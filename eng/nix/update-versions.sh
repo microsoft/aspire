@@ -102,7 +102,12 @@ temp_path="${output_path}.tmp"
     checksum_url="${archive_url}.sha512"
 
     echo "Reading ${checksum_url}" >&2
-    checksum="$(curl -fsSL "$checksum_url")"
+    checksum_contents="$(curl -fsSL "$checksum_url")"
+    # The release checksum sidecar can be either:
+    #   <hex-sha512>
+    #   <hex-sha512>  <archive-name>
+    # Only the first token is the digest consumed by Nix's SRI hash format.
+    read -r checksum _ <<< "$checksum_contents"
     hash="$(hex_sha512_to_sri "$checksum")"
 
     printf '    "%s": {\n' "$system"

@@ -2,11 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
+using Aspire.TestUtilities;
 using Xunit;
 
 namespace Infrastructure.Tests;
 
-public sealed class NixCliPackageTests
+public sealed class NixCliPackageTests : IDisposable
 {
     private static readonly Dictionary<string, string> s_expectedSystems = new(StringComparer.Ordinal)
     {
@@ -15,6 +16,10 @@ public sealed class NixCliPackageTests
         ["x86_64-darwin"] = "osx-x64",
         ["x86_64-linux"] = "linux-x64",
     };
+
+    private readonly TestTempDirectory _tempDirectory = new();
+
+    public void Dispose() => _tempDirectory.Dispose();
 
     [Fact]
     public async Task ManifestDescribesExpectedStableReleaseAssets()
@@ -62,6 +67,51 @@ public sealed class NixCliPackageTests
     }
 
     [Fact]
+    [RequiresTools(["bash", "base64", "xxd"])]
+    public async Task UpdateVersionsParsesFirstHashTokenFromSha512CompanionFile()
+    {
+        var outputPath = Path.Combine(_tempDirectory.Path, "versions.json");
+        var fakeBinPath = Path.Combine(_tempDirectory.Path, "bin");
+        Directory.CreateDirectory(fakeBinPath);
+
+        var curlPath = Path.Combine(fakeBinPath, "curl");
+        await File.WriteAllTextAsync(curlPath, """
+            #!/usr/bin/env bash
+            set -euo pipefail
+            url="${@: -1}"
+            printf '%s  %s\n' 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "${url##*/}"
+            """);
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(curlPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
+
+        var result = await RunBashAsync(
+            Path.Combine(RepoRoot.Path, "eng", "nix", "update-versions.sh"),
+            ["--version", "13.4.0", "--output-path", outputPath],
+            new Dictionary<string, string?>
+            {
+                ["PATH"] = fakeBinPath + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH")
+            });
+
+        Assert.True(result.ExitCode == 0, $"Expected update-versions.sh to succeed.{Environment.NewLine}{result.Output}");
+
+        var manifest = await ReadJsonObjectAsync(outputPath);
+        var systems = GetRequiredObject(manifest, "systems");
+        var expectedHash = "sha512-" + Convert.ToBase64String(Convert.FromHexString(new string('a', 128)));
+
+        foreach (var system in s_expectedSystems.Keys)
+        {
+            var entry = GetRequiredObject(systems, system);
+            Assert.Equal(expectedHash, GetRequiredString(entry, "hash"));
+        }
+    }
+
+    [Fact]
     public async Task FlakeLockPinsNixpkgsInput()
     {
         var flakeLock = await ReadJsonObjectAsync("flake.lock");
@@ -84,8 +134,41 @@ public sealed class NixCliPackageTests
             ?? throw new InvalidOperationException($"Could not parse {relativePath} as a JSON object.");
     }
 
+    private static async Task<CommandResult> RunBashAsync(string scriptPath, string[] arguments, Dictionary<string, string?> environment)
+    {
+        using var process = new System.Diagnostics.Process();
+        process.StartInfo.FileName = "bash";
+        process.StartInfo.ArgumentList.Add(scriptPath);
+
+        foreach (var argument in arguments)
+        {
+            process.StartInfo.ArgumentList.Add(argument);
+        }
+
+        process.StartInfo.RedirectStandardError = true;
+        process.StartInfo.RedirectStandardOutput = true;
+        process.StartInfo.UseShellExecute = false;
+
+        foreach (var (name, value) in environment)
+        {
+            process.StartInfo.Environment[name] = value;
+        }
+
+        process.Start();
+        var outputTask = process.StandardOutput.ReadToEndAsync();
+        var errorTask = process.StandardError.ReadToEndAsync();
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await process.WaitForExitAsync(cancellationTokenSource.Token);
+
+        var output = await outputTask + await errorTask;
+
+        return new CommandResult(process.ExitCode, output);
+    }
+
     private static Task<string> ReadRepoFileAsync(string relativePath)
-        => File.ReadAllTextAsync(Path.Combine(RepoRoot.Path, relativePath));
+        => Path.IsPathRooted(relativePath)
+            ? File.ReadAllTextAsync(relativePath)
+            : File.ReadAllTextAsync(Path.Combine(RepoRoot.Path, relativePath));
 
     private static JsonObject GetRequiredObject(JsonObject obj, string propertyName)
     {
@@ -98,4 +181,6 @@ public sealed class NixCliPackageTests
         Assert.True(obj.TryGetPropertyValue(propertyName, out var value), $"Expected property '{propertyName}'.");
         return Assert.IsAssignableFrom<JsonValue>(value).GetValue<string>();
     }
+
+    private sealed record CommandResult(int ExitCode, string Output);
 }
