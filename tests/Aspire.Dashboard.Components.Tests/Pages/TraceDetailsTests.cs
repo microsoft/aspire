@@ -129,6 +129,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         Assert.Equal("0", scrollContainer.GetAttribute("tabindex"));
         Assert.Equal("region", scrollContainer.GetAttribute("role"));
         Assert.Equal(loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceStartHeader)].Value, scrollContainer.GetAttribute("aria-label"));
+        Assert.Equal("tracedetails-grid-container", scrollContainer.GetAttribute("class"));
         cut.WaitForAssertion(() =>
         {
             Assert.Contains(JSInterop.Invocations, invocation =>
