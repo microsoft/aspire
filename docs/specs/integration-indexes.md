@@ -757,7 +757,7 @@ The JSON shape in `docs/specs/cli-output-formats.md` currently has:
   {
     "name": "Redis",
     "package": "Aspire.Hosting.Redis",
-    "version": "13.4.0"
+    "version": "13.0.0"
   }
 ]
 ```
