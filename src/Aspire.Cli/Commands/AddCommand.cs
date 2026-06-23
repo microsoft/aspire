@@ -24,9 +24,9 @@ internal sealed class AddCommand : BaseCommand
     private readonly IProjectLocator _projectLocator;
     private readonly IAddCommandPrompter _prompter;
     private readonly AspireCliTelemetry _telemetry;
-    private readonly IDotNetSdkInstaller _sdkInstaller;
+    private readonly IDotNetRuntimeSelector _runtimeSelector;
 
-    public AddCommand(IDotNetCliRunner runner, IPackagingService packagingService, IInteractionService interactionService, IProjectLocator projectLocator, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier)
+    public AddCommand(IDotNetCliRunner runner, IPackagingService packagingService, IInteractionService interactionService, IProjectLocator projectLocator, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetRuntimeSelector runtimeSelector, IFeatures features, ICliUpdateNotifier updateNotifier)
         : base("add", AddCommandStrings.Description, features, updateNotifier)
     {
         ArgumentNullException.ThrowIfNull(runner);
@@ -35,7 +35,7 @@ internal sealed class AddCommand : BaseCommand
         ArgumentNullException.ThrowIfNull(projectLocator);
         ArgumentNullException.ThrowIfNull(prompter);
         ArgumentNullException.ThrowIfNull(telemetry);
-        ArgumentNullException.ThrowIfNull(sdkInstaller);
+        ArgumentNullException.ThrowIfNull(runtimeSelector);
 
         _runner = runner;
         _packagingService = packagingService;
@@ -43,7 +43,7 @@ internal sealed class AddCommand : BaseCommand
         _projectLocator = projectLocator;
         _prompter = prompter;
         _telemetry = telemetry;
-        _sdkInstaller = sdkInstaller;
+        _runtimeSelector = runtimeSelector;
 
         var integrationArgument = new Argument<string>("integration");
         integrationArgument.Description = AddCommandStrings.IntegrationArgumentDescription;
@@ -66,7 +66,7 @@ internal sealed class AddCommand : BaseCommand
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // Check if the .NET SDK is available
-        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, _interactionService, cancellationToken))
+        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_interactionService, _runtimeSelector, cancellationToken))
         {
             return ExitCodeConstants.SdkNotInstalled;
         }

@@ -213,10 +213,6 @@ public class Program
 
         using var app = await BuildApplicationAsync(args);
 
-        // Initialize the .NET runtime selector 
-        var runtimeSelector = app.Services.GetRequiredService<IDotNetRuntimeSelector>();
-        await runtimeSelector.InitializeAsync();
-
         await app.StartAsync().ConfigureAwait(false);
 
         var rootCommand = app.Services.GetRequiredService<RootCommand>();

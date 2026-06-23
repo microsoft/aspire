@@ -26,6 +26,7 @@ internal sealed class DotNetRuntimeSelector(
     private string? _dotNetExecutablePath;
     private DotNetRuntimeMode _mode = DotNetRuntimeMode.System;
     private readonly Dictionary<string, string> _environmentVariables = new();
+    private bool? _initializeResult;
 
     /// <inheritdoc />
     public string DotNetExecutablePath => _dotNetExecutablePath ?? "dotnet";
@@ -36,19 +37,31 @@ internal sealed class DotNetRuntimeSelector(
     /// <inheritdoc />
     public async Task<bool> InitializeAsync(CancellationToken cancellationToken = default)
     {
+        // Return cached result if already initialized.
+        if (_initializeResult.HasValue)
+        {
+            return _initializeResult.Value;
+        }
+
+        _initializeResult = await InitializeCoreAsync(cancellationToken);
+        return _initializeResult.Value;
+    }
+
+    private async Task<bool> InitializeCoreAsync(CancellationToken cancellationToken)
+    {
         // Check configuration first, then environment variables
-        var disablePrivateSdk = configuration["ASPIRE_DISABLE_PRIVATE_SDK"] == "1" 
+        var disablePrivateSdk = configuration["ASPIRE_DISABLE_PRIVATE_SDK"] == "1"
             || Environment.GetEnvironmentVariable("ASPIRE_DISABLE_PRIVATE_SDK") == "1";
         var overrideVersion = configuration["ASPIRE_DOTNET_SDK_VERSION"]
-            ?? Environment.GetEnvironmentVariable("ASPIRE_DOTNET_SDK_VERSION") 
+            ?? Environment.GetEnvironmentVariable("ASPIRE_DOTNET_SDK_VERSION")
             ?? configuration["overrideMinimumSdkVersion"];
-        
+
         // Load settings from ~/.aspire/settings.json
         var settings = await LoadSettingsAsync();
-        
+
         // Determine the required SDK version
-        var requiredVersion = overrideVersion 
-            ?? settings?.DotNet?.SdkVersion 
+        var requiredVersion = overrideVersion
+            ?? settings?.DotNet?.SdkVersion
             ?? DotNetSdkInstaller.MinimumSdkVersion;
 
         // Determine the preferred mode
