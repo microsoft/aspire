@@ -1540,6 +1540,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             new ConsoleEnvironment(console, console),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(),
             NullLoggerFactory.Instance,
             new ConsoleLogBufferContext());
 
@@ -1971,9 +1972,10 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                 var consoleEnvironment = sp.GetRequiredService<ConsoleEnvironment>();
                 var executionContext = sp.GetRequiredService<CliExecutionContext>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
+                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
                 var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
                 var logBufferContext = sp.GetRequiredService<ConsoleLogBufferContext>();
-                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory, logBufferContext);
+                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, processPathProvider, loggerFactory, logBufferContext);
 
                 return new ExtensionInteractionService(consoleInteractionService, extensionBackchannel, extensionPromptEnabled: false);
             };

@@ -19,19 +19,9 @@ internal static class DotNetToolDetection
         "osx-arm64"
     ];
 
-    internal static bool IsRunningAsDotNetTool()
-    {
-        return GetDotNetToolUpdateCommand() is not null;
-    }
-
     internal static bool IsRunningAsDotNetTool(string? processPath)
     {
         return GetDotNetToolUpdateCommand(processPath) is not null;
-    }
-
-    internal static string? GetDotNetToolUpdateCommand()
-    {
-        return GetDotNetToolUpdateCommand(Environment.ProcessPath);
     }
 
     internal static string? GetDotNetToolUpdateCommand(string? processPath)
