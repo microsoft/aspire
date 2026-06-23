@@ -2,7 +2,7 @@
 
 > **Status:** Draft proposal.
 >
-> This spec explores replacing NuGet package search as the primary Aspire integration discovery mechanism with curated integration indexes. It is informed by the current CLI implementation, [#16882](https://github.com/microsoft/aspire/pull/16882), mise's registry model, and Nix-style reproducibility goals.
+> This spec explores replacing NuGet package search as the primary Aspire integration discovery mechanism with curated integration indexes. It is informed by the current CLI implementation, [#16882](https://github.com/microsoft/aspire/pull/16882), mise's registry model, and reproducibility goals from package-index ecosystems.
 
 ## Summary
 
@@ -16,6 +16,28 @@ That makes NuGet package identity the user-facing integration identity. It also 
 This proposal introduces a curated integration-index layer above package providers. An integration index maps stable user-facing integration names to one or more provider coordinates such as NuGet packages, npm packages, container images, templates, or future provider types.
 
 The first implementation should keep package installation behavior NuGet-based and reuse the existing `PackagingService`, `PackageChannel`, and `INuGetPackageCache` machinery. The index changes discovery and naming, not the package-resolution engine.
+
+## MVP cut
+
+The smallest useful implementation should be intentionally conservative:
+
+1. Add built-in `aspire` and `community-toolkit` index artifacts.
+2. Support only the NuGet provider.
+3. Keep the existing NuGet version-resolution, feed, hive, staging, PR, and `ASPIRE_CLI_PACKAGES` behavior.
+4. Preserve every existing package-derived friendly name as an alias.
+5. Add index/provenance metadata to human-readable output without changing install semantics.
+6. Move CLI, MCP, and integration-doc lookup to one shared integration-resolution service.
+7. Keep user-added external indexes out of the first implementation except for the internal abstractions needed to avoid painting the design into a corner.
+
+This cut is enough to validate the hard parts:
+
+- Whether curated names can replace package IDs without breaking existing add/search flows.
+- Whether "channel" can disappear from public integration UX by treating stable/daily/staging/PR/local as `aspire@variant`.
+- Whether runtime availability and NuGet provider resolution can stay fast when the catalog is data-driven.
+- Whether MCP, VS Code, and JSON consumers can migrate without relying on NuGet prefix-derived names.
+- Whether the index artifact format can support future external indexes without requiring executable plugins.
+
+It deliberately does not prove npm/container/template providers or arbitrary third-party index acquisition. Those should wait until the built-in NuGet-only path is stable.
 
 ## Goals
 
@@ -120,6 +142,32 @@ Future provider types can include `npm`, `container`, `template`, or `module`, b
 ## Index authoring format
 
 Indexes should be authored as normal repo files. The exact authoring format can be YAML, JSON, or TOML; this spec uses YAML for readability. The CLI should consume a generated, validated JSON artifact.
+
+Recommended repo shape for built-in indexes:
+
+```text
+src/Aspire.Cli/IntegrationIndexes/
+  schema/
+    integration-index.schema.json
+  aspire/
+    redis.yaml
+    postgres.yaml
+  community-toolkit/
+    orleans-redis.yaml
+  generated/
+    aspire.index.json
+    community-toolkit.index.json
+```
+
+The authoring files are optimized for review. The generated JSON files are optimized for the CLI and for remote acquisition:
+
+- Contributors edit one small entry file per integration.
+- CI validates entry files against the schema.
+- CI regenerates deterministic `*.index.json` artifacts.
+- The CLI embeds the generated artifacts at build/package time.
+- Remote GitHub-backed indexes expose the generated artifact at a commit SHA.
+
+Committing generated artifacts is a trade-off. It creates larger PR diffs and potential merge conflicts, but it also gives the CLI a simple immutable artifact to fetch, digest, cache, and embed without cloning or running repo code. If that proves too noisy, the fallback is to generate during build for built-in indexes and require external indexes to publish a generated artifact.
 
 Example entry:
 
@@ -353,6 +401,68 @@ This preserves today's provider-resolution behavior:
 - Bundle-mode NuGet search.
 
 The implicit/default Aspire variant must always participate in NuGet provider resolution, even when an AppHost has pinned an explicit variant. This preserves the current invariant from `IntegrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync`: prerelease-only integrations must remain reachable through the implicit `Quality.Both` channel even when a polyglot AppHost pins a stable-quality channel. Index `versionPolicy` filters candidates after variants have produced them; it must not narrow the variant set. This avoids regressing [#17724](https://github.com/microsoft/aspire/issues/17724) and [#17725](https://github.com/microsoft/aspire/issues/17725).
+
+## Walking-skeleton implementation
+
+The implementation should start by introducing the index model behind the existing command behavior, not by adding new UX first.
+
+Proposed internal types:
+
+| Type | Responsibility |
+| ---- | -------------- |
+| `IntegrationIndexDocument` | Deserialized generated artifact: schema version, index metadata, entries. |
+| `IntegrationEntry` | Curated entry ID, display name, aliases, tags, docs, provenance, provider references. |
+| `IntegrationProviderReference` | Provider type plus provider-specific coordinate and version policy. |
+| `IntegrationIndexVariant` | Publicly modeled index variant such as `aspire@daily`; internally maps to one or more `PackageChannel` instances for NuGet. |
+| `IntegrationCandidate` | Runtime candidate after AppHost language, index precedence, alias, availability, and provider filtering. |
+| `IIntegrationIndexSource` | Loads built-in, cached, external, or dynamic-discovery indexes. |
+| `IIntegrationProvider` | Resolves provider versions and installs provider coordinates. First implementation only needs `NuGetIntegrationProvider`. |
+| `IntegrationResolver` | Shared CLI/MCP/VS Code-facing service for search, exact resolution, ambiguity handling, and provider selection. |
+
+The first code slice should preserve old behavior by construction:
+
+1. Load built-in index documents from embedded JSON.
+2. Build a legacy alias map from existing friendly-name algorithms.
+3. Ask `PackagingService.GetChannelsAsync()` for the current NuGet resolution profiles.
+4. Convert the selected profiles into `IntegrationIndexVariant` values.
+5. Resolve integration entries to NuGet provider coordinates.
+6. Use existing `PackageChannel` version APIs for availability and version selection.
+7. Install through existing `IAppHostProject.AddPackageAsync`.
+
+This lets the first PR be validated with current tests plus focused new tests:
+
+- `aspire add redis` resolves to the same NuGet package/version it does today.
+- `aspire add Aspire.Hosting.Redis` still works as an exact package ID fallback.
+- `aspire add communitytoolkit-*` still works through generated aliases.
+- Non-interactive fuzzy matches still fail rather than picking an arbitrary candidate.
+- MCP listing and CLI listing return the same integration set.
+- PR/local/`ASPIRE_CLI_PACKAGES` hives still produce the selected local version.
+
+### Adapter strategy
+
+The safest path is to adapt existing services incrementally:
+
+```text
+Current command code
+  -> IntegrationPackageSearchService
+      -> IntegrationResolver
+          -> IIntegrationIndexSource[]
+          -> IIntegrationProvider[]
+          -> PackagingService / PackageChannel
+```
+
+`IntegrationPackageSearchService` can initially keep its public methods and return shapes while delegating to `IntegrationResolver`. That avoids rewriting `AddCommand`, `IntegrationSearchCommand`, and `ListIntegrationsTool` in one step. Once the resolver is stable, command-specific types can be renamed or collapsed around the integration model.
+
+### Provider/version performance
+
+A naive index implementation would query NuGet versions for every catalog entry on every list/search. That is too expensive and would make curated indexes slower than today's prefix search.
+
+The NuGet provider should use a two-level strategy:
+
+1. For list/search, reuse channel-level integration package search results when available and join those packages to index provider coordinates.
+2. For exact add/index-qualified add, resolve the selected provider coordinate directly with `GetPackageVersionsAsync`.
+
+That keeps normal discovery close to today's cost while still allowing exact curated entries that were not returned by a broad package search to produce a precise "entry exists but package is unavailable" error.
 
 ## Runtime availability
 
@@ -625,7 +735,165 @@ The VS Code extension schema may also need to understand:
 - Per-index URL/commit pins.
 - Provider-specific configuration.
 
+## Hard choices and recommended defaults
+
+This section captures the choices that should get explicit review before implementation. The recommendations are intended to make the first implementation small enough to ship while preserving room for external indexes and non-NuGet providers.
+
+### Choice 1: Is a channel an index, an index variant, or a provider option?
+
+**Recommendation:** model channel as an index variant in public integration UX, backed by provider-resolution profiles internally.
+
+| Option | Pros | Cons |
+| ------ | ---- | ---- |
+| Keep `channel` as a peer concept | Minimal implementation churn. | Users must understand index, source, and channel. Ambiguity grows when external indexes define their own release lanes. |
+| Make channel a provider option only | Accurate for NuGet feeds and quality. | Hard to explain `aspire@daily` style discovery because the catalog and provider resolution are selected separately. |
+| Make channel an index variant | One public noun for discovery: `index`. Variants can own catalog plus provider resolution. | Requires compatibility aliases for existing channel terminology and careful docs/help updates. |
+
+The first implementation should keep `PackageChannel` internally and expose `aspire@stable`, `aspire@daily`, `aspire@staging`, and synthesized PR/local variants in integration commands. Existing `--channel`-style configuration can remain as a compatibility layer until all callers move to variant terminology.
+
+### Choice 2: Where do built-in index files live?
+
+**Recommendation:** keep built-in authoring files in this repo under the CLI source tree and commit deterministic generated artifacts.
+
+| Option | Pros | Cons |
+| ------ | ---- | ---- |
+| This repo, under CLI source | Contributions look like normal Aspire PRs. CLI packaging can embed artifacts directly. | Adds generated files to source diffs unless generation happens only at build time. |
+| Separate official index repo | Cleaner ownership boundary and independent index updates. | More repo/process overhead. Harder to guarantee CLI snapshot freshness and validate changes with CLI tests. |
+| Docs repo or docs tree | Easy to review as content. | Blurs product docs and executable catalog artifacts. Harder to build/test/package. |
+
+The first index should live with the CLI because the CLI is the first consumer and because the entry schema must evolve with CLI code. A separate repo can be introduced later if index updates need an independent cadence.
+
+### Choice 3: Authoring format vs consumed artifact
+
+**Recommendation:** author entry files for review, consume generated canonical JSON.
+
+| Option | Pros | Cons |
+| ------ | ---- | ---- |
+| Author and consume one JSON file | Simple and no generation step. | Large merge conflicts, poor contribution ergonomics, hard to review one-entry changes. |
+| Author per-entry YAML/TOML, consume generated JSON | Good PR diffs and stable runtime artifact. | Requires a generator/validator and generated artifact policy. |
+| Consume repo tree directly | No generated artifact. | Requires clone/archive traversal and makes index integrity harder. |
+
+YAML is readable for examples, but JSON may be better if we want zero new parser dependencies in build tooling. The hard requirement is not YAML; it is "small authoring files plus deterministic generated JSON".
+
+### Choice 4: What does project pinning look like?
+
+**Recommendation:** do not persist built-in index pins in Phase 1; require project pins before external indexes are enabled.
+
+| Option | Pros | Cons |
+| ------ | ---- | ---- |
+| No project pins | Simple and matches today's package-only model. | External index meaning can drift after install. |
+| Pin every index use | Fully reproducible. | Adds files/metadata for normal built-in Aspire scenarios and creates migration burden. |
+| Pin only non-built-in indexes | Keeps built-in path simple while preventing silent external index drift. | A project using only built-in indexes is still tied to the installed CLI/package feed behavior. |
+
+The storage location remains the hardest unresolved detail. A cross-AppHost lock file is attractive because it works for C# and polyglot AppHosts:
+
+```text
+<AppHost directory>/.aspire/integration-indexes.lock.json
+```
+
+Example:
+
+```json
+{
+  "version": 1,
+  "indexes": [
+    {
+      "id": "contoso",
+      "url": "https://github.com/contoso/aspire-index",
+      "commit": "abc123",
+      "sha256": "..."
+    }
+  ]
+}
+```
+
+The downside is introducing a new committed project file. The alternative is to store C# pins in MSBuild and polyglot pins in Aspire config, but that splits the implementation and makes cross-language tooling harder.
+
+### Choice 5: How strict is index integrity?
+
+**Recommendation:** bind every remote index artifact to index ID, resolved commit, schema version, and SHA-256 digest; do not require signed indexes in the first implementation.
+
+| Option | Pros | Cons |
+| ------ | ---- | ---- |
+| URL-only cache | Easy. | Allows silent content drift and cache poisoning by mutable refs. |
+| Commit plus digest | Strong immutable artifact identity and straightforward project pins. | Requires a fetch path that can resolve refs to commits and compute digests. |
+| Signed index artifacts | Stronger provenance story. | Requires key management, rotation, enterprise policy, and contributor education before there is evidence we need it. |
+
+The digest is security-related here because it protects the index artifact the CLI consumed. It does not replace NuGet signing, npm provenance, or registry policy for provider artifacts.
+
+### Choice 6: Should list/search resolve provider versions eagerly?
+
+**Recommendation:** list/search should join index entries to existing provider search results; exact add should resolve provider versions directly.
+
+| Option | Pros | Cons |
+| ------ | ---- | ---- |
+| Eagerly query every indexed package | Strong "listed means installable" guarantee. | Slow and expensive, especially with multiple indexes/variants. |
+| Never check availability in list/search | Fast and stable. | Search results can fail at install time more often than today. |
+| Join broad provider search results, direct-resolve exact adds | Keeps normal cost near today's NuGet search and gives precise errors for exact requests. | Some curated entries can be hidden from normal search if broad provider search misses them. |
+
+The fallback for hidden-but-valid entries is exact or index-qualified add: `aspire add aspire/foo` can resolve `foo` directly and explain why it is unavailable if no compatible package exists.
+
+### Choice 7: How should JSON output evolve?
+
+**Recommendation:** preserve existing `name`, `package`, and `version` fields initially; append `qualifiedName`, `index`, `provenance`, and `provider`.
+
+| Option | Pros | Cons |
+| ------ | ---- | ---- |
+| Replace shape immediately | Clean model. | Breaks tools that parse current JSON. |
+| Append fields in-place | Most consumers tolerate additive fields. | `name` semantics remain ambiguous during migration. |
+| Add a versioned output mode | Clear contract. | More CLI surface and test matrix. |
+
+The key migration rule is that `name` must remain a valid add argument during the transition. Curated entry IDs can appear in `qualifiedName` before they replace legacy friendly names as the primary `name` value.
+
+### Choice 8: Should third-party NuGet tag discovery be on by default?
+
+**Recommendation:** curated indexes are default; NuGet tag discovery is explicit or policy-controlled.
+
+| Option | Pros | Cons |
+| ------ | ---- | ---- |
+| On by default | Maximum discoverability. | Search results become less curated and trust/provenance becomes more important. |
+| Ask on first use | User-aware. | Awkward for non-interactive CLI, MCP, and VS Code flows. |
+| Explicit opt-in | Predictable and safer for enterprise users. | Users may miss useful third-party integrations. |
+
+The curated index should answer "what do we recommend?" Dynamic NuGet tag discovery should answer "what else exists?" and should be surfaced with `third-party` provenance.
+
+### Choice 9: Do we need explicit provider coordinates?
+
+**Recommendation:** support explicit provider coordinates such as `nuget:Aspire.Hosting.Redis` as the escape hatch.
+
+| Option | Pros | Cons |
+| ------ | ---- | ---- |
+| Exact package ID fallback only | Preserves current usage. | Ambiguous once npm/container/template providers exist. |
+| Explicit provider coordinates | Clear and extensible. | Adds another advanced syntax. |
+| Require index entries for everything | Clean catalog model. | Blocks testing unpublished/internal packages and slows advanced workflows. |
+
+Exact NuGet package IDs should keep working for compatibility, but the provider-coordinate form is the future-proof way to disambiguate package IDs from curated entry IDs.
+
+### Choice 10: How much provider policy belongs in the index?
+
+**Recommendation:** index entries declare policy intent and compatibility; providers enforce ecosystem-specific rules.
+
+Examples of index-owned policy:
+
+- Entry ID, aliases, display text, docs.
+- Supported AppHost languages.
+- Provider preference order.
+- Aspire compatibility ranges.
+- Whether prerelease follows variant behavior.
+- Deprecation/replacement metadata.
+
+Examples of provider-owned policy:
+
+- NuGet source mapping and feed trust.
+- NuGet version enumeration and package metadata validation.
+- npm provenance and package-manager behavior.
+- Container registry auth, digest pinning, and platform support.
+
+Putting provider-specific policy entirely in the index would make indexes too powerful and too hard to trust. Putting all policy in providers would make indexes little more than search aliases. The split above keeps indexes data-only while still making curation meaningful.
+
 ## Migration plan
+
+Each phase should have an explicit decision gate. If a gate fails, the next phase should not expand the concept surface area.
 
 ### Phase 1: Internal model and built-in indexes
 
@@ -638,6 +906,8 @@ The VS Code extension schema may also need to understand:
 - Update `IntegrationPackageSearchService` to return integration candidates instead of raw packages.
 - Keep exact package ID matching as a fallback.
 
+**Gate:** existing `aspire add`, `aspire integration list`, `aspire integration search`, and MCP integration listing produce equivalent results for current official/community NuGet packages, with only additive index/provenance metadata.
+
 ### Phase 2: CLI UX and output
 
 - Show index/provenance in human-readable output.
@@ -646,6 +916,8 @@ The VS Code extension schema may also need to understand:
 - Update MCP listing to use the shared integration service.
 - Add ambiguity prompts for same name across indexes.
 
+**Gate:** every old package-derived name remains an accepted alias, non-interactive ambiguity rules are tested, and JSON/MCP/VS Code consumers have a documented compatibility path.
+
 ### Phase 3: External indexes
 
 - Add `aspire integration index list/add/remove/update`.
@@ -653,17 +925,23 @@ The VS Code extension schema may also need to understand:
 - Add schema validation and index metadata.
 - Record project index provenance for non-built-in indexes.
 
+**Gate:** remote index acquisition validates ID, schema, commit, and digest; project pins persist URL, commit, and digest for every non-built-in index used by a project.
+
 ### Phase 4: Dynamic NuGet discovery
 
 - Integrate #16882-style NuGet tag discovery as an optional `NuGetTagDiscoveryIndex`.
 - Keep third-party discovery opt-in.
 - Reuse dependency metadata validation for exact package ID flows.
 
+**Gate:** curated search remains the default, third-party discovery is visibly marked, and enterprise/non-interactive policy can disable it.
+
 ### Phase 5: Additional providers
 
 - Add new built-in providers only after the index/trust model is stable.
 - Candidate provider types: `npm`, `container`, `template`, `module`.
 - Each provider must define version resolution, install behavior, validation, and trust policy.
+
+**Gate:** provider-coordinate syntax, provider ordering, AppHost language selection, and provider-specific trust policy are documented and tested with one concrete non-NuGet provider before adding more.
 
 ## Validation
 
@@ -696,13 +974,11 @@ CLI tests should cover:
 
 ## Open questions
 
-- What authoring format should the repo use: YAML, JSON, or TOML?
-- Where should official Aspire index entries live in this repo?
-- Should Community Toolkit entries live in this repo, the Community Toolkit repo, or both with a generated artifact?
-- Should the built-in Community Toolkit index be enabled by default or shown as curated-but-community?
-- What is the project-level storage location for index pins across C# and polyglot AppHosts?
-- Do we need a lock file before external indexes are allowed?
-- Should `aspire add nuget:Package.Id` be an explicit provider coordinate?
-- How should exact package ID fallback interact with index-qualified names?
-- Should JSON output add fields in place or introduce a versioned output shape?
-- What enterprise policy hooks are required before user-added indexes ship?
+- Should the first built-in authoring files be YAML for readability or JSON to avoid adding build-time parser dependencies?
+- Should generated index artifacts be committed for built-in indexes, or generated during build and only committed/published for external index repos?
+- Should Community Toolkit entries be authored in this repo first, in the Community Toolkit repo first, or mirrored between both?
+- Should `community-toolkit` be enabled by default, or listed as built-in but disabled until a user opts in?
+- Is `<AppHost directory>/.aspire/integration-indexes.lock.json` acceptable as a committed project file for external index pins, or should C# and polyglot AppHosts use their existing project/config stores?
+- Should `aspire add Aspire.Hosting.Redis` continue as an unqualified exact package ID fallback forever, or should help text steer advanced users to `nuget:Aspire.Hosting.Redis` once provider coordinates exist?
+- Does additive JSON output preserve enough compatibility, or do VS Code/MCP consumers need a versioned output mode before index fields are added?
+- What enterprise policy hooks are required before user-added indexes ship: allowed index URLs, allowed commits, provider allowlists, package-source allowlists, or all of these?
