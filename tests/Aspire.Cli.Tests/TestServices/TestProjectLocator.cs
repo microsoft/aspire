@@ -17,7 +17,7 @@ internal sealed class TestProjectLocator : IProjectLocator
 
     public Func<DirectoryInfo, AppHostDiscoveryScope, CancellationToken, bool, Task<List<AppHostProjectCandidate>>>? FindAppHostProjectsAsyncCallback { get; set; }
 
-    public Func<DirectoryInfo, AppHostDiscoveryScope, Action<int>?, CancellationToken,bool, IAsyncEnumerable<AppHostProjectCandidate>>? FindAppHostProjectsStreamAsyncCallback { get; set; }
+    public Func<DirectoryInfo, AppHostDiscoveryScope, Action<int>?, CancellationToken, bool, IAsyncEnumerable<AppHostProjectCandidate>>? FindAppHostProjectsStreamAsyncCallback { get; set; }
 
     public Func<DirectoryInfo, AppHostDiscoveryScope, CancellationToken, bool, Task<List<FileInfo>>>? FindAppHostProjectFilesAsyncCallback { get; set; }
 
