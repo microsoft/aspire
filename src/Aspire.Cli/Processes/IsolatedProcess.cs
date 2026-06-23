@@ -77,23 +77,36 @@ internal sealed class IsolatedProcessStartInfo
     internal IReadOnlyDictionary<string, string?>? GetEnvironmentForSpawn()
         => _environment;
 
+    /// <summary>
+    /// Initializes <see cref="Environment"/> as an empty block and returns it, skipping the
+    /// lazy parent-environment snapshot that <see cref="Environment"/> would otherwise trigger.
+    /// Use this for the "replace, don't overlay" path where the caller is about to write the
+    /// child's entire environment from an authoritative source: seeding ~50-100 parent entries
+    /// only to clear them immediately is pure waste. Marks <see cref="HasCustomEnvironment"/>
+    /// so the spawn uses this explicit block rather than re-inheriting the parent.
+    /// </summary>
+    internal IDictionary<string, string?> UseEmptyEnvironment()
+        => _environment = new Dictionary<string, string?>(EnvironmentComparer);
+
     private static Dictionary<string, string?> LoadParentEnvironment()
     {
         // Snapshot the parent env on first access. ProcessStartInfo.Environment has the
         // same semantics — touching the property materializes the inherited block so the
         // caller can mutate it freely without affecting the parent process.
         var parent = System.Environment.GetEnvironmentVariables();
-        // OrdinalIgnoreCase mirrors ProcessStartInfo's behavior on Windows (env vars are
-        // case-insensitive). Using it on all platforms is slightly less strict than the
-        // Unix kernel (which treats env names as bytes) but it matches what ProcessStartInfo
-        // does and prevents the trap of accidentally having both "Path" and "PATH" entries.
-        var dict = new Dictionary<string, string?>(parent.Count, StringComparer.OrdinalIgnoreCase);
+        var dict = new Dictionary<string, string?>(parent.Count, EnvironmentComparer);
         foreach (System.Collections.DictionaryEntry entry in parent)
         {
             dict[(string)entry.Key] = entry.Value as string;
         }
         return dict;
     }
+
+    // OrdinalIgnoreCase mirrors ProcessStartInfo's behavior on Windows (env vars are
+    // case-insensitive). Using it on all platforms is slightly less strict than the
+    // Unix kernel (which treats env names as bytes) but it matches what ProcessStartInfo
+    // does and prevents the trap of accidentally having both "Path" and "PATH" entries.
+    private static StringComparer EnvironmentComparer => StringComparer.OrdinalIgnoreCase;
 }
 
 /// <summary>

@@ -83,16 +83,17 @@ internal sealed class ProcessExecutionFactory(
         // configured, to suppress any value the parent CLI happens to have set in its own env.
         // ProcessStartInfo.Environment is eagerly snapshotted from the parent, so iterating it gives
         // the authoritative "what the child should see" view; a missing key really means "do not pass
-        // this to the child". (Clear() first seeds the parent env then empties it, so HasCustomEnvironment
-        // is set and the spawn uses our explicit block rather than re-inheriting the parent.)
-        isolatedStartInfo.Environment.Clear();
+        // this to the child". Start from an empty block (UseEmptyEnvironment skips the parent snapshot
+        // we would otherwise allocate and immediately discard) so HasCustomEnvironment is set and the
+        // spawn uses our explicit block rather than re-inheriting the parent.
+        var childEnvironment = isolatedStartInfo.UseEmptyEnvironment();
         foreach (var (key, value) in startInfo.Environment)
         {
             // Match ProcessStartInfo.Environment semantics: a null value means "do not set this
             // variable in the child" — we get there by simply not adding it.
             if (value is not null)
             {
-                isolatedStartInfo.Environment[key] = value;
+                childEnvironment[key] = value;
             }
         }
 
