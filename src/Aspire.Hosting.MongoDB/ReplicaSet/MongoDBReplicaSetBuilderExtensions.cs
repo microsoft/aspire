@@ -67,6 +67,20 @@ public static class MongoDBReplicaSetBuilderExtensions
             })
             .OnInitializeResource(async (resource, evt, ct) =>
             {
+                var membersList = rsResource.Members.ToList();
+                if (membersList is [])
+                {
+                    await evt.Notifications.PublishUpdateAsync(resource, s => s with
+                    {
+                        State = KnownResourceStates.FailedToStart,
+                        Properties = [new(
+                            Name: "Error",
+                            Value:  "Cannot initialize MongoDB replica set because it does not have any members."
+                        )],
+                    }).ConfigureAwait(false);
+                    return;
+                }
+
                 var logger = evt.Services.GetRequiredService<ILogger<MongoDBReplicaSetResource>>();
 
                 connectionString = await rsResource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);

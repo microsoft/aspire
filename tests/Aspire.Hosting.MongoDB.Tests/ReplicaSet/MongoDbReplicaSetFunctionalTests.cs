@@ -6,6 +6,7 @@ using Aspire.Hosting.Utils;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Polly;
+using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.MongoDB.Tests;
 
@@ -95,6 +96,22 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
         }, cts.Token);
 
         await app.StopAsync();
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task MongoDBReplicaSetWithNoMembersAssigned()
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        var rs = builder.AddMongoDBReplicaSet("rs0");
+
+        using var app = builder.Build();
+        await app.StartAsync(cts.Token);
+
+        await app.ResourceNotifications.WaitForResourceAsync(rs.Resource.Name, KnownResourceStates.FailedToStart, cts.Token);
     }
 
     private static async Task CreateTestDataWithReplicaSetFeaturesAsync(IMongoDatabase mongoDatabase, CancellationToken ct)

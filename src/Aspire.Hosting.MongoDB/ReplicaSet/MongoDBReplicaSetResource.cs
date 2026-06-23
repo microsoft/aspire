@@ -24,9 +24,15 @@ public sealed class MongoDBReplicaSetResource(
     /// </summary>
     public ParameterResource SharedKeyFileParameter => keyFile;
 
+    /// <summary>
+    /// Gets the parameter that contains the content of the key file used for internal authentication between members of the MongoDB replica set.
+    /// </summary>
+    public IEnumerable<MongoDBServerResource> Members => Annotations.OfType<MongoReplicaSetMemberAnnotation>().Select(a => a.Member);
+
     private ReferenceExpression BuildConnectionString()
     {
-        if (!this.TryGetAnnotationsOfType<MongoReplicaSetMemberAnnotation>(out var members) || !members.Any())
+        var membersList = Members.ToList();
+        if (membersList is [])
         {
             throw new InvalidOperationException($"Cannot build connection string for MongoDB replica set resource '{Name}' because it does not have any members.");
         }
@@ -35,28 +41,27 @@ public sealed class MongoDBReplicaSetResource(
 
         // Build the seed list `mongodb://host1:port1,host2:port2,.../?replicaSet=<name>` — see https://www.mongodb.com/docs/manual/reference/connection-string/#dns-seedlist-connection-format
         builder.AppendLiteral("mongodb://");
-        var membersList = members.ToList();
         var hasAuth = false;
         for (var i = 0; i < membersList.Count; i++)
         {
             var @this = membersList[i];
             if (i is 0)
             {
-                if (@this.Member.PasswordParameter is not null)
+                if (@this.PasswordParameter is not null)
                 {
-                    if (@this.Member.UserNameParameter is not null)
+                    if (@this.UserNameParameter is not null)
                     {
-                        builder.Append($"{@this.Member.UserNameParameter:uri}:{@this.Member.PasswordParameter:uri}@");
+                        builder.Append($"{@this.UserNameParameter:uri}:{@this.PasswordParameter:uri}@");
                     }
                     else
                     {
-                        builder.Append($"{MongoDBServerResource.DefaultUserName:uri}:{@this.Member.PasswordParameter:uri}@");
+                        builder.Append($"{MongoDBServerResource.DefaultUserName:uri}:{@this.PasswordParameter:uri}@");
                     }
                     hasAuth = true;
                 }
             }
 
-            builder.Append($"{@this.Member.PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}");
+            builder.Append($"{@this.PrimaryEndpoint.Property(EndpointProperty.HostAndPort)}");
 
             if (i < membersList.Count - 1)
             {
@@ -74,7 +79,7 @@ public sealed class MongoDBReplicaSetResource(
             builder.Append($"{MongoDBServerResource.DefaultAuthenticationMechanism:uri}");
         }
 
-        if (membersList.Any(m => m.Member.TlsEnabled))
+        if (membersList.Any(m => m.TlsEnabled))
         {
             builder.AppendLiteral("&tls=true");
         }
