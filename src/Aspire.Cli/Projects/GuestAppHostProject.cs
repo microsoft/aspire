@@ -1261,7 +1261,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // unreliable for processes the BCL did not itself start) goes through the
             // IsolatedProcess wrapper's GetExitCodeProcess-backed accessors instead.
             // See https://github.com/dotnet/runtime/issues/45003.
-            catch (SocketException ex) when (serverSession.HasServerExited == true)
+            catch (SocketException ex) when (serverSession.HasServerExited == true && !cancellationToken.IsCancellationRequested)
             {
                 var exitCode = serverSession.TryGetServerExitCode() ?? -1;
                 _logger.LogError("AppHost server process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", exitCode, socketPath);
@@ -1296,6 +1296,17 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 {
                     await Task.Delay(50, cancellationToken).ConfigureAwait(false);
                 }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // User cancellation (Ctrl+C) is tearing down the run; appHostSystemToken is linked
+                // to it. Leave the backchannel completion source pending rather than faulting it:
+                // faulting here would trip the IsFaulted continuation in RunAppHostAsync, which sets
+                // internalFaultCode = FailedToDotnetRunAppHost and would surface a run *failure*
+                // instead of the normal Cancelled (130). The outer run loop observes the same token
+                // and returns cancellation on its own.
+                _logger.LogDebug("Backchannel connection to AppHost server cancelled during shutdown.");
+                return;
             }
             catch (Exception ex)
             {

@@ -96,7 +96,14 @@ internal sealed class ProcessTreeGracefulShutdownService(
 
     private void ForceKillRemainingProcesses(IEnumerable<ProcessTarget> processes, bool afterTimeout)
     {
-        var killEntireProcessTree = !OperatingSystem.IsWindows();
+        // On Windows DCP is normally an in-tree descendant of the AppHost, so the success path
+        // (afterTimeout: false, which only mops up leftover shutdown-handle processes after a
+        // graceful stop succeeded) must NOT tree-kill — that would tear DCP down mid-cleanup.
+        // But once graceful shutdown has failed/timed out (afterTimeout: true) the whole point of
+        // this escalation is a guaranteed teardown, so we tree-kill on Windows too; otherwise the
+        // root PID dies while orphaned descendants (DCP, tsx/node, the guest) keep running. On Unix
+        // we always tree-kill.
+        var killEntireProcessTree = afterTimeout || !OperatingSystem.IsWindows();
 
         foreach (var process in processes.Distinct())
         {

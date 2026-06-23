@@ -40,7 +40,11 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private readonly bool _isolateConsole;
 
     // Serializes StartAsync against DisposeAsync so a concurrent dispose cannot orphan a
-    // just-spawned process (see StartAsync for the ordering guarantee).
+    // just-spawned process (see StartAsync for the ordering guarantee). Never disposed: the
+    // idempotency guard in DisposeAsync reads _disposed only AFTER acquiring this gate, so
+    // disposing it would make a second DisposeAsync throw ObjectDisposedException from WaitAsync
+    // before it could observe that the first dispose already ran. We never touch
+    // AvailableWaitHandle, so SemaphoreSlim needs no disposal here.
     private readonly SemaphoreSlim _startGate = new(1, 1);
     private bool _startInvoked;
     private bool _disposed;
@@ -430,7 +434,6 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _stopCts.Dispose();
         (_project as IDisposable)?.Dispose();
         _activity.Dispose();
-        _startGate.Dispose();
     }
 
     private static void ObserveFaultedTask(Task task)
