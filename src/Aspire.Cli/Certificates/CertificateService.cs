@@ -50,17 +50,16 @@ internal sealed class CertificateService(
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
     CliExecutionContext executionContext,
-    Func<bool>? isLinux = null) : ICertificateService
+    IEnvironment environment) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
-    private readonly Func<bool> _isLinux = isLinux ?? OperatingSystem.IsLinux;
 
     public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity(kind: ActivityKind.Client);
 
         var environmentVariables = new Dictionary<string, string>();
-        var isLinux = _isLinux();
+        var isLinux = environment.IsLinux;
 
         // In non-interactive environments on macOS and Windows we can't successfully
         // prompt for trust (macOS Keychain password, Windows trust dialog).

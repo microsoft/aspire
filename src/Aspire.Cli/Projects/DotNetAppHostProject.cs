@@ -78,7 +78,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         IGracefulShutdownWindow shutdownService,
         IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
         CliExecutionContext executionContext,
-        TimeProvider? timeProvider = null)
+        TimeProvider timeProvider)
     {
         _runner = runner;
         _interactionService = interactionService;
@@ -97,7 +97,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _shutdownService = shutdownService;
         _gracefulShutdownSignaler = gracefulShutdownSignaler;
         _executionContext = executionContext;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider, _profilingTelemetry);
     }
 

@@ -409,7 +409,7 @@ internal sealed record AzureProvisioningFailureDetails(
     internal static bool IsFailureProperty(string propertyName)
         => propertyName.StartsWith(PropertyPrefix, StringComparison.Ordinal);
 
-    private static ResourcePropertySnapshot CreateHighlightedFailureProperty(string name, object value, string displayName)
+    internal static ResourcePropertySnapshot CreateHighlightedFailureProperty(string name, object value, string displayName)
         => new($"{PropertyPrefix}{name}", value) { DisplayName = displayName, IsHighlighted = true };
 
     internal JsonObject ToJsonObject()

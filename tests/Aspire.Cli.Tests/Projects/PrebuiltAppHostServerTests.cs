@@ -414,6 +414,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             mappings: mappings,
             nuGetPackageCache: new FakeNuGetPackageCache(),
             features: new TestFeatures(),
+            NullLogger.Instance,
             configureGlobalPackagesFolder: true);
         var server = CreateServerWithChannel(workspace, stagingChannel, executionContext);
 
@@ -560,7 +561,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource)
             ],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, explicitChannel, CreateContextWithIdentityChannel("pr-12345"));
 
         using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
@@ -587,6 +588,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             mappings: [new PackageMapping("CommunityToolkit*", channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
             features: new TestFeatures(),
+            NullLogger.Instance,
             configureGlobalPackagesFolder: true);
         var executionContext = CreateContextWithIdentityChannel("pr-12345");
         var server = CreateServerWithChannel(workspace, stagingChannel, executionContext);
@@ -635,7 +637,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", channelSource), new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
         using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
@@ -681,7 +683,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping(PackageMapping.AllPackages, channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
         using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
@@ -735,7 +737,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
         var sources = await InvokeGetNuGetSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
@@ -757,7 +759,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("CommunityToolkit*", channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
         var sources = await InvokeGetNuGetSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
@@ -781,7 +783,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping(PackageMapping.AllPackages, channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
 
         var sources = await InvokeGetNuGetSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
@@ -875,7 +877,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
         };
         var dailyChannel = PackageChannel.CreateExplicitChannel(
-            "daily", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
+            "daily", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]),
@@ -904,7 +906,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
         };
         var dailyChannel = PackageChannel.CreateExplicitChannel(
-            "daily", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
+            "daily", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
 
         var packagingService = new TestPackagingService
         {
@@ -972,7 +974,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
         };
         var channel = PackageChannel.CreateExplicitChannel(
-            channelName, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
+            channelName, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
         return CreateServerWithChannel(workspace, channel, executionContext);
     }
 
@@ -1208,7 +1210,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", packageSource.FullName)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
@@ -1272,7 +1274,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 new PackageMapping(PackageMapping.AllPackages, channelSource)
             ],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
@@ -1327,7 +1329,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
@@ -1442,7 +1444,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", missingPackageSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
@@ -1511,7 +1513,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource)
             ],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel])
@@ -1693,7 +1695,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", channelSource)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel])
@@ -1761,7 +1763,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             quality: PackageChannelQuality.Both,
             mappings: [new PackageMapping("Aspire*", localHive)],
             nuGetPackageCache: new FakeNuGetPackageCache(),
-            features: new TestFeatures());
+            features: new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([prChannel])
@@ -1911,7 +1913,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
             ],
             new FakeNuGetPackageCache(),
-            new TestFeatures());
+            new TestFeatures(),
+            NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([stagingChannel])

@@ -54,9 +54,10 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
                 var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
                 var interactionService = sp.GetRequiredService<IInteractionService>();
+                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
 
                 // Use a custom notifier that overrides the current version
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0-dev", logger, nuGetPackageCache, interactionService);
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0-dev", logger, nuGetPackageCache, interactionService, processPathProvider);
             };
         });
 
@@ -106,9 +107,10 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
                 var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
                 var interactionService = sp.GetRequiredService<IInteractionService>();
+                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
 
                 // Use a custom notifier that overrides the current version
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0-dev", logger, nuGetPackageCache, interactionService);
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0-dev", logger, nuGetPackageCache, interactionService, processPathProvider);
             };
         });
 
@@ -158,9 +160,10 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
                 var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
                 var interactionService = sp.GetRequiredService<IInteractionService>();
+                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
 
                 // Use a custom notifier that overrides the current version
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService);
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService, processPathProvider);
             };
         });
 
@@ -196,7 +199,8 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
                 var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService);
+                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService, processPathProvider);
             };
         });
 
@@ -210,11 +214,12 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     public async Task NotifyIfUpdateAvailable_UsesDotnetToolCommandForNativeAotToolStorePath()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/any/linux-x64/aspire");
         TestInteractionService? interactionService = null;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
+            UseProcessPath(configure, "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/any/linux-x64/aspire");
+
             configure.NuGetPackageCacheFactory = _ => new FakeNuGetPackageCache
             {
                 GetCliPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([
@@ -233,7 +238,8 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
                 var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
                 var service = sp.GetRequiredService<IInteractionService>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service);
+                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service, processPathProvider);
             };
         });
 
@@ -253,11 +259,13 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var tempDirectory = new TestTempDirectory();
         var toolPath = Path.Combine(tempDirectory.Path, "custom tool path");
-        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting(CreateCustomToolPathInstall(toolPath));
+        var processPath = CreateCustomToolPathInstall(toolPath);
         TestInteractionService? interactionService = null;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
+            UseProcessPath(configure, processPath);
+
             configure.NuGetPackageCacheFactory = _ => new FakeNuGetPackageCache
             {
                 GetCliPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([
@@ -276,7 +284,8 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
                 var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
                 var service = sp.GetRequiredService<IInteractionService>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service);
+                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service, processPathProvider);
             };
         });
 
@@ -294,11 +303,12 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     public async Task NotifyIfUpdateAvailable_UsesAspireUpdateCommandForStandaloneArchivePath()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.aspire/bin/aspire");
         TestInteractionService? interactionService = null;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
+            UseProcessPath(configure, "/home/test/.aspire/bin/aspire");
+
             configure.NuGetPackageCacheFactory = _ => new FakeNuGetPackageCache
             {
                 GetCliPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([
@@ -317,7 +327,8 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
                 var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
                 var service = sp.GetRequiredService<IInteractionService>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service);
+                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service, processPathProvider);
             };
         });
 
@@ -335,12 +346,13 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     public async Task NotifyIfUpdateAvailable_UsesNpmCommandForNpmInstall()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.aspire/bin/aspire");
         using var npmScope = NpmInstallDetection.UseEnvironmentForTesting(CreateNpmInstallEnvironment());
         TestInteractionService? interactionService = null;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
+            UseProcessPath(configure, "/home/test/.aspire/bin/aspire");
+
             configure.NuGetPackageCacheFactory = _ => new FakeNuGetPackageCache
             {
                 GetCliPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([
@@ -359,7 +371,8 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
                 var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
                 var service = sp.GetRequiredService<IInteractionService>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service);
+                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service, processPathProvider);
             };
         });
 
@@ -405,9 +418,10 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
                 var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
                 var interactionService = sp.GetRequiredService<IInteractionService>();
+                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
 
                 // Use a custom notifier that overrides the current version
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService);
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService, processPathProvider);
             };
         });
 
@@ -499,9 +513,19 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
             [NpmInstallDetection.PackageRidEnvironmentVariableName] = "linux-x64"
         };
     }
+
+    private static void UseProcessPath(CliServiceCollectionTestOptions options, string? processPath)
+    {
+        options.ProcessPathProviderFactory = _ => new TestProcessPathProvider(processPath);
+    }
 }
 
-internal sealed class CliUpdateNotifierWithPackageVersionOverride(string currentVersion, ILogger<CliUpdateNotifier> logger, INuGetPackageCache nuGetPackageCache, IInteractionService interactionService) : CliUpdateNotifier(logger, nuGetPackageCache, interactionService)
+internal sealed class CliUpdateNotifierWithPackageVersionOverride(
+    string currentVersion,
+    ILogger<CliUpdateNotifier> logger,
+    INuGetPackageCache nuGetPackageCache,
+    IInteractionService interactionService,
+    IProcessPathProvider processPathProvider) : CliUpdateNotifier(logger, nuGetPackageCache, interactionService, processPathProvider)
 {
     protected override SemVersion? GetCurrentVersion()
     {

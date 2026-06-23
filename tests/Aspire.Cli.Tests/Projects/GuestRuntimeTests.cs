@@ -39,8 +39,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         return new GuestRuntime(
             spec ?? CreateTestSpec(),
             _loggerFactory.CreateLogger<GuestRuntime>(),
-            commandResolver: commandResolver,
-            profilingTelemetry: profilingTelemetry);
+            commandResolver ?? PathLookupHelper.FindFullPathFromPath,
+            profilingTelemetry ?? new ProfilingTelemetry(new ConfigurationBuilder().Build()));
     }
 
     private static RuntimeSpec CreateTestSpec(

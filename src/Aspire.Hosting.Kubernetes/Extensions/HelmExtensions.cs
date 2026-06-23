@@ -45,7 +45,7 @@ internal static partial class HelmExtensions
         => $"{ValuesSegment}.{ConfigKey}.{resourceName}.{parameterName}".ToHelmValuesSectionName().ToHelmExpression();
 
     public static string ToHelmChartName(this string applicationName)
-        => applicationName.ToLower().Replace("_", "-").Replace(".", "-");
+        => applicationName.ToLowerInvariant().Replace("_", "-").Replace(".", "-");
 
     /// <summary>
     /// Converts the specified resource name into a Kubernetes resource name.

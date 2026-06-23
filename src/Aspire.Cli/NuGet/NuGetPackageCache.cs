@@ -161,11 +161,11 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
                    packageName.Equals("Aspire.ProjectTemplates", StringComparison.Ordinal) ||
                    packageName.Equals("Aspire.Cli", StringComparison.Ordinal);
 
-            var isExcluded = packageName.StartsWith("Aspire.Hosting.AppHost") ||
-                             packageName.StartsWith("Aspire.Hosting.Sdk") ||
-                             packageName.StartsWith("Aspire.Hosting.Orchestration") ||
-                             packageName.StartsWith("Aspire.Hosting.Testing") ||
-                             packageName.StartsWith("Aspire.Hosting.Msi");
+            var isExcluded = packageName.StartsWith("Aspire.Hosting.AppHost", StringComparison.Ordinal) ||
+                             packageName.StartsWith("Aspire.Hosting.Sdk", StringComparison.Ordinal) ||
+                             packageName.StartsWith("Aspire.Hosting.Orchestration", StringComparison.Ordinal) ||
+                             packageName.StartsWith("Aspire.Hosting.Testing", StringComparison.Ordinal) ||
+                             packageName.StartsWith("Aspire.Hosting.Msi", StringComparison.Ordinal);
 
             return isHostingOrCommunityToolkitNamespaced && !isExcluded;
         }

@@ -20,7 +20,7 @@ internal sealed class DcpKubeconfig : IDisposable
 
     public X509Certificate2? ClientCertificate { get; init; }
 
-    internal static async Task<DcpKubeconfig> ReadFileWithRetryAsync(string path, CancellationToken cancellationToken, Func<TimeSpan, CancellationToken, Task>? delayAsync = null)
+    internal static async Task<DcpKubeconfig> ReadFileWithRetryAsync(string path, Func<TimeSpan, CancellationToken, Task>? delayAsync = null, CancellationToken cancellationToken = default)
     {
         delayAsync ??= Task.Delay;
 

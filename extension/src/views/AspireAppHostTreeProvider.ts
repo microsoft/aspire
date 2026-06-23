@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { AspireTerminalProvider, shellArg } from '../utils/AspireTerminalProvider';
+import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTerminalProvider';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
 import { compareResourceCommands, getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
 import {
@@ -59,6 +59,8 @@ import { AppHostLaunchService } from '../services/AppHostLaunchService';
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
 
 const integratedBrowserOpenCommand = 'workbench.action.browser.open';
+const terminalEnabledPropertyName = 'terminal.enabled';
+const terminalReplicaIndexPropertyName = 'terminal.replicaIndex';
 
 function sortResources(resources: ResourceJson[]): ResourceJson[] {
     return [...resources].sort((a, b) => {
@@ -421,12 +423,26 @@ export function getResourceContextValue(resource: ResourceJson): string {
     if (hasEnabledCommand(commands, 'restart') || hasEnabledCommand(commands, 'resource-restart')) {
         parts.push('canRestart');
     }
+    if (isTerminalEnabled(resource)) {
+        parts.push('canOpenTerminal');
+    }
     return parts.join(':');
 }
 
 function hasEnabledCommand(commands: Record<string, ResourceCommandJson> | null | undefined, commandName: string): boolean {
     const command = commands?.[commandName];
     return isCommandVisibleToUi(command) && isEnabledCommand(command);
+}
+
+function isTerminalEnabled(resource: ResourceJson): boolean {
+    const value = resource.properties?.[terminalEnabledPropertyName];
+    return value?.trim().toLowerCase() === 'true';
+}
+
+function getTerminalReplicaIndex(resource: ResourceJson): string | undefined {
+    const value = resource.properties?.[terminalReplicaIndexPropertyName];
+    const trimmedValue = value?.trim();
+    return trimmedValue && trimmedValue.length > 0 ? trimmedValue : undefined;
 }
 
 export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
@@ -1425,6 +1441,21 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
         await this._terminalProvider.sendAspireCommandToAspireTerminal(['logs', shellArg(resourceName), '--apphost', shellArg(appHost.appHostPath)]);
+    }
+
+    async openResourceTerminal(element: ResourceItem): Promise<void> {
+        const command: Array<string | ShellArg> = ['terminal', 'attach', shellArg(element.resource.name)];
+        const appHostPath = this._getAppHostPathForResource(element);
+        if (appHostPath) {
+            command.push('--apphost', shellArg(appHostPath));
+        }
+
+        const replicaIndex = getTerminalReplicaIndex(element.resource);
+        if (replicaIndex) {
+            command.push('--replica', shellArg(replicaIndex));
+        }
+
+        await this._terminalProvider.sendAspireCommandToAspireTerminal(command, true, undefined, { terminalTarget: 'editor' });
     }
 
     async executeResourceCommand(element: ResourceItem): Promise<void> {

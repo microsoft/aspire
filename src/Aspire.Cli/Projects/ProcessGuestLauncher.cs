@@ -28,6 +28,8 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         Func<string, string?> commandResolver,
         IProcessExecutionFactory processExecutionFactory)
     {
+        ArgumentNullException.ThrowIfNull(commandResolver);
+
         _language = language;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;

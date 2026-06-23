@@ -952,7 +952,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             // (e.g. Aspire.Hosting.Dashboard.Model.IconResolver). Third-party categories (e.g.
             // Microsoft.AspNetCore.Server.Kestrel) get a "ThirdParty" segment so they can be filtered
             // with a single rule on "Aspire.Hosting.Dashboard.ThirdParty".
-            if (category.StartsWith("Aspire.Dashboard."))
+            if (category.StartsWith("Aspire.Dashboard.", StringComparison.Ordinal))
             {
                 var categoryTrimmed = category["Aspire.Dashboard.".Length..];
                 return loggerFactory.CreateLogger($"Aspire.Hosting.Dashboard.{categoryTrimmed}");

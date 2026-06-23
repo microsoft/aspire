@@ -210,4 +210,8 @@
     <value>The {0} command requires --yes when the --non-interactive option is specified.</value>
     <comment>{0} is the command name.</comment>
   </data>
+  <data name="UnrecognizedOptionDidYouMeanFormat" xml:space="preserve">
+    <value>Unrecognized option '{0}'. Did you mean '{1}'?</value>
+    <comment>{0} is the unrecognized option, {1} is the suggested correct option.</comment>
+  </data>
 </root>
