@@ -475,20 +475,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 await serverSession.StartAsync();
                 serverCompletion = serverSession.WaitForExitAsync();
 
-                // Give the server a moment to start
-                await Task.Delay(500, cancellationToken);
-
-                if (serverCompletion.IsCompleted)
-                {
-                    _interactionService.DisplayLines(serverSession.Output!.GetLines());
-                    _interactionService.DisplayError("App host exited unexpectedly.");
-                    return CliExitCodes.FailedToDotnetRunAppHost;
-                }
-
                 try
                 {
                     // Step 5: Connect to server for RPC calls. The connection helper retries until
-                    // the RPC socket is available and fails early if the server process exits.
+                    // the RPC socket is available and fails early if the server process exits — it
+                    // races the connect against the server-exit signal, so a server that crashes on
+                    // startup surfaces immediately (no fixed start-up delay to wait through).
                     rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
 
                     // Step 6: Generate SDK code via RPC if needed
@@ -1053,18 +1045,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
                 try
                 {
-                    // Give the server a moment to start
-                    await Task.Delay(500, cancellationToken);
-
-                    if (serverCompletion.IsCompleted)
-                    {
-                        _interactionService.DisplayLines(serverSession.Output!.GetLines());
-                        _interactionService.DisplayError("App host exited unexpectedly.");
-                        return CliExitCodes.FailedToDotnetRunAppHost;
-                    }
-
                     // Step 3: Connect to server for RPC calls. The connection helper retries until
-                    // the RPC socket is available and fails early if the server process exits.
+                    // the RPC socket is available and fails early if the server process exits — it
+                    // races the connect against the server-exit signal, so a server that crashes on
+                    // startup surfaces immediately (no fixed start-up delay to wait through).
                     rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
 
                     // Step 4: Generate code via RPC if needed
