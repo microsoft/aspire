@@ -13,7 +13,8 @@ namespace Aspire.Cli.Migrations;
 internal sealed record MigrationContext(FileInfo? AppHostFile)
 {
     /// <summary>
-    /// Detects and applies migrations against the current working directory.
+    /// A context with no explicitly selected AppHost, so the migration resolves the current AppHost
+    /// from the working directory.
     /// </summary>
     public static MigrationContext CurrentDirectory { get; } = new((FileInfo?)null);
 }
