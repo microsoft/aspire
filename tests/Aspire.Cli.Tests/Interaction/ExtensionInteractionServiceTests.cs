@@ -10,6 +10,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 
@@ -38,12 +39,14 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             new ConsoleEnvironment(console, console),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(),
             NullLoggerFactory.Instance,
             new ConsoleLogBufferContext());
         var extensionInteractionService = new ExtensionInteractionService(
             consoleInteractionService,
             new TestExtensionBackchannel(),
-            extensionPromptEnabled: false);
+            extensionPromptEnabled: false,
+            logger: NullLogger<ExtensionInteractionService>.Instance);
 
         var fileLinkMarkup = MarkupHelpers.SafeFileLink(extensionInteractionService, logFilePath);
         extensionInteractionService.DisplayMessage(
@@ -78,6 +81,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             new ConsoleEnvironment(console, console),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(),
             NullLoggerFactory.Instance,
             new ConsoleLogBufferContext());
 
@@ -94,7 +98,8 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         var extensionInteractionService = new ExtensionInteractionService(
             consoleInteractionService,
             backchannel,
-            extensionPromptEnabled: false);
+            extensionPromptEnabled: false,
+            logger: NullLogger<ExtensionInteractionService>.Instance);
 
         extensionInteractionService.DisplayLines(
         [
@@ -116,5 +121,39 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
         var json = JsonSerializer.Serialize(captured, options.GetTypeInfo(captured.GetType()));
         Assert.Equal("[{\"stream\":\"stdout\",\"line\":\"hello\"},{\"stream\":\"stderr\",\"line\":\"oops\"}]", json);
+    }
+
+    [Fact]
+    public async Task Dispose_StopsBackgroundPump()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.TrueColor,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [extension].log");
+        var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
+        var consoleInteractionService = new ConsoleInteractionService(
+            new ConsoleEnvironment(console, console),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(),
+            NullLoggerFactory.Instance,
+            new ConsoleLogBufferContext());
+        var extensionInteractionService = new ExtensionInteractionService(
+            consoleInteractionService,
+            new TestExtensionBackchannel(),
+            extensionPromptEnabled: false,
+            logger: NullLogger<ExtensionInteractionService>.Instance);
+
+        extensionInteractionService.Dispose();
+
+        // The background pump should exit promptly after disposal.
+        await extensionInteractionService.PumpTask.DefaultTimeout();
     }
 }

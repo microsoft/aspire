@@ -26,22 +26,29 @@ internal interface IExtensionInteractionService : IInteractionService
     void ConsoleDisplaySubtleMessage(string message, bool allowMarkup = false);
 }
 
-internal class ExtensionInteractionService : IExtensionInteractionService
+internal class ExtensionInteractionService : IExtensionInteractionService, IDisposable
 {
     private readonly ConsoleInteractionService _consoleInteractionService;
     private readonly bool _extensionPromptEnabled;
+    private readonly CancellationTokenSource _cts = new();
     private readonly CancellationToken _cancellationToken;
     private readonly Channel<Func<Task>> _extensionTaskChannel;
-    private readonly ILogger<ExtensionInteractionService>? _logger;
+    private readonly ILogger<ExtensionInteractionService> _logger;
+
+    /// <summary>
+    /// The background pump task that processes queued extension operations.
+    /// Completes when the channel is completed and/or the token is cancelled.
+    /// </summary>
+    internal Task PumpTask { get; }
 
     public IExtensionBackchannel Backchannel { get; }
 
-    public ExtensionInteractionService(ConsoleInteractionService consoleInteractionService, IExtensionBackchannel backchannel, bool extensionPromptEnabled, CancellationToken? cancellationToken = null, ILogger<ExtensionInteractionService>? logger = null)
+    public ExtensionInteractionService(ConsoleInteractionService consoleInteractionService, IExtensionBackchannel backchannel, bool extensionPromptEnabled, ILogger<ExtensionInteractionService> logger)
     {
         _consoleInteractionService = consoleInteractionService;
         Backchannel = backchannel;
         _extensionPromptEnabled = extensionPromptEnabled;
-        _cancellationToken = cancellationToken ?? CancellationToken.None;
+        _cancellationToken = _cts.Token;
         _logger = logger;
         _extensionTaskChannel = Channel.CreateUnbounded<Func<Task>>(new UnboundedChannelOptions
         {
@@ -49,32 +56,9 @@ internal class ExtensionInteractionService : IExtensionInteractionService
             SingleWriter = true
         });
 
-        _ = Task.Run(async () =>
-        {
-            while (await _extensionTaskChannel.Reader.WaitToReadAsync().ConfigureAwait(false))
-            {
-                try
-                {
-                    var taskFunction = await _extensionTaskChannel.Reader.ReadAsync().ConfigureAwait(false);
-                    await taskFunction.Invoke();
-                }
-                catch (Exception ex) when (ex is not ExtensionOperationCanceledException)
-                {
-                    try
-                    {
-                        await Backchannel.DisplayErrorAsync(StringUtils.RemoveMarkup(ex.Message), _cancellationToken);
-                    }
-                    catch (Exception displayErrorException)
-                    {
-                        // Keep the single-reader pump alive even when the extension connection is
-                        // already broken; otherwise the final flush sentinel can never be processed.
-                        _logger?.LogDebug(displayErrorException, "Failed to display an extension operation error through the extension backchannel.");
-                    }
-
-                    _consoleInteractionService.DisplayError(ex.Message);
-                }
-            }
-        });
+        // Use CancellationToken.None here to avoid the pump task being cancelled before it is scheduled.
+        // Code in the pump task itself will observe the cancellation token to exit gracefully when the service is disposed.
+        PumpTask = Task.Run(ProcessExtensionTaskChannelAsync, CancellationToken.None);
     }
 
     public async Task FlushAsync(CancellationToken cancellationToken = default)
@@ -577,5 +561,50 @@ internal class ExtensionInteractionService : IExtensionInteractionService
     {
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.WriteDebugSessionMessageAsync(StringUtils.RemoveMarkup(message), stdout, textStyle, _cancellationToken));
         Debug.Assert(result);
+    }
+
+    private async Task ProcessExtensionTaskChannelAsync()
+    {
+        try
+        {
+            while (await _extensionTaskChannel.Reader.WaitToReadAsync(_cancellationToken).ConfigureAwait(false))
+            {
+                try
+                {
+                    var taskFunction = await _extensionTaskChannel.Reader.ReadAsync().ConfigureAwait(false);
+                    await taskFunction.Invoke();
+                }
+                catch (Exception ex) when (ex is not ExtensionOperationCanceledException)
+                {
+                    try
+                    {
+                        await Backchannel.DisplayErrorAsync(StringUtils.RemoveMarkup(ex.Message), _cancellationToken);
+                    }
+                    catch (Exception displayErrorException)
+                    {
+                        // Keep the single-reader pump alive even when the extension connection is
+                        // already broken; otherwise the final flush sentinel can never be processed.
+                        _logger.LogDebug(displayErrorException, "Failed to display an extension operation error through the extension backchannel.");
+                    }
+
+                    _consoleInteractionService.DisplayError(ex.Message);
+                }
+            }
+        }
+        catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
+        {
+            // Expected during disposal — the channel was completed and/or the token cancelled.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error in extension task channel processing loop.");
+        }
+    }
+
+    public void Dispose()
+    {
+        _extensionTaskChannel.Writer.TryComplete();
+        _cts.Cancel();
+        _cts.Dispose();
     }
 }

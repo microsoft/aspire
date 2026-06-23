@@ -194,7 +194,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         return TestExecutionContextHelper.CreateExecutionContext(
             workingDirectory,
             debugMode: false,
-            environmentVariables: new Dictionary<string, string?>(),
+            environment: new TestEnvironment(),
             homeDirectory: workingDirectory);
     }
 
@@ -208,7 +208,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         return TestExecutionContextHelper.CreateExecutionContext(
             workingDirectory,
             debugMode: false,
-            environmentVariables: environmentVariables,
+            environment: new TestEnvironment(environmentVariables),
             homeDirectory: workingDirectory);
     }
 

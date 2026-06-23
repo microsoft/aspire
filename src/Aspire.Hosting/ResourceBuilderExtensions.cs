@@ -2823,6 +2823,7 @@ public static class ResourceBuilderExtensions
 
         var endpointName = endpoint.EndpointName;
 
+        // Validate that the endpoint exists during allocation to fail fast on misconfiguration.
         builder.OnResourceEndpointsAllocated((_, @event, ct) =>
         {
             if (!endpoint.Exists)
@@ -2833,14 +2834,6 @@ public static class ResourceBuilderExtensions
             return Task.CompletedTask;
         });
 
-        Uri? uri = null;
-        builder.OnBeforeResourceStarted((_, @event, ct) =>
-        {
-            var baseUri = new Uri(endpoint.Url, UriKind.Absolute);
-            uri = new Uri(baseUri, path);
-            return Task.CompletedTask;
-        });
-
         var healthCheckKey = $"{builder.Resource.Name}_{endpointName}_{path}_{statusCode}_check";
 
         builder.ApplicationBuilder.Services.AddHttpClient();
@@ -2848,8 +2841,9 @@ public static class ResourceBuilderExtensions
 
         builder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
             healthCheckKey,
-            serviceProvider => new DeferredUriHealthCheck(
-                () => uri,
+            serviceProvider => new EndpointUriHealthCheck(
+                endpoint,
+                path,
                 statusCode.Value,
                 () => serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(healthCheckKey)),
             failureStatus: default,

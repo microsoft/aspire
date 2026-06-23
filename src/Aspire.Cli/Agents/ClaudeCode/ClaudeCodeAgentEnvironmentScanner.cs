@@ -197,7 +197,7 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
         CancellationToken cancellationToken)
     {
         var configFilePath = Path.Combine(repoRoot.FullName, McpConfigFileName);
-        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, cancellationToken);
+        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, null, cancellationToken);
 
         // Ensure "mcpServers" object exists
         if (!config.ContainsKey("mcpServers") || config["mcpServers"] is not JsonObject)

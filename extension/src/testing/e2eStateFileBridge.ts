@@ -342,6 +342,12 @@ async function executeE2eControlCommand(
       markStarted();
       return await commandPromise;
     }
+    case 'openResourceTerminal': {
+      const element = getResourceElement(appHostTreeProvider, command.resourceName, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.openResourceTerminal', element);
+      markStarted();
+      return await commandPromise;
+    }
     case 'copyResourceName': {
       const element = getResourceElement(appHostTreeProvider, command.resourceName, command.appHostPath);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyResourceName', element);

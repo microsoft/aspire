@@ -397,7 +397,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         return TestExecutionContextHelper.CreateExecutionContext(
             workingDirectory,
             debugMode: false,
-            environmentVariables: environmentVariables,
+            environment: new TestEnvironment(environmentVariables),
             homeDirectory: homeDirectory);
     }
 }

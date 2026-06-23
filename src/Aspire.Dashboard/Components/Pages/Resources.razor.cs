@@ -3,8 +3,6 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Globalization;
-using System.Text;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
@@ -764,31 +762,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             return (value, property.IsValueSensitive, isUnresolved);
         }
         return (null, false, isUnresolved);
-    }
-
-    private static string GetUrlsTooltip(ResourceViewModel resource)
-    {
-        var displayedUrls = GetDisplayedUrls(resource);
-
-        if (displayedUrls.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        if (displayedUrls.Count == 1)
-        {
-            return displayedUrls[0].Text;
-        }
-
-        var maxShownUrls = 3;
-        var tooltipBuilder = new StringBuilder(string.Join(", ", displayedUrls.Take(maxShownUrls).Select(url => url.Text)));
-
-        if (displayedUrls.Count > maxShownUrls)
-        {
-            tooltipBuilder.Append(CultureInfo.CurrentCulture, $" + {displayedUrls.Count - maxShownUrls}");
-        }
-
-        return tooltipBuilder.ToString();
     }
 
     private async Task OnToggleCollapse(ResourceGridViewModel viewModel)

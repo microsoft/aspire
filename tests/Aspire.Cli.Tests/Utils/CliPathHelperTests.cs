@@ -174,6 +174,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [InlineData("brew")]
     [InlineData("winget")]
     [InlineData("dotnet-tool")]
+    [InlineData("nix")]
     [InlineData("unknown")]
     public void TryGetAspireHomeDirectoryFromInstallRoute_PackageManagerOrUnknownRoute_ReturnsNull(string source)
     {

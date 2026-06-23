@@ -734,10 +734,12 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         // Push some logs through to the dashboard resource.
         var logger = resourceLoggerService.GetLogger("aspire-dashboard-0");
 
-        // The logging watcher expects a JSON payload
+        // The logging watcher expects a JSON payload. Use an "Aspire.Dashboard." prefixed category
+        // so the LogMessage method trims it and routes to "Aspire.Hosting.Dashboard.Test" rather than
+        // "Aspire.Hosting.Dashboard.ThirdParty.Test".
         var dashboardLogMessage = new DashboardLogMessage
         {
-            Category = "Test",
+            Category = "Aspire.Dashboard.Test",
             LogLevel = logLevel,
             Message = "Test dashboard message"
         };

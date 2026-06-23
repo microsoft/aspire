@@ -28,7 +28,7 @@ internal static class TestExecutionContextHelper
         return CreateExecutionContext(
             workspace.WorkspaceRoot,
             identityChannel: identityChannel,
-            environmentVariables: environmentVariables,
+            environment: new TestEnvironment(environmentVariables),
             logFilePath: logFilePath,
             identityVersion: identityVersion,
             identityCommit: identityCommit,
@@ -45,7 +45,7 @@ internal static class TestExecutionContextHelper
         string identityChannel = "local",
         DirectoryInfo? homeDirectory = null,
         DirectoryInfo? hivesDirectory = null,
-        IReadOnlyDictionary<string, string?>? environmentVariables = null,
+        IEnvironment? environment = null,
         DirectoryInfo? packagesDirectory = null,
         bool debugMode = false,
         string? logFilePath = null,
@@ -76,7 +76,7 @@ internal static class TestExecutionContextHelper
             identityOverridden: identityOverridden,
             identityPackagesDirectory: identityPackagesDirectory,
             debugMode: debugMode,
-            environmentVariables: environmentVariables,
+            environmentVariables: (environment as TestEnvironment)?.Variables,
             homeDirectory: homeDirectory,
             packagesDirectory: packagesDirectory);
     }

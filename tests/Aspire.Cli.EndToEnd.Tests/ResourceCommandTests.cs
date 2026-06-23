@@ -119,11 +119,11 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
         await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
-        await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
         await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.EmptyAppHost);
 
@@ -133,7 +133,9 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
         // Read the generated apphost.cs so we can extract the #:sdk line with the
         // resolved version, then replace the entire file with a minimal AppHost
-        // that has a placeholder resource and a command that uses IInteractionService.
+        // that has a parameter resource and a command that uses IInteractionService.
+        // Using a parameter instead of a container avoids Docker container teardown
+        // flakiness during `aspire stop` in CI (see #17485).
         var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "apphost.cs");
         var content = File.ReadAllText(appHostFilePath);
 
@@ -145,9 +147,9 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
             var builder = DistributedApplication.CreateBuilder(args);
 
-            var cache = builder.AddContainer("cache", "redis");
+            var resource = builder.AddParameter("test-resource");
 
-            cache.WithCommand(
+            resource.WithCommand(
                 name: "needs-interaction",
                 displayName: "Needs interaction",
                 executeCommand: async context =>
@@ -187,9 +189,9 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        await auto.TypeAsync("aspire resource cache needs-interaction");
+        await auto.TypeAsync("aspire resource test-resource needs-interaction");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Failed to execute command 'needs-interaction' on resource 'cache'", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("Failed to execute command 'needs-interaction' on resource 'test-resource'", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("InteractionService is not available", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("See logs at", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("See AppHost logs at", timeout: TimeSpan.FromSeconds(30));
@@ -308,6 +310,88 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
             TimeSpan.FromSeconds(10));
 
         // Stop the AppHost.
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task ResourceCommand_JsonResult_WritesOnlyJsonToStdoutAndStatusToStderr()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var projectSuffix = Guid.NewGuid().ToString("N")[..6];
+        var projectName = $"ResourceCmdJsonApp_{projectSuffix}";
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.EmptyAppHost);
+
+        await auto.TypeAsync($"cd {projectName}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Replace the generated apphost.cs with a minimal AppHost that has a
+        // command returning a JSON result.
+        var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "apphost.cs");
+        var content = File.ReadAllText(appHostFilePath);
+        var sdkLine = content.Split('\n', 2)[0].TrimEnd('\r');
+
+        var newContent = $$"""
+            {{sdkLine}}
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            var resource = builder.AddParameter("test-resource");
+
+            resource.WithCommand(
+                name: "get-info",
+                displayName: "Get info",
+                executeCommand: context =>
+                {
+                    var json = "{\"status\":\"healthy\",\"version\":\"1.0.0\",\"items\":[1,2,3]}";
+                    return Task.FromResult(CommandResults.Success("Info retrieved", json, CommandResultFormat.Json));
+                });
+
+            builder.Build().Run();
+            """;
+
+        File.WriteAllText(appHostFilePath, newContent);
+
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Run the resource command, separating stdout and stderr into distinct files.
+        await auto.TypeAsync("aspire resource test-resource get-info > /tmp/cmd-stdout.txt 2> /tmp/cmd-stderr.txt");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+
+        // Assert that stdout contains only valid JSON parsable by jq.
+        await auto.TypeAsync("jq . /tmp/cmd-stdout.txt > /dev/null");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Assert that the JSON content matches what the command returned.
+        await auto.TypeAsync("jq -r '.status' /tmp/cmd-stdout.txt");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("healthy", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Assert that stderr has content (status/progress messages from the CLI).
+        await auto.TypeAsync("test -s /tmp/cmd-stderr.txt");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
