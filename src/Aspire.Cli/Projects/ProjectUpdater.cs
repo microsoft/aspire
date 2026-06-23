@@ -208,12 +208,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     {
         if (Environment.OSVersion.Platform == PlatformID.Win32NT)
         {
-            return path.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
+            return path.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), StringComparison.Ordinal);
         }
         else
         {
             var globalNuGetFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget");
-            return path.StartsWith(globalNuGetFolder);
+            return path.StartsWith(globalNuGetFolder, StringComparison.Ordinal);
         }
     }
 
@@ -1141,7 +1141,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private static bool IsMSBuildPropertyExpression(string value)
     {
-        return value.StartsWith("$(") && value.EndsWith(")") && value.Length > 3;
+        return value.StartsWith("$(", StringComparison.Ordinal) && value.EndsWith(")", StringComparison.Ordinal) && value.Length > 3;
     }
 
     private static string? ExtractPropertyNameFromExpression(string expression)
