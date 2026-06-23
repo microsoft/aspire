@@ -43,7 +43,8 @@ internal static class PackageUpdateRecommendationChannels
 internal class CliUpdateNotifier(
     ILogger<CliUpdateNotifier> logger,
     INuGetPackageCache nuGetPackageCache,
-    IInteractionService interactionService) : ICliUpdateNotifier
+    IInteractionService interactionService,
+    IProcessPathProvider processPathProvider) : ICliUpdateNotifier
 {
     private IEnumerable<Shared.NuGetPackageCli>? _availablePackages;
 
@@ -122,7 +123,7 @@ internal class CliUpdateNotifier(
         var newerVersion = PackageUpdateHelpers.GetNewerVersion(logger, currentVersion, _availablePackages);
         var updateCommand = newerVersion is null
             ? null
-            : DotNetToolDetection.GetDotNetToolUpdateCommand()
+            : DotNetToolDetection.GetDotNetToolUpdateCommand(processPathProvider.ProcessPath)
                 ?? NpmInstallDetection.GetNpmUpdateCommand()
                 ?? "aspire update";
         // Derive the lane the recommendation comes from so doctor can show

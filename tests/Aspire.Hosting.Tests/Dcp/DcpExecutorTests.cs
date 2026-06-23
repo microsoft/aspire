@@ -14,6 +14,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
@@ -2642,6 +2643,47 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task ProjectLaunchConfiguration_UsesProjectDebugSupportProducer_InDebugSession()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+
+        projectBuilder.WithDebugSupport(_ => new ProjectLaunchConfiguration
+        {
+            Mode = ExecutableLaunchMode.NoDebug,
+            DisableLaunchProfile = true
+        }, "project");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var configBuilder = new ConfigurationBuilder();
+        configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionRunMode] = ExecutableLaunchMode.Debug
+        });
+        var configuration = configBuilder.Build();
+
+        var executor = CreateAppExecutor(model, configuration: configuration, kubernetesService: kubernetes);
+
+        await executor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetes, "proj");
+        Assert.True(exe.TryGetProjectLaunchConfiguration(out var plc));
+        Assert.NotNull(plc);
+        Assert.Equal("TestProject", plc!.ProjectPath);
+        Assert.Equal(ExecutableLaunchMode.NoDebug, plc.Mode);
+        Assert.True(plc.DisableLaunchProfile);
+    }
+
+    [Fact]
     public async Task ProjectLaunchConfiguration_Disabled_WhenLaunchProfileExcluded_InDebugSession()
     {
         // Arrange
@@ -3532,6 +3574,84 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task Project_WithTerminal_RunsAsProcess_InDebugSessionWhenDebugSupportIsAddedLater()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        var debugArgsCallbackInvoked = false;
+        var resource = builder.AddProject<Projects.ServiceA>("ServiceA").WithTerminal();
+        resource.WithDebugSupport(
+            mode => new ProjectLaunchConfiguration { ProjectPath = "/test/path", Mode = mode },
+            "project",
+            argsCallback: _ => debugArgsCallbackInvoked = true);
+
+        // Simulate a debug session whose capability list advertises "project" support.
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["project"] }),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Materialize the per-replica terminal hosts (see Project_WithTerminal_PopulatesPerReplicaTerminalSpec).
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, distributedAppModel));
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "ServiceA");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.False(debugArgsCallbackInvoked);
+        Assert.NotNull(exe.Spec.Terminal);
+    }
+
+    [Fact]
+    public async Task Project_WithTerminal_RunsAsProcess_NoDebugSessionInfo()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddProject<Projects.ServiceA>("ServiceA").WithTerminal();
+
+        // No DebugSessionInfo simulates the Visual Studio scenario, where project resources normally
+        // fall back to IDE execution. A terminal-attached resource must still run as a plain process,
+        // because attaching the debugger would break the PTY flow and leave the user with an empty
+        // terminal. Temporary until DCP supports both at once: https://github.com/microsoft/dcp/issues/189.
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, distributedAppModel));
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "ServiceA");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    [Fact]
     public async Task ProjectExecutable_InvalidDebugSessionInfo_DefaultsToProjectSupport()
     {
         // Arrange
@@ -3725,6 +3845,319 @@ public class DcpExecutorTests
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    public static TheoryData<string, string[]> MauiProjectLaunchConfigurationsThatFallbackToProcess => new()
+    {
+        { "maui", ["run", "-f", "net10.0-windows10.0.19041.0"] },
+        { "maui", ["run", "-f", "net10.0-maccatalyst", "-p:OpenArguments=-W"] },
+        { "maui", ["run", "-f", "net10.0-ios", "-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79"] },
+        { "maui", ["run", "-f", "net10.0-ios", "-p:RuntimeIdentifier=ios-arm64"] },
+        { "maui", ["run", "-f", "net10.0-android", "-p:AdbTarget=-e"] },
+        { "maui", ["run", "-f", "net10.0-android", "-p:AdbTarget=-d"] }
+    };
+
+    [Theory]
+    [MemberData(nameof(MauiProjectLaunchConfigurationsThatFallbackToProcess))]
+    public async Task ProjectWithNonProjectAnnotationAndExecutableAnnotation_VSCodeExplicitlyUnsupported_RunsInProcessWithResourceArgs(string launchConfigurationType, string[] resourceArgs)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder
+            .WithAnnotation(new ExecutableAnnotation
+            {
+                Command = "dotnet",
+                WorkingDirectory = "/tmp/mauiapp"
+            })
+            .WithDebugSupport(mode => new ExecutableLaunchConfiguration(launchConfigurationType) { Mode = mode }, launchConfigurationType)
+            .WithArgs(resourceArgs);
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["project"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var distributedApplicationOptions = new DistributedApplicationOptions { AssemblyName = typeof(DcpExecutorTests).Assembly.FullName };
+        var expectedConfiguration = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyConfigurationAttribute>(typeof(DcpExecutorTests).Assembly)?.Configuration;
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration, distributedApplicationOptions: distributedApplicationOptions);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.Equal("dotnet", exe.Spec.ExecutablePath);
+        Assert.Equal("/tmp/mauiapp", exe.Spec.WorkingDirectory);
+        var expectedArgs = new List<string> { resourceArgs[0] };
+        if (!string.IsNullOrEmpty(expectedConfiguration))
+        {
+            expectedArgs.AddRange(["--configuration", expectedConfiguration]);
+        }
+        expectedArgs.Add("--no-launch-profile");
+        expectedArgs.AddRange(resourceArgs.Skip(1));
+
+        Assert.Equal(expectedArgs, exe.Spec.Args);
+    }
+
+    [Theory]
+    [MemberData(nameof(MauiProjectLaunchConfigurationsThatFallbackToProcess))]
+    public async Task ProjectWithNonProjectAnnotationAndExecutableAnnotation_NoDebugSessionInfo_RunsInProcessWithResourceArgs(string launchConfigurationType, string[] resourceArgs)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder
+            .WithAnnotation(new ExecutableAnnotation
+            {
+                Command = "dotnet",
+                WorkingDirectory = "/tmp/mauiapp"
+            })
+            .WithDebugSupport(mode => new ExecutableLaunchConfiguration(launchConfigurationType) { Mode = mode }, launchConfigurationType)
+            .WithArgs(resourceArgs);
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345"
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var distributedApplicationOptions = new DistributedApplicationOptions { AssemblyName = typeof(DcpExecutorTests).Assembly.FullName };
+        var expectedConfiguration = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyConfigurationAttribute>(typeof(DcpExecutorTests).Assembly)?.Configuration;
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration, distributedApplicationOptions: distributedApplicationOptions);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.Equal("dotnet", exe.Spec.ExecutablePath);
+        Assert.Equal("/tmp/mauiapp", exe.Spec.WorkingDirectory);
+        var expectedArgs = new List<string> { resourceArgs[0] };
+        if (!string.IsNullOrEmpty(expectedConfiguration))
+        {
+            expectedArgs.AddRange(["--configuration", expectedConfiguration]);
+        }
+        expectedArgs.Add("--no-launch-profile");
+        expectedArgs.AddRange(resourceArgs.Skip(1));
+
+        Assert.Equal(expectedArgs, exe.Spec.Args);
+    }
+
+    [Theory]
+    [MemberData(nameof(MauiProjectLaunchConfigurationsThatFallbackToProcess))]
+    public async Task ProjectWithNonProjectAnnotationAndExecutableAnnotation_NoDebugSession_RunsInProcessWithResourceArgs(string launchConfigurationType, string[] resourceArgs)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder
+            .WithAnnotation(new ExecutableAnnotation
+            {
+                Command = "dotnet",
+                WorkingDirectory = "/tmp/mauiapp"
+            })
+            .WithDebugSupport(mode => new ExecutableLaunchConfiguration(launchConfigurationType) { Mode = mode }, launchConfigurationType)
+            .WithArgs(resourceArgs);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var distributedApplicationOptions = new DistributedApplicationOptions { AssemblyName = typeof(DcpExecutorTests).Assembly.FullName };
+        var expectedConfiguration = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyConfigurationAttribute>(typeof(DcpExecutorTests).Assembly)?.Configuration;
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, distributedApplicationOptions: distributedApplicationOptions);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.Equal("dotnet", exe.Spec.ExecutablePath);
+        Assert.Equal("/tmp/mauiapp", exe.Spec.WorkingDirectory);
+        var expectedArgs = new List<string> { resourceArgs[0] };
+        if (!string.IsNullOrEmpty(expectedConfiguration))
+        {
+            expectedArgs.AddRange(["--configuration", expectedConfiguration]);
+        }
+        expectedArgs.Add("--no-launch-profile");
+        expectedArgs.AddRange(resourceArgs.Skip(1));
+
+        Assert.Equal(expectedArgs, exe.Spec.Args);
+    }
+
+    [Fact]
+    public async Task MauiProjectWithExecutableAnnotationAndSupportedLaunchConfiguration_RunsInIdeWithLaunchMetadata()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder
+            .WithAnnotation(new ExecutableAnnotation
+            {
+                Command = "dotnet",
+                WorkingDirectory = "/tmp/mauiapp"
+            })
+            .WithDebugSupport(mode => new TestMauiLaunchConfiguration
+            {
+                Mode = mode,
+                ProjectPath = "/tmp/mauiapp/MauiApp.csproj",
+                TargetFramework = "net10.0-android",
+                Platform = "android",
+                TargetKind = "emulator",
+                MsBuildProperties = new Dictionary<string, string>
+                {
+                    ["AdbTarget"] = "-e"
+                }
+            }, "maui")
+            .WithArgs("run", "-f", "net10.0-android", "-p:AdbTarget=-e");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["maui"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234",
+            [KnownConfigNames.DebugSessionRunMode] = "Debug"
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var distributedApplicationOptions = new DistributedApplicationOptions { AssemblyName = typeof(DcpExecutorTests).Assembly.FullName };
+        var expectedConfiguration = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyConfigurationAttribute>(typeof(DcpExecutorTests).Assembly)?.Configuration;
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration, distributedApplicationOptions: distributedApplicationOptions);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal("dotnet", exe.Spec.ExecutablePath);
+        Assert.Equal("/tmp/mauiapp", exe.Spec.WorkingDirectory);
+        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
+        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes!));
+        var expectedArgs = new List<string> { "run" };
+        if (!string.IsNullOrEmpty(expectedConfiguration))
+        {
+            expectedArgs.AddRange(["--configuration", expectedConfiguration]);
+        }
+        expectedArgs.Add("--no-launch-profile");
+        expectedArgs.AddRange(["-f", "net10.0-android", "-p:AdbTarget=-e"]);
+        Assert.Equal(expectedArgs, exe.Spec.Args);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<TestMauiLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        var launchConfig = Assert.Single(launchConfigs);
+        Assert.Equal("maui", launchConfig.Type);
+        Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
+        Assert.Equal("/tmp/mauiapp/MauiApp.csproj", launchConfig.ProjectPath);
+        Assert.Equal("net10.0-android", launchConfig.TargetFramework);
+        Assert.Equal("android", launchConfig.Platform);
+        Assert.Equal("emulator", launchConfig.TargetKind);
+        Assert.Equal("-e", launchConfig.MsBuildProperties!["AdbTarget"]);
+    }
+
+    [Fact]
+    public async Task ProjectWithNonProjectAnnotationAndExecutableAnnotation_LaunchProfileArgsStayAfterDotnetRunArgs()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProjectWithLaunchProfileCommandLineArgs>("proj", launchProfileName: "http");
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder
+            .WithAnnotation(new ExecutableAnnotation
+            {
+                Command = "dotnet",
+                WorkingDirectory = "/tmp/mauiapp"
+            })
+            .WithDebugSupport(mode => new ExecutableLaunchConfiguration("maui") { Mode = mode }, "maui")
+            .WithArgs("run", "-f", "net10.0-ios", "-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["project"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo),
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var distributedApplicationOptions = new DistributedApplicationOptions { AssemblyName = typeof(DcpExecutorTests).Assembly.FullName };
+        var expectedConfiguration = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyConfigurationAttribute>(typeof(DcpExecutorTests).Assembly)?.Configuration;
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration, distributedApplicationOptions: distributedApplicationOptions);
+
+        await appExecutor.RunApplicationAsync();
+
+        var expectedArgs = new List<string> { "run" };
+        if (!string.IsNullOrEmpty(expectedConfiguration))
+        {
+            expectedArgs.AddRange(["--configuration", expectedConfiguration]);
+        }
+        expectedArgs.AddRange([
+            "--no-launch-profile",
+            "-f",
+            "net10.0-ios",
+            "-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79",
+            "--",
+            "--profile-arg",
+            "profile value"
+        ]);
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        Assert.Equal(expectedArgs, exe.Spec.Args);
     }
 
     [Fact]
@@ -5314,7 +5747,8 @@ public class DcpExecutorTests
         DcpExecutorEvents? events = null,
         Hosting.Eventing.IDistributedApplicationEventing? distributedApplicationEventing = null,
         ILogger<ContainerCreator>? containerCreatorLogger = null,
-        ILogger<DcpExecutor>? logger = null)
+        ILogger<DcpExecutor>? logger = null,
+        DistributedApplicationOptions? distributedApplicationOptions = null)
     {
         if (configuration == null)
         {
@@ -5364,7 +5798,7 @@ public class DcpExecutorTests
             configuration,
             nameGenerator,
             distributedAppModel,
-            new DistributedApplicationOptions(),
+            distributedApplicationOptions ?? new DistributedApplicationOptions(),
             executionContext,
             locations,
             aspireStore,
@@ -5531,6 +5965,28 @@ public class DcpExecutorTests
         public LaunchSettings LaunchSettings { get; } = new();
     }
 
+    private sealed class TestMauiLaunchConfiguration : ExecutableLaunchConfiguration
+    {
+        public TestMauiLaunchConfiguration() : base("maui")
+        {
+        }
+
+        [JsonPropertyName("project_path")]
+        public string ProjectPath { get; set; } = string.Empty;
+
+        [JsonPropertyName("target_framework")]
+        public string TargetFramework { get; set; } = string.Empty;
+
+        [JsonPropertyName("platform")]
+        public string Platform { get; set; } = string.Empty;
+
+        [JsonPropertyName("target_kind")]
+        public string TargetKind { get; set; } = string.Empty;
+
+        [JsonPropertyName("msbuild_properties")]
+        public Dictionary<string, string>? MsBuildProperties { get; set; }
+    }
+
     private sealed class TestProjectWithLaunchSettings : IProjectMetadata
     {
         public string ProjectPath => "TestProjectWithLaunchSettings";
@@ -5559,6 +6015,24 @@ public class DcpExecutorTests
                     ["ASPNETCORE_ENVIRONMENT"] = "Development"
                 }
             };
+            return settings;
+        }
+    }
+
+    private sealed class TestProjectWithLaunchProfileCommandLineArgs : IProjectMetadata
+    {
+        public string ProjectPath => "TestProjectWithLaunchProfileCommandLineArgs";
+        public LaunchSettings LaunchSettings { get; } = CreateLaunchSettings();
+
+        private static LaunchSettings CreateLaunchSettings()
+        {
+            var settings = new LaunchSettings();
+            settings.Profiles["http"] = new LaunchProfile
+            {
+                CommandName = "Project",
+                CommandLineArgs = "--profile-arg \"profile value\""
+            };
+
             return settings;
         }
     }

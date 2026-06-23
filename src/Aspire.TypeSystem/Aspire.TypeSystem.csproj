@@ -8,6 +8,65 @@
     <IsAotCompatible>true</IsAotCompatible>
     <PackageTags>aspire ats typesystem polyglot</PackageTags>
     <Description>Aspire Type System (ATS) APIs for Aspire polyglot support.</Description>
+
+    <!--
+      Aspire.TypeSystem is the shared contract assembly for polyglot code generation. It is
+      bundled into the CLI's single-file apphost server (aspire-managed) and loaded into that
+      process's DEFAULT AssemblyLoadContext. IntegrationLoadContext deliberately force-shares
+      this assembly from the default context so the cross-ALC contracts (ICodeGenerator,
+      ILanguageSupport, AtsContext) keep a single type identity across the boundary
+      (see src/Aspire.Hosting.RemoteHost/IntegrationLoadContext.cs and docs/specs/bundle.md).
+
+      The language codegen assemblies (Aspire.Hosting.CodeGeneration.*) are restored from the SDK
+      side and reference this assembly by strong name (StrongNameKeyId=Open). The CLR satisfies a
+      strong-named reference only when the loaded (here: bundled) copy's AssemblyVersion is GREATER
+      THAN OR EQUAL TO the requested version. If AssemblyVersion floated with the build, the version
+      on either side would diverge whenever the CLI and SDK were built at different times, the
+      reference would fail to bind, Assembly.GetTypes() would throw ReflectionTypeLoadException, and
+      every generator would be silently dropped -> "No code generator/language support found".
+      A floating version cannot satisfy BOTH skew directions at once: it
+      necessarily breaks either "new CLI + older Aspire.Hosting" (backward compat, bundle.md
+      "Scenario 2") or "old CLI + newer Aspire.Hosting".
+
+      Fix: FREEZE AssemblyVersion at a fixed constant decoupled from the build, carried forward to all
+      later releases so every stable and servicing release from this point onward (13.4.5, 13.4.6, 13.5,
+      ...) bundles the same value. The constant must be GREATER THAN OR EQUAL TO the latest already-shipped
+      stable version so the bundled copy satisfies the (lower or equal, real) reference of any
+      already-released codegen assembly -> the common, must-work backward-compat direction (a current CLI
+      running an existing stable app) binds. 13.4.5.0 is chosen because it matches the AssemblyVersion of
+      the latest already-shipped stable (13.4.5, whose AssemblyVersion floated to 13.4.5.0): freezing at
+      that exact value means the already-released 13.4.5 CLI (which bundles floating 13.4.5.0) and every
+      post-freeze CLI and SDK carry the identical constant, so post-freeze CLI/SDK pairs always match
+      exactly and no skew matters. (A constant higher than the latest shipped stable would break that
+      already-released CLI, whose bundled copy would then be lower than the frozen reference.)
+
+      Two residual hard-bind failures remain, both routed to the "run aspire update"
+      diagnostics rather than fixable by the freeze value:
+        1. An already-shipped OLD CLI (bundling a real, lower version) paired with post-freeze
+           codegen referencing this constant. That is the genuinely unsupportable "the CLI predates
+           this build" case: it cannot be fixed for an immutable shipped CLI regardless of value.
+        2. A pre-freeze 13.5.0 PREVIEW app whose codegen still references a real 13.5.0.0
+           (> 13.4.5.0). Preview-channel skew is outside the supported stable matrix; those
+           previews are superseded by post-freeze builds carrying this constant.
+      (Post-freeze CLIs never hit case 1: they all bundle this constant and satisfy any post-freeze
+      reference.)
+
+      Bump this constant ONLY when the shared contract changes in a binary-incompatible way (a
+      member is removed or its signature changes), and then only to the then-current product
+      version (which is always >= this value); an additive change (new members only) keeps the same
+      value. A binary-incompatible change is caught by the repository's standard public API
+      compatibility tracking (the checked-in api/Aspire.TypeSystem.cs reference surface and
+      package baseline validation), which flags any change to the shipped surface, forcing a
+      deliberate decision about whether the change is additive (no bump) or breaking (bump).
+
+      Only AssemblyVersion is frozen; FileVersion, InformationalVersion, and the NuGet package
+      version remain build-derived so diagnostics keep real build identities. Aspire.TypeSystem is
+      consumed only via ProjectReference (no PackageReference consumers), so the frozen
+      AssemblyVersion is not a package contract anyone binds to by exact version. Because
+      13.4.5.0 is >= the package baseline version, package baseline validation (CP0003) still
+      passes, so no validation override is required.
+    -->
+    <AssemblyVersion>13.4.5.0</AssemblyVersion>
   </PropertyGroup>
 
 </Project>

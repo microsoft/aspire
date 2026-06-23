@@ -303,8 +303,8 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
             out float? panel2Size,
             out float? panel1Fraction)
         {
-            if (panel1SizeString is null || !panel1SizeString.EndsWith("fr")
-                || panel2SizeString is null || !panel2SizeString.EndsWith("fr"))
+            if (panel1SizeString is null || !panel1SizeString.EndsWith("fr", StringComparison.Ordinal)
+                || panel2SizeString is null || !panel2SizeString.EndsWith("fr", StringComparison.Ordinal))
             {
                 panel1Size = null;
                 panel2Size = null;

@@ -193,7 +193,7 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
             Directory.CreateDirectory(configDirectory);
         }
 
-        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, cancellationToken);
+        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, null, cancellationToken);
 
         // Ensure "mcpServers" object exists
         if (!config.ContainsKey("mcpServers") || config["mcpServers"] is not JsonObject)

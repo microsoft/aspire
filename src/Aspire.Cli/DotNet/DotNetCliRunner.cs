@@ -11,6 +11,7 @@ using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Caching;
+using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
@@ -390,7 +391,7 @@ internal sealed class DotNetCliRunner(
         logger.LogDebug("Starting backchannel connection to AppHost at {SocketPath}", socketPath);
 
         var startTime = DateTimeOffset.UtcNow;
-        var connectionTimeout = GetBackchannelConnectionTimeout();
+        var connectionTimeout = GetBackchannelConnectionTimeout(configuration);
 
         do
         {
@@ -490,7 +491,7 @@ internal sealed class DotNetCliRunner(
         env["AspireCliPath"] = Environment.ProcessPath;
     }
 
-    private TimeSpan GetBackchannelConnectionTimeout()
+    internal static TimeSpan GetBackchannelConnectionTimeout(IConfiguration configuration)
     {
         var configuredValue = configuration[KnownConfigNames.CliBackchannelConnectTimeoutSeconds];
         if (double.TryParse(configuredValue, CultureInfo.InvariantCulture, out var seconds) && seconds >= 0)
@@ -498,7 +499,14 @@ internal sealed class DotNetCliRunner(
             return TimeSpan.FromSeconds(seconds);
         }
 
-        return TimeSpan.FromSeconds(60);
+        var timeout = TimeSpan.FromSeconds(WaitCommand.DefaultTimeoutSeconds);
+        var configuredStartupTimeout = configuration[CliConfigNames.AppHostStartupTimeout];
+        if (int.TryParse(configuredStartupTimeout, CultureInfo.InvariantCulture, out var startupTimeoutSeconds) && startupTimeoutSeconds > timeout.TotalSeconds)
+        {
+            timeout = TimeSpan.FromSeconds(startupTimeoutSeconds);
+        }
+
+        return timeout;
     }
 
     // Cache expiry/max age handled inside DiskCache implementation.
@@ -1019,7 +1027,7 @@ internal sealed class DotNetCliRunner(
     internal static bool TryParsePackageVersionFromStdout(string stdout, [NotNullWhen(true)] out string? version)
     {
         var lines = stdout.Split(Environment.NewLine);
-        var successLine = lines.SingleOrDefault(x => x.StartsWith("Success: Aspire.ProjectTemplates"));
+        var successLine = lines.SingleOrDefault(x => x.StartsWith("Success: Aspire.ProjectTemplates", StringComparison.Ordinal));
 
         if (successLine is null)
         {

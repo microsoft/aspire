@@ -12,7 +12,7 @@ public class NuGetSignatureVerificationEnablerTests
     private static CliExecutionContext CreateContext(Dictionary<string, string?>? envVars = null)
     {
         var dir = new DirectoryInfo(Path.GetTempPath());
-        return TestExecutionContextHelper.CreateExecutionContext(dir, environmentVariables: envVars);
+        return TestExecutionContextHelper.CreateExecutionContext(dir, environment: new TestEnvironment(envVars));
     }
 
     [Fact]

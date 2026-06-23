@@ -58,6 +58,10 @@ export const processExceptionOccurred = (error: string, command: string) => vsco
 export const pidDescription = (pid: number) => vscode.l10n.t('PID: {0}', pid);
 export const dashboardLabel = vscode.l10n.t('Dashboard');
 export const errorFetchingAppHosts = (error: string) => vscode.l10n.t('Error fetching running AppHosts: {0}', error);
+export const aspireCliCommandFailed = (command: string, exitCode: string, output: string) => vscode.l10n.t('{0} exited with code {1}{2}', command, exitCode, output);
+export const aspireCliCommandTimedOut = (timeoutMs: number) => vscode.l10n.t('timed out after {0}ms', timeoutMs);
+export const aspireCliOutputParseFailed = (command: string, error: string) => vscode.l10n.t('Failed to parse {0} output: {1}', command, error);
+export const appHostPathMustBeNonEmptyAbsolute = vscode.l10n.t('appHostPath must be a non-empty absolute path');
 export const aspireDescribeMinimumVersion = '13.2.0';
 export const aspireCliDescribeNotSupported = (version: string) => vscode.l10n.t('Workspace resources require Aspire CLI {0} or newer. Update the Aspire CLI and refresh the Aspire panel.', version);
 export const appHostDescribeMayNotBeSupported = (version: string) => vscode.l10n.t('No workspace resources were returned. Workspace resources require the AppHost to reference Aspire.Hosting {0} or newer.', version);
@@ -131,6 +135,7 @@ export const invalidTokenLength = vscode.l10n.t('Invalid token length in Authori
 export const authorizationHeaderMustStartWithBearer = vscode.l10n.t('Authorization header must start with \'Bearer \'.');
 export const authorizationAndDcpHeadersRequired = vscode.l10n.t('Authorization and Microsoft-Developer-DCP-Instance-ID headers are required.');
 export const authorizationHeaderRequired = vscode.l10n.t('Authorization header is required.');
+export const testRunSessionManagerNotInitialized = vscode.l10n.t('Test run session manager has not been initialized with DCP server connection information.');
 export const buildFailedForProjectWithError = (project: string, error: string) => vscode.l10n.t('Build failed for project {0} with error: {1}.', project, error);
 export const failedToInspectRuntimeConfig = (outputPath: string, error: string) => vscode.l10n.t('Failed to inspect runtimeconfig for {0}: {1}', outputPath, error);
 export const dotNetRunFallbackDisablesDebugger = (outputPath: string, projectPath: string) => vscode.l10n.t('Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', outputPath, projectPath);
