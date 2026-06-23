@@ -240,7 +240,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
                 return GetPackageFileMetadata(file.FullName);
             })
             .OfType<PackageFileMetadata>()
-            .Where(metadata => IsIntegrationPackageId(metadata.PackageId))
+            .Where(metadata => PackageIdFilters.IsIntegrationPackageId(metadata.PackageId))
             .Where(metadata => showDeprecatedPackages || !DeprecatedPackages.IsDeprecated(metadata.PackageId))
             .Where(IsAllowedByQuality);
 
@@ -321,7 +321,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (GetPackageFileMetadata(file.FullName) is not { } metadata || !IsIntegrationPackageId(metadata.PackageId))
+            if (GetPackageFileMetadata(file.FullName) is not { } metadata || !PackageIdFilters.IsIntegrationPackageId(metadata.PackageId))
             {
                 continue;
             }
@@ -707,30 +707,6 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     {
         return mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(mapping.PackageFilter, PackageMapping.AllPackages, StringComparison.Ordinal);
-    }
-
-    private static bool IsIntegrationPackageId(string packageId)
-    {
-        // NuGet package IDs are case-insensitive, so prefix checks use OrdinalIgnoreCase
-        // to stay consistent with StringComparers.NuGetPackageId used elsewhere in this
-        // file. .nupkg files on disk normally carry the canonical casing, but matching
-        // case-insensitively avoids silently dropping integrations whose file names were
-        // produced with a non-canonical casing (e.g. a third-party hive build).
-        //
-        // This method classifies a package id by namespace only. The deprecation filter
-        // is applied separately in GetIntegrationPackagesFromLocalPackageSource so it can
-        // be gated on the ShowDeprecatedPackages feature flag, matching the feed-based
-        // path in NuGetPackageCache.
-        var isHostingOrCommunityToolkitNamespaced = packageId.StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase) ||
-            packageId.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.OrdinalIgnoreCase);
-
-        var isExcluded = packageId.StartsWith("Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase) ||
-            packageId.StartsWith("Aspire.Hosting.Sdk", StringComparison.OrdinalIgnoreCase) ||
-            packageId.StartsWith("Aspire.Hosting.Orchestration", StringComparison.OrdinalIgnoreCase) ||
-            packageId.StartsWith("Aspire.Hosting.Testing", StringComparison.OrdinalIgnoreCase) ||
-            packageId.StartsWith("Aspire.Hosting.Msi", StringComparison.OrdinalIgnoreCase);
-
-        return isHostingOrCommunityToolkitNamespaced && !isExcluded;
     }
 
     public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null, string? currentCliVersion = null)

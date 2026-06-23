@@ -120,7 +120,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         // Dropped — outside the integration namespace.
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.ProjectTemplates.{pinnedVersion}.nupkg"), string.Empty);
 
-        // Dropped — internal Aspire framework packages (AppHost, Sdk, Orchestration.*, Testing, Msi).
+        // Dropped — internal Aspire framework packages (AppHost, Sdk, Orchestration.*, Testing, Msi, Integration.Analyzers).
         // Orchestration is seeded with a RID-suffixed shape because no bare
         // Aspire.Hosting.Orchestration nupkg is produced by the build; the exclusion is a
         // prefix rule, so one RID variant exercises the rule against a realistic package name
@@ -130,6 +130,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.Orchestration.linux-arm64.{pinnedVersion}.nupkg"), string.Empty);
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.Testing.{pinnedVersion}.nupkg"), string.Empty);
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.Msi.{pinnedVersion}.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.Integration.Analyzers.{pinnedVersion}.nupkg"), string.Empty);
 
         // Dropped — deprecated packages enumerated in DeprecatedPackages.
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.Dapr.{pinnedVersion}.nupkg"), string.Empty);
