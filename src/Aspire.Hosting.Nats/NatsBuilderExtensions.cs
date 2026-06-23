@@ -208,6 +208,7 @@ public static class NatsBuilderExtensions
     )
     {
         ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(routesLocator);
 
         builder = builder
             .WithEndpoint(
