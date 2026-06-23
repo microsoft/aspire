@@ -10,7 +10,7 @@
     var preOverflowedCount = orderedValues.Count - renderedValues.Count;
 }
 
-<FluentOverflow Class="dimension-overflow" OnOverflowRaised="@(items => HandleOverflowChanged(items))">
+<FluentOverflow Class="dimension-overflow">
     <ChildContent>
         @{
             var i = 0;

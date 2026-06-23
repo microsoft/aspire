@@ -14,7 +14,6 @@ public class DimensionFilterViewModel
     public required string Name { get; init; }
     public List<DimensionValueViewModel> Values { get; } = [];
     public HashSet<DimensionValueViewModel> SelectedValues { get; } = [];
-    public DimensionValueViewModel[] OverflowedValues { get; set; } = [];
     public bool PopupVisible { get; set; }
 
     /// <summary>

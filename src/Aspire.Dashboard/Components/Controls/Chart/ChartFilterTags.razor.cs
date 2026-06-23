@@ -5,7 +5,6 @@ using System.Globalization;
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components;
 
@@ -72,20 +71,6 @@ public partial class ChartFilterTags : IDisposable
         }
 
         return Task.CompletedTask;
-    }
-
-    public void HandleOverflowChanged(IEnumerable<FluentOverflowItem> overflowItems)
-    {
-        var overflowedFromComponent = overflowItems
-            .Select(i => (DimensionValueViewModel)i.AdditionalAttributes![KeyForDimensionValue])
-            .ToArray();
-
-        // Items beyond MaxRenderedTags are always overflowed since they aren't rendered
-        // in the FluentOverflow. Include them so the pre-overflowed items appear in the
-        // "+N" badge and popover.
-        var preOverflowed = GetOrderedValues(Filter.Values).Skip(MaxRenderedTags);
-
-        Filter.OverflowedValues = [.. overflowedFromComponent, .. preOverflowed];
     }
 
     /// <summary>
