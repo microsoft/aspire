@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Temporarily disables flaky VS Code extension E2E tests in CI; no user-facing change",
+  "mergedAt": "2026-06-22T23:44:21Z",
+  "number": 18413,
+  "runDate": "2026-06-23T00:28:25Z",
+  "status": "excluded",
+  "title": "ci: temporarily disable flaky VS Code extension E2E tests"
+}

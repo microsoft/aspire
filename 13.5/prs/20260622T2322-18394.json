@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: NuGet config merger no longer overwrites user-defined package source mappings with wildcard pattern",
+  "mergedAt": "2026-06-22T23:22:54Z",
+  "number": 18394,
+  "runDate": "2026-06-23T00:28:25Z",
+  "status": "included",
+  "title": "fix(cli): dont add wildcard pattern to private sources with existing mappings"
+}

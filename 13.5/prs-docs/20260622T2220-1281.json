@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Docs link fix only; no matching product changelog entry",
+  "mergedAt": "2026-06-22T22:20:10Z",
+  "number": 1281,
+  "runDate": "2026-06-23T00:28:25Z",
+  "status": "excluded",
+  "title": "Fix broken WithTerminal link in 13.5 whats-new"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI-only changes: metadata-only PR detection and selector job reason formatting",
+  "mergedAt": "2026-06-22T22:41:10Z",
+  "number": 18409,
+  "runDate": "2026-06-23T00:28:25Z",
+  "status": "excluded",
+  "title": "fix(ci): skip full matrix on metadata-only PRs; clearer selector job reasons"
+}

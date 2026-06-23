@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The `Aspire.Hosting.GitHub.Models` integration has been retired. All public APIs are now marked `[Obsolete]` and the package is hidden from `aspire add`. Users relying on GitHub Models should migrate to alternative AI service integrations.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🌇",
+  "firstMergedAt": "2026-06-22T20:45:59Z",
+  "lastMergedAt": "2026-06-22T20:45:59Z",
+  "name": "GitHub Models integration deprecated",
+  "owner": "sebastienros",
+  "prs": [
+    18405
+  ]
+}

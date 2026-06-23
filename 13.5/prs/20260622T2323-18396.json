@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only fix for flaky E2E test; no user-facing product change",
+  "mergedAt": "2026-06-22T23:23:26Z",
+  "number": 18396,
+  "runDate": "2026-06-23T00:28:25Z",
+  "status": "excluded",
+  "title": "Fix flaky ResourceCommand_FailsWhenInteractionServiceIsRequired test"
+}

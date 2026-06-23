@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "When running `aspire update`, the NuGet config merger no longer incorrectly adds a wildcard (`*`) pattern to user-defined package sources that already have specific patterns configured, preventing unintended overwriting of custom source mappings.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-06-22T23:22:54Z",
+  "lastMergedAt": "2026-06-22T23:22:54Z",
+  "name": "Fix NuGet package source mapping overwrite during aspire update",
+  "owner": "JamesNK",
+  "prs": [
+    18394
+  ]
+}

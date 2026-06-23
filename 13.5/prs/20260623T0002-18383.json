@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard bug fix: caps URLs column at 20 rendered items to prevent SignalR disconnect",
+  "mergedAt": "2026-06-23T00:02:54Z",
+  "number": 18383,
+  "runDate": "2026-06-23T00:28:25Z",
+  "status": "included",
+  "title": "Cap rendered items in UrlsColumnDisplay to prevent SignalR disconnect"
+}
