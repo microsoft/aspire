@@ -19,8 +19,14 @@ internal sealed class TestMigration(string id, int order, MigrationDescriptor? d
 
     public bool ApplyInvoked { get; private set; }
 
-    public Task<MigrationDescriptor?> DetectAsync(CancellationToken cancellationToken)
+    public MigrationContext? DetectedContext { get; private set; }
+
+    public MigrationContext? AppliedContext { get; private set; }
+
+    public Task<MigrationDescriptor?> DetectAsync(MigrationContext context, CancellationToken cancellationToken)
     {
+        DetectedContext = context;
+
         if (throwOnDetect)
         {
             throw new InvalidOperationException("Detection failed");
@@ -29,9 +35,10 @@ internal sealed class TestMigration(string id, int order, MigrationDescriptor? d
         return Task.FromResult(descriptor);
     }
 
-    public Task ApplyAsync(CancellationToken cancellationToken)
+    public Task ApplyAsync(MigrationContext context, CancellationToken cancellationToken)
     {
         ApplyInvoked = true;
+        AppliedContext = context;
         return Task.CompletedTask;
     }
 }

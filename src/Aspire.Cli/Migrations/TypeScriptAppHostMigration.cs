@@ -60,9 +60,9 @@ internal sealed class TypeScriptAppHostMigration : IMigration
     public int Order => 100;
 
     /// <inheritdoc />
-    public async Task<MigrationDescriptor?> DetectAsync(CancellationToken cancellationToken)
+    public async Task<MigrationDescriptor?> DetectAsync(MigrationContext context, CancellationToken cancellationToken)
     {
-        var appHostFile = await ResolveLegacyAppHostAsync(cancellationToken);
+        var appHostFile = await ResolveLegacyAppHostAsync(context, cancellationToken);
         if (appHostFile is null)
         {
             return null;
@@ -88,11 +88,11 @@ internal sealed class TypeScriptAppHostMigration : IMigration
     }
 
     /// <inheritdoc />
-    public async Task ApplyAsync(CancellationToken cancellationToken)
+    public async Task ApplyAsync(MigrationContext context, CancellationToken cancellationToken)
     {
         // Re-resolve rather than trusting an earlier DetectAsync result: applying must be safe to
         // run on its own and a no-op when there is nothing (left) to migrate.
-        var appHostFile = await ResolveLegacyAppHostAsync(cancellationToken);
+        var appHostFile = await ResolveLegacyAppHostAsync(context, cancellationToken);
         if (appHostFile?.Directory is not { Exists: true } appHostDirectory)
         {
             return;
@@ -126,10 +126,18 @@ internal sealed class TypeScriptAppHostMigration : IMigration
     /// <c>apphost.ts</c> in a legacy layout (no modern <c>apphost.mts</c> sibling). Returns
     /// <see langword="null"/> otherwise.
     /// </summary>
-    private async Task<FileInfo?> ResolveLegacyAppHostAsync(CancellationToken cancellationToken)
+    private async Task<FileInfo?> ResolveLegacyAppHostAsync(MigrationContext context, CancellationToken cancellationToken)
     {
-        var appHostFile = await LegacyTypeScriptAppHost.ResolveTypeScriptAppHostAsync(
-            _projectLocator, _languageDiscovery, _executionContext.WorkingDirectory, _logger, cancellationToken);
+        var appHostFile = context.AppHostFile;
+        if (appHostFile is null)
+        {
+            appHostFile = await LegacyTypeScriptAppHost.ResolveTypeScriptAppHostAsync(
+                _projectLocator, _languageDiscovery, _executionContext.WorkingDirectory, _logger, cancellationToken);
+        }
+        else if (!TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_languageDiscovery.GetLanguageByFile(appHostFile)))
+        {
+            return null;
+        }
 
         if (appHostFile?.Directory is not { Exists: true } appHostDirectory ||
             !LegacyTypeScriptAppHost.IsLegacyAppHostFile(appHostFile) ||

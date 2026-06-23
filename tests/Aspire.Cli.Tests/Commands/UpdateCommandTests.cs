@@ -955,6 +955,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         // The advisory is non-destructive: `update` points at `aspire update --migrate` rather
         // than applying the migration itself.
+        Assert.NotNull(pendingMigration.DetectedContext?.AppHostFile);
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"), pendingMigration.DetectedContext.AppHostFile.FullName);
         Assert.False(pendingMigration.ApplyInvoked);
     }
 
@@ -981,6 +983,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(pendingMigration.DetectedContext?.AppHostFile);
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"), pendingMigration.DetectedContext.AppHostFile.FullName);
+        Assert.NotNull(pendingMigration.AppliedContext?.AppHostFile);
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"), pendingMigration.AppliedContext.AppHostFile.FullName);
         Assert.True(pendingMigration.ApplyInvoked);
         Assert.Contains(interactionService.DisplayedMessages, m => m.Message == MigrationStrings.AvailableMigrationsHeader);
     }

@@ -13,7 +13,7 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// </summary>
 /// <remarks>
 /// This is the read-only half of the migration system: it shares the exact same
-/// <see cref="IMigration.DetectAsync"/> detection that <c>aspire update --migrate</c> uses to apply changes,
+/// <see cref="IMigration.DetectAsync(MigrationContext, CancellationToken)"/> detection that <c>aspire update --migrate</c> uses to apply changes,
 /// so the two can never drift. Any new migration registered in DI automatically shows up here with
 /// no changes to this check.
 /// See: https://github.com/microsoft/aspire/issues/17842
@@ -46,7 +46,7 @@ internal sealed class PendingMigrationsCheck : IEnvironmentCheck
             MigrationDescriptor? descriptor;
             try
             {
-                descriptor = await migration.DetectAsync(cancellationToken);
+                descriptor = await migration.DetectAsync(MigrationContext.CurrentDirectory, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

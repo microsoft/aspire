@@ -365,7 +365,7 @@ internal sealed class UpdateCommand : BaseCommand
             // we stay non-destructive and only surface a non-blocking advisory. Detection reuses the
             // same IMigration registry behind `aspire doctor`, so any future migration shows up here
             // automatically.
-            await HandlePendingMigrationsAsync(parseResult.GetValue(s_migrateOption), confirmBinding, cancellationToken);
+            await HandlePendingMigrationsAsync(parseResult.GetValue(s_migrateOption), projectFile, confirmBinding, cancellationToken);
 
             // After successful project update, check if CLI update is available and prompt
             // Only prompt if the channel supports CLI downloads (has a non-null CliDownloadBaseUrl)
@@ -455,8 +455,10 @@ internal sealed class UpdateCommand : BaseCommand
     /// Migrations run after the package update so that any migration depending on a newer package
     /// version sees the updated packages. A failure here never turns a successful update into a failure.
     /// </summary>
-    private async Task HandlePendingMigrationsAsync(bool applyRequested, PromptBinding<bool> confirmBinding, CancellationToken cancellationToken)
+    private async Task HandlePendingMigrationsAsync(bool applyRequested, FileInfo projectFile, PromptBinding<bool> confirmBinding, CancellationToken cancellationToken)
     {
+        var context = new MigrationContext(projectFile);
+
         // Detect once up front so we can list the full set before asking for a single confirmation.
         var pending = new List<(IMigration Migration, MigrationDescriptor Descriptor)>();
         foreach (var migration in _migrations.OrderBy(m => m.Order))
@@ -464,7 +466,7 @@ internal sealed class UpdateCommand : BaseCommand
             MigrationDescriptor? descriptor;
             try
             {
-                descriptor = await migration.DetectAsync(cancellationToken);
+                descriptor = await migration.DetectAsync(context, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -529,7 +531,7 @@ internal sealed class UpdateCommand : BaseCommand
         {
             try
             {
-                await migration.ApplyAsync(cancellationToken);
+                await migration.ApplyAsync(context, cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

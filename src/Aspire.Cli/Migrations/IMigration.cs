@@ -4,6 +4,21 @@
 namespace Aspire.Cli.Migrations;
 
 /// <summary>
+/// Identifies the AppHost a migration should inspect or mutate.
+/// </summary>
+/// <param name="AppHostFile">
+/// The AppHost file explicitly selected by the command, or <see langword="null"/> when the migration
+/// should resolve the current AppHost from the working directory.
+/// </param>
+internal sealed record MigrationContext(FileInfo? AppHostFile)
+{
+    /// <summary>
+    /// Detects and applies migrations against the current working directory.
+    /// </summary>
+    public static MigrationContext CurrentDirectory { get; } = new((FileInfo?)null);
+}
+
+/// <summary>
 /// A single, self-contained migration that can detect whether it applies to the current project
 /// and, when it does, bring the project up to the latest recommended Aspire conventions.
 /// </summary>
@@ -30,22 +45,24 @@ internal interface IMigration
     int Order { get; }
 
     /// <summary>
-    /// Detects whether this migration applies to the current project.
+    /// Detects whether this migration applies to the selected project.
     /// </summary>
+    /// <param name="context">The AppHost to inspect, or the current working directory when no AppHost is specified.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
     /// A <see cref="MigrationDescriptor"/> describing what would change, or <see langword="null"/>
     /// when there is nothing to migrate. Detection must be side-effect free so it is safe to run
     /// repeatedly (e.g. from <c>aspire doctor</c>).
     /// </returns>
-    Task<MigrationDescriptor?> DetectAsync(CancellationToken cancellationToken);
+    Task<MigrationDescriptor?> DetectAsync(MigrationContext context, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Applies the migration to the current project. Implementations own their own progress,
+    /// Applies the migration to the selected project. Implementations own their own progress,
     /// success, and best-effort failure messaging via <c>IInteractionService</c>. Applying must be
     /// idempotent: if there is nothing to migrate (for example because a previous run already
     /// completed), this should be a no-op.
     /// </summary>
+    /// <param name="context">The AppHost to mutate, or the current working directory when no AppHost is specified.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    Task ApplyAsync(CancellationToken cancellationToken);
+    Task ApplyAsync(MigrationContext context, CancellationToken cancellationToken);
 }

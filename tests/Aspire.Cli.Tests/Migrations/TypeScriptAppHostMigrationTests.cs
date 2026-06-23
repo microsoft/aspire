@@ -54,7 +54,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
         await File.WriteAllTextAsync(appHostPath, "import { createBuilder } from './.modules/aspire.js';");
 
-        var descriptor = await CreateMigration(workspace).DetectAsync(CancellationToken.None);
+        var descriptor = await CreateMigration(workspace).DetectAsync(MigrationContext.CurrentDirectory, CancellationToken.None);
 
         Assert.NotNull(descriptor);
         Assert.Contains("apphost.ts", descriptor.Detail);
@@ -71,7 +71,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
             Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts"),
             "import { createBuilder } from './.aspire/modules/aspire.mjs';");
 
-        var descriptor = await CreateMigration(workspace).DetectAsync(CancellationToken.None);
+        var descriptor = await CreateMigration(workspace).DetectAsync(MigrationContext.CurrentDirectory, CancellationToken.None);
 
         Assert.Null(descriptor);
     }
@@ -83,7 +83,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"), "// legacy");
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts"), "// modern");
 
-        var descriptor = await CreateMigration(workspace).DetectAsync(CancellationToken.None);
+        var descriptor = await CreateMigration(workspace).DetectAsync(MigrationContext.CurrentDirectory, CancellationToken.None);
 
         Assert.Null(descriptor);
     }
@@ -94,9 +94,23 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"), "// csharp");
 
-        var descriptor = await CreateMigration(workspace).DetectAsync(CancellationToken.None);
+        var descriptor = await CreateMigration(workspace).DetectAsync(MigrationContext.CurrentDirectory, CancellationToken.None);
 
         Assert.Null(descriptor);
+    }
+
+    [Fact]
+    public async Task DetectAsync_WithSelectedLegacyAppHostOutsideWorkingDirectory_ReturnsDescriptor()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "external-apphost"));
+        await WriteLegacyLayoutAsync(appHostDirectory);
+        var appHostPath = Path.Combine(appHostDirectory.FullName, "apphost.ts");
+
+        var descriptor = await CreateMigration(workspace).DetectAsync(new MigrationContext(new FileInfo(appHostPath)), CancellationToken.None);
+
+        Assert.NotNull(descriptor);
+        Assert.Equal(appHostPath, descriptor.Metadata!["appHostPath"]!.GetValue<string>());
     }
 
     private const string LegacyAppHostContent =
@@ -195,7 +209,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
         var root = workspace.WorkspaceRoot;
         await WriteLegacyLayoutAsync(root);
 
-        await CreateMigration(workspace).ApplyAsync(CancellationToken.None);
+        await CreateMigration(workspace).ApplyAsync(MigrationContext.CurrentDirectory, CancellationToken.None);
 
         Assert.False(File.Exists(Path.Combine(root.FullName, "apphost.ts")));
         Assert.False(Directory.Exists(Path.Combine(root.FullName, ".modules")));
@@ -205,6 +219,24 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
 
         await AssertMigratedMetadataAsync(
             root,
+            new[] { "apphost.mts", ".aspire/modules/aspire.mts", ".aspire/modules/base.mts", ".aspire/modules/transport.mts", "src/**/*.ts", "lib/foo.ts" });
+    }
+
+    [Fact]
+    public async Task ApplyAsync_WithSelectedLegacyAppHostOutsideWorkingDirectory_MigratesSelectedAppHost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "external-apphost"));
+        await WriteLegacyLayoutAsync(appHostDirectory);
+
+        await CreateMigration(workspace).ApplyAsync(new MigrationContext(new FileInfo(Path.Combine(appHostDirectory.FullName, "apphost.ts"))), CancellationToken.None);
+
+        Assert.False(File.Exists(Path.Combine(appHostDirectory.FullName, "apphost.ts")));
+        Assert.False(Directory.Exists(Path.Combine(appHostDirectory.FullName, ".modules")));
+        Assert.Equal(ExpectedModernAppHostContent, await File.ReadAllTextAsync(Path.Combine(appHostDirectory.FullName, "apphost.mts")));
+
+        await AssertMigratedMetadataAsync(
+            appHostDirectory,
             new[] { "apphost.mts", ".aspire/modules/aspire.mts", ".aspire/modules/base.mts", ".aspire/modules/transport.mts", "src/**/*.ts", "lib/foo.ts" });
     }
 
@@ -226,7 +258,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
             }
             """);
 
-        await CreateMigration(workspace).ApplyAsync(CancellationToken.None);
+        await CreateMigration(workspace).ApplyAsync(MigrationContext.CurrentDirectory, CancellationToken.None);
 
         await AssertMigratedMetadataAsync(
             root,
@@ -241,11 +273,11 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
         await WriteLegacyLayoutAsync(root);
 
         var migration = CreateMigration(workspace);
-        await migration.ApplyAsync(CancellationToken.None);
+        await migration.ApplyAsync(MigrationContext.CurrentDirectory, CancellationToken.None);
 
         var migratedContent = await File.ReadAllTextAsync(Path.Combine(root.FullName, "apphost.mts"));
 
-        await migration.ApplyAsync(CancellationToken.None);
+        await migration.ApplyAsync(MigrationContext.CurrentDirectory, CancellationToken.None);
 
         Assert.Equal(migratedContent, await File.ReadAllTextAsync(Path.Combine(root.FullName, "apphost.mts")));
     }
