@@ -22,6 +22,7 @@
 #   job:cli-starter            tests.yml cli_starter_validation_windows
 #   job:winget-installer       tests.yml prepare_winget_installer_artifacts
 #   job:homebrew-installer     tests.yml prepare_homebrew_installer_artifacts
+#   job:nix-package            tests.yml nix_package
 #   job:api-diffs              generate-api-diffs.yml    (schedule-only today)
 #   job:ats-diffs              generate-ats-diffs.yml    (schedule-only today)
 #   job:deployment-e2e         deployment-tests.yml      (schedule/dispatch-only today)
@@ -256,8 +257,8 @@ path_rules:
       - flake.nix
       - flake.lock
       - eng/nix/**
-    targets: [test:Infrastructure.Tests]
-    reason: Infrastructure.Tests validates the Nix flake, package derivation, update script, and release asset manifest
+    targets: [test:Infrastructure.Tests, job:nix-package]
+    reason: Infrastructure.Tests validates the Nix flake, package derivation, update script, and release asset manifest; the Nix package smoke runs nix flake check, nix build, and the packaged CLI
   - paths:
       - eng/scripts/download-native-archives.ps1
       - eng/scripts/stage-native-cli-tool-packages.ps1

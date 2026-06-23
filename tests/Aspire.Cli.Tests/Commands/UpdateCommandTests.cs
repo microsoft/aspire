@@ -3,6 +3,7 @@
 
 using System.Collections;
 using System.Runtime.InteropServices;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
@@ -919,6 +920,51 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(downloaderInvoked, "Archive self-update should not be used for npm installs.");
         Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("npm install -g @microsoft/aspire-cli@latest", StringComparison.Ordinal));
+        Assert.DoesNotContain(interactionService.DisplayedPlainText, text => text.Contains("dotnet tool update", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_WhenRunningFromNix_DisplaysNixUpdateGuidance()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var tempDirectory = new TestTempDirectory();
+
+        var binaryDir = Path.Combine(tempDirectory.Path, "nix", "store", "hash-aspire-cli", "lib", "aspire-cli");
+        Directory.CreateDirectory(binaryDir);
+
+        var processPath = Path.Combine(binaryDir, GetAspireExecutableName());
+        File.WriteAllText(processPath, string.Empty);
+        File.WriteAllText(Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName), """{"source":"nix"}""");
+
+        using var processPathScope = UpdateCommand.UseProcessPathForTesting(processPath);
+
+        var interactionService = new TestInteractionService();
+        var downloaderInvoked = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (_, _) =>
+                {
+                    downloaderInvoked = true;
+                    return Task.FromResult(string.Empty);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(downloaderInvoked, "Archive self-update should not be used for Nix installs.");
+        Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("nix profile upgrade aspire-cli", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("nix flake update <input-name>", StringComparison.Ordinal));
+        Assert.DoesNotContain(interactionService.DisplayedPlainText, text => text.Contains("npm install", StringComparison.Ordinal));
         Assert.DoesNotContain(interactionService.DisplayedPlainText, text => text.Contains("dotnet tool update", StringComparison.Ordinal));
     }
 

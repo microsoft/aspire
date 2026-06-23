@@ -111,6 +111,7 @@ namespace Aspire.Cli.Resources {
     internal static string QualityOptionDescriptionWithStaging => ResourceManager.GetString("QualityOptionDescriptionWithStaging", resourceCulture);
     internal static string DotNetToolSelfUpdateMessage => ResourceManager.GetString("DotNetToolSelfUpdateMessage", resourceCulture);
     internal static string NpmSelfUpdateMessage => ResourceManager.GetString("NpmSelfUpdateMessage", resourceCulture);
+    internal static string NixSelfUpdateMessage => ResourceManager.GetString("NixSelfUpdateMessage", resourceCulture);
     internal static string ProjectUpdateSkippedAfterCliUpdateMessage => ResourceManager.GetString("ProjectUpdateSkippedAfterCliUpdateMessage", resourceCulture);
     internal static string MigratedToNewSdkFormat => ResourceManager.GetString("MigratedToNewSdkFormat", resourceCulture);
     internal static string RemovedObsoleteAppHostPackage => ResourceManager.GetString("RemovedObsoleteAppHostPackage", resourceCulture);
