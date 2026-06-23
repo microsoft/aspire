@@ -565,7 +565,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             new NullLayoutDiscovery(),
             new LayoutProcessRunner(new TestProcessExecutionFactory()),
             new TestFeatures(),
-            executionContext,
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         return new AppHostServerProjectFactory(

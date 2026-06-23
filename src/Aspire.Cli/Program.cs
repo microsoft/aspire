@@ -458,7 +458,7 @@ public class Program
         builder.Services.AddTransient<IProcessTreeGracefulShutdownSignaler>(sp => sp.GetRequiredService<ProcessTreeGracefulShutdownService>());
 
         // Register certificate tool runner - uses native CertificateManager directly (no subprocess needed)
-        builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>()));
+        builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>(), sp.GetRequiredService<IEnvironment>()));
         builder.Services.AddSingleton<ICertificateToolRunner, NativeCertificateToolRunner>();
 
         builder.Services.AddTransient<IDotNetCliRunner, DotNetCliRunner>();

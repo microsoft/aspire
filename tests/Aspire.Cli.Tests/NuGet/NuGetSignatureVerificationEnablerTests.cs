@@ -9,10 +9,9 @@ namespace Aspire.Cli.Tests.NuGet;
 
 public class NuGetSignatureVerificationEnablerTests
 {
-    private static CliExecutionContext CreateContext(Dictionary<string, string?>? envVars = null)
+    private static IEnvironment CreateEnvironment(Dictionary<string, string?>? envVars = null)
     {
-        var dir = new DirectoryInfo(Path.GetTempPath());
-        return TestExecutionContextHelper.CreateExecutionContext(dir, environment: new TestEnvironment(envVars));
+        return new TestEnvironment(envVars);
     }
 
     [Fact]
@@ -20,9 +19,9 @@ public class NuGetSignatureVerificationEnablerTests
     {
         var envVars = new Dictionary<string, string>();
         var features = new TestFeatures().SetFeature(KnownFeatures.NuGetSignatureVerificationEnabled, false);
-        var context = CreateContext();
+        var environment = CreateEnvironment();
 
-        NuGetSignatureVerificationEnabler.Apply(envVars, features, context);
+        NuGetSignatureVerificationEnabler.Apply(envVars, features, environment);
 
         Assert.Empty(envVars);
     }
@@ -37,9 +36,9 @@ public class NuGetSignatureVerificationEnablerTests
 
         var envVars = new Dictionary<string, string>();
         var features = new TestFeatures(); // default is true for this feature
-        var context = CreateContext(new Dictionary<string, string?>()); // empty env — no user override
+        var environment = CreateEnvironment(new Dictionary<string, string?>()); // empty env — no user override
 
-        NuGetSignatureVerificationEnabler.Apply(envVars, features, context);
+        NuGetSignatureVerificationEnabler.Apply(envVars, features, environment);
 
         Assert.True(envVars.ContainsKey(NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification));
         Assert.Equal("True", envVars[NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification]);
@@ -55,12 +54,12 @@ public class NuGetSignatureVerificationEnablerTests
 
         var envVars = new Dictionary<string, string>();
         var features = new TestFeatures();
-        var context = CreateContext(new Dictionary<string, string?>
+        var environment = CreateEnvironment(new Dictionary<string, string?>
         {
             [NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification] = "false"
         });
 
-        NuGetSignatureVerificationEnabler.Apply(envVars, features, context);
+        NuGetSignatureVerificationEnabler.Apply(envVars, features, environment);
 
         Assert.True(envVars.ContainsKey(NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification));
         Assert.Equal("False", envVars[NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification]);
@@ -76,12 +75,12 @@ public class NuGetSignatureVerificationEnablerTests
 
         var envVars = new Dictionary<string, string>();
         var features = new TestFeatures();
-        var context = CreateContext(new Dictionary<string, string?>
+        var environment = CreateEnvironment(new Dictionary<string, string?>
         {
             [NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification] = "true"
         });
 
-        NuGetSignatureVerificationEnabler.Apply(envVars, features, context);
+        NuGetSignatureVerificationEnabler.Apply(envVars, features, environment);
 
         Assert.True(envVars.ContainsKey(NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification));
         Assert.Equal("True", envVars[NuGetSignatureVerificationEnabler.DotNetNuGetSignatureVerification]);
@@ -97,9 +96,9 @@ public class NuGetSignatureVerificationEnablerTests
 
         var envVars = new Dictionary<string, string>();
         var features = new TestFeatures(); // default is true
-        var context = CreateContext();
+        var environment = CreateEnvironment();
 
-        NuGetSignatureVerificationEnabler.Apply(envVars, features, context);
+        NuGetSignatureVerificationEnabler.Apply(envVars, features, environment);
 
         Assert.Empty(envVars);
     }

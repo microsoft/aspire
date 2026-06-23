@@ -109,7 +109,8 @@ internal sealed class DotNetCliRunner(
     IFeatures features,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
-    IProcessExecutionFactory executionFactory) : IDotNetCliRunner
+    IProcessExecutionFactory executionFactory,
+    IEnvironment environment) : IDotNetCliRunner
 {
     private readonly IDiskCache _diskCache = diskCache;
 
@@ -414,7 +415,7 @@ internal sealed class DotNetCliRunner(
             // Prepend the private SDK path to PATH. Check if the caller already provided a PATH override.
             var currentPath = env.TryGetValue("PATH", out var userPath)
                 ? userPath
-                : Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+                : environment.GetEnvironmentVariable("PATH") ?? string.Empty;
             env["PATH"] = $"{sdkInstallPath}{Path.PathSeparator}{currentPath}";
 
             logger.LogDebug("Using private SDK installation at {SdkPath}", sdkInstallPath);

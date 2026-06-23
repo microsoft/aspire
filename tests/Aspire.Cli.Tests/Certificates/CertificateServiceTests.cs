@@ -323,8 +323,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var interactiveService = sp.GetRequiredService<IInteractionService>();
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
-                var executionContext = sp.GetRequiredService<CliExecutionContext>();
-                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, executionContext, new TestEnvironment { IsLinux = true });
+                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, new TestEnvironment { IsLinux = true });
             };
         });
 
@@ -450,9 +449,12 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 return new CliHostEnvironment(configuration, nonInteractive: true);
             };
             options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
-                workspace.WorkspaceRoot, environment: new TestEnvironment(envVars));
+                workspace.WorkspaceRoot);
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
+
+        // Override the IEnvironment registration to include the env vars for this test
+        services.AddSingleton<IEnvironment>(new TestEnvironment(envVars));
 
         using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
@@ -513,8 +515,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var interactiveService = sp.GetRequiredService<IInteractionService>();
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
-                var executionContext = sp.GetRequiredService<CliExecutionContext>();
-                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, executionContext, environment ?? sp.GetRequiredService<IEnvironment>());
+                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, environment ?? sp.GetRequiredService<IEnvironment>());
             };
         });
 
@@ -559,6 +560,6 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     private static void AssertSslCertDirContainsDevCertsTrustPath(IDictionary<string, string> environmentVariables)
     {
         Assert.True(environmentVariables.ContainsKey("SSL_CERT_DIR"));
-        Assert.Contains(CertificateHelpers.GetDevCertsTrustPath(), environmentVariables["SSL_CERT_DIR"].Split(Path.PathSeparator));
+        Assert.Contains(CertificateHelpers.GetDevCertsTrustPath(new HostEnvironment()), environmentVariables["SSL_CERT_DIR"].Split(Path.PathSeparator));
     }
 }

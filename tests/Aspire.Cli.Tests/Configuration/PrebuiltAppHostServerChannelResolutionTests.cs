@@ -95,7 +95,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
             new NullLayoutDiscovery(),
             new LayoutProcessRunner(new TestProcessExecutionFactory()),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         return new PrebuiltAppHostServer(

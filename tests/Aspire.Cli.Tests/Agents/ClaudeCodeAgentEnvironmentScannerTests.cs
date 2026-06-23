@@ -112,7 +112,6 @@ public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         return TestExecutionContextHelper.CreateExecutionContext(
             workingDirectory,
             debugMode: false,
-            environment: new TestEnvironment(),
             homeDirectory: workingDirectory);
     }
 

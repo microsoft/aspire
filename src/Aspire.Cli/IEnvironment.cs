@@ -8,7 +8,7 @@ namespace Aspire.Cli;
 /// <see cref="Acquisition.IdentityResolver"/> can read environment variables
 /// and detect the host OS without a circular dependency between them.
 /// </summary>
-internal interface IEnvironment
+public interface IEnvironment
 {
     /// <summary>
     /// Gets the value of an environment variable.

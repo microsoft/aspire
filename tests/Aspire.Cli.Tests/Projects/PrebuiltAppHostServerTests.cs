@@ -946,7 +946,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new NullLayoutDiscovery(),
             new LayoutProcessRunner(new TestProcessExecutionFactory()),
             new TestFeatures(),
-            executionContext,
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         return new PrebuiltAppHostServer(
@@ -1902,7 +1902,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(layout),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            executionContext,
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var stagingChannel = PackageChannel.CreateExplicitChannel(
@@ -2416,7 +2416,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(layout),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
 
         var server = CreatePrebuiltAppHostServer(
@@ -2557,7 +2557,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(layout),
             new LayoutProcessRunner(new TestProcessExecutionFactory()),
             new TestFeatures(),
-            executionContext,
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var server = CreatePrebuiltAppHostServer(

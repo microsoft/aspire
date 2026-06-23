@@ -444,7 +444,8 @@ internal sealed class CliServiceCollectionTestOptions
         var appHostCandidateFinder = serviceProvider.GetService<IAppHostCandidateFinder>()
             ?? new AppHostCandidateFinder(gitRepository, profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-        return new ProjectLocator(logger, executionContext, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, appHostCandidateFinder, telemetry);
+        var environment = serviceProvider.GetRequiredService<IEnvironment>();
+        return new ProjectLocator(logger, executionContext, environment, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, appHostCandidateFinder, telemetry);
     }
 
     public ISolutionLocator CreateDefaultSolutionLocatorFactory(IServiceProvider serviceProvider)
@@ -500,8 +501,7 @@ internal sealed class CliServiceCollectionTestOptions
         var interactiveService = serviceProvider.GetRequiredService<IInteractionService>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
-        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment, executionContext, serviceProvider.GetRequiredService<IEnvironment>());
+        return new CertificateService(certificateToolRunner, interactiveService, telemetry, hostEnvironment, serviceProvider.GetRequiredService<IEnvironment>());
     };
 
     public Func<IServiceProvider, IScaffoldingService> ScaffoldingServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -532,7 +532,7 @@ internal sealed class CliServiceCollectionTestOptions
         var executionFactory = serviceProvider.GetRequiredService<IProcessExecutionFactory>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
 
-        return new DotNetCliRunner(logger, serviceProvider, telemetry, profilingTelemetry, configuration, diskCache, features, interactionService, executionContext, executionFactory);
+        return new DotNetCliRunner(logger, serviceProvider, telemetry, profilingTelemetry, configuration, diskCache, features, interactionService, executionContext, executionFactory, new HostEnvironment());
     };
 
     public Func<IServiceProvider, IDotNetSdkInstaller> DotNetSdkInstallerFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -597,7 +597,7 @@ internal sealed class CliServiceCollectionTestOptions
         var scaffoldingService = serviceProvider.GetRequiredService<IScaffoldingService>();
         var cliTemplateLogger = serviceProvider.GetRequiredService<ILogger<CliTemplateFactory>>();
         var templateNuGetConfigService = serviceProvider.GetRequiredService<TemplateNuGetConfigService>();
-        var dotNetFactory = new DotNetTemplateFactory(interactionService, runner, certificateService, prompter, executionContext, sdkInstaller, features, telemetry, hostEnvironment, templateNuGetConfigService);
+        var dotNetFactory = new DotNetTemplateFactory(interactionService, runner, certificateService, prompter, executionContext, sdkInstaller, features, telemetry, hostEnvironment, templateNuGetConfigService, new HostEnvironment());
         var projectFactory = serviceProvider.GetRequiredService<IAppHostProjectFactory>();
         var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, templateNuGetConfigService, cliTemplateLogger);
         return new TemplateProvider([dotNetFactory, cliFactory]);

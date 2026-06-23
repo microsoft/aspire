@@ -7,7 +7,7 @@ namespace Aspire.Cli;
 /// Default <see cref="IEnvironment"/> that delegates to the process
 /// environment and <see cref="OperatingSystem"/> runtime checks.
 /// </summary>
-internal sealed class HostEnvironment : IEnvironment
+public sealed class HostEnvironment : IEnvironment
 {
     public string? GetEnvironmentVariable(string variable) => Environment.GetEnvironmentVariable(variable);
 

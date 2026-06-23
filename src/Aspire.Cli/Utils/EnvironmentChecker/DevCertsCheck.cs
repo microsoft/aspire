@@ -13,7 +13,7 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// <summary>
 /// Checks if the HTTPS development certificate is trusted and detects multiple certificates.
 /// </summary>
-internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateToolRunner certificateToolRunner) : IEnvironmentCheck
+internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateToolRunner certificateToolRunner, IEnvironment environment) : IEnvironmentCheck
 {
     internal const string CheckName = "dev-certs";
     internal const string VersionCheckName = "dev-certs-version";
@@ -28,7 +28,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         try
         {
             var trustResult = certificateToolRunner.CheckHttpCertificate();
-            var results = EvaluateCertificateResults(trustResult.Certificates);
+            var results = EvaluateCertificateResults(trustResult.Certificates, environment);
 
             return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>(results);
         }
@@ -50,9 +50,10 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
     /// Evaluates certificate information and produces the appropriate check results.
     /// </summary>
     /// <param name="certInfos">Certificate information from <see cref="ICertificateToolRunner.CheckHttpCertificate"/>.</param>
+    /// <param name="environment">The environment abstraction for reading environment variables.</param>
     /// <returns>The list of environment check results.</returns>
     internal static List<EnvironmentCheckResult> EvaluateCertificateResults(
-        IReadOnlyList<DevCertInfo> certInfos)
+        IReadOnlyList<DevCertInfo> certInfos, IEnvironment environment)
     {
         if (certInfos.Count == 0)
         {
@@ -155,7 +156,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         else if (partiallyTrustedCount > 0 && fullyTrustedCount == 0)
         {
             // Certificate is partially trusted (Linux with SSL_CERT_DIR not configured)
-            var devCertsTrustPath = CertificateHelpers.GetDevCertsTrustPath();
+            var devCertsTrustPath = CertificateHelpers.GetDevCertsTrustPath(environment);
             results.Add(new EnvironmentCheckResult
             {
                 Category = EnvironmentCheckCategories.Environment,
