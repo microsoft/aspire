@@ -84,13 +84,13 @@ public class NatsClusterFunctionalTests(ITestOutputHelper testOutputHelper)
             await node2Connection.ConnectAsync();
 
             var subscribedSignal = new TaskCompletionSource();
-            var sub = Task.Run(async () =>
+            var subscriptionTask = Task.Run(async () =>
             {
-                var sub = await node2Connection.SubscribeCoreAsync<string>("test.subject", cancellationToken: cts.Token);
+                var subscription = await node2Connection.SubscribeCoreAsync<string>("test.subject", cancellationToken: cts.Token);
                 await node2Connection.PingAsync(cts.Token); // NOTE: See https://docs.nats.io/using-nats/developer/sending/caches
                 subscribedSignal.SetResult();
 
-                await foreach (var msg in sub.Msgs.ReadAllAsync(cts.Token))
+                await foreach (var msg in subscription.Msgs.ReadAllAsync(cts.Token))
                 {
                     break;
                 }
@@ -99,7 +99,7 @@ public class NatsClusterFunctionalTests(ITestOutputHelper testOutputHelper)
             await subscribedSignal.Task;
             await node1Connection.PublishAsync("test.subject", "hello from node 1", cancellationToken: cts.Token);
 
-            await sub;
+            await subscriptionTask;
         }, cts.Token);
 
         await app.StopAsync();
