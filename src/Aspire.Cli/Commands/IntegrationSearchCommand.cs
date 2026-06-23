@@ -54,13 +54,13 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 return CommandResult.FromExitCode(exitCode);
             }
 
-            var packagesWithChannels = (await InteractionService.ShowStatusAsync(
+            var packageCandidates = (await InteractionService.ShowStatusAsync(
                 AddCommandStrings.SearchingForAspirePackages,
-                async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, cancellationToken)))
+                async () => await _integrationPackageSearchService.GetIntegrationPackageCandidatesAsync(workingDirectory, configuredChannel, cancellationToken)))
                 .ToArray();
 
-            var packagesWithShortName = packagesWithChannels
-                .Select(IntegrationPackageSearchService.GenerateFriendlyName)
+            var packagesWithShortName = packageCandidates
+                .Select(static candidate => candidate.ToLegacyPackage())
                 .OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer())
                 .ToArray();
 

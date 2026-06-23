@@ -26,6 +26,7 @@ using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
+using Aspire.Cli.Integrations;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
@@ -586,6 +587,9 @@ public class Program
         builder.Services.AddTransient<DescribeCommand>();
         builder.Services.AddTransient<LogsCommand>();
         builder.Services.AddTransient<IntegrationPackageSearchService>();
+        builder.Services.AddTransient<IIntegrationIndexSource, StaticGeneratedIntegrationIndexSource>();
+        builder.Services.AddTransient<IIntegrationIndexSource, NuGetSearchIntegrationIndexSource>();
+        builder.Services.AddTransient<IIntegrationResolver, IntegrationResolver>();
         builder.Services.AddTransient<IntegrationCommand>();
         builder.Services.AddTransient<IntegrationListCommand>();
         builder.Services.AddTransient<IntegrationSearchCommand>();
