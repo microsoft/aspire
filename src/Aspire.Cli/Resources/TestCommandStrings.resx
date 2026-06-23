@@ -120,4 +120,19 @@
   <data name="Description" xml:space="preserve">
     <value>Run an Aspire AppHost and exit when its test resources finish</value>
   </data>
+  <data name="WaitingForTestResources" xml:space="preserve">
+    <value>Waiting for test resources to complete...</value>
+  </data>
+  <data name="NoTestResources" xml:space="preserve">
+    <value>No test resources were found. Mark a resource with WithTestRun() to bound the run.</value>
+  </data>
+  <data name="TestResourcePassed" xml:space="preserve">
+    <value>Test resource '{0}' passed.</value>
+  </data>
+  <data name="TestResourceFailed" xml:space="preserve">
+    <value>Test resource '{0}' failed.</value>
+  </data>
+  <data name="TestRunSummary" xml:space="preserve">
+    <value>{0} passed, {1} failed.</value>
+  </data>
 </root>

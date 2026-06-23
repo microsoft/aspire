@@ -50,5 +50,35 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
         }
+
+        public static string WaitingForTestResources {
+            get {
+                return ResourceManager.GetString("WaitingForTestResources", resourceCulture);
+            }
+        }
+
+        public static string NoTestResources {
+            get {
+                return ResourceManager.GetString("NoTestResources", resourceCulture);
+            }
+        }
+
+        public static string TestResourcePassed {
+            get {
+                return ResourceManager.GetString("TestResourcePassed", resourceCulture);
+            }
+        }
+
+        public static string TestResourceFailed {
+            get {
+                return ResourceManager.GetString("TestResourceFailed", resourceCulture);
+            }
+        }
+
+        public static string TestRunSummary {
+            get {
+                return ResourceManager.GetString("TestRunSummary", resourceCulture);
+            }
+        }
     }
 }

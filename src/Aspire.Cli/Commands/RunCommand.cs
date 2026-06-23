@@ -73,6 +73,7 @@ internal class RunCommand : BaseCommand
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly TimeProvider _timeProvider;
     private bool _isDetachMode;
+    private bool? _commandOutcomeSuccess;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
 
     private static readonly TimeSpan s_appHostStartupCancellationTimeout = TimeSpan.FromSeconds(5);
@@ -158,6 +159,29 @@ internal class RunCommand : BaseCommand
     /// </summary>
     protected virtual void ConfigureAppHostEnvironment(IDictionary<string, string> environmentVariables)
     {
+    }
+
+    /// <summary>
+    /// Gives derived commands (for example <c>aspire test</c>) a chance to take over the post-startup
+    /// interaction with the running app host instead of the default <c>aspire run</c> behaviour (Ctrl+C
+    /// wait / live endpoint display). Implementations typically stream results over the backchannel,
+    /// render progress, then call <see cref="IAppHostCliBackchannel.RequestStopAsync(CancellationToken)"/>
+    /// to end the run. Returning <see langword="true"/> suppresses the default behaviour.
+    /// </summary>
+    /// <returns><see langword="true"/> if the command handled the interaction; otherwise <see langword="false"/>.</returns>
+    protected virtual Task<bool> TryRunCommandInteractionAsync(IAppHostCliBackchannel backchannel, int longestLocalizedLengthWithColon, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(false);
+    }
+
+    /// <summary>
+    /// Records the success/failure outcome of a command-driven interaction. When set, this — not the app
+    /// host process exit code — determines the command result (the app host is stopped by the command and
+    /// typically exits cleanly regardless of whether the underlying work passed or failed).
+    /// </summary>
+    protected void SetCommandOutcome(bool success)
+    {
+        _commandOutcomeSuccess = success;
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -420,7 +444,13 @@ internal class RunCommand : BaseCommand
                 var isRemoteEnvironment = isCodespaces || isRemoteContainers || isSshRemote;
 
                 var profileStopRequested = false;
-                if (captureProfile)
+                var commandHandledInteraction = await TryRunCommandInteractionAsync(backchannel, longestLocalizedLengthWithColon, cancellationToken).ConfigureAwait(false);
+                if (commandHandledInteraction)
+                {
+                    // A derived command (for example `aspire test`) drove the interaction and already asked
+                    // the app host to stop, so skip the default run behaviour and fall through to teardown.
+                }
+                else if (captureProfile)
                 {
                     profileStopRequested = await RequestAppHostStopForProfileAsync(backchannel, pendingRun, captureProfileDelay, _profilingTelemetry, cancellationToken).ConfigureAwait(false);
                 }
@@ -512,6 +542,16 @@ internal class RunCommand : BaseCommand
 
                     var exitCode = await pendingRun;
                     lifetimeActivity.SetProcessExitCode(exitCode);
+
+                    // Command-driven modes (for example `aspire test`) determine success from the command
+                    // outcome, not the app host exit code: the command stops the app host via
+                    // RequestStopAsync, so it typically exits cleanly even when the underlying work failed.
+                    if (_commandOutcomeSuccess is { } outcome)
+                    {
+                        return outcome
+                            ? CommandResult.Success()
+                            : CommandResult.FromExitCode(CliExitCodes.TestRunFailed);
+                    }
 
                     // Capture mode intentionally turns a long-running AppHost startup into a finite command.
                     // Some AppHost implementations, including guest AppHosts, report the teardown exit code
