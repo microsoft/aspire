@@ -160,6 +160,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'viewAppHostLogFile'; appHostPath?: string }
     | { name: 'copyLogFilePath'; appHostPath?: string }
     | { name: 'viewResourceLogs'; appHostPath?: string; resourceName: string }
+    | { name: 'openResourceTerminal'; appHostPath?: string; resourceName: string }
     | { name: 'copyResourceName'; appHostPath?: string; resourceName: string }
     | { name: 'copyEndpointUrl'; appHostPath?: string; resourceName?: string; url?: string }
     | { name: 'openInIntegratedBrowser'; appHostPath?: string; resourceName?: string; url?: string }

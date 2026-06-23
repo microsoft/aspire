@@ -27,7 +27,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     {
         return TestExecutionContextHelper.CreateExecutionContext(
             workingDirectory,
-            environmentVariables: environmentVariables);
+            environment: new TestEnvironment(environmentVariables));
     }
 
     [Fact]

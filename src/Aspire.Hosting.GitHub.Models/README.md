@@ -1,5 +1,14 @@
 # GitHub Models hosting integration
 
+> [!WARNING]
+> **This integration is deprecated and no longer supported.**
+> GitHub Models is no longer available to new customers, so the
+> `Aspire.Hosting.GitHub.Models` integration has been sunset. It will not receive
+> further updates (including model-list refreshes) and will be removed in a future
+> release. Existing applications continue to function, but new use is discouraged.
+> See [microsoft/aspire#18402](https://github.com/microsoft/aspire/issues/18402)
+> for details.
+
 Use this integration to model, configure, and orchestrate GitHub Models in an Aspire solution.
 
 ## Getting started

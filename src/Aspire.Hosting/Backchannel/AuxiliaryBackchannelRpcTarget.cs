@@ -1108,9 +1108,16 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         // Build properties dictionary from ResourcePropertySnapshot
         // Redact sensitive property values to avoid leaking secrets
+        //
+        // Stamp the per-replica terminal properties (terminal.enabled, terminal.replicaIndex,
+        // terminal.replicaCount) the same way the dashboard gRPC path does so that `aspire describe`
+        // and the VS Code extension can detect terminal availability and target the right replica.
+        // The sensitive terminal.consumerUdsPath is redacted to null below by the IsSensitive check,
+        // which is intentional: the CLI resolves the real socket path via GetTerminalInfoAsync.
+        var stampedProperties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource, resourceEvent.ResourceId, snapshot.Properties);
         var properties = new Dictionary<string, JsonNode?>();
         string[]? waitingFor = null;
-        foreach (var prop in snapshot.Properties)
+        foreach (var prop in stampedProperties)
         {
             // Redact sensitive property values
             if (prop.IsSensitive)

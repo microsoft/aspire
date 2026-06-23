@@ -12,6 +12,7 @@ using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.CopilotCli;
 using Aspire.Cli.Agents.OpenCode;
+using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Agents.VsCode;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
@@ -28,6 +29,7 @@ using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
+using Aspire.Cli.Npm;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Processes;
@@ -349,8 +351,18 @@ public class Program
         // CliStartupContext so the channel can be logged at startup before DI is fully wired, and it
         // continues to power that early startup log. `IIdentityResolver` is the richer reader that
         // also resolves sidecar/env overrides for version, commit, and the NuGet service index; it
-        // powers `CliExecutionContext` construction.
+        // powers `CliExecutionContext` identity population.
         builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
+        builder.Services.AddSingleton<IEnvironment, HostEnvironment>();
+        if (OperatingSystem.IsWindows())
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
+        }
+        builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton<IIdentityResolver>(sp =>
         {
             // Binary dir is the directory containing the running executable.
@@ -381,17 +393,9 @@ public class Program
             return new IdentityResolver(
                 sp.GetRequiredService<IInstallSidecarReader>(),
                 typeof(Program).Assembly,
-                binaryDir);
+                binaryDir,
+                sp.GetRequiredService<IEnvironment>());
         });
-        if (OperatingSystem.IsWindows())
-        {
-            builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
-        }
-        else
-        {
-            builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
-        }
-        builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton(sp =>
         {
             // Use the resolver overload so env/sidecar overrides apply to
@@ -514,13 +518,13 @@ public class Program
         builder.Services.AddSingleton<ICopilotCliRunner, CopilotCliRunner>();
 
         // Npm and Playwright CLI operations.
-        builder.Services.AddSingleton<Aspire.Cli.Npm.INpmRunner, Aspire.Cli.Npm.NpmRunner>();
-        builder.Services.AddHttpClient<Aspire.Cli.Npm.INpmProvenanceChecker, Aspire.Cli.Npm.SigstoreNpmProvenanceChecker>();
+        builder.Services.AddSingleton<INpmRunner, NpmRunner>();
+        builder.Services.AddHttpClient<INpmProvenanceChecker, SigstoreNpmProvenanceChecker>();
         builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
         builder.Services.AddSingleton<IEmbeddedAspireSkillsBundleProvider, EmbeddedAspireSkillsBundleProvider>();
         builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
-        builder.Services.AddSingleton<Aspire.Cli.Agents.Playwright.IPlaywrightCliRunner, Aspire.Cli.Agents.Playwright.PlaywrightCliRunner>();
-        builder.Services.AddSingleton<Aspire.Cli.Agents.Playwright.PlaywrightCliInstaller>();
+        builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
+        builder.Services.AddSingleton<PlaywrightCliInstaller>();
 
         // Agent environment detection.
         builder.Services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();
@@ -659,17 +663,6 @@ public class Program
         var homeDirectory = GetUsersAspirePath(processPath);
         var sdksPath = Path.Combine(homeDirectory, "sdks");
         return new DirectoryInfo(sdksPath);
-    }
-
-    internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, string channel, string? processPath = null)
-    {
-        var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        var hivesDirectory = GetHivesDirectory(processPath);
-        var cacheDirectory = GetCacheDirectory(processPath);
-        var sdksDirectory = GetSdksDirectory(processPath);
-        var packagesDirectory = GetPackagesDirectory(processPath);
-        var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, identityChannel: channel, debugMode: debugMode, packagesDirectory: packagesDirectory, aspireHomeDirectory: aspireHomeDirectory);
     }
 
     internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, IIdentityResolver identityResolver, string? processPath = null)

@@ -86,7 +86,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 return EnsureCertificateResult.PartiallyFailedToTrustTheCertificate;
             },
             CheckHttpCertificateCallback = () => CreateTrustResult(CertificateManager.TrustLevel.Partial)
-        }, nonInteractive: false, isLinux: () => true);
+        }, nonInteractive: false, environment: new TestEnvironment { IsLinux = true });
 
         var cs = sp.GetRequiredService<ICertificateService>();
 
@@ -113,7 +113,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 return EnsureCertificateResult.PartiallyFailedToTrustTheCertificate;
             },
             CheckHttpCertificateCallback = () => CreateTrustResult(CertificateManager.TrustLevel.Partial)
-        }, nonInteractive: true, isLinux: () => true);
+        }, nonInteractive: true, environment: new TestEnvironment { IsLinux = true });
 
         var cs = sp.GetRequiredService<ICertificateService>();
 
@@ -324,7 +324,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
                 var executionContext = sp.GetRequiredService<CliExecutionContext>();
-                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, executionContext, isLinux: () => true);
+                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, executionContext, new TestEnvironment { IsLinux = true });
             };
         });
 
@@ -450,7 +450,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 return new CliHostEnvironment(configuration, nonInteractive: true);
             };
             options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
-                workspace.WorkspaceRoot, environmentVariables: envVars);
+                workspace.WorkspaceRoot, environment: new TestEnvironment(envVars));
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
 
@@ -498,7 +498,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         Assert.Contains(interactionService.DisplayedMessages, m => m.Message == expectedMessage);
     }
 
-    private ServiceProvider CreateServiceProvider(TemporaryWorkspace workspace, TestCertificateToolRunner toolRunner, bool nonInteractive = false, Func<bool>? isLinux = null)
+    private ServiceProvider CreateServiceProvider(TemporaryWorkspace workspace, TestCertificateToolRunner toolRunner, bool nonInteractive = false, IEnvironment? environment = null)
     {
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -514,7 +514,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
                 var executionContext = sp.GetRequiredService<CliExecutionContext>();
-                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, executionContext, isLinux);
+                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, executionContext, environment ?? sp.GetRequiredService<IEnvironment>());
             };
         });
 

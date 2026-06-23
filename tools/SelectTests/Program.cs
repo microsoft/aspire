@@ -893,6 +893,13 @@ internal static class Selection
 
     // The full set of causes for one job, de-duplicated and priority-ordered, for the job-reasons
     // table. Every cause is shown (no truncation) so a reviewer sees exactly what pulled the job in.
+    //
+    // A job is often pulled in by several INDEPENDENT triggers (e.g. a changed path rule AND an affected
+    // production project AND a selected test that derives it). Comma-joining those on one line reads as a
+    // single causal chain -- "affected project Aspire.Cli, selected test Aspire.Cli.Tests" looks like one
+    // flows through the other, when they are unrelated reasons. So render each independent trigger as its
+    // own bulleted line, collapsing only the homogeneous changed-file causes (every path that matched a
+    // rule/convention) into one comma-joined segment. A single trigger needs no bullet.
     private static string JobCausesText(IReadOnlyDictionary<string, IReadOnlyList<Cause>> causes, string key)
     {
         if (!causes.TryGetValue(key, out var list) || list.Count == 0)
@@ -900,10 +907,34 @@ internal static class Selection
             return "_unattributed_";
         }
 
-        return string.Join(", ", list
-            .OrderBy(c => CausePriority(c.Kind))
+        var ordered = list.OrderBy(c => CausePriority(c.Kind)).ToList();
+
+        // Changed-file causes (a path matched a convention/path rule) are the same KIND of reason, so
+        // they read fine comma-joined as one segment. Distinct kinds (affected project, selected test)
+        // each get their own line.
+        var fileCauses = ordered
+            .Where(c => c.Kind is CauseKind.Convention or CauseKind.PathRule)
             .Select(ShortCause)
-            .Distinct());
+            .Distinct()
+            .ToList();
+        var otherCauses = ordered
+            .Where(c => c.Kind is not (CauseKind.Convention or CauseKind.PathRule))
+            .Select(ShortCause)
+            .Distinct()
+            .ToList();
+
+        var segments = new List<string>();
+        if (fileCauses.Count > 0)
+        {
+            segments.Add(string.Join(", ", fileCauses));
+        }
+        segments.AddRange(otherCauses);
+
+        // A single trigger reads fine on its own; 2+ get "• " bullets so they cannot run together (a
+        // literal bullet glyph -- a markdown "-" list does not render inside a GitHub table cell).
+        return segments.Count == 1
+            ? segments[0]
+            : string.Join("<br>", segments.Select(s => $"• {s}"));
     }
 
     private static void WriteSummary(
@@ -1091,7 +1122,11 @@ internal static class Selection
         // Name the seed changed file (and hop count) rather than the full chain, which the summary
         // carries -- the comment stays scannable. Falls back to a generic label when no path was tracked.
         CauseKind.Layer1Graph => Layer1ShortCause(cause),
-        CauseKind.DerivedFromTest => $"via test `{cause.Trigger}`",
+        // "selected test" (a noun phrase parallel to "affected project") names the trigger: a
+        // derived_targets rule pulls this job in because that test project was selected. Phrasing it as a
+        // noun -- not "derived from test X" -- avoids a dangling "from" that reads as if the line above it
+        // in the job-reasons cell flows through this test.
+        CauseKind.DerivedFromTest => $"selected test `{cause.Trigger}`",
         _ => cause.Trigger,
     };
 

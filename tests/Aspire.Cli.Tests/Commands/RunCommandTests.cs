@@ -1977,7 +1977,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                 var logBufferContext = sp.GetRequiredService<ConsoleLogBufferContext>();
                 var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, processPathProvider, loggerFactory, logBufferContext);
 
-                return new ExtensionInteractionService(consoleInteractionService, extensionBackchannel, extensionPromptEnabled: false);
+                return new ExtensionInteractionService(consoleInteractionService, extensionBackchannel, extensionPromptEnabled: false, logger: NullLogger<ExtensionInteractionService>.Instance);
             };
             options.ConfigurationCallback += config =>
             {

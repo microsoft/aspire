@@ -283,6 +283,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
                         null!,
                         features: new TestFeatures(),
+                        NullLogger.Instance,
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily");
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
@@ -529,6 +530,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
                         null!,
                         features: new TestFeatures(),
+                        NullLogger.Instance,
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily");
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
@@ -607,6 +609,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
                         null!,
                         features: new TestFeatures(),
+                        NullLogger.Instance,
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily");
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
@@ -683,6 +686,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
                         null!,
                         features: new TestFeatures(),
+                        NullLogger.Instance,
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily");
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
@@ -848,6 +852,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         new[] { new PackageMapping("Aspire*", "/path/to/pr/hive") },
                         null!,
                         features: new TestFeatures(),
+                        NullLogger.Instance,
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: null); // No CLI download URL for PR channels
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { prChannel });
@@ -1520,7 +1525,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     var fakeCache = new FakeNuGetPackageCache();
-                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel });
                 }
             };
@@ -1675,7 +1680,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                     var fakeCache = new FakeNuGetPackageCache();
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[]
                     {
-                        PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures()),
+                        PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance),
                     });
                 }
             };
@@ -1733,8 +1738,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                     var fakeCache = new FakeNuGetPackageCache();
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[]
                     {
-                        PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures()),
-                        PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures()),
+                        PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance),
+                        PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures(), NullLogger.Instance),
                     });
                 },
                 GetStagingChannelUnavailableReasonCallback = () => unavailableReason
@@ -1961,10 +1966,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     var fakeCache = new FakeNuGetPackageCache();
-                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Stable, mappings: null, fakeCache, new TestFeatures());
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures());
-                    var hiveChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures());
+                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Stable, mappings: null, fakeCache, new TestFeatures(), NullLogger.Instance);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures(), NullLogger.Instance);
+                    var hiveChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, stableChannel, dailyChannel, hiveChannel });
                 }
             };
@@ -2373,9 +2378,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     var fakeCache = new FakeNuGetPackageCache();
-                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
-                    var stagingChannel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings: null, fakeCache, new TestFeatures());
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures());
+                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
+                    var stagingChannel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings: null, fakeCache, new TestFeatures(), NullLogger.Instance);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures(), NullLogger.Instance);
                     var channels = new List<PackageChannel> { implicitChannel, stagingChannel, dailyChannel };
 
                     // Optional pr-* and local channels for identity-channel tests. Production
@@ -2388,14 +2393,14 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         {
                             if (hive.Name.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
                             {
-                                channels.Add(PackageChannel.CreateExplicitChannel(hive.Name, PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures()));
+                                channels.Add(PackageChannel.CreateExplicitChannel(hive.Name, PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures(), NullLogger.Instance));
                             }
                         }
                     }
 
                     if (includeLocalInChannels)
                     {
-                        channels.Add(PackageChannel.CreateExplicitChannel(PackageChannelNames.Local, PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures()));
+                        channels.Add(PackageChannel.CreateExplicitChannel(PackageChannelNames.Local, PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures(), NullLogger.Instance));
                     }
 
                     return Task.FromResult<IEnumerable<PackageChannel>>(channels);
@@ -2912,6 +2917,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             [new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json")],
             fakeCache,
             features: new TestFeatures(),
+            NullLogger.Instance,
             configureGlobalPackagesFolder: false,
             cliDownloadBaseUrl: cliDownloadBaseUrl);
     }
