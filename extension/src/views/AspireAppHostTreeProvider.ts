@@ -1602,7 +1602,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
         return await executeResourceCommand(
             this._repository,
-            (resourceName, command, content) => this.showResourceCommandOutput(resourceName, command, content),
+            (resourceName, command, content, outputAppHostPath) => this.showResourceCommandOutput(resourceName, command, content, outputAppHostPath),
             {
                 resourceName: element.resource.name,
                 displayName: element.resource.displayName ?? element.resource.name,
@@ -1612,10 +1612,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             });
     }
 
-    async showResourceCommandOutput(resourceName: string, commandName: string, content: string): Promise<void> {
+    async showResourceCommandOutput(resourceName: string, commandName: string, content: string, appHostPath?: string): Promise<void> {
         // Reuse the read-only aspire-source virtual document provider so returned command values open
         // in a normal editor the user can read, search, and copy from, without a save prompt.
-        const safeName = `${resourceName}-${commandName}`.replace(/[^A-Za-z0-9._-]+/g, '_');
+        const safeName = `${appHostPath ? `${path.normalize(appHostPath)}-` : ''}${resourceName}-${commandName}`.replace(/[^A-Za-z0-9._-]+/g, '_');
         const uri = vscode.Uri.parse(`aspire-source:${safeName}-output.txt`);
         this._ensureContentProviderRegistered();
         this._appHostSourceContents.set(uri.toString(), content);

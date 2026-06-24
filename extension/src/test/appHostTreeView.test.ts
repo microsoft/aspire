@@ -2902,3 +2902,37 @@ suite('viewAppHostSource', () => {
         provider.dispose();
     });
 });
+
+suite('showResourceCommandOutput', () => {
+    let sandbox: sinon.SinonSandbox;
+
+    setup(() => {
+        sandbox = sinon.createSandbox();
+    });
+
+    teardown(() => {
+        sandbox.restore();
+    });
+
+    test('uses AppHost path to disambiguate output documents across global AppHosts', async () => {
+        const provider = makeTreeProvider([]);
+        const openedUris: vscode.Uri[] = [];
+
+        sandbox.stub(vscode.workspace, 'openTextDocument').callsFake(async uri => {
+            openedUris.push(uri as vscode.Uri);
+            return { uri } as vscode.TextDocument;
+        });
+        sandbox.stub(vscode.window, 'showTextDocument').resolves(undefined as any);
+
+        await provider.showResourceCommandOutput('api', 'migrate', 'first', '/repo/First.AppHost/AppHost.csproj');
+        await provider.showResourceCommandOutput('api', 'migrate', 'second', '/repo/Second.AppHost/AppHost.csproj');
+
+        assert.strictEqual(openedUris.length, 2);
+        assert.notStrictEqual(openedUris[0].toString(), openedUris[1].toString());
+        assert.ok(openedUris[0].toString().includes('api-migrate-output.txt'));
+        assert.ok(openedUris[1].toString().includes('api-migrate-output.txt'));
+        assert.strictEqual(provider.provideTextDocumentContent(openedUris[0]), 'first');
+        assert.strictEqual(provider.provideTextDocumentContent(openedUris[1]), 'second');
+        provider.dispose();
+    });
+});

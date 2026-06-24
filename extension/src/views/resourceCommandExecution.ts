@@ -22,7 +22,7 @@ export type ResourceCommandRunner = Pick<AppHostDataRepository, 'runResourceComm
 // Renders a command's returned value in a VS Code editor. The CLI has already rendered the value
 // (text/json/markdown) to plain text on stdout, so the renderer only needs to surface that text.
 // Implemented by the tree provider's read-only `aspire-source` content provider.
-export type ResourceCommandOutputRenderer = (resourceName: string, commandName: string, content: string) => Promise<void> | void;
+export type ResourceCommandOutputRenderer = (resourceName: string, commandName: string, content: string, appHostPath?: string) => Promise<void> | void;
 
 export interface ResourceCommandExecutionRequest {
     resourceName: string;
@@ -125,7 +125,7 @@ async function tryRenderCommandOutput(
     }
 
     try {
-        await renderOutput(request.resourceName, request.commandName, stdout);
+        await renderOutput(request.resourceName, request.commandName, stdout, request.appHostPath);
         return true;
     } catch (error) {
         const message = getErrorMessage(error);

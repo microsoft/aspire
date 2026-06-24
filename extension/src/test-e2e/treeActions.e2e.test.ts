@@ -5,6 +5,11 @@ import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setC
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { answerActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
+interface ActiveEditorInfo {
+    uri?: string;
+    fileName?: string;
+}
+
 suite('Aspire tree action command E2E', function () {
     this.timeout(300000);
 
@@ -156,31 +161,37 @@ suite('Aspire tree action command E2E', function () {
 
         // Resource lifecycle commands now execute over the hidden CLI backchannel instead of being
         // typed into the visible Aspire terminal, so there is no terminal command to observe or to
-        // suppress. We drive the real command and assert on the instrumented command outcome plus the
-        // resulting resource state transitions. NOTE: because these commands now actually run (rather
-        // than being suppressed terminal text), this section is validated manually by the area owner;
-        // the timing/state strings below may need tuning for a given runtime.
+        // suppress. Drive the real command and assert on the instrumented command outcome, the lack of
+        // a visible terminal command, and the resulting resource state transitions.
+        terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.stopResource');
         await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: workerResourceName });
         await waitForCommandOutcome('aspire-vscode.stopResource', 'success', 60000, before);
+        assert.strictEqual(getTerminalCommandCount(), terminalBefore);
         await waitForResourceState(workerResourceName, ['Exited', 'Finished', 'Stopped'], 90000);
 
+        terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.startResource');
         await executeE2eControlCommand({ name: 'startResource', appHostPath, resourceName: workerResourceName });
         await waitForCommandOutcome('aspire-vscode.startResource', 'success', 60000, before);
+        assert.strictEqual(getTerminalCommandCount(), terminalBefore);
         await waitForResourceState(workerResourceName, ['Running'], 90000);
 
+        terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.restartResource');
         await executeE2eControlCommand({ name: 'restartResource', appHostPath, resourceName: workerResourceName });
         await waitForCommandOutcome('aspire-vscode.restartResource', 'success', 60000, before);
+        assert.strictEqual(getTerminalCommandCount(), terminalBefore);
         await waitForResourceState(workerResourceName, ['Running'], 90000);
 
         // The echo-arguments command returns a value, which the extension now renders in a read-only
         // editor rather than streaming raw stdout to a shared terminal. Prompted secret arguments are
         // passed to the hidden CLI process (not echoed to a terminal others can scroll); redaction of
         // those arguments in spawn diagnostics is covered by the unit tests
-        // (resourceCommandExecution / AppHostDataRepository). Here we only drive the interactive
-        // argument prompts and assert the command completes successfully.
+        // (resourceCommandExecution / AppHostDataRepository). Here we drive the interactive argument
+        // prompts and assert the real Extension Host opens the aspire-source output editor without
+        // creating any new terminal command events.
+        terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.executeResourceCommandItem');
         assert.ok(enabledCommandItem, 'Expected enabled command tree item.');
         await executeE2eControlCommand({ name: 'executeResourceCommandItem', appHostPath, resourceName: workerResourceName, commandName: 'echo-arguments' }, { waitFor: 'started' });
@@ -191,7 +202,10 @@ suite('Aspire tree action command E2E', function () {
         await answerActiveInput('10', 'Threshold');
         await answerActiveInput('secret-from-command-item', 'Token');
         await waitForCommandOutcome('aspire-vscode.executeResourceCommandItem', 'success', 60000, before);
+        assert.strictEqual(getTerminalCommandCount(), terminalBefore);
+        await waitForResourceCommandOutputEditor(workerResourceName, 'echo-arguments');
 
+        terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.executeResourceCommand');
         await executeE2eControlCommand({ name: 'executeResourceCommand', appHostPath, resourceName: workerResourceName }, { waitFor: 'started' });
         const quickPickLabels = await getActiveQuickPickLabels();
@@ -208,8 +222,29 @@ suite('Aspire tree action command E2E', function () {
         await answerActiveInput('42.5', 'Threshold');
         await answerActiveInput('secret-from-e2e', 'Token');
         await waitForCommandOutcome('aspire-vscode.executeResourceCommand', 'success', 60000, before);
+        assert.strictEqual(getTerminalCommandCount(), terminalBefore);
+        await waitForResourceCommandOutputEditor(workerResourceName, 'echo-arguments');
     });
 });
+
+async function waitForResourceCommandOutputEditor(resourceName: string, commandName: string, timeoutMs = 60000): Promise<ActiveEditorInfo> {
+    const started = Date.now();
+    let lastEditor: ActiveEditorInfo | undefined;
+    const resourceCommandOutputName = `${resourceName}-${commandName}`.replace(/[^A-Za-z0-9._-]+/g, '_');
+
+    while (Date.now() - started < timeoutMs) {
+        const result = (await executeE2eControlCommand({ name: 'getActiveEditor' })).result as ActiveEditorInfo;
+        lastEditor = result;
+        const uri = result.uri ?? '';
+        if (uri.startsWith('aspire-source:') && uri.endsWith('-output.txt') && uri.includes(resourceCommandOutputName)) {
+            return result;
+        }
+
+        await delay(200);
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for resource command output editor '${resourceName}/${commandName}'. Last active editor: ${JSON.stringify(lastEditor)}`);
+}
 
 function quoteExpectedShellArg(arg: string): string {
     if (process.platform === 'win32') {
@@ -217,4 +252,8 @@ function quoteExpectedShellArg(arg: string): string {
     }
 
     return `'${arg.replace(/'/g, "'\"'\"'")}'`;
+}
+
+function delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }

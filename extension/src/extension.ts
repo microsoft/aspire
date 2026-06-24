@@ -279,7 +279,8 @@ export async function activate(context: vscode.ExtensionContext) {
     // the tree provider's read-only output document.
     return await executeResourceCommand(
       dataRepository,
-      (resource, command, content) => appHostTreeProvider.showResourceCommandOutput(resource, command, content),
+      (resource, command, content, outputAppHostPath) =>
+        appHostTreeProvider.showResourceCommandOutput(resource, command, content, outputAppHostPath),
       {
         resourceName,
         commandName: action,

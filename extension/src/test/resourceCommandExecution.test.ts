@@ -54,15 +54,15 @@ suite('executeResourceCommand', () => {
 
     test('renders returned command output when stdout is non-empty', async () => {
         const { runner } = makeRunner({ stdout: 'line one\nline two', stderr: '' });
-        const rendered: Array<[string, string, string]> = [];
+        const rendered: Array<[string, string, string, string | undefined]> = [];
 
         const outcome = await executeResourceCommand(
             runner,
-            (resource, command, content) => { rendered.push([resource, command, content]); },
-            { resourceName: 'cache', commandName: 'describe', appHostPath: undefined });
+            (resource, command, content, appHostPath) => { rendered.push([resource, command, content, appHostPath]); },
+            { resourceName: 'cache', commandName: 'describe', appHostPath: '/repo/AppHost.csproj' });
 
         assert.deepStrictEqual(outcome, { success: true, hadOutput: true });
-        assert.deepStrictEqual(rendered, [['cache', 'describe', 'line one\nline two']]);
+        assert.deepStrictEqual(rendered, [['cache', 'describe', 'line one\nline two', '/repo/AppHost.csproj']]);
         assert.strictEqual(infoStub.calledOnce, true);
     });
 
