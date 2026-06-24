@@ -196,7 +196,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
 
     private static FileInfo CreateProjectFile(TemporaryWorkspace workspace)
     {
-        // Write a realistic AppHost project so the no-evaluate heuristic detects it from the project
+        // Write a realistic AppHost project so the XML pre-filter detects it from the project
         // content (the Aspire.AppHost.Sdk reference), not just from the "*.AppHost.csproj" file name.
         var path = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.AppHost.csproj");
         File.WriteAllText(path, "<Project Sdk=\"Microsoft.NET.Sdk;Aspire.AppHost.Sdk/9.5.0\" />");
