@@ -156,6 +156,42 @@ public sealed class NpmCliPackageTests : IDisposable
     }
 
     [Fact]
+    [RequiresTools(["node"])]
+    public async Task LauncherPostinstallCheckSucceedsWhenNativePackageIsInstalled()
+    {
+        var pointerPackageRoot = await CreateFakeNpmInstallAsync(includeRidPackages: true);
+
+        using var cmd = new NodeCommand(_output)
+            .WithTimeout(TimeSpan.FromSeconds(30));
+
+        var result = await cmd.ExecuteScriptAsync(
+            Path.Combine(pointerPackageRoot, "bin", "aspire.js"),
+            "--npm-postinstall-check");
+
+        result.EnsureSuccessful();
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task LauncherPostinstallCheckExplainsDisabledOptionalDependencies()
+    {
+        var pointerPackageRoot = await CreateFakeNpmInstallAsync(includeRidPackages: false);
+
+        using var cmd = new NodeCommand(_output)
+            .WithTimeout(TimeSpan.FromSeconds(30));
+
+        var result = await cmd.ExecuteScriptAsync(
+            Path.Combine(pointerPackageRoot, "bin", "aspire.js"),
+            "--npm-postinstall-check");
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("without disabling npm optional dependencies", result.Output);
+        Assert.Contains("--omit=optional", result.Output);
+        Assert.Contains("--no-optional", result.Output);
+        Assert.Contains("npm_config_optional=false", result.Output);
+    }
+
+    [Fact]
     [RequiresTools(["pwsh", "npm"])]
     public async Task PackScriptGeneratesPointerPackageMetadataMapAndReadme()
     {
@@ -171,6 +207,7 @@ public sealed class NpmCliPackageTests : IDisposable
             ["aspire", "typescript", "dotnet", "apphost", "polyglot", "distributed-applications", "code-first", "orchestration", "observability", "opentelemetry", "local-development"],
             GetStringArray(packageJson["keywords"]));
         Assert.Equal(">=20", GetString(GetObject(packageJson, "engines"), "node"));
+        Assert.Equal("node bin/aspire.js --npm-postinstall-check", GetString(GetObject(packageJson, "scripts"), "postinstall"));
         Assert.Equal(
             s_supportedRids.ToDictionary(rid => $"{PackageName}-{rid.Rid}", _ => PackageVersion, StringComparer.Ordinal),
             GetStringMap(GetObject(packageJson, "optionalDependencies")));
@@ -188,10 +225,12 @@ public sealed class NpmCliPackageTests : IDisposable
         Assert.Contains($"npm install -g {PackageName}", readme);
         Assert.Contains($"npm install -g {PackageName}@latest", readme);
         Assert.Contains("The native platform packages are installed through npm optional dependencies.", readme);
+        Assert.Contains("installation fails because the launcher cannot find the native CLI binary", readme);
         Assert.Contains("If you run `aspire update --self` from an npm install, the CLI points you back to this npm update command.", readme);
         Assert.Contains($"npm uninstall -g {PackageName}", readme);
         Assert.Contains("## Troubleshooting", readme);
         Assert.Contains("Optional dependencies disabled", readme);
+        Assert.Contains("If installation fails or the launcher says the native package was not installed", readme);
         Assert.Contains("the `npm_config_optional=false` environment variable", readme);
         Assert.Contains("PATH cannot find `aspire`", readme);
         Assert.Contains("Supported platforms and architectures", readme);
@@ -370,6 +409,60 @@ public sealed class NpmCliPackageTests : IDisposable
 
     private Task<string> ReadRepoFileAsync(string relativePath)
         => File.ReadAllTextAsync(Path.Combine(_repoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+
+    private async Task<string> CreateFakeNpmInstallAsync(bool includeRidPackages)
+    {
+        var testRoot = Path.Combine(_tempDirectory.Path, Path.GetRandomFileName());
+        var nodeModulesRoot = Path.Combine(testRoot, "node_modules");
+        var pointerPackageRoot = Path.Combine(nodeModulesRoot, "@microsoft", "aspire-cli");
+        var pointerBinRoot = Path.Combine(pointerPackageRoot, "bin");
+        Directory.CreateDirectory(pointerBinRoot);
+
+        File.Copy(
+            Path.Combine(_repoRoot, "eng", "clipack", "npm", "aspire.js"),
+            Path.Combine(pointerBinRoot, "aspire.js"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(pointerPackageRoot, "package.json"),
+            $$"""
+            {
+              "name": "{{PackageName}}",
+              "version": "{{PackageVersion}}"
+            }
+            """);
+
+        var packageMap = new JsonObject();
+        foreach (var rid in s_supportedRids)
+        {
+            packageMap[rid.Rid] = $"{PackageName}-{rid.Rid}";
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(pointerBinRoot, "aspire-package-map.json"), packageMap.ToJsonString());
+
+        if (includeRidPackages)
+        {
+            foreach (var rid in s_supportedRids)
+            {
+                var ridPackageRoot = Path.Combine(nodeModulesRoot, "@microsoft", $"aspire-cli-{rid.Rid}");
+                var ridBinRoot = Path.Combine(ridPackageRoot, "bin");
+                Directory.CreateDirectory(ridBinRoot);
+
+                await File.WriteAllTextAsync(
+                    Path.Combine(ridPackageRoot, "package.json"),
+                    $$"""
+                    {
+                      "name": "{{PackageName}}-{{rid.Rid}}",
+                      "version": "{{PackageVersion}}"
+                    }
+                    """);
+
+                await File.WriteAllTextAsync(Path.Combine(ridBinRoot, "aspire"), "native binary stub");
+                await File.WriteAllTextAsync(Path.Combine(ridBinRoot, "aspire.exe"), "native binary stub");
+            }
+        }
+
+        return pointerPackageRoot;
+    }
 
     public static TheoryData<RidPackageExpectation> GetSupportedRidData()
     {

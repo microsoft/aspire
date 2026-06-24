@@ -23,7 +23,7 @@ aspire --version
 aspire --help
 ```
 
-The npm package installs a small JavaScript `aspire` launcher. The native platform packages are installed through npm optional dependencies. The launcher selects the package that matches your OS, CPU, and Linux libc. Do not install this package with optional dependencies disabled, or the launcher will not be able to find the native CLI binary.
+The npm package installs a small JavaScript `aspire` launcher. The native platform packages are installed through npm optional dependencies. The launcher selects the package that matches your OS, CPU, and Linux libc. Do not install this package with optional dependencies disabled, or installation fails because the launcher cannot find the native CLI binary.
 
 ## Quick start
 
@@ -134,7 +134,7 @@ npm uninstall -g __PACKAGE_NAME__
 
 ### Optional dependencies disabled
 
-If the launcher says the native package was not installed, reinstall without `--omit=optional`, `--no-optional`, or the `npm_config_optional=false` environment variable:
+If installation fails or the launcher says the native package was not installed, reinstall without `--omit=optional`, `--no-optional`, or the `npm_config_optional=false` environment variable:
 
 ```bash
 npm install -g __PACKAGE_NAME__
