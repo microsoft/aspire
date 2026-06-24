@@ -169,6 +169,38 @@ suite('appHostTargetVersion', () => {
         assert.strictEqual(await getAppHostTargetVersion(appHostPath), undefined);
     });
 
+    test('reads the older C# AppHost package reference version', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.1" />
+  </ItemGroup>
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '8.2.1');
+    });
+
+    test('reads the centrally managed older C# AppHost package reference version', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting" />
+  </ItemGroup>
+</Project>
+`);
+        writeFileSync(join(dir, 'Directory.Packages.props'), `<Project>
+  <ItemGroup>
+    <PackageVersion Include="Aspire.Hosting" Version="8.2.2" />
+  </ItemGroup>
+</Project>
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '8.2.2');
+    });
+
     test('reads an unversioned C# project SDK version from global.json msbuild-sdks', async () => {
         const dir = makeTempDir();
         const appHostPath = join(dir, 'AppHost.csproj');

@@ -152,6 +152,8 @@ async function getAppHostTargetVersionInfoFromFile(filePath: string): Promise<Fi
         return noFileTargetVersionInfo();
     }
 
+    const uncommentedContents = stripXmlComments(contents);
+
     if (extension === '.cs') {
         const singleFileVersion = getAspireAppHostSdkVersionFromSingleFile(contents);
         return {
@@ -160,7 +162,26 @@ async function getAppHostTargetVersionInfoFromFile(filePath: string): Promise<Fi
         };
     }
 
-    const projectVersion = getAspireAppHostSdkVersionFromProject(contents);
+    const packageVersion = getAspireHostingPackageVersionFromProject(uncommentedContents);
+    if (packageVersion.version) {
+        return {
+            version: packageVersion.version,
+            isCSharpAppHostFile: true,
+        };
+    }
+
+    const centralPackageVersion = packageVersion.referencesAspireHostingPackage && !packageVersion.hasInlineVersion
+        ? await getCentralAspireHostingPackageVersion(dirname(filePath))
+        : undefined;
+
+    if (centralPackageVersion) {
+        return {
+            version: centralPackageVersion,
+            isCSharpAppHostFile: true,
+        };
+    }
+
+    const projectVersion = getAspireAppHostSdkVersionFromProject(uncommentedContents);
     if (projectVersion.version) {
         return {
             version: projectVersion.version,
@@ -174,7 +195,7 @@ async function getAppHostTargetVersionInfoFromFile(filePath: string): Promise<Fi
 
     return {
         version: globalJsonVersion,
-        isCSharpAppHostFile: projectVersion.referencesAspireAppHostSdk,
+        isCSharpAppHostFile: packageVersion.referencesAspireHostingPackage || projectVersion.referencesAspireAppHostSdk,
     };
 }
 
@@ -193,16 +214,21 @@ interface ProjectSdkVersionInfo {
     hasInlineVersion: boolean;
 }
 
+interface PackageVersionInfo {
+    version?: string;
+    referencesAspireHostingPackage: boolean;
+    hasInlineVersion: boolean;
+}
+
 interface SingleFileSdkVersionInfo {
     version?: string;
     referencesAspireAppHostSdk: boolean;
 }
 
 function getAspireAppHostSdkVersionFromProject(contents: string): ProjectSdkVersionInfo {
-    const uncommentedContents = stripXmlComments(contents);
-    const sdkAttribute = getAspireAppHostSdkVersionFromProjectSdkAttribute(uncommentedContents);
-    const sdkElement = getAspireAppHostSdkVersionFromSdkElement(uncommentedContents);
-    const propertyVersion = getAspireHostingSdkVersionProperty(uncommentedContents);
+    const sdkAttribute = getAspireAppHostSdkVersionFromProjectSdkAttribute(contents);
+    const sdkElement = getAspireAppHostSdkVersionFromSdkElement(contents);
+    const propertyVersion = getAspireHostingSdkVersionProperty(contents);
 
     return {
         version: sdkAttribute.version ?? sdkElement.version ?? propertyVersion,
@@ -217,6 +243,79 @@ function stripXmlComments(contents: string): string {
     // Remove comments before applying the lightweight SDK regexes so telemetry cannot report
     // a version from an inactive project fragment.
     return contents.replace(/<!--[\s\S]*?-->/g, '');
+}
+
+function getAspireHostingPackageVersionFromProject(contents: string): PackageVersionInfo {
+    return getAspireHostingPackageVersionFromItems(contents, ['PackageReference', 'AspireProjectOrPackageReference', 'PackageVersion']);
+}
+
+function getAspireHostingPackageVersionFromPackageVersionsFile(contents: string): PackageVersionInfo {
+    return getAspireHostingPackageVersionFromItems(contents, ['PackageVersion']);
+}
+
+function getAspireHostingPackageVersionFromItems(contents: string, itemNames: readonly string[]): PackageVersionInfo {
+    // Older C# AppHosts can target Aspire through package metadata instead of the AppHost SDK:
+    //   <PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.1" />
+    //   <PackageReference Include="Aspire.Hosting"><Version>8.2.1</Version></PackageReference>
+    //   <PackageVersion Include="Aspire.Hosting" Version="8.2.2" />
+    // The CLI prefers Aspire.Hosting before Aspire.Hosting.AppHost; keep the fallback aligned so
+    // old CLIs that omit aspireHostingVersion report the same version source as new CLIs.
+    const packageIds = ['Aspire.Hosting', 'Aspire.Hosting.AppHost'];
+    let referencesAspireHostingPackage = false;
+    let hasInlineVersion = false;
+
+    for (const itemName of itemNames) {
+        const items = getMsBuildItems(contents, itemName);
+        for (const packageId of packageIds) {
+            for (const item of items) {
+                const identity = getMsBuildItemIdentity(item);
+                if (identity !== packageId) {
+                    continue;
+                }
+
+                referencesAspireHostingPackage = true;
+                const versionMetadata = getMsBuildVersionMetadata(item);
+                hasInlineVersion ||= versionMetadata.hasVersion;
+                if (versionMetadata.version) {
+                    return { version: versionMetadata.version, referencesAspireHostingPackage, hasInlineVersion };
+                }
+            }
+        }
+    }
+
+    return { referencesAspireHostingPackage, hasInlineVersion };
+}
+
+function getMsBuildItems(contents: string, itemName: string): string[] {
+    const itemRegex = new RegExp(`<${itemName}\\b[^>]*(?:/>|>[\\s\\S]*?</${itemName}>)`, 'gi');
+    return [...contents.matchAll(itemRegex)].map(match => match[0]);
+}
+
+function getMsBuildItemIdentity(item: string): string | undefined {
+    return getXmlAttribute(item, 'Include')
+        ?? getXmlAttribute(item, 'Update');
+}
+
+function getMsBuildVersionMetadata(item: string): { version?: string; hasVersion: boolean } {
+    const version = getXmlAttribute(item, 'VersionOverride')
+        ?? getXmlAttribute(item, 'Version')
+        ?? getXmlElementText(item, 'Version');
+
+    return {
+        version: normalizeVersion(version),
+        hasVersion: version !== undefined,
+    };
+}
+
+function getXmlAttribute(xml: string, attributeName: string): string | undefined {
+    const openingTag = /^<[^>]+>/s.exec(xml)?.[0];
+    const attributeMatch = new RegExp(`\\b${attributeName}\\s*=\\s*(["'])(?<value>.*?)\\1`, 'is').exec(openingTag ?? '');
+    return attributeMatch?.groups?.value;
+}
+
+function getXmlElementText(xml: string, elementName: string): string | undefined {
+    const elementMatch = new RegExp(`<${elementName}>\\s*(?<value>[^<\\s]+)\\s*</${elementName}>`, 'i').exec(xml);
+    return elementMatch?.groups?.value;
 }
 
 function getAspireAppHostSdkVersionFromProjectSdkAttribute(contents: string): ProjectSdkVersionInfo {
@@ -354,6 +453,20 @@ async function getGlobalJsonMsBuildSdkVersion(startDirectory: string): Promise<s
     }
 }
 
+async function getCentralAspireHostingPackageVersion(startDirectory: string): Promise<string | undefined> {
+    for (let directory = resolve(startDirectory); ; directory = dirname(directory)) {
+        const result = await readAspireHostingPackageVersionFromDirectoryPackages(join(directory, 'Directory.Packages.props'));
+        if (result.version || result.foundConfig) {
+            return result.version;
+        }
+
+        const parent = dirname(directory);
+        if (parent === directory) {
+            return undefined;
+        }
+    }
+}
+
 async function readAspireAppHostSdkVersionFromGlobalJson(globalJsonPath: string): Promise<ConfiguredSdkVersionInfo> {
     const file = await readJsoncFile(globalJsonPath);
     if (!file.exists) {
@@ -367,6 +480,22 @@ async function readAspireAppHostSdkVersionFromGlobalJson(globalJsonPath: string)
     // See https://learn.microsoft.com/visualstudio/msbuild/how-to-use-project-sdk#how-project-sdks-are-resolved.
     return {
         version: normalizeVersion(msBuildSdks?.['Aspire.AppHost.Sdk']),
+        foundConfig: true,
+    };
+}
+
+async function readAspireHostingPackageVersionFromDirectoryPackages(packagesPath: string): Promise<ConfiguredSdkVersionInfo> {
+    let contents: string;
+    try {
+        contents = stripXmlComments(stripLeadingByteOrderMark(await fs.readFile(packagesPath, 'utf8')));
+    }
+    catch {
+        return { foundConfig: false };
+    }
+
+    const packageVersion = getAspireHostingPackageVersionFromPackageVersionsFile(contents);
+    return {
+        version: packageVersion.version,
         foundConfig: true,
     };
 }
