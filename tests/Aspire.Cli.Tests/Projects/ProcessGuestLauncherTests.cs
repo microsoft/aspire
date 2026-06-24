@@ -6,20 +6,23 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging;
 using static Aspire.Cli.Tests.TestServices.ProcessTestHelpers;
 
 namespace Aspire.Cli.Tests.Projects;
 
 public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
 {
-    private static ProcessGuestLauncher CreateLauncher()
+    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+
+    private ProcessGuestLauncher CreateLauncher()
         => new(
             "test",
-            NullLogger<ProcessGuestLauncher>.Instance,
+            _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
             fileLoggerProvider: null,
             commandResolver: PathLookupHelper.FindFullPathFromPath,
-            processExecutionFactory: new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance));
+            processExecutionFactory: new ProcessExecutionFactory(_loggerFactory.CreateLogger<ProcessExecutionFactory>()));
 
     [Fact]
     public async Task LaunchAsync_NoOptions_OnCancellation_ForceKillsProcessTreeAndReturns()
@@ -300,11 +303,18 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
     {
         if (OperatingSystem.IsWindows())
         {
+            // Use cmd.exe as the descendant instead of powershell.exe because PowerShell has
+            // a multi-second cold start on CI runners, and nesting two powershell.exe processes
+            // (root + child) frequently exceeds the pid-file wait timeout.
             var scriptFile = new FileInfo(Path.Combine(workspaceRoot.FullName, "spawn-descendant.ps1"));
             var content =
-                "$child = Start-Process -FilePath powershell.exe -ArgumentList '-NoProfile', '-Command', 'Start-Sleep -Seconds 60' -PassThru" + Environment.NewLine +
+                "$psi = [System.Diagnostics.ProcessStartInfo]::new()" + Environment.NewLine +
+                "$psi.FileName = 'cmd.exe'" + Environment.NewLine +
+                "$psi.Arguments = '/c ping -n 60 127.0.0.1 > nul'" + Environment.NewLine +
+                "$psi.UseShellExecute = $false" + Environment.NewLine +
+                "$child = [System.Diagnostics.Process]::Start($psi)" + Environment.NewLine +
                 $"Set-Content -Path '{descendantPidFile.FullName}' -Value $child.Id" + Environment.NewLine +
-                "Wait-Process -Id $child.Id" + Environment.NewLine;
+                "$child.WaitForExit()" + Environment.NewLine;
             await File.WriteAllTextAsync(scriptFile.FullName, content);
 
             return ("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptFile.FullName]);
@@ -328,7 +338,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
 
     private static async Task<int> WaitForPidFileAsync(FileInfo pidFile)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        var deadline = DateTime.UtcNow + TestConstants.LongTimeoutTimeSpan;
         while (DateTime.UtcNow < deadline)
         {
             if (pidFile.Exists)
