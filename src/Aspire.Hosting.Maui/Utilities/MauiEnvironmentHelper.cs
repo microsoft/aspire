@@ -96,8 +96,7 @@ internal static class MauiEnvironmentHelper
         var itemGroup = new XElement("ItemGroup");
         foreach (var (key, value) in environmentVariables.OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase))
         {
-            // Encode semicolons as %3B to prevent MSBuild from treating them as item separators.
-            var encodedValue = EncodeSemicolons(value, out _);
+            var encodedValue = EncodeMSBuildItemValue(value, out _);
             itemGroup.Add(new XElement("_GeneratedAndroidEnvironment", new XAttribute("Include", $"{key}={encodedValue}")));
         }
         projectElement.Add(itemGroup);
@@ -194,15 +193,19 @@ internal static class MauiEnvironmentHelper
         return new string(chars);
     }
 
-    internal static string EncodeSemicolons(string value, out bool wasEncoded)
+    internal static string EncodeMSBuildItemValue(string value, out bool wasEncoded)
     {
-        wasEncoded = value.Contains(';', StringComparison.Ordinal);
+        wasEncoded = value.Contains('%', StringComparison.Ordinal) || value.Contains(';', StringComparison.Ordinal);
         if (!wasEncoded)
         {
             return value;
         }
 
-        return value.Replace(";", "%3B", StringComparison.Ordinal);
+        // MSBuild item Include values use %-escaped sequences. Escape existing '%' first so a literal
+        // value like "foo%3Bbar" is preserved as "%253B" instead of being decoded into "foo;bar".
+        return value
+            .Replace("%", "%25", StringComparison.Ordinal)
+            .Replace(";", "%3B", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -271,8 +274,7 @@ internal static class MauiEnvironmentHelper
 
         foreach (var (key, value) in environmentVariables.OrderBy(kvp => kvp.Key, StringComparer.Ordinal))
         {
-            // Encode semicolons as %3B to prevent MSBuild from treating them as item separators
-            var encodedValue = value.Replace(";", "%3B", StringComparison.Ordinal);
+            var encodedValue = EncodeMSBuildItemValue(value, out _);
 
             // Add as MlaunchEnvironmentVariables item with Include="KEY=VALUE"
             itemGroup.Add(new XElement("MlaunchEnvironmentVariables",

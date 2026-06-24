@@ -87,15 +87,23 @@ public class MauiEnvironmentHelperTests
     {
         var envVars = new Dictionary<string, string>
         {
+            ["LITERAL_ESCAPE"] = "already%3Bencoded",
             ["PATH"] = "/usr/bin;/usr/local/bin"
         };
 
         var content = MauiEnvironmentHelper.GenerateAndroidTargetsFileContent(envVars);
         var doc = XDocument.Parse(content);
 
-        var item = doc.Descendants("_GeneratedAndroidEnvironment").Single();
-        // Semicolons should be encoded as %3B to prevent MSBuild item separation
-        Assert.Equal("PATH=/usr/bin%3B/usr/local/bin", item.Attribute("Include")?.Value);
+        var items = doc.Descendants("_GeneratedAndroidEnvironment")
+            .Select(item => item.Attribute("Include")?.Value)
+            .ToList();
+
+        Assert.Equal(
+            [
+                "LITERAL_ESCAPE=already%253Bencoded",
+                "PATH=/usr/bin%3B/usr/local/bin"
+            ],
+            items);
     }
 
     [Fact]
@@ -156,26 +164,36 @@ public class MauiEnvironmentHelperTests
     {
         var envVars = new Dictionary<string, string>
         {
+            ["LITERAL_ESCAPE"] = "already%3Bencoded",
             ["PATH"] = "/usr/bin;/usr/local/bin"
         };
 
         var content = MauiEnvironmentHelper.GenerateiOSTargetsFileContent(envVars);
         var doc = XDocument.Parse(content);
 
-        var item = doc.Descendants("MlaunchEnvironmentVariables").Single();
-        // Semicolons should be encoded as %3B to prevent MSBuild item separation
-        Assert.Equal("PATH=/usr/bin%3B/usr/local/bin", item.Attribute("Include")?.Value);
+        var items = doc.Descendants("MlaunchEnvironmentVariables")
+            .Select(item => item.Attribute("Include")?.Value)
+            .ToList();
+
+        Assert.Equal(
+            [
+                "LITERAL_ESCAPE=already%253Bencoded",
+                "PATH=/usr/bin%3B/usr/local/bin"
+            ],
+            items);
     }
 
     [Theory]
     [InlineData("simple-value", "simple-value", false)]
     [InlineData("has;semicolons", "has%3Bsemicolons", true)]
     [InlineData("multiple;semi;colons", "multiple%3Bsemi%3Bcolons", true)]
+    [InlineData("literal%3Bescape", "literal%253Bescape", true)]
+    [InlineData("literal%percent;and;semicolons", "literal%25percent%3Band%3Bsemicolons", true)]
     [InlineData("", "", false)]
     [InlineData("no-special-chars", "no-special-chars", false)]
-    public void EncodeSemicolons_EncodesCorrectly(string input, string expectedOutput, bool expectedWasEncoded)
+    public void EncodeMSBuildItemValue_EncodesCorrectly(string input, string expectedOutput, bool expectedWasEncoded)
     {
-        var result = MauiEnvironmentHelper.EncodeSemicolons(input, out var wasEncoded);
+        var result = MauiEnvironmentHelper.EncodeMSBuildItemValue(input, out var wasEncoded);
 
         Assert.Equal(expectedOutput, result);
         Assert.Equal(expectedWasEncoded, wasEncoded);
