@@ -19,7 +19,7 @@ The first implementation keeps package installation behavior NuGet-based and reu
 
 The prototype now proves the compatibility shape end to end:
 
-- An embedded static `aspire` index artifact contributes `aspire/redis`.
+- An embedded snapshot of the static `aspire` index contributes `aspire/redis`.
 - A dynamic `nuget-search` index wraps today's NuGet package discovery side by side with the static index.
 - `aspire integration search cache --format json` resolves the static index alias to Redis.
 - `aspire add aspire/redis --non-interactive` installs `Aspire.Hosting.Redis` through the real CLI command stack.
@@ -129,7 +129,7 @@ Decisions from this slice:
 
 | Decision | Rationale |
 | -------- | --------- |
-| Built-in indexes are static generated artifacts embedded in the CLI. | This gives deterministic first-run/offline behavior and avoids a network/cache dependency for official entries. |
+| Built-in indexes are GitHub-root static artifacts embedded in the CLI as release snapshots. | The source of truth is the repo-root `integration-index.json` file; embedding a validated copy gives deterministic first-run/offline behavior and avoids a network/cache dependency for official entries. |
 | The first embedded artifact is `aspire`, seeded with Redis only. | A one-entry artifact proves schema, loading, alias search, index-qualified add, and duplicate handling without pretending the catalog is complete. |
 | `nuget-search` runs side by side with the static index during migration. | Existing package-search behavior remains available while static coverage grows. This is a compatibility source, not the future trust default for arbitrary third-party discovery. |
 | Static and dynamic sources share channel-level NuGet discovery per command. | Without sharing, enabling both sources doubles NuGet search cost. The resolver context caches `PackageChannel.GetIntegrationPackagesAsync()` results for the command invocation. |
@@ -163,8 +163,8 @@ Indexes can be backed by different source types:
 
 | Index source type | Example index ID | Description |
 | ----------------- | ---------------- | ----------- |
-| Static generated artifact | `aspire`, `community-toolkit` | Curated JSON artifact embedded in the CLI or fetched/cached from a repo. |
-| External generated artifact | `contoso` | User-added or enterprise JSON artifact fetched from GitHub or another HTTPS endpoint. |
+| Static generated artifact | `aspire`, `community-toolkit` | Curated repo-root `integration-index.json` artifact embedded in the CLI or fetched/cached from a repo. |
+| External generated artifact | `contoso` | User-added or enterprise repo-root `integration-index.json` artifact fetched from GitHub or another HTTPS endpoint. |
 | Dynamic NuGet search | `nuget-search` | Runtime index that searches NuGet metadata and emits `IntegrationPackageCandidate` values for discovered packages. |
 
 This spec uses **index** for the curated integration catalog and reserves **source** for provider-specific package feeds, such as the existing `aspire add --source <nuget-feed>` option. Commands that need both concepts should keep that distinction visible in help text and output.
@@ -207,33 +207,31 @@ Future provider types can include `npm`, `container`, `template`, or `module`, b
 
 ## Index authoring format
 
-Indexes should be authored as normal repo files. The authoring format should be JSON so entry files, generated artifacts, schemas, and CLI consumption all use one format. The CLI should consume a generated, validated JSON artifact.
+Indexes should be authored as normal repo files. The authoring format should be JSON so entry files, the root artifact, schemas, and CLI consumption all use one format. The CLI should consume a generated, validated JSON artifact named `integration-index.json` at the repository root.
 
 Recommended repo shape for built-in indexes:
 
 ```text
+integration-index.json
 src/Aspire.Cli/IntegrationIndexes/
   schema/
     integration-index.schema.json
-  aspire/
+  entries/
     redis.json
     postgres.json
-  community-toolkit/
-    orleans-redis.json
-  generated/
-    aspire.index.json
-    community-toolkit.index.json
 ```
 
-The authoring files are optimized for review. The generated JSON files are optimized for the CLI and for remote acquisition:
+For the official Aspire index, `integration-index.json` lives at the root of `microsoft/aspire`. For the Community Toolkit index, the same file should live at the root of the Community Toolkit repository rather than being mirrored into the Aspire CLI source tree. A user-added GitHub index follows the same convention: adding a repository means the CLI resolves and fetches that repository's root `integration-index.json` at a commit.
+
+The per-entry authoring files are optimized for review. The root generated JSON file is optimized for the CLI and for remote acquisition:
 
 - Contributors edit one small entry file per integration.
 - CI validates entry files against the schema.
-- CI regenerates deterministic `*.index.json` artifacts.
-- The CLI embeds the generated artifacts at build/package time.
-- Remote GitHub-backed indexes expose the generated artifact at a commit SHA.
+- CI regenerates deterministic `integration-index.json`.
+- The CLI embeds a validated copy of selected built-in root artifacts at build/package time.
+- Remote GitHub-backed indexes expose root `integration-index.json` at a commit SHA.
 
-Committing generated artifacts is a trade-off. It creates larger PR diffs and potential merge conflicts, but it also gives the CLI a simple immutable artifact to fetch, digest, cache, and embed without cloning or running repo code. If that proves too noisy, the fallback is to generate during build for built-in indexes and require external indexes to publish a generated artifact.
+Committing the root generated artifact is a trade-off. It creates larger PR diffs and potential merge conflicts, but it also gives the CLI a simple immutable artifact to fetch, digest, cache, and embed without cloning or running repo code. The repo-root convention is the important part: normal acquisition should fetch one known file from GitHub, not traverse the repository. If the generated diff proves too noisy, the fallback is to keep the generated file updated by CI automation, not to make the CLI consume the source tree.
 
 Example entry:
 
@@ -258,7 +256,7 @@ Example entry:
 }
 ```
 
-Docs links are optional and should point to an existing first-party doc or repository README when one is available. The generated artifact should include enough metadata for the CLI to search and resolve without reading the repo tree:
+Docs links are optional and should point to an existing first-party doc or repository README when one is available. The root generated artifact should include enough metadata for the CLI to search and resolve without reading the repo tree:
 
 ```json
 {
@@ -296,7 +294,7 @@ Docs links are optional and should point to an existing first-party doc or repos
 
 ### Name conflicts
 
-Entry IDs are unique only within an index, so `aspire/redis`, `community-toolkit/redis`, and `contoso/redis` can coexist. The generated artifact validator should reject duplicate entry IDs within one index and should reject aliases that conflict with another entry ID or alias in the same index unless they point to the same entry.
+Entry IDs are unique only within an index, so `aspire/redis`, `community-toolkit/redis`, and `contoso/redis` can coexist. The root artifact validator should reject duplicate entry IDs within one index and should reject aliases that conflict with another entry ID or alias in the same index unless they point to the same entry.
 
 Cross-index conflicts are handled at resolution time. The index-qualified ID is the stable identity, and bare names are shortcuts that use the precedence rules in [Index and name precedence](#index-and-name-precedence). Human-readable list/search output should always include index and provenance when multiple enabled indexes expose the same bare name so users can disambiguate with commands such as `aspire add community-toolkit/redis`.
 
@@ -304,23 +302,24 @@ Cross-index conflicts are handled at resolution time. The index-qualified ID is 
 
 Indexes should not require a clone in the normal path.
 
-The embedded built-in index is the first local artifact. It is loaded from the CLI assembly and requires no cache. Persistent artifact caching starts when indexes can be fetched independently of the CLI binary.
+The embedded built-in index is the first local artifact. It is a CLI-bundled snapshot of the GitHub root `integration-index.json` file and requires no cache. Persistent artifact caching starts when indexes can be fetched independently of the CLI binary.
 
 Normal list/search/add commands should not fetch or switch index artifacts based on age. They should use the latest valid artifact already available locally:
 
 1. Use a project-pinned artifact when the project pins an external index.
-2. Otherwise use the newest valid cached generated artifact for the index.
+2. Otherwise use the newest valid cached root artifact for the index.
 3. For built-in indexes, compare the cache with the embedded snapshot when the CLI can order their revisions, then use the newest valid local artifact. If revisions cannot be ordered, prefer the project pin or cached artifact over the embedded snapshot to avoid silent downgrades.
 4. For built-in indexes with no valid cache, use the embedded snapshot.
 5. For external indexes with no valid cache or project pin, fail with instructions to run `aspire integration index update` or re-add the index.
 
 Fetching happens through explicit index-management operations such as `aspire integration index add` and `aspire integration index update`:
 
-1. Fetch a generated artifact or archive from the index endpoint.
-2. Validate the artifact schema and index metadata.
-3. Cache the artifact with the resolved commit or immutable version.
+1. Resolve a GitHub repository URL, branch, tag, or SHA to an immutable commit.
+2. Fetch `integration-index.json` from the repository root at that commit.
+3. Validate the artifact schema and index metadata.
+4. Cache the artifact with the resolved commit or immutable version.
 
-For GitHub-backed indexes, the preferred artifact is a generated JSON file committed in the index repository and fetched by commit SHA. A release asset or branch-generated artifact is acceptable only when the CLI can bind it to immutable content with a digest and index metadata. `aspire integration index update` advances a cached index from one resolved commit/digest to another; project-pinned indexes do not advance silently.
+For GitHub-backed indexes, the artifact is `integration-index.json` committed in the repository root and fetched by commit SHA, for example `https://raw.githubusercontent.com/microsoft/aspire/<commit>/integration-index.json`. `aspire integration index add https://github.com/contoso/aspire-index` should therefore be enough information to discover the index. A release asset or non-root artifact path is acceptable only as an explicit advanced form when the CLI can bind it to immutable content with a digest and index metadata. `aspire integration index update` advances a cached index from one resolved commit/digest to another; project-pinned indexes do not advance silently.
 
 The embedded snapshot is a local artifact, not a freshness boundary. Normal commands should not perform opportunistic refreshes and should not switch artifacts based on cache age. Users can run `aspire integration index update` to advance cached indexes intentionally, similar to package managers that separate update from install/search. CLI releases should refresh the embedded snapshot so first-run/offline behavior does not drift indefinitely from the official index.
 
@@ -329,11 +328,11 @@ There are two distinct caching layers:
 | Cache | Scope | Implemented? | Purpose |
 | ----- | ----- | ------------ | ------- |
 | Command-level provider discovery cache | One resolver invocation | Yes | Share `PackageChannel.GetIntegrationPackagesAsync()` results between static and dynamic sources so side-by-side indexes do not double-query NuGet. |
-| Persistent index artifact cache | CLI/user/project storage | No | Store fetched generated artifacts by index ID, resolved revision, and digest for external or independently updated built-in indexes. |
+| Persistent index artifact cache | CLI/user/project storage | No | Store fetched `integration-index.json` artifacts by index ID, resolved revision, and digest for external or independently updated built-in indexes. |
 
 The command-level provider cache is an optimization, not an index freshness policy. Persistent index caching must still use explicit update semantics.
 
-Cloning is an implementation fallback only for indexes that cannot expose a generated artifact through a simple HTTPS/GitHub raw/archive path, such as some private enterprise repositories.
+Cloning is an implementation fallback only for indexes that cannot expose root `integration-index.json` through a simple HTTPS/GitHub raw path, such as some private enterprise repositories.
 
 When cloning is required, the CLI must:
 
@@ -699,12 +698,13 @@ An explicit provider version should:
 
 Indexes are data, not code.
 
-Index integrity is in scope. A downloaded index artifact must be bound to the index that produced it and to immutable content before the CLI trusts or caches it. For built-in indexes, the embedded snapshot is trusted as part of the CLI build. For remote indexes, the CLI should resolve the requested ref to a commit, validate the generated artifact, compute a content digest, and cache the artifact by index ID, commit, and digest. Project pins for non-built-in indexes should record enough information to detect drift:
+Index integrity is in scope. A downloaded index artifact must be bound to the index that produced it and to immutable content before the CLI trusts or caches it. For built-in indexes, the embedded snapshot is trusted as part of the CLI build and should be traceable back to a repo-root `integration-index.json` at a commit. For remote indexes, the CLI should resolve the requested ref to a commit, fetch root `integration-index.json`, validate the generated artifact, compute a content digest, and cache the artifact by index ID, commit, and digest. Project pins for non-built-in indexes should record enough information to detect drift:
 
 ```json
 {
   "id": "contoso",
   "url": "https://github.com/contoso/aspire-index",
+  "path": "integration-index.json",
   "commit": "abc123",
   "sha256": "..."
 }
@@ -921,27 +921,27 @@ The first implementation should keep `PackageChannel` internally and expose `asp
 
 ### Choice 2: Where do built-in index files live?
 
-**Recommendation:** keep built-in authoring files in this repo under the CLI source tree and commit deterministic generated artifacts.
+**Recommendation:** keep the official Aspire index in this repo and publish its deterministic generated artifact as `integration-index.json` at the repository root. Embed that root artifact into CLI releases as the built-in snapshot.
 
 | Option | Pros | Cons |
 | ------ | ---- | ---- |
-| This repo, under CLI source | Contributions look like normal Aspire PRs. CLI packaging can embed artifacts directly. | Adds generated files to source diffs unless generation happens only at build time. |
+| This repo, root artifact plus source entries | Contributions look like normal Aspire PRs. GitHub acquisition can fetch one well-known file. CLI packaging can embed the same artifact it would fetch remotely. | Adds a generated root file to source diffs unless CI automation owns updates. |
 | Separate official index repo | Cleaner ownership boundary and independent index updates. | More repo/process overhead. Harder to guarantee CLI snapshot freshness and validate changes with CLI tests. |
 | Docs repo or docs tree | Easy to review as content. | Blurs product docs and executable catalog artifacts. Harder to build/test/package. |
 
-The first index should live with the CLI because the CLI is the first consumer and because the entry schema must evolve with CLI code. A separate repo can be introduced later if index updates need an independent cadence.
+The first index should live in `microsoft/aspire` because the CLI is the first consumer and because the entry schema must evolve with CLI code. The consumed artifact should still be the repo-root `integration-index.json`, not a CLI-private file path, so the built-in and external-index acquisition paths use the same shape.
 
 ### Choice 3: Authoring format vs consumed artifact
 
-**Recommendation:** author per-entry JSON files for review, consume generated canonical JSON.
+**Recommendation:** author per-entry JSON files for review, consume the generated canonical root `integration-index.json`.
 
 | Option | Pros | Cons |
 | ------ | ---- | ---- |
 | Author and consume one JSON file | Simple and no generation step. | Large merge conflicts, poor contribution ergonomics, hard to review one-entry changes. |
-| Author per-entry JSON, consume generated JSON | Good PR diffs, one parser format, and stable runtime artifact. | Requires a generator/validator and generated artifact policy. |
+| Author per-entry JSON, consume root generated JSON | Good PR diffs, one parser format, one well-known GitHub acquisition path, and stable runtime artifact. | Requires a generator/validator and generated artifact policy. |
 | Consume repo tree directly | No generated artifact. | Requires clone/archive traversal and makes index integrity harder. |
 
-Per-entry JSON keeps contribution diffs small without adding another parser format to build tooling or the CLI. The hard requirement is "small authoring files plus deterministic generated JSON".
+Per-entry JSON keeps contribution diffs small without adding another parser format to build tooling or the CLI. The hard requirement is "small authoring files plus deterministic repo-root `integration-index.json`".
 
 ### Choice 4: What does project pinning look like?
 
@@ -1108,7 +1108,7 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 
 ### Phase 2: Embedded static built-in index seed
 
-- Add an embedded generated JSON artifact for the built-in `aspire` index.
+- Add an embedded generated JSON snapshot for the built-in `aspire` index.
 - Seed the artifact with one high-value entry, `aspire/redis`, with `cache` as an alias and `nuget:Aspire.Hosting.Redis` as the provider coordinate.
 - Load the artifact through `StaticGeneratedIntegrationIndexSource`.
 - Join static entries to channel-level NuGet search results for display/version availability.
@@ -1121,11 +1121,12 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 ### Phase 3: Broader generated built-in catalog
 
 - Add deterministic generation/validation for the full built-in `aspire` catalog.
+- Generate the canonical `integration-index.json` file at the repository root and embed that file into CLI releases.
 - Preserve existing user-facing names by generating aliases from current friendly-name schemes.
 - Add duplicate ID, alias conflict, invalid provider coordinate, missing package, and nondeterministic generation checks.
-- Add `community-toolkit` only after official catalog generation and compatibility aliases are proven.
+- Add `community-toolkit` from the Community Toolkit repository's root `integration-index.json` only after official catalog generation and compatibility aliases are proven.
 
-**Gate:** generated built-in artifacts cover the current official package set first, then the Community Toolkit set, without changing existing accepted add arguments.
+**Gate:** repo-root `integration-index.json` covers the current official package set first, then the Community Toolkit root artifact covers the Community Toolkit set, without changing existing accepted add arguments.
 
 ### Phase 4: Compatibility adapter switch
 
@@ -1152,11 +1153,11 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 ### Phase 6: External static indexes
 
 - Add `aspire integration index list/add/remove/update`.
-- Add generated artifact acquisition and cache.
+- Add repo-root `integration-index.json` acquisition and cache.
 - Add schema validation and index metadata.
 - Record project index provenance for non-built-in indexes.
 
-**Gate:** remote index acquisition validates ID, schema, commit, and digest; project pins persist URL, commit, and digest for every non-built-in index used by a project.
+**Gate:** remote index acquisition validates ID, schema, root path, commit, and digest; project pins persist URL, root path, commit, and digest for every non-built-in index used by a project.
 
 ### Phase 7: User-configured dynamic NuGet search indexes
 
@@ -1214,7 +1215,6 @@ Current prototype validation includes:
 
 ## Open questions
 
-- Should Community Toolkit entries be authored in this repo first, in the Community Toolkit repo first, or mirrored between both?
 - Should `community-toolkit` be enabled by default, or listed as built-in but disabled until a user opts in?
 - Is `<AppHost directory>/.aspire/integration-indexes.lock.json` acceptable as a committed project file for external index pins, or should C# and polyglot AppHosts use their existing project/config stores?
 - How long should `aspire add Aspire.Hosting.Redis` continue as an unqualified exact package ID fallback before help text steers advanced users to `nuget:Aspire.Hosting.Redis`?
