@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -10,6 +10,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.TestUtilities;
 using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,7 +18,6 @@ using Microsoft.Extensions.Time.Testing;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using InvocationConfiguration = System.CommandLine.InvocationConfiguration;
-using Aspire.TestUtilities;
 
 namespace Aspire.Cli.Tests.Commands;
 
