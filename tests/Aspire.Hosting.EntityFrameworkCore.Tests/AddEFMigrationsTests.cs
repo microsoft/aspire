@@ -234,6 +234,12 @@ public class AddEFMigrationsTests
         // resource, not on the startup project. The dotnet-ef tool resource must inherit it so the
         // design-time DbContext can open the database. Regression test for the
         // "The ConnectionString property has not been initialized." failure.
+        //
+        // The forwarding under test is operation-mode agnostic, so this asserts in Publish mode where
+        // references resolve to manifest expressions synchronously. Run mode is intentionally avoided
+        // because the tool resource also eagerly inherits the startup project's endpoint references,
+        // and resolving those in Run mode awaits runtime endpoint allocation (a TaskCompletionSource
+        // only completed by DCP when the app is actually running) — which deadlocks a plain unit test.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var db = builder.AddResource(new TestDatabaseResource("db1"));
         var project = builder.AddProject<Projects.ServiceA>("myproject");
