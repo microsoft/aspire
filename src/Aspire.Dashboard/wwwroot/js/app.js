@@ -326,7 +326,11 @@ window.getBrowserInfo = function () {
 window.focusElement = function (selector, suppressFocusVisible) {
     const element = document.getElementById(selector);
     if (element) {
-        element.focus({ focusVisible: !suppressFocusVisible });
+        if (suppressFocusVisible) {
+            element.focus({ focusVisible: false });
+        } else {
+            element.focus();
+        }
     }
 };
 
