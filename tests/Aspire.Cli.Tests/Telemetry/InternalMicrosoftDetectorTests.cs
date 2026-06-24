@@ -5,6 +5,9 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Diagnostics;
+using System.Net;
+using System.Text;
 
 namespace Aspire.Cli.Tests.Telemetry;
 
@@ -282,12 +285,193 @@ public sealed class InternalMicrosoftDetectorTests
         Assert.Equal(["/status"], arguments);
     }
 
+    [Fact]
+    public async Task CheckGitHubMembershipWithTokenAsync_ReturnsFalseWhenUserRequestFails()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var handler = new TestGitHubHttpMessageHandler((request, _) =>
+            Task.FromResult(request.RequestUri?.AbsolutePath switch
+            {
+                "/user" => new HttpResponseMessage(HttpStatusCode.Unauthorized),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            }));
+        var detector = CreateDetector(
+            Path.Combine(tempDirectory.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            gitHubHttpMessageHandler: handler);
+
+        var result = await detector.CheckGitHubMembershipWithTokenAsync(CreateGitHubToken(1), CancellationToken.None);
+
+        Assert.False(result);
+        Assert.Equal(["/user"], handler.GetRequestPaths());
+    }
+
+    [Fact]
+    public async Task CheckGitHubMembershipWithTokenAsync_ReturnsTrueForActivePrivateMembership()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var handler = new TestGitHubHttpMessageHandler((request, _) =>
+            Task.FromResult(request.RequestUri?.AbsolutePath switch
+            {
+                "/user" => JsonResponse(HttpStatusCode.OK, """{"login":"testuser"}"""),
+                "/user/memberships/orgs/microsoft" => JsonResponse(HttpStatusCode.OK, """{"state":"active"}"""),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            }));
+        var detector = CreateDetector(
+            Path.Combine(tempDirectory.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            gitHubHttpMessageHandler: handler);
+
+        var result = await detector.CheckGitHubMembershipWithTokenAsync(CreateGitHubToken(1), CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal(["/user", "/user/memberships/orgs/microsoft"], handler.GetRequestPaths());
+    }
+
+    [Fact]
+    public async Task CheckGitHubMembershipWithTokenAsync_ReturnsTrueForExplicitPublicMembership()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var handler = new TestGitHubHttpMessageHandler((request, _) =>
+            Task.FromResult(request.RequestUri?.AbsolutePath switch
+            {
+                "/user" => JsonResponse(HttpStatusCode.OK, """{"login":"testuser"}"""),
+                "/user/memberships/orgs/microsoft" => new HttpResponseMessage(HttpStatusCode.NotFound),
+                "/orgs/microsoft/public_members/testuser" => new HttpResponseMessage(HttpStatusCode.NoContent),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            }));
+        var detector = CreateDetector(
+            Path.Combine(tempDirectory.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            gitHubHttpMessageHandler: handler);
+
+        var result = await detector.CheckGitHubMembershipWithTokenAsync(CreateGitHubToken(1), CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal(["/user", "/user/memberships/orgs/microsoft", "/orgs/microsoft/public_members/testuser"], handler.GetRequestPaths());
+    }
+
+    [Fact]
+    public async Task CheckGitHubMembershipWithTokenAsync_ReturnsFalseForNonMember()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var handler = new TestGitHubHttpMessageHandler((request, _) =>
+            Task.FromResult(request.RequestUri?.AbsolutePath switch
+            {
+                "/user" => JsonResponse(HttpStatusCode.OK, """{"login":"testuser"}"""),
+                "/user/memberships/orgs/microsoft" => new HttpResponseMessage(HttpStatusCode.NotFound),
+                "/orgs/microsoft/public_members/testuser" => new HttpResponseMessage(HttpStatusCode.NotFound),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            }));
+        var detector = CreateDetector(
+            Path.Combine(tempDirectory.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            gitHubHttpMessageHandler: handler);
+
+        var result = await detector.CheckGitHubMembershipWithTokenAsync(CreateGitHubToken(1), CancellationToken.None);
+
+        Assert.False(result);
+        Assert.Equal(["/user", "/user/memberships/orgs/microsoft", "/orgs/microsoft/public_members/testuser"], handler.GetRequestPaths());
+    }
+
+    [Fact]
+    public async Task CheckCopilotCliAsync_ChecksTokenCandidatesWithoutCopilotCommand()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var handler = new TestGitHubHttpMessageHandler((request, _) =>
+            Task.FromResult(request.RequestUri?.AbsolutePath switch
+            {
+                "/user" => JsonResponse(HttpStatusCode.OK, """{"login":"testuser"}"""),
+                "/user/memberships/orgs/microsoft" => JsonResponse(HttpStatusCode.OK, """{"state":"active"}"""),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            }));
+        var detector = CreateDetector(
+            Path.Combine(tempDirectory.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            environmentVariables: new Dictionary<string, string?>
+            {
+                ["PATH"] = tempDirectory.Path,
+                ["PATHEXT"] = ".EXE",
+                ["COPILOT_GH_ACCOUNT_1"] = CreateGitHubToken(1)
+            },
+            gitHubHttpMessageHandler: handler);
+
+        var result = await detector.CheckCopilotCliAsync(CancellationToken.None);
+
+        Assert.True(result.IsInternalMicrosoft);
+        Assert.Equal(["/user", "/user/memberships/orgs/microsoft"], handler.GetRequestPaths());
+    }
+
+    [Fact]
+    public async Task CheckCopilotCliAsync_LimitsGitHubTokenCandidates()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var handler = new TestGitHubHttpMessageHandler((request, _) =>
+            Task.FromResult(request.RequestUri?.AbsolutePath switch
+            {
+                "/user" => new HttpResponseMessage(HttpStatusCode.Unauthorized),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound)
+            }));
+        var environmentVariables = Enumerable.Range(0, 7)
+            .ToDictionary(index => $"COPILOT_GH_ACCOUNT_{index}", index => (string?)CreateGitHubToken(index));
+        environmentVariables["PATH"] = tempDirectory.Path;
+        environmentVariables["PATHEXT"] = ".EXE";
+        var detector = CreateDetector(
+            Path.Combine(tempDirectory.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            environmentVariables: environmentVariables,
+            gitHubHttpMessageHandler: handler);
+
+        var result = await detector.CheckCopilotCliAsync(CancellationToken.None);
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.Equal(5, handler.GetRequestPaths().Count(path => path == "/user"));
+    }
+
+    [Fact]
+    public async Task CheckCopilotCliAsync_UsesOverallGitHubTokenCandidateTimeout()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var handler = new TestGitHubHttpMessageHandler(async (_, cancellationToken) =>
+        {
+            await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+            return new HttpResponseMessage(HttpStatusCode.OK);
+        });
+        var environmentVariables = Enumerable.Range(0, 7)
+            .ToDictionary(index => $"COPILOT_GH_ACCOUNT_{index}", index => (string?)CreateGitHubToken(index));
+        environmentVariables["PATH"] = tempDirectory.Path;
+        environmentVariables["PATHEXT"] = ".EXE";
+        var detector = CreateDetector(
+            Path.Combine(tempDirectory.Path, "cache", "detector.json"),
+            new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
+            probeStages: [],
+            environmentVariables: environmentVariables,
+            gitHubHttpMessageHandler: handler,
+            gitHubCandidateTimeout: TimeSpan.FromMilliseconds(100));
+
+        var stopwatch = Stopwatch.StartNew();
+        var result = await detector.CheckCopilotCliAsync(CancellationToken.None);
+        stopwatch.Stop();
+
+        Assert.False(result.IsInternalMicrosoft);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(2));
+        Assert.Equal(5, handler.GetRequestPaths().Count(path => path == "/user"));
+    }
+
     private static InternalMicrosoftDetector CreateDetector(
         string cacheFilePath,
         DateTimeOffset now,
         IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> probeStages,
         TestProcessExecutionFactory? processFactory = null,
-        IReadOnlyDictionary<string, string?>? environmentVariables = null)
+        IReadOnlyDictionary<string, string?>? environmentVariables = null,
+        HttpMessageHandler? gitHubHttpMessageHandler = null,
+        TimeSpan? gitHubCandidateTimeout = null)
     {
         var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
             new DirectoryInfo(Path.GetDirectoryName(cacheFilePath) ?? AppContext.BaseDirectory),
@@ -299,11 +483,48 @@ public sealed class InternalMicrosoftDetectorTests
             new FixedTimeProvider(now),
             NullLogger<InternalMicrosoftDetector>.Instance,
             processFactory ?? new TestProcessExecutionFactory(),
-            probeStages);
+            probeStages,
+            gitHubHttpMessageHandler,
+            gitHubCandidateTimeout);
     }
+
+    private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json)
+    {
+        return new HttpResponseMessage(statusCode)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+    }
+
+    private static string CreateGitHubToken(int index)
+        => $"gho_{index:D2}{new string('a', 24)}";
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => now;
+    }
+
+    private sealed class TestGitHubHttpMessageHandler(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> sendAsync) : HttpMessageHandler
+    {
+        private readonly Lock _lock = new();
+        private readonly List<string> _requestPaths = [];
+
+        public IReadOnlyList<string> GetRequestPaths()
+        {
+            lock (_lock)
+            {
+                return [.. _requestPaths];
+            }
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            lock (_lock)
+            {
+                _requestPaths.Add(request.RequestUri?.AbsolutePath ?? string.Empty);
+            }
+
+            return await sendAsync(request, cancellationToken).ConfigureAwait(false);
+        }
     }
 }

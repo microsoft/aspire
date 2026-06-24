@@ -35,15 +35,19 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private const string CorpMicrosoftDomainSuffix = ".corp.microsoft.com";
     private const string CacheSubdirectoryName = "internal-microsoft";
     private const string CacheFileName = "detector.json";
+    private const int MaxGitHubTokenCandidates = 5;
 
     private static readonly TimeSpan s_cacheRefreshInterval = TimeSpan.FromHours(6);
     private static readonly TimeSpan s_processProbeTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan s_cancelledProbeDrainTimeout = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan s_gitHubHttpTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan s_gitHubCandidateTimeout = TimeSpan.FromSeconds(5);
 
     private readonly string _cacheFilePath;
     private readonly CliExecutionContext _executionContext;
     private readonly IProcessExecutionFactory _processExecutionFactory;
+    private readonly HttpMessageHandler? _gitHubHttpMessageHandler;
+    private readonly TimeSpan _gitHubCandidateTimeout;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<InternalMicrosoftDetector> _logger;
     private readonly IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> _probeStages;
@@ -65,11 +69,15 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         TimeProvider timeProvider,
         ILogger<InternalMicrosoftDetector> logger,
         IProcessExecutionFactory processExecutionFactory,
-        IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? probeStages)
+        IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>>? probeStages,
+        HttpMessageHandler? gitHubHttpMessageHandler = null,
+        TimeSpan? gitHubCandidateTimeout = null)
     {
         _cacheFilePath = cacheFilePath;
         _executionContext = executionContext;
         _processExecutionFactory = processExecutionFactory;
+        _gitHubHttpMessageHandler = gitHubHttpMessageHandler;
+        _gitHubCandidateTimeout = gitHubCandidateTimeout ?? s_gitHubCandidateTimeout;
         _timeProvider = timeProvider;
         _logger = logger;
         _probeStages = probeStages ?? CreateDefaultProbeStages();
@@ -557,19 +565,13 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        using var http = CreateGitHubHttpClient();
-        return await CheckAnyGitHubMembershipCandidateAsync(http, tokenCandidates, cancellationToken).ConfigureAwait(false)
+        return await CheckAnyGitHubMembershipCandidateAsync(tokenCandidates, cancellationToken).ConfigureAwait(false)
             ? Detected(alias: null)
             : InternalMicrosoftProbeResult.NotDetected;
     }
 
-    private async Task<InternalMicrosoftProbeResult> CheckCopilotCliAsync(CancellationToken cancellationToken)
+    internal async Task<InternalMicrosoftProbeResult> CheckCopilotCliAsync(CancellationToken cancellationToken)
     {
-        if (!CommandExists("copilot"))
-        {
-            return InternalMicrosoftProbeResult.NotDetected;
-        }
-
         var tokenCandidates = new List<TokenCandidate>();
         foreach (var (name, value) in GetEnvironmentVariables())
         {
@@ -593,25 +595,99 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return InternalMicrosoftProbeResult.NotDetected;
         }
 
-        using var http = CreateGitHubHttpClient();
-        return await CheckAnyGitHubMembershipCandidateAsync(http, tokenCandidates, cancellationToken).ConfigureAwait(false)
+        return await CheckAnyGitHubMembershipCandidateAsync(tokenCandidates, cancellationToken).ConfigureAwait(false)
             ? Detected(alias: null)
             : InternalMicrosoftProbeResult.NotDetected;
     }
 
-    private static async Task<bool> CheckAnyGitHubMembershipCandidateAsync(HttpClient http, IReadOnlyList<TokenCandidate> candidates, CancellationToken cancellationToken)
+    private async Task<bool> CheckAnyGitHubMembershipCandidateAsync(IReadOnlyList<TokenCandidate> candidates, CancellationToken cancellationToken)
     {
-        foreach (var candidate in candidates)
+        var candidatesToCheck = candidates.Take(MaxGitHubTokenCandidates).ToArray();
+        if (candidatesToCheck.Length == 0)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (await CheckGitHubMembershipWithTokenAsync(http, candidate.Token, cancellationToken).ConfigureAwait(false))
-            {
-                return true;
-            }
+            return false;
         }
 
-        return false;
+        using var timeoutSource = new CancellationTokenSource(_gitHubCandidateTimeout);
+        using var linkedSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutSource.Token);
+        var candidateTasks = candidatesToCheck
+            .Select(candidate => CheckGitHubMembershipCandidateAsync(candidate, linkedSource.Token))
+            .ToList();
+
+        try
+        {
+            while (candidateTasks.Count > 0)
+            {
+                var completedTask = await Task.WhenAny(candidateTasks).WaitAsync(linkedSource.Token).ConfigureAwait(false);
+                candidateTasks.Remove(completedTask);
+
+                if (await completedTask.ConfigureAwait(false))
+                {
+                    await linkedSource.CancelAsync().ConfigureAwait(false);
+                    await DrainGitHubCandidateTasksAsync(candidateTasks).ConfigureAwait(false);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutSource.IsCancellationRequested)
+        {
+            return false;
+        }
+        finally
+        {
+            await linkedSource.CancelAsync().ConfigureAwait(false);
+            await DrainGitHubCandidateTasksAsync(candidateTasks).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<bool> CheckGitHubMembershipCandidateAsync(TokenCandidate candidate, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var http = CreateGitHubHttpClient();
+            return await CheckGitHubMembershipWithTokenAsync(http, candidate.Token, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or TaskCanceledException)
+        {
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(ex, "GitHub token membership probe failed.");
+            }
+
+            return false;
+        }
+    }
+
+    private async Task DrainGitHubCandidateTasksAsync(IReadOnlyList<Task<bool>> candidateTasks)
+    {
+        if (candidateTasks.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.WhenAll(candidateTasks).WaitAsync(s_cancelledProbeDrainTimeout).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or TimeoutException or HttpRequestException or JsonException or InvalidOperationException or TaskCanceledException)
+        {
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug(ex, "A cancelled GitHub token membership probe failed while draining.");
+            }
+        }
+    }
+
+    internal async Task<bool> CheckGitHubMembershipWithTokenAsync(string token, CancellationToken cancellationToken)
+    {
+        using var http = CreateGitHubHttpClient();
+        return await CheckGitHubMembershipWithTokenAsync(http, token, cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<bool> CheckGitHubMembershipWithTokenAsync(HttpClient http, string token, CancellationToken cancellationToken)
@@ -638,17 +714,17 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return state?.Equals("active", StringComparison.OrdinalIgnoreCase) == true;
         }
 
-        using var publicMemberRequest = NewGitHubRequest(HttpMethod.Get, $"https://api.github.com/orgs/{MicrosoftGitHubOrg}/members/{login}", token);
+        using var publicMemberRequest = NewGitHubRequest(HttpMethod.Get, $"https://api.github.com/orgs/{MicrosoftGitHubOrg}/public_members/{login}", token);
         using var publicMemberResponse = await http.SendAsync(publicMemberRequest, cancellationToken).ConfigureAwait(false);
         return publicMemberResponse.StatusCode == HttpStatusCode.NoContent;
     }
 
-    private static HttpClient CreateGitHubHttpClient()
+    private HttpClient CreateGitHubHttpClient()
     {
-        var http = new HttpClient
-        {
-            Timeout = s_gitHubHttpTimeout
-        };
+        var http = _gitHubHttpMessageHandler is null
+            ? new HttpClient()
+            : new HttpClient(_gitHubHttpMessageHandler, disposeHandler: false);
+        http.Timeout = s_gitHubHttpTimeout;
 
         http.DefaultRequestHeaders.UserAgent.ParseAdd("aspire-cli-internal-microsoft-detector/1.0");
         return http;
