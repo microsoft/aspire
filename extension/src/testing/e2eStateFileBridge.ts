@@ -921,7 +921,7 @@ async function stopDebuggingForE2E(
 ): Promise<void> {
   const trackedSessions = aspireContext.aspireDebugSessions;
   if (trackedSessions.length > 0) {
-    await Promise.all(trackedSessions.map(debugSession => vscode.debug.stopDebugging(debugSession.session)));
+    await Promise.all(trackedSessions.map(debugSession => debugSession.stopDebugging()));
   }
   else {
     await vscode.debug.stopDebugging();
