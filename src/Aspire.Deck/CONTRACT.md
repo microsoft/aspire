@@ -197,6 +197,7 @@ export interface CanvasManifest {
 export interface AppHostInfo {
   id: string;                 // stable id assigned at registration
   name: string;               // application name, or the id until connected
+  resourceServiceUrl: string; // the AppHost's resource-service endpoint
   state: ConnectionState;     // resource-service connection state
   active: boolean;            // whether this AppHost is the one being shown
 }

@@ -201,6 +201,7 @@ export interface ExecuteCommandArgs {
 export interface AppHostInfo {
   id: string;
   name: string;
+  resourceServiceUrl: string;
   state: ConnectionState;
   active: boolean;
 }

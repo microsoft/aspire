@@ -271,8 +271,8 @@ const canvases: CanvasManifest[] = [
 
 // Two attached AppHosts so the switcher is exercisable in browser/mock mode.
 const mockApphosts: AppHostInfo[] = [
-  { id: "local", name: "TestShop", state: "connected", active: true },
-  { id: "demo-2", name: "OrdersService", state: "connected", active: false },
+  { id: "local", name: "TestShop", resourceServiceUrl: "https://localhost:17042", state: "connected", active: true },
+  { id: "demo-2", name: "OrdersService", resourceServiceUrl: "https://localhost:18055", state: "connected", active: false },
 ];
 
 const metricDefs: Array<{ name: string; unit: string | null; resource: string; base: number; jitter: number; kind: MetricKind }> = [

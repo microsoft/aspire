@@ -139,6 +139,7 @@ impl AppState {
                     .unwrap()
                     .clone()
                     .unwrap_or_else(|| s.id.clone()),
+                resource_service_url: s.resource_service_url.clone(),
                 state: s.connection.lock().unwrap().state.clone(),
                 active: active.as_deref() == Some(s.id.as_str()),
             })

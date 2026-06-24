@@ -19,14 +19,17 @@ export function TopBar({
   theme: Theme;
   onToggleTheme: () => void;
 }) {
-  const appName = config?.applicationName ?? "Aspire application";
+  const active = apphosts.find((a) => a.active);
+  // The title reflects the AppHost the UI is currently showing. With multiple
+  // attached AppHosts this follows the switcher's active selection; with none
+  // attached yet it falls back to the bootstrap config.
+  const appName = active?.name ?? config?.applicationName ?? "Aspire application";
+  const appSub = active?.resourceServiceUrl ?? config?.resourceServiceUrl ?? "No resource service connected";
   return (
     <header className="topbar">
       <div className="topbar__title">
         <span className="topbar__app">{appName}</span>
-        <span className="topbar__app-sub">
-          {config?.resourceServiceUrl ?? "No resource service connected"}
-        </span>
+        <span className="topbar__app-sub">{appSub}</span>
       </div>
 
       <AppHostSwitcher apphosts={apphosts} />

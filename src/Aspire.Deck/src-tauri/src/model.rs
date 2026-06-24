@@ -376,6 +376,8 @@ pub struct AppHostInfo {
     pub id: String,
     /// Display name (the application name reported by the resource service, or the id).
     pub name: String,
+    /// The AppHost's resource-service endpoint (shown as the active AppHost's subtitle).
+    pub resource_service_url: String,
     /// Last known resource-service connection state for this AppHost.
     pub state: String,
     /// Whether this is the AppHost the UI is currently showing.
