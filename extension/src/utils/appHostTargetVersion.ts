@@ -1,10 +1,15 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
-import { stripComments } from 'jsonc-parser';
+import { parse, type ParseError } from 'jsonc-parser';
 import type { CandidateAppHostDisplayInfo } from './appHostDiscovery';
 
 const unknownVersion = 'unknown';
 const noAppHostsVersion = 'none';
+const maxVersionLength = 64;
+// apphost_target_version is SystemMetaData telemetry, so keep values bounded to
+// Aspire version shapes like "13.4.2", "13.5.0-preview.1", or
+// "13.5.0-pr.18457.gabcdef" instead of emitting arbitrary project/config text.
+const semverLikeVersionRegex = /^\d{1,3}\.\d{1,4}\.\d{1,4}(?:-[0-9A-Za-z][0-9A-Za-z-]{0,19}(?:\.[0-9A-Za-z][0-9A-Za-z-]{0,19}){0,5})?$/;
 
 export function summarizeAppHostTargetVersions(candidates: readonly CandidateAppHostDisplayInfo[]): string {
     if (candidates.length === 0) {
@@ -111,9 +116,18 @@ function isCSharpAppHostFile(filePath: string): boolean {
 }
 
 function getAspireAppHostSdkVersionFromProject(contents: string): string | undefined {
-    return getAspireAppHostSdkVersionFromProjectSdkAttribute(contents)
-        ?? getAspireAppHostSdkVersionFromSdkElement(contents)
-        ?? getAspireHostingSdkVersionProperty(contents);
+    const uncommentedContents = stripXmlComments(contents);
+    return getAspireAppHostSdkVersionFromProjectSdkAttribute(uncommentedContents)
+        ?? getAspireAppHostSdkVersionFromSdkElement(uncommentedContents)
+        ?? getAspireHostingSdkVersionProperty(uncommentedContents);
+}
+
+function stripXmlComments(contents: string): string {
+    // Project files can contain inactive SDK declarations in XML comments, for example:
+    //   <!-- <Project Sdk="Aspire.AppHost.Sdk/1.2.3"> -->
+    // Remove comments before applying the lightweight SDK regexes so telemetry cannot report
+    // a version from an inactive project fragment.
+    return contents.replace(/<!--[\s\S]*?-->/g, '');
 }
 
 function getAspireAppHostSdkVersionFromProjectSdkAttribute(contents: string): string | undefined {
@@ -194,7 +208,12 @@ function readSdkVersionFromConfigFile(configPath: string): string | undefined {
     }
 
     try {
-        const parsed = JSON.parse(stripComments(readFileSync(configPath, 'utf8')));
+        const errors: ParseError[] = [];
+        const parsed = parse(readFileSync(configPath, 'utf8'), errors, { allowTrailingComma: true });
+        if (errors.length > 0) {
+            return undefined;
+        }
+
         return normalizeVersion(parsed?.sdk?.version)
             ?? normalizeVersion(parsed?.sdkVersion);
     }
@@ -204,7 +223,16 @@ function readSdkVersionFromConfigFile(configPath: string): string | undefined {
 }
 
 function normalizeVersion(version: unknown): string | undefined {
-    return typeof version === 'string' && version.trim() !== ''
-        ? version.trim()
+    if (typeof version !== 'string') {
+        return undefined;
+    }
+
+    const trimmedVersion = version.trim();
+    if (trimmedVersion.length === 0 || trimmedVersion.length > maxVersionLength) {
+        return undefined;
+    }
+
+    return semverLikeVersionRegex.test(trimmedVersion)
+        ? trimmedVersion
         : undefined;
 }
