@@ -259,8 +259,8 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
         // On Windows the same physical project is reached through paths that differ only by drive
         // casing — VS Code launches the CLI with a lowercase drive letter ("c:\...") while a
         // terminal uses an uppercase one ("C:\..."). Both must derive the same cache key, otherwise
-        // a terminal-populated entry is invisible to the extension's no-evaluate read and the
-        // AppHost stays "possibly-buildable". NormalizePathForHash only normalizes the drive letter
+        // a terminal-populated entry is invisible to a later read for the same project and the
+        // AppHost is needlessly re-evaluated. NormalizePathForHash only normalizes the drive letter
         // (not the rest of the path), so this only applies on Windows; flip just the drive letter
         // here to mirror the real c:\ vs C:\ scenario.
 
