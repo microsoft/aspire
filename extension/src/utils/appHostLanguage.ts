@@ -25,9 +25,9 @@ export type AppHostLanguageSummary = 'csharp' | 'typescript' | 'polyglot' | 'unk
  * the summary. Anything we don't recognize is grouped as `'other'` so that a
  * mixed workspace still reports `polyglot` rather than hiding the diversity.
  */
-function languageFamily(raw: string | null | undefined): 'csharp' | 'typescript' | 'other' | undefined {
+function languageFamily(raw: string | null | undefined): 'csharp' | 'typescript' | 'other' {
     if (!raw) {
-        return undefined;
+        return 'other';
     }
     const value = raw.toLowerCase();
     if (value === 'csharp' || value === 'c#') {
@@ -51,9 +51,6 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
 
     for (const candidate of candidates) {
         const family = languageFamily(candidate.language);
-        if (family === undefined) {
-            continue;
-        }
         sawAny = true;
         if (family === 'csharp') {
             sawCsharp = true;
@@ -175,9 +172,7 @@ async function isCsharpAppHostMarker(directoryPath: string, entry: string): Prom
 function projectFileNameLooksLikeAppHost(fileName: string): boolean {
     const nameWithoutExtension = fileName.replace(/\.[^.]+$/, '');
     return nameWithoutExtension === 'apphost'
-        || nameWithoutExtension.startsWith('apphost')
-        || nameWithoutExtension.endsWith('.apphost')
-        || nameWithoutExtension.includes('.apphost.');
+        || nameWithoutExtension.endsWith('.apphost');
 }
 
 async function projectFileReferencesAspireAppHost(directoryPath: string, entry: string): Promise<boolean> {

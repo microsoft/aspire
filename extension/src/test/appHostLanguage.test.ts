@@ -30,6 +30,11 @@ suite('appHostLanguage.summarizeAppHostLanguages', () => {
         assert.strictEqual(summarizeAppHostLanguages([c('csharp'), c('python')]), 'polyglot');
     });
 
+    test('returns polyglot when a missing language is mixed with a known one', () => {
+        assert.strictEqual(summarizeAppHostLanguages([c('csharp'), c(null)]), 'polyglot');
+        assert.strictEqual(summarizeAppHostLanguages([c('typescript'), c(null)]), 'polyglot');
+    });
+
     test('returns unknown when no candidate has a recognizable language', () => {
         assert.strictEqual(summarizeAppHostLanguages([c(null), c(null)]), 'unknown');
     });
@@ -158,6 +163,13 @@ suite('appHostLanguage.classifyAppHostDirectory', () => {
         const dir = makeTempDir();
         writeFileSync(join(dir, 'apphost.ts'), '');
         writeFileSync(join(dir, 'Helper.csproj'), '<Project Sdk="Microsoft.NET.Sdk" />');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'typescript');
+    });
+
+    test('ignores AppHost-named non-Aspire C# projects when classifying a TypeScript AppHost directory', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'apphost.ts'), '');
+        writeFileSync(join(dir, 'AppHost.Helper.csproj'), '<Project Sdk="Microsoft.NET.Sdk" />');
         assert.strictEqual(await classifyAppHostDirectory(dir), 'typescript');
     });
 
