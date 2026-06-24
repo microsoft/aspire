@@ -1414,16 +1414,16 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
     }
 
-    async stopResource(element: ResourceItem): Promise<void> {
-        await this._runResourceCommand(element, 'stop');
+    async stopResource(element: ResourceItem): Promise<ResourceCommandExecutionOutcome | void> {
+        return await this._runResourceCommand(element, 'stop');
     }
 
-    async startResource(element: ResourceItem): Promise<void> {
-        await this._runResourceCommand(element, 'start');
+    async startResource(element: ResourceItem): Promise<ResourceCommandExecutionOutcome | void> {
+        return await this._runResourceCommand(element, 'start');
     }
 
-    async restartResource(element: ResourceItem): Promise<void> {
-        await this._runResourceCommand(element, 'restart');
+    async restartResource(element: ResourceItem): Promise<ResourceCommandExecutionOutcome | void> {
+        return await this._runResourceCommand(element, 'restart');
     }
 
     async viewResourceLogs(element: ResourceItem): Promise<void> {

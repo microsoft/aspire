@@ -17,6 +17,7 @@ import type { AspireSubcommand } from '../utils/AspireTerminalProvider';
 import { AspireTerminalProvider, shellArg } from '../utils/AspireTerminalProvider';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
+import { onDidInvokeCommand, withCommandTelemetry } from '../utils/telemetry';
 
 function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {
     const base: ResourceJson = {
@@ -1214,6 +1215,74 @@ suite('AspireAppHostTreeProvider', () => {
 
         assert.deepStrictEqual(outcome, { success: false, hadOutput: false });
         assert.strictEqual(errorStub.calledOnce, true);
+    });
+
+    test('lifecycle resource command failures reach telemetry', async () => {
+        sandbox.stub(vscode.window, 'withProgress').callsFake((_options: any, task: any) => task({ report: () => { } }, { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => { } }) }));
+        sandbox.stub(vscode.window, 'showErrorMessage');
+
+        const invocations: Array<{ command: string; outcome: string; errorKind?: string }> = [];
+        const invocationSubscription = onDidInvokeCommand(event => invocations.push(event));
+        const runResourceCommandCalls: Array<[string, string | undefined, string, readonly string[]]> = [];
+        const repository = {
+            viewMode: 'global' as ViewMode,
+            appHosts: [
+                makeAppHost({
+                    resources: [
+                        makeResource({
+                            commands: {
+                                start: { displayName: 'Start', description: null },
+                                stop: { displayName: 'Stop', description: null },
+                                restart: { displayName: 'Restart', description: null },
+                            },
+                        }),
+                    ],
+                }),
+            ],
+            workspaceResources: [],
+            workspaceAppHostPath: undefined,
+            workspaceAppHostCandidatePaths: [],
+            workspaceAppHostName: undefined,
+            onDidChangeData: (() => ({ dispose: () => { } })) as vscode.Event<void>,
+            runResourceCommand: async (resourceName: string, appHostPath: string | undefined, commandName: string, additionalArgs: readonly string[] = []) => {
+                runResourceCommandCalls.push([resourceName, appHostPath, commandName, additionalArgs]);
+                throw new Error(`${commandName} failed`);
+            },
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+
+        try {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup);
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+
+            const outcomes = [
+                await withCommandTelemetry('aspire-vscode.stopResource', () => provider.stopResource(resourceItem as any), { source: 'tree' }),
+                await withCommandTelemetry('aspire-vscode.startResource', () => provider.startResource(resourceItem as any), { source: 'tree' }),
+                await withCommandTelemetry('aspire-vscode.restartResource', () => provider.restartResource(resourceItem as any), { source: 'tree' }),
+            ];
+
+            assert.deepStrictEqual(outcomes, [
+                { success: false, hadOutput: false },
+                { success: false, hadOutput: false },
+                { success: false, hadOutput: false },
+            ]);
+            assert.deepStrictEqual(runResourceCommandCalls, [
+                ['my-service', '/test/AppHost.csproj', 'stop', []],
+                ['my-service', '/test/AppHost.csproj', 'start', []],
+                ['my-service', '/test/AppHost.csproj', 'restart', []],
+            ]);
+            assert.deepStrictEqual(invocations.map(event => [event.command, event.outcome, event.errorKind]), [
+                ['aspire-vscode.stopResource', 'error', 'HandledError'],
+                ['aspire-vscode.startResource', 'error', 'HandledError'],
+                ['aspire-vscode.restartResource', 'error', 'HandledError'],
+            ]);
+        }
+        finally {
+            invocationSubscription.dispose();
+            provider.dispose();
+        }
     });
 
     test('resource with commands is expandable even without URLs, health checks, or child resources', () => {
