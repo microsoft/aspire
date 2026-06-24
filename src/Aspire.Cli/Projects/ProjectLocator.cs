@@ -141,6 +141,13 @@ internal sealed class ProjectLocator(
 {
     private const string AspireConfigAppHostPathKey = "appHost.path";
     private const string LegacySettingsAppHostPathKey = "appHostPath";
+    private static readonly string[] s_dotNetProjectExtensions = [".csproj", ".fsproj", ".vbproj"];
+    private static readonly string[] s_dotNetAppHostProjectContentMarkers =
+    [
+        "<IsAspireHost>",
+        "Aspire.AppHost.Sdk",
+        "Aspire.Hosting"
+    ];
 
     /// <summary>
     /// Finds all candidate AppHost projects in the specified search directory with language metadata.
@@ -348,6 +355,13 @@ internal sealed class ProjectLocator(
                     continue;
                 }
 
+                if (scope is not AppHostDiscoveryScope.ExplicitDirectory &&
+                    IsOrdinaryDotNetProjectCandidate(candidateFile, handler))
+                {
+                    logger.LogTrace("Skipping ordinary .NET project candidate {CandidateFile}", candidateFile.FullName);
+                    continue;
+                }
+
                 candidatesWithHandlers.Add((candidateFile, handler));
             }
 
@@ -548,6 +562,48 @@ internal sealed class ProjectLocator(
         }
 
         return await FindAppHostsAsync();
+    }
+
+    private static bool IsOrdinaryDotNetProjectCandidate(FileInfo candidateFile, IAppHostProject handler)
+    {
+        if (!handler.LanguageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) ||
+            !s_dotNetProjectExtensions.Contains(candidateFile.Extension, StringComparer.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (Path.GetFileNameWithoutExtension(candidateFile.Name).Contains("AppHost", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (candidateFile.DirectoryName is { } directoryName &&
+            (File.Exists(Path.Combine(directoryName, "AppHost.cs")) ||
+             File.Exists(Path.Combine(directoryName, "apphost.cs"))))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var reader = candidateFile.OpenText();
+            string? line;
+            while ((line = reader.ReadLine()) is not null)
+            {
+                if (s_dotNetAppHostProjectContentMarkers.Any(marker => line.Contains(marker, StringComparison.Ordinal)))
+                {
+                    return false;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // If the cheap prefilter cannot read a project file that discovery found, keep the
+            // previous behavior and let the full project validation path report the real failure.
+            return false;
+        }
+
+        return true;
     }
 
     /// <inheritdoc />
