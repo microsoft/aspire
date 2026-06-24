@@ -13,7 +13,7 @@ import { AspireAppHostTreeProvider, getResourceContextValue, getResourceIcon, ge
 import type { AppHostDisplayInfo, ResourceJson, ViewMode } from '../views/AppHostDataRepository';
 import { ResourceCommandInputType } from '../views/AppHostDataRepository';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
-import type { AspireSubcommand } from '../utils/AspireTerminalProvider';
+import type { AspireSubcommand, AspireTerminal } from '../utils/AspireTerminalProvider';
 import { AspireTerminalProvider, shellArg } from '../utils/AspireTerminalProvider';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
@@ -200,7 +200,7 @@ function makeProofTerminalProvider(sandbox: sinon.SinonSandbox, proof: ShellProo
     const terminalProvider = new AspireTerminalProvider(subscriptions);
     sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: proof.cliPath, available: true, source: 'configured' });
     sandbox.stub(terminalProvider, 'isCliDebugLoggingEnabled').returns(false);
-    sandbox.stub(terminalProvider, 'getAspireTerminal').returns({
+    const aspireTerminal: AspireTerminal = {
         terminal: {
             shellIntegration: {
                 executeCommand: (commandLine: string) => {
@@ -212,7 +212,9 @@ function makeProofTerminalProvider(sandbox: sinon.SinonSandbox, proof: ShellProo
             show: () => { }
         } as unknown as vscode.Terminal,
         dispose: () => { },
-    });
+    };
+    sandbox.stub(terminalProvider, 'getAspireTerminal').returns(aspireTerminal);
+    sandbox.stub(terminalProvider as unknown as { createAspireEditorTerminal: () => AspireTerminal }, 'createAspireEditorTerminal').returns(aspireTerminal);
 
     return {
         terminalProvider,
