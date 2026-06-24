@@ -2069,6 +2069,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
             </Project>
             """);
 

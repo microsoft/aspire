@@ -48,14 +48,13 @@ Stream output is emitted in arrival order from parallel discovery; lines are not
 
 If discovery finds no AppHost candidates, the stream emits no lines. The stream does not emit `started`, `complete`, or `canceled` control records; use the command's exit code and end-of-file to detect stream completion.
 
-
 #### AppHost candidate fields
 
 | Field | Applies to | Description |
 | ----- | ---------- | ----------- |
 | `path` | All candidates | Full path to the candidate AppHost project file. |
 | `language` | All candidates | Detected AppHost language, such as `C#` or `TypeScript`. |
-| `status` | All candidates | Candidate validation status: `buildable`, `possibly-unbuildable`, or `possibly-buildable`. |
+| `status` | All candidates | Candidate validation status, such as `buildable` or `possibly-unbuildable`. |
 
 ### `aspire start` and `aspire run --detach`
 
