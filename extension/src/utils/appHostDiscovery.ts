@@ -522,12 +522,7 @@ function parseCandidateOutput(output: string, commandName: string): CandidateApp
     if (Array.isArray(parsed)) {
         const appHosts = parsed
             .filter(isLsCandidate)
-            .map(candidate => ({
-                path: candidate.path,
-                language: candidate.language,
-                status: candidate.status,
-                aspireHostingVersion: candidate.aspireHostingVersion,
-            }));
+            .map(candidate => toDisplayCandidate(candidate));
 
         const unexpectedCandidateCount = parsed.length - appHosts.length;
         if (unexpectedCandidateCount > 0) {
@@ -539,10 +534,7 @@ function parseCandidateOutput(output: string, commandName: string): CandidateApp
 
     if (isAppHostProjectSearchResult(parsed)) {
         return parsed.app_host_candidates.map(candidate => ({
-            path: candidate.path,
-            language: candidate.language,
-            status: candidate.status,
-            aspireHostingVersion: candidate.aspireHostingVersion,
+            ...toDisplayCandidate(candidate),
             selected: typeof parsed.selected_project_file === 'string' && isSamePath(parsed.selected_project_file, candidate.path),
         }));
     }
@@ -618,6 +610,20 @@ function isLsCandidate(obj: unknown): obj is CandidateAppHostDisplayInfo {
         && ((obj as CandidateAppHostDisplayInfo).aspireHostingVersion === undefined
             || (obj as CandidateAppHostDisplayInfo).aspireHostingVersion === null
             || typeof (obj as CandidateAppHostDisplayInfo).aspireHostingVersion === 'string');
+}
+
+function toDisplayCandidate(candidate: CandidateAppHostDisplayInfo | AppHostCandidate): CandidateAppHostDisplayInfo {
+    const displayCandidate: CandidateAppHostDisplayInfo = {
+        path: candidate.path,
+        language: candidate.language,
+        status: candidate.status,
+    };
+
+    if (candidate.aspireHostingVersion !== undefined) {
+        displayCandidate.aspireHostingVersion = candidate.aspireHostingVersion;
+    }
+
+    return displayCandidate;
 }
 
 function formatErrorMessage(error: unknown): string {
