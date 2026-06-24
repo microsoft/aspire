@@ -132,11 +132,10 @@ export async function classifyAppHostDirectory(directoryPath: string | undefined
     let sawCsharp = false;
     let sawTypescript = false;
     for (const entry of entries) {
-        const family = classifyAppHostPath(entry);
-        if (family === 'csharp') {
+        if (isCsharpAppHostMarker(entry)) {
             sawCsharp = true;
         }
-        else if (family === 'typescript') {
+        else if (isTypescriptAppHostMarker(entry)) {
             sawTypescript = true;
         }
     }
@@ -153,4 +152,15 @@ export async function classifyAppHostDirectory(directoryPath: string | undefined
         return 'typescript';
     }
     return 'unknown';
+}
+
+function isCsharpAppHostMarker(entry: string): boolean {
+    const lower = entry.toLowerCase();
+    return lower === 'apphost.cs' || lower.endsWith('.csproj') || lower.endsWith('.fsproj') || lower.endsWith('.vbproj');
+}
+
+function isTypescriptAppHostMarker(entry: string): boolean {
+    const lower = entry.toLowerCase();
+    return lower === 'apphost.ts' || lower === 'apphost.mts' || lower === 'apphost.cts' ||
+        lower === 'apphost.js' || lower === 'apphost.mjs' || lower === 'apphost.cjs';
 }

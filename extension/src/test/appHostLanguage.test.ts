@@ -145,6 +145,13 @@ suite('appHostLanguage.classifyAppHostDirectory', () => {
         assert.strictEqual(await classifyAppHostDirectory(dir), 'unknown');
     });
 
+    test('ignores non-AppHost C# files when classifying a TypeScript AppHost directory', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'apphost.ts'), '');
+        writeFileSync(join(dir, 'helper.cs'), '');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'typescript');
+    });
+
     test('returns csharp when both csharp and typescript markers exist (deterministic fallback)', async () => {
         // Highly unusual but plausible during polyglot migration. The
         // classifier prefers csharp so the dimension stays deterministic
