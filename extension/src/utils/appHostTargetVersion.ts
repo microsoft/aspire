@@ -315,11 +315,7 @@ interface ConfiguredSdkVersionInfo {
 async function getConfiguredSdkVersionInDirectory(directory: string): Promise<ConfiguredSdkVersionInfo> {
     const configVersion = await readSdkVersionFromConfigFile(join(directory, 'aspire.config.json'));
     if (configVersion.version || configVersion.foundConfig) {
-        const settingsVersion = await readSdkVersionFromConfigFile(join(directory, '.aspire', 'settings.json'));
-        return {
-            version: configVersion.version ?? settingsVersion.version,
-            foundConfig: true,
-        };
+        return configVersion;
     }
 
     return await readSdkVersionFromConfigFile(join(directory, '.aspire', 'settings.json'));

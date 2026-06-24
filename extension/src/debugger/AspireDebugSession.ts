@@ -82,6 +82,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   // path starts the work in the background and reuses the same result for start/end telemetry.
   private _appHostTargetVersionAtLaunch = 'unknown';
   private _appHostTargetVersionAtLaunchPromise: Promise<string> | undefined = undefined;
+  private _appHostIsDirectoryAtLaunch: 'true' | 'false' | 'unknown' = 'unknown';
   // Mode the AppHost was launched with (`run` | `debug`) — captured for the
   // matching end event.
   private _appHostModeAtLaunch: 'run' | 'debug' = 'run';
@@ -216,6 +217,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     this._appHostLanguageAtLaunch = classifyAppHostPath(appHostPath);
     this._appHostTargetVersionAtLaunch = 'unknown';
     this._appHostTargetVersionAtLaunchPromise = this.resolveAppHostTargetVersionAtLaunch(appHostPath);
+    this._appHostIsDirectoryAtLaunch = 'unknown';
     // `command` originates in the user's launch.json and is typed in the
     // contributing extension surface as AspireCommandType ('run'|'deploy'|
     // 'publish'|'do'), but launch.json is freeform JSON — a typo or custom
@@ -234,6 +236,11 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     });
 
     const appHostIsDirectory = await this.isDirectory(appHostPath);
+    if (this._disposed) {
+      return;
+    }
+
+    this._appHostIsDirectoryAtLaunch = appHostIsDirectory ? 'true' : 'false';
     this._appHostLanguageAtLaunchPromise = this.resolveAppHostLanguageAtLaunch(appHostPath, appHostIsDirectory);
 
     // For 'do' with an explicit step (old CLI fallback), pass it as a positional argument
@@ -740,6 +747,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     const languagePromise = this._appHostLanguageAtLaunchPromise;
     const targetVersion = this._appHostTargetVersionAtLaunch;
     const targetVersionPromise = this._appHostTargetVersionAtLaunchPromise;
+    const appHostIsDirectory = this._appHostIsDirectoryAtLaunch;
     const debugSessionId = this.debugSessionId;
     const dcpServer = this._dcpServer;
 
@@ -772,6 +780,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
             mode,
             apphost_language: resolvedLanguage,
             apphost_target_version: resolvedTargetVersion,
+            apphost_is_directory: appHostIsDirectory,
             ended_with_error: aggregate?.anyNonZeroExit ? 'true' : 'false',
             distinct_resource_types: aggregate ? aggregate.distinctResourceTypes.join(',') : '',
           }, {

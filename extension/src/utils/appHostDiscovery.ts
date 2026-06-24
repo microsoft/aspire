@@ -92,7 +92,15 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     }
 
     async tryResolveDebugTarget(filePath: string, workspaceFolder?: vscode.WorkspaceFolder): Promise<string | undefined> {
-        const candidate = await this.tryFindCandidateForEditorFile(filePath, workspaceFolder);
+        const folder = workspaceFolder ?? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
+        if (!folder) {
+            return undefined;
+        }
+
+        const candidates = await this.discover(folder);
+        const candidate = isSamePath(filePath, folder.uri.fsPath)
+            ? findWorkspaceDefaultCandidate(candidates)
+            : findCandidateForEditorFile(filePath, candidates);
         return candidate ? getDebugTargetForCandidate(candidate) : undefined;
     }
 
@@ -396,6 +404,12 @@ export function findCandidateForEditorFile(filePath: string, candidates: readonl
         .filter(candidate => isCSharpProjectCandidate(candidate) && isCSharpSourceFileForProjectCandidate(filePath, candidate.path))
         .sort((left, right) => path.dirname(right.path).length - path.dirname(left.path).length)[0];
     return projectCandidate;
+}
+
+function findWorkspaceDefaultCandidate(candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
+    const buildableCandidates = candidates.filter(isBuildableCandidate);
+    return buildableCandidates.find(candidate => candidate.selected)
+        ?? (buildableCandidates.length === 1 ? buildableCandidates[0] : undefined);
 }
 
 export function getDebugTargetForCandidate(candidate: CandidateAppHostDisplayInfo): string {
@@ -707,6 +721,10 @@ function isCSharpProjectCandidate(candidate: CandidateAppHostDisplayInfo): boole
     // candidate adaptation/matching.
     return path.extname(candidate.path).toLowerCase() === '.csproj'
         && (candidate.language === null || candidate.language.toLowerCase() === 'csharp');
+}
+
+function isBuildableCandidate(candidate: CandidateAppHostDisplayInfo): boolean {
+    return candidate.status === null || candidate.status === 'buildable';
 }
 
 function isCSharpSourceFileForProjectCandidate(filePath: string, projectPath: string): boolean {

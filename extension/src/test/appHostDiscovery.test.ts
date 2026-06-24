@@ -140,6 +140,31 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('resolves workspace folder debug target to the single discovered AppHost candidate', async () => {
+            stubFileSystemWatchers(sandbox);
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.(JSON.stringify([{
+                    path: buildPath('workspace', 'NestedAppHost', 'apphost.ts'),
+                    language: 'typescript/nodejs',
+                    status: 'buildable',
+                    aspireHostingVersion: '13.5.0',
+                }]));
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                const result = await service.resolveDebugTarget(workspaceFolder.uri.fsPath, workspaceFolder);
+
+                assert.strictEqual(result, buildPath('workspace', 'NestedAppHost', 'apphost.ts'));
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
         test('fires change event and invalidates cache when watched files change', async () => {
             const watcherCallbacks = stubFileSystemWatchers(sandbox);
             const clock = sandbox.useFakeTimers();

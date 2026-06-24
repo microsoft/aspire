@@ -306,6 +306,16 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(await getAppHostTargetVersion(appHostDir), undefined);
     });
 
+    test('does not read same-directory legacy settings when aspire.config.json has no SDK version', async () => {
+        const dir = makeTempDir();
+        mkdirSync(join(dir, '.aspire'), { recursive: true });
+        writeFileSync(join(dir, 'aspire.config.json'), JSON.stringify({}));
+        writeFileSync(join(dir, '.aspire', 'settings.json'), JSON.stringify({ sdk: { version: '13.3.0' } }));
+        writeFileSync(join(dir, 'apphost.ts'), 'import { aspire } from "@microsoft/aspire";');
+
+        assert.strictEqual(await getAppHostTargetVersion(dir), undefined);
+    });
+
     test('ignores malformed polyglot SDK versions from config', async () => {
         const dir = makeTempDir();
         const appHostPath = join(dir, 'apphost.ts');

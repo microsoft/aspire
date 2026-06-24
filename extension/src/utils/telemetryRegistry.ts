@@ -66,7 +66,7 @@ export interface TelemetryEventSchema {
         measurements: never;
     };
     'debug/apphost/end': {
-        properties: 'mode' | 'apphost_language' | 'apphost_target_version' | 'ended_with_error' | 'distinct_resource_types';
+        properties: 'mode' | 'apphost_language' | 'apphost_target_version' | 'apphost_is_directory' | 'ended_with_error' | 'distinct_resource_types';
         measurements: 'duration_ms' | 'total_child_sessions' | 'distinct_resource_type_count';
     };
     'debug/runsession/start': {
