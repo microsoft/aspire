@@ -247,7 +247,7 @@ jobs:
 
   build_packages:
     name: Build packages
-    if: false  # [ignore][experiment] disabled for fast validation CI
+    if: false  # [ignore][experiment] disabled foo
     uses: ./.github/workflows/build-packages.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
