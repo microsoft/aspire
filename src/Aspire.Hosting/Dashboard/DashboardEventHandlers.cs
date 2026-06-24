@@ -605,6 +605,16 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             context.EnvironmentVariables[DashboardConfigNames.AppHostFilePathName.EnvVarName] = appHostFilePath;
         }
 
+        // Forward the launching CLI's own path so dashboard feedback diagnostics invoke the exact
+        // `aspire` build that started the AppHost (the CLI's Environment.ProcessPath) instead of a
+        // possibly-different `aspire` on PATH. The CLI sets AspireCliPath when it launches the AppHost
+        // via `dotnet run` (DotNetCliRunner.AddAspireCliPathEnvironment); when it's absent the
+        // dashboard falls back to `aspire` from PATH.
+        if (configuration["AspireCliPath"] is { Length: > 0 } aspireCliPath)
+        {
+            context.EnvironmentVariables[DashboardConfigNames.CliPathName.EnvVarName] = aspireCliPath;
+        }
+
         PopulateDashboardUrls(context);
 
         var otlpHttp = ((IResourceWithEndpoints)context.Resource).GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName, KnownNetworkIdentifiers.LocalhostNetwork);

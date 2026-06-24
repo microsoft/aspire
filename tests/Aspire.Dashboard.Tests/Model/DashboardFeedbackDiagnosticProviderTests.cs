@@ -70,7 +70,7 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
 
         var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
 
-        Assert.Equal($"- AppHost: C# at `{appHostPath}` using Aspire.AppHost.Sdk 13.5.0-preview.1.26319.9 and Aspire.Hosting.AppHost 9.0.0 targeting `net10.0`{Environment.NewLine}", result);
+        Assert.Equal($"- AppHost: C# (`{Path.GetFileName(appHostPath)}`) using Aspire.AppHost.Sdk 13.5.0-preview.1.26319.9 and Aspire.Hosting.AppHost 9.0.0 targeting `net10.0`{Environment.NewLine}", result);
         var invocation = Assert.Single(runner.Invocations);
         Assert.Equal("dotnet", invocation.FileName);
         Assert.Equal("msbuild", invocation.Arguments[0]);
@@ -103,7 +103,7 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
 
         var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
 
-        Assert.Equal($"- AppHost: C# at `{appHostPath}` using Aspire.AppHost.Sdk 13.5.0 and Aspire.Hosting.AppHost 9.1.0 targeting `net10.0`{Environment.NewLine}", result);
+        Assert.Equal($"- AppHost: C# (`{Path.GetFileName(appHostPath)}`) using Aspire.AppHost.Sdk 13.5.0 and Aspire.Hosting.AppHost 9.1.0 targeting `net10.0`{Environment.NewLine}", result);
     }
 
     [Fact]
@@ -125,7 +125,7 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
 
         var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
 
-        Assert.Equal($"- AppHost: C# at `{appHostPath}` using Aspire.AppHost.Sdk 13.5.0 targeting `net10.0`{Environment.NewLine}", result);
+        Assert.Equal($"- AppHost: C# (`{Path.GetFileName(appHostPath)}`) using Aspire.AppHost.Sdk 13.5.0 targeting `net10.0`{Environment.NewLine}", result);
         var invocation = Assert.Single(runner.Invocations);
         Assert.Equal("build", invocation.Arguments[0]);
     }
@@ -142,7 +142,7 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
 
         var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
 
-        Assert.Equal($"- AppHost: C# at `{appHostPath}`{Environment.NewLine}", result);
+        Assert.Equal($"- AppHost: C# (`{Path.GetFileName(appHostPath)}`){Environment.NewLine}", result);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
 
         var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
 
-        Assert.Equal($"- AppHost: TypeScript at `{appHostPath}` on Node.js v24.15.0{Environment.NewLine}", result);
+        Assert.Equal($"- AppHost: TypeScript (`{Path.GetFileName(appHostPath)}`) on Node.js v24.15.0{Environment.NewLine}", result);
     }
 
     [Fact]
@@ -176,7 +176,7 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
 
         var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
 
-        Assert.Equal($"- AppHost: TypeScript at `{appHostPath}`{Environment.NewLine}", result);
+        Assert.Equal($"- AppHost: TypeScript (`{Path.GetFileName(appHostPath)}`){Environment.NewLine}", result);
     }
 
     [Fact]
@@ -230,6 +230,68 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
         Assert.Equal("Could not capture `aspire doctor` output (exit code 3).", result);
     }
 
+    [Fact]
+    public void BuildAdditionalContext_DropsQueryStringFromDashboardRoute()
+    {
+        // The route can carry user-specific filters (resource names, log filters) that must not leak
+        // into a public issue, so only the page identity is kept.
+        var provider = CreateProvider(
+            new ConfigurationBuilder().Build(),
+            currentUri: "http://localhost/structuredlogs?resource=customer-api&filters=secret-value");
+
+        var result = provider.BuildAdditionalContext();
+
+        var routeLine = Assert.Single(GetNonEmptyLines(result), line => line.StartsWith("- Dashboard route:", StringComparison.Ordinal));
+        Assert.Equal("- Dashboard route: /structuredlogs", routeLine);
+    }
+
+    [Fact]
+    public async Task CaptureAppHostContextAsync_DoesNotLeakAbsoluteAppHostDirectory()
+    {
+        using var tempDirectory = new TemporaryDirectory();
+        var appHostPath = Path.Combine(tempDirectory.Path, "MyApp.AppHost.csproj");
+        File.WriteAllText(appHostPath, "<Project />");
+        var runner = new FakeFeedbackDiagnosticProcessRunner((_, _) => Success("""
+            {
+              "Properties": { "AspireHostingSDKVersion": "13.5.0", "TargetFramework": "net10.0" },
+              "Items": {}
+            }
+            """));
+        var provider = CreateProvider(CreateConfiguration(appHostPath), runner);
+
+        var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Contains("MyApp.AppHost.csproj", result, StringComparison.Ordinal);
+        Assert.DoesNotContain(tempDirectory.Path, result, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CaptureAspireDoctorOutputAsync_UsesConfiguredCliPath_WhenSet()
+    {
+        var cliPath = Path.Combine("C:\\", "tools", "aspire", "aspire.exe");
+        var runner = new FakeFeedbackDiagnosticProcessRunner((_, _) => Success("""{"sdk":"10.0.301"}"""));
+        var provider = CreateProvider(CreateCliPathConfiguration(cliPath), runner);
+
+        await provider.CaptureAspireDoctorOutputAsync(CancellationToken.None);
+
+        var invocation = Assert.Single(runner.Invocations);
+        Assert.Equal(cliPath, invocation.FileName);
+        Assert.Equal(["doctor", "--format", "json"], invocation.Arguments);
+    }
+
+    [Fact]
+    public async Task CaptureAspireDoctorOutputAsync_FallsBackToAspireOnPath_WhenCliPathNotConfigured()
+    {
+        var runner = new FakeFeedbackDiagnosticProcessRunner((_, _) => Success("""{"sdk":"10.0.301"}"""));
+        var provider = CreateProvider(new ConfigurationBuilder().Build(), runner);
+
+        await provider.CaptureAspireDoctorOutputAsync(CancellationToken.None);
+
+        var invocation = Assert.Single(runner.Invocations);
+        Assert.Equal("aspire", invocation.FileName);
+    }
+
     private static FeedbackDiagnosticProcessResult Success(string standardOutput) =>
         new(Started: true, ExitCode: 0, StandardOutput: standardOutput, TimedOut: false, FailureMessage: null);
 
@@ -238,10 +300,10 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
         return value.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
     }
 
-    private static DashboardFeedbackDiagnosticProvider CreateProvider(IConfiguration configuration, IFeedbackDiagnosticProcessRunner? processRunner = null)
+    private static DashboardFeedbackDiagnosticProvider CreateProvider(IConfiguration configuration, IFeedbackDiagnosticProcessRunner? processRunner = null, string currentUri = "http://localhost/resources")
     {
         return new DashboardFeedbackDiagnosticProvider(
-            new TestNavigationManager(),
+            new TestNavigationManager(currentUri),
             configuration,
             processRunner ?? new FakeFeedbackDiagnosticProcessRunner((_, _) => Success(string.Empty)),
             NullLogger<DashboardFeedbackDiagnosticProvider>.Instance);
@@ -252,6 +314,15 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
         return new ConfigurationBuilder()
             .AddInMemoryCollection([
                 new KeyValuePair<string, string?>(DashboardConfigNames.AppHostFilePathName.ConfigKey, appHostPath)
+            ])
+            .Build();
+    }
+
+    private static IConfiguration CreateCliPathConfiguration(string cliPath)
+    {
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection([
+                new KeyValuePair<string, string?>(DashboardConfigNames.CliPathName.ConfigKey, cliPath)
             ])
             .Build();
     }
@@ -275,9 +346,9 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
 
     private sealed class TestNavigationManager : NavigationManager
     {
-        public TestNavigationManager()
+        public TestNavigationManager(string currentUri = "http://localhost/resources")
         {
-            Initialize("http://localhost/", "http://localhost/resources");
+            Initialize("http://localhost/", currentUri);
         }
     }
 

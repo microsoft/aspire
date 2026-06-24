@@ -53,8 +53,19 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
         builder.AppendLine("- Posted from: Dashboard");
         builder.AppendLine(CultureInfo.InvariantCulture, $"- Aspire version: {VersionHelpers.DashboardDisplayVersion}");
         builder.AppendLine(CultureInfo.InvariantCulture, $"- Operating system: {RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})");
-        builder.AppendLine(CultureInfo.InvariantCulture, $"- Dashboard route: /{navigationManager.ToBaseRelativePath(navigationManager.Uri)}");
+        builder.AppendLine(CultureInfo.InvariantCulture, $"- Dashboard route: /{GetSanitizedDashboardRoute()}");
         return builder.ToString();
+    }
+
+    private string GetSanitizedDashboardRoute()
+    {
+        // The relative path can carry a query string and/or fragment that encode user-specific state,
+        // for example a resource name or structured-log filters (structuredlogs?resource=customer-api).
+        // Strip everything from the first '?' or '#' so those values don't leak into a public GitHub
+        // issue; only the page identity (e.g. "structuredlogs") is useful context anyway.
+        var relativePath = navigationManager.ToBaseRelativePath(navigationManager.Uri);
+        var separatorIndex = relativePath.IndexOfAny(['?', '#']);
+        return separatorIndex >= 0 ? relativePath[..separatorIndex] : relativePath;
     }
 
     public async Task<string?> CaptureAppHostContextAsync(CancellationToken cancellationToken)
@@ -79,8 +90,16 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
 
     public async Task<string> CaptureAspireDoctorOutputAsync(CancellationToken cancellationToken)
     {
+        // Prefer the exact CLI that launched the AppHost (forwarded by the AppHost as
+        // DASHBOARD__CLI__PATH from the CLI's Environment.ProcessPath) so the captured diagnostics
+        // come from the same `aspire` build the user is running. Fall back to `aspire` on PATH when
+        // the dashboard wasn't started via the CLI (for example a manual `dotnet run`).
+        var cliExecutable = configuration[DashboardConfigNames.CliPathName.ConfigKey] is { Length: > 0 } configuredCliPath
+            ? configuredCliPath
+            : "aspire";
+
         var result = await processRunner.RunAsync(
-            "aspire",
+            cliExecutable,
             ["doctor", "--format", "json"],
             workingDirectory: null,
             environment: null,
@@ -221,7 +240,11 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
     private static string FormatCSharpAppHostContext(string appHostFilePath, string? sdkVersion, string? appHostPackageVersion, string? targetFramework)
     {
         var builder = new StringBuilder();
-        builder.Append(CultureInfo.InvariantCulture, $"C# at `{appHostFilePath}`");
+
+        // Only include the AppHost file name, never the full path: the absolute path leaks the local
+        // user/home directory (and customer folder names) into a public GitHub issue. The file name
+        // (for example MyApp.AppHost.csproj or apphost.cs) is enough to identify the AppHost shape.
+        builder.Append(CultureInfo.InvariantCulture, $"C# (`{Path.GetFileName(appHostFilePath)}`)");
 
         var startedUsingClause = false;
         if (!string.IsNullOrWhiteSpace(sdkVersion))
@@ -252,7 +275,10 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
         var nodeVersion = await CaptureCommandVersionAsync("node", appHostFilePath, cancellationToken).ConfigureAwait(false);
 
         var builder = new StringBuilder();
-        builder.Append(CultureInfo.InvariantCulture, $"TypeScript at `{appHostFilePath}`");
+
+        // Use only the file name, not the absolute path, to avoid leaking the local user/home
+        // directory (and customer folder names) into a public GitHub issue.
+        builder.Append(CultureInfo.InvariantCulture, $"TypeScript (`{Path.GetFileName(appHostFilePath)}`)");
         if (!string.IsNullOrWhiteSpace(nodeVersion))
         {
             builder.Append(CultureInfo.InvariantCulture, $" on Node.js {nodeVersion}");

@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Bunit;
@@ -52,7 +53,44 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.Contains("overflow-y: auto", style);
     }
 
+    [Fact]
+    public void Render_OpenMenu_FeedbackEntryRendersNestedFeedbackItems()
+    {
+        var feedbackItems = new List<MenuButtonItem>
+        {
+            new() { Text = "Report a bug", OnClick = () => Task.CompletedTask },
+            new() { Text = "Suggest an idea", OnClick = () => Task.CompletedTask },
+            new() { Text = "General feedback", OnClick = () => Task.CompletedTask },
+        };
+
+        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), feedbackItems);
+
+        // The feedback entry renders its nested items as a submenu:
+        //   <fluent-menu-item title="Provide feedback">
+        //     ...
+        //     <fluent-menu slot="submenu">
+        //       <div>
+        //         <fluent-menu-item>Report a bug</fluent-menu-item>
+        //         <fluent-menu-item>Suggest an idea</fluent-menu-item>
+        //         <fluent-menu-item>General feedback</fluent-menu-item>
+        //       </div>
+        //     </fluent-menu>
+        //   </fluent-menu-item>
+        // The nested item text is rendered as element text content (not a "label" attribute).
+        var submenu = cut.Find("""fluent-menu[slot="submenu"]""");
+        var nestedItemTexts = submenu.QuerySelectorAll("fluent-menu-item")
+            .Select(item => item.TextContent.Trim())
+            .ToList();
+
+        Assert.Equal(new[] { "Report a bug", "Suggest an idea", "General feedback" }, nestedItemTexts);
+    }
+
     private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl)
+    {
+        return RenderMobileNavMenu(currentUrl, feedbackMenuItems: []);
+    }
+
+    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, List<MenuButtonItem> feedbackMenuItems)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
@@ -69,7 +107,7 @@ public class MobileNavMenuTests : DashboardTestContext
             builder.Add(p => p.IsNavMenuOpen, true);
             builder.Add(p => p.IsAIEnabled, false);
             builder.Add(p => p.CloseNavMenu, () => { });
-            builder.Add(p => p.GetFeedbackMenuItems, () => []);
+            builder.Add(p => p.GetFeedbackMenuItems, () => feedbackMenuItems);
             builder.Add(p => p.LaunchHelpAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchAIAgentsAsync, () => Task.CompletedTask);
             builder.Add(p => p.IsAgentHelpEnabled, false);
