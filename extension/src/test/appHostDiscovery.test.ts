@@ -526,10 +526,8 @@ suite('AppHost discovery', () => {
                 const discovery = service.discover(workspaceFolder);
                 await waitForMicrotasks();
 
-                // Each failed CLI step arms its own 5s timeout: stream ls, then the buffered ls
-                // fallback, then the legacy get-apphosts fallback. Advance the clock once per step.
-                await clock.tickAsync(5_000);
-                await waitForMicrotasks();
+                // Each failed CLI step arms its own 5s timeout: the streaming ls discovery, then
+                // the legacy get-apphosts fallback. Advance the clock once per step.
                 await clock.tickAsync(5_000);
                 await waitForMicrotasks();
                 await clock.tickAsync(5_000);
@@ -537,14 +535,13 @@ suite('AppHost discovery', () => {
                 await assert.rejects(discovery, /timed out after 5 seconds/);
                 assert.deepStrictEqual(killedArgs, [
                     ['ls', '--format', 'json', '--stream'],
-                    ['ls', '--format', 'json'],
                     ['extension', 'get-apphosts'],
                 ]);
 
                 hangCli = false;
                 const retryResult = await service.discover(workspaceFolder);
                 assert.deepStrictEqual(retryResult, []);
-                assert.strictEqual(spawnStub.callCount, 4);
+                assert.strictEqual(spawnStub.callCount, 3);
             }
             finally {
                 service.dispose();

@@ -489,11 +489,14 @@ suite('AppHostDataRepository', () => {
 
     test('describe watch does not report compatibility error when workspace AppHost returns no data successfully', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+        // ps and ls discovery spawn concurrently, so capture the ls callback by args
+        // rather than call index since the spawn order is not deterministic.
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if ((args as string[])[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
             return new TestChildProcess();
         });
-        spawnStub.onSecondCall().returns(new TestChildProcess());
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -530,11 +533,14 @@ suite('AppHostDataRepository', () => {
 
     test('describe watch reports generic error when workspace AppHost exits with runtime failure', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+        // ps and ls discovery spawn concurrently, so capture the ls callback by args
+        // rather than call index since the spawn order is not deterministic.
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if ((args as string[])[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
             return new TestChildProcess();
         });
-        spawnStub.onSecondCall().returns(new TestChildProcess());
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -597,11 +603,19 @@ suite('AppHostDataRepository', () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         const getAppHostsProcess = new TestChildProcess();
         const psProcess = new TestChildProcess();
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
-            return getAppHostsProcess;
+        // ps and ls discovery spawn concurrently, so match by args rather than call index
+        // since the spawn order is not deterministic.
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            switch ((args as string[])[0]) {
+                case 'ls':
+                    getAppHostsLineCallback = createLsLineCallback(options);
+                    return getAppHostsProcess;
+                case 'ps':
+                    return psProcess;
+                default:
+                    return new TestChildProcess();
+            }
         });
-        spawnStub.onSecondCall().returns(psProcess);
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -1744,8 +1758,12 @@ suite('AppHostDataRepository', () => {
         }]);
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+        // ps and ls discovery spawn concurrently, so capture the ls callback by args
+        // rather than call index since the spawn order is not deterministic.
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if ((args as string[])[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
             return new TestChildProcess();
         });
         const repository = new AppHostDataRepository(terminalProvider);
@@ -1781,8 +1799,12 @@ suite('AppHostDataRepository', () => {
         }]);
         const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
-            getAppHostsLineCallback = createLsLineCallback(options);
+        // ps and ls discovery spawn concurrently, so capture the ls callback by args
+        // rather than call index since the spawn order is not deterministic.
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if ((args as string[])[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
             return new TestChildProcess();
         });
         const repository = new AppHostDataRepository(terminalProvider);
