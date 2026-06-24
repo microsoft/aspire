@@ -150,8 +150,15 @@ virtual filesystem to diff packages. That has two CI-breaking constraints:
 - it cannot run inside a git worktree.
 
 A HEAD-only graph never evaluates from-commit content, so both constraints
-disappear. Two-commit central-package diffing is intentionally not reproduced:
-Layer 2 routes `Directory.Packages.props` to `ALL`.
+disappear. Two-commit *per-package* diffing (mapping a single changed
+`<PackageVersion>` to only the projects that consume that package) is
+intentionally not reproduced. It is not needed for correctness: the SDK imports
+`Directory.Packages.props` during evaluation, so it appears in every project's
+`ProjectInstance.ImportPaths`, and Layer 1 already attributes a change to it to
+every importing project — i.e. all test projects. Layer 2 *additionally* routes
+`Directory.Packages.props` to `ALL`; that entry is not redundant because Layer 1
+only emits `test:` targets, so the `ALL` route is what also fires the non-.NET
+`job:` targets (extension e2e, CLI archive, …) and the full matrix.
 
 ### Why no `Microsoft.Build.Prediction`
 
@@ -360,9 +367,19 @@ problem, and masking it with run-all would teach the audit nothing.
 Because the diff is taken from the merge-base, the shallow PR checkout must be
 deepened until that common ancestor is reachable. The step fetches the base
 commit, then re-fetches both base and head at a growing depth until
-`git merge-base` resolves. If it never resolves within the depth bound the step
-**fails loudly** rather than falling back to run-all — a missing merge-base
-would otherwise crash the selector or, worse, silently under-select.
+`git merge-base` resolves. If it never resolves within the depth bound, the step
+**warns and falls back to `--force-all`** (run the full matrix) rather than
+failing the PR. An unresolved merge-base must not block PRs while the cause (a
+history-depth gap or a genuinely divergent base) is found and fixed; over-selecting
+is the fail-safe outcome, matching the unmapped-file run-all fallback. `SelectTests`
+applies the same fallback itself if its own `git merge-base` comes up empty. Both
+emit a `::warning::` and record the reason in the run summary, so a systemic
+regression surfaces instead of hiding behind a green-but-full-matrix run.
+
+Note the asymmetry with the base-fetch failure above: a base commit that can't be
+**fetched** still fails the step (`base.sha` is always reachable on origin, so that
+is a real infra problem), whereas a base/head that can't be **merge-based** after
+deepening degrades to run-all.
 
 ## Failure policy
 

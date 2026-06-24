@@ -649,15 +649,16 @@ public sealed class SelectTestsCliTests
         });
     }
 
-    // P1-6a. The merge-base is safety-critical: if base and head share no common ancestor, the selector
-    // must FAIL rather than diff against an empty/garbage base (which would silently under-select and
-    // skip real tests). Two unrelated root histories (an --orphan branch) make `git merge-base` find
-    // nothing, so the run must throw naming the merge-base, and the failure diagnostics must name the
-    // "resolve merge-base of base..head" stage so a crash is debuggable. Failure mode: a regression that
-    // swallows the error or falls back to a base-tip/empty diff turns a fatal mis-detection into a quiet
-    // skip -- the exact silent under-selection this design refuses to allow.
+    // P1-6a. An unresolved merge-base must NOT block the PR: when base and head share no common ancestor
+    // (history not deep enough, or genuinely divergent branches), the selector degrades to a fail-SAFE
+    // run-ALL rather than throwing -- over-selecting is safe, blocking every affected PR is not. Two
+    // unrelated root histories (an --orphan branch) make `git merge-base` find nothing. The run must
+    // succeed (exit 0), select ALL (so enforce writes NO restriction props -> the full matrix runs), and
+    // record the fallback reason in the summary so a systemic regression is visible, not hidden behind a
+    // green-but-full-matrix run. Failure mode: a regression that re-throws here turns every PR whose
+    // checkout can't reach the branch point red.
     [Fact]
-    public void MergeBaseWithNoCommonAncestorFailsLoud()
+    public void MergeBaseWithNoCommonAncestorFallsBackToAll()
     {
         WithGitRepo((repoRoot, output) =>
         {
@@ -675,14 +676,41 @@ public sealed class SelectTestsCliTests
             var unrelatedSha = RunGit(repoRoot, "rev-parse", "HEAD");
 
             var propsPath = Path.Combine(repoRoot, "BeforeBuildProps.props");
-            var ex = Assert.Throws<InvalidOperationException>(() =>
-                Selection.Run(Options(repoRoot, propsPath, from: unrelatedSha, to: baseSha, skipLayer1: true, enforce: true)));
+            var exit = Selection.Run(Options(repoRoot, propsPath, from: unrelatedSha, to: baseSha, skipLayer1: true, enforce: true));
 
-            Assert.Contains("merge-base", ex.Message, StringComparison.Ordinal);
+            Assert.Equal(0, exit);
+            // ALL selected -> enforce writes no restriction props, so enumerate-tests runs everything.
+            Assert.False(File.Exists(propsPath));
+
+            // The fallback is recorded in the run summary (the durable record the weekly audit reads),
+            // naming the merge-base as the cause.
+            var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
+            Assert.Contains("fail-safe run-all because", summary);
+            Assert.Contains("merge-base", summary);
+        });
+    }
+
+    // P1-6c. The CI action's OWN merge-base fallback enters the tool with --force-all already set (the
+    // shell deepen loop gave up), so RunCore's merge-base block is skipped and the reason can't be derived
+    // here -- the action passes it via --force-all-reason. The summary must render THAT reason ("fail-safe
+    // run-all because ...") so the weekly audit, which reads the summary and not the raw logs, can tell a
+    // systemic shallow-history regression apart from an intentional run-full-ci kill switch. Failure mode:
+    // dropping the --force-all-reason wiring would relabel this as a plain "(kill switch)" full run, hiding
+    // the regression behind a green-but-full-matrix run.
+    [Fact]
+    public void ForceAllReasonIsRecordedInSummaryDistinctFromKillSwitch()
+    {
+        RunInTempRepo((repoRoot, propsPath, output) =>
+        {
+            var changed = WriteChangedFiles(repoRoot, "src/Aspire.Hosting/Foo.cs");
+            const string reason = "git merge-base of base abc123 and head def456 was unreachable within 4096 commits of CI checkout history";
+
+            Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true, forceAll: true, forceAllReason: reason));
 
             var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
-            Assert.Contains("SelectTests FAILED", summary);
-            Assert.Contains("resolve merge-base of base..head", summary);
+            // The action-supplied reason is surfaced verbatim, flagged as fail-safe rather than kill switch.
+            Assert.Contains($"force-all: True — fail-safe run-all because {reason}", summary);
+            Assert.DoesNotContain("force-all: True (kill switch)", summary);
         });
     }
 
@@ -935,7 +963,8 @@ public sealed class SelectTestsCliTests
         bool skipLayer1 = false,
         bool forceAll = false,
         bool enforce = false,
-        string? slnxPath = null) =>
+        string? slnxPath = null,
+        string? forceAllReason = null) =>
         new(
             RepoRoot: repoRoot,
             MapPath: Path.Combine(repoRoot, "map.yml"),
@@ -946,7 +975,8 @@ public sealed class SelectTestsCliTests
             SkipLayer1: skipLayer1,
             ForceAll: forceAll,
             Enforce: enforce,
-            BeforeBuildProps: propsPath);
+            BeforeBuildProps: propsPath,
+            ForceAllReason: forceAllReason);
 
     private static string WriteChangedFiles(string repoRoot, params string[] paths)
     {

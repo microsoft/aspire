@@ -85,12 +85,12 @@ public sealed class SelectTestsWorkflowTests
 
     // On a PR the action diffs from the merge-base of base..head, which the shallow CI checkout can't
     // see until it is deepened. The step must deepen BOTH endpoints until `git merge-base` resolves and,
-    // if it never does within a bounded number of fetches, FAIL rather than fall back to --force-all -- a
-    // missing merge-base would otherwise crash the selector or, worse, silently under-select. Pin the
-    // loop, its termination bound, and the hard failure so a "simplification" can't turn the failure into
-    // a run-all or an unbounded fetch.
+    // if it never does within a bounded number of fetches, degrade to --force-all (run ALL) rather than
+    // fail the PR -- a missing merge-base must not block PRs while the wiring is fixed. Pin the loop, its
+    // termination bound, the warning, and the --force-all fallback so a regression can't turn it back into
+    // a hard failure or an unbounded fetch.
     [Fact]
-    public void SelectTestsActionDeepensUntilMergeBaseReachableThenFailsLoud()
+    public void SelectTestsActionDeepensUntilMergeBaseReachableThenFallsBackToAll()
     {
         var action = File.ReadAllText(SelectTestsActionPath);
 
@@ -100,8 +100,29 @@ public sealed class SelectTestsWorkflowTests
         Assert.Contains("git fetch --no-tags --depth=\"$depth\" origin \"$PR_BASE_SHA\" \"$HEAD_SHA\"", action);
         // Bounded so a pathological history can't fetch forever.
         Assert.Contains("-ge 4096", action);
-        // An unresolved merge-base is a hard failure, NOT a --force-all fallback.
-        Assert.Contains("cannot compute the PR diff.", action);
+        // An unresolved merge-base warns and degrades to run-all -- it must NOT be a hard ::error::/exit.
+        Assert.Contains("::warning::Could not find a merge-base", action);
+        Assert.DoesNotContain("::error::Could not find a merge-base", action);
+
+        // The unresolved-merge-base path must DEGRADE to run-all, never hard-fail the PR. A bare
+        // Contains("args+=(--force-all)") is non-discriminating: that string also appears in the
+        // kill-switch and non-PR branches, so it would still pass if THIS branch were turned into an
+        // `exit 1`. Scope the assertions to the merge-base resolution + fallback region -- past the
+        // base-fetch guards that legitimately `exit 1` -- so a regression to a hard failure is caught.
+        var resolveStart = action.IndexOf("merge_base_found=true", StringComparison.Ordinal);
+        Assert.True(resolveStart >= 0, "merge-base resolution region not found in action.yml");
+        // The closing `fi` of the `if [ "$merge_base_found" = "true" ]` gate, matched at its 10-space
+        // indent so the loop's inner `fi` (12 spaces) and the outer branch `fi` (8 spaces) don't match.
+        var resolveEnd = action.IndexOf("\n          fi", resolveStart, StringComparison.Ordinal);
+        Assert.True(resolveEnd > resolveStart, "merge_base_found gate is not closed as expected");
+        var mergeBaseRegion = action[resolveStart..resolveEnd];
+
+        // Give-up path breaks out of the loop rather than exiting ...
+        Assert.Contains("break", mergeBaseRegion);
+        // ... and the gate degrades to run-all, recording the reason for the audit summary.
+        Assert.Contains("--force-all --force-all-reason", mergeBaseRegion);
+        // Nothing in the resolution or fallback may hard-fail the PR.
+        Assert.DoesNotContain("exit", mergeBaseRegion);
     }
 
     private static string SelectTestsActionPath

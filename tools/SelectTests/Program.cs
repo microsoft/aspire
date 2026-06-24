@@ -59,6 +59,14 @@ var forceAllOption = new Option<bool>("--force-all")
     Description = "Kill switch: force the full matrix regardless of changed files."
 };
 
+var forceAllReasonOption = new Option<string?>("--force-all-reason")
+{
+    Description = "Human-readable reason recorded in the run summary when --force-all is a fail-SAFE " +
+                  "fallback (e.g. the CI checkout couldn't reach the merge-base) rather than the kill " +
+                  "switch. Lets the weekly audit -- which reads the summary, not the raw logs -- tell a " +
+                  "systemic regression apart from an intentional run-full-ci full run."
+};
+
 var enforceOption = new Option<bool>("--enforce")
 {
     Description = "Restrict the build to the selected projects (writes --before-build-props). Without this " +
@@ -76,7 +84,7 @@ var rootCommand = new RootCommand("Select the relevant CI test subset for a PR's
 foreach (var option in new Option[]
 {
     repoRootOption, mapOption, slnxOption, fromOption, toOption, changedFilesOption,
-    skipLayer1Option, forceAllOption, enforceOption, beforeBuildPropsOption
+    skipLayer1Option, forceAllOption, forceAllReasonOption, enforceOption, beforeBuildPropsOption
 })
 {
     rootCommand.Options.Add(option);
@@ -94,12 +102,13 @@ rootCommand.SetAction(parseResult =>
     var changedFilesPath = parseResult.GetValue(changedFilesOption);
     var skipLayer1 = parseResult.GetValue(skipLayer1Option);
     var forceAll = parseResult.GetValue(forceAllOption);
+    var forceAllReason = parseResult.GetValue(forceAllReasonOption);
     var enforce = parseResult.GetValue(enforceOption);
     var beforeBuildProps = parseResult.GetValue(beforeBuildPropsOption);
 
     return Selection.Run(new RunOptions(
         repoRoot, mapPath, slnxPath, from, to, changedFilesPath,
-        skipLayer1, forceAll, enforce, beforeBuildProps));
+        skipLayer1, forceAll, enforce, beforeBuildProps, forceAllReason));
 });
 
 return rootCommand.Parse(args).Invoke();
@@ -114,7 +123,8 @@ internal sealed record RunOptions(
     bool SkipLayer1,
     bool ForceAll,
     bool Enforce,
-    string? BeforeBuildProps);
+    string? BeforeBuildProps,
+    string? ForceAllReason = null);
 
 internal static class Selection
 {
@@ -163,8 +173,24 @@ internal static class Selection
         if (!options.ForceAll && options.From is not null && options.ChangedFilesPath is null)
         {
             trace.EnterStage("resolve merge-base of base..head");
-            var mergeBase = ResolveMergeBase(options.RepoRoot, options.From, options.To);
-            options = options with { From = mergeBase };
+            var mergeBase = TryResolveMergeBase(options.RepoRoot, options.From, options.To, out var mergeBaseError);
+            if (mergeBase is null)
+            {
+                // Don't block the PR on an unresolved merge-base. Over-selecting (run ALL) is the
+                // fail-SAFE outcome -- the same stance as the unmapped-file run-all fallback -- so a
+                // history-depth gap or a genuinely divergent base degrades to a full run while the wiring
+                // is fixed, instead of failing the job and turning every affected PR red. The CI action
+                // deepens the shallow checkout to make the merge-base reachable, so reaching here means
+                // even that didn't help. Warn loudly AND record the reason in the summary so a systemic
+                // regression can't hide behind a green-but-full-matrix run.
+                var reason = $"{mergeBaseError} -- the base and head may not share enough local history, or the branches genuinely diverge";
+                WriteWarning($"SelectTests: {reason}. Falling back to running ALL tests for this PR.");
+                options = options with { ForceAll = true, ForceAllReason = reason };
+            }
+            else
+            {
+                options = options with { From = mergeBase };
+            }
         }
 
         // Under --force-all the selector returns ALL regardless of the diff (see below), so skip
@@ -327,30 +353,42 @@ internal static class Selection
 
     // Layer 2 needs the actual changed file paths (it glob-matches them), independent of the
     // project-name closure that Layer 1 produces.
-    // Resolves the merge-base (common ancestor / branch point) of the base ref and the head. The PR diff
-    // is taken FROM this commit so that only the PR's own commits count -- commits that landed on the
-    // base branch after the branch point share this ancestor and so produce no diff. When --to is omitted
-    // (local working-tree run) the head side is HEAD. The CI action deepens the shallow checkout until
-    // this commit is reachable; if git still can't find a common ancestor we FAIL rather than diff
-    // against nothing, because an empty/garbage base would silently under-select and skip real tests.
-    private static string ResolveMergeBase(string repoRoot, string from, string? to)
+    // Resolves the merge-base (common ancestor / branch point) of the base ref and the head -- the commit
+    // the PR diff is taken FROM, so only the PR's own commits count (commits that landed on the base
+    // branch after the branch point share this ancestor and so produce no diff). When --to is omitted
+    // (local working-tree run) the head side is HEAD. Returns null (with a human-readable reason in
+    // <paramref name="error"/>) when git can't find a common ancestor or the command fails; the caller
+    // then degrades to a fail-SAFE run-all rather than blocking the PR. The CI action deepens the shallow
+    // checkout to make this commit reachable, so a null here means even that didn't help.
+    private static string? TryResolveMergeBase(string repoRoot, string from, string? to, out string error)
     {
         var head = to ?? "HEAD";
         var stdout = RunProcess("git", new[] { "merge-base", from, head }, repoRoot, out var exitCode, out var stderr);
         if (exitCode != 0)
         {
-            throw new InvalidOperationException(
-                $"git merge-base {from} {head} failed ({exitCode}): {stderr}. The base and head histories may not be deep enough locally to share a common ancestor -- the CI checkout must be deepened until they do.");
+            // `git merge-base` exits 1 with no output when the two commits share no merge base; a higher
+            // code (or stderr) is a real git error (bad object, not a repo, ...). Both degrade to run-all.
+            error = $"git merge-base {from} {head} exited {exitCode}{(stderr.Trim().Length > 0 ? $": {stderr.Trim()}" : " (no common ancestor)")}";
+            return null;
         }
 
         var mergeBase = stdout.Trim();
         if (mergeBase.Length == 0)
         {
-            throw new InvalidOperationException(
-                $"git merge-base {from} {head} found no common ancestor; cannot compute the PR diff.");
+            error = $"git merge-base {from} {head} found no common ancestor";
+            return null;
         }
 
+        error = string.Empty;
         return mergeBase;
+    }
+
+    // Emits a GitHub Actions warning annotation. A `::warning::` line on stdout is surfaced as an
+    // annotation by the runner (https://docs.github.com/actions/using-workflows/workflow-commands-for-github-actions#setting-a-warning-message);
+    // locally it is just a printed line. stdout is free for this -- step outputs go to $GITHUB_OUTPUT.
+    private static void WriteWarning(string message)
+    {
+        Console.Out.WriteLine($"::warning::{message}");
     }
 
     private static IReadOnlyCollection<string> ResolveChangedFiles(RunOptions options)
@@ -1001,7 +1039,10 @@ internal static class Selection
         sb.AppendLine("### Options");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- mode: {(options.Enforce ? "enforcing" : "audit (advisory: the full matrix + all jobs run regardless of the selection below)")}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- change source: {source}");
-        sb.AppendLine(CultureInfo.InvariantCulture, $"- force-all (kill switch): {options.ForceAll}");
+        var forceAllDetail = options.ForceAll && options.ForceAllReason is not null
+            ? $"True — fail-safe run-all because {options.ForceAllReason}"
+            : $"{options.ForceAll} (kill switch)";
+        sb.AppendLine(CultureInfo.InvariantCulture, $"- force-all: {forceAllDetail}");
         sb.AppendLine(CultureInfo.InvariantCulture, $"- layer 1 (affected-projects graph): {(options.SkipLayer1 || options.ForceAll ? "skipped" : $"{layer1Affected.Count} affected project(s) (production + test)")}");
         sb.AppendLine();
 

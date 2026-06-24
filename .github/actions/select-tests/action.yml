@@ -143,14 +143,17 @@ runs:
 
           # Deepen both endpoints until their merge-base is reachable. A shallow checkout truncates
           # ancestry, so git can't see the branch point yet. Re-fetch both SHAs at a growing depth until
-          # `git merge-base` succeeds. If it never resolves within the bound we FAIL loudly (a missing
-          # merge-base would make SelectTests error, or worse, silently under-select) rather than mask it
-          # with --force-all. The bound also prevents an unbounded fetch on pathological histories.
+          # `git merge-base` succeeds. If it never resolves within the bound, DON'T fail the PR: fall back
+          # to --force-all (run every test) -- the fail-SAFE outcome, matching SelectTests' own fallback --
+          # and warn loudly so a systemic regression is visible instead of blocking PRs while it's fixed.
+          # The bound also prevents an unbounded fetch on pathological histories.
+          merge_base_found=true
           depth=1
           until git merge-base "$PR_BASE_SHA" "$HEAD_SHA" >/dev/null 2>&1; do
             if [ "$depth" -ge 4096 ]; then
-              echo "::error::Could not find a merge-base of base $PR_BASE_SHA and head $HEAD_SHA within $depth commits of history; cannot compute the PR diff." >&2
-              exit 1
+              echo "::warning::Could not find a merge-base of base $PR_BASE_SHA and head $HEAD_SHA within $depth commits of history; running ALL tests for this PR." >&2
+              merge_base_found=false
+              break
             fi
             depth=$((depth * 4))
             echo "Merge-base of base..head not yet reachable; deepening history to depth $depth."
@@ -159,7 +162,15 @@ runs:
             # and the depth bound guarantees termination.
             git fetch --no-tags --depth="$depth" origin "$PR_BASE_SHA" "$HEAD_SHA" || true
           done
-          args+=(--from "$PR_BASE_SHA" --to "$HEAD_SHA")
+          if [ "$merge_base_found" = "true" ]; then
+            args+=(--from "$PR_BASE_SHA" --to "$HEAD_SHA")
+          else
+            # Unresolved merge-base -> fail-safe run-all rather than blocking the PR. Pass the reason so the
+            # run summary records WHY this is a full run -- distinct from a run-full-ci kill switch -- to
+            # match SelectTests' own tool-level fallback. Without it a systemic shallow-history regression
+            # hides behind a "(kill switch)" label in the audit's durable record (the summary, not the logs).
+            args+=(--force-all --force-all-reason "git merge-base of base $PR_BASE_SHA and head $HEAD_SHA was unreachable within $depth commits of CI checkout history")
+          fi
         else
           # Non-PR events (e.g. push to main) have no reliable base -> run everything.
           args+=(--force-all)
