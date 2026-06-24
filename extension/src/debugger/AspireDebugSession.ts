@@ -202,15 +202,20 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     // Append any additional command args forwarded from the CLI (e.g., step name for 'do', unmatched tokens)
     const commandArgs = this.configuration.args ?? [];
     const appHostPath = this._session.configuration.program as string;
-    // Telemetry: emit `debug/apphost/start` once per AppHost launch. We do it
-    // here (rather than in the constructor) because the constructor runs
-    // before VS Code's debug-launch UX completes; this branch is the single
-    // entry point that triggers an actual CLI spawn. The matching end event
-    // is emitted from dispose().
-    this._appHostModeAtLaunch = noDebug ? 'run' : 'debug';
-
-    const appHostIsDirectory = await this.isDirectory(appHostPath);
     const extensionArgs: string[] = [];
+    // Telemetry: emit `debug/apphost/start` once per AppHost launch. This must
+    // happen before any awaited filesystem metadata work because child
+    // `debug/runsession/start` events can arrive immediately after CLI spawn.
+    // Values that need async enrichment start as bounded sentinel values here
+    // and are resolved in the background for the matching end event.
+    this._appHostStartTimeMs = Date.now();
+    this._appHostModeAtLaunch = noDebug ? 'run' : 'debug';
+    // Before the filesystem probe below, the file extension is the only language
+    // signal available. Directory-launched AppHosts report `unknown` on start
+    // telemetry and are enriched on the matching end event.
+    this._appHostLanguageAtLaunch = classifyAppHostPath(appHostPath);
+    this._appHostTargetVersionAtLaunch = 'unknown';
+    this._appHostTargetVersionAtLaunchPromise = this.resolveAppHostTargetVersionAtLaunch(appHostPath);
     // `command` originates in the user's launch.json and is typed in the
     // contributing extension surface as AspireCommandType ('run'|'deploy'|
     // 'publish'|'do'), but launch.json is freeform JSON — a typo or custom
@@ -218,18 +223,18 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     // set so the dimension stays bounded.
     const knownCommands: ReadonlySet<string> = new Set(['run', 'deploy', 'publish', 'do']);
     const commandForTelemetry = knownCommands.has(command) ? command : 'other';
-    this._appHostLanguageAtLaunchPromise = this.resolveAppHostLanguageAtLaunch(appHostPath, appHostIsDirectory);
-    this._appHostTargetVersionAtLaunchPromise = this.resolveAppHostTargetVersionAtLaunch(appHostPath);
-    this._appHostStartTimeMs = Date.now();
-    void Promise.all([this._appHostLanguageAtLaunchPromise, this._appHostTargetVersionAtLaunchPromise]).then(([appHostLanguage, appHostTargetVersion]) => {
-      sendTelemetryEvent('debug/apphost/start', {
-        mode: this._appHostModeAtLaunch,
-        apphost_language: appHostLanguage,
-        apphost_target_version: appHostTargetVersion,
-        apphost_is_directory: appHostIsDirectory ? 'true' : 'false',
-        command: commandForTelemetry,
-      });
+    sendTelemetryEvent('debug/apphost/start', {
+      mode: this._appHostModeAtLaunch,
+      apphost_language: this._appHostLanguageAtLaunch,
+      apphost_target_version: this._appHostTargetVersionAtLaunch,
+      // The true directory/file answer requires fs.stat; keep start telemetry
+      // ahead of filesystem work so child debug telemetry cannot overtake it.
+      apphost_is_directory: 'unknown',
+      command: commandForTelemetry,
     });
+
+    const appHostIsDirectory = await this.isDirectory(appHostPath);
+    this._appHostLanguageAtLaunchPromise = this.resolveAppHostLanguageAtLaunch(appHostPath, appHostIsDirectory);
 
     // For 'do' with an explicit step (old CLI fallback), pass it as a positional argument
     const step = this.configuration.step;

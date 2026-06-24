@@ -86,7 +86,7 @@ suite('AspireDebugSession tests', () => {
         ]);
     });
 
-    test('reports AppHost target version in start telemetry', async () => {
+    test('reports unknown AppHost target version in start telemetry before async enrichment', async () => {
         const tempDir = makeTempDir();
         const appHostPath = join(tempDir, 'apphost.cs');
         writeFileSync(appHostPath, `#:sdk Aspire.AppHost.Sdk@13.6.0
@@ -123,7 +123,110 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             const event = fake.events.find(event => event.name === 'debug/apphost/start');
             assert.ok(event);
             assert.strictEqual(event.properties?.apphost_language, 'csharp');
-            assert.strictEqual(event.properties?.apphost_target_version, '13.6.0');
+            assert.strictEqual(event.properties?.apphost_target_version, 'unknown');
+        }
+        finally {
+            restoreReporter();
+        }
+    });
+
+    test('emits AppHost start telemetry before target version resolution completes', async () => {
+        const tempDir = makeTempDir();
+        const appHostPath = join(tempDir, 'apphost.cs');
+        writeFileSync(appHostPath, `#:sdk Aspire.AppHost.Sdk@13.6.0
+
+var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
+`);
+        const fake = new FakeTelemetryReporter();
+        const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: appHostPath,
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        let resolveTargetVersion: ((value: string) => void) | undefined;
+        const targetVersionPromise = new Promise<string>(resolve => {
+            resolveTargetVersion = resolve;
+        });
+        sinon.stub(aspireDebugSession as any, 'resolveAppHostTargetVersionAtLaunch').returns(targetVersionPromise);
+
+        let eventsAtSpawn: RecordedEvent[] = [];
+        const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').callsFake(async () => {
+            eventsAtSpawn = [...fake.events];
+        });
+
+        try {
+            aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
+
+            await waitFor(() => spawnStub.calledOnce);
+            const event = eventsAtSpawn.find(event => event.name === 'debug/apphost/start');
+            assert.ok(event, 'Expected debug/apphost/start to be emitted before spawnAspireCommand.');
+            assert.strictEqual(event.properties?.apphost_language, 'csharp');
+            assert.strictEqual(event.properties?.apphost_target_version, 'unknown');
+        }
+        finally {
+            resolveTargetVersion?.('13.6.0');
+            restoreReporter();
+        }
+    });
+
+    test('emits AppHost end telemetry when disposed before launch filesystem check completes', async () => {
+        const fake = new FakeTelemetryReporter();
+        const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.cs',
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const dcpServer = {
+            takeDebugSessionAggregateStats: sinon.stub().returns({
+                anyNonZeroExit: false,
+                distinctResourceTypes: [],
+                totalChildSessions: 0,
+            }),
+        };
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, dcpServer as any, terminalProvider as any, () => { });
+        sinon.stub(aspireDebugSession as any, 'isDirectory').returns(new Promise<boolean>(() => { }));
+
+        try {
+            aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
+            aspireDebugSession.dispose();
+
+            await waitForWithFakeClock(clock, () => fake.events.some(event => event.name === 'debug/apphost/end'));
+
+            const event = fake.events.find(event => event.name === 'debug/apphost/end');
+            assert.ok(event, 'Expected debug/apphost/end when disposal races with launch startup.');
+            assert.strictEqual(event.properties?.apphost_language, 'csharp');
+            assert.strictEqual(event.properties?.apphost_target_version, 'unknown');
         }
         finally {
             restoreReporter();
@@ -173,8 +276,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             await waitFor(() => fake.events.some(event => event.name === 'debug/apphost/start'));
             const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
             aspireDebugSession.dispose();
-            await clock.tickAsync(500);
-            await clock.tickAsync(0);
+            await waitForWithFakeClock(clock, () => fake.events.some(event => event.name === 'debug/apphost/end'));
 
             const event = fake.events.find(event => event.name === 'debug/apphost/end');
             assert.ok(event);
@@ -529,6 +631,17 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             }
 
             await new Promise(resolve => setTimeout(resolve, 10));
+        }
+    }
+
+    async function waitForWithFakeClock(clock: sinon.SinonFakeTimers, predicate: () => boolean): Promise<void> {
+        const timeoutAt = clock.now + 5000;
+        while (!predicate()) {
+            if (clock.now > timeoutAt) {
+                throw new Error('Timed out waiting for condition.');
+            }
+
+            await clock.tickAsync(10);
         }
     }
 });
