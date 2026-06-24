@@ -12,6 +12,7 @@ import { AppHostDiscoveryService, CandidateAppHostDisplayInfo, findCandidateForE
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { appHostDiscoveryFindFilesMaxResults } from '../utils/workspaceFileSearch';
 import { lsStreamCapability } from '../types/configInfo';
+import { extensionLogOutputChannel } from '../utils/logging';
 
 suite('AppHost discovery', () => {
     test('resolves SDK-style C# AppHost source file to discovered project candidate', () => {
@@ -105,12 +106,12 @@ suite('AppHost discovery', () => {
     suite('service', () => {
         let sandbox: sinon.SinonSandbox;
         let findFilesStub: sinon.SinonStub;
-        let hasCapabilityStub: sinon.SinonStub;
+        let getConfigInfoStub: sinon.SinonStub;
 
         setup(() => {
             sandbox = sinon.createSandbox();
             findFilesStub = sandbox.stub(vscode.workspace, 'findFiles').resolves([]);
-            hasCapabilityStub = sandbox.stub(configInfoProviderModule.ConfigInfoProvider.prototype, 'hasCapability').resolves(true);
+            getConfigInfoStub = sandbox.stub(configInfoProviderModule.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({ capabilities: [lsStreamCapability] } as any);
         });
 
         teardown(() => {
@@ -729,7 +730,7 @@ suite('AppHost discovery', () => {
 
         test('uses buffered aspire ls without --stream when the CLI does not advertise streaming', async () => {
             stubFileSystemWatchers(sandbox);
-            hasCapabilityStub.resolves(false);
+            getConfigInfoStub.resolves({ capabilities: [] } as any);
             const observedArgs: string[][] = [];
             const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
                 observedArgs.push(args);
@@ -753,6 +754,53 @@ suite('AppHost discovery', () => {
                     language: 'csharp',
                     status: 'buildable',
                 }]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('does not latch the stream-capability log when the first config probe transiently fails', async () => {
+            stubFileSystemWatchers(sandbox);
+            // First discovery: the `config info` probe transiently fails (resolves null). Discovery must
+            // fall back to buffered `ls` AND must NOT log the stream capability, because a suppressed
+            // probe failure is indistinguishable from a genuinely-absent capability and `getConfigInfo`
+            // does not cache failures. Second discovery: the probe succeeds and advertises streaming, so
+            // the capability log fires exactly once recording the true (enabled) mode.
+            getConfigInfoStub.onCall(0).resolves(null);
+            getConfigInfoStub.resolves({ capabilities: [lsStreamCapability] } as any);
+            const candidate = {
+                path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            const observedArgs: string[][] = [];
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                observedArgs.push(args);
+                if (args.includes('--stream')) {
+                    emitLsStream(options, [candidate]);
+                }
+                else {
+                    options?.stdoutCallback?.(JSON.stringify([candidate]));
+                    options?.exitCallback?.(0);
+                }
+                return { kill: () => { } } as any;
+            });
+            const infoStub = sandbox.stub(extensionLogOutputChannel, 'info');
+            const capabilityLogs = () => infoStub.getCalls().filter(call => typeof call.args[0] === 'string' && (call.args[0] as string).includes(lsStreamCapability));
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+                await service.discover(workspaceFolder);
+                assert.strictEqual(capabilityLogs().length, 0, 'a transient probe failure must not log the stream capability');
+
+                await service.discover(workspaceFolder, true);
+                const logs = capabilityLogs();
+                assert.strictEqual(logs.length, 1);
+                assert.match(logs[0].args[0] as string, /advertised; aspire ls --stream enabled\./);
+                assert.deepStrictEqual(observedArgs, [['ls', '--format', 'json'], ['ls', '--format', 'json', '--stream']]);
             }
             finally {
                 service.dispose();

@@ -50,6 +50,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private readonly _activeCliProcesses = new Set<ChildProcessWithoutNullStreams>();
     private readonly _cancelActiveCliProcesses = new Set<(error: Error) => void>();
     private _disposed = false;
+    private _streamCapabilityLogged = false;
     private readonly _configInfoProvider: ConfigInfoProvider;
     readonly onDidChangeCandidates = this._onDidChangeCandidates.event;
 
@@ -171,7 +172,21 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._throwIfDisposed();
 
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        const streamSupported = await this._configInfoProvider.hasCapability(lsStreamCapability, { suppressErrors: true });
+        const configInfo = await this._configInfoProvider.getConfigInfo({ suppressErrors: true });
+        const streamSupported = configInfo?.capabilities?.includes(lsStreamCapability) ?? false;
+
+        // `_discoverWithLs` runs on every cache-miss/forced refresh, so log the capability once per
+        // service instance (mirrors the describe `--include-disabled-commands` capability log in
+        // AppHostDataRepository._resolveDescribeCapability). Only latch the log when the `config info`
+        // probe actually succeeded (`configInfo` is non-null): `suppressErrors: true` collapses a
+        // genuinely-absent capability and a transient probe failure into the same `false`, and
+        // `getConfigInfo` does NOT cache failures. Guarding on `configInfo` keeps a one-off probe
+        // hiccup from permanently logging "not advertised" while a later successful discovery silently
+        // streams — the next successful probe logs the true `aspire ls` mode instead.
+        if (configInfo && !this._streamCapabilityLogged) {
+            this._streamCapabilityLogged = true;
+            extensionLogOutputChannel.info(`CLI capability '${lsStreamCapability}' ${streamSupported ? 'advertised' : 'not advertised'}; aspire ls --stream ${streamSupported ? 'enabled' : 'disabled'}.`);
+        }
 
         const args = ['ls', '--format', 'json'];
         if (streamSupported) {
@@ -291,7 +306,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             () => stdout);
     }
 
-    private _runCliProcess<T>(cliPath: string, args: string[], workingDirectory: string, dataCallbacks: { stdoutCallback?: (data: string) => void; lineCallback?: (line: string) => void }, onSuccess: () => T, options?: { idleTimeout?: boolean }): Promise<T> {
+    private _runCliProcess<T>(cliPath: string, args: string[], workingDirectory: string, dataCallbacks: { stdoutCallback?: (data: string) => void; lineCallback?: (line: string) => void }, onSuccess: () => T, resetTimeoutOnOutput = false): Promise<T> {
         return new Promise<T>((resolve, reject) => {
             this._throwIfDisposed();
 
@@ -340,52 +355,36 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 complete();
             };
 
-            // The discovery timeout has two modes. For buffered commands (`aspire ls --format json`,
-            // legacy `extension get-apphosts`) it is a total-duration cap: those produce output only
-            // at the end, so a single timer covers the whole run. For the streaming command
-            // (`aspire ls --format json --stream`) it is an inactivity watchdog: it is re-armed on
-            // every chunk of CLI output (see the activity wrapping below) so it only fires when the
-            // CLI goes silent for the full interval (a genuine hang). A large workspace can
-            // legitimately stream candidates for far longer than the interval in total, so a
-            // total-duration cap there would needlessly kill a healthy stream and discard progress.
+            // Callers pick the timeout policy. Buffered discovery (`aspire ls --format json`, legacy
+            // `extension get-apphosts`) leaves `resetTimeoutOnOutput` false for a total-duration cap.
+            // Streaming discovery (`aspire ls --format json --stream`) sets it true so each chunk of
+            // output re-arms the timer (via `onActivity` below), turning it into an inactivity
+            // watchdog: a large workspace can stream candidates for far longer than the interval, so
+            // only a genuine silence (a hang) should abort it.
             const timeoutMs = getAppHostDiscoveryTimeoutMs();
-            const armTimeout = () => {
+            const startTimeout = () => {
                 if (settled) {
                     return;
                 }
-                if (timeout) {
-                    clearTimeout(timeout);
-                }
+                clearTimeout(timeout);
                 timeout = setTimeout(() => {
-                    const reason = options?.idleTimeout
-                        ? `timed out after ${timeoutMs / 1000} seconds without output`
-                        : `timed out after ${timeoutMs / 1000} seconds`;
-                    cancel(new Error(`aspire ${cliArgs.join(' ')} ${reason}.`));
+                    const silence = resetTimeoutOnOutput ? ' without output' : '';
+                    cancel(new Error(`aspire ${cliArgs.join(' ')} timed out after ${timeoutMs / 1000} seconds${silence}.`));
                 }, timeoutMs);
             };
-
-            // When using the inactivity watchdog, re-arm the timer on every chunk of output so steady
-            // streaming progress keeps the process alive. Buffered commands keep their raw callbacks.
-            const wrapWithActivity = (callback?: (data: string) => void): ((data: string) => void) | undefined => {
-                if (!options?.idleTimeout || !callback) {
-                    return callback;
-                }
-                return data => {
-                    armTimeout();
-                    callback(data);
-                };
-            };
-            const effectiveDataCallbacks = {
-                stdoutCallback: wrapWithActivity(dataCallbacks.stdoutCallback),
-                lineCallback: wrapWithActivity(dataCallbacks.lineCallback),
-            };
+            const onActivity = resetTimeoutOnOutput ? startTimeout : undefined;
 
             this._cancelActiveCliProcesses.add(cancel);
             try {
                 childProcess = spawnCliProcess(this._terminalProvider, cliPath, cliArgs, {
                     noExtensionVariables: true,
                     workingDirectory,
-                    ...effectiveDataCallbacks,
+                    stdoutCallback: dataCallbacks.stdoutCallback
+                        ? data => { onActivity?.(); dataCallbacks.stdoutCallback!(data); }
+                        : undefined,
+                    lineCallback: dataCallbacks.lineCallback
+                        ? line => { onActivity?.(); dataCallbacks.lineCallback!(line); }
+                        : undefined,
                     stderrCallback: data => { stderr += data; },
                     exitCallback: code => {
                         settle(() => {
@@ -412,7 +411,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             }
 
             this._activeCliProcesses.add(childProcess);
-            armTimeout();
+            startTimeout();
         });
     }
 
@@ -469,7 +468,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             workingDirectory,
             { lineCallback: handleLine },
             () => candidates,
-            { idleTimeout: true });
+            true);
     }
 }
 
