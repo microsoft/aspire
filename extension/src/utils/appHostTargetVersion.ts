@@ -24,7 +24,7 @@ export async function summarizeAppHostTargetVersions(candidates: readonly Candid
         normalizeVersion(candidate.aspireHostingVersion) ?? await getAppHostTargetVersion(candidate.path)));
 
     for (const version of resolvedVersions) {
-        addVersion(versions, version);
+        addCandidateVersion(versions, version);
     }
 
     return summarizeVersions(versions) ?? unknownVersion;
@@ -56,6 +56,10 @@ export async function getAppHostTargetVersion(appHostPath: string | undefined): 
     return isPolyglotAppHostFile(resolvedPath)
         ? await getConfiguredSdkVersion(dirname(resolvedPath))
         : undefined;
+}
+
+function addCandidateVersion(versions: Set<string>, version: string | undefined): void {
+    addVersion(versions, version ?? unknownVersion);
 }
 
 function addVersion(versions: Set<string>, version: string | undefined): void {

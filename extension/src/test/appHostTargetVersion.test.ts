@@ -77,6 +77,15 @@ suite('appHostTargetVersion', () => {
         assert.strictEqual(await summarizeAppHostTargetVersions(candidates), 'unknown');
     });
 
+    test('buckets mixed known and unknown target versions as multiple', async () => {
+        const candidates = [
+            candidate('/workspace/AppHost/AppHost.csproj', 'csharp', '13.5.0'),
+            candidate('/does/not/exist/apphost.ts', 'typescript'),
+        ];
+
+        assert.strictEqual(await summarizeAppHostTargetVersions(candidates), 'multiple');
+    });
+
     test('falls back to project parsing when aspire ls omits target versions', async () => {
         const dir = makeTempDir();
         const appHostPath = join(dir, 'AppHost.csproj');
