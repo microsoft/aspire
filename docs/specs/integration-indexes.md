@@ -1,6 +1,6 @@
 # Aspire integration indexes
 
-> **Status:** Draft proposal.
+> **Status:** Draft proposal with a compatibility prototype in this PR.
 >
 > This spec explores replacing NuGet package search as the primary Aspire integration discovery mechanism with curated integration indexes. It is informed by the current CLI implementation, [#16882](https://github.com/microsoft/aspire/pull/16882), mise's registry model, and reproducibility goals from package-index ecosystems.
 
@@ -15,19 +15,28 @@ That makes NuGet package identity the user-facing integration identity. It also 
 
 This proposal introduces a curated integration-index layer above package providers. An integration index maps stable user-facing integration names to one or more provider coordinates such as NuGet packages, npm packages, container images, templates, or future provider types.
 
-The first implementation should keep package installation behavior NuGet-based and reuse the existing `PackagingService`, `PackageChannel`, and `INuGetPackageCache` machinery. The index changes discovery and naming, not the package-resolution engine.
+The first implementation keeps package installation behavior NuGet-based and reuses the existing `PackagingService`, `PackageChannel`, and `INuGetPackageCache` machinery. The index changes discovery and naming, not the package-resolution engine.
+
+The prototype now proves the compatibility shape end to end:
+
+- An embedded static `aspire` index artifact contributes `aspire/redis`.
+- A dynamic `nuget-search` index wraps today's NuGet package discovery side by side with the static index.
+- `aspire integration search cache --format json` resolves the static index alias to Redis.
+- `aspire add aspire/redis --non-interactive` installs `Aspire.Hosting.Redis` through the real CLI command stack.
+- Static and dynamic candidates share the same channel-level NuGet discovery for a command and are deduplicated before add prompts.
 
 ## MVP cut
 
 The smallest useful implementation should be intentionally conservative:
 
-1. Add built-in `aspire` and `community-toolkit` index artifacts.
+1. Add a built-in `aspire` index artifact first, then add `community-toolkit` once the authoring/generation pattern is proven.
 2. Support only the NuGet provider.
 3. Keep the existing NuGet version-resolution, feed, hive, staging, PR, and `ASPIRE_CLI_PACKAGES` behavior.
 4. Preserve every existing package-derived friendly name as an alias.
-5. Add index/provenance metadata to human-readable output without changing install semantics.
-6. Move CLI, MCP, and integration-doc lookup to one shared integration-resolution service.
-7. Keep user-added external indexes and dynamic NuGet search indexes out of the authoritative command path except for the internal abstractions needed to avoid painting the design into a corner.
+5. Keep existing JSON and table output stable until consumers have an additive migration path.
+6. Move CLI add/list/search to one shared integration-resolution service first; MCP, VS Code, and docs lookup move after the resolver is stable.
+7. Keep user-added external indexes out of the authoritative command path until artifact caching, pinning, and policy are implemented.
+8. Keep the built-in `nuget-search` source enabled as a compatibility source during migration; user-configured dynamic NuGet search indexes remain explicit or policy-controlled.
 
 This cut is enough to validate the hard parts:
 
@@ -37,7 +46,7 @@ This cut is enough to validate the hard parts:
 - Whether MCP, VS Code, and JSON consumers can migrate without relying on NuGet prefix-derived names.
 - Whether the index model can support future external indexes and dynamic search-backed indexes without requiring executable plugins.
 
-It deliberately does not prove npm/container/template providers or arbitrary third-party index acquisition. Those should wait until the built-in NuGet-only path is stable.
+It deliberately does not prove npm/container/template providers, arbitrary third-party index acquisition, or persistent remote index caching. Those should wait until the built-in NuGet-only path is stable.
 
 ## Goals
 
@@ -59,9 +68,9 @@ It deliberately does not prove npm/container/template providers or arbitrary thi
 - Do not remove exact NuGet package ID flows.
 - Do not solve provider artifact signing or package-registry trust beyond surfacing and enforcing provider-specific policy.
 
-## Current implementation
+## Legacy implementation being migrated
 
-The current CLI path is package-search driven:
+The legacy CLI path is package-search driven:
 
 ```text
 aspire integration list/search
@@ -100,6 +109,34 @@ Aspire.Hosting.Redis                         -> redis
 CommunityToolkit.Aspire.Hosting.SomePackage  -> communitytoolkit-somepackage
 ```
 
+## Implemented compatibility slice
+
+The prototype keeps the command surface compatible while adding the index model underneath:
+
+```text
+aspire add / aspire integration list/search
+  -> IntegrationPackageSearchService
+  -> IntegrationResolver
+       -> StaticGeneratedIntegrationIndexSource
+            -> embedded integration-indexes/aspire.generated.json
+       -> NuGetSearchIntegrationIndexSource
+            -> existing PackageChannel.GetIntegrationPackagesAsync()
+  -> existing PackageChannel version/install behavior
+  -> existing IAppHostProject.AddPackageAsync()
+```
+
+Decisions from this slice:
+
+| Decision | Rationale |
+| -------- | --------- |
+| Built-in indexes are static generated artifacts embedded in the CLI. | This gives deterministic first-run/offline behavior and avoids a network/cache dependency for official entries. |
+| The first embedded artifact is `aspire`, seeded with Redis only. | A one-entry artifact proves schema, loading, alias search, index-qualified add, and duplicate handling without pretending the catalog is complete. |
+| `nuget-search` runs side by side with the static index during migration. | Existing package-search behavior remains available while static coverage grows. This is a compatibility source, not the future trust default for arbitrary third-party discovery. |
+| Static and dynamic sources share channel-level NuGet discovery per command. | Without sharing, enabling both sources doubles NuGet search cost. The resolver context caches `PackageChannel.GetIntegrationPackagesAsync()` results for the command invocation. |
+| Static/dynamic duplicate candidates are deduplicated before add prompts. | `aspire/redis` and `nuget-search/redis` both point at `Aspire.Hosting.Redis`; users should not see duplicate version prompts for the same package/version/channel. |
+| Existing JSON output stays `name`, `package`, `version` for now. | The implementation proves the model without breaking VS Code, MCP, scripts, or tests that parse today's shape. |
+| Package resolution remains provider-owned. | The static index selects `nuget:Aspire.Hosting.Redis`; `PackageChannel` still selects available versions from the active variant/feed/hive context. |
+
 ## Proposed model
 
 Introduce an internal integration model:
@@ -128,35 +165,37 @@ Indexes can be backed by different source types:
 | ----------------- | ---------------- | ----------- |
 | Static generated artifact | `aspire`, `community-toolkit` | Curated JSON artifact embedded in the CLI or fetched/cached from a repo. |
 | External generated artifact | `contoso` | User-added or enterprise JSON artifact fetched from GitHub or another HTTPS endpoint. |
-| Dynamic NuGet search | `nuget-search` | Runtime index that searches NuGet metadata and emits `IntegrationEntry` values for discovered packages. |
+| Dynamic NuGet search | `nuget-search` | Runtime index that searches NuGet metadata and emits `IntegrationPackageCandidate` values for discovered packages. |
 
 This spec uses **index** for the curated integration catalog and reserves **source** for provider-specific package feeds, such as the existing `aspire add --source <nuget-feed>` option. Commands that need both concepts should keep that distinction visible in help text and output.
 
-The first built-in indexes are:
+The built-in indexes should be:
 
 | Index ID | Provenance | Purpose |
 | --------- | ---------- | ------- |
 | `aspire` | `official` | Microsoft/Aspire-supported integrations. |
 | `community-toolkit` | `community` | Curated Community Toolkit integrations. |
 
-The first optional dynamic index is:
+The first implemented built-in artifact is `aspire`; it is intentionally seeded with Redis only while the end-to-end path and migration rules are proven. `community-toolkit` should be added after the generator/validator can preserve today's Community Toolkit friendly names and aliases.
+
+The built-in compatibility dynamic index is:
 
 | Index ID | Provenance | Purpose |
 | -------- | ---------- | ------- |
-| `nuget-search` | `third-party` | Search NuGet metadata for hosting integrations outside curated indexes. |
+| `nuget-search` | `third-party` | Preserve today's NuGet package-search behavior while curated index coverage grows. |
 
 The resolver should support both static and dynamic index source types from the beginning. A command should see a single merged candidate set regardless of whether entries came from a generated artifact or from NuGet search:
 
 ```text
 IIntegrationIndexSource
-  - StaticGeneratedIndexSource
-  - DynamicNuGetSearchIndexSource
+  - StaticGeneratedIntegrationIndexSource
+  - NuGetSearchIntegrationIndexSource
 
 IntegrationResolver
-  -> IEnumerable<IntegrationEntry>
+  -> IReadOnlyList<IntegrationPackageCandidate>
 ```
 
-That lets the current NuGet search behavior be wrapped as an index first, then curated static indexes can be introduced without changing the command-facing model again.
+That lets the current NuGet search behavior and curated static entries run through the same resolver. The compatibility source can stay enabled until static indexes cover the current supported package surface; user-configured dynamic NuGet search remains a later opt-in/policy feature.
 
 The first provider type is:
 
@@ -265,6 +304,8 @@ Cross-index conflicts are handled at resolution time. The index-qualified ID is 
 
 Indexes should not require a clone in the normal path.
 
+The embedded built-in index is the first local artifact. It is loaded from the CLI assembly and requires no cache. Persistent artifact caching starts when indexes can be fetched independently of the CLI binary.
+
 Normal list/search/add commands should not fetch or switch index artifacts based on age. They should use the latest valid artifact already available locally:
 
 1. Use a project-pinned artifact when the project pins an external index.
@@ -282,6 +323,15 @@ Fetching happens through explicit index-management operations such as `aspire in
 For GitHub-backed indexes, the preferred artifact is a generated JSON file committed in the index repository and fetched by commit SHA. A release asset or branch-generated artifact is acceptable only when the CLI can bind it to immutable content with a digest and index metadata. `aspire integration index update` advances a cached index from one resolved commit/digest to another; project-pinned indexes do not advance silently.
 
 The embedded snapshot is a local artifact, not a freshness boundary. Normal commands should not perform opportunistic refreshes and should not switch artifacts based on cache age. Users can run `aspire integration index update` to advance cached indexes intentionally, similar to package managers that separate update from install/search. CLI releases should refresh the embedded snapshot so first-run/offline behavior does not drift indefinitely from the official index.
+
+There are two distinct caching layers:
+
+| Cache | Scope | Implemented? | Purpose |
+| ----- | ----- | ------------ | ------- |
+| Command-level provider discovery cache | One resolver invocation | Yes | Share `PackageChannel.GetIntegrationPackagesAsync()` results between static and dynamic sources so side-by-side indexes do not double-query NuGet. |
+| Persistent index artifact cache | CLI/user/project storage | No | Store fetched generated artifacts by index ID, resolved revision, and digest for external or independently updated built-in indexes. |
+
+The command-level provider cache is an optimization, not an index freshness policy. Persistent index caching must still use explicit update semantics.
 
 Cloning is an implementation fallback only for indexes that cannot expose a generated artifact through a simple HTTPS/GitHub raw/archive path, such as some private enterprise repositories.
 
@@ -444,38 +494,38 @@ The implicit/default Aspire variant must always participate in NuGet provider re
 
 ## Walking-skeleton implementation
 
-The implementation should start by introducing the index model behind the existing command behavior, not by adding new UX first.
+The implementation starts by introducing the index model behind the existing command behavior, not by adding new UX first.
 
-Proposed internal types:
+Internal types:
 
 | Type | Responsibility |
 | ---- | -------------- |
-| `IntegrationIndexDocument` | Deserialized generated artifact: schema version, index metadata, entries. |
+| `IntegrationIndexArtifact` | Deserialized generated artifact: schema version, index metadata, entries. |
 | `IntegrationEntry` | Curated entry ID, display name, aliases, tags, docs, provenance, provider references. |
 | `IntegrationProviderReference` | Provider type plus provider-specific coordinate, compatibility constraints, and resolution hints. |
-| `IntegrationIndexVariant` | Publicly modeled index variant such as `aspire@daily`; internally maps to one or more `PackageChannel` instances for NuGet. |
-| `IntegrationCandidate` | Runtime candidate after AppHost language, index precedence, alias, availability, and provider filtering. |
+| `IntegrationIndexSourceContext` | Per-command cache and context shared by all index sources. |
+| `IntegrationPackageCandidate` | Runtime candidate after AppHost language, index precedence, alias, availability, and provider filtering. |
 | `IIntegrationIndexSource` | Loads built-in, cached, external, or dynamic-discovery indexes. |
-| `IIntegrationProvider` | Resolves provider versions and installs provider coordinates. First implementation only needs `NuGetIntegrationProvider`. |
+| `IIntegrationProvider` | Future abstraction that resolves provider versions and installs provider coordinates. The prototype still uses `PackageChannel` and `IAppHostProject` directly for NuGet. |
 | `IntegrationResolver` | Shared CLI/MCP/VS Code-facing service for search, exact resolution, ambiguity handling, and provider selection. |
 
-The first code slice should preserve old behavior by construction:
+The first code slice preserves old behavior by construction:
 
-1. Load built-in index documents from embedded JSON.
-2. Build a legacy alias map from existing friendly-name algorithms.
+1. Load built-in index artifacts from embedded JSON.
+2. Build candidates from the embedded static index and dynamic NuGet search source.
 3. Ask `PackagingService.GetChannelsAsync()` for the current NuGet resolution profiles.
-4. Convert the selected profiles into `IntegrationIndexVariant` values.
-5. Resolve integration entries to NuGet provider coordinates.
-6. Use existing `PackageChannel` version APIs for availability and version selection.
-7. Install through existing `IAppHostProject.AddPackageAsync`.
+4. Resolve integration entries to NuGet provider coordinates.
+5. Use existing `PackageChannel` version APIs for availability and version selection.
+6. Install through existing `IAppHostProject.AddPackageAsync`.
 
-This lets the first PR be validated with current tests plus focused new tests:
+This lets the implementation be validated with current tests plus focused new tests:
 
 - `aspire add redis` resolves to the same NuGet package/version it does today.
 - `aspire add Aspire.Hosting.Redis` still works as an exact package ID fallback.
-- `aspire add communitytoolkit-*` still works through generated aliases.
+- Existing official and Community Toolkit friendly names stay accepted as generated aliases as those entries move into static catalogs.
 - Non-interactive fuzzy matches still fail rather than picking an arbitrary candidate.
-- MCP listing and CLI listing return the same integration set.
+- CLI listing and search return the same compatibility package set as before, plus curated aliases from static entries.
+- MCP listing moves after CLI behavior is stable.
 - PR/local/`ASPIRE_CLI_PACKAGES` hives still produce the selected local version.
 
 ### Adapter strategy
@@ -487,22 +537,21 @@ Current command code
   -> IntegrationPackageSearchService
       -> IntegrationResolver
           -> IIntegrationIndexSource[]
-          -> IIntegrationProvider[]
           -> PackagingService / PackageChannel
 ```
 
-`IntegrationPackageSearchService` can initially keep its public methods and return shapes while delegating to `IntegrationResolver`. That avoids rewriting `AddCommand`, `IntegrationSearchCommand`, and `ListIntegrationsTool` in one step. Once the resolver is stable, command-specific types can be renamed or collapsed around the integration model.
+`IntegrationPackageSearchService` keeps its public methods and return shapes while delegating to `IntegrationResolver`. That avoided rewriting every consumer in one step. `AddCommand` and `IntegrationSearchCommand` now consume candidates where they need index-qualified names and aliases; `ListIntegrationsTool` remains a later migration target.
 
 ### Provider/version performance
 
 A naive index implementation would query NuGet versions for every catalog entry on every list/search. That is too expensive and would make curated indexes slower than today's prefix search.
 
-The NuGet provider should use a two-level strategy:
+The NuGet provider uses a two-level strategy:
 
 1. For list/search, reuse channel-level integration package search results when available and join those packages to index provider coordinates.
 2. For exact add/index-qualified add, resolve the selected provider coordinate directly with `GetPackageVersionsAsync`.
 
-That keeps normal discovery close to today's cost while still allowing exact curated entries that were not returned by a broad package search to produce a precise "entry exists but package is unavailable" error.
+The prototype implements the first part with `IntegrationIndexSourceContext`, which caches `PackageChannel.GetIntegrationPackagesAsync()` per channel for a command. That keeps normal discovery close to today's cost while both static and dynamic index sources are enabled.
 
 ## Runtime availability
 
@@ -714,7 +763,7 @@ IntegrationIndex
   - NuGetSearchIndex
 ```
 
-The NuGet search index should emit the same internal `IntegrationEntry` shape as curated indexes. It should mark entries as third-party and keep the validation from #16882:
+The NuGet search index should emit the same runtime candidate shape as curated indexes. It should mark entries as third-party and keep the validation from #16882:
 
 - Broad discovery by NuGet tags.
 - Strict validation by direct dependency on `Aspire.Hosting` or `Aspire.Hosting.AppHost`.
@@ -725,8 +774,8 @@ There are two forms:
 
 | Form | Purpose |
 | ---- | ------- |
-| Built-in compatibility `NuGetSearchIndex` | Wraps today's NuGet search/prefix behavior so the new resolver can reproduce current behavior during migration. |
-| User-configured `NuGetSearchIndex` | Adds optional NuGet search scopes beyond curated indexes, such as `nuget-search` or `contoso-nuget`. |
+| Built-in compatibility `NuGetSearchIndex` | Wraps today's NuGet search/prefix behavior so the new resolver can reproduce current behavior during migration. This is implemented as `nuget-search`. |
+| User-configured `NuGetSearchIndex` | Adds optional NuGet search scopes beyond curated indexes, such as `contoso-nuget`. |
 
 Unlike static indexes, the NuGet search index does not have a generated JSON artifact, index commit, or digest. Its identity is the search configuration:
 
@@ -740,7 +789,7 @@ Unlike static indexes, the NuGet search index does not have a generated JSON art
 }
 ```
 
-Runtime entries derived from NuGet search should use:
+Runtime candidates derived from NuGet search should use:
 
 | Field | Value |
 | ----- | ----- |
@@ -750,9 +799,9 @@ Runtime entries derived from NuGet search should use:
 | Provider coordinate | `nuget:<PackageId>`. |
 | Provenance | `third-party` unless configured by enterprise policy. |
 
-Because search results are dynamic, normal curated search remains deterministic by default. Enabling a NuGet search index should be explicit or policy-controlled, and output must show the dynamic index/provenance so users can distinguish recommended catalog entries from search-derived entries.
+Because search results are dynamic, the long-term default should be curated search. The built-in `nuget-search` source is enabled during migration to preserve current behavior while the static catalog is incomplete. User-configured NuGet search indexes should be explicit or policy-controlled, and output must show the dynamic index/provenance so users can distinguish recommended catalog entries from search-derived entries.
 
-Default behavior can remain curated-only:
+Future curated-only behavior can be:
 
 ```bash
 aspire integration search terraform
@@ -966,7 +1015,7 @@ The key migration rule is that `name` must remain a valid add argument during th
 
 ### Choice 8: Should the dynamic NuGet search index be on by default?
 
-**Recommendation:** curated indexes are default; the dynamic NuGet search index is explicit or policy-controlled.
+**Recommendation:** split the answer into built-in migration compatibility and user-configured discovery. The built-in `nuget-search` compatibility source is on while the static index is incomplete; user-configured dynamic NuGet search indexes are explicit or policy-controlled.
 
 | Option | Pros | Cons |
 | ------ | ---- | ---- |
@@ -974,7 +1023,7 @@ The key migration rule is that `name` must remain a valid add argument during th
 | Ask on first use | User-aware. | Awkward for non-interactive CLI, MCP, and VS Code flows. |
 | Explicit opt-in | Predictable and safer for enterprise users. | Users may miss useful third-party integrations. |
 
-The curated index should answer "what do we recommend?" The dynamic NuGet search index should answer "what else exists in this NuGet search scope?" and should be surfaced with `third-party` provenance unless enterprise policy marks a configured search index differently.
+The curated index should answer "what do we recommend?" The built-in dynamic NuGet search source currently answers "what would the old CLI have found?" A user-configured dynamic NuGet search index should answer "what else exists in this NuGet search scope?" and should be surfaced with `third-party` provenance unless enterprise policy marks a configured search index differently.
 
 ### Choice 9: Do we need explicit provider coordinates?
 
@@ -1024,7 +1073,7 @@ Delivery rules:
 6. Require equivalence tests for current list/search/add behavior before new UX is enabled.
 7. Support static and dynamic index sources in the resolver before changing command UX, so migration does not require another model pivot.
 
-The first implementation should run the new model in **shadow mode** before it becomes authoritative:
+The conservative recommendation was to run the new model in **shadow mode** before it becomes authoritative:
 
 ```text
 legacy NuGet resolver -> current command behavior
@@ -1032,13 +1081,13 @@ index resolver        -> parallel candidate set used by tests/diagnostics
 comparison            -> reports mismatches in package ID, version, alias, provider, and availability
 ```
 
-Shadow mode should not silently fall back in production command paths. Its purpose is to make mismatches visible in tests and optional diagnostics before the command path changes. Once the candidate sets match for the existing official/community NuGet surface, the command adapter can switch to the index resolver while preserving the old public method shapes.
+The prototype skipped a standalone shadow-mode phase for CLI add/list/search and instead switched those commands through the resolver with narrow unit tests plus one Docker E2E proof. Shadow mode remains useful before migrating MCP/VS Code or before broadening static catalog coverage because it catches equivalence drift without changing more user-visible surfaces.
 
 ## Migration plan
 
 Each phase should have an explicit decision gate. If a gate fails, the next phase should not expand the concept surface area.
 
-### Phase 0: Baseline current behavior
+### Phase 0: Baseline current behavior and compatibility tests
 
 - Add focused tests that capture today's `aspire add`, `aspire integration list`, `aspire integration search`, and MCP integration listing behavior.
 - Include stable/daily/staging, PR/local hives, `ASPIRE_CLI_PACKAGES`, exact package ID fallback, friendly-name derivation, and non-interactive fuzzy failure behavior.
@@ -1046,34 +1095,37 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 
 **Gate:** tests describe the current behavior closely enough that a resolver replacement cannot change names, packages, versions, availability, or non-interactive behavior without a deliberate test update.
 
-### Phase 1: Index source model and dynamic NuGet search adapter
+### Phase 1: Resolver model and dynamic NuGet search compatibility source
 
-- Add `IntegrationEntry`, `IntegrationProviderReference`, and `IntegrationIndex` data abstractions.
+- Add `IntegrationEntry`, `IntegrationProviderReference`, runtime candidate, and index-artifact abstractions.
 - Add the `IIntegrationIndexSource` abstraction with at least two source shapes: static generated artifact and dynamic NuGet search.
-- Wrap the current NuGet package search behavior as a `NuGetSearchIndex` that emits `IntegrationEntry` values.
-- Do not add curated static indexes yet.
-- Do not change command behavior.
+- Wrap the current NuGet package search behavior as a built-in `nuget-search` source.
+- Keep package version selection and installation on `PackageChannel` and `IAppHostProject`.
 
-**Gate:** the dynamic NuGet search index can reproduce the current prefix/tag search candidate set as `IntegrationEntry` values, including friendly names, provider coordinates, versions, and exact package ID fallback.
+**Status:** implemented for CLI add/list/search.
 
-### Phase 2: Generated built-in static indexes
+**Gate:** the dynamic NuGet search source can reproduce the current prefix/tag search candidate set as runtime candidates, including friendly names, provider coordinates, versions, and exact package ID fallback.
 
-- Add JSON schema validation and deterministic generation for built-in Aspire and Community Toolkit index artifacts.
-- Author initial index entries from the existing prefix-discovered package set.
-- Preserve existing user-facing names by generating aliases from both current friendly-name schemes: `IntegrationPackageSearchService.GenerateFriendlyName` and `ListIntegrationsTool.GetFriendlyName`.
-- Do not change command behavior.
+### Phase 2: Embedded static built-in index seed
 
-**Gate:** generated built-in index artifacts cover the same current official/community package set, and index CI catches duplicate IDs, alias conflicts, invalid provider coordinates, and nondeterministic generation.
+- Add an embedded generated JSON artifact for the built-in `aspire` index.
+- Seed the artifact with one high-value entry, `aspire/redis`, with `cache` as an alias and `nuget:Aspire.Hosting.Redis` as the provider coordinate.
+- Load the artifact through `StaticGeneratedIntegrationIndexSource`.
+- Join static entries to channel-level NuGet search results for display/version availability.
+- Deduplicate static and dynamic candidates that point at the same package/version/channel before add prompts.
 
-### Phase 3: Shadow resolver over both index types
+**Status:** implemented and validated with a Docker E2E test.
 
-- Add `IntegrationResolver` and the NuGet-only `IIntegrationProvider` abstraction.
-- Load both static generated indexes and the dynamic NuGet search index.
-- Convert existing `PackageChannel` instances into `IntegrationIndexVariant` values.
-- Run resolver comparison tests against the legacy NuGet search pipeline.
-- Keep command paths using the legacy resolver.
+**Gate:** `aspire integration search cache --format json` finds Redis through the static alias, and `aspire add aspire/redis --non-interactive` installs `Aspire.Hosting.Redis` through the real CLI package path.
 
-**Gate:** shadow resolver results match legacy resolver results for current supported scenarios, including package ID, selected version, aliases, availability, AppHost language support, and source-index attribution.
+### Phase 3: Broader generated built-in catalog
+
+- Add deterministic generation/validation for the full built-in `aspire` catalog.
+- Preserve existing user-facing names by generating aliases from current friendly-name schemes.
+- Add duplicate ID, alias conflict, invalid provider coordinate, missing package, and nondeterministic generation checks.
+- Add `community-toolkit` only after official catalog generation and compatibility aliases are proven.
+
+**Gate:** generated built-in artifacts cover the current official package set first, then the Community Toolkit set, without changing existing accepted add arguments.
 
 ### Phase 4: Compatibility adapter switch
 
@@ -1083,17 +1135,19 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 - Keep exact package ID matching as a fallback.
 - Keep current human-readable and JSON output fields stable.
 
-**Gate:** existing `aspire add`, `aspire integration list`, `aspire integration search`, and MCP integration listing produce equivalent results for current official/community NuGet packages, with only additive index/provenance metadata.
+**Status:** implemented for CLI add/list/search. MCP is not migrated yet.
+
+**Gate:** existing `aspire add`, `aspire integration list`, and `aspire integration search` produce equivalent results for current official NuGet packages while also accepting static aliases and index-qualified names.
 
 ### Phase 5: Additive CLI/MCP UX
 
 - Show index/provenance in human-readable output.
-- Add index-qualified names such as `aspire/redis`.
+- Keep accepting index-qualified names such as `aspire/redis`; make them more visible in output/help.
 - Add JSON output fields such as `qualifiedName`, `index`, `provenance`, and `provider` without removing existing fields.
 - Update MCP listing to use the shared integration service.
 - Add ambiguity prompts for same name across indexes.
 
-**Gate:** every old package-derived name remains an accepted alias, non-interactive ambiguity rules are tested, and JSON/MCP/VS Code consumers have a documented compatibility path.
+**Gate:** every old package-derived name remains an accepted alias, non-interactive ambiguity rules are tested, and JSON/MCP/VS Code consumers have a documented compatibility path for additive fields.
 
 ### Phase 6: External static indexes
 
@@ -1111,7 +1165,7 @@ Each phase should have an explicit decision gate. If a gate fails, the next phas
 - Keep third-party search indexes opt-in unless enterprise policy enables them.
 - Reuse dependency metadata validation for exact package ID flows.
 
-**Gate:** curated search remains the default, search-derived entries are visibly marked with index/provenance, and enterprise/non-interactive policy can disable or constrain the NuGet search index.
+**Gate:** curated search remains the long-term default, search-derived entries are visibly marked with index/provenance, and enterprise/non-interactive policy can disable or constrain user-configured NuGet search indexes.
 
 ### Phase 8: Additional providers
 
@@ -1152,13 +1206,18 @@ CLI tests should cover:
 - Offline embedded snapshot behavior.
 - External index schema validation failure.
 
+Current prototype validation includes:
+
+- Unit coverage for dynamic NuGet search projection, embedded static index loading, shared source-context caching, static alias search, index-qualified exact add, and duplicate package candidates across static/dynamic sources.
+- Full `Aspire.Cli.Tests` coverage for the changed command path.
+- Docker CLI E2E coverage that searches the static `cache` alias and adds `aspire/redis` from a localhive-built CLI archive.
+
 ## Open questions
 
-- Should generated index artifacts be committed for built-in indexes, or generated during build and only committed/published for external index repos?
 - Should Community Toolkit entries be authored in this repo first, in the Community Toolkit repo first, or mirrored between both?
 - Should `community-toolkit` be enabled by default, or listed as built-in but disabled until a user opts in?
 - Is `<AppHost directory>/.aspire/integration-indexes.lock.json` acceptable as a committed project file for external index pins, or should C# and polyglot AppHosts use their existing project/config stores?
-- Should `aspire add Aspire.Hosting.Redis` continue as an unqualified exact package ID fallback forever, or should help text steer advanced users to `nuget:Aspire.Hosting.Redis` once provider coordinates exist?
+- How long should `aspire add Aspire.Hosting.Redis` continue as an unqualified exact package ID fallback before help text steers advanced users to `nuget:Aspire.Hosting.Redis`?
 - Does additive JSON output preserve enough compatibility, or do VS Code/MCP consumers need a versioned output mode before index fields are added?
 - Should index entries include a simple `projection` hint for ATS-backed provider packages, or should that be inferred entirely from provider package metadata after restore?
 - What enterprise policy hooks are required before user-added indexes ship: allowed index URLs, allowed commits, provider allowlists, package-source allowlists, or all of these?
