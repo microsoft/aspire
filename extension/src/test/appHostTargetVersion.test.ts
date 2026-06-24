@@ -173,6 +173,19 @@ suite('appHostTargetVersion', () => {
         assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.5.2');
     });
 
+    test('summarizes a BOM-prefixed unversioned C# project SDK version from global.json msbuild-sdks', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'AppHost.csproj');
+        writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        writeFileSync(join(dir, 'global.json'), `\uFEFF${JSON.stringify({
+            'msbuild-sdks': {
+                'Aspire.AppHost.Sdk': '13.5.2',
+            },
+        })}`);
+
+        assert.strictEqual(await summarizeAppHostTargetVersions([candidate(appHostPath, 'csharp')]), '13.5.2');
+    });
+
     test('reads an unversioned C# project Sdk element version from global.json msbuild-sdks', async () => {
         const dir = makeTempDir();
         const appHostPath = join(dir, 'AppHost.csproj');
@@ -226,6 +239,15 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
 
         assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.4.2');
         assert.strictEqual(await getAppHostTargetVersion(dir), '13.4.2');
+    });
+
+    test('summarizes a BOM-prefixed polyglot SDK version from aspire.config.json', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'apphost.ts');
+        writeFileSync(appHostPath, 'import { aspire } from "@microsoft/aspire";');
+        writeFileSync(join(dir, 'aspire.config.json'), `\uFEFF${JSON.stringify({ sdk: { version: '13.4.2' } })}`);
+
+        assert.strictEqual(await summarizeAppHostTargetVersions([candidate(appHostPath, 'typescript')]), '13.4.2');
     });
 
     test('reads the polyglot SDK version from a directory with non-AppHost C# files', async () => {

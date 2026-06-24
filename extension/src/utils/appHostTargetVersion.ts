@@ -385,6 +385,13 @@ async function readJsoncFile(filePath: string): Promise<JsoncFileResult> {
         return { exists: false };
     }
 
+    if (contents.startsWith('\uFEFF')) {
+        // jsonc-parser reports a leading UTF-8 BOM as InvalidSymbol even though
+        // the rest of the JSONC object is parsed. Strip only that exact prefix so
+        // BOM-prefixed config files work without accepting any other invalid input.
+        contents = contents.slice(1);
+    }
+
     const errors: ParseError[] = [];
     const parsed = parse(contents, errors, { allowTrailingComma: true }) as unknown;
     return {
