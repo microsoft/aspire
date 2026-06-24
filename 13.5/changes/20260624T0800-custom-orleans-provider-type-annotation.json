@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@flensrocker"
+  ],
+  "description": "Users can now explicitly specify the Orleans provider type for a resource using `WithOrleansProviderType()`. This is useful for drop-in replacements like Garnet for Redis, where Orleans cannot automatically derive the correct provider type from the resource name.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-06-24T08:00:02Z",
+  "lastMergedAt": "2026-06-24T08:00:02Z",
+  "name": "Custom Orleans provider type annotation",
+  "owner": "davidfowl",
+  "prs": [
+    13630
+  ]
+}

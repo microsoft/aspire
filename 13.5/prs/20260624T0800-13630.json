@@ -1,0 +1,9 @@
+{
+  "author": "flensrocker",
+  "comment": "New feature: adds WithOrleansProviderType() to allow explicit provider type specification for Orleans resources; community contribution",
+  "mergedAt": "2026-06-24T08:00:02Z",
+  "number": 13630,
+  "runDate": "2026-06-24T12:41:02Z",
+  "status": "included",
+  "title": "feat: add custom Orleans provider type annotation"
+}
