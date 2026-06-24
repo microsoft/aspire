@@ -46,7 +46,7 @@ internal sealed class BundleNuGetService : INuGetService
     private readonly ILayoutDiscovery _layoutDiscovery;
     private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly IFeatures _features;
-    private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
     private readonly ILogger<BundleNuGetService> _logger;
     private readonly IBundleService? _bundleService;
 
@@ -54,14 +54,14 @@ internal sealed class BundleNuGetService : INuGetService
         ILayoutDiscovery layoutDiscovery,
         LayoutProcessRunner layoutProcessRunner,
         IFeatures features,
-        CliExecutionContext executionContext,
+        IEnvironment environment,
         ILogger<BundleNuGetService> logger,
         IBundleService? bundleService = null)
     {
         _layoutDiscovery = layoutDiscovery;
         _layoutProcessRunner = layoutProcessRunner;
         _features = features;
-        _executionContext = executionContext;
+        _environment = environment;
         _logger = logger;
         _bundleService = bundleService;
     }
@@ -181,7 +181,7 @@ internal sealed class BundleNuGetService : INuGetService
         }
 
         var environmentVariables = new Dictionary<string, string>();
-        NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _executionContext);
+        NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _environment);
         layoutLease?.AddEnvironment(environmentVariables);
 
         var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(

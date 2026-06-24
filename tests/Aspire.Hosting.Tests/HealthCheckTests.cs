@@ -77,7 +77,7 @@ public class HealthCheckTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task WithHttpHealthCheckInitializesUriOnBeforeResourceStartedEvent()
+    public async Task WithHttpHealthCheckResolvesUriFromEndpointDuringCheck()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
@@ -96,13 +96,16 @@ public class HealthCheckTests(ITestOutputHelper testOutputHelper)
 
         await eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(resource.Resource, app.Services));
 
-        // The health check URI is intentionally initialized on BeforeResourceStartedEvent (not on
-        // ResourceEndpointsAllocatedEvent) so the URI reflects the final allocated endpoint. Once that
-        // event has been published the health check factory can build a valid check.
-        await eventing.PublishAsync(new BeforeResourceStartedEvent(resource.Resource, app.Services));
-
         var healthCheck = registration.Factory(app.Services);
         Assert.NotNull(healthCheck);
+
+        // The health check resolves the endpoint URI directly via GetValueAsync during CheckHealthAsync.
+        // The HTTP request will fail (nothing listening), but the error message confirms the URI was resolved.
+        var context = new HealthCheckContext { Registration = registration };
+        var result = await healthCheck.CheckHealthAsync(context);
+
+        Assert.Equal(HealthStatus.Unhealthy, result.Status);
+        Assert.Contains("http://localhost:49217/", result.Description);
     }
 
     [Fact]

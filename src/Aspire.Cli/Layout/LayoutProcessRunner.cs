@@ -32,7 +32,7 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
         var args = arguments.ToArray();
         var workDir = new DirectoryInfo(workingDirectory ?? Directory.GetCurrentDirectory());
 
-        using var execution = executionFactory.CreateExecution(toolPath, args, environmentVariables, workDir, options);
+        await using var execution = executionFactory.CreateExecution(toolPath, args, environmentVariables, workDir, options);
 
         if (!execution.Start())
         {
@@ -45,7 +45,7 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
     }
 
     /// <inheritdoc />
-    public IProcessExecution Start(
+    public async Task<IProcessExecution> StartAsync(
         string toolPath,
         IEnumerable<string> arguments,
         string? workingDirectory = null,
@@ -59,7 +59,7 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
 
         if (!execution.Start())
         {
-            execution.Dispose();
+            await execution.DisposeAsync().ConfigureAwait(false);
             throw new InvalidOperationException($"Failed to start process: {toolPath}");
         }
 

@@ -110,7 +110,7 @@ public partial class TextVisualizer : ComponentBase, IAsyncDisposable
     {
         // we support light (a11y-light-min) and dark (a11y-dark-min) themes.
         // syntax to force a theme for highlight.js is "theme-{themeName}"
-        return $"log-content highlight-line language-{ViewModel.FormatKind} theme-a11y-{ThemeManager.EffectiveTheme.ToLower()}-min";
+        return $"log-content highlight-line language-{ViewModel.FormatKind} theme-a11y-{ThemeManager.EffectiveTheme.ToLowerInvariant()}-min";
     }
 
     private static MarkupString GetFormattedPlaintext(StringLogLine line)

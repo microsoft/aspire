@@ -98,6 +98,7 @@ suite('Aspire package contribution surface E2E', function () {
             'aspire-vscode.codeLensRevealResource',
             'aspire-vscode.openInIntegratedBrowser',
             'aspire-vscode.copyEndpointUrl',
+            'aspire-vscode.openResourceTerminal',
         ]) {
             assert.ok(hiddenPaletteCommands.includes(commandId), `${commandId} should stay hidden from the command palette.`);
         }
@@ -474,6 +475,7 @@ const expectedCommandIds = [
     'aspire-vscode.openInExternalBrowser',
     'aspire-vscode.openInIntegratedBrowser',
     'aspire-vscode.openLocalSettings',
+    'aspire-vscode.openResourceTerminal',
     'aspire-vscode.openTerminal',
     'aspire-vscode.publish',
     'aspire-vscode.refreshAppHosts',
@@ -535,6 +537,7 @@ const expectedViewItemContextCommands = [
     'aspire-vscode.executeResourceCommand',
     'aspire-vscode.executeResourceCommandItem',
     'aspire-vscode.viewResourceLogs',
+    'aspire-vscode.openResourceTerminal',
     'aspire-vscode.openInExternalBrowser',
     'aspire-vscode.openInIntegratedBrowser',
     'aspire-vscode.copyEndpointUrl',

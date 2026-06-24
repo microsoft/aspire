@@ -215,6 +215,35 @@ suite('AspireTerminalProvider tests', () => {
             }
         });
 
+        test('creates a new editor terminal when terminalTarget is editor', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const createdTerminal = {
+                shellIntegration: {
+                    executeCommand: () => ({} as vscode.TerminalShellExecution)
+                },
+                sendText: () => { },
+                show: () => { },
+                dispose: () => { },
+            } as unknown as vscode.Terminal;
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal').returns(createdTerminal);
+            const sharedTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal');
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs', true, undefined, { terminalTarget: 'editor' });
+
+                assert.strictEqual(sharedTerminalStub.called, false);
+                assert.strictEqual(createTerminalStub.calledOnce, true);
+                const options = createTerminalStub.firstCall.args[0] as vscode.TerminalOptions;
+                assert.strictEqual(options.location, vscode.TerminalLocation.Editor);
+            }
+            finally {
+                createEnvironmentStub.restore();
+                createTerminalStub.restore();
+                sharedTerminalStub.restore();
+            }
+        });
+
         test('quotes Windows CLI path with PowerShell escaping', async () => {
             const platformStub = sinon.stub(process, 'platform').value('win32');
             const cliPath = 'C:\\Tools\\$(bad)\\`bin\\aspire.exe';
@@ -541,7 +570,15 @@ suite('AspireTerminalProvider tests', () => {
     });
 
     suite('createEnvironment', () => {
+        let originalStartupTimeout: string | undefined;
+        let originalLowercaseStartupTimeout: string | undefined;
+
         setup(() => {
+            originalStartupTimeout = process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT];
+            originalLowercaseStartupTimeout = process.env.aspire_cli_start_timeout;
+            delete process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT];
+            delete process.env.aspire_cli_start_timeout;
+
             terminalProvider.rpcServerConnectionInfo = {
                 address: 'http://localhost:1234',
                 token: 'rpc-token',
@@ -554,12 +591,58 @@ suite('AspireTerminalProvider tests', () => {
             };
         });
 
+        teardown(() => {
+            restoreEnvironmentVariable(EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT, originalStartupTimeout);
+            restoreEnvironmentVariable('aspire_cli_start_timeout', originalLowercaseStartupTimeout);
+        });
+
         test('marks extension-managed debug sessions as non-interactive without disabling extension prompts', () => {
             const env = terminalProvider.createEnvironment('debug-session-id', false);
 
             assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, 'debug-session-id');
             assert.strictEqual(env.ASPIRE_EXTENSION_PROMPT_ENABLED, 'true');
             assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, 'true');
+        });
+
+        test('uses a longer AppHost startup timeout for extension-managed debug sessions', () => {
+            const env = terminalProvider.createEnvironment('debug-session-id', false);
+
+            assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, '86400');
+        });
+
+        test('does not change the AppHost startup timeout for extension-managed run sessions', () => {
+            const env = terminalProvider.createEnvironment('debug-session-id', true);
+
+            assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, undefined);
+        });
+
+        test('keeps an explicitly configured AppHost startup timeout for extension-managed debug sessions', () => {
+            const originalStartupTimeout = process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT];
+            process.env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT] = '300';
+
+            try {
+                const env = terminalProvider.createEnvironment('debug-session-id', false);
+
+                assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, '300');
+            }
+            finally {
+                restoreEnvironmentVariable(EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT, originalStartupTimeout);
+            }
+        });
+
+        test('keeps an explicitly configured AppHost startup timeout with different casing on Windows', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            process.env.aspire_cli_start_timeout = '300';
+
+            try {
+                const env = terminalProvider.createEnvironment('debug-session-id', false);
+
+                assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, undefined);
+                assert.strictEqual(env.aspire_cli_start_timeout, '300');
+            }
+            finally {
+                platformStub.restore();
+            }
         });
 
         test('creates DCP run-session environment without extension backchannel stop hook', () => {
@@ -588,6 +671,7 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(env.DEBUG_SESSION_PORT, 'http://localhost:5678');
             assert.strictEqual(env.DEBUG_SESSION_TOKEN, 'dcp-token');
             assert.strictEqual(env.DEBUG_SESSION_SERVER_CERTIFICATE, 'dcp-cert');
+            assert.strictEqual(env.ASPIRE_CLI_START_TIMEOUT, '86400');
             const debugSessionInfo = JSON.parse(env.DEBUG_SESSION_INFO);
             assert.deepStrictEqual(debugSessionInfo.protocols_supported, ['2024-03-03', '2024-04-23', '2025-10-01']);
             assert.ok(debugSessionInfo.supported_launch_configurations.includes('baseline.v1'));

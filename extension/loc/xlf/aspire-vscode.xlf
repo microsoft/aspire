@@ -478,6 +478,9 @@
     <trans-unit id="aspire-vscode.strings.directLink">
       <source xml:lang="en">Open local URL</source>
     </trans-unit>
+    <trans-unit id="command.openResourceTerminal">
+      <source xml:lang="en">Open terminal</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.dashboardLaunchIntegratedBrowserDescription">
       <source xml:lang="en">Open the dashboard in VS Code&apos;s integrated browser.</source>
     </trans-unit>

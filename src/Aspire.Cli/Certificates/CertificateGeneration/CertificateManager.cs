@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using Aspire.Cli;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -51,13 +52,13 @@ internal abstract class CertificateManager
 
     public const int RSAMinimumKeySizeInBits = 2048;
 
-    public static CertificateManager Create(ILogger logger) => OperatingSystem.IsWindows() ?
+    public static CertificateManager Create(ILogger logger, IEnvironment environment) => OperatingSystem.IsWindows() ?
 #pragma warning disable CA1416 // Validate platform compatibility
             new WindowsCertificateManager(logger) :
 #pragma warning restore CA1416 // Validate platform compatibility
             OperatingSystem.IsMacOS() ?
             new MacOSCertificateManager(logger) as CertificateManager :
-            new UnixCertificateManager(logger);
+            new UnixCertificateManager(logger, environment);
 
     protected CertificateManagerLogger Log { get; }
 
