@@ -8,6 +8,7 @@ import { answerActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, ope
 interface ActiveEditorInfo {
     uri?: string;
     fileName?: string;
+    text?: string;
 }
 
 suite('Aspire tree action command E2E', function () {
@@ -203,7 +204,7 @@ suite('Aspire tree action command E2E', function () {
         await answerActiveInput('secret-from-command-item', 'Token');
         await waitForCommandOutcome('aspire-vscode.executeResourceCommandItem', 'success', 60000, before);
         assert.strictEqual(getTerminalCommandCount(), terminalBefore);
-        await waitForResourceCommandOutputEditor(workerResourceName, 'echo-arguments');
+        const commandItemEditor = await waitForResourceCommandOutputEditor(workerResourceName, 'echo-arguments', 'hello from command item');
 
         terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.executeResourceCommand');
@@ -223,11 +224,12 @@ suite('Aspire tree action command E2E', function () {
         await answerActiveInput('secret-from-e2e', 'Token');
         await waitForCommandOutcome('aspire-vscode.executeResourceCommand', 'success', 60000, before);
         assert.strictEqual(getTerminalCommandCount(), terminalBefore);
-        await waitForResourceCommandOutputEditor(workerResourceName, 'echo-arguments');
+        const commandPaletteEditor = await waitForResourceCommandOutputEditor(workerResourceName, 'echo-arguments', 'hello from e2e');
+        assert.notStrictEqual(commandPaletteEditor.text, commandItemEditor.text);
     });
 });
 
-async function waitForResourceCommandOutputEditor(resourceName: string, commandName: string, timeoutMs = 60000): Promise<ActiveEditorInfo> {
+async function waitForResourceCommandOutputEditor(resourceName: string, commandName: string, expectedText: string, timeoutMs = 60000): Promise<ActiveEditorInfo> {
     const started = Date.now();
     let lastEditor: ActiveEditorInfo | undefined;
     const resourceCommandOutputName = `${resourceName}-${commandName}`.replace(/[^A-Za-z0-9._-]+/g, '_');
@@ -236,14 +238,14 @@ async function waitForResourceCommandOutputEditor(resourceName: string, commandN
         const result = (await executeE2eControlCommand({ name: 'getActiveEditor' })).result as ActiveEditorInfo;
         lastEditor = result;
         const uri = result.uri ?? '';
-        if (uri.startsWith('aspire-source:') && uri.endsWith('-output.txt') && uri.includes(resourceCommandOutputName)) {
+        if (uri.startsWith('aspire-source:') && uri.includes(`${resourceCommandOutputName}-output.txt`) && result.text?.includes(expectedText)) {
             return result;
         }
 
         await delay(200);
     }
 
-    throw new Error(`Timed out after ${timeoutMs}ms waiting for resource command output editor '${resourceName}/${commandName}'. Last active editor: ${JSON.stringify(lastEditor)}`);
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for resource command output editor '${resourceName}/${commandName}' containing '${expectedText}'. Last active editor: ${JSON.stringify(lastEditor)}`);
 }
 
 function quoteExpectedShellArg(arg: string): string {

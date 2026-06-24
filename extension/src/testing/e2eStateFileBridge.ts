@@ -1122,11 +1122,12 @@ function getLogFileElement(appHostTreeProvider: AspireAppHostTreeProvider, appHo
   return element;
 }
 
-function getActiveEditorInfo(): { uri?: string; fileName?: string } {
+function getActiveEditorInfo(): { uri?: string; fileName?: string; text?: string } {
   const document = vscode.window.activeTextEditor?.document;
   return {
     uri: document?.uri.toString(),
     fileName: document?.fileName,
+    text: document?.getText(),
   };
 }
 

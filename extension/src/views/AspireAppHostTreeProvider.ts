@@ -1615,8 +1615,12 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     async showResourceCommandOutput(resourceName: string, commandName: string, content: string, appHostPath?: string): Promise<void> {
         // Reuse the read-only aspire-source virtual document provider so returned command values open
         // in a normal editor the user can read, search, and copy from, without a save prompt.
-        const safeName = `${appHostPath ? `${path.normalize(appHostPath)}-` : ''}${resourceName}-${commandName}`.replace(/[^A-Za-z0-9._-]+/g, '_');
-        const uri = vscode.Uri.parse(`aspire-source:${safeName}-output.txt`);
+        const safeName = `${resourceName}-${commandName}`.replace(/[^A-Za-z0-9._-]+/g, '_');
+        const uri = vscode.Uri.from({
+            scheme: 'aspire-source',
+            path: `${safeName}-output.txt`,
+            query: appHostPath === undefined ? undefined : `appHostPath=${encodeURIComponent(path.normalize(appHostPath))}`,
+        });
         this._ensureContentProviderRegistered();
         this._appHostSourceContents.set(uri.toString(), content);
         this._onDidChangeContent.fire(uri);

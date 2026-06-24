@@ -2914,7 +2914,7 @@ suite('showResourceCommandOutput', () => {
         sandbox.restore();
     });
 
-    test('uses AppHost path to disambiguate output documents across global AppHosts', async () => {
+    test('uses hidden AppHost path query to disambiguate output documents across global AppHosts', async () => {
         const provider = makeTreeProvider([]);
         const openedUris: vscode.Uri[] = [];
 
@@ -2924,13 +2924,15 @@ suite('showResourceCommandOutput', () => {
         });
         sandbox.stub(vscode.window, 'showTextDocument').resolves(undefined as any);
 
-        await provider.showResourceCommandOutput('api', 'migrate', 'first', '/repo/First.AppHost/AppHost.csproj');
-        await provider.showResourceCommandOutput('api', 'migrate', 'second', '/repo/Second.AppHost/AppHost.csproj');
+        await provider.showResourceCommandOutput('api', 'migrate', 'first', '/repo/a/b/AppHost.csproj');
+        await provider.showResourceCommandOutput('api', 'migrate', 'second', '/repo/a_b/AppHost.csproj');
 
         assert.strictEqual(openedUris.length, 2);
         assert.notStrictEqual(openedUris[0].toString(), openedUris[1].toString());
-        assert.ok(openedUris[0].toString().includes('api-migrate-output.txt'));
-        assert.ok(openedUris[1].toString().includes('api-migrate-output.txt'));
+        assert.strictEqual(openedUris[0].path, 'api-migrate-output.txt');
+        assert.strictEqual(openedUris[1].path, 'api-migrate-output.txt');
+        assert.ok(!openedUris[0].path.includes('/repo/a/b'));
+        assert.ok(!openedUris[1].path.includes('/repo/a_b'));
         assert.strictEqual(provider.provideTextDocumentContent(openedUris[0]), 'first');
         assert.strictEqual(provider.provideTextDocumentContent(openedUris[1]), 'second');
         provider.dispose();
