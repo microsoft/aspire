@@ -209,6 +209,16 @@ public sealed class NpmCliPackageTests : IDisposable
         Assert.DoesNotContain("```csharp", readme);
     }
 
+    [Fact]
+    public async Task PointerPackageReadmeSupportedPlatformTextMatchesSupportedRidMatrix()
+    {
+        var readme = await RenderTemplateAsync("eng/scripts/pack-cli-npm-package.pointer.README.md", ("PACKAGE_NAME", PackageName));
+        var supportedPlatformText = GetExpectedSupportedPlatformText();
+
+        Assert.Contains($"Supported platforms: {supportedPlatformText}.", readme);
+        Assert.Contains($"The npm package currently ships native binaries for {supportedPlatformText}. Other platforms are not supported by this package.", readme);
+    }
+
     [Theory]
     [MemberData(nameof(GetSupportedRidData))]
     [RequiresTools(["pwsh", "npm"])]
@@ -414,6 +424,89 @@ public sealed class NpmCliPackageTests : IDisposable
         return template;
     }
 
+    private static string GetExpectedSupportedPlatformText()
+    {
+        var platformGroups = new[]
+        {
+            new PlatformDescription("win32", null, "Windows", null),
+            new PlatformDescription("darwin", null, "macOS", null),
+            new PlatformDescription("linux", "glibc", "Linux", "with glibc"),
+            new PlatformDescription("linux", "musl", "Linux", "with musl/Alpine")
+        };
+
+        var describedRids = new HashSet<string>(StringComparer.Ordinal);
+        var descriptions = new List<string>();
+
+        foreach (var group in platformGroups)
+        {
+            var matchingRids = s_supportedRids
+                .Where(rid => rid.Os.Contains(group.Os, StringComparer.Ordinal) && HasLibc(rid, group.Libc))
+                .ToArray();
+
+            if (matchingRids.Length == 0)
+            {
+                continue;
+            }
+
+            foreach (var rid in matchingRids)
+            {
+                describedRids.Add(rid.Rid);
+            }
+
+            var cpuText = string.Join(
+                '/',
+                matchingRids
+                    .SelectMany(rid => rid.Cpu)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(GetCpuDisplayOrder)
+                    .Select(FormatCpuName));
+            descriptions.Add(group.LibcDescription is null ? $"{group.Name} {cpuText}" : $"{group.Name} {cpuText} {group.LibcDescription}");
+        }
+
+        Assert.Equal(
+            s_supportedRids.Select(rid => rid.Rid).Order(StringComparer.Ordinal),
+            describedRids.Order(StringComparer.Ordinal));
+
+        return JoinDescriptions(descriptions);
+    }
+
+    private static bool HasLibc(RidPackageExpectation rid, string? libc)
+    {
+        return libc is null
+            ? rid.Libc is null
+            : rid.Libc?.Contains(libc, StringComparer.Ordinal) == true;
+    }
+
+    private static string FormatCpuName(string cpu)
+    {
+        return cpu switch
+        {
+            "arm64" => "Arm64",
+            _ => cpu
+        };
+    }
+
+    private static int GetCpuDisplayOrder(string cpu)
+    {
+        return cpu switch
+        {
+            "x64" => 0,
+            "arm64" => 1,
+            _ => 2
+        };
+    }
+
+    private static string JoinDescriptions(IReadOnlyList<string> descriptions)
+    {
+        return descriptions.Count switch
+        {
+            0 => throw new InvalidOperationException("Expected at least one supported npm CLI platform."),
+            1 => descriptions[0],
+            2 => $"{descriptions[0]} and {descriptions[1]}",
+            _ => $"{string.Join(", ", descriptions.Take(descriptions.Count - 1))}, and {descriptions[^1]}"
+        };
+    }
+
     private static JsonObject ReadJsonObject(string path)
     {
         var json = File.ReadAllText(path);
@@ -477,6 +570,8 @@ public sealed class NpmCliPackageTests : IDisposable
     }
 
     public sealed record RidPackageExpectation(string Rid, string BinaryName, string[] Os, string[] Cpu, string[]? Libc);
+
+    private sealed record PlatformDescription(string Os, string? Libc, string Name, string? LibcDescription);
 
     private sealed record PackedNpmPackage(string RidPackageRoot, string PointerPackageRoot);
 }
