@@ -649,6 +649,43 @@ public sealed class SelectTestsCliTests
         });
     }
 
+    // P1-6a. The merge-base is safety-critical: if base and head share no common ancestor, the selector
+    // must FAIL rather than diff against an empty/garbage base (which would silently under-select and
+    // skip real tests). Two unrelated root histories (an --orphan branch) make `git merge-base` find
+    // nothing, so the run must throw naming the merge-base, and the failure diagnostics must name the
+    // "resolve merge-base of base..head" stage so a crash is debuggable. Failure mode: a regression that
+    // swallows the error or falls back to a base-tip/empty diff turns a fatal mis-detection into a quiet
+    // skip -- the exact silent under-selection this design refuses to allow.
+    [Fact]
+    public void MergeBaseWithNoCommonAncestorFailsLoud()
+    {
+        WithGitRepo((repoRoot, output) =>
+        {
+            WriteFile(repoRoot, "Aspire.slnx", Slnx);
+            WriteFile(repoRoot, "map.yml", Map);
+            WriteFile(repoRoot, "other.txt", "v0");
+            GitCommitAll(repoRoot, "base");
+            var baseSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            // --orphan starts a branch with no parent, so its first commit is a second root that shares
+            // no history with main; merge-base(unrelated, main) is therefore empty.
+            RunGit(repoRoot, "checkout", "-q", "--orphan", "unrelated");
+            WriteFile(repoRoot, "unrelated.txt", "v0");
+            GitCommitAll(repoRoot, "unrelated root");
+            var unrelatedSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            var propsPath = Path.Combine(repoRoot, "BeforeBuildProps.props");
+            var ex = Assert.Throws<InvalidOperationException>(() =>
+                Selection.Run(Options(repoRoot, propsPath, from: unrelatedSha, to: baseSha, skipLayer1: true, enforce: true)));
+
+            Assert.Contains("merge-base", ex.Message, StringComparison.Ordinal);
+
+            var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
+            Assert.Contains("SelectTests FAILED", summary);
+            Assert.Contains("resolve merge-base of base..head", summary);
+        });
+    }
+
     // P1-6b. --from with no --to diffs the base ref against the WORKING TREE, so an uncommitted edit is
     // picked up. Failure mode: requiring --to (or diffing against HEAD instead of the work tree) would
     // miss locally-changed files when the workflow runs the selector against the checked-out tree.

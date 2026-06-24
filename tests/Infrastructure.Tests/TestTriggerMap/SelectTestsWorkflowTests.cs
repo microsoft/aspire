@@ -70,6 +70,40 @@ public sealed class SelectTestsWorkflowTests
         Assert.Contains("/commit/", job);
     }
 
+    // The selector diffs head against the merge-base of base..head, so it must be handed the PR's REAL
+    // head (pull_request.head.sha). github.sha is the synthetic refs/pull/N/merge commit, regenerated
+    // asynchronously as the base advances; feeding it lets base-branch churn leak into the diff and
+    // over-select (microsoft/aspire#18377). Pin the real-head wiring and forbid a revert to github.sha.
+    [Fact]
+    public void TestsWorkflowPassesPrHeadShaNotMergeRefToSelector()
+    {
+        var testsYml = File.ReadAllText(TestsWorkflowPath);
+
+        Assert.Contains("headSha: ${{ github.event.pull_request.head.sha }}", testsYml);
+        Assert.DoesNotContain("headSha: ${{ github.sha }}", testsYml);
+    }
+
+    // On a PR the action diffs from the merge-base of base..head, which the shallow CI checkout can't
+    // see until it is deepened. The step must deepen BOTH endpoints until `git merge-base` resolves and,
+    // if it never does within a bounded number of fetches, FAIL rather than fall back to --force-all -- a
+    // missing merge-base would otherwise crash the selector or, worse, silently under-select. Pin the
+    // loop, its termination bound, and the hard failure so a "simplification" can't turn the failure into
+    // a run-all or an unbounded fetch.
+    [Fact]
+    public void SelectTestsActionDeepensUntilMergeBaseReachableThenFailsLoud()
+    {
+        var action = File.ReadAllText(SelectTestsActionPath);
+
+        // The deepen loop gates on the two endpoints' merge-base actually resolving locally.
+        Assert.Contains("until git merge-base \"$PR_BASE_SHA\" \"$HEAD_SHA\"", action);
+        // Each iteration re-fetches both endpoints at a growing depth.
+        Assert.Contains("git fetch --no-tags --depth=\"$depth\" origin \"$PR_BASE_SHA\" \"$HEAD_SHA\"", action);
+        // Bounded so a pathological history can't fetch forever.
+        Assert.Contains("-ge 4096", action);
+        // An unresolved merge-base is a hard failure, NOT a --force-all fallback.
+        Assert.Contains("cannot compute the PR diff.", action);
+    }
+
     private static string SelectTestsActionPath
         => Path.Combine(RepoRoot.Path, ".github", "actions", "select-tests", "action.yml");
 
