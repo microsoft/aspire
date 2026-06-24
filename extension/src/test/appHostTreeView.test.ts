@@ -1177,6 +1177,45 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(infoStub.calledOnce, true);
     });
 
+    test('resource command item returns failed execution outcome after reporting error', async () => {
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => 'aspire',
+            createEnvironment: () => ({}),
+            sendAspireCommandToAspireTerminal: () => { throw new Error('terminal should not be used'); },
+        } as unknown as AspireTerminalProvider;
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'global' as ViewMode,
+            appHosts: [
+                makeAppHost({
+                    resources: [
+                        makeResource({
+                            commands: {
+                                fail: { displayName: 'Fail command', description: null },
+                            },
+                        }),
+                    ],
+                }),
+            ],
+            workspaceResources: [],
+            workspaceAppHostPath: undefined,
+            workspaceAppHostCandidatePaths: [],
+            workspaceAppHostName: undefined,
+            onDidChangeData,
+            runResourceCommand: async () => {
+                throw new Error('resource command failed');
+            },
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
+        const errorStub = sandbox.stub(vscode.window, 'showErrorMessage');
+        const [commandItem] = getResourceCommandItems(provider);
+
+        const outcome = await provider.executeResourceCommandItem(commandItem as any);
+
+        assert.deepStrictEqual(outcome, { success: false, hadOutput: false });
+        assert.strictEqual(errorStub.calledOnce, true);
+    });
+
     test('resource with commands is expandable even without URLs, health checks, or child resources', () => {
         const provider = makeTreeProvider([
             makeAppHost({

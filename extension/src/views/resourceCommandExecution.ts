@@ -76,8 +76,8 @@ export async function executeResourceCommand(
                     throw error;
                 }
 
-                await handleFailure(renderOutput, request, displayName, error);
-                throw error;
+                const hadOutput = await handleFailure(renderOutput, request, displayName, error);
+                return { success: false, hadOutput };
             }
 
             vscode.window.showInformationMessage(resourceCommandSucceeded(request.commandName, displayName));
@@ -90,12 +90,12 @@ async function handleFailure(
     renderOutput: ResourceCommandOutputRenderer,
     request: ResourceCommandExecutionRequest,
     displayName: string,
-    error: unknown): Promise<void> {
+    error: unknown): Promise<boolean> {
 
     if (error instanceof AspireCliNotInstalledError) {
         extensionLogOutputChannel.error(`Failed to start the Aspire CLI for '${request.commandName}' on '${request.resourceName}': ${error.message}`);
         vscode.window.showErrorMessage(resourceCommandCliNotInstalled(error.message));
-        return;
+        return false;
     }
 
     if (error instanceof AspireCliFailedError) {
@@ -104,13 +104,13 @@ async function handleFailure(
         vscode.window.showErrorMessage(detail
             ? resourceCommandFailed(request.commandName, displayName, limitFailureDetailForDisplay(detail))
             : resourceCommandFailedNoDetail(request.commandName, displayName));
-        await tryRenderCommandOutput(renderOutput, request, error.stdout);
-        return;
+        return await tryRenderCommandOutput(renderOutput, request, error.stdout);
     }
 
     const message = getErrorMessage(error);
     extensionLogOutputChannel.error(`Command '${request.commandName}' on '${request.resourceName}' failed: ${message}`);
     vscode.window.showErrorMessage(resourceCommandFailed(request.commandName, displayName, limitFailureDetailForDisplay(message)));
+    return false;
 }
 
 async function tryRenderCommandOutput(

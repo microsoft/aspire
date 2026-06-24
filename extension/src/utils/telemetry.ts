@@ -181,7 +181,13 @@ export async function withCommandTelemetry<T>(
     let outcome: CommandOutcome = 'success';
     let errorKind: string | undefined;
     try {
-        return await Promise.resolve(fn());
+        const result = await Promise.resolve(fn());
+        if (isHandledCommandFailure(result)) {
+            outcome = 'error';
+            errorKind = getHandledCommandFailureKind(result);
+        }
+
+        return result;
     }
     catch (err) {
         if (isCancellation(err)) {
@@ -239,6 +245,22 @@ function classifyError(err: unknown): string {
         return 'String';
     }
     return typeof err;
+}
+
+function isHandledCommandFailure(value: unknown): value is { success: false; errorKind?: unknown } {
+    if (typeof value !== 'object' || value === null || !('success' in value)) {
+        return false;
+    }
+
+    // Some command implementations report handled failures as return values so VS Code does not
+    // also show its generic "command failed" notification. Keep those visible in command telemetry.
+    return (value as { success?: unknown }).success === false;
+}
+
+function getHandledCommandFailureKind(value: { errorKind?: unknown }): string {
+    return typeof value.errorKind === 'string' && value.errorKind.length > 0
+        ? value.errorKind
+        : 'HandledError';
 }
 
 /**

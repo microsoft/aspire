@@ -54,7 +54,7 @@ import {
 } from './AppHostDataRepository';
 import { collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
-import { executeResourceCommand } from './resourceCommandExecution';
+import { executeResourceCommand, type ResourceCommandExecutionOutcome } from './resourceCommandExecution';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
@@ -1459,7 +1459,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         await this._terminalProvider.sendAspireCommandToAspireTerminal(command, true, undefined, { terminalTarget: 'editor' });
     }
 
-    async executeResourceCommand(element: ResourceItem): Promise<void> {
+    async executeResourceCommand(element: ResourceItem): Promise<ResourceCommandExecutionOutcome | void> {
         const commands = element.resource.commands;
         if (!commands || Object.keys(commands).length === 0) {
             vscode.window.showInformationMessage(noCommandsAvailable);
@@ -1496,10 +1496,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             throw new vscode.CancellationError();
         }
 
-        await this._runResourceCommand(element, selected.label, commandArguments.args);
+        return await this._runResourceCommand(element, selected.label, commandArguments.args);
     }
 
-    async executeResourceCommandItem(element: ResourceCommandItem): Promise<void> {
+    async executeResourceCommandItem(element: ResourceCommandItem): Promise<ResourceCommandExecutionOutcome | void> {
         const commandName = element.commandName;
         const command = element.commandJson;
         const resourceItem = element.resourceItem;
@@ -1517,7 +1517,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        await this._runResourceCommand(resourceItem, commandName, commandArguments.args);
+        return await this._runResourceCommand(resourceItem, commandName, commandArguments.args);
     }
 
     async copyAppHostPath(element: AppHostItem | WorkspaceResourcesItem | WorkspaceAppHostItem): Promise<void> {
@@ -1585,7 +1585,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         await vscode.commands.executeCommand('simpleBrowser.show', element.url);
     }
 
-    private async _runResourceCommand(element: ResourceItem, commandName: string, additionalArgs?: string[]): Promise<void> {
+    private async _runResourceCommand(element: ResourceItem, commandName: string, additionalArgs?: string[]): Promise<ResourceCommandExecutionOutcome | void> {
         // Execute resource commands over the hidden CLI backchannel instead of typing into the
         // visible Aspire terminal. The CLI runs the command non-interactively, and any returned
         // value is surfaced in a read-only editor via showResourceCommandOutput. additionalArgs are
@@ -1600,7 +1600,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        await executeResourceCommand(
+        return await executeResourceCommand(
             this._repository,
             (resourceName, command, content) => this.showResourceCommandOutput(resourceName, command, content),
             {

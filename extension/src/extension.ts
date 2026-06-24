@@ -277,7 +277,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // Execute over the hidden CLI backchannel and surface the result inside VS Code, rather than
     // typing `aspire resource ...` into the visible terminal. Returned values are rendered through
     // the tree provider's read-only output document.
-    await executeResourceCommand(
+    return await executeResourceCommand(
       dataRepository,
       (resource, command, content) => appHostTreeProvider.showResourceCommandOutput(resource, command, content),
       {
