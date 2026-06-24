@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CI/test infrastructure fix: adds IgnoreStandardErrorWarningFormat to Playwright install MSBuild exec tasks to prevent transient CDN error messages from failing the build. No user-facing behavior change.",
+  "mergedAt": "2026-06-24T17:19:56Z",
+  "number": 18468,
+  "runDate": "2026-06-24T18:33:55Z",
+  "status": "excluded",
+  "title": "Fix Playwright download transient errors failing the build"
+}
