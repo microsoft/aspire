@@ -173,11 +173,13 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
         const streamSupported = await this._configInfoProvider.hasCapability(lsStreamCapability, { suppressErrors: true });
 
+        const args = ['ls', '--format', 'json'];
         if (streamSupported) {
-            return await this._runCliForStream(cliPath, ['ls', '--format', 'json', '--stream'], workspaceFolder.uri.fsPath, onCandidate);
+            args.push('--stream');
+            return await this._runCliForStream(cliPath, args, workspaceFolder.uri.fsPath, onCandidate);
         }
 
-        const output = await this._runCliForStdout(cliPath, ['ls', '--format', 'json'], workspaceFolder.uri.fsPath);
+        const output = await this._runCliForStdout(cliPath, args, workspaceFolder.uri.fsPath);
         return parseCandidateOutput(output, 'aspire ls');
     }
 
