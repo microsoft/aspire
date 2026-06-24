@@ -231,6 +231,7 @@ suite('E2E launch profile', () => {
         assert.ok(waitFallback.includes('isProcessTimeoutError(cliError)'));
         assert.ok(waitFallback.includes('knownAppHostPid === undefined'));
         assert.ok(waitFallback.includes('runningAppHostFromState?.appHostPid !== knownAppHostPid'));
+        assert.ok(waitFallback.includes('isKnownAppHostProcess(knownAppHostPid, appHostPath)'));
         assert.ok(waitFallback.includes('await stopProcess(knownAppHostPid, 30000);'));
     });
 

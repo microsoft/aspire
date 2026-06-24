@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getWorkspaceRoot } from './paths';
@@ -442,6 +443,10 @@ async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string
                 throw error;
             }
 
+            if (!isKnownAppHostProcess(knownAppHostPid, appHostPath)) {
+                throw error;
+            }
+
             await stopProcess(knownAppHostPid, 30000);
             await waitForNoRunningAppHostPath(appHostPath, 5000, knownAppHostPid, actionDescription);
             return;
@@ -465,6 +470,57 @@ async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string
 
 function isProcessTimeoutError(error: unknown): boolean {
     return error instanceof ProcessError && /\btimed out after \d+ms\b/i.test(error.message);
+}
+
+function isKnownAppHostProcess(pid: number, appHostPath: string): boolean {
+    const commandLine = getProcessCommandLine(pid);
+    if (commandLine === undefined) {
+        return false;
+    }
+
+    return normalizePathForCommandLineSearch(commandLine).includes(normalizePathForCommandLineSearch(appHostPath));
+}
+
+function getProcessCommandLine(pid: number): string | undefined {
+    if (!Number.isInteger(pid) || pid <= 0) {
+        return undefined;
+    }
+
+    if (process.platform === 'linux') {
+        try {
+            const commandLine = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').replace(/\0/g, ' ').trim();
+            return commandLine.length > 0 ? commandLine : undefined;
+        }
+        catch (error) {
+            if (isProcessLookupError(error)) {
+                return undefined;
+            }
+
+            throw error;
+        }
+    }
+
+    if (process.platform === 'win32') {
+        const result = spawnSync('powershell.exe', [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `$process = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}"; if ($process) { $process.CommandLine }`,
+        ], { encoding: 'utf8', timeout: 5000 });
+
+        return result.status === 0 && result.stdout.trim().length > 0 ? result.stdout.trim() : undefined;
+    }
+
+    const result = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8', timeout: 5000 });
+    return result.status === 0 && result.stdout.trim().length > 0 ? result.stdout.trim() : undefined;
+}
+
+function normalizePathForCommandLineSearch(value: string): string {
+    return value.replace(/\\/g, '/').toLowerCase();
+}
+
+function isProcessLookupError(error: unknown): boolean {
+    return error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'ESRCH' || error.code === 'EACCES' || error.code === 'EPERM');
 }
 
 function getRunningAppHostFromState(appHostPath: string) {
