@@ -54,6 +54,7 @@ import {
 } from './AppHostDataRepository';
 import { collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
+import { executeResourceCommand } from './resourceCommandExecution';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
@@ -1495,7 +1496,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             throw new vscode.CancellationError();
         }
 
-        await this._runResourceCommand(element, selected.label, commandArguments.args, commandArguments.containsSecret);
+        await this._runResourceCommand(element, selected.label, commandArguments.args);
     }
 
     async executeResourceCommandItem(element: ResourceCommandItem): Promise<void> {
@@ -1516,7 +1517,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        await this._runResourceCommand(resourceItem, commandName, commandArguments.args, commandArguments.containsSecret);
+        await this._runResourceCommand(resourceItem, commandName, commandArguments.args);
     }
 
     async copyAppHostPath(element: AppHostItem | WorkspaceResourcesItem | WorkspaceAppHostItem): Promise<void> {
@@ -1584,21 +1585,43 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         await vscode.commands.executeCommand('simpleBrowser.show', element.url);
     }
 
-    private async _runResourceCommand(element: ResourceItem, commandName: string, additionalArgs?: string[], redactAdditionalArgs = false): Promise<void> {
-        if (this._repository.viewMode === 'workspace') {
-            const appHostPath = this._getAppHostPathForResource(element);
-            const command = appHostPath
-                ? ['resource', shellArg(element.resource.name), shellArg(commandName), '--apphost', shellArg(appHostPath)]
-                : ['resource', shellArg(element.resource.name), shellArg(commandName)];
-            await this._terminalProvider.sendAspireCommandToAspireTerminal(command, true, additionalArgs, { redactAdditionalArgs });
+    private async _runResourceCommand(element: ResourceItem, commandName: string, additionalArgs?: string[]): Promise<void> {
+        // Execute resource commands over the hidden CLI backchannel instead of typing into the
+        // visible Aspire terminal. The CLI runs the command non-interactively, and any returned
+        // value is surfaced in a read-only editor via showResourceCommandOutput. additionalArgs are
+        // forwarded verbatim (they already carry the `--` delimiter and prompted values); secret
+        // values are not echoed to a terminal, and the spawn diagnostics log redacts tokens after
+        // the `--` delimiter, so no separate redaction flag is needed here.
+        const appHostPath = this._repository.viewMode === 'workspace'
+            ? this._getAppHostPathForResource(element)
+            : this._findAppHostForResource(element)?.appHostPath;
+
+        if (this._repository.viewMode !== 'workspace' && appHostPath === undefined) {
             return;
         }
 
-        const appHost = this._findAppHostForResource(element);
-        if (!appHost) {
-            return;
-        }
-        await this._terminalProvider.sendAspireCommandToAspireTerminal(['resource', shellArg(element.resource.name), shellArg(commandName), '--apphost', shellArg(appHost.appHostPath)], true, additionalArgs, { redactAdditionalArgs });
+        await executeResourceCommand(
+            this._repository,
+            (resourceName, command, content) => this.showResourceCommandOutput(resourceName, command, content),
+            {
+                resourceName: element.resource.name,
+                displayName: element.resource.displayName ?? element.resource.name,
+                commandName,
+                appHostPath: appHostPath ?? undefined,
+                additionalArgs,
+            });
+    }
+
+    async showResourceCommandOutput(resourceName: string, commandName: string, content: string): Promise<void> {
+        // Reuse the read-only aspire-source virtual document provider so returned command values open
+        // in a normal editor the user can read, search, and copy from, without a save prompt.
+        const safeName = `${resourceName}-${commandName}`.replace(/[^A-Za-z0-9._-]+/g, '_');
+        const uri = vscode.Uri.parse(`aspire-source:${safeName}-output.txt`);
+        this._ensureContentProviderRegistered();
+        this._appHostSourceContents.set(uri.toString(), content);
+        this._onDidChangeContent.fire(uri);
+        const document = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(document, { preview: true });
     }
 
     private async _loadResourceCommandArguments(element: ResourceItem, commandName: string, values: readonly ResourceCommandArgumentValue[]): Promise<ResourceCommandArgumentInputJson[] | undefined> {

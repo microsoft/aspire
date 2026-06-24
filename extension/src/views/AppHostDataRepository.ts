@@ -124,6 +124,15 @@ export class AspireCliParseError extends Error {
     }
 }
 
+/**
+ * Captured output from a hidden `aspire resource ...` execution. `stdout` carries the rendered
+ * command value (when the command returns one); `stderr` carries human-readable status/errors.
+ */
+export interface ResourceCommandExecutionOutput {
+    stdout: string;
+    stderr: string;
+}
+
 export type ViewMode = 'workspace' | 'global';
 
 interface GlobalDescribeStream {
@@ -518,13 +527,36 @@ export class AppHostDataRepository {
         });
     }
 
-    async runResourceCommand(resourceName: string, appHostPath: string, commandName: 'start' | 'stop'): Promise<void> {
-        const trimmedAppHostPath = appHostPath.trim();
-        if (!trimmedAppHostPath || !path.isAbsolute(trimmedAppHostPath)) {
-            throw new Error(appHostPathMustBeNonEmptyAbsolute);
+    /**
+     * Executes a resource command (e.g. start/stop/restart or a custom command) by spawning a
+     * hidden `aspire resource <name> <command>` child process rather than typing into the visible
+     * Aspire terminal. The CLI runs the command non-interactively over the AppHost backchannel,
+     * routes human-readable status to stderr, and writes any returned command value (text/json/
+     * markdown) to stdout, so callers can surface success/failure and rendered output inside VS Code.
+     *
+     * @param appHostPath Absolute path to the owning AppHost, or `undefined` to let the CLI resolve
+     * the running AppHost itself (workspace mode with no explicit selection). A provided-but-invalid
+     * path is rejected so we never spawn the CLI with a relative or blank `--apphost` value.
+     * @param additionalArgs Extra CLI tokens collected from argument prompts. These already include
+     * the `--` delimiter from {@link buildResourceCommandCliArgs}, which keeps them out of the spawn
+     * diagnostics log (see redactCliSpawnArgs) so secret values are not persisted.
+     */
+    async runResourceCommand(resourceName: string, appHostPath: string | undefined, commandName: string, additionalArgs: readonly string[] = []): Promise<ResourceCommandExecutionOutput> {
+        const args = ['resource', resourceName, commandName];
+        if (appHostPath !== undefined) {
+            const trimmedAppHostPath = appHostPath.trim();
+            if (!trimmedAppHostPath || !path.isAbsolute(trimmedAppHostPath)) {
+                throw new Error(appHostPathMustBeNonEmptyAbsolute);
+            }
+
+            args.push('--apphost', trimmedAppHostPath);
         }
 
-        await this._runCliCommand(`aspire resource ${commandName}`, ['resource', resourceName, commandName, '--apphost', trimmedAppHostPath]);
+        if (additionalArgs.length > 0) {
+            args.push(...additionalArgs);
+        }
+
+        return await this._runCliCommand(`aspire resource ${commandName}`, args);
     }
 
     dispose(): void {

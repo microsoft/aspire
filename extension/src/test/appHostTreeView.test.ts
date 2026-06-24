@@ -684,9 +684,6 @@ suite('AspireAppHostTreeProvider', () => {
 
             await provider.openResourceTerminal(resourceItem as any);
             proof.run(commandLines[2], ['terminal', 'attach', resourceName, '--apphost', appHostPath]);
-
-            await provider.restartResource(resourceItem as any);
-            proof.run(commandLines[3], ['resource', resourceName, 'restart', '--apphost', appHostPath]);
         }
         finally {
             provider.dispose();
@@ -734,9 +731,6 @@ suite('AspireAppHostTreeProvider', () => {
 
             await provider.openResourceTerminal(resourceItem as any);
             proof.runPowerShell(commandLines[2], ['terminal', 'attach', resourceName, '--apphost', appHostPath], powerShellPath);
-
-            await provider.restartResource(resourceItem as any);
-            proof.runPowerShell(commandLines[3], ['resource', resourceName, 'restart', '--apphost', appHostPath], powerShellPath);
         }
         finally {
             platformStub.restore();
@@ -774,7 +768,9 @@ suite('AspireAppHostTreeProvider', () => {
             await assert.rejects(() => provider.stopAppHost(workspaceItem as any), { message: terminalCommandArgumentControlCharacters });
             await assert.rejects(() => provider.viewResourceLogs(resourceItem as any), { message: terminalCommandArgumentControlCharacters });
             await assert.rejects(() => provider.openResourceTerminal(resourceItem as any), { message: terminalCommandArgumentControlCharacters });
-            await assert.rejects(() => provider.restartResource(resourceItem as any), { message: terminalCommandArgumentControlCharacters });
+            // restartResource no longer flows through the terminal: it spawns the CLI directly with
+            // shell:false, so control characters in the resource name are passed as an inert argv
+            // element rather than rejected. That path is covered by the resource-command tests below.
 
             assert.deepStrictEqual(commandLines, []);
             assert.strictEqual(fs.existsSync(proof.appHostMarkerPath), false, 'AppHost control-character payload should not execute');
@@ -1138,6 +1134,7 @@ suite('AspireAppHostTreeProvider', () => {
 
     test('legacy command item without state executes from context menu', async () => {
         const sentCommands: AspireSubcommand[] = [];
+        const runResourceCommandCalls: Array<[string, string | undefined, string, readonly string[]]> = [];
         const terminalProvider = {
             getAspireCliExecutablePath: async () => 'aspire',
             createEnvironment: () => ({}),
@@ -1162,6 +1159,10 @@ suite('AspireAppHostTreeProvider', () => {
             workspaceAppHostCandidatePaths: [],
             workspaceAppHostName: undefined,
             onDidChangeData,
+            runResourceCommand: async (resourceName: string, appHostPath: string | undefined, commandName: string, additionalArgs: readonly string[] = []) => {
+                runResourceCommandCalls.push([resourceName, appHostPath, commandName, additionalArgs]);
+                return { stdout: '', stderr: '' };
+            },
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
         const infoStub = sandbox.stub(vscode.window, 'showInformationMessage');
@@ -1169,8 +1170,11 @@ suite('AspireAppHostTreeProvider', () => {
 
         await provider.executeResourceCommandItem(commandItem as any);
 
-        assert.strictEqual(infoStub.called, false);
-        assert.deepStrictEqual(sentCommands, [['resource', shellArg('my-service'), shellArg('$(legacy)'), '--apphost', shellArg('/test/AppHost.csproj')]]);
+        // The command runs over the hidden CLI backchannel, not the visible terminal, and reports
+        // success inside VS Code.
+        assert.deepStrictEqual(sentCommands, []);
+        assert.deepStrictEqual(runResourceCommandCalls, [['my-service', '/test/AppHost.csproj', '$(legacy)', []]]);
+        assert.strictEqual(infoStub.calledOnce, true);
     });
 
     test('resource with commands is expandable even without URLs, health checks, or child resources', () => {
@@ -2179,8 +2183,9 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
-    test('workspace resource commands use the AppHost that owns the resource', () => {
+    test('workspace resource commands use the AppHost that owns the resource', async () => {
         const commands: AspireSubcommand[] = [];
+        const runResourceCommandCalls: Array<[string, string | undefined, string, readonly string[]]> = [];
         const selectedHostPath = '/repo/apps/Store/AppHost.csproj';
         const otherHostPath = '/repo/samples/Store/AppHost.csproj';
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
@@ -2197,6 +2202,10 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHostCandidatePaths: [selectedHostPath, otherHostPath],
             workspaceAppHostDescription: 'Workspace view selected because aspire ls found 2 buildable AppHosts.',
             onDidChangeData,
+            runResourceCommand: async (resourceName: string, appHostPath: string | undefined, commandName: string, additionalArgs: readonly string[] = []) => {
+                runResourceCommandCalls.push([resourceName, appHostPath, commandName, additionalArgs]);
+                return { stdout: '', stderr: '' };
+            },
         } as unknown as AppHostDataRepository;
         const terminalProvider = {
             getAspireCliExecutablePath: async () => 'aspire',
@@ -2212,18 +2221,21 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
 
         provider.viewResourceLogs(resourceItem as any);
         provider.openResourceTerminal(resourceItem as any);
-        provider.restartResource(resourceItem as any);
+        await provider.restartResource(resourceItem as any);
 
+        // Logs and terminal still go through the terminal; restart now runs over the hidden CLI
+        // backchannel and must target the AppHost that owns the resource.
         assert.deepStrictEqual(commands, [
             ['logs', shellArg('cache'), '--apphost', shellArg(otherHostPath)],
             ['terminal', 'attach', shellArg('cache-b'), '--apphost', shellArg(otherHostPath)],
-            ['resource', shellArg('cache-b'), shellArg('restart'), '--apphost', shellArg(otherHostPath)],
         ]);
+        assert.deepStrictEqual(runResourceCommandCalls, [['cache-b', otherHostPath, 'restart', []]]);
         provider.dispose();
     });
 
-    test('workspace resource commands use the running AppHost path when no workspace AppHost is selected', () => {
+    test('workspace resource commands use the running AppHost path when no workspace AppHost is selected', async () => {
         const commands: AspireSubcommand[] = [];
+        const runResourceCommandCalls: Array<[string, string | undefined, string, readonly string[]]> = [];
         const runningHostPath = '/repo/apps/Store/AppHost.csproj';
         const idleHostPath = '/repo/samples/Store/AppHost.csproj';
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
@@ -2239,6 +2251,10 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             workspaceAppHostCandidatePaths: [runningHostPath, idleHostPath],
             workspaceAppHostDescription: 'Workspace view selected because aspire ls found 2 buildable AppHosts.',
             onDidChangeData,
+            runResourceCommand: async (resourceName: string, appHostPath: string | undefined, commandName: string, additionalArgs: readonly string[] = []) => {
+                runResourceCommandCalls.push([resourceName, appHostPath, commandName, additionalArgs]);
+                return { stdout: '', stderr: '' };
+            },
         } as unknown as AppHostDataRepository;
         const terminalProvider = {
             getAspireCliExecutablePath: async () => 'aspire',
@@ -2253,13 +2269,13 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
 
         provider.viewResourceLogs(resourceItem as any);
         provider.openResourceTerminal(resourceItem as any);
-        provider.restartResource(resourceItem as any);
+        await provider.restartResource(resourceItem as any);
 
         assert.deepStrictEqual(commands, [
             ['logs', shellArg('cache'), '--apphost', shellArg(runningHostPath)],
             ['terminal', 'attach', shellArg('cache'), '--apphost', shellArg(runningHostPath)],
-            ['resource', shellArg('cache'), shellArg('restart'), '--apphost', shellArg(runningHostPath)],
         ]);
+        assert.deepStrictEqual(runResourceCommandCalls, [['cache', runningHostPath, 'restart', []]]);
         provider.dispose();
     });
 

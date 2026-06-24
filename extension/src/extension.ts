@@ -39,6 +39,7 @@ import { getSupportedLanguageIds } from './editor/parsers/AppHostResourceParser'
 import { readGitCommitSha } from './utils/versionInfo';
 import { collectResourceCommandArguments } from './views/ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './views/ResourceCommandArgumentsLoader';
+import { executeResourceCommand } from './views/resourceCommandExecution';
 import { ResourceCommandJson } from './views/AppHostDataRepository';
 import { AppHostDiscoveryService } from './utils/appHostDiscovery';
 import { AppHostLaunchService } from './services/AppHostLaunchService';
@@ -273,10 +274,18 @@ export async function activate(context: vscode.ExtensionContext) {
       return;
     }
 
-    const command = appHostPath
-      ? ['resource', shellArg(resourceName), shellArg(action), '--apphost', shellArg(appHostPath)]
-      : ['resource', shellArg(resourceName), shellArg(action)];
-    terminalProvider.sendAspireCommandToAspireTerminal(command, true, commandArguments.args, { redactAdditionalArgs: commandArguments.containsSecret });
+    // Execute over the hidden CLI backchannel and surface the result inside VS Code, rather than
+    // typing `aspire resource ...` into the visible terminal. Returned values are rendered through
+    // the tree provider's read-only output document.
+    await executeResourceCommand(
+      dataRepository,
+      (resource, command, content) => appHostTreeProvider.showResourceCommandOutput(resource, command, content),
+      {
+        resourceName,
+        commandName: action,
+        appHostPath: appHostPath || undefined,
+        additionalArgs: commandArguments.args,
+      });
   });
   const codeLensViewLogsRegistration = registerInstrumentedCommand('aspire-vscode.codeLensViewLogs', 'codelens', (resourceName: string, appHostPath: string) => {
     const command = appHostPath
@@ -482,10 +491,10 @@ function createExtensionApi(
       return appHosts.map(appHost => cloneAppHostState(appHost, false));
     },
     async stopResource(resourceName: string, appHostPath: string): Promise<void> {
-      return dataRepository.runResourceCommand(resourceName, appHostPath, 'stop');
+      await dataRepository.runResourceCommand(resourceName, appHostPath, 'stop');
     },
     async startResource(resourceName: string, appHostPath: string): Promise<void> {
-      return dataRepository.runResourceCommand(resourceName, appHostPath, 'start');
+      await dataRepository.runResourceCommand(resourceName, appHostPath, 'start');
     },
     acquireTestRunSession: (options) => testRunSessionManager.acquireTestRunSession(options),
     releaseTestRunSession: (id) => testRunSessionManager.releaseTestRunSession(id),

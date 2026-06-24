@@ -278,6 +278,33 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('runResourceCommand omits --apphost, forwards additional args, and returns captured output', async () => {
+        const resourceProcess = new TestChildProcess();
+        spawnStub.returns(resourceProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            // undefined appHostPath means "let the CLI resolve the running AppHost", so no --apphost
+            // flag is added. additionalArgs already carry the `--` delimiter from
+            // buildResourceCommandCliArgs and must be forwarded verbatim after the command name.
+            const runPromise = repository.runResourceCommand('cache', undefined, 'echo-arguments', ['--', '--message=hello']);
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['resource', 'cache', 'echo-arguments', '--', '--message=hello']);
+
+            spawnStub.firstCall.args[3].stdoutCallback('rendered command value');
+            spawnStub.firstCall.args[3].stderrCallback('status: ok');
+            resourceProcess.markExited(0);
+            spawnStub.firstCall.args[3].exitCallback(0);
+
+            const output = await runPromise;
+            assert.strictEqual(output.stdout, 'rendered command value');
+            assert.strictEqual(output.stderr, 'status: ok');
+        } finally {
+            repository.dispose();
+        }
+    });
+
     test('fetchAppHostsOnce returns healthy AppHosts when one describe fails', async () => {
         const psProcess = new TestChildProcess();
         const healthyDescribeProcess = new TestChildProcess();

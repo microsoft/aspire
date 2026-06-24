@@ -76,12 +76,17 @@ export const resourceCommandCustomChoiceDescription = vscode.l10n.t('Custom valu
 export const resourceCommandDynamicInputsUnsupported = vscode.l10n.t('This command has dynamic inputs that the Aspire extension cannot prompt for yet. Run it from the Aspire Dashboard or Aspire CLI instead.');
 export const resourceCommandDynamicInputsFailed = vscode.l10n.t('Failed to load dynamic command inputs. Run this command from the Aspire Dashboard or Aspire CLI instead.');
 export const resourceCommandLoadingDynamicInputs = vscode.l10n.t('Updating command inputs...');
-export const resourceCommandSecretWarning = vscode.l10n.t('This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI terminal and may be visible in terminal history or scrollback.');
+export const resourceCommandSecretWarning = vscode.l10n.t('This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI as command-line arguments and may briefly be visible to other processes on this machine.');
 export const resourceCommandContinue = vscode.l10n.t('Continue');
 export const resourceCommandDontShowAgain = vscode.l10n.t("Don't show again");
 export const resourceCommandInvalidNumber = vscode.l10n.t('Enter a number using invariant culture, for example 1, -1.5, or 1e3.');
 export const resourceCommandMaxLength = (length: number) => vscode.l10n.t('Value must be {0} characters or fewer.', length);
 export const resourceCommandDisabledDescription = vscode.l10n.t('(disabled)');
+export const resourceCommandRunning = (command: string, resource: string) => vscode.l10n.t("Running '{0}' on '{1}'...", command, resource);
+export const resourceCommandSucceeded = (command: string, resource: string) => vscode.l10n.t("Command '{0}' completed on '{1}'.", command, resource);
+export const resourceCommandFailed = (command: string, resource: string, error: string) => vscode.l10n.t("Command '{0}' on '{1}' failed: {2}", command, resource, error);
+export const resourceCommandFailedNoDetail = (command: string, resource: string) => vscode.l10n.t("Command '{0}' on '{1}' failed.", command, resource);
+export const resourceCommandCliNotInstalled = (error: string) => vscode.l10n.t('The Aspire CLI could not be started: {0}', error);
 export const selectDashboardPlaceholder = vscode.l10n.t('Select a dashboard to open');
 export const dashboardUrlNotFound = vscode.l10n.t('No Aspire Dashboard URL is available. Start an AppHost and try again.');
 export const dashboardUrlUnsupported = vscode.l10n.t('The Aspire Dashboard URL must use http or https.');
