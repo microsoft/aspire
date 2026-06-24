@@ -1,0 +1,9 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "hostgroup-roles.module.bicep",
+  "params": {
+    "hostgroup_outputs_name": "{hostgroup.outputs.name}",
+    "principalType": "",
+    "principalId": ""
+  }
+}

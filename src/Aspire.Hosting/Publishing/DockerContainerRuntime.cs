@@ -5,6 +5,7 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
@@ -12,7 +13,7 @@ namespace Aspire.Hosting.Publishing;
 
 internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContainerRuntime>
 {
-    public DockerContainerRuntime(ILogger<DockerContainerRuntime> logger) : base(logger)
+    public DockerContainerRuntime(ILogger<DockerContainerRuntime> logger, IProcessRunner processRunner) : base(logger, processRunner)
     {
     }
 

@@ -3,10 +3,20 @@
 
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Azure.Core;
+using Azure.Provisioning.Authorization;
 
 namespace Aspire.Hosting.Azure.Provisioning;
 
-internal sealed record UserPrincipal(Guid Id, string Name);
+internal sealed record UserPrincipal(Guid Id, string Name)
+{
+    public UserPrincipal(Guid id, string name, RoleManagementPrincipalType type)
+        : this(id, name)
+    {
+        Type = type;
+    }
+
+    public RoleManagementPrincipalType Type { get; init; } = RoleManagementPrincipalType.User;
+}
 
 internal sealed class ProvisioningContext(
     TokenCredential credential,

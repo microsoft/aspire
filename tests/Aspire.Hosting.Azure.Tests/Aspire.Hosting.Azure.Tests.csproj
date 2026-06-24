@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.OperationalInsights\Aspire.Hosting.Azure.OperationalInsights.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.PostgreSQL\Aspire.Hosting.Azure.PostgreSQL.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Redis\Aspire.Hosting.Azure.Redis.csproj" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Sandboxes\Aspire.Hosting.Azure.Sandboxes.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Search\Aspire.Hosting.Azure.Search.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.ServiceBus\Aspire.Hosting.Azure.ServiceBus.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.SignalR\Aspire.Hosting.Azure.SignalR.csproj" />

@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Azure.Core;
+using Azure.Provisioning.Authorization;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -24,6 +25,7 @@ public class DefaultUserPrincipalProviderTests
         Assert.NotNull(principal);
         Assert.Equal(Guid.Parse("11111111-2222-3333-4444-555555555555"), principal.Id);
         Assert.Equal("test@example.com", principal.Name);
+        Assert.Equal(RoleManagementPrincipalType.User, principal.Type);
     }
 
     [Fact]
@@ -42,6 +44,7 @@ public class DefaultUserPrincipalProviderTests
         // Assert
         Assert.Equal(expectedOid, principal.Id);
         Assert.Equal(expectedUpn, principal.Name);
+        Assert.Equal(RoleManagementPrincipalType.User, principal.Type);
     }
 
     [Fact]
@@ -60,6 +63,23 @@ public class DefaultUserPrincipalProviderTests
         // Assert
         Assert.Equal(expectedOid, principal.Id);
         Assert.Equal(expectedEmail, principal.Name);
+        Assert.Equal(RoleManagementPrincipalType.User, principal.Type);
+    }
+
+    [Fact]
+    public async Task GetUserPrincipalAsync_ParsesAppTokenAsServicePrincipal()
+    {
+        var expectedOid = Guid.NewGuid();
+        var expectedAppId = Guid.NewGuid().ToString();
+        var token = CreateTestAppToken(expectedOid, expectedAppId);
+        var tokenCredentialProvider = new TestTokenCredentialProviderWithCustomToken(token);
+        var provider = new DefaultUserPrincipalProvider(tokenCredentialProvider);
+
+        var principal = await provider.GetUserPrincipalAsync();
+
+        Assert.Equal(expectedOid, principal.Id);
+        Assert.Equal(expectedAppId, principal.Name);
+        Assert.Equal(RoleManagementPrincipalType.ServicePrincipal, principal.Type);
     }
 
     [Fact]
@@ -128,6 +148,30 @@ public class DefaultUserPrincipalProviderTests
             iat = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
         };
         
+        var payloadJson = JsonSerializer.Serialize(payload);
+        var payloadBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(payloadJson))
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+
+        var signature = Convert.ToBase64String(Encoding.UTF8.GetBytes("test-signature"));
+
+        return $"{header}.{payloadBase64}.{signature}";
+    }
+
+    private static string CreateTestAppToken(Guid oid, string appId)
+    {
+        var header = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { alg = "RS256", typ = "JWT" })));
+
+        var payload = new
+        {
+            oid = oid.ToString(),
+            appid = appId,
+            idtyp = "app",
+            exp = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeSeconds(),
+            iat = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+        };
+
         var payloadJson = JsonSerializer.Serialize(payload);
         var payloadBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(payloadJson))
             .TrimEnd('=')

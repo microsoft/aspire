@@ -104,6 +104,7 @@
     <Project Path="src/Aspire.Hosting.Azure.OperationalInsights/Aspire.Hosting.Azure.OperationalInsights.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.PostgreSQL/Aspire.Hosting.Azure.PostgreSQL.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Redis/Aspire.Hosting.Azure.Redis.csproj" />
+    <Project Path="src/Aspire.Hosting.Azure.Sandboxes/Aspire.Hosting.Azure.Sandboxes.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.Search/Aspire.Hosting.Azure.Search.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.ServiceBus/Aspire.Hosting.Azure.ServiceBus.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.SignalR/Aspire.Hosting.Azure.SignalR.csproj" />

@@ -5,6 +5,7 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Dcp.Process;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests.Publishing;
@@ -25,7 +26,17 @@ public class ContainerRuntimeBaseTests
         Assert.Contains("stderr-final-line", exception.Message);
     }
 
-    private sealed class TestContainerRuntime(string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance)
+    [Fact]
+    public async Task ExecuteContainerCommandForOutputAsync_ReturnsStdoutOnly()
+    {
+        var runtime = new TestContainerRuntime();
+
+        var output = await runtime.RunCommandForOutputAsync().WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal("{\"json\":true}", output);
+    }
+
+    private sealed class TestContainerRuntime(string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, new DefaultProcessRunner())
     {
         protected override string RuntimeExecutable => runtimeExecutable ?? (OperatingSystem.IsWindows() ? "cmd" : "sh");
 
@@ -50,6 +61,17 @@ public class ContainerRuntimeBaseTests
                 "Test command failed with exit code {ExitCode}.",
                 "Test command succeeded.",
                 "Test command failed with exit code {0}.",
+                cancellationToken);
+        }
+
+        public Task<string> RunCommandForOutputAsync(CancellationToken cancellationToken = default)
+        {
+            return ExecuteContainerCommandForOutputAsync(
+                OperatingSystem.IsWindows()
+                    ? "/c \"echo {\"\"json\"\":true} & echo stderr-line 1>&2\""
+                    : "-c \"echo '{\\\"json\\\":true}'; echo stderr-line 1>&2\"",
+                "test output",
+                "test-image",
                 cancellationToken);
         }
     }

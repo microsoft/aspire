@@ -1,0 +1,13 @@
+﻿{
+  "Name": "provision-newfile",
+  "DependsOnSteps": [
+    "create-provisioning-context",
+    "deploy-listener-sandbox-container"
+  ],
+  "RequiredBySteps": [
+    "deploy"
+  ],
+  "Tags": [
+    "provision-infra"
+  ]
+}

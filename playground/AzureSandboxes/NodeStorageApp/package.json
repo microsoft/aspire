@@ -1,0 +1,15 @@
+{
+  "name": "sandbox-node-storage",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "build": "echo \"no build needed\"",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@azure/identity": "^4.13.1",
+    "@azure/storage-blob": "^12.31.0"
+  },
+  "devDependencies": {}
+}
