@@ -59,6 +59,14 @@
     {
       "output": { "regex": "mcr\\.microsoft\\.com[\\s\\S]{0,500}The request is blocked" },
       "reason": "MCR registry request blocked (rate limiting)"
+    },
+    {
+      "output": { "regex": "(?:azurecr\\.io|netaspireci)[\\s\\S]{0,200}connect:\\s*connection refused" },
+      "reason": "Transient Azure Container Registry connection refused"
+    },
+    {
+      "output": { "regex": "\\bdigest-mismatch:\\s+error\\b" },
+      "reason": "Transient corepack/npm registry CDN digest mismatch"
     }
   ]
 }

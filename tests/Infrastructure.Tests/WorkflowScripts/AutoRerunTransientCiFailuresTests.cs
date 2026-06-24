@@ -124,10 +124,11 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task AllowsNarrowOverrideForWindowsPostTestCleanupProcessInitializationFailures()
+    public async Task RetriesWindowsProcessInitializationFailuresRegardlessOfFailedStepNames()
     {
         WorkflowJob job = CreateJob(failedSteps:
         [
+            "Check for hang dump files",
             "Upload logs, and test results",
             "Copy CLI E2E recordings for upload",
             "Upload CLI E2E recordings",
@@ -138,14 +139,12 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Process completed with exit code -1073741502.");
 
         Assert.Single(result.RetryableJobs);
-        Assert.Equal(
-            "Post-test cleanup steps 'Upload logs, and test results | Copy CLI E2E recordings for upload | Upload CLI E2E recordings | Generate test results summary | Post Checkout code' matched the Windows process initialization failure override allowlist.",
-            result.RetryableJobs[0].Reason);
+        Assert.Contains("Windows process initialization failure allowlist", result.RetryableJobs[0].Reason);
     }
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task DoesNotOverrideWindowsProcessInitializationFailuresWhenTestExecutionAlsoFailed()
+    public async Task RetriesWindowsProcessInitializationFailuresEvenWhenTestExecutionStepFailed()
     {
         WorkflowJob job = CreateJob(failedSteps:
         [
@@ -156,11 +155,87 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
         AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Process completed with exit code -1073741502.");
 
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("Windows process initialization failure allowlist", result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RetriesWindowsProcessInitializationFailuresOnBuildStep()
+    {
+        WorkflowJob job = CreateJob(failedSteps: ["Build test project"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Process completed with exit code -1073741502.");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("Windows process initialization failure allowlist", result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RetriesWhenOnlyPostTestCleanupStepFailsWithNoErrorAnnotation()
+    {
+        // Real signature from 7-day CI sample: 47 windows-latest jobs/week where the
+        // tests pass cleanly, then 'Upload logs, and test results' fails alone with
+        // NO error annotation (the only annotation is the windows-latest deprecation
+        // notice), and the subsequent artifact-upload / summary steps all succeed.
+        // Example: actions/runs/27072649810/job/79882215855 (Hosting.MongoDB).
+        WorkflowJob job = CreateJob(failedSteps: ["Upload logs, and test results"]);
+
+        // Annotation text the auto-rerun bot would actually see — no error signal,
+        // just the unrelated platform-deprecation notice.
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(
+            job,
+            "NOTICE: windows-latest requests are being redirected to windows-2025-vs2026 by June 15, 2026");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("post-test cleanup", result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RetriesWhenAllPostTestCleanupStepsCascadeFailureIsTheOnlyFailure()
+    {
+        // Real signature from 7-day CI sample: 24 records where a Windows hang-dump
+        // check fires (-1073741502 / 0xC0000142 during Get-ChildItem) and the cascade
+        // takes down every subsequent post-test step. Both the new (no-annotation) rule
+        // and the existing Windows-init annotation rule cover this — verify the new
+        // rule retries the cascade even when the annotation is missing.
+        WorkflowJob job = CreateJob(failedSteps:
+        [
+            "Check for hang dump files",
+            "Upload logs, and test results",
+            "Copy CLI E2E recordings for upload",
+            "Upload CLI E2E recordings",
+            "Generate test results summary",
+            "Post Checkout code"
+        ]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(
+            job,
+            "NOTICE: windows-latest requests are being redirected to windows-2025-vs2026 by June 15, 2026");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("post-test cleanup", result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DoesNotRetryPostTestCleanupWhenOtherNonCleanupStepAlsoFailed()
+    {
+        // Safety: even with 'Upload logs, and test results' failing, if a non-cleanup,
+        // non-test-execution step also failed (e.g. some build or setup step), the
+        // "all post-test cleanup" rule must NOT fire — that's a different failure mode.
+        WorkflowJob job = CreateJob(failedSteps:
+        [
+            "Some custom validation step",
+            "Upload logs, and test results"
+        ]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(job, "Process completed with exit code 1.");
+
         Assert.Empty(result.RetryableJobs);
         Assert.Single(result.SkippedJobs);
-        Assert.Equal(
-            "Failed steps 'Run tests (Windows) | Upload logs, and test results | Generate test results summary' include a test execution failure, so the job was not retried without a high-confidence infrastructure override.",
-            result.SkippedJobs[0].Reason);
     }
 
     [Fact]
@@ -232,6 +307,27 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
         Assert.Single(result.RetryableJobs);
         Assert.Equal(
             "Failed steps 'Build test project | Check validation results' will be retried because the job log shows a likely transient infrastructure network failure. Matched pattern: `/Unable to load the service index for source https:\\/\\/(?:pkgs\\.dev\\.azure\\.com\\/dnceng|dnceng\\.pkgs\\.visualstudio\\.com)\\/public\\/_packaging\\//i`.",
+            result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AllowsLogBasedOverrideForCorepackDigestMismatchOnVsCodeExtensionE2E()
+    {
+        // Sample log fragment captured from a real VS Code extension E2E failure
+        // (corepack tarball SHA mismatch from the npm registry CDN). Repeats N times
+        // when the failure persists across retry attempts:
+        //   2026-06-06T10:21:47.7767159Z   digest-mismatch: error
+        WorkflowJob job = CreateJob(failedSteps: ["Run extension E2E tests"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(
+            job,
+            "Process completed with exit code 1.",
+            "2026-06-06T10:21:47.7767159Z   digest-mismatch: error\n2026-06-06T10:21:48.3116385Z   digest-mismatch: error");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Equal(
+            "Failed step 'Run extension E2E tests' will be retried because the job log shows a likely transient infrastructure network failure. Matched pattern: `/\\bdigest-mismatch:\\s+error\\b/i`.",
             result.RetryableJobs[0].Reason);
     }
 
@@ -1568,6 +1664,51 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task AnalyzeFailedJobsWithLiveConfigRetriesTestExecFailureOnAzureContainerRegistryConnectionRefused()
+    {
+        // Sample fragment captured from a real push-to-main failure burst on
+        // run 27046149398 (2026-06-05) where 10 parallel test jobs (StackExchange.Redis,
+        // Npgsql.EFCore.PostgreSQL, NATS.Net, MongoDB.*, Qdrant.Client, etc.) all hit the
+        // same ACR transient at the same second:
+        //   Docker.DotNet.DockerApiException : Docker API responded with status code=InternalServerError,
+        //   response={"message":"Get \"https://netaspireci.azurecr.io/v2/\": dial tcp 20.150.241.14:443:
+        //   connect: connection refused"}
+        WorkflowJob job = CreateJob(id: 1, failedSteps: ["Run tests (Linux/macOS)"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeJobsAsync(
+            [job],
+            new Dictionary<string, string> { ["1"] = "Process completed with exit code 1." },
+            new Dictionary<string, string> { ["1"] = "Docker.DotNet.DockerApiException : Get \"https://netaspireci.azurecr.io/v2/\": dial tcp 20.150.241.14:443: connect: connection refused" },
+            retryPatternsConfig: await LoadLiveRetryPatternsConfigAsync());
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("Azure Container Registry connection refused", result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task AnalyzeFailedJobsWithLiveConfigRetriesTestExecFailureOnCorepackDigestMismatch()
+    {
+        // Sample fragment captured from a real test-execution failure where a Templates /
+        // Polyglot / Cli.EndToEnd test happens to invoke corepack (e.g. through aspire init
+        // for a TypeScript apphost) and hits the same digest-mismatch CDN transient that
+        // affects VS Code extension E2E. Step is "Run tests" (test execution), so the
+        // hardcoded JS infrastructureNetworkFailureLogOverridePatterns path doesn't fire
+        // for it — only the configurable jobFailurePatterns can rescue it.
+        WorkflowJob job = CreateJob(id: 1, failedSteps: ["Run tests (Linux/macOS)"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeJobsAsync(
+            [job],
+            new Dictionary<string, string> { ["1"] = "Process completed with exit code 1." },
+            new Dictionary<string, string> { ["1"] = "  digest-mismatch: error\n  digest-mismatch: error" },
+            retryPatternsConfig: await LoadLiveRetryPatternsConfigAsync());
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Contains("corepack/npm registry CDN digest mismatch", result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task AnalyzeFailedJobsWithConfigSkipsWhenJobLogDoesNotMatchPattern()
     {
         WorkflowJob job = CreateJob(id: 1, failedSteps: ["Run tests"]);
@@ -2236,6 +2377,15 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     private Task<string> ReadRepoFileAsync(string relativePath)
         => File.ReadAllTextAsync(Path.Combine(_repoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+
+    // Loads eng/test-retry-patterns.json as a generic object the harness can serialize back to JS,
+    // so tests can validate that real-world failure-log fragments match the patterns
+    // actually shipped to CI (not synthetic patterns invented for the test).
+    private async Task<object> LoadLiveRetryPatternsConfigAsync()
+    {
+        string configJson = await ReadRepoFileAsync("eng/test-retry-patterns.json");
+        return JsonSerializer.Deserialize<JsonElement>(configJson);
+    }
 
     private sealed class HarnessRequest
     {

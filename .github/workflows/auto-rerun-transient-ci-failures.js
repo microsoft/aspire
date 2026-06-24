@@ -90,6 +90,7 @@ const ignoredFailureStepOverridePatterns = [
 ];
 
 const postTestCleanupFailureStepPatterns = [
+    /^Check for hang dump files$/i,
     /^Upload logs, and test results$/i,
     /^Copy CLI E2E recordings for upload$/i,
     /^Upload CLI E2E recordings$/i,
@@ -115,6 +116,13 @@ const infrastructureNetworkFailureLogOverridePatterns = [
     /expected 'packfile'/i,
     /\bRPC failed\b/i,
     /\bRecv failure\b/i,
+    // Corepack / npm registry CDN integrity check failure. Emitted when the package
+    // tarball SHA doesn't match the expected digest — usually a stale or partially
+    // served CDN response that succeeds on retry. Format observed in CI logs:
+    //   "    digest-mismatch: error"
+    // (repeated for each tarball attempt). Persistent mismatches caused by a tampered
+    // package would re-fail on retry, so allow-listing this is safe.
+    /\bdigest-mismatch:\s+error\b/i,
 ];
 
 function matchesAny(value, patterns) {
@@ -393,9 +401,9 @@ function classifyFailedJob(job, annotationsOrText, jobLogText = '', options = {}
     const annotationsText = toAnnotationText(annotationsOrText);
     const matchesTransientAnnotation = matchesAny(annotationsText, transientAnnotationPatterns);
     const matchesIgnoredFailureStepOverride = matchesAny(annotationsText, ignoredFailureStepOverridePatterns);
+    const matchesWindowsProcessInitializationFailure = matchesAny(annotationsText, windowsProcessInitializationFailurePatterns);
     const hasOnlyPostTestCleanupFailures = failedSteps.length > 0
         && failedSteps.every(step => matchesAny(step, postTestCleanupFailureStepPatterns));
-    const matchesWindowsProcessInitializationFailure = matchesAny(annotationsText, windowsProcessInitializationFailurePatterns);
 
     if (matchesTransientAnnotation && failedSteps.length === 0) {
         return {
@@ -405,11 +413,31 @@ function classifyFailedJob(job, annotationsOrText, jobLogText = '', options = {}
         };
     }
 
-    if (hasOnlyPostTestCleanupFailures && matchesWindowsProcessInitializationFailure) {
+    if (matchesWindowsProcessInitializationFailure) {
         return {
             retryable: true,
             failedSteps,
-            reason: `Post-test cleanup steps '${failedStepText}' matched the Windows process initialization failure override allowlist.`,
+            reason: failedSteps.length === 0
+                ? 'Job annotations matched the Windows process initialization failure allowlist (exit code -1073741502 is an OS-level infrastructure failure).'
+                : `${formatFailedStepLabel(failedSteps, failedStepText)} matched the Windows process initialization failure allowlist (exit code -1073741502 is an OS-level infrastructure failure).`,
+        };
+    }
+
+    if (hasOnlyPostTestCleanupFailures) {
+        // The test process ran to completion (no test-execution step failed) and the only
+        // failures are in post-test cleanup (artifact upload, hang-dump check, results
+        // summary generation, repo cleanup). The test results are already on disk; these
+        // steps are dominated by transient infra (artifact storage blips, GitHub API
+        // hiccups, ephemeral filesystem locks on Windows runners) and frequently fail
+        // with no error annotation at all. A genuinely persistent failure (malformed
+        // results, disk full) will reproduce on retry and be caught by the existing
+        // 3-attempt cap. Observed signature in 7-day CI data: 47 windows-latest jobs/week
+        // where 'Upload logs, and test results' fails alone with no error annotation
+        // (tests passed, subsequent artifact-upload steps also passed).
+        return {
+            retryable: true,
+            failedSteps,
+            reason: `Failed steps '${failedStepText}' are all post-test cleanup steps; the test process itself ran to completion. Retrying to re-run the upload/cleanup.`,
         };
     }
 
