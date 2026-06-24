@@ -22,6 +22,7 @@ import os from "os";
 import { EnvironmentVariables } from "../utils/environment";
 import { sendTelemetryEvent } from "../utils/telemetry";
 import { classifyAppHostPath, classifyAppHostDirectory } from "../utils/appHostLanguage";
+import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
 
 export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
@@ -76,6 +77,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   // Tracks the AppHost-language classification of the launched program so it can
   // be repeated on the matching end event without re-deriving from `configuration`.
   private _appHostLanguageAtLaunch: 'csharp' | 'typescript' | 'unknown' = 'unknown';
+  private _appHostTargetVersionAtLaunch = 'unknown';
   // Mode the AppHost was launched with (`run` | `debug`) — captured for the
   // matching end event.
   private _appHostModeAtLaunch: 'run' | 'debug' = 'run';
@@ -153,6 +155,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       this._appHostLanguageAtLaunch = appHostIsDirectory
         ? classifyAppHostDirectory(appHostPath)
         : classifyAppHostPath(appHostPath);
+      this._appHostTargetVersionAtLaunch = getAppHostTargetVersion(appHostPath) ?? 'unknown';
       this._appHostModeAtLaunch = noDebug ? 'run' : 'debug';
       // `command` originates in the user's launch.json and is typed in the
       // contributing extension surface as AspireCommandType ('run'|'deploy'|
@@ -164,6 +167,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       sendTelemetryEvent('debug/apphost/start', {
         mode: this._appHostModeAtLaunch,
         apphost_language: this._appHostLanguageAtLaunch,
+        apphost_target_version: this._appHostTargetVersionAtLaunch,
         apphost_is_directory: appHostIsDirectory ? 'true' : 'false',
         command: commandForTelemetry,
       });
@@ -688,6 +692,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     const startMs = this._appHostStartTimeMs;
     const mode = this._appHostModeAtLaunch;
     const language = this._appHostLanguageAtLaunch;
+    const targetVersion = this._appHostTargetVersionAtLaunch;
     const debugSessionId = this.debugSessionId;
     const dcpServer = this._dcpServer;
 
@@ -716,6 +721,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         sendTelemetryEvent('debug/apphost/end', {
           mode,
           apphost_language: language,
+          apphost_target_version: targetVersion,
           ended_with_error: aggregate?.anyNonZeroExit ? 'true' : 'false',
           distinct_resource_types: aggregate ? aggregate.distinctResourceTypes.join(',') : '',
         }, {

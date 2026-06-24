@@ -1,11 +1,55 @@
 import * as assert from 'assert';
+import type { TelemetryReporter } from '@vscode/extension-telemetry';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugSession, buildAspireCommandArgs, getLoggableDebugConfiguration } from '../debugger/AspireDebugSession';
 import { AspireResourceExtendedDebugConfiguration } from '../dcp/types';
+import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
+
+interface RecordedEvent {
+    name: string;
+    properties?: Record<string, string>;
+    measurements?: Record<string, number>;
+}
+
+class FakeTelemetryReporter {
+    public events: RecordedEvent[] = [];
+
+    sendTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements });
+    }
+
+    sendTelemetryErrorEvent(): void { /* not used here */ }
+    sendDangerousTelemetryEvent(): void { /* not used here */ }
+    sendDangerousTelemetryErrorEvent(): void { /* not used here */ }
+    sendRawTelemetryEvent(): void { /* not used here */ }
+
+    dispose(): Promise<void> { return Promise.resolve(); }
+}
 
 suite('AspireDebugSession tests', () => {
-    teardown(() => sinon.restore());
+    const tempDirs: string[] = [];
+
+    function makeTempDir(): string {
+        const parent = join(process.cwd(), '.test-tmp');
+        mkdirSync(parent, { recursive: true });
+        const dir = mkdtempSync(join(parent, 'aspire-debug-session-'));
+        tempDirs.push(dir);
+        return dir;
+    }
+
+    teardown(() => {
+        sinon.restore();
+        __resetCommonPropertiesForTests();
+        for (const dir of tempDirs) {
+            if (existsSync(dir)) {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        }
+        tempDirs.length = 0;
+    });
 
     test('suppresses the Aspire CLI first-run banner for extension-managed launches', () => {
         const parentDebugSession = {
@@ -39,6 +83,103 @@ suite('AspireDebugSession tests', () => {
             '--apphost',
             '/workspace/apphost.cs',
         ]);
+    });
+
+    test('reports AppHost target version in start telemetry', () => {
+        const tempDir = makeTempDir();
+        const appHostPath = join(tempDir, 'apphost.cs');
+        writeFileSync(appHostPath, `#:sdk Aspire.AppHost.Sdk@13.6.0
+
+var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
+`);
+        const fake = new FakeTelemetryReporter();
+        const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: appHostPath,
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+
+        try {
+            aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
+
+            const event = fake.events.find(event => event.name === 'debug/apphost/start');
+            assert.ok(event);
+            assert.strictEqual(event.properties?.apphost_language, 'csharp');
+            assert.strictEqual(event.properties?.apphost_target_version, '13.6.0');
+        }
+        finally {
+            restoreReporter();
+        }
+    });
+
+    test('reports AppHost target version in end telemetry', async () => {
+        const tempDir = makeTempDir();
+        const appHostPath = join(tempDir, 'apphost.cs');
+        writeFileSync(appHostPath, `#:sdk Aspire.AppHost.Sdk@13.6.0
+
+var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
+`);
+        const fake = new FakeTelemetryReporter();
+        const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: appHostPath,
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const dcpServer = {
+            takeDebugSessionAggregateStats: sinon.stub().returns({
+                anyNonZeroExit: false,
+                distinctResourceTypes: ['project'],
+                totalChildSessions: 1,
+            }),
+        };
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, dcpServer as any, terminalProvider as any, () => { });
+        sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+
+        try {
+            aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
+            aspireDebugSession.dispose();
+            await clock.tickAsync(500);
+
+            const event = fake.events.find(event => event.name === 'debug/apphost/end');
+            assert.ok(event);
+            assert.strictEqual(event.properties?.apphost_language, 'csharp');
+            assert.strictEqual(event.properties?.apphost_target_version, '13.6.0');
+        }
+        finally {
+            restoreReporter();
+        }
     });
 
     test('redacts debug configuration environment fields from logs by default', () => {

@@ -77,6 +77,11 @@
         "purpose": "FeatureInsight",
         "comment": "The AppHost project language detected by the extension."
       },
+      "apphost_target_version": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The Aspire version targeted by the AppHost."
+      },
       "apphost_is_directory": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -98,6 +103,11 @@
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
         "comment": "The AppHost project language detected by the extension."
+      },
+      "apphost_target_version": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The Aspire version targeted by the AppHost."
       },
       "ended_with_error": {
         "classification": "SystemMetaData",
@@ -418,6 +428,11 @@
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "comment": "The AppHost languages detected in the current workspace."
+    },
+    "apphost_target_versions": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "The Aspire versions targeted by AppHosts in the current workspace."
     },
     "apphost_present": {
       "classification": "SystemMetaData",

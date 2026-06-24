@@ -17,6 +17,7 @@ export interface CandidateAppHostDisplayInfo {
     path: string;
     language: string | null;
     status: string | null;
+    aspireHostingVersion?: string | null;
     selected?: boolean;
 }
 
@@ -25,6 +26,7 @@ export interface AppHostCandidate {
     path: string;
     language: string;
     status: string;
+    aspireHostingVersion?: string | null;
 }
 
 export interface AppHostProjectSearchResult {
@@ -524,6 +526,7 @@ function parseCandidateOutput(output: string, commandName: string): CandidateApp
                 path: candidate.path,
                 language: candidate.language,
                 status: candidate.status,
+                aspireHostingVersion: candidate.aspireHostingVersion,
             }));
 
         const unexpectedCandidateCount = parsed.length - appHosts.length;
@@ -539,6 +542,7 @@ function parseCandidateOutput(output: string, commandName: string): CandidateApp
             path: candidate.path,
             language: candidate.language,
             status: candidate.status,
+            aspireHostingVersion: candidate.aspireHostingVersion,
             selected: typeof parsed.selected_project_file === 'string' && isSamePath(parsed.selected_project_file, candidate.path),
         }));
     }
@@ -610,7 +614,10 @@ function isLsCandidate(obj: unknown): obj is CandidateAppHostDisplayInfo {
         && typeof obj === 'object'
         && typeof (obj as CandidateAppHostDisplayInfo).path === 'string'
         && typeof (obj as CandidateAppHostDisplayInfo).language === 'string'
-        && typeof (obj as CandidateAppHostDisplayInfo).status === 'string';
+        && typeof (obj as CandidateAppHostDisplayInfo).status === 'string'
+        && ((obj as CandidateAppHostDisplayInfo).aspireHostingVersion === undefined
+            || (obj as CandidateAppHostDisplayInfo).aspireHostingVersion === null
+            || typeof (obj as CandidateAppHostDisplayInfo).aspireHostingVersion === 'string');
 }
 
 function formatErrorMessage(error: unknown): string {
@@ -670,7 +677,10 @@ function isAppHostProjectSearchResult(obj: unknown): obj is AppHostProjectSearch
             && typeof candidate.relativePath === 'string'
             && typeof candidate.path === 'string'
             && typeof candidate.language === 'string'
-            && typeof candidate.status === 'string');
+            && typeof candidate.status === 'string'
+            && (candidate.aspireHostingVersion === undefined
+                || candidate.aspireHostingVersion === null
+                || typeof candidate.aspireHostingVersion === 'string'));
 }
 
 function toCandidatesFromLegacySearchResult(parsed: LegacyAppHostProjectSearchResult): CandidateAppHostDisplayInfo[] {

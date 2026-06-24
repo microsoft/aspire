@@ -36,7 +36,7 @@
  * catalog tracks (event, property) pairs — every common property duplicates
  * into a row for every event. The set is deliberately tiny.
  */
-export type CommonTelemetryProperty = 'apphost_languages' | 'apphost_present';
+export type CommonTelemetryProperty = 'apphost_languages' | 'apphost_target_versions' | 'apphost_present';
 
 /**
  * Per-event schema. Each entry lists the event-specific properties and
@@ -62,11 +62,11 @@ export interface TelemetryEventSchema {
         measurements: 'running_apphosts' | 'total_resources';
     };
     'debug/apphost/start': {
-        properties: 'mode' | 'apphost_language' | 'apphost_is_directory' | 'command';
+        properties: 'mode' | 'apphost_language' | 'apphost_target_version' | 'apphost_is_directory' | 'command';
         measurements: never;
     };
     'debug/apphost/end': {
-        properties: 'mode' | 'apphost_language' | 'ended_with_error' | 'distinct_resource_types';
+        properties: 'mode' | 'apphost_language' | 'apphost_target_version' | 'ended_with_error' | 'distinct_resource_types';
         measurements: 'duration_ms' | 'total_child_sessions' | 'distinct_resource_type_count';
     };
     'debug/runsession/start': {
