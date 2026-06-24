@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugSession, buildAspireCommandArgs, getLoggableDebugConfiguration } from '../debugger/AspireDebugSession';
+import { appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { AspireResourceExtendedDebugConfiguration } from '../dcp/types';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 
@@ -454,6 +455,76 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         }
         finally {
             resolveLanguage?.('typescript');
+            restoreReporter();
+        }
+    });
+
+    test('uses workspace default candidate only for directory launch telemetry enrichment', async () => {
+        const workspaceDir = makeTempDir();
+        const appHostDir = join(workspaceDir, 'NestedAppHost');
+        mkdirSync(appHostDir);
+        const appHostPath = join(appHostDir, 'apphost.ts');
+        writeFileSync(appHostPath, 'import { createBuilder } from "./.aspire/modules/aspire";');
+        writeFileSync(join(appHostDir, 'aspire.config.json'), JSON.stringify({ sdk: { version: '13.6.0' } }));
+        const fake = new FakeTelemetryReporter();
+        const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: workspaceDir,
+                command: 'run',
+                [appHostTelemetryTargetPathConfigKey]: appHostPath,
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const dcpServer = {
+            takeDebugSessionAggregateStats: sinon.stub().returns({
+                anyNonZeroExit: false,
+                distinctResourceTypes: [],
+                totalChildSessions: 0,
+            }),
+        };
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, dcpServer as any, terminalProvider as any, () => { });
+        const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+
+        try {
+            aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
+            await waitFor(() => spawnStub.calledOnce);
+            assert.deepStrictEqual(spawnStub.firstCall.args[0], [
+                'run',
+                '--start-debug-session',
+                '--nologo',
+            ]);
+            assert.strictEqual(spawnStub.firstCall.args[1], workspaceDir);
+
+            await waitFor(() => fake.events.some(event => event.name === 'debug/apphost/start'));
+            const startEvent = fake.events.find(event => event.name === 'debug/apphost/start');
+            assert.ok(startEvent);
+            assert.strictEqual(startEvent.properties?.apphost_language, 'unknown');
+            assert.strictEqual(startEvent.properties?.apphost_target_version, 'unknown');
+
+            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+            aspireDebugSession.dispose();
+            await waitForWithFakeClock(clock, () => fake.events.some(event => event.name === 'debug/apphost/end'));
+
+            const endEvent = fake.events.find(event => event.name === 'debug/apphost/end');
+            assert.ok(endEvent);
+            assert.strictEqual(endEvent.properties?.apphost_language, 'typescript');
+            assert.strictEqual(endEvent.properties?.apphost_target_version, '13.6.0');
+            assert.strictEqual(endEvent.properties?.apphost_is_directory, 'true');
+        }
+        finally {
             restoreReporter();
         }
     });

@@ -140,7 +140,7 @@ suite('AppHost discovery', () => {
             }
         });
 
-        test('resolves workspace folder debug target to the single discovered AppHost candidate', async () => {
+        test('keeps workspace folder debug target unchanged and returns default candidate separately', async () => {
             stubFileSystemWatchers(sandbox);
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
                 options?.stdoutCallback?.(JSON.stringify([{
@@ -157,8 +157,10 @@ suite('AppHost discovery', () => {
 
             try {
                 const result = await service.resolveDebugTarget(workspaceFolder.uri.fsPath, workspaceFolder);
+                const candidate = await service.tryFindWorkspaceDefaultCandidate(workspaceFolder.uri.fsPath, workspaceFolder);
 
-                assert.strictEqual(result, buildPath('workspace', 'NestedAppHost', 'apphost.ts'));
+                assert.strictEqual(result, workspaceFolder.uri.fsPath);
+                assert.strictEqual(candidate?.path, buildPath('workspace', 'NestedAppHost', 'apphost.ts'));
             }
             finally {
                 service.dispose();

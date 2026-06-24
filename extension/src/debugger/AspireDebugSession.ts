@@ -24,6 +24,7 @@ import { sendTelemetryEvent } from "../utils/telemetry";
 import { classifyAppHostPath, classifyAppHostDirectory } from "../utils/appHostLanguage";
 import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
+import { appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
 
 export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
 
@@ -203,6 +204,9 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     // Append any additional command args forwarded from the CLI (e.g., step name for 'do', unmatched tokens)
     const commandArgs = this.configuration.args ?? [];
     const appHostPath = this._session.configuration.program as string;
+    const appHostTelemetryTargetPath = typeof this._session.configuration[appHostTelemetryTargetPathConfigKey] === 'string'
+      ? this._session.configuration[appHostTelemetryTargetPathConfigKey]
+      : undefined;
     const extensionArgs: string[] = [];
     // Telemetry: emit `debug/apphost/start` once per AppHost launch. This must
     // happen before any awaited filesystem metadata work because child
@@ -216,7 +220,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     // telemetry and are enriched on the matching end event.
     this._appHostLanguageAtLaunch = classifyAppHostPath(appHostPath);
     this._appHostTargetVersionAtLaunch = 'unknown';
-    this._appHostTargetVersionAtLaunchPromise = this.resolveAppHostTargetVersionAtLaunch(appHostPath);
+    this._appHostTargetVersionAtLaunchPromise = this.resolveAppHostTargetVersionAtLaunch(appHostTelemetryTargetPath ?? appHostPath);
     this._appHostIsDirectoryAtLaunch = 'unknown';
     // `command` originates in the user's launch.json and is typed in the
     // contributing extension surface as AspireCommandType ('run'|'deploy'|
@@ -241,7 +245,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     }
 
     this._appHostIsDirectoryAtLaunch = appHostIsDirectory ? 'true' : 'false';
-    this._appHostLanguageAtLaunchPromise = this.resolveAppHostLanguageAtLaunch(appHostPath, appHostIsDirectory);
+    this._appHostLanguageAtLaunchPromise = this.resolveAppHostLanguageAtLaunch(appHostPath, appHostIsDirectory, appHostTelemetryTargetPath);
 
     // For 'do' with an explicit step (old CLI fallback), pass it as a positional argument
     const step = this.configuration.step;
@@ -299,11 +303,14 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     }
   }
 
-  private async resolveAppHostLanguageAtLaunch(appHostPath: string | undefined, appHostIsDirectory: boolean): Promise<'csharp' | 'typescript' | 'unknown'> {
+  private async resolveAppHostLanguageAtLaunch(appHostPath: string | undefined, appHostIsDirectory: boolean, appHostTelemetryTargetPath: string | undefined): Promise<'csharp' | 'typescript' | 'unknown'> {
     try {
-      this._appHostLanguageAtLaunch = appHostIsDirectory
-        ? await classifyAppHostDirectory(appHostPath)
-        : classifyAppHostPath(appHostPath);
+      const telemetryTargetLanguage = classifyAppHostPath(appHostTelemetryTargetPath);
+      this._appHostLanguageAtLaunch = telemetryTargetLanguage !== 'unknown'
+        ? telemetryTargetLanguage
+        : (appHostIsDirectory
+          ? await classifyAppHostDirectory(appHostPath)
+          : classifyAppHostPath(appHostPath));
     }
     catch {
       // Telemetry enrichment must never break or delay the debug launch path.

@@ -97,11 +97,23 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             return undefined;
         }
 
+        if (isSamePath(filePath, folder.uri.fsPath)) {
+            return undefined;
+        }
+
         const candidates = await this.discover(folder);
-        const candidate = isSamePath(filePath, folder.uri.fsPath)
-            ? findWorkspaceDefaultCandidate(candidates)
-            : findCandidateForEditorFile(filePath, candidates);
+        const candidate = findCandidateForEditorFile(filePath, candidates);
         return candidate ? getDebugTargetForCandidate(candidate) : undefined;
+    }
+
+    async tryFindWorkspaceDefaultCandidate(filePath: string, workspaceFolder?: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo | undefined> {
+        const folder = workspaceFolder ?? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
+        if (!folder || !isSamePath(filePath, folder.uri.fsPath)) {
+            return undefined;
+        }
+
+        const candidates = await this.discover(folder);
+        return findWorkspaceDefaultCandidate(candidates);
     }
 
     async tryFindCandidateForEditorFile(filePath: string, workspaceFolder?: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo | undefined> {
