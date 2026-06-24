@@ -30,12 +30,15 @@ export function MetricsPage() {
       if (metric.lastValue === null) {
         continue;
       }
-      const buffer = buffers.get(metric.name) ?? [];
-      buffer.push(metric.lastValue);
-      if (buffer.length > RING_CAPACITY) {
-        buffer.splice(0, buffer.length - RING_CAPACITY);
+      // Append immutably: Sparkline (and uPlot) only redraw when the `values`
+      // array reference changes. Mutating the existing buffer in place would keep
+      // the same reference and freeze the chart after the first render.
+      const previous = buffers.get(metric.name) ?? [];
+      const next = [...previous, metric.lastValue];
+      if (next.length > RING_CAPACITY) {
+        next.splice(0, next.length - RING_CAPACITY);
       }
-      buffers.set(metric.name, buffer);
+      buffers.set(metric.name, next);
     }
     // Trigger a re-render so the chart reflects the appended sample.
     forceTick((n) => n + 1);
