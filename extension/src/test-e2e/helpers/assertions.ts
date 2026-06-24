@@ -310,7 +310,7 @@ export async function applyE2eControl(payload: Record<string, unknown>, waitFor:
     const revision = ++controlRevision;
     writeJsonFileAtomic(controlFilePath, { revision, ...payload });
     const stateFile = await waitForExtensionState(
-        file => file.control?.revision === revision && (file.control.status === 'error' || file.control.status === 'applied' || (waitFor === 'started' && file.control.status === 'started')),
+        file => file.control?.revision === revision && (file.control.status === 'error' || (waitFor === 'applied' ? file.control.status === 'applied' : file.control.startedObserved === true)),
         `E2E control revision ${revision}`,
         timeoutMs);
 

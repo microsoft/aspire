@@ -136,13 +136,13 @@ export function createE2eStateFileBridge(
             const markCommandStarted = () => {
               if (!commandStarted) {
                 commandStarted = true;
-                controlStatus = { revision, status: 'started' };
+                controlStatus = { revision, status: 'started', startedObserved: true };
                 writeStateFile();
               }
             };
 
             const result = await executeE2eControlCommand(context, aspireContext, appHostLaunchService, appHostTreeProvider, terminalProvider, payload.command, markCommandStarted);
-            controlStatus = { revision, status: 'applied', result };
+            controlStatus = { revision, status: 'applied', startedObserved: commandStarted, result };
           }
           else {
             controlStatus = { revision, status: 'applied' };

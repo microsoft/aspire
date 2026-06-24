@@ -129,6 +129,7 @@ export interface AspireDebugConsoleOutputEvent {
 export interface AspireExtensionE2EControlStatus {
     revision: number;
     status: 'started' | 'applied' | 'error';
+    startedObserved?: boolean;
     errorMessage?: string;
     result?: unknown;
 }

@@ -3,7 +3,7 @@ import * as path from 'path';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getWorkspaceRoot } from './paths';
-import { runProcess } from './process';
+import { ProcessError, runProcess } from './process';
 
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -310,6 +310,11 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
     }
 
     if (/timed out|Failed to stop/i.test(stopError.message)) {
+        if (runningAppHostBeforeStop?.appHostPid !== undefined) {
+            await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop.appHostPid, 'after stopping');
+            return;
+        }
+
         const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
         if (!runningAppHost) {
             await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
@@ -423,7 +428,25 @@ async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string
         await waitForNoRunningAppHostPath(appHostPath, timeoutMs, knownAppHostPid, actionDescription);
     }
     catch (error) {
-        const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
+        let runningAppHost: PsAppHost | undefined;
+        try {
+            runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
+        }
+        catch (cliError) {
+            if (!isProcessTimeoutError(cliError) || knownAppHostPid === undefined) {
+                throw cliError;
+            }
+
+            const runningAppHostFromState = getRunningAppHostFromState(appHostPath);
+            if (runningAppHostFromState?.appHostPid !== knownAppHostPid) {
+                throw error;
+            }
+
+            await stopProcess(knownAppHostPid, 30000);
+            await waitForNoRunningAppHostPath(appHostPath, 5000, knownAppHostPid, actionDescription);
+            return;
+        }
+
         // The extension state file can lag behind the CLI registry after stopDebugging:
         // it may still contain an AppHost PID even though aspire ps has already dropped
         // the AppHost. At that point the PID may be stale/reused, so don't SIGTERM it.
@@ -438,6 +461,10 @@ async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string
         await stopProcess(runningAppHost.appHostPid, 30000);
         await waitForNoRunningAppHostPath(appHostPath, 5000, runningAppHost.appHostPid, actionDescription);
     }
+}
+
+function isProcessTimeoutError(error: unknown): boolean {
+    return error instanceof ProcessError && /\btimed out after \d+ms\b/i.test(error.message);
 }
 
 function getRunningAppHostFromState(appHostPath: string) {
