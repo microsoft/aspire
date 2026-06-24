@@ -142,7 +142,7 @@ async function getAppHostTargetVersionInfoFromFile(filePath: string): Promise<Fi
 
     let contents: string;
     try {
-        contents = await fs.readFile(filePath, 'utf8');
+        contents = stripLeadingByteOrderMark(await fs.readFile(filePath, 'utf8'));
     }
     catch {
         return noFileTargetVersionInfo();
@@ -379,17 +379,10 @@ interface JsoncFileResult {
 async function readJsoncFile(filePath: string): Promise<JsoncFileResult> {
     let contents: string;
     try {
-        contents = await fs.readFile(filePath, 'utf8');
+        contents = stripLeadingByteOrderMark(await fs.readFile(filePath, 'utf8'));
     }
     catch {
         return { exists: false };
-    }
-
-    if (contents.startsWith('\uFEFF')) {
-        // jsonc-parser reports a leading UTF-8 BOM as InvalidSymbol even though
-        // the rest of the JSONC object is parsed. Strip only that exact prefix so
-        // BOM-prefixed config files work without accepting any other invalid input.
-        contents = contents.slice(1);
     }
 
     const errors: ParseError[] = [];
@@ -398,6 +391,13 @@ async function readJsoncFile(filePath: string): Promise<JsoncFileResult> {
         exists: true,
         value: errors.length === 0 && isJsonObject(parsed) ? parsed : undefined,
     };
+}
+
+function stripLeadingByteOrderMark(contents: string): string {
+    // Node's UTF-8 text decoder exposes a file BOM as U+FEFF at offset 0. Strip
+    // only that exact prefix so anchored parsers, like "#:sdk" single-file AppHost
+    // detection and jsonc-parser, see the same first character users see.
+    return contents.startsWith('\uFEFF') ? contents.slice(1) : contents;
 }
 
 function getJsonObjectProperty(obj: Record<string, unknown> | undefined, propertyName: string): Record<string, unknown> | undefined {

@@ -226,6 +226,28 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.6.0-preview.1');
     });
 
+    test('reads a BOM-prefixed C# single-file SDK directive version', async () => {
+        const dir = makeTempDir();
+        const appHostPath = join(dir, 'apphost.cs');
+        writeFileSync(appHostPath, `\uFEFF#:sdk Aspire.AppHost.Sdk@13.6.0
+
+var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
+`);
+
+        assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.6.0');
+    });
+
+    test('does not use polyglot config for a BOM-prefixed C# single-file AppHost directory', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'apphost.cs'), `\uFEFF#:sdk Aspire.AppHost.Sdk@13.6.0
+
+var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
+`);
+        writeFileSync(join(dir, 'aspire.config.json'), JSON.stringify({ sdk: { version: '13.4.2' } }));
+
+        assert.strictEqual(await getAppHostTargetVersion(dir), '13.6.0');
+    });
+
     test('reads the polyglot SDK version from aspire.config.json', async () => {
         const dir = makeTempDir();
         const appHostPath = join(dir, 'apphost.ts');
