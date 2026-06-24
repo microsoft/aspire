@@ -87,12 +87,6 @@ suite('AspireDebugSession tests', () => {
     });
 
     test('reports unknown AppHost target version in start telemetry before async enrichment', async () => {
-        const tempDir = makeTempDir();
-        const appHostPath = join(tempDir, 'apphost.cs');
-        writeFileSync(appHostPath, `#:sdk Aspire.AppHost.Sdk@13.6.0
-
-var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
-`);
         const fake = new FakeTelemetryReporter();
         const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
         const parentDebugSession = {
@@ -104,7 +98,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
                 type: 'aspire',
                 request: 'launch',
                 name: 'Aspire',
-                program: appHostPath,
+                program: '/workspace/apphost.cs',
                 command: 'run',
             },
             customRequest: sinon.stub(),
@@ -114,7 +108,12 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             isCliDebugLoggingEnabled: () => false,
         };
         const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
-        sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+        let resolveTargetVersion: ((value: string) => void) | undefined;
+        const targetVersionPromise = new Promise<string>(resolve => {
+            resolveTargetVersion = resolve;
+        });
+        sinon.stub(aspireDebugSession as any, 'resolveAppHostTargetVersionAtLaunch').returns(targetVersionPromise);
+        const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
 
         try {
             aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
@@ -124,8 +123,10 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             assert.ok(event);
             assert.strictEqual(event.properties?.apphost_language, 'csharp');
             assert.strictEqual(event.properties?.apphost_target_version, 'unknown');
+            await waitFor(() => spawnStub.calledOnce);
         }
         finally {
+            resolveTargetVersion?.('13.6.0');
             restoreReporter();
         }
     });
@@ -215,6 +216,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, dcpServer as any, terminalProvider as any, () => { });
+        sinon.stub(aspireDebugSession as any, 'resolveAppHostTargetVersionAtLaunch').resolves('unknown');
         sinon.stub(aspireDebugSession as any, 'isDirectory').returns(new Promise<boolean>(() => { }));
 
         try {
@@ -278,12 +280,6 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
     });
 
     test('reports AppHost target version in end telemetry', async () => {
-        const tempDir = makeTempDir();
-        const appHostPath = join(tempDir, 'apphost.cs');
-        writeFileSync(appHostPath, `#:sdk Aspire.AppHost.Sdk@13.6.0
-
-var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
-`);
         const fake = new FakeTelemetryReporter();
         const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
         const parentDebugSession = {
@@ -295,7 +291,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
                 type: 'aspire',
                 request: 'launch',
                 name: 'Aspire',
-                program: appHostPath,
+                program: '/workspace/apphost.cs',
                 command: 'run',
             },
             customRequest: sinon.stub(),
@@ -313,11 +309,18 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         };
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, dcpServer as any, terminalProvider as any, () => { });
-        sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+        let resolveTargetVersion: ((value: string) => void) | undefined;
+        const targetVersionPromise = new Promise<string>(resolve => {
+            resolveTargetVersion = resolve;
+        });
+        sinon.stub(aspireDebugSession as any, 'resolveAppHostTargetVersionAtLaunch').returns(targetVersionPromise);
+        const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
 
         try {
             aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
-            await waitFor(() => fake.events.some(event => event.name === 'debug/apphost/start'));
+            await waitFor(() => spawnStub.calledOnce);
+            resolveTargetVersion!('13.6.0');
+            await targetVersionPromise;
             const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
             aspireDebugSession.dispose();
             await waitForWithFakeClock(clock, () => fake.events.some(event => event.name === 'debug/apphost/end'));
@@ -328,13 +331,12 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             assert.strictEqual(event.properties?.apphost_target_version, '13.6.0');
         }
         finally {
+            resolveTargetVersion?.('13.6.0');
             restoreReporter();
         }
     });
 
     test('reports resolved AppHost directory classification in end telemetry', async () => {
-        const tempDir = makeTempDir();
-        writeFileSync(join(tempDir, 'apphost.ts'), 'import { aspire } from "@microsoft/aspire";');
         const fake = new FakeTelemetryReporter();
         const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
         const parentDebugSession = {
@@ -346,7 +348,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
                 type: 'aspire',
                 request: 'launch',
                 name: 'Aspire',
-                program: tempDir,
+                program: '/workspace/apphost',
                 command: 'run',
             },
             customRequest: sinon.stub(),
@@ -364,6 +366,13 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         };
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
         const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, dcpServer as any, terminalProvider as any, () => { });
+        let resolveLanguage: ((value: 'csharp' | 'typescript' | 'unknown') => void) | undefined;
+        const languagePromise = new Promise<'csharp' | 'typescript' | 'unknown'>(resolve => {
+            resolveLanguage = resolve;
+        });
+        sinon.stub(aspireDebugSession as any, 'isDirectory').resolves(true);
+        sinon.stub(aspireDebugSession as any, 'resolveAppHostLanguageAtLaunch').returns(languagePromise);
+        sinon.stub(aspireDebugSession as any, 'resolveAppHostTargetVersionAtLaunch').resolves('unknown');
         const spawnStub = sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
 
         try {
@@ -373,15 +382,19 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             assert.ok(startEvent);
             assert.strictEqual(startEvent.properties?.apphost_is_directory, 'unknown');
 
+            resolveLanguage!('typescript');
+            await languagePromise;
             const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
             aspireDebugSession.dispose();
             await waitForWithFakeClock(clock, () => fake.events.some(event => event.name === 'debug/apphost/end'));
 
             const endEvent = fake.events.find(event => event.name === 'debug/apphost/end');
             assert.ok(endEvent);
+            assert.strictEqual(endEvent.properties?.apphost_language, 'typescript');
             assert.strictEqual(endEvent.properties?.apphost_is_directory, 'true');
         }
         finally {
+            resolveLanguage?.('typescript');
             restoreReporter();
         }
     });
