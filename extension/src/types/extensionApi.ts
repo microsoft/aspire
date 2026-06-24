@@ -104,6 +104,7 @@ export interface AspireExtensionE2EStateFile {
     terminalCommands: readonly AspireExtensionE2ETerminalCommand[];
     debugLaunches: readonly AspireExtensionE2EDebugLaunch[];
     debugConsoleOutputs: readonly AspireExtensionE2EDebugConsoleOutput[];
+    stoppingPathEvents: readonly AspireExtensionE2EStoppingPathEvent[];
     control?: AspireExtensionE2EControlStatus;
 }
 
@@ -118,6 +119,11 @@ export type AspireExtensionE2ETerminalCommand = AspireTerminalCommandEvent & Asp
 export type AspireExtensionE2EDebugLaunch = AppHostLaunchRequestedEvent & AspireExtensionE2ESequence;
 
 export type AspireExtensionE2EDebugConsoleOutput = AspireDebugConsoleOutputEvent & AspireExtensionE2ESequence;
+
+export interface AspireExtensionE2EStoppingPathEvent extends AspireExtensionE2ESequence {
+    appHostPath: string;
+    state: 'entered' | 'left';
+}
 
 export interface AspireDebugConsoleOutputEvent {
     debugSessionId: string;

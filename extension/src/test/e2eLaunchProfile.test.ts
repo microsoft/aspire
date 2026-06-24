@@ -247,6 +247,23 @@ suite('E2E launch profile', () => {
         assert.ok(assertions.includes("waitFor === 'applied' ? file.control.status === 'applied' : file.control.startedObserved === true"));
     });
 
+    test('latches E2E AppHost stopping path transitions before snapshots can clear', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
+        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
+
+        assert.ok(apiTypes.includes('stoppingPathEvents: readonly AspireExtensionE2EStoppingPathEvent[];'));
+        assert.ok(apiTypes.includes("state: 'entered' | 'left';"));
+        assert.ok(e2eStateFileBridge.includes('recordStoppingPathEvents(state.stoppingPaths);'));
+        assert.ok(e2eStateFileBridge.includes("stoppingPathEvents.push({ sequence: ++stoppingPathSequence, appHostPath, state: 'entered' });"));
+        assert.ok(assertions.includes('waitForStoppingPathEvent'));
+        assert.ok(debugDashboard.includes('const beforeStoppingPathEvent = getStoppingPathEventCount();'));
+        assert.ok(debugDashboard.includes("await waitForStoppingPathEvent(appHostPath, 'entered', beforeStoppingPathEvent, 120000);"));
+        assert.ok(!debugDashboard.includes("file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath))"));
+    });
+
     test('patches ExTester launch arguments without replacement-token expansion', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
