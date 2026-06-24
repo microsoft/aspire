@@ -57,17 +57,6 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
     }
 
-    /**
-     * Discovers AppHost candidates for a workspace folder.
-     *
-     * `onCandidate` is invoked once per candidate as it streams in from `aspire ls --stream`, allowing
-     * callers to paint results incrementally before discovery completes. IMPORTANT: `onCandidate` is only
-     * wired into a freshly started discovery (a cache miss, or `forceRefresh: true`). A caller that awaits
-     * an already in-flight cached discovery still receives the full list via the returned promise, but its
-     * `onCandidate` callback will NOT fire for candidates the in-flight run already emitted. Pass
-     * `forceRefresh: true` when incremental callbacks are required. Today only the AppHost panel relies on
-     * `onCandidate`, and it forces fresh runs, so this is not a problem in practice.
-     */
     async discover(workspaceFolder: vscode.WorkspaceFolder, forceRefresh = false, cancellationToken?: vscode.CancellationToken, onCandidate?: (candidate: CandidateAppHostDisplayInfo) => void): Promise<CandidateAppHostDisplayInfo[]> {
         this._throwIfDisposed();
         throwIfCancellationRequested(cancellationToken);
@@ -185,16 +174,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         const streamSupported = await this._configInfoProvider.hasCapability(lsStreamCapability, { suppressErrors: true });
 
         if (streamSupported) {
-            try {
-                return await this._runCliForStream(cliPath, ['ls', '--format', 'json', '--stream'], workspaceFolder.uri.fsPath, onCandidate);
-            }
-            catch (streamError) {
-                this._throwIfDisposed();
-                // The CLI advertised streaming support but the stream still failed (e.g. a transient
-                // runtime error). Retry once with the buffered, non-streaming form before dropping to
-                // the legacy get-apphosts path so a one-off streaming hiccup doesn't lose discovery.
-                extensionLogOutputChannel.warn(`aspire ls --stream failed despite advertised ${lsStreamCapability} capability, retrying without --stream: ${formatErrorMessage(streamError)}`);
-            }
+            return await this._runCliForStream(cliPath, ['ls', '--format', 'json', '--stream'], workspaceFolder.uri.fsPath, onCandidate);
         }
 
         const output = await this._runCliForStdout(cliPath, ['ls', '--format', 'json'], workspaceFolder.uri.fsPath);
