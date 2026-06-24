@@ -6,6 +6,8 @@ This document explains how the automatic CI rerun system works and how to config
 
 When a `CI` pull request run fails on GitHub Actions, a companion workflow automatically analyzes the failure, determines whether it was caused by transient infrastructure or test issues, and — if safe — requests GitHub to rerun the failed jobs. It also posts a comment on the PR explaining what it did and why.
 
+> **Scheduled `Outerloop Tests` runs use a separate, simpler workflow.** Outerloop runs have no associated PR, so they are rerun unconditionally (no analysis, no PR comment) with the same attempt cadence. See [Auto-rerun outerloop failures](auto-rerun-outerloop-failures.md).
+
 > **Currently in force mode.** The workflow is temporarily configured to skip the analysis below and rerun the failed jobs on **any** failed run with an open PR. See [Force-rerun all failures](#force-rerun-all-failures-force_rerun_all). The rest of this section describes the normal (analysis) behavior that force mode bypasses.
 
 ```text
