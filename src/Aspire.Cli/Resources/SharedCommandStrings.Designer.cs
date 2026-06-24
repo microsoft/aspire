@@ -227,5 +227,11 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NonInteractiveRequiresYesFormat", resourceCulture);
             }
         }
+
+        internal static string UnrecognizedOptionDidYouMeanFormat {
+            get {
+                return ResourceManager.GetString("UnrecognizedOptionDidYouMeanFormat", resourceCulture);
+            }
+        }
     }
 }

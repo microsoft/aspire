@@ -23,6 +23,7 @@ export interface AspireTerminal {
 
 export interface SendAspireCommandOptions {
     redactAdditionalArgs?: boolean;
+    terminalTarget?: 'shared' | 'editor';
 }
 
 // String parts are fixed CLI syntax and are validated before interpolation.
@@ -170,13 +171,16 @@ export class AspireTerminalProvider implements vscode.Disposable {
             logCommand = `${baseCommand} ${logArgs.join(' ')}`;
         }
         const executionSuppressed = isE2eTerminalCommandExecutionSuppressed();
+        const terminalTarget = options?.terminalTarget ?? 'shared';
         let aspireTerminal: AspireTerminal | undefined;
         let executionMode: AspireTerminalCommandEvent['executionMode'];
         if (executionSuppressed) {
             executionMode = 'suppressed';
         }
         else {
-            aspireTerminal = this.getAspireTerminal(false, cliPath);
+            aspireTerminal = terminalTarget === 'editor'
+                ? this.createAspireEditorTerminal(cliPath)
+                : this.getAspireTerminal(false, cliPath);
             executionMode = aspireTerminal.terminal.shellIntegration ? 'shellIntegration' : 'sendText';
         }
         this._onDidSendAspireCommand.fire({
@@ -215,7 +219,6 @@ export class AspireTerminalProvider implements vscode.Disposable {
     }
 
     getAspireTerminal(forceCreate?: boolean, aspireCliPath?: string): AspireTerminal {
-        const terminalName = aspireTerminalName;
         const msBuildAspireCliPath = this.getAspireCliPathForTerminalEnvironment(aspireCliPath);
 
         const existingTerminal = this._terminalByDebugSessionId.get(null);
@@ -232,18 +235,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         }
 
         extensionLogOutputChannel.info(`Creating new Aspire terminal`);
-        const terminalOptions: vscode.TerminalOptions = {
-            name: terminalName,
-            env: this.createEnvironment(undefined, undefined, undefined, aspireCliPath),
-        };
-        if (process.platform === 'win32') {
-            // quoteShellArg uses PowerShell escaping on Windows. Do not rely on the
-            // user's default terminal profile because cmd.exe treats backticks as
-            // ordinary characters and would make quoted values containing " shell-sensitive again.
-            terminalOptions.shellPath = this.getWindowsPowerShellPath();
-        }
-
-        const terminal = vscode.window.createTerminal(terminalOptions);
+        const terminal = this.createTerminal(undefined, aspireCliPath);
 
         const aspireTerminal: AspireTerminal = {
             terminal,
@@ -257,6 +249,32 @@ export class AspireTerminalProvider implements vscode.Disposable {
         this._terminalByDebugSessionId.set(null, aspireTerminal);
 
         return aspireTerminal;
+    }
+
+    private createAspireEditorTerminal(aspireCliPath?: string): AspireTerminal {
+        extensionLogOutputChannel.info('Creating Aspire editor terminal');
+        const terminal = this.createTerminal(vscode.TerminalLocation.Editor, aspireCliPath);
+        return {
+            terminal,
+            msBuildAspireCliPath: this.getAspireCliPathForTerminalEnvironment(aspireCliPath),
+            dispose: () => terminal.dispose(),
+        };
+    }
+
+    private createTerminal(location?: vscode.TerminalLocation, aspireCliPath?: string): vscode.Terminal {
+        const terminalOptions: vscode.TerminalOptions = {
+            name: aspireTerminalName,
+            env: this.createEnvironment(undefined, undefined, undefined, aspireCliPath),
+            location,
+        };
+        if (process.platform === 'win32') {
+            // quoteShellArg uses PowerShell escaping on Windows. Do not rely on the
+            // user's default terminal profile because cmd.exe treats backticks as
+            // ordinary characters and would make quoted values containing " shell-sensitive again.
+            terminalOptions.shellPath = this.getWindowsPowerShellPath();
+        }
+
+        return vscode.window.createTerminal(terminalOptions);
     }
 
     createEnvironment(debugSessionId?: string, noDebug?: boolean, noExtensionVariables?: boolean, aspireCliPath?: string): any {
@@ -326,6 +344,14 @@ export class AspireTerminalProvider implements vscode.Disposable {
         // through the extension backchannel while disabling Spectre live output
         // such as the first-run banner and spinners.
         env.ASPIRE_NON_INTERACTIVE = 'true';
+
+        // While debugging, the developer can pause on a breakpoint (e.g. before builder.Build())
+        // for an arbitrarily long time. Use a very long startup timeout (86400s = 24h) so the parent
+        // Aspire CLI doesn't hit its normal ~120s startup timeout and tear down the debug session.
+        // An explicitly configured ASPIRE_CLI_START_TIMEOUT still wins.
+        if (noDebug === false && !hasConfiguredEnvironmentVariable(env, EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT)) {
+            env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT] = '86400';
+        }
 
         // if DCP debug logging is enabled, set DCP-specific logging environment variables
         const dcpDebugLoggingEnabled = vscode.workspace.getConfiguration('aspire').get<boolean>('enableAspireDcpDebugLogging', false);
@@ -412,6 +438,20 @@ function isPowerShell7Available(): boolean {
     });
 
     return result.status === 0 && result.error === undefined;
+}
+
+function hasConfiguredEnvironmentVariable(env: Record<string, string | undefined>, name: string): boolean {
+    if (env[name]) {
+        return true;
+    }
+
+    if (process.platform !== 'win32') {
+        return false;
+    }
+
+    // Windows environment variables are case-insensitive. Avoid adding a second
+    // differently-cased key because Node picks only one when spawning the child process.
+    return Object.entries(env).some(([key, value]) => key.toUpperCase() === name && !!value);
 }
 
 function isE2eTerminalCommandExecutionSuppressed(): boolean {

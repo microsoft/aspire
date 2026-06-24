@@ -12,6 +12,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -419,8 +420,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.PackagingServiceFactory = _ => new TestPackagingService
             {
                 GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
-                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
-                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], dailyCache, new TestFeatures())
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance),
+                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], dailyCache, new TestFeatures(), NullLogger.Instance)
                 ])
             };
         });
@@ -491,8 +492,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.PackagingServiceFactory = _ => new TestPackagingService
             {
                 GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
-                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
-                    PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, PackageChannelQuality.Both, [new PackageMapping("Aspire*", "staging")], stagingCache, new TestFeatures())
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance),
+                    PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, PackageChannelQuality.Both, [new PackageMapping("Aspire*", "staging")], stagingCache, new TestFeatures(), NullLogger.Instance)
                 ])
             };
         });
@@ -578,8 +579,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.PackagingServiceFactory = _ => new TestPackagingService
             {
                 GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
-                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
-                    PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, [new PackageMapping("Aspire*", "stable")], stableCache, new TestFeatures())
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance),
+                    PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, [new PackageMapping("Aspire*", "stable")], stableCache, new TestFeatures(), NullLogger.Instance)
                 ])
             };
         });
@@ -673,8 +674,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.PackagingServiceFactory = _ => new TestPackagingService
             {
                 GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
-                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
-                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], dailyCache, new TestFeatures())
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance),
+                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], dailyCache, new TestFeatures(), NullLogger.Instance)
                 ])
             };
         });
@@ -784,8 +785,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.PackagingServiceFactory = _ => new TestPackagingService
             {
                 GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
-                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
-                    PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, PackageChannelQuality.Both, [new PackageMapping("Aspire*", "staging")], stagingCache, new TestFeatures())
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance),
+                    PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, PackageChannelQuality.Both, [new PackageMapping("Aspire*", "staging")], stagingCache, new TestFeatures(), NullLogger.Instance)
                 ])
             };
         });
@@ -926,8 +927,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.PackagingServiceFactory = _ => new TestPackagingService
             {
                 GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
-                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
-                    PackageChannel.CreateExplicitChannel("test-hive", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "test-hive")], explicitCache, new TestFeatures())
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance),
+                    PackageChannel.CreateExplicitChannel("test-hive", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "test-hive")], explicitCache, new TestFeatures(), NullLogger.Instance)
                 ])
             };
         });
@@ -2214,7 +2215,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         // Create a fake channel
         var fakeCache = new FakeNuGetPackageCache();
-        var channel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+        var channel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
 
         // Create multiple versions of the same package
         var packages = new[]
@@ -2262,7 +2263,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         // Create a fake channel
         var fakeCache = new FakeNuGetPackageCache();
-        var channel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+        var channel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
 
         // Create multiple versions of the same package from same channel
         var packages = new[]
@@ -2310,10 +2311,10 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         // Create two different channels
         var fakeCache = new FakeNuGetPackageCache();
-        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
         
         var mappings = new[] { new PackageMapping("Aspire*", "https://preview-feed") };
-        var explicitChannel = PackageChannel.CreateExplicitChannel("preview", PackageChannelQuality.Prerelease, mappings, fakeCache, new TestFeatures());
+        var explicitChannel = PackageChannel.CreateExplicitChannel("preview", PackageChannelQuality.Prerelease, mappings, fakeCache, new TestFeatures(), NullLogger.Instance);
 
         // Create packages from different channels with different versions
         var packages = new[]
@@ -2366,8 +2367,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var prompter = new AddCommandPrompter(interactionService);
 
         var fakeCache = new FakeNuGetPackageCache();
-        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
-        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], fakeCache, new TestFeatures());
+        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], fakeCache, new TestFeatures(), NullLogger.Instance);
 
         // The implicit (ambient) channel surfaces a higher-precedence STABLE version; the pinned daily
         // channel surfaces a PRERELEASE version. Pre-fix the higher stable version was always the default.
@@ -2439,8 +2440,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.PackagingServiceFactory = _ => new TestPackagingService
             {
                 GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
-                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
-                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], dailyCache, new TestFeatures())
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance),
+                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], dailyCache, new TestFeatures(), NullLogger.Instance)
                 ])
             };
         });

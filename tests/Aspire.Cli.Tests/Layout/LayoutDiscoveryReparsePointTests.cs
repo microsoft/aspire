@@ -48,7 +48,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         var linkPath = Path.Combine(linksDir, "aspire");
         File.CreateSymbolicLink(linkPath, realBinary);
 
-        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
         {
             ProcessPathOverride = linkPath
         };
@@ -77,7 +77,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         var linkPath = Path.Combine(rawLayoutRoot, "aspire");
         File.CreateSymbolicLink(linkPath, realBinary);
 
-        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
         {
             ProcessPathOverride = linkPath
         };
@@ -113,7 +113,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         try
         {
             Environment.SetEnvironmentVariable(BundleDiscovery.LayoutPathEnvVar, layoutRoot);
-            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance);
+            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment());
             var layout = discovery.DiscoverLayout();
 
             Assert.NotNull(layout);
@@ -148,7 +148,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         {
             Environment.SetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome);
 
-            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
             {
                 ProcessPathOverride = binaryPath
             };
@@ -194,7 +194,7 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         {
             Environment.SetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome);
 
-            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
             {
                 ProcessPathOverride = binaryPath
             };

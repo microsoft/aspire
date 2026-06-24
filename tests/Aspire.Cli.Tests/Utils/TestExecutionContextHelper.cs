@@ -19,7 +19,6 @@ internal static class TestExecutionContextHelper
     public static CliExecutionContext CreateExecutionContext(
         this TemporaryWorkspace workspace,
         string identityChannel = "local",
-        IReadOnlyDictionary<string, string?>? environmentVariables = null,
         string? logFilePath = null,
         string? identityVersion = null,
         string? identityCommit = null,
@@ -28,7 +27,6 @@ internal static class TestExecutionContextHelper
         return CreateExecutionContext(
             workspace.WorkspaceRoot,
             identityChannel: identityChannel,
-            environmentVariables: environmentVariables,
             logFilePath: logFilePath,
             identityVersion: identityVersion,
             identityCommit: identityCommit,
@@ -45,7 +43,6 @@ internal static class TestExecutionContextHelper
         string identityChannel = "local",
         DirectoryInfo? homeDirectory = null,
         DirectoryInfo? hivesDirectory = null,
-        IReadOnlyDictionary<string, string?>? environmentVariables = null,
         DirectoryInfo? packagesDirectory = null,
         bool debugMode = false,
         string? logFilePath = null,
@@ -76,7 +73,6 @@ internal static class TestExecutionContextHelper
             identityOverridden: identityOverridden,
             identityPackagesDirectory: identityPackagesDirectory,
             debugMode: debugMode,
-            environmentVariables: environmentVariables,
             homeDirectory: homeDirectory,
             packagesDirectory: packagesDirectory);
     }

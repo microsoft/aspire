@@ -1,8 +1,5 @@
 # __PACKAGE_NAME__
 
-[![CI](https://github.com/microsoft/aspire/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/microsoft/aspire/actions/workflows/ci.yml)
-[![Tests](https://github.com/microsoft/aspire/actions/workflows/tests.yml/badge.svg?branch=main&event=push)](https://github.com/microsoft/aspire/actions/workflows/tests.yml)
-
 The Aspire CLI, published for npm-based installs.
 
 ## What is Aspire?

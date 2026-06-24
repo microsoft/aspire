@@ -351,7 +351,23 @@ public class MSBuildTests
 
         var cliPath = Path.Combine(tempDirectory.Path, "tools", $"aspire{extension}");
         Directory.CreateDirectory(Path.GetDirectoryName(cliPath)!);
-        File.WriteAllText(cliPath, "");
+
+        // The run hook only activates when the resolved CLI reports a version >= the minimum
+        // supported version: _AspireCheckCliVersion probes "<cli> --version". The fake shim must
+        // therefore emit a sufficiently new version, otherwise the wrapping path under test is
+        // never reached. The probe runs through MSBuild's Exec task, which uses /bin/sh on
+        // non-Windows hosts (it keys off the real OS, not the <OS>Windows_NT</OS> property this
+        // test sets for the wrapping logic), so the body is a batch/sh polyglot: cmd.exe treats
+        // the first line as a label and runs the echo below it, while /bin/sh runs the leading
+        // ":;" no-op and echoes the version before exiting.
+        var shimBody = string.Join(Environment.NewLine, ":; echo 99.0.0; exit 0", "@echo off", "echo 99.0.0", "");
+        File.WriteAllText(cliPath, shimBody);
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(cliPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                | UnixFileMode.GroupRead | UnixFileMode.GroupExecute
+                | UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        }
 
         var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
             $"""

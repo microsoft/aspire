@@ -1411,7 +1411,7 @@ public static class JavaScriptHostingExtensions
                 {
                     configTarget = ctx.Arguments[cfgIndex + 1] switch
                     {
-                        string s when !string.IsNullOrEmpty(s) && !s.StartsWith("--") => s,
+                        string s when !string.IsNullOrEmpty(s) && !s.StartsWith("--", StringComparison.Ordinal) => s,
                         ReferenceExpression re => await re.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false),
                         _ => null,
                     };
