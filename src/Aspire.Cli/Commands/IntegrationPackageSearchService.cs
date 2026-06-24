@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Integrations;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
@@ -17,11 +18,18 @@ internal sealed class IntegrationPackageSearchService(
     IProjectLocator projectLocator,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
-    IAppHostProjectFactory projectFactory)
+    IAppHostProjectFactory projectFactory,
+    IIntegrationResolver integrationResolver)
 {
     private const double FuzzyMatchThreshold = 0.3;
 
     public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
+    {
+        var candidates = await GetIntegrationPackageCandidatesAsync(workingDirectory, configuredChannel, cancellationToken);
+        return candidates.Select(static candidate => (candidate.Package, candidate.Channel));
+    }
+
+    public async Task<IEnumerable<IntegrationPackageCandidate>> GetIntegrationPackageCandidatesAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
     {
         // `configuredChannel` (from a polyglot apphost's aspire.config.json) is forwarded
         // as `requestedChannelName` so PackagingService can synthesize the staging channel
@@ -51,21 +59,9 @@ internal sealed class IntegrationPackageSearchService(
             ? allChannels
             : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
 
-        var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
-        var packagesLock = new object();
-
-        await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
-        {
-            var integrationPackages = await channel.GetIntegrationPackagesAsync(
-                workingDirectory: workingDirectory,
-                cancellationToken: ct);
-            lock (packagesLock)
-            {
-                packages.AddRange(integrationPackages.Select(p => (p, channel)));
-            }
-        });
-
-        return packages;
+        return await integrationResolver.GetPackageCandidatesAsync(
+            new IntegrationIndexSourceContext(workingDirectory, channels.ToArray()),
+            cancellationToken);
     }
 
     public async Task<(DirectoryInfo WorkingDirectory, string? ConfiguredChannel, int? ExitCode)> GetPackageSearchContextAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
@@ -129,10 +125,7 @@ internal sealed class IntegrationPackageSearchService(
 
     public static (string FriendlyName, NuGetPackage Package, PackageChannel Channel) GenerateFriendlyName((NuGetPackage Package, PackageChannel Channel) packageWithChannel)
     {
-        var packageId = packageWithChannel.Package.Id.Replace("Aspire.Hosting.", "", StringComparison.OrdinalIgnoreCase);
-        var friendlyName = packageId.Replace('.', '-').ToLowerInvariant();
-
-        return (friendlyName, packageWithChannel.Package, packageWithChannel.Channel);
+        return (IntegrationNameHelper.GenerateFriendlyName(packageWithChannel.Package.Id), packageWithChannel.Package, packageWithChannel.Channel);
     }
 
     public static IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore)> GetIntegrationSearchMatches(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string searchTerm)
@@ -144,11 +137,28 @@ internal sealed class IntegrationPackageSearchService(
             .ThenByDescending(p => p.FriendlyName, new CommunityToolkitFirstComparer());
     }
 
+    public static IEnumerable<(IntegrationPackageCandidate Candidate, double SearchScore)> GetIntegrationSearchMatches(IEnumerable<IntegrationPackageCandidate> candidates, string searchTerm)
+    {
+        return candidates
+            .Select(candidate => (Candidate: candidate, SearchScore: candidate.GetSearchScore(searchTerm)))
+            .Where(candidate => candidate.SearchScore > FuzzyMatchThreshold)
+            .OrderByDescending(candidate => candidate.SearchScore)
+            .ThenByDescending(candidate => candidate.Candidate.Name, new CommunityToolkitFirstComparer());
+    }
+
     public static (string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore) SelectPreferredIntegrationPackage(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore)> packages)
     {
         return packages
             .OrderByDescending(p => p.Channel.Type is PackageChannelType.Implicit)
             .ThenByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer)
+            .First();
+    }
+
+    public static IntegrationPackageCandidate SelectPreferredIntegrationPackage(IEnumerable<IntegrationPackageCandidate> candidates)
+    {
+        return candidates
+            .OrderByDescending(candidate => candidate.Channel.Type is PackageChannelType.Implicit)
+            .ThenByDescending(candidate => SemVersion.Parse(candidate.Package.Version), SemVersion.PrecedenceComparer)
             .First();
     }
 

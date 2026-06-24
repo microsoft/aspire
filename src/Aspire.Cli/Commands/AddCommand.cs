@@ -4,6 +4,7 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Integrations;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
@@ -146,33 +147,37 @@ internal sealed class AddCommand : BaseCommand
                 return AddCommandFromExitCode(exitCode);
             }
 
-            List<(NuGetPackage Package, PackageChannel Channel)> packagesWithChannels;
+            List<IntegrationPackageCandidate> packageCandidates;
             using (var searchPackagesActivity = _profilingTelemetry.StartAddSearchPackages(configuredChannel))
             {
                 var discoveredPackages = await InteractionService.ShowStatusAsync(
                     AddCommandStrings.SearchingForAspirePackages,
-                    async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
-                packagesWithChannels = discoveredPackages as List<(NuGetPackage Package, PackageChannel Channel)> ?? discoveredPackages.ToList();
-                var packageCount = packagesWithChannels.Count;
+                    async () => await _integrationPackageSearchService.GetIntegrationPackageCandidatesAsync(effectiveAppHostProjectFile.Directory!, configuredChannel, cancellationToken));
+                packageCandidates = discoveredPackages as List<IntegrationPackageCandidate> ?? discoveredPackages.ToList();
+                var packageCount = packageCandidates.Count;
                 searchPackagesActivity.SetAddPackageSearchResultCount(packageCount);
                 addActivity.SetAddPackageSearchResultCount(packageCount);
             }
 
-            if (packagesWithChannels.Count == 0)
+            if (packageCandidates.Count == 0)
             {
                 throw new EmptyChoicesException(AddCommandStrings.NoIntegrationPackagesFound);
             }
 
-            var packagesWithShortName = packagesWithChannels.Select(IntegrationPackageSearchService.GenerateFriendlyName).OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer()).ToList();
+            var packagesWithCandidates = packageCandidates
+                .Select(static candidate => (Candidate: candidate, Package: candidate.ToLegacyPackage()))
+                .OrderBy(p => p.Package.FriendlyName, new CommunityToolkitFirstComparer())
+                .ToList();
+            var packagesWithShortName = DeduplicatePackageMatches(packagesWithCandidates.Select(static p => p.Package));
 
             if (packagesWithShortName.Count == 0)
             {
                 return AddCommandFailure(CliExitCodes.FailedToAddPackage, AddCommandStrings.NoPackagesFound);
             }
 
-            var filteredPackagesWithShortName = packagesWithShortName
-                .Where(p => p.FriendlyName == integrationName || p.Package.Id == integrationName)
-                .ToList();
+            var filteredPackagesWithShortName = DeduplicatePackageMatches(packagesWithCandidates
+                .Where(p => p.Candidate.IsExactMatch(integrationName))
+                .Select(static p => p.Package));
             var packageMatchKind = filteredPackagesWithShortName.Count > 0
                 ? ProfilingTelemetry.Values.AddPackageMatchKindExact
                 : ProfilingTelemetry.Values.AddPackageMatchKindNone;
@@ -196,9 +201,9 @@ internal sealed class AddCommand : BaseCommand
                 // then try a fuzzy search to create a broader filtered list.
                 // Materialize the query with ToList() to avoid multiple enumerations
                 // (which would recalculate fuzzy scores on each Count()/First() call).
-                filteredPackagesWithShortName = IntegrationPackageSearchService.GetIntegrationSearchMatches(packagesWithShortName, integrationName)
-                    .Select(x => (x.FriendlyName, x.Package, x.Channel))
-                    .ToList();
+                filteredPackagesWithShortName = DeduplicatePackageMatches(
+                    IntegrationPackageSearchService.GetIntegrationSearchMatches(packageCandidates, integrationName)
+                        .Select(static match => match.Candidate.ToLegacyPackage()));
                 packageMatchKind = filteredPackagesWithShortName.Count > 0
                     ? ProfilingTelemetry.Values.AddPackageMatchKindFuzzy
                     : ProfilingTelemetry.Values.AddPackageMatchKindNone;
@@ -388,6 +393,29 @@ internal sealed class AddCommand : BaseCommand
             }
         }
         return versions;
+    }
+
+    private static List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> DeduplicatePackageMatches(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages)
+    {
+        var results = new List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var package in packages)
+        {
+            var key = string.Join('\0',
+                package.Package.Id,
+                package.Package.Version,
+                package.Channel.Type.ToString(),
+                package.Channel.Name,
+                package.Channel.SourceDetails);
+
+            if (seen.Add(key))
+            {
+                results.Add(package);
+            }
+        }
+
+        return results;
     }
 
     private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlow(

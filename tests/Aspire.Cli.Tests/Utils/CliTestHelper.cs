@@ -14,6 +14,7 @@ using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
+using Aspire.Cli.Integrations;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
@@ -251,6 +252,9 @@ internal static class CliTestHelper
         services.AddTransient<TerminalAttachCommand>();
         services.AddTransient<TerminalPsCommand>();
         services.AddTransient<IntegrationPackageSearchService>();
+        services.AddTransient<IIntegrationIndexSource, StaticGeneratedIntegrationIndexSource>();
+        services.AddTransient<IIntegrationIndexSource, NuGetSearchIntegrationIndexSource>();
+        services.AddTransient<IIntegrationResolver, IntegrationResolver>();
         services.AddTransient<IntegrationCommand>();
         services.AddTransient<IntegrationListCommand>();
         services.AddTransient<IntegrationSearchCommand>();

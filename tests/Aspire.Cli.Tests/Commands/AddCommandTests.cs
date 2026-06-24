@@ -4,6 +4,7 @@
 using System.Text.Json;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Integrations;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
@@ -997,6 +998,107 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var integrations = ReadIntegrationResults(rawJson);
         Assert.Empty(integrations);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandFormatJsonMatchesStaticIndexAlias()
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                {
+                    return (0, [CreatePackage("Aspire.Hosting.Redis", "13.4.0")]);
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("integration search cache --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("redis", integration.Name);
+        Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+        Assert.Equal("13.4.0", integration.Version);
+    }
+
+    [Fact]
+    public async Task AddCommandExactIndexQualifiedNameDoesNotMatchOtherEntryForSamePackage()
+    {
+        var addedPackageVersion = string.Empty;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var channel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var provider = new IntegrationProviderReference(IntegrationProviderTypes.NuGet, "Aspire.Hosting.Redis");
+        var officialIndex = new IntegrationIndexDescriptor("aspire", "Aspire", "official", IntegrationIndexSourceKind.StaticGeneratedArtifact);
+        var nugetSearchIndex = new IntegrationIndexDescriptor("nuget-search", "NuGet search", "third-party", IntegrationIndexSourceKind.DynamicNuGetSearch);
+        var candidates = new[]
+        {
+            new IntegrationPackageCandidate(
+                new IntegrationEntry
+                {
+                    Index = officialIndex,
+                    Id = "cache",
+                    Providers = [provider]
+                },
+                provider,
+                CreatePackage("Aspire.Hosting.Redis", "13.4.0"),
+                channel),
+            new IntegrationPackageCandidate(
+                new IntegrationEntry
+                {
+                    Index = nugetSearchIndex,
+                    Id = "redis",
+                    Providers = [provider]
+                },
+                provider,
+                CreatePackage("Aspire.Hosting.Redis", "13.5.0"),
+                channel)
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("Integration discovery should come from the resolver.");
+                runner.AddPackageAsyncCallback = (_, _, packageVersion, _, _, _, _) =>
+                {
+                    addedPackageVersion = packageVersion;
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        services.AddSingleton<IIntegrationResolver>(new TestIntegrationResolver(candidates));
+        using var providerServices = services.BuildServiceProvider();
+
+        var command = providerServices.GetRequiredService<AddCommand>();
+        var result = command.Parse("add aspire/cache");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal("13.4.0", addedPackageVersion);
     }
 
     [Fact]
@@ -2871,6 +2973,16 @@ internal sealed class TestAddCommandPrompter(IInteractionService interactionServ
             { } callback => Task.FromResult(callback(packages)),
             _ => Task.FromResult(packages.First()) // If no callback is provided just accept the first package.
         };
+    }
+}
+
+internal sealed class TestIntegrationResolver(IEnumerable<IntegrationPackageCandidate> candidates) : IIntegrationResolver
+{
+    public Task<IEnumerable<IntegrationPackageCandidate>> GetPackageCandidatesAsync(
+        IntegrationIndexSourceContext context,
+        CancellationToken cancellationToken)
+    {
+        return Task.FromResult(candidates);
     }
 }
 

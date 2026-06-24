@@ -126,6 +126,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Integrations\Indexes\aspire.generated.json" LogicalName="integration-indexes/aspire.generated.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="$(SharedDir)CliExitCodes.cs" Link="CliExitCodes.cs" />
     <Compile Include="$(SharedDir)AppHostProfilePortGenerator.cs" Link="Utils\AppHostProfilePortGenerator.cs" />
     <Compile Include="$(SharedDir)AspireCliIdentityEnvVars.cs" Link="Acquisition\AspireCliIdentityEnvVars.cs" />
