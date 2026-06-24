@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREDOTNETTOOL
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -225,7 +227,42 @@ public class AddEFMigrationsTests
         Assert.False(migrations.Resource.PublishAsMigrationBundle);
     }
 
+    [Fact]
+    public async Task ToolResourceInheritsConnectionStringFromMigrationReference()
+    {
+        // The connection string the user declares via .WithReference(<db>) lands on the migration
+        // resource, not on the startup project. The dotnet-ef tool resource must inherit it so the
+        // design-time DbContext can open the database. Regression test for the
+        // "The ConnectionString property has not been initialized." failure.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var db = builder.AddResource(new TestDatabaseResource("db1"));
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
+            .WithReference(db);
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var toolResource = Assert.Single(appModel.Resources.OfType<DotnetToolResource>(), r => r.Name == "ef-tool-mymigrations");
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        var env = await toolResource.GetEnvironmentVariableValuesAsync(DistributedApplicationOperation.Publish);
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        Assert.Equal("{db1.connectionString}", Assert.Contains("ConnectionStrings__db1", env));
+    }
+
     // Test classes for DbContext types
     private sealed class TestDbContext { }
     private sealed class AnotherDbContext { }
+
+    /// <summary>
+    /// A minimal test resource that implements IResourceWithConnectionString so it can be used as the
+    /// target of <c>WithReference</c> on an EF migration resource.
+    /// </summary>
+    private sealed class TestDatabaseResource(string name) : Resource(name), IResourceWithConnectionString
+    {
+        public ReferenceExpression ConnectionStringExpression =>
+            ReferenceExpression.Create($"Host=localhost;Database={Name}");
+    }
 }
