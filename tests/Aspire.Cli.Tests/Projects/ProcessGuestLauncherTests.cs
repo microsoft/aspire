@@ -12,9 +12,11 @@ using static Aspire.Cli.Tests.TestServices.ProcessTestHelpers;
 
 namespace Aspire.Cli.Tests.Projects;
 
-public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper)
+public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDisposable
 {
     private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+
+    public void Dispose() => _loggerFactory.Dispose();
 
     private ProcessGuestLauncher CreateLauncher()
         => new(
