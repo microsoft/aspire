@@ -52,6 +52,12 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared/TempDirectory.cs" />
+    <!-- Verify's [ModuleInitializer] that points snapshot resolution at each test's Snapshots/ dir.
+         Consumers that only reference this helper assembly (and no longer reference Aspire.Hosting.Tests)
+         rely on this initializer loading transitively, exactly as it did from Aspire.Hosting.Tests before
+         the helper extraction. The VerifyInitializer.TryInitialize() guard makes double-init across
+         assemblies safe. -->
+    <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" Link="shared/TestModuleInitializer.cs" />
     <Compile Include="$(TestsSharedDir)Logging\*.cs" LinkBase="shared/Logging" />
     <Compile Include="$(TestsSharedDir)DistributedApplicationTestingBuilderExtensions.cs" Link="shared/DistributedApplicationTestingBuilderExtensions.cs" />
   </ItemGroup>
