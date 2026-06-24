@@ -1930,8 +1930,23 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     [Fact]
     public void IsLikelyAppHost_SiblingAppHostSourceFile_ReturnsTrue()
     {
-        // The project has no inline marker and an ordinary name, but a sibling apphost.cs (shipped by
-        // project-based AppHosts created with `aspire new`) marks it as a candidate.
+        // The project has no inline marker and an ordinary name, but a sibling AppHost.cs (shipped by
+        // project-based AppHosts created with `aspire new`) marks it as a candidate. The file is written with
+        // its real PascalCase name so this also guards against a case-sensitive lookup missing it on
+        // Linux/macOS.
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("AppHost.cs", "// builder entrypoint");
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_SiblingAppHostSourceFileWithDifferentCasing_ReturnsTrue()
+    {
+        // The sibling source-file match is case-insensitive (preserving the prior discovery behavior), so a
+        // differently-cased apphost.cs next to an ordinary project is still treated as a candidate.
         var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
             <Project Sdk="Microsoft.NET.Sdk" />
             """);

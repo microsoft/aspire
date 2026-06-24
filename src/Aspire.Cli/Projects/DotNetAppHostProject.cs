@@ -52,6 +52,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private const string AspireAppHostSdkName = "Aspire.AppHost.Sdk";
     private const string IsAspireHostProperty = "IsAspireHost";
     private const string AppHostSourceFileName = "apphost.cs";
+    private const string ProjectAppHostSourceFileName = "AppHost.cs";
     private const string DirectoryBuildPropsName = "Directory.Build.props";
     private const string DirectoryBuildTargetsName = "Directory.Build.targets";
 
@@ -288,12 +289,18 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return true;
         }
 
-        // Convention 2: a sibling apphost.cs lives next to the project. A project-based AppHost created by
-        // `aspire new` ships an apphost.cs with the builder entrypoint, so its presence is a strong signal
-        // even when the csproj carries no inline marker.
+        // Convention 2: a sibling AppHost.cs source file lives next to the project. Project-based AppHosts
+        // created by the templates (e.g. `aspire new`) ship an AppHost.cs (PascalCase) with the builder
+        // entrypoint, so its presence is a strong signal even when the csproj carries no inline marker.
+        // (The lowercase apphost.cs is the separate single-file AppHost convention, which has no csproj.)
+        //
+        // Match the file name case-insensitively by enumerating the directory rather than calling
+        // File.Exists with a fixed-case name: File.Exists is case-sensitive on Linux/macOS and would miss
+        // the PascalCase AppHost.cs there. This preserves the behavior of the previous discovery heuristic.
         var directory = projectFile.Directory;
         return directory is not null
-            && File.Exists(Path.Combine(directory.FullName, AppHostSourceFileName));
+            && directory.EnumerateFiles("*.cs", SearchOption.TopDirectoryOnly)
+                .Any(file => file.Name.Equals(ProjectAppHostSourceFileName, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool ContainsAspireAppHostSdk(string sdkAttribute)
