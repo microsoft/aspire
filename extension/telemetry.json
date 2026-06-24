@@ -109,6 +109,11 @@
         "purpose": "FeatureInsight",
         "comment": "The Aspire version targeted by the AppHost."
       },
+      "apphost_is_directory": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the AppHost launch target was a directory."
+      },
       "ended_with_error": {
         "classification": "SystemMetaData",
         "purpose": "PerformanceAndHealth",
