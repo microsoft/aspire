@@ -66,7 +66,7 @@ jobs:
         uses: ./.github/actions/select-tests
         with:
           checkout: 'false'
-          enforce: 'false'
+          enforce: 'true'
           commentFile: ${{ env.SELECT_TESTS_COMMENT_FILE }}
           # Kill switch: the 'run-full-ci' PR label forces the full matrix + all jobs. Read from the event
           # payload snapshot, so adding the label takes effect on the next push (or reopen), not on a
