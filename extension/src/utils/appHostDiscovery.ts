@@ -291,7 +291,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             () => stdout);
     }
 
-    private _runCliProcess<T>(cliPath: string, args: string[], workingDirectory: string, dataCallbacks: { stdoutCallback?: (data: string) => void; lineCallback?: (line: string) => void }, onSuccess: () => T): Promise<T> {
+    private _runCliProcess<T>(cliPath: string, args: string[], workingDirectory: string, dataCallbacks: { stdoutCallback?: (data: string) => void; lineCallback?: (line: string) => void }, onSuccess: () => T, options?: { idleTimeout?: boolean }): Promise<T> {
         return new Promise<T>((resolve, reject) => {
             this._throwIfDisposed();
 
@@ -340,12 +340,52 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 complete();
             };
 
+            // The discovery timeout has two modes. For buffered commands (`aspire ls --format json`,
+            // legacy `extension get-apphosts`) it is a total-duration cap: those produce output only
+            // at the end, so a single timer covers the whole run. For the streaming command
+            // (`aspire ls --format json --stream`) it is an inactivity watchdog: it is re-armed on
+            // every chunk of CLI output (see the activity wrapping below) so it only fires when the
+            // CLI goes silent for the full interval (a genuine hang). A large workspace can
+            // legitimately stream candidates for far longer than the interval in total, so a
+            // total-duration cap there would needlessly kill a healthy stream and discard progress.
+            const timeoutMs = getAppHostDiscoveryTimeoutMs();
+            const armTimeout = () => {
+                if (settled) {
+                    return;
+                }
+                if (timeout) {
+                    clearTimeout(timeout);
+                }
+                timeout = setTimeout(() => {
+                    const reason = options?.idleTimeout
+                        ? `timed out after ${timeoutMs / 1000} seconds without output`
+                        : `timed out after ${timeoutMs / 1000} seconds`;
+                    cancel(new Error(`aspire ${cliArgs.join(' ')} ${reason}.`));
+                }, timeoutMs);
+            };
+
+            // When using the inactivity watchdog, re-arm the timer on every chunk of output so steady
+            // streaming progress keeps the process alive. Buffered commands keep their raw callbacks.
+            const wrapWithActivity = (callback?: (data: string) => void): ((data: string) => void) | undefined => {
+                if (!options?.idleTimeout || !callback) {
+                    return callback;
+                }
+                return data => {
+                    armTimeout();
+                    callback(data);
+                };
+            };
+            const effectiveDataCallbacks = {
+                stdoutCallback: wrapWithActivity(dataCallbacks.stdoutCallback),
+                lineCallback: wrapWithActivity(dataCallbacks.lineCallback),
+            };
+
             this._cancelActiveCliProcesses.add(cancel);
             try {
                 childProcess = spawnCliProcess(this._terminalProvider, cliPath, cliArgs, {
                     noExtensionVariables: true,
                     workingDirectory,
-                    ...dataCallbacks,
+                    ...effectiveDataCallbacks,
                     stderrCallback: data => { stderr += data; },
                     exitCallback: code => {
                         settle(() => {
@@ -372,10 +412,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             }
 
             this._activeCliProcesses.add(childProcess);
-            const timeoutMs = getAppHostDiscoveryTimeoutMs();
-            timeout = setTimeout(() => {
-                cancel(new Error(`aspire ${cliArgs.join(' ')} timed out after ${timeoutMs / 1000} seconds.`));
-            }, timeoutMs);
+            armTimeout();
         });
     }
 
@@ -431,7 +468,8 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             args,
             workingDirectory,
             { lineCallback: handleLine },
-            () => candidates);
+            () => candidates,
+            { idleTimeout: true });
     }
 }
 

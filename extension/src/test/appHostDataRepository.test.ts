@@ -1962,6 +1962,68 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('workspace ps starts describe for the running AppHost before discovery completes', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        let psOptions: any;
+        const describeCalls: { args: string[] }[] = [];
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            if (args[0] === 'describe') {
+                describeCalls.push({ args });
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'workspace ps watch did not start before discovery completed');
+
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                    appHostPid: 125881,
+                    dashboardUrl: 'https://localhost:17193/login?t=061212',
+                },
+            ]));
+
+            // The describe stream for the running AppHost must start as soon as ps retargets,
+            // without waiting for idle `aspire ls` discovery to finish.
+            await waitForCondition(
+                () => describeCalls.some(call => call.args.includes('--apphost') && call.args.includes('/workspace/apps/Store/AppHost.csproj')),
+                'describe did not start for the running AppHost before discovery completed');
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
+
+            discovery.resolve([{
+                path: '/workspace/apps/Store/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            }]);
+            await waitForCondition(() => repository.isWorkspaceAppHostDiscoveryComplete, 'workspace discovery did not complete');
+
+            // Completion re-selects the same running AppHost, so no additional describe is started.
+            assert.strictEqual(describeCalls.length, 1);
+            assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('workspace ps ignores running AppHosts outside workspace before discovery completes', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),

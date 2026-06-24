@@ -570,7 +570,16 @@ export class AppHostDataRepository {
             return true;
         }
 
-        return this._workspaceAppHostDiscoveryComplete && this._workspaceAppHostPath !== undefined;
+        // Watch as soon as a workspace AppHost is selected, even if idle `aspire ls`
+        // discovery is still streaming. During discovery the ONLY code that sets
+        // `_workspaceAppHostPath` is `_handleWorkspacePsOutput` retargeting to the single
+        // running workspace AppHost reported by `aspire ps` (the streaming `ls` handler sets
+        // candidate paths only, never the selected path). That retarget is a strong, correct
+        // signal to start streaming the running AppHost's resources immediately instead of
+        // waiting for the full idle-candidate list — which is the whole point of decoupling
+        // `ps` (running) from `ls` (idle). Completion (`_handleWorkspaceAppHostCandidates` →
+        // `_syncPolling`) remains authoritative and corrects multi-candidate selection.
+        return this._workspaceAppHostPath !== undefined;
     }
 
     private _syncPolling(refreshBeforeFollowOnResume = false): void {

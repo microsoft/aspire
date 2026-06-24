@@ -549,6 +549,60 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('does not time out a slow but active aspire ls --stream discovery', async () => {
+            stubFileSystemWatchers(sandbox);
+            sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+                get: <T>(key: string, defaultValue: T) => key === 'appHostDiscoveryTimeoutMs' ? 5000 as T : defaultValue,
+            } as vscode.WorkspaceConfiguration);
+            const clock = sandbox.useFakeTimers();
+            let killed = false;
+            let capturedOptions: SpawnCliProcessOptions | undefined;
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                capturedOptions = options;
+                return {
+                    killed: false,
+                    kill: () => { killed = true; return true; },
+                } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+
+            try {
+                const discovery = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+
+                const emit = (dir: string) => capturedOptions?.lineCallback?.(JSON.stringify({
+                    path: buildPath('workspace', dir, 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }));
+
+                // Each candidate arrives within the 5s idle window, but the total run (12s) far
+                // exceeds it. The streaming path's inactivity watchdog must re-arm on every line so a
+                // healthy slow stream is never killed by the total-duration timeout it replaced.
+                emit('First');
+                await clock.tickAsync(4_000);
+                emit('Second');
+                await clock.tickAsync(4_000);
+                emit('Third');
+                await clock.tickAsync(4_000);
+                capturedOptions?.exitCallback?.(0);
+
+                const result = await discovery;
+
+                assert.strictEqual(killed, false);
+                assert.deepStrictEqual(result.map(candidate => candidate.path), [
+                    buildPath('workspace', 'First', 'AppHost.csproj'),
+                    buildPath('workspace', 'Second', 'AppHost.csproj'),
+                    buildPath('workspace', 'Third', 'AppHost.csproj'),
+                ]);
+            }
+            finally {
+                service.dispose();
+                clock.restore();
+            }
+        });
+
         test('keeps valid aspire ls candidates when future entries have unexpected shape', async () => {
             stubFileSystemWatchers(sandbox);
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
