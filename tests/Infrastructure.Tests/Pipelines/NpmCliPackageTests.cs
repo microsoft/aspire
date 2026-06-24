@@ -182,10 +182,22 @@ public sealed class NpmCliPackageTests : IDisposable
 
         var readme = await File.ReadAllTextAsync(Path.Combine(package.PointerPackageRoot, "README.md"));
         Assert.Equal(await RenderTemplateAsync("eng/scripts/pack-cli-npm-package.pointer.README.md", ("PACKAGE_NAME", PackageName)), readme);
+        Assert.Contains("Use it to create, run, publish, and deploy Aspire AppHosts from a terminal.", readme);
         Assert.Contains("This package requires Node.js 20 or later.", readme);
+        Assert.Contains("Supported platforms:", readme);
         Assert.Contains($"npm install -g {PackageName}", readme);
+        Assert.Contains($"npm install -g {PackageName}@latest", readme);
         Assert.Contains("The native platform packages are installed through npm optional dependencies.", readme);
         Assert.Contains("If you run `aspire update --self` from an npm install, the CLI points you back to this npm update command.", readme);
+        Assert.Contains($"npm uninstall -g {PackageName}", readme);
+        Assert.Contains("## Troubleshooting", readme);
+        Assert.Contains("Optional dependencies disabled", readme);
+        Assert.Contains("the `npm_config_optional=false` environment variable", readme);
+        Assert.Contains("PATH cannot find `aspire`", readme);
+        Assert.Contains("Supported platforms and architectures", readme);
+        Assert.Contains("## Useful commands", readme);
+        Assert.Contains("`aspire deploy` deploys an AppHost to its supported deployment targets.", readme);
+        Assert.Contains("Aspire CLI command reference", readme);
         Assert.Contains("TypeScript AppHost (`apphost.mts`)", readme);
         Assert.Contains("import { createBuilder } from './.aspire/modules/aspire.mjs';", readme);
         Assert.Contains("aspire dashboard run", readme);
