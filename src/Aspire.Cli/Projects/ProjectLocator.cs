@@ -682,7 +682,7 @@ internal sealed class ProjectLocator(
     }
 
     private static bool ContainsDotNetAppHostProjectContentMarker(string line)
-        => s_dotNetAppHostProjectContentMarkers.Any(marker => line.Contains(marker, StringComparison.Ordinal));
+        => s_dotNetAppHostProjectContentMarkers.Any(marker => line.Contains(marker, StringComparison.OrdinalIgnoreCase));
 
     /// <inheritdoc />
     public async Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default)

@@ -2330,6 +2330,7 @@ builder.Build().Run();");
     [InlineData("<Project><PropertyGroup><IsAspireHost>true</IsAspireHost></PropertyGroup></Project>")]
     [InlineData("<Project Sdk=\"Aspire.AppHost.Sdk/13.0.0\" />")]
     [InlineData("<Project><ItemGroup><PackageReference Include=\"Aspire.Hosting\" /></ItemGroup></Project>")]
+    [InlineData("<Project><ItemGroup><PackageReference Include=\"aspire.hosting\" /></ItemGroup></Project>")]
     public async Task FindAppHostProjectsAsync_ValidatesDotNetProjectCandidatesWithAppHostMarkers(string projectContent)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
