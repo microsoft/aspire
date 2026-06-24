@@ -66,6 +66,71 @@ suite('spawnCliProcess tests', () => {
         }
     });
 
+    test('doubles trailing backslashes when quoting Windows cmd wrapper arguments', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const originalComSpec = process.env.ComSpec;
+        process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+        try {
+            const result = getCliSpawnCommand('C:\\Tools\\Aspire CLI\\aspire.cmd', [
+                '--path=C:\\temp\\',
+                'next',
+            ]);
+
+            assert.strictEqual(result.command, process.env.ComSpec);
+            assert.deepStrictEqual(result.args, [
+                '/d',
+                '/v:off',
+                '/s',
+                '/c',
+                String.raw`call "C:\Tools\Aspire CLI\aspire.cmd" "--path=C:\temp\\" "next"`
+            ]);
+            assert.strictEqual(result.windowsVerbatimArguments, true);
+        }
+        finally {
+            platformStub.restore();
+
+            if (originalComSpec === undefined) {
+                delete process.env.ComSpec;
+            }
+            else {
+                process.env.ComSpec = originalComSpec;
+            }
+        }
+    });
+
+    test('doubles backslashes before embedded quotes when quoting Windows cmd wrapper arguments', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const originalComSpec = process.env.ComSpec;
+        process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+        try {
+            const result = getCliSpawnCommand('C:\\Tools\\Aspire CLI\\aspire.cmd', [
+                String.raw`--literal=C:\temp\"quoted"`,
+            ]);
+
+            assert.strictEqual(result.command, process.env.ComSpec);
+            assert.deepStrictEqual(result.args, [
+                '/d',
+                '/v:off',
+                '/s',
+                '/c',
+                String.raw`call "C:\Tools\Aspire CLI\aspire.cmd" "--literal=C:\temp\\""quoted"""`
+            ]);
+            assert.strictEqual(result.windowsVerbatimArguments, true);
+        }
+        finally {
+            platformStub.restore();
+
+            if (originalComSpec === undefined) {
+                delete process.env.ComSpec;
+            }
+            else {
+                process.env.ComSpec = originalComSpec;
+            }
+        }
+    });
+
     test('formats final startup timeout when spawning CLI process', () => {
         const message = getCliSpawnDiagnostics(
             '/usr/local/bin/aspire',

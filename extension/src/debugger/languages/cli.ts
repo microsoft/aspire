@@ -45,7 +45,37 @@ function buildCmdWrapperCommand(command: string, args: string[]): string {
 }
 
 function quoteCmdArgument(value: string): string {
-    return `"${value.replace(/%/g, '%%').replace(/"/g, '""')}"`;
+    // The wrapper command is executed as:
+    //   cmd.exe /d /v:off /s /c call "aspire.cmd" "<arg>" ...
+    // Many .cmd shims then forward arguments to a native executable with `%*`, for example:
+    //   "node.exe" "aspire.js" %*
+    // Because `%*` is parsed later by normal Windows argv rules, trailing backslashes must be
+    // doubled before our closing quote (`"--path=C:\temp\\" "next"`), and backslashes before
+    // embedded quotes must be doubled before cmd's doubled-quote escape.
+    const valueWithEscapedPercents = value.replace(/%/g, '%%');
+    let quotedValue = '';
+    let backslashCount = 0;
+
+    for (const character of valueWithEscapedPercents) {
+        if (character === '\\') {
+            backslashCount++;
+            continue;
+        }
+
+        if (character === '"') {
+            quotedValue += '\\'.repeat(backslashCount * 2);
+            backslashCount = 0;
+            quotedValue += '""';
+            continue;
+        }
+
+        quotedValue += '\\'.repeat(backslashCount);
+        backslashCount = 0;
+        quotedValue += character;
+    }
+
+    quotedValue += '\\'.repeat(backslashCount * 2);
+    return `"${quotedValue}"`;
 }
 
 export function getCliSpawnDiagnostics(command: string, args: string[] | undefined, workingDirectory: string, noDebug: boolean | undefined, debugSessionId: string | undefined, env: Record<string, string | undefined>): string {

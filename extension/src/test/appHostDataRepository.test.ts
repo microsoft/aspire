@@ -373,7 +373,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('runResourceCommand bounds captured stdout', async () => {
+    test('runResourceCommand marks bounded JSON stdout as truncated', async () => {
         const resourceProcess = new TestChildProcess();
         spawnStub.returns(resourceProcess);
         const repository = new AppHostDataRepository(terminalProvider);
@@ -382,14 +382,42 @@ suite('AppHostDataRepository', () => {
             const runPromise = repository.runResourceCommand('cache', '/workspace/AppHost.csproj', 'dump');
             await waitForMicrotasks();
 
-            const largeOutput = `${'x'.repeat(70000)}tail`;
+            const largeOutput = `{"prefix":"${'x'.repeat(70000)}","tail":true}`;
             spawnStub.firstCall.args[3].stdoutCallback(largeOutput);
             resourceProcess.markExited(0);
             spawnStub.firstCall.args[3].exitCallback(0);
 
             const output = await runPromise;
             assert.ok(output.stdout.length < largeOutput.length, 'stdout should be capped');
-            assert.ok(output.stdout.endsWith('tail'));
+            assert.ok(output.stdout.startsWith('{"prefix":"'), output.stdout.slice(0, 100));
+            assert.ok(output.stdout.includes('Aspire command output truncated'), output.stdout);
+            assert.ok(output.stdout.endsWith('","tail":true}'), output.stdout.slice(-100));
+        } finally {
+            repository.dispose();
+        }
+    });
+
+    test('runResourceCommand marks bounded chunked text stdout as truncated', async () => {
+        const resourceProcess = new TestChildProcess();
+        spawnStub.returns(resourceProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const runPromise = repository.runResourceCommand('cache', '/workspace/AppHost.csproj', 'dump');
+            await waitForMicrotasks();
+
+            const firstChunk = `text-start\n${'x'.repeat(40000)}`;
+            const secondChunk = `${'y'.repeat(40000)}\ntext-end`;
+            spawnStub.firstCall.args[3].stdoutCallback(firstChunk);
+            spawnStub.firstCall.args[3].stdoutCallback(secondChunk);
+            resourceProcess.markExited(0);
+            spawnStub.firstCall.args[3].exitCallback(0);
+
+            const output = await runPromise;
+            assert.ok(output.stdout.length < firstChunk.length + secondChunk.length, 'stdout should be capped');
+            assert.ok(output.stdout.startsWith('text-start\n'), output.stdout.slice(0, 100));
+            assert.ok(output.stdout.includes('Aspire command output truncated'), output.stdout);
+            assert.ok(output.stdout.endsWith('\ntext-end'), output.stdout.slice(-100));
         } finally {
             repository.dispose();
         }

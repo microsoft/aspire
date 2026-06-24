@@ -4,7 +4,7 @@ import { ChildProcessWithoutNullStreams, spawn as spawnProcess } from 'child_pro
 import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { appHostDescribeMayNotBeSupported, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
+import { appHostDescribeMayNotBeSupported, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireCommandOutputTruncated, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
 import { AppHostCandidate, AppHostDiscoveryService, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
@@ -1283,14 +1283,14 @@ export class AppHostDataRepository {
         }
 
         return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-            let stdout = '';
-            let stderr = '';
             let settled = false;
             let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
             let cliProcess: ChildProcessWithoutNullStreams | undefined;
             let cancellationRegistration: vscode.Disposable | undefined;
             const timeoutMs = options.timeoutMs === undefined ? AppHostDataRepository._oneShotCommandTimeoutMs : options.timeoutMs;
             const stdoutBufferLimit = options.stdoutBufferLimit === undefined ? null : options.stdoutBufferLimit;
+            const stdout = new LimitedOutputBuffer(stdoutBufferLimit);
+            const stderr = new LimitedOutputBuffer(AppHostDataRepository._oneShotOutputBufferLimit);
 
             const settle = (callback: () => void) => {
                 if (settled) {
@@ -1315,7 +1315,7 @@ export class AppHostDataRepository {
 
             if (timeoutMs !== null) {
                 timeoutTimer = setTimeout(() => {
-                    settle(() => reject(new AspireCliFailedError(command, null, stdout, stderr || aspireCliCommandTimedOut(timeoutMs))));
+                    settle(() => reject(new AspireCliFailedError(command, null, stdout.value, stderr.value || aspireCliCommandTimedOut(timeoutMs))));
                 }, timeoutMs);
             }
 
@@ -1325,15 +1325,15 @@ export class AppHostDataRepository {
 
             cliProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                 noExtensionVariables: true,
-                stdoutCallback: (data) => { stdout = stdoutBufferLimit === null ? stdout + data : appendLimitedOutput(stdout, data, stdoutBufferLimit); },
-                stderrCallback: (data) => { stderr = appendLimitedOutput(stderr, data, AppHostDataRepository._oneShotOutputBufferLimit); },
+                stdoutCallback: (data) => { stdout.append(data); },
+                stderrCallback: (data) => { stderr.append(data); },
                 exitCallback: (code) => {
                     if (code !== 0) {
-                        settle(() => reject(new AspireCliFailedError(command, code, stdout, stderr)));
+                        settle(() => reject(new AspireCliFailedError(command, code, stdout.value, stderr.value)));
                         return;
                     }
 
-                    settle(() => resolve({ stdout, stderr }));
+                    settle(() => resolve({ stdout: stdout.value, stderr: stderr.value }));
                 },
                 errorCallback: (error) => {
                     settle(() => reject(new AspireCliNotInstalledError(error.message)));
@@ -2074,15 +2074,84 @@ function getCommandOutputSuffix(stdout: string, stderr: string): string {
     const output = (stderr || stdout).trim();
     const limitedOutput = output.length <= oneShotErrorSuffixLimit
         ? output
-        : output.slice(output.length - oneShotErrorSuffixLimit);
+        : truncateOutputWithMarker(output, oneShotErrorSuffixLimit);
 
     return limitedOutput ? `: ${limitedOutput}` : '';
 }
 
-function appendLimitedOutput(existing: string, data: string, limit: number): string {
-    const combined = existing + data;
+class LimitedOutputBuffer {
+    private readonly _marker: string;
+    private readonly _headLimit: number;
+    private readonly _tailLimit: number;
+    private _head = '';
+    private _tail = '';
+    private _truncated = false;
 
-    return combined.length <= limit ? combined : combined.slice(combined.length - limit);
+    constructor(private readonly _limit: number | null) {
+        if (_limit === null) {
+            this._marker = '';
+            this._headLimit = 0;
+            this._tailLimit = 0;
+            return;
+        }
+
+        this._marker = getOutputTruncationMarker(_limit);
+        const available = Math.max(_limit - this._marker.length, 0);
+        this._headLimit = Math.ceil(available / 2);
+        this._tailLimit = available - this._headLimit;
+    }
+
+    append(data: string): void {
+        if (this._limit === null) {
+            this._head += data;
+            return;
+        }
+
+        if (!this._truncated) {
+            const combined = this._head + data;
+            if (combined.length <= this._limit) {
+                this._head = combined;
+                return;
+            }
+
+            this._head = combined.slice(0, this._headLimit);
+            this._tail = takeLast(combined, this._tailLimit);
+            this._truncated = true;
+            return;
+        }
+
+        this._tail = takeLast(this._tail + data, this._tailLimit);
+    }
+
+    get value(): string {
+        if (!this._truncated) {
+            return this._head;
+        }
+
+        return `${this._head}${this._marker}${this._tail}`;
+    }
+}
+
+function truncateOutputWithMarker(output: string, limit: number): string {
+    // Returned resource command values can be JSON, markdown, or plain text. A silent tail-only
+    // truncation makes large JSON look like corrupt full output, so keep both the beginning and end
+    // with an explicit marker while still honoring the same bounded-output limit.
+    const marker = getOutputTruncationMarker(limit);
+    const available = Math.max(limit - marker.length, 0);
+    const headLimit = Math.ceil(available / 2);
+    const tailLimit = available - headLimit;
+
+    return `${output.slice(0, headLimit)}${marker}${takeLast(output, tailLimit)}`;
+}
+
+function getOutputTruncationMarker(limit: number): string {
+    const marker = `\n${aspireCommandOutputTruncated(limit)}\n`;
+
+    return marker.length <= limit ? marker : marker.slice(0, limit);
+}
+
+function takeLast(value: string, count: number): string {
+    return count === 0 ? '' : value.slice(-count);
 }
 
 export function filterResourceCommandStatusOutput(output: string, resourceName: string, commandName: string): string {

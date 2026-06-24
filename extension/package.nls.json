@@ -100,6 +100,7 @@
   "aspire-vscode.strings.aspireCliCommandFailed": "{0} exited with code {1}{2}",
   "aspire-vscode.strings.aspireCliCommandTimedOut": "timed out after {0}ms",
   "aspire-vscode.strings.aspireCliOutputParseFailed": "Failed to parse {0} output: {1}",
+  "aspire-vscode.strings.aspireCommandOutputTruncated": "[Aspire command output truncated to {0} characters. Showing the beginning and end of the output.]",
   "aspire-vscode.strings.appHostPathMustBeNonEmptyAbsolute": "appHostPath must be a non-empty absolute path",
   "aspire-vscode.strings.aspireCliDescribeNotSupported": "Workspace resources require Aspire CLI {0} or newer. Update the Aspire CLI and refresh the Aspire panel.",
   "aspire-vscode.strings.appHostDescribeMayNotBeSupported": "No workspace resources were returned. Workspace resources require the AppHost to reference Aspire.Hosting {0} or newer.",

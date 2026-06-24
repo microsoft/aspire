@@ -61,6 +61,7 @@ export const errorFetchingAppHosts = (error: string) => vscode.l10n.t('Error fet
 export const aspireCliCommandFailed = (command: string, exitCode: string, output: string) => vscode.l10n.t('{0} exited with code {1}{2}', command, exitCode, output);
 export const aspireCliCommandTimedOut = (timeoutMs: number) => vscode.l10n.t('timed out after {0}ms', timeoutMs);
 export const aspireCliOutputParseFailed = (command: string, error: string) => vscode.l10n.t('Failed to parse {0} output: {1}', command, error);
+export const aspireCommandOutputTruncated = (limit: number) => vscode.l10n.t('[Aspire command output truncated to {0} characters. Showing the beginning and end of the output.]', limit);
 export const appHostPathMustBeNonEmptyAbsolute = vscode.l10n.t('appHostPath must be a non-empty absolute path');
 export const aspireDescribeMinimumVersion = '13.2.0';
 export const aspireCliDescribeNotSupported = (version: string) => vscode.l10n.t('Workspace resources require Aspire CLI {0} or newer. Update the Aspire CLI and refresh the Aspire panel.', version);
