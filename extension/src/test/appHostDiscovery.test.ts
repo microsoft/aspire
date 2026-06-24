@@ -993,18 +993,15 @@ suite('AppHost discovery', () => {
             }
         });
 
-        test('caller cancellation does not reject shared configured AppHost path search for other callers', async () => {
+        test('caller cancellation does not reject shared discovery for other callers', async () => {
             stubFileSystemWatchers(sandbox);
-            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-                options?.stdoutCallback?.('[]');
-                options?.exitCallback?.(0);
+            // Hold the ls stream open (no exit) so both callers are awaiting the shared discovery
+            // when one of them cancels. The cancellation must isolate to that caller only.
+            let options: cliModule.SpawnProcessOptions | undefined;
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, spawnOptions) => {
+                options = spawnOptions;
                 return { kill: () => { } } as any;
             });
-            let resolveFindFiles: ((uris: vscode.Uri[]) => void) | undefined;
-            const findFilesPromise = new Promise<vscode.Uri[]>(resolve => {
-                resolveFindFiles = resolve;
-            });
-            findFilesStub.callsFake(() => findFilesPromise);
             const cancellationSource = new vscode.CancellationTokenSource();
             const service = new AppHostDiscoveryService(makeTerminalProvider());
             const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
@@ -1013,15 +1010,21 @@ suite('AppHost discovery', () => {
                 const cancelledDiscovery = service.discover(workspaceFolder, false, cancellationSource.token);
                 const sharedDiscovery = service.discover(workspaceFolder);
                 await waitForMicrotasks();
-                assert.ok(resolveFindFiles);
+                assert.ok(options);
 
                 cancellationSource.cancel();
                 const cancelledResult = assert.rejects(cancelledDiscovery, /cancelled/);
-                resolveFindFiles([]);
+
+                // Complete the shared discovery after the cancellation; the surviving caller must
+                // still resolve with the discovered (empty) candidate list.
+                options.exitCallback?.(0);
                 await cancelledResult;
 
                 assert.deepStrictEqual(await sharedDiscovery, []);
-                assert.strictEqual(findFilesStub.callCount, 2);
+
+                // The configured-AppHost search still runs once for the shared discovery (one call
+                // per config pattern) off the critical path, even though one caller cancelled.
+                await waitForCondition(() => findFilesStub.callCount === 2, 'shared configured AppHost path search to run');
             }
             finally {
                 cancellationSource.dispose();
@@ -1050,7 +1053,10 @@ suite('AppHost discovery', () => {
 
                 await Promise.all([firstDiscovery, secondDiscovery]);
 
-                assert.strictEqual(findFilesStub.callCount, 2);
+                // The configured-AppHost search runs off the critical path after discover() resolves.
+                // Exactly two calls (one per config pattern) proves the search is shared: a single
+                // cache-miss enrichment, not one per caller (which would be four).
+                await waitForCondition(() => findFilesStub.callCount === 2, 'shared configured AppHost path search to run');
             }
             finally {
                 service.dispose();
@@ -1094,15 +1100,104 @@ suite('AppHost discovery', () => {
                 const service = new AppHostDiscoveryService(makeTerminalProvider());
 
                 try {
-                    const result = await service.discover(makeWorkspaceFolder(tempDir));
+                    const workspaceFolder = makeWorkspaceFolder(tempDir);
+                    const enrichmentApplied = onceCandidatesChanged(service, workspaceFolder);
 
-                    assert.deepStrictEqual(result, [
+                    // discover() resolves with the freshly streamed candidates immediately; the
+                    // configured-AppHost selection is applied off the critical path (see discover()).
+                    const initialResult = await service.discover(workspaceFolder);
+                    assert.deepStrictEqual(initialResult, [
+                        {
+                            path: otherAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                        },
+                        {
+                            path: matchingAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                        },
+                    ]);
+
+                    // Once the background enrichment lands it fires onDidChangeCandidates and swaps
+                    // the cached result, so a subsequent discover() returns the selection applied.
+                    await enrichmentApplied;
+                    const enrichedResult = await service.discover(workspaceFolder);
+                    assert.deepStrictEqual(enrichedResult, [
                         {
                             path: otherAppHostPath,
                             language: 'csharp',
                             status: 'buildable',
                             selected: false,
                         },
+                        {
+                            path: matchingAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                            selected: true,
+                        },
+                    ]);
+                }
+                finally {
+                    service.dispose();
+                }
+            }
+            finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        test('resolves discovery before the configured AppHost search completes', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                const configPath = path.join(tempDir, 'aspire.config.json');
+                const matchingAppHostPath = path.join(tempDir, 'AppHost', 'AppHost.csproj');
+                fs.writeFileSync(configPath, JSON.stringify({ appHost: { path: 'AppHost/AppHost.csproj' } }));
+
+                // Gate the configured-AppHost search so it cannot complete until the test releases it.
+                // This reproduces the slow cold findFiles that previously blocked discover() from
+                // resolving; discovery must now resolve with the raw stream before the gate opens.
+                let releaseFindFiles: (() => void) | undefined;
+                const findFilesGate = new Promise<void>(resolve => {
+                    releaseFindFiles = resolve;
+                });
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    await findFilesGate;
+                    return pattern.endsWith('aspire.config.json') ? [vscode.Uri.file(configPath)] : [];
+                });
+                sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                    emitLsStream(options, [
+                        {
+                            path: matchingAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                        },
+                    ]);
+                    return { kill: () => { } } as any;
+                });
+                const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+                try {
+                    const workspaceFolder = makeWorkspaceFolder(tempDir);
+                    const enrichmentApplied = onceCandidatesChanged(service, workspaceFolder);
+
+                    // discover() resolves even though the configured-AppHost search is still blocked.
+                    const initialResult = await service.discover(workspaceFolder);
+                    assert.deepStrictEqual(initialResult, [
+                        {
+                            path: matchingAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                        },
+                    ]);
+
+                    // Releasing the gate lets the background enrichment apply the configured selection.
+                    releaseFindFiles?.();
+                    await enrichmentApplied;
+                    const enrichedResult = await service.discover(workspaceFolder);
+                    assert.deepStrictEqual(enrichedResult, [
                         {
                             path: matchingAppHostPath,
                             language: 'csharp',
@@ -1184,6 +1279,35 @@ function makeCancellationToken(): vscode.CancellationToken {
 async function waitForMicrotasks(): Promise<void> {
     await Promise.resolve();
     await Promise.resolve();
+}
+
+// Polls until the predicate holds, failing the test if it never does. Used to observe an
+// off-critical-path background task (configured-AppHost enrichment) whose no-op outcome fires
+// no event — the only signal is the side effect on the stub (e.g. findFiles call count).
+async function waitForCondition(predicate: () => boolean, description: string): Promise<void> {
+    for (let attempt = 0; attempt < 200; attempt++) {
+        if (predicate()) {
+            return;
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 5));
+    }
+
+    assert.fail(`Timed out waiting for ${description}`);
+}
+
+// Resolves the first time discovery reports a candidate change for the given workspace folder.
+// Configured-AppHost selection is applied off the discovery critical path (see
+// AppHostDiscoveryService.discover), so tests wait on this event to observe the enriched result.
+function onceCandidatesChanged(service: AppHostDiscoveryService, workspaceFolder: vscode.WorkspaceFolder): Promise<void> {
+    return new Promise(resolve => {
+        const subscription = service.onDidChangeCandidates(folder => {
+            if (path.resolve(folder.uri.fsPath) === path.resolve(workspaceFolder.uri.fsPath)) {
+                subscription.dispose();
+                resolve();
+            }
+        });
+    });
 }
 
 type SpawnCliProcessOptions = Parameters<typeof cliModule.spawnCliProcess>[3];

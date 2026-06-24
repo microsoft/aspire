@@ -649,6 +649,16 @@ export class AppHostDataRepository {
         this._workspaceAppHostDiscoveryInProgress = true;
         this._workspaceAppHostDiscoveryCancellationSource = cancellationSource;
 
+        // Start `aspire ps` (and, once it reports a running AppHost, `aspire describe --follow`)
+        // immediately, in parallel with `aspire ls` discovery. Running AppHosts are discovered by
+        // `ps`, which is independent of the slow `ls`/configured-AppHost enrichment that resolves
+        // `discover()`. Without this, ps polling only kicks off from the discovery completion
+        // handlers below, so running resources couldn't paint until idle discovery finished (which
+        // can take far longer on a large workspace). `_syncPolling` is a no-op until the panel or an
+        // AppHost editor is active, and the polling gates already permit ps during in-progress
+        // discovery, so this safely begins the running-AppHosts stream as early as possible.
+        this._syncPolling();
+
         // Accumulate candidates streamed by `aspire ls --stream` so the panel can paint AppHosts
         // as they are discovered. The completion handler below is still authoritative for
         // single/multi selection, describe streams, and ps polling — streaming only renders the

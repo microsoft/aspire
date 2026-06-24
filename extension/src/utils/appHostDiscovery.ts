@@ -74,8 +74,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             // The cached discovery promise is shared across extension features. Keep caller
             // cancellation outside the cached operation so one cancelled refresh doesn't reject
             // unrelated callers that are awaiting the same workspace discovery.
-            const discoveryPromise = this._discoverCore(workspaceFolder, onCandidate)
-                .then(candidates => this._includeConfiguredAppHostCandidate(workspaceFolder, candidates));
+            const discoveryPromise = this._discoverCore(workspaceFolder, onCandidate);
             let cachedPromise: Promise<CandidateAppHostDisplayInfo[]>;
             cachedPromise = discoveryPromise.catch(error => {
                 if (this._cache.get(key) === cachedPromise) {
@@ -85,6 +84,18 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             });
             resultPromise = cachedPromise;
             this._cache.set(key, resultPromise);
+
+            // Apply the configured-AppHost selection (from aspire.config.json / .aspire/settings.json)
+            // OFF the critical discovery path. That lookup uses vscode.workspace.findFiles, which can
+            // take tens of seconds on a large or cold workspace right after activation (the VS Code
+            // file-search service is contended by the activation findFiles storm). Awaiting it inside
+            // discover() would delay the panel's first authoritative paint — and the dependent ps /
+            // describe streams — by that entire duration even though the candidate list is already
+            // known. Instead, resolve discover() with the freshly discovered candidates immediately,
+            // then enrich the cached result in the background and fire onDidChangeCandidates so the
+            // panel re-reads (and applies) the selection once it lands. Consumers that don't need the
+            // selection (editor command provider, engagement counting) are unaffected.
+            this._scheduleConfiguredAppHostSelection(workspaceFolder, key, cachedPromise);
         }
 
         return await withCancellation(resultPromise, cancellationToken);
@@ -263,6 +274,43 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         if (this._disposed) {
             throw new Error('AppHost discovery service has been disposed.');
         }
+    }
+
+    private _scheduleConfiguredAppHostSelection(workspaceFolder: vscode.WorkspaceFolder, key: string, basePromise: Promise<CandidateAppHostDisplayInfo[]>): void {
+        // Runs the configured-AppHost enrichment after discover() has already resolved with the raw
+        // candidate list (see the comment in discover()). On completion, swap the cached promise to
+        // the enriched list and notify subscribers so the panel applies the selection. The result is
+        // never awaited by discover(), so failures here must not surface as unhandled rejections.
+        void basePromise.then(async candidates => {
+            if (this._disposed || this._cache.get(key) !== basePromise) {
+                return;
+            }
+
+            let enriched: CandidateAppHostDisplayInfo[];
+            try {
+                enriched = await this._includeConfiguredAppHostCandidate(workspaceFolder, candidates);
+            }
+            catch (error) {
+                extensionLogOutputChannel.warn(`Failed to apply configured AppHost selection: ${formatErrorMessage(error)}`);
+                return;
+            }
+
+            // _includeConfiguredAppHostCandidate returns the same array reference when nothing
+            // changed, so a reference inequality reliably signals an applied selection.
+            if (enriched === candidates) {
+                return;
+            }
+
+            if (this._disposed || this._cache.get(key) !== basePromise) {
+                return;
+            }
+
+            this._cache.set(key, Promise.resolve(enriched));
+            this._onDidChangeCandidates.fire(workspaceFolder);
+        }).catch(() => {
+            // The base discovery promise rejected; its own .catch already evicts the cache entry and
+            // surfaces the error to awaiting callers. Nothing to enrich here.
+        });
     }
 
     private async _includeConfiguredAppHostCandidate(workspaceFolder: vscode.WorkspaceFolder, candidates: CandidateAppHostDisplayInfo[]): Promise<CandidateAppHostDisplayInfo[]> {
