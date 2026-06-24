@@ -117,5 +117,5 @@ public class RestoreCommandTests : IDisposable
     /// Converts a file path to its JSON-escaped representation (e.g. backslashes doubled).
     /// </summary>
     private static string JsonEncodedPath(string path) =>
-        path.Replace("/", "//");
+        path.Replace("\\", "\\\\");
 }
