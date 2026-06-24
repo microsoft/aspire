@@ -92,11 +92,7 @@ async function getAppHostTargetVersionFromDirectory(directoryPath: string): Prom
     }
 
     const versionResults = await Promise.all(entries.map(async entry => {
-        const entryPath = join(directoryPath, entry);
-        return {
-            isCSharpAppHostFile: isCSharpAppHostFile(entryPath),
-            version: await getAppHostTargetVersionFromFile(entryPath),
-        };
+        return await getAppHostTargetVersionInfoFromDirectoryEntry(directoryPath, entry, entries);
     }));
 
     const versions = new Set<string>();
@@ -115,9 +111,33 @@ async function getAppHostTargetVersionFromDirectory(directoryPath: string): Prom
 }
 
 async function getAppHostTargetVersionFromFile(filePath: string): Promise<string | undefined> {
+    return (await getAppHostTargetVersionInfoFromFile(filePath)).version;
+}
+
+async function getAppHostTargetVersionInfoFromDirectoryEntry(directoryPath: string, entry: string, entries: readonly string[]): Promise<FileTargetVersionInfo> {
+    const entryPath = join(directoryPath, entry);
+    const versionInfo = await getAppHostTargetVersionInfoFromFile(entryPath);
+
+    if (extname(entry).toLowerCase() !== '.cs') {
+        return versionInfo;
+    }
+
+    // Match the CLI's single-file AppHost detection so unrelated helper.cs files
+    // cannot block a polyglot directory from using aspire.config.json.
+    return isSingleFileCSharpAppHostEntry(entry, entries)
+        ? versionInfo
+        : noFileTargetVersionInfo();
+}
+
+interface FileTargetVersionInfo {
+    version?: string;
+    isCSharpAppHostFile: boolean;
+}
+
+async function getAppHostTargetVersionInfoFromFile(filePath: string): Promise<FileTargetVersionInfo> {
     const extension = extname(filePath).toLowerCase();
     if (extension !== '.csproj' && extension !== '.cs') {
-        return undefined;
+        return noFileTargetVersionInfo();
     }
 
     let contents: string;
@@ -125,35 +145,53 @@ async function getAppHostTargetVersionFromFile(filePath: string): Promise<string
         contents = await fs.readFile(filePath, 'utf8');
     }
     catch {
-        return undefined;
+        return noFileTargetVersionInfo();
     }
 
     if (extension === '.cs') {
-        return getAspireAppHostSdkVersionFromSingleFile(contents);
+        const singleFileVersion = getAspireAppHostSdkVersionFromSingleFile(contents);
+        return {
+            version: singleFileVersion.version,
+            isCSharpAppHostFile: singleFileVersion.referencesAspireAppHostSdk,
+        };
     }
 
     const projectVersion = getAspireAppHostSdkVersionFromProject(contents);
     if (projectVersion.version) {
-        return projectVersion.version;
+        return {
+            version: projectVersion.version,
+            isCSharpAppHostFile: true,
+        };
     }
 
-    return projectVersion.referencesAspireAppHostSdk && !projectVersion.hasInlineVersion
+    const globalJsonVersion = projectVersion.referencesAspireAppHostSdk && !projectVersion.hasInlineVersion
         ? await getGlobalJsonMsBuildSdkVersion(dirname(filePath))
         : undefined;
+
+    return {
+        version: globalJsonVersion,
+        isCSharpAppHostFile: projectVersion.referencesAspireAppHostSdk,
+    };
 }
 
 function isPolyglotAppHostFile(filePath: string): boolean {
     return ['.ts', '.mts', '.cts', '.js', '.mjs', '.cjs'].includes(extname(filePath).toLowerCase());
 }
 
-function isCSharpAppHostFile(filePath: string): boolean {
-    return ['.csproj', '.cs'].includes(extname(filePath).toLowerCase());
+function isSingleFileCSharpAppHostEntry(entry: string, entries: readonly string[]): boolean {
+    return entry.toLowerCase() === 'apphost.cs'
+        && !entries.some(entry => extname(entry).toLowerCase() === '.csproj');
 }
 
 interface ProjectSdkVersionInfo {
     version?: string;
     referencesAspireAppHostSdk: boolean;
     hasInlineVersion: boolean;
+}
+
+interface SingleFileSdkVersionInfo {
+    version?: string;
+    referencesAspireAppHostSdk: boolean;
 }
 
 function getAspireAppHostSdkVersionFromProject(contents: string): ProjectSdkVersionInfo {
@@ -245,18 +283,21 @@ function getAspireHostingSdkVersionProperty(contents: string): string | undefine
     return normalizeVersion(propertyMatch?.groups?.version);
 }
 
-function getAspireAppHostSdkVersionFromSingleFile(contents: string): string | undefined {
+function getAspireAppHostSdkVersionFromSingleFile(contents: string): SingleFileSdkVersionInfo {
     // Single-file C# AppHosts target Aspire with a file directive:
     //   #:sdk Aspire.AppHost.Sdk@13.5.0
-    const directiveMatch = /^[ \t]*#:sdk[ \t]+Aspire\.AppHost\.Sdk@(?<version>\S+)/im.exec(contents);
-    return normalizeVersion(directiveMatch?.groups?.version);
+    const directiveMatch = /^[ \t]*#:sdk[ \t]+Aspire\.AppHost\.Sdk(?:@(?<version>\S+))?/im.exec(contents);
+    return {
+        version: normalizeVersion(directiveMatch?.groups?.version),
+        referencesAspireAppHostSdk: directiveMatch !== null,
+    };
 }
 
 async function getConfiguredSdkVersion(startDirectory: string): Promise<string | undefined> {
     for (let directory = resolve(startDirectory); ; directory = dirname(directory)) {
-        const version = await getConfiguredSdkVersionInDirectory(directory);
-        if (version) {
-            return version;
+        const result = await getConfiguredSdkVersionInDirectory(directory);
+        if (result.version || result.foundConfig) {
+            return result.version;
         }
 
         const parent = dirname(directory);
@@ -266,23 +307,44 @@ async function getConfiguredSdkVersion(startDirectory: string): Promise<string |
     }
 }
 
-async function getConfiguredSdkVersionInDirectory(directory: string): Promise<string | undefined> {
-    return await readSdkVersionFromConfigFile(join(directory, 'aspire.config.json'))
-        ?? await readSdkVersionFromConfigFile(join(directory, '.aspire', 'settings.json'));
+interface ConfiguredSdkVersionInfo {
+    version?: string;
+    foundConfig: boolean;
 }
 
-async function readSdkVersionFromConfigFile(configPath: string): Promise<string | undefined> {
-    const parsed = await readJsoncFile(configPath);
+async function getConfiguredSdkVersionInDirectory(directory: string): Promise<ConfiguredSdkVersionInfo> {
+    const configVersion = await readSdkVersionFromConfigFile(join(directory, 'aspire.config.json'));
+    if (configVersion.version || configVersion.foundConfig) {
+        const settingsVersion = await readSdkVersionFromConfigFile(join(directory, '.aspire', 'settings.json'));
+        return {
+            version: configVersion.version ?? settingsVersion.version,
+            foundConfig: true,
+        };
+    }
+
+    return await readSdkVersionFromConfigFile(join(directory, '.aspire', 'settings.json'));
+}
+
+async function readSdkVersionFromConfigFile(configPath: string): Promise<ConfiguredSdkVersionInfo> {
+    const file = await readJsoncFile(configPath);
+    if (!file.exists) {
+        return { foundConfig: false };
+    }
+
+    const parsed = file.value;
     const sdk = getJsonObjectProperty(parsed, 'sdk');
-    return normalizeVersion(sdk?.version)
-        ?? normalizeVersion(parsed?.sdkVersion);
+    return {
+        version: normalizeVersion(sdk?.version)
+            ?? normalizeVersion(parsed?.sdkVersion),
+        foundConfig: true,
+    };
 }
 
 async function getGlobalJsonMsBuildSdkVersion(startDirectory: string): Promise<string | undefined> {
     for (let directory = resolve(startDirectory); ; directory = dirname(directory)) {
-        const version = await readAspireAppHostSdkVersionFromGlobalJson(join(directory, 'global.json'));
-        if (version) {
-            return version;
+        const result = await readAspireAppHostSdkVersionFromGlobalJson(join(directory, 'global.json'));
+        if (result.version || result.foundConfig) {
+            return result.version;
         }
 
         const parent = dirname(directory);
@@ -292,27 +354,43 @@ async function getGlobalJsonMsBuildSdkVersion(startDirectory: string): Promise<s
     }
 }
 
-async function readAspireAppHostSdkVersionFromGlobalJson(globalJsonPath: string): Promise<string | undefined> {
-    const parsed = await readJsoncFile(globalJsonPath);
+async function readAspireAppHostSdkVersionFromGlobalJson(globalJsonPath: string): Promise<ConfiguredSdkVersionInfo> {
+    const file = await readJsoncFile(globalJsonPath);
+    if (!file.exists) {
+        return { foundConfig: false };
+    }
+
+    const parsed = file.value;
     const msBuildSdks = getJsonObjectProperty(parsed, 'msbuild-sdks');
     // MSBuild's SDK resolver reads this global.json shape:
     //   { "msbuild-sdks": { "Aspire.AppHost.Sdk": "13.5.0" } }
     // See https://learn.microsoft.com/visualstudio/msbuild/how-to-use-project-sdk#how-project-sdks-are-resolved.
-    return normalizeVersion(msBuildSdks?.['Aspire.AppHost.Sdk']);
+    return {
+        version: normalizeVersion(msBuildSdks?.['Aspire.AppHost.Sdk']),
+        foundConfig: true,
+    };
 }
 
-async function readJsoncFile(filePath: string): Promise<Record<string, unknown> | undefined> {
+interface JsoncFileResult {
+    exists: boolean;
+    value?: Record<string, unknown>;
+}
+
+async function readJsoncFile(filePath: string): Promise<JsoncFileResult> {
     let contents: string;
     try {
         contents = await fs.readFile(filePath, 'utf8');
     }
     catch {
-        return undefined;
+        return { exists: false };
     }
 
     const errors: ParseError[] = [];
     const parsed = parse(contents, errors, { allowTrailingComma: true }) as unknown;
-    return errors.length === 0 && isJsonObject(parsed) ? parsed : undefined;
+    return {
+        exists: true,
+        value: errors.length === 0 && isJsonObject(parsed) ? parsed : undefined,
+    };
 }
 
 function getJsonObjectProperty(obj: Record<string, unknown> | undefined, propertyName: string): Record<string, unknown> | undefined {
@@ -343,5 +421,11 @@ function noProjectSdkVersionInfo(): ProjectSdkVersionInfo {
     return {
         referencesAspireAppHostSdk: false,
         hasInlineVersion: false,
+    };
+}
+
+function noFileTargetVersionInfo(): FileTargetVersionInfo {
+    return {
+        isCSharpAppHostFile: false,
     };
 }
