@@ -665,6 +665,70 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('falls back to FSharp and Visual Basic project files when CLI discovery fails', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                const fsharpAppHostProjectPath = path.join(tempDir, 'FSharpAppHost', 'FSharpAppHost.fsproj');
+                const visualBasicAppHostProjectPath = path.join(tempDir, 'VisualBasicAppHost', 'VisualBasicAppHost.vbproj');
+                fs.mkdirSync(path.dirname(fsharpAppHostProjectPath), { recursive: true });
+                fs.mkdirSync(path.dirname(visualBasicAppHostProjectPath), { recursive: true });
+                fs.writeFileSync(fsharpAppHostProjectPath, `<Project Sdk="Aspire.AppHost.Sdk/13.5.0">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+`);
+                fs.writeFileSync(visualBasicAppHostProjectPath, `<Project Sdk="Aspire.AppHost.Sdk/13.5.0">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+`);
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    if (pattern.endsWith('*.fsproj')) {
+                        return [vscode.Uri.file(fsharpAppHostProjectPath)];
+                    }
+
+                    if (pattern.endsWith('*.vbproj')) {
+                        return [vscode.Uri.file(visualBasicAppHostProjectPath)];
+                    }
+
+                    return [];
+                });
+                sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                    options?.stderrCallback?.(`${args.join(' ')} failed`);
+                    options?.exitCallback?.(1);
+                    return { kill: () => { } } as any;
+                });
+                const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+                try {
+                    const result = await service.discover(makeWorkspaceFolder(tempDir));
+
+                    assert.deepStrictEqual(result, [
+                        {
+                            path: vscode.Uri.file(fsharpAppHostProjectPath).fsPath,
+                            language: 'fsharp',
+                            status: 'buildable',
+                        },
+                        {
+                            path: vscode.Uri.file(visualBasicAppHostProjectPath).fsPath,
+                            language: 'visualbasic',
+                            status: 'buildable',
+                        },
+                    ]);
+                }
+                finally {
+                    service.dispose();
+                }
+            }
+            finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
         test('uses VS Code file system when falling back to project files', async () => {
             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
             try {
