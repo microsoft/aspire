@@ -164,7 +164,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.DevCertsPartiallyTrustedMessage,
                 Details = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsPartiallyTrustedDetailsFormat, devCertsTrustPath),
-                Fix = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsPartiallyTrustedFixFormat, BuildSslCertDirFixCommand(devCertsTrustPath)),
+                Fix = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsPartiallyTrustedFixFormat, BuildSslCertDirFixCommand(devCertsTrustPath, environment)),
                 Link = "https://aka.ms/aspire-prerequisites#dev-certs",
                 Metadata = metadata
             });
@@ -240,9 +240,9 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
     /// locations, matching the behavior of <see cref="Aspire.Cli.Certificates.CertificateService"/>.
     /// </para>
     /// </remarks>
-    private static string BuildSslCertDirFixCommand(string devCertsTrustPath)
+    private static string BuildSslCertDirFixCommand(string devCertsTrustPath, IEnvironment environment)
     {
-        var currentSslCertDir = Environment.GetEnvironmentVariable("SSL_CERT_DIR");
+        var currentSslCertDir = environment.GetEnvironmentVariable("SSL_CERT_DIR");
 
         if (!string.IsNullOrEmpty(currentSslCertDir))
         {
