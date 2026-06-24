@@ -75,7 +75,9 @@ exactly such a file and tripped the run-all fallback —
 The same rebound `from` feeds both layers, so they see an identical change set.
 When `--to` is omitted (local working-tree run) `HEAD` is used only to resolve the
 merge-base; the diff itself then compares that merge-base against the **working
-tree**, so uncommitted changes are included.
+tree**, so uncommitted changes are included. The
+merge-base (3-dot) base is the same choice Nx, Turborepo, Jest, Pants, and
+GitHub's own PR path filters make; see [Prior art and comparison](#prior-art-and-comparison).
 
 Deletes are included. Renames include both the old path and the new path, so a
 cross-project move marks both the project that lost the file and the project
@@ -505,6 +507,92 @@ flip to enforcing and keep the `run-full-ci` kill switch.
 A convention-miss dir with no same-named test is intentionally not asserted.
 Its MSBuild files are owned by Layer 1, and a non-MSBuild change there safely
 hits a curated rule, the convention backstop, or the run-all fallback.
+
+## Prior art and comparison
+
+Two design choices warrant justification against the field: the **diff base**
+(merge-base / 3-dot) and the **two-layer static-graph + curated-map**
+architecture with fail-safe defaults. We surveyed how comparable affected-test /
+impacted-test systems handle the same problems.
+
+### Diff base: merge-base (3-dot) is the mainstream choice
+
+Every changed-files-based selector that targets PRs takes the diff from the
+**branch point** (the merge-base), not the base tip — so base-branch commits that
+landed after the PR forked are not attributed to it. That is exactly the
+base-tip → merge-base switch this design made.
+
+- **Turborepo** `--affected` is, by its own docs, equivalent to
+  `--filter=...[main...HEAD]` — a 3-dot (merge-base) range.
+  ([`turbo run` reference](https://turborepo.dev/docs/reference/run))
+- **dorny/paths-filter** (the popular GitHub path-filter action) detects
+  feature-branch changes "against the merge-base with the configured base
+  branch," and "only changes introduced by the current branch are considered."
+  ([README](https://github.com/dorny/paths-filter))
+- **Nx** `nx affected` rewrites the base through `git merge-base` before diffing.
+  ([affected docs](https://nx.dev/docs/features/ci-features/affected),
+  [`command-line-utils` source](https://github.com/nrwl/nx/blob/master/packages/nx/src/utils/command-line-utils.ts))
+- **Jest** `--changedSince` and **Pants** `--changed-since` both diff
+  `<since>...HEAD` (3-dot); Pants' docs explicitly show computing a
+  `git merge-base` for PR runs.
+  ([Jest CLI](https://jestjs.io/docs/cli#--changedsince),
+  [Pants target selection](https://www.pantsbuild.org/stable/docs/using-pants/advanced-target-selection))
+- **GitHub's own** PR `paths:` filters compare the merge-base (3-dot); `push`
+  filters compare the previous tip (2-dot).
+
+Content-hash systems (Bazel, Turborepo's task cache) and coverage/ML systems
+(Gradle Develocity Predictive Test Selection, Azure DevOps VSTest Test Impact
+Analysis) sidestep the diff-base question entirely — they key on input hashes or
+per-test coverage rather than a commit range — so the merge-base distinction
+does not arise for them.
+
+### Shallow checkout and the unresolved-merge-base fallback
+
+CI checkouts are shallow, so the merge-base may not be present locally. Our
+action deepens **both** endpoints until `git merge-base` resolves, and if it
+never does, warns and runs **all** tests rather than failing the PR. Both halves
+mirror established behavior:
+
+- **dorny/paths-filter** doubles its `initial-fetch-depth` "until the merge-base
+  is found, or there are no more commits in the history," and if there is no
+  common ancestor "all files are considered as added" — i.e. everything matches.
+  That is the same deepen-then-degrade-to-all behavior, arrived at independently.
+- **Turborepo** warns that "if the checkout is too shallow, then all packages
+  will be considered changed," and recommends `--depth=0`.
+- **Nx** CI recipes use `fetch-depth: 0` for the same reason.
+
+### Where this design deliberately differs
+
+- **Two layers (static project graph + curated path map).** This is more bespoke
+  than the first-class workspace/package graphs of Nx, Turborepo, and Pants, or
+  the build-graph queries of Bazel/Buck2. The tradeoff is transparency and
+  repo-specific accuracy in exchange for maintaining the curated layer for
+  non-MSBuild dependencies (runtime/loose-file reads and non-.NET jobs).
+- **No content hashing or coverage/ML test-impact selection.** Bazel/Turborepo
+  hashing and Develocity/Azure-TIA coverage give finer precision, but they trade
+  away the per-decision explainability the map + graph closure provide ("why did
+  this test run" — a named path), and add caching/coverage infrastructure not
+  warranted at this repo's scale. This is an explicit non-goal, not an oversight.
+
+### Fail-safe vs fail-open
+
+A changed file that is Layer-1-unowned, un-ignored, and matched by no rule forces
+**ALL** (run-all fallback). This conservative stance matches Azure DevOps TIA
+(unknown/unsupported file types fall back to running all tests) and Turborepo
+(too-shallow history → all packages). Graph-only tools (Nx, Pants, Jest) instead
+select *nothing* for a file outside their ownership/input model, which can
+silently skip tests for a new, unmapped loose file — the failure mode the
+run-all fallback exists to prevent.
+
+| System | Mechanism | Diff base | Insufficient / unresolved base |
+| --- | --- | --- | --- |
+| **Aspire SelectTests** | static project graph + curated path map | merge-base (3-dot) | warn → run ALL |
+| Nx | project graph | merge-base (3-dot) | needs full history (`fetch-depth: 0`) |
+| Turborepo | package graph + content hash | merge-base (3-dot) | too-shallow → all packages |
+| dorny/paths-filter | path globs | merge-base (3-dot) | no ancestor → all files added |
+| Jest / Pants | module / target graph | merge-base (3-dot) | error / needs history |
+| Bazel / Buck2 | build graph + content hash | (hash, no range) | n/a |
+| Develocity PTS / Azure VSTest TIA | per-test coverage / ML | (coverage, no range) | unknown → run all (TIA) |
 
 ## Rollout
 
