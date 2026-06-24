@@ -30,6 +30,7 @@ function makeDeps(overrides: Partial<CliPathEnvironmentDependencies> = {}): CliP
         getConfiguredPath: () => '',
         isAbsolute: (cliPath: string) => cliPath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(cliPath),
         fileExists: (cliPath: string) => cliPath.endsWith('/aspire') || cliPath.endsWith('\\aspire.exe') || cliPath.endsWith('/aspire.exe'),
+        realpath: (cliPath: string) => cliPath,
         log: () => { },
         warn: () => { },
         ...overrides,
@@ -66,6 +67,22 @@ suite('cliPathEnvironment.getForwardableAspireCliPath tests', () => {
             fileExists: (candidate) => {
                 const normalized = normalizeCandidate(candidate);
                 return normalized === '/work/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire'
+                    || normalized === '/work/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire.dll';
+            },
+        })), undefined);
+    });
+
+    test('returns undefined when the configured path resolves to an unbundled framework-dependent CLI build', () => {
+        const symlinkPath = '/Users/me/bin/aspire-dev';
+        const repoCliPath = '/work/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire';
+
+        assert.strictEqual(getForwardableAspireCliPath(makeDeps({
+            getConfiguredPath: () => symlinkPath,
+            realpath: (candidate) => candidate === symlinkPath ? repoCliPath : candidate,
+            fileExists: (candidate) => {
+                const normalized = normalizeCandidate(candidate);
+                return normalized === symlinkPath
+                    || normalized === repoCliPath
                     || normalized === '/work/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire.dll';
             },
         })), undefined);

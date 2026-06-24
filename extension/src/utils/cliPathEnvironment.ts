@@ -35,6 +35,7 @@ export interface CliPathEnvironmentCollection {
 export interface ForwardableCliPathDependencies {
     isAbsolute: (cliPath: string) => boolean;
     fileExists: (cliPath: string) => boolean;
+    realpath: (cliPath: string) => string | undefined;
 }
 
 /**
@@ -50,6 +51,7 @@ export interface CliPathEnvironmentDependencies extends ForwardableCliPathDepend
 const defaultForwardableCliPathDeps: ForwardableCliPathDependencies = {
     isAbsolute: path.isAbsolute,
     fileExists: fileExists,
+    realpath: realpath,
 };
 
 const defaultDeps: CliPathEnvironmentDependencies = {
@@ -66,7 +68,8 @@ export function isForwardableAspireCliPath(
     return configuredPath.length > 0
         && deps.isAbsolute(configuredPath)
         && deps.fileExists(configuredPath)
-        && !isUnbundledFrameworkDependentCliPath(configuredPath, deps);
+        && !isUnbundledFrameworkDependentCliPath(configuredPath, deps)
+        && !isResolvedUnbundledFrameworkDependentCliPath(configuredPath, deps);
 }
 
 export function getForwardableAspireCliPath(deps: CliPathEnvironmentDependencies = defaultDeps): string | undefined {
@@ -98,6 +101,15 @@ function fileExists(filePath: string): boolean {
     }
 }
 
+function realpath(filePath: string): string | undefined {
+    try {
+        return fs.realpathSync.native(filePath);
+    }
+    catch {
+        return undefined;
+    }
+}
+
 function isUnbundledFrameworkDependentCliPath(configuredPath: string, deps: ForwardableCliPathDependencies): boolean {
     const cliDirectory = path.dirname(configuredPath);
     const cliAssemblyPath = path.join(cliDirectory, 'aspire.dll');
@@ -113,6 +125,15 @@ function isUnbundledFrameworkDependentCliPath(configuredPath: string, deps: Forw
     // Installed layouts either have a sidecar or an adjacent bundle layout that
     // `ResolveAspireCliBundle` can bind to the selected CLI path.
     return !hasInstallSidecar(cliDirectory, deps) && !hasAdjacentBundleLayout(cliDirectory, deps);
+}
+
+function isResolvedUnbundledFrameworkDependentCliPath(configuredPath: string, deps: ForwardableCliPathDependencies): boolean {
+    const resolvedPath = deps.realpath(configuredPath);
+    if (resolvedPath === undefined || resolvedPath === configuredPath || !deps.isAbsolute(resolvedPath) || !deps.fileExists(resolvedPath)) {
+        return false;
+    }
+
+    return isUnbundledFrameworkDependentCliPath(resolvedPath, deps);
 }
 
 function hasInstallSidecar(cliDirectory: string, deps: ForwardableCliPathDependencies): boolean {
