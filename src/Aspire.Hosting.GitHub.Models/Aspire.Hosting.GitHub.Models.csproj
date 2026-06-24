@@ -9,10 +9,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="tools\**\*.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Compile Include="$(SharedDir)IConfigurationExtensions.cs" Link="IConfigurationExtensions.cs" />
   </ItemGroup>
 

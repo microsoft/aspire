@@ -208,12 +208,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     {
         if (Environment.OSVersion.Platform == PlatformID.Win32NT)
         {
-            return path.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
+            return path.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), StringComparison.Ordinal);
         }
         else
         {
             var globalNuGetFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget");
-            return path.StartsWith(globalNuGetFolder);
+            return path.StartsWith(globalNuGetFolder, StringComparison.Ordinal);
         }
     }
 
@@ -352,7 +352,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         return Task.CompletedTask;
     }
 
-    private async Task<NuGetPackageCli?> GetLatestVersionOfPackageAsync(UpdateContext context, string packageId, CancellationToken cancellationToken, bool throwIfNotFound = true)
+    private async Task<NuGetPackageCli?> GetLatestVersionOfPackageAsync(UpdateContext context, string packageId, bool throwIfNotFound = true, CancellationToken cancellationToken = default)
     {
         var cacheKey = $"LatestPackage-{packageId}";
         var latestPackage = await cache.GetOrCreateAsync(cacheKey, async entry =>
@@ -389,7 +389,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         var sdkVersionElement = propertiesElement.GetProperty("AspireHostingSDKVersion");
         var sdkVersion = sdkVersionElement.GetString();
 
-        var latestSdkPackage = await GetLatestVersionOfPackageAsync(context, "Aspire.AppHost.Sdk", cancellationToken);
+        var latestSdkPackage = await GetLatestVersionOfPackageAsync(context, "Aspire.AppHost.Sdk", cancellationToken: cancellationToken);
 
         // Treat unparseable versions (including range expressions) like wildcards - always update them
         // Only skip if the version is a valid semantic version that matches the latest
@@ -1023,7 +1023,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private async Task AnalyzePackageForTraditionalManagementAsync(string packageId, string packageVersion, FileInfo projectFile, UpdateContext context, CancellationToken cancellationToken)
     {
-        var latestPackage = await GetLatestVersionOfPackageAsync(context, packageId, cancellationToken, throwIfNotFound: false);
+        var latestPackage = await GetLatestVersionOfPackageAsync(context, packageId, throwIfNotFound: false, cancellationToken: cancellationToken);
 
         if (latestPackage is null)
         {
@@ -1059,7 +1059,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             return;
         }
 
-        var latestPackage = await GetLatestVersionOfPackageAsync(context, packageId, cancellationToken, throwIfNotFound: false);
+        var latestPackage = await GetLatestVersionOfPackageAsync(context, packageId, throwIfNotFound: false, cancellationToken: cancellationToken);
 
         if (latestPackage is null)
         {
@@ -1141,7 +1141,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private static bool IsMSBuildPropertyExpression(string value)
     {
-        return value.StartsWith("$(") && value.EndsWith(")") && value.Length > 3;
+        return value.StartsWith("$(", StringComparison.Ordinal) && value.EndsWith(")", StringComparison.Ordinal) && value.Length > 3;
     }
 
     private static string? ExtractPropertyNameFromExpression(string expression)

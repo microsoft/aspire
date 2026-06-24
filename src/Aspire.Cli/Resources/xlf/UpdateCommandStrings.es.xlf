@@ -147,6 +147,11 @@
         <target state="translated">Migrado al nuevo formato de proyecto: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</target>
         <note />
       </trans-unit>
+      <trans-unit id="NixSelfUpdateMessage">
+        <source>To update the Aspire CLI when installed from Nix, update the profile package or flake input:</source>
+        <target state="new">To update the Aspire CLI when installed from Nix, update the profile package or flake input:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoAppHostFoundUpdateCliPrompt">
         <source>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</source>
         <target state="needs-review-translation">No se encontró ningún proyecto de AppHost. ¿Quiere actualizar la CLI de Aspire en su lugar?</target>

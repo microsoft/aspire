@@ -76,6 +76,7 @@ The map stays small by keeping each dependency in the layer that can prove it:
 | `job:cli-starter` | `tests.yml` `cli_starter_validation_windows` |
 | `job:winget-installer` | `tests.yml` `prepare_winget_installer_artifacts` |
 | `job:homebrew-installer` | `tests.yml` `prepare_homebrew_installer_artifacts` |
+| `job:nix-package` | `tests.yml` `nix_package` |
 | `job:api-diffs` | [`generate-api-diffs.yml`](../../.github/workflows/generate-api-diffs.yml) — *schedule-only today* |
 | `job:ats-diffs` | [`generate-ats-diffs.yml`](../../.github/workflows/generate-ats-diffs.yml) — *schedule-only today* |
 | `job:deployment-e2e` | [`deployment-tests.yml`](../../.github/workflows/deployment-tests.yml) — *schedule/dispatch-only today* |
@@ -173,7 +174,10 @@ Highlights:
 - **non-.NET job loose triggers** — only the paths the project graph cannot
   attribute, such as `tests/PolyglotAppHosts/**`, checked-in `*.ats.txt` /
   `*.tscompat.suppression.txt` baselines, `tools/TypeScriptApiCompat/**`, and
-  `extension/**`.
+  `extension/**`. A `src/Aspire.Hosting*/api/*.ats.txt` baseline fans out to
+  **both** `job:typescript-api-compat` (baseline diff) and `job:polyglot`,
+  because the polyglot playground regenerates and compiles that exported surface
+  in every language.
 - **linked source with no owning project directory** — `src/Aspire/Cli/**`
   carries explicit targets because it is linked into another project but is not
   itself a project directory.

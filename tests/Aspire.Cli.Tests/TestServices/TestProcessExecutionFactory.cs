@@ -18,7 +18,7 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
     private int _attemptCount;
 
     /// <summary>
-    /// Gets or sets a callback that is invoked when <see cref="CreateExecution"/> is called.
+    /// Gets or sets a callback that is invoked when <c>CreateExecution</c> is called.
     /// If this returns an <see cref="IProcessExecution"/>, that execution is returned directly.
     /// </summary>
     public Func<string[], IDictionary<string, string>?, DirectoryInfo, ProcessInvocationOptions, IProcessExecution>? CreateExecutionCallback { get; set; }
@@ -26,7 +26,7 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
     public Func<string, string[], IDictionary<string, string>?, DirectoryInfo, ProcessInvocationOptions, IProcessExecution>? CreateExecutionWithFileNameCallback { get; set; }
 
     /// <summary>
-    /// Gets or sets an action that is invoked when <see cref="CreateExecution"/> is called,
+    /// Gets or sets an action that is invoked when <c>CreateExecution</c> is called,
     /// typically used for assertions on the arguments.
     /// </summary>
     public Action<string[], IDictionary<string, string>?, DirectoryInfo, ProcessInvocationOptions>? AssertionCallback { get; set; }
@@ -69,7 +69,7 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
     public ProcessInvocationOptions? LastProcessInvocationOptions { get; private set; }
 
     /// <summary>
-    /// Gets the number of times <see cref="CreateExecution"/> has been called.
+    /// Gets the number of times <c>CreateExecution</c> has been called.
     /// </summary>
     public int AttemptCount => _attemptCount;
 
@@ -110,6 +110,29 @@ internal sealed class TestProcessExecutionFactory : IProcessExecutionFactory
         var testExecution = new TestProcessExecution(fileName, args, env, options, callback, () => _attemptCount);
         CreatedExecutions.Add(testExecution);
         return testExecution;
+    }
+
+    public IProcessExecution CreateExecution(System.Diagnostics.ProcessStartInfo startInfo, ProcessInvocationOptions options)
+    {
+        // Translate the fully-populated ProcessStartInfo into the (fileName, args, env, workingDirectory)
+        // shape the rest of this fake understands, so the AppHost server / guest spawn paths (which use
+        // the PSI overload) flow through the same assertion + callback machinery as every other caller.
+        var args = startInfo.ArgumentList.ToArray();
+
+        // ProcessStartInfo.Environment is lazily seeded with the full parent-process environment on
+        // first access (caller-supplied overrides are layered on top), so it is always populated.
+        // Forward the whole resolved set as the authoritative environment for the spawn — this mirrors
+        // the production ProcessExecutionFactory PSI overload, which also treats startInfo.Environment
+        // as authoritative. Tests that assert on env should look up the specific keys they set rather
+        // than expecting only caller-supplied vars to be present.
+        IDictionary<string, string> env = startInfo.Environment
+            .Where(static kvp => kvp.Value is not null)
+            .ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value!);
+
+        var workingDirectory = new DirectoryInfo(
+            string.IsNullOrEmpty(startInfo.WorkingDirectory) ? Directory.GetCurrentDirectory() : startInfo.WorkingDirectory);
+
+        return CreateExecution(startInfo.FileName, args, env, workingDirectory, options);
     }
 }
 
@@ -210,10 +233,11 @@ internal sealed class TestProcessExecution : IProcessExecution
         KillCallback?.Invoke(entireProcessTree);
     }
 
-    public void Dispose()
+    public ValueTask DisposeAsync()
     {
         DisposeCount++;
         DisposeCallback?.Invoke();
+        return ValueTask.CompletedTask;
     }
 }
 
@@ -253,7 +277,8 @@ internal static class DotNetCliRunnerTestHelper
             serviceProvider.GetRequiredService<IFeatures>(),
             serviceProvider.GetRequiredService<IInteractionService>(),
             executionContext,
-            executionFactory);
+            executionFactory,
+            new HostEnvironment());
     }
 
     public static DotNetCliRunner Create(
@@ -283,7 +308,8 @@ internal static class DotNetCliRunnerTestHelper
             serviceProvider.GetRequiredService<IFeatures>(),
             serviceProvider.GetRequiredService<IInteractionService>(),
             executionContext,
-            executionFactory);
+            executionFactory,
+            new HostEnvironment());
     }
 
     /// <summary>
@@ -315,7 +341,8 @@ internal static class DotNetCliRunnerTestHelper
             serviceProvider.GetRequiredService<IFeatures>(),
             serviceProvider.GetRequiredService<IInteractionService>(),
             executionContext,
-            executionFactory);
+            executionFactory,
+            new HostEnvironment());
 
         return (runner, executionFactory);
     }
