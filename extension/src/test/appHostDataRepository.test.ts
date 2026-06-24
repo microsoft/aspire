@@ -1984,6 +1984,130 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('streaming workspace discovery renders candidates before discovery completes', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let capturedOnCandidate: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async (
+                _folder: vscode.WorkspaceFolder,
+                _forceRefresh?: boolean,
+                _token?: vscode.CancellationToken,
+                onCandidate?: (candidate: CandidateAppHostDisplayInfo) => void,
+            ) => {
+                capturedOnCandidate = onCandidate;
+                return discovery.promise;
+            },
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => capturedOnCandidate !== undefined, 'workspace discovery did not start');
+
+            // A candidate streamed by `aspire ls --stream` must paint into the candidate list
+            // immediately, before the discovery promise resolves, so the panel shows AppHosts
+            // during slow discovery instead of waiting for the full buffered result.
+            capturedOnCandidate!({
+                path: '/workspace/apps/Store/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            });
+
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [
+                '/workspace/apps/Store/AppHost.csproj',
+            ]);
+
+            discovery.resolve([{
+                path: '/workspace/apps/Store/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            }]);
+            await waitForCondition(() => repository.isWorkspaceAppHostDiscoveryComplete, 'workspace discovery did not complete');
+
+            assert.strictEqual(repository.workspaceAppHostPath, '/workspace/apps/Store/AppHost.csproj');
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('streaming workspace candidates keep in-workspace running AppHosts during discovery', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let capturedOnCandidate: ((candidate: CandidateAppHostDisplayInfo) => void) | undefined;
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async (
+                _folder: vscode.WorkspaceFolder,
+                _forceRefresh?: boolean,
+                _token?: vscode.CancellationToken,
+                onCandidate?: (candidate: CandidateAppHostDisplayInfo) => void,
+            ) => {
+                capturedOnCandidate = onCandidate;
+                return discovery.promise;
+            },
+            dispose: () => { },
+        };
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined && capturedOnCandidate !== undefined, 'workspace ps watch / discovery did not start');
+
+            // Stream one idle candidate so the candidate-path list is non-empty while discovery is
+            // still pending. The ps union must still surface a different in-workspace running AppHost
+            // that `aspire ls` has not yet reported — otherwise running AppHosts would vanish from the
+            // panel until idle discovery completes (the pre-streaming union only kept running AppHosts
+            // while the candidate list was empty).
+            capturedOnCandidate!({
+                path: '/workspace/apps/Store/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            });
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [
+                '/workspace/apps/Store/AppHost.csproj',
+            ]);
+
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/apps/Web/AppHost.csproj',
+                    appHostPid: 222333,
+                    dashboardUrl: 'https://localhost:17193/login?t=abc',
+                },
+            ]));
+
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
+            assert.strictEqual(repository.appHosts.length, 1);
+            assert.strictEqual(repository.appHosts[0].appHostPath, '/workspace/apps/Web/AppHost.csproj');
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('workspace ps empty snapshot keeps loading while workspace discovery is pending', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),

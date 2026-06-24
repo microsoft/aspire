@@ -57,6 +57,17 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
     }
 
+    /**
+     * Discovers AppHost candidates for a workspace folder.
+     *
+     * `onCandidate` is invoked once per candidate as it streams in from `aspire ls --stream`, allowing
+     * callers to paint results incrementally before discovery completes. IMPORTANT: `onCandidate` is only
+     * wired into a freshly started discovery (a cache miss, or `forceRefresh: true`). A caller that awaits
+     * an already in-flight cached discovery still receives the full list via the returned promise, but its
+     * `onCandidate` callback will NOT fire for candidates the in-flight run already emitted. Pass
+     * `forceRefresh: true` when incremental callbacks are required. Today only the AppHost panel relies on
+     * `onCandidate`, and it forces fresh runs, so this is not a problem in practice.
+     */
     async discover(workspaceFolder: vscode.WorkspaceFolder, forceRefresh = false, cancellationToken?: vscode.CancellationToken, onCandidate?: (candidate: CandidateAppHostDisplayInfo) => void): Promise<CandidateAppHostDisplayInfo[]> {
         this._throwIfDisposed();
         throwIfCancellationRequested(cancellationToken);
@@ -171,23 +182,11 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._throwIfDisposed();
 
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        const waitForDebugger = process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true';
-
-        const bufferedArgs = ['ls', '--format', 'json'];
-        if (waitForDebugger) {
-            bufferedArgs.push('--cli-wait-for-debugger');
-        }
-
         const streamSupported = await this._configInfoProvider.hasCapability(lsStreamCapability, { suppressErrors: true });
 
         if (streamSupported) {
-            const streamArgs = ['ls', '--format', 'json', '--stream'];
-            if (waitForDebugger) {
-                streamArgs.push('--cli-wait-for-debugger');
-            }
-
             try {
-                return await this._runCliForStream(cliPath, streamArgs, workspaceFolder.uri.fsPath, onCandidate);
+                return await this._runCliForStream(cliPath, ['ls', '--format', 'json', '--stream'], workspaceFolder.uri.fsPath, onCandidate);
             }
             catch (streamError) {
                 this._throwIfDisposed();
@@ -198,7 +197,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             }
         }
 
-        const output = await this._runCliForStdout(cliPath, bufferedArgs, workspaceFolder.uri.fsPath);
+        const output = await this._runCliForStdout(cliPath, ['ls', '--format', 'json'], workspaceFolder.uri.fsPath);
         return parseCandidateOutput(output, 'aspire ls');
     }
 
@@ -206,12 +205,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._throwIfDisposed();
 
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        const args = ['extension', 'get-apphosts'];
-        if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-            args.push('--cli-wait-for-debugger');
-        }
-
-        const output = await this._runCliForStdout(cliPath, args, workspaceFolder.uri.fsPath);
+        const output = await this._runCliForStdout(cliPath, ['extension', 'get-apphosts'], workspaceFolder.uri.fsPath);
         const parsed = parseLegacyGetAppHostsOutput(output);
         return toCandidatesFromLegacySearchResult(parsed);
     }
@@ -319,6 +313,13 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         return new Promise<T>((resolve, reject) => {
             this._throwIfDisposed();
 
+            // Honor ASPIRE_CLI_STOP_ON_ENTRY for every discovery spawn here, alongside the other
+            // universal spawn properties (noExtensionVariables, the discovery timeout, etc.), so
+            // individual call sites pass only their command args.
+            const cliArgs = process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true'
+                ? [...args, '--cli-wait-for-debugger']
+                : args;
+
             let stderr = '';
             let settled = false;
             let childProcess: ChildProcessWithoutNullStreams | undefined;
@@ -327,7 +328,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 if (childProcess && !childProcess.killed) {
                     try {
                         if (!childProcess.kill()) {
-                            extensionLogOutputChannel.warn(`Failed to stop AppHost discovery command: aspire ${args.join(' ')}`);
+                            extensionLogOutputChannel.warn(`Failed to stop AppHost discovery command: aspire ${cliArgs.join(' ')}`);
                         }
                     }
                     catch (killError) {
@@ -359,7 +360,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
 
             this._cancelActiveCliProcesses.add(cancel);
             try {
-                childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                childProcess = spawnCliProcess(this._terminalProvider, cliPath, cliArgs, {
                     noExtensionVariables: true,
                     workingDirectory,
                     ...dataCallbacks,
@@ -391,7 +392,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             this._activeCliProcesses.add(childProcess);
             const timeoutMs = getAppHostDiscoveryTimeoutMs();
             timeout = setTimeout(() => {
-                cancel(new Error(`aspire ${args.join(' ')} timed out after ${timeoutMs / 1000} seconds.`));
+                cancel(new Error(`aspire ${cliArgs.join(' ')} timed out after ${timeoutMs / 1000} seconds.`));
             }, timeoutMs);
         });
     }
