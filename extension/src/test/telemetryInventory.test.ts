@@ -5,6 +5,7 @@ import * as ts from 'typescript';
 
 type TelemetryInventory = {
     events: Record<string, Record<string, unknown>>;
+    commonProperties: Record<string, unknown>;
 };
 
 type TelemetryRegistryEvent = {
@@ -41,6 +42,20 @@ function readTelemetryRegistryEvents(): TelemetryRegistryEvent[] {
     });
 
     return events;
+}
+
+function readCommonTelemetryProperties(): string[] {
+    const registryPath = path.resolve(__dirname, '../../src/utils/telemetryRegistry.ts');
+    const sourceText = fs.readFileSync(registryPath, 'utf8');
+    const sourceFile = ts.createSourceFile(registryPath, sourceText, ts.ScriptTarget.Latest, true);
+
+    for (const node of sourceFile.statements) {
+        if (ts.isTypeAliasDeclaration(node) && node.name.text === 'CommonTelemetryProperty') {
+            return getStringLiteralUnion(node.type).sort();
+        }
+    }
+
+    return [];
 }
 
 function getSchemaEntries(typeNode: ts.TypeNode): string[] {
@@ -107,5 +122,13 @@ suite('extension/telemetry.json', () => {
             });
 
         assert.deepStrictEqual(missingInventoryEntries, []);
+    });
+
+    test('declares every common property from telemetry registry', () => {
+        const inventory = readTelemetryInventory();
+        const missingCommonProperties = readCommonTelemetryProperties()
+            .filter(property => !Object.hasOwn(inventory.commonProperties, property));
+
+        assert.deepStrictEqual(missingCommonProperties, []);
     });
 });
