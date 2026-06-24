@@ -2446,6 +2446,51 @@ builder.Build().Run();");
     }
 
     [Fact]
+    public async Task FindAppHostProjectsAsync_ValidatesDotNetProjectCandidatesWithImplicitDirectoryBuildImportedAppHostMarkers()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Build.props"), """
+            <Project>
+              <Import Project="hosting.props" />
+            </Project>
+            """);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "hosting.props"), """
+            <Project>
+              <PropertyGroup>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "CustomHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, "<Project />");
+
+        var validatedProjectNames = new List<string>();
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = projectFile =>
+            {
+                lock (validatedProjectNames)
+                {
+                    validatedProjectNames.Add(projectFile.Name);
+                }
+
+                return new AppHostValidationResult(IsValid: true);
+            }
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.AllFiles, CancellationToken.None).DefaultTimeout();
+
+        var appHostCandidate = Assert.Single(found);
+        Assert.Equal(appHostProjectFile.FullName, appHostCandidate.AppHostFile.FullName);
+        Assert.Equal([appHostProjectFile.Name], validatedProjectNames);
+    }
+
+    [Fact]
     public async Task FindAppHostProjectsAsync_ExplicitDirectoryScope_AppliesSkipListButNotGit()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -648,10 +648,18 @@ internal sealed class ProjectLocator(
     }
 
     private static bool HasAppHostMarkerInBuildFile(string buildFilePath, Dictionary<string, bool> dotNetBuildFileMarkerCache)
+        => HasAppHostMarkerInBuildFile(buildFilePath, dotNetBuildFileMarkerCache, new HashSet<string>(StringComparer.Ordinal));
+
+    private static bool HasAppHostMarkerInBuildFile(string buildFilePath, Dictionary<string, bool> dotNetBuildFileMarkerCache, HashSet<string> visitedBuildFiles)
     {
         if (dotNetBuildFileMarkerCache.TryGetValue(buildFilePath, out var hasAppHostMarker))
         {
             return hasAppHostMarker;
+        }
+
+        if (!visitedBuildFiles.Add(buildFilePath))
+        {
+            return false;
         }
 
         if (!File.Exists(buildFilePath))
@@ -662,9 +670,18 @@ internal sealed class ProjectLocator(
 
         try
         {
+            var buildFileDirectory = Path.GetDirectoryName(buildFilePath);
             foreach (var line in File.ReadLines(buildFilePath))
             {
                 if (ContainsDotNetAppHostProjectContentMarker(line))
+                {
+                    dotNetBuildFileMarkerCache[buildFilePath] = true;
+                    return true;
+                }
+
+                if (buildFileDirectory is not null &&
+                    TryGetResolvableImportPath(line, buildFileDirectory) is { } importedBuildFilePath &&
+                    HasAppHostMarkerInBuildFile(importedBuildFilePath, dotNetBuildFileMarkerCache, visitedBuildFiles))
                 {
                     dotNetBuildFileMarkerCache[buildFilePath] = true;
                     return true;
@@ -683,6 +700,43 @@ internal sealed class ProjectLocator(
 
     private static bool ContainsDotNetAppHostProjectContentMarker(string line)
         => s_dotNetAppHostProjectContentMarkers.Any(marker => line.Contains(marker, StringComparison.OrdinalIgnoreCase));
+
+    private static string? TryGetResolvableImportPath(string line, string importingDirectory)
+    {
+        if (!line.Contains("<Import", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var projectAttributeIndex = line.IndexOf("Project=", StringComparison.OrdinalIgnoreCase);
+        if (projectAttributeIndex < 0)
+        {
+            return null;
+        }
+
+        var quoteIndex = projectAttributeIndex + "Project=".Length;
+        if (quoteIndex >= line.Length || line[quoteIndex] is not ('"' or '\''))
+        {
+            return null;
+        }
+
+        var quote = line[quoteIndex];
+        var endQuoteIndex = line.IndexOf(quote, quoteIndex + 1);
+        if (endQuoteIndex < 0)
+        {
+            return null;
+        }
+
+        var importPath = line[(quoteIndex + 1)..endQuoteIndex];
+        if (importPath.IndexOfAny(['$', '*', '?']) >= 0)
+        {
+            return null;
+        }
+
+        return Path.GetFullPath(Path.IsPathRooted(importPath)
+            ? importPath
+            : Path.Combine(importingDirectory, importPath));
+    }
 
     /// <inheritdoc />
     public async Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default)
