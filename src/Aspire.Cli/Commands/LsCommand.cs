@@ -24,17 +24,22 @@ internal sealed class LsCommand : BaseCommand
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly TimeProvider _timeProvider;
 
-    private static readonly Option<OutputFormat> s_formatOption = new("--format")
+    // These options are instance fields (not static) so each LsCommand owns its own Option instances.
+    // The CLI builds one command tree per DI container (one per test), and System.CommandLine mutates
+    // per-parse state on the symbol objects during parse/validation, which is not thread-safe. Sharing
+    // static Option instances across concurrently-parsed command trees races and can surface as an NRE
+    // inside CommandResult.ValidateOptionsAndAddDefaultResults. See https://github.com/microsoft/aspire/issues/18476.
+    private readonly Option<OutputFormat> _formatOption = new("--format")
     {
         Description = SharedCommandStrings.LsFormatOptionDescription
     };
 
-    private static readonly Option<bool> s_allOption = new("--all")
+    private readonly Option<bool> _allOption = new("--all")
     {
         Description = SharedCommandStrings.LsAllOptionDescription
     };
 
-    private static readonly Option<bool> s_streamOption = new("--stream")
+    private readonly Option<bool> _streamOption = new("--stream")
     {
         Description = SharedCommandStrings.LsStreamOptionDescription
     };
@@ -55,13 +60,13 @@ internal sealed class LsCommand : BaseCommand
         _profilingTelemetry = profilingTelemetry;
         _timeProvider = timeProvider;
 
-        Options.Add(s_formatOption);
-        Options.Add(s_allOption);
-        Options.Add(s_streamOption);
+        Options.Add(_formatOption);
+        Options.Add(_allOption);
+        Options.Add(_streamOption);
 
         Validators.Add(result =>
         {
-            if (result.GetValue(s_streamOption) && result.GetValue(s_formatOption) != OutputFormat.Json)
+            if (result.GetValue(_streamOption) && result.GetValue(_formatOption) != OutputFormat.Json)
             {
                 result.AddError(SharedCommandStrings.LsStreamRequiresJson);
             }
@@ -72,9 +77,9 @@ internal sealed class LsCommand : BaseCommand
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
-        var format = parseResult.GetValue(s_formatOption);
-        var includeAll = parseResult.GetValue(s_allOption);
-        var stream = parseResult.GetValue(s_streamOption);
+        var format = parseResult.GetValue(_formatOption);
+        var includeAll = parseResult.GetValue(_allOption);
+        var stream = parseResult.GetValue(_streamOption);
         using var profilingActivity = _profilingTelemetry.StartLsCommand(format.ToString().ToLowerInvariant(), includeAll);
 
         // `aspire ls` is ambient discovery from the working directory by default, so
