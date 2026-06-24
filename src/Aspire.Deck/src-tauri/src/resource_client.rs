@@ -288,7 +288,13 @@ pub async fn execute_command(
         resource_type,
         parameter: None,
         arguments: Default::default(),
-        non_interactive: true,
+        // Run interactively (matching the dashboard). When a command declares argument
+        // inputs (e.g. set-parameter) or its callback calls IInteractionService.Prompt*,
+        // the AppHost raises an inputs dialog over the WatchInteractions stream, which
+        // Deck renders as the interaction pane. Sending non_interactive=true would instead
+        // make the AppHost skip the prompt and immediately fail required-argument commands
+        // with "Command argument validation failed."
+        non_interactive: false,
     };
 
     match client.execute_resource_command(request).await {
