@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal CLI refactoring to use IEnvironment abstraction - not user-facing",
+  "mergedAt": "2026-06-24T00:52:02Z",
+  "number": 18424,
+  "runDate": "2026-06-24T07:06:06Z",
+  "status": "excluded",
+  "title": "Replace Environment.GetEnvironmentVariable in CLI with IEnvironment abstraction"
+}

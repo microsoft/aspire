@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Code quality fix in build tools (StringComparison) - not user-facing",
+  "mergedAt": "2026-06-24T06:56:32Z",
+  "number": 18463,
+  "runDate": "2026-06-24T07:06:06Z",
+  "status": "excluded",
+  "title": "Fix CA1310: Add StringComparison to StartsWith calls in Heartbeat.cs"
+}

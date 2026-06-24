@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CI test infrastructure fix - Playwright download timeout, not user-facing",
+  "mergedAt": "2026-06-24T04:25:47Z",
+  "number": 18453,
+  "runDate": "2026-06-24T07:06:06Z",
+  "status": "excluded",
+  "title": "Make Playwright browser provisioning resilient to download timeouts"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Flaky test fix - test-only change",
+  "mergedAt": "2026-06-24T06:10:26Z",
+  "number": 18451,
+  "runDate": "2026-06-24T07:06:06Z",
+  "status": "excluded",
+  "title": "Fix flaky WaitForLegacyDetachedStartupStabilityAsync_RetriesV2ProbeUntilChildExits test"
+}

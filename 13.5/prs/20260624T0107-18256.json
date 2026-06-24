@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard UX improvement - keyboard navigation (Home/End/PgUp/PgDown) on scroll containers",
+  "mergedAt": "2026-06-24T01:07:55Z",
+  "number": 18256,
+  "runDate": "2026-06-24T07:06:06Z",
+  "status": "included",
+  "title": "Enable keyboard navigation on dashboard scroll containers"
+}

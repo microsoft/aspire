@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Dashboard pages now support keyboard navigation (Home, End, PgUp, PgDown) for scrolling through resources, logs, traces, and console output. Previously, users had to click into the scroll area first before keyboard shortcuts would work.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⌨️",
+  "firstMergedAt": "2026-06-24T01:07:55Z",
+  "lastMergedAt": "2026-06-24T01:07:55Z",
+  "name": "Keyboard navigation for dashboard scroll areas",
+  "owner": "JamesNK",
+  "prs": [
+    18256
+  ]
+}
