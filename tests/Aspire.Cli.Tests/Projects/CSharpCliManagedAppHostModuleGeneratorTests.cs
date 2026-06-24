@@ -197,7 +197,8 @@ public class CSharpCliManagedAppHostModuleGeneratorTests : IDisposable
                         new PackageMapping("*", "https://example.invalid/daily/all")
                     ],
                     new FakeNuGetPackageCache(),
-                    new TestFeatures());
+                    new TestFeatures(),
+                    NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([daily]);
             }
         };

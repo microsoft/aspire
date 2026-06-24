@@ -372,7 +372,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         // probe must actually find the freshly extracted bundle via the Aspire-home
         // fallback. Relative-to-CLI discovery must fail (binary lives outside any
         // layout) for the home probe to be exercised.
-        var layoutDiscovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+        var layoutDiscovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance, new HostEnvironment())
         {
             ProcessPathOverride = processPath
         };

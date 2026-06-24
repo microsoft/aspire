@@ -8,6 +8,7 @@ using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
@@ -45,6 +46,8 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         IConfigurationService configurationService,
         IPackagingService packagingService,
         ILogger<CSharpCliManagedAppHostModuleGenerator> cliManagedModuleGeneratorLogger,
+        IGracefulShutdownWindow shutdownService,
+        IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
         CliExecutionContext executionContext,
         TimeProvider? timeProvider = null)
         : base(
@@ -62,8 +65,10 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
             loggingOptions,
             appHostInfoResolver,
             configurationService,
+            shutdownService,
+            gracefulShutdownSignaler,
             executionContext,
-            timeProvider)
+            timeProvider ?? TimeProvider.System)
     {
         _features = features;
         _runner = runner;

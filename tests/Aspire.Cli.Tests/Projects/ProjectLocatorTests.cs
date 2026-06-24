@@ -24,11 +24,10 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 {
-    private static Aspire.Cli.CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory, IReadOnlyDictionary<string, string?>? environmentVariables = null)
+    private static Aspire.Cli.CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
     {
         return TestExecutionContextHelper.CreateExecutionContext(
-            workingDirectory,
-            environmentVariables: environmentVariables);
+            workingDirectory);
     }
 
     [Fact]
@@ -1855,8 +1854,8 @@ builder.Build().Run();");
         {
             ["NUGET_PACKAGES"] = Path.Combine(workspace.WorkspaceRoot.FullName, ".nuget", "packages")
         };
-        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot, environmentVariables: envVars);
-        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory, environment: new TestEnvironment(envVars));
 
         var foundFiles = await projectLocator.FindAppHostProjectFilesAsync(
             workspace.WorkspaceRoot.FullName, CancellationToken.None).DefaultTimeout();
@@ -1923,8 +1922,8 @@ builder.Build().Run();");
         {
             ["NUGET_PACKAGES"] = customCacheDir
         };
-        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot, environmentVariables: envVars);
-        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory, environment: new TestEnvironment(envVars));
 
         var foundFiles = await projectLocator.FindAppHostProjectFilesAsync(
             workspace.WorkspaceRoot.FullName, CancellationToken.None).DefaultTimeout();
@@ -1963,8 +1962,8 @@ builder.Build().Run();");
         {
             ["NUGET_PACKAGES"] = customCacheDir
         };
-        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot, environmentVariables: envVars);
-        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory, environment: new TestEnvironment(envVars));
 
         var foundFiles = await projectLocator.FindAppHostProjectFilesAsync(
             workspace.WorkspaceRoot.FullName, CancellationToken.None).DefaultTimeout();
@@ -3012,7 +3011,8 @@ builder.Build().Run();");
         IDotNetSdkInstaller? sdkInstaller = null,
         IGitRepository? gitRepository = null,
         AspireCliTelemetry? telemetry = null,
-        ILogger<ProjectLocator>? logger = null)
+        ILogger<ProjectLocator>? logger = null,
+        IEnvironment? environment = null)
     {
         var appHostCandidateFinder = new AppHostCandidateFinder(
             gitRepository ?? new TestGitRepository(),
@@ -3022,6 +3022,7 @@ builder.Build().Run();");
         return new ProjectLocator(
             logger ?? NullLogger<ProjectLocator>.Instance,
             executionContext,
+            environment ?? new TestEnvironment(),
             interactionService ?? new TestInteractionService(),
             configurationService ?? new TestConfigurationService(executionContext),
             projectFactory ?? new TestAppHostProjectFactory(),

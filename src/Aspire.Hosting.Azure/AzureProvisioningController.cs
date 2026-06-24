@@ -9,12 +9,12 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
-using Aspire.Hosting.Eventing;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Azure.Resources;
+using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Pipelines;
 using Azure;
 using Azure.Core;
 using Azure.Identity;
@@ -58,7 +58,7 @@ namespace Aspire.Hosting.Azure;
 /// </para>
 /// <para>
 /// Drift detection runs periodically. It probes ARM to verify each running resource still exists and
-/// marks missing resources as "Missing in Azure" / the environment as "Drifted". The drift monitor queues at
+/// marks missing resources and the environment with drift states. The drift monitor queues at
 /// most one check at a time through the same serialized channel.
 /// </para>
 /// <para>
@@ -83,7 +83,7 @@ internal sealed class AzureProvisioningController(
     internal const string ForgetStateCommandName = "forget-state";
     internal const string ChangeResourceLocationCommandName = "change-location";
     internal const string GetAzureResourceCommandName = "get-azure-resource";
-    internal const string CancelDeploymentCommandName = "cancel-deployment";
+    internal const string CancelCommandName = "cancel-azure-operation";
     internal const string DeleteAzureResourceCommandName = "delete-azure-resource";
     internal const string ReprovisionResourceCommandName = "reprovision";
     internal const string ResetProvisioningStateCommandName = "reset-provisioning-state";
@@ -91,10 +91,18 @@ internal sealed class AzureProvisioningController(
     internal const string ReprovisionAllCommandName = "reprovision-all";
     internal const string DeleteAzureResourcesCommandName = "delete-azure-resources";
     internal const string LocationOverrideKey = "LocationOverride";
-    internal const string MissingInAzureState = "Missing in Azure";
-    internal const string DriftedState = "Drifted";
-    internal const string CreatingArmDeploymentState = "Creating ARM Deployment";
-    internal const string WaitingForDeploymentState = "Waiting for Deployment";
+    internal static string MissingInAzureState => AzureProvisioningStrings.ResourceStateMissingInAzure;
+    internal static string DriftedState => AzureProvisioningStrings.ResourceStateDrifted;
+    internal static string StartingState => AzureProvisioningStrings.ResourceStateStarting;
+    internal static string CompilingArmTemplateState => AzureProvisioningStrings.ResourceStateCompilingArmTemplate;
+    internal static string CreatingArmDeploymentState => AzureProvisioningStrings.ResourceStateCreatingArmDeployment;
+    internal static string WaitingForDeploymentState => AzureProvisioningStrings.ResourceStateWaitingForDeployment;
+    internal static string ChangingLocationState => AzureProvisioningStrings.ResourceStateChangingLocation;
+    internal static string DeletingState => AzureProvisioningStrings.ResourceStateDeleting;
+    internal static string CancelingState => AzureProvisioningStrings.ResourceStateCanceling;
+    internal static string ProvisionedState => AzureProvisioningStrings.ResourceStateProvisioned;
+    private const string KeyVaultVaultResourceType = "Microsoft.KeyVault/vaults";
+    private static string ProvisioningStatePrefix => AzureProvisioningStrings.ResourceStateProvisioningPrefix;
     private const string SubscriptionIdArgumentName = "subscriptionId";
     private const string ResourceGroupArgumentName = "resourceGroup";
     private const string LocationArgumentName = "location";
@@ -107,6 +115,11 @@ internal sealed class AzureProvisioningController(
         "azure.tenant.domain",
         "azure.tenant.id",
         "azure.location",
+        AzureResourceProperties.OperationName,
+        AzureResourceProperties.OperationPhase,
+        AzureResourceProperties.OperationStatus,
+        AzureResourceProperties.OperationTargetLocation,
+        AzureResourceProperties.OperationStartedAt,
         CustomResourceKnownProperties.Source
     ];
 
@@ -116,7 +129,9 @@ internal sealed class AzureProvisioningController(
         SingleWriter = false
     });
     private readonly ILogger<AzureProvisioningController> _logger = logger;
+    private readonly TimeProvider _timeProvider = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
     private readonly object _operationStateLock = new();
+    private readonly List<AzureOperationState> _queuedOperationStates = [];
     private AzureControllerState _state = AzureControllerState.Empty;
     private int _operationLoopStarted;
     private int _driftMonitorStarted;
@@ -200,15 +215,25 @@ internal sealed class AzureProvisioningController(
             IsHighlighted: false,
             ExecuteCommand: static (controller, resourceName, context) => controller.ExecuteGetAzureResourceCommandAsync(resourceName, context)),
         new(
-            AzureResourceCommand.CancelDeployment,
-            CancelDeploymentCommandName,
-            AzureProvisioningStrings.CancelDeploymentCommandName,
-            AzureProvisioningStrings.CancelDeploymentCommandDescription,
-            AzureProvisioningStrings.CancelDeploymentCommandConfirmation,
+            AzureResourceCommand.Cancel,
+            CancelCommandName,
+            AzureProvisioningStrings.CancelCommandName,
+            AzureProvisioningStrings.CancelCommandDescription,
+            AzureProvisioningStrings.CancelCommandConfirmation,
             "Stop",
             IconVariant.Regular,
-            IsHighlighted: false,
-            ExecuteCommand: static (controller, resourceName, context) => controller.ExecuteCancelResourceDeploymentCommandAsync(resourceName, context)),
+            IsHighlighted: true,
+            ExecuteCommand: static (controller, resourceName, context) => controller.ExecuteCancelCommandAsync(resourceName, context)),
+        new(
+            AzureResourceCommand.Reprovision,
+            ReprovisionResourceCommandName,
+            AzureProvisioningStrings.ReprovisionResourceCommandName,
+            AzureProvisioningStrings.ReprovisionResourceCommandDescription,
+            AzureProvisioningStrings.ReprovisionResourceCommandConfirmation,
+            "ArrowSync",
+            IconVariant.Regular,
+            IsHighlighted: true,
+            ExecuteCommand: static (controller, resourceName, context) => controller.ExecuteReprovisionResourceCommandAsync(resourceName, context)),
         new(
             AzureResourceCommand.DeleteAzureResource,
             DeleteAzureResourceCommandName,
@@ -217,7 +242,7 @@ internal sealed class AzureProvisioningController(
             AzureProvisioningStrings.DeleteAzureResourceCommandConfirmation,
             "Delete",
             IconVariant.Regular,
-            IsHighlighted: false,
+            IsHighlighted: true,
             ExecuteCommand: static (controller, resourceName, context) => controller.ExecuteDeleteAzureResourceCommandAsync(resourceName, context)),
         new(
             AzureResourceCommand.ForgetState,
@@ -228,17 +253,7 @@ internal sealed class AzureProvisioningController(
             "ArrowReset",
             IconVariant.Regular,
             IsHighlighted: false,
-            ExecuteCommand: static (controller, resourceName, context) => controller.ExecuteForgetStateCommandAsync(resourceName, context)),
-        new(
-            AzureResourceCommand.Reprovision,
-            ReprovisionResourceCommandName,
-            AzureProvisioningStrings.ReprovisionResourceCommandName,
-            AzureProvisioningStrings.ReprovisionResourceCommandDescription,
-            AzureProvisioningStrings.ReprovisionResourceCommandConfirmation,
-            "ArrowSync",
-            IconVariant.Regular,
-            IsHighlighted: true,
-            ExecuteCommand: static (controller, resourceName, context) => controller.ExecuteReprovisionResourceCommandAsync(resourceName, context))
+            ExecuteCommand: static (controller, resourceName, context) => controller.ExecuteForgetStateCommandAsync(resourceName, context))
     ];
 
     // The Change Azure context dialog is a cascade:
@@ -608,12 +623,12 @@ internal sealed class AzureProvisioningController(
         return await RunOperationAsync<bool>(model, new ReprovisionResourceIntent(resourceName), cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task CancelResourceDeploymentAsync(DistributedApplicationModel model, string resourceName, CancellationToken cancellationToken = default)
+    public async Task CancelResourceAsync(DistributedApplicationModel model, string resourceName, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
 
-        await RunOperationAsync(model, new CancelResourceDeploymentIntent(resourceName), cancellationToken).ConfigureAwait(false);
+        await CancelResourceCoreAsync(model, resourceName, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task DeleteAzureResourceAsync(DistributedApplicationModel model, string resourceName, CancellationToken cancellationToken = default)
@@ -628,6 +643,8 @@ internal sealed class AzureProvisioningController(
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
+
+        ThrowIfKeyVaultLocationChangeTarget(model, resourceName);
 
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
         if (!interactionService.IsAvailable)
@@ -677,6 +694,8 @@ internal sealed class AzureProvisioningController(
         ArgumentNullException.ThrowIfNull(model);
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
         ArgumentException.ThrowIfNullOrWhiteSpace(location);
+
+        ThrowIfKeyVaultLocationChangeTarget(model, resourceName);
 
         location = NormalizeLocation(location, await GetLocationOptionsAsync(cancellationToken).ConfigureAwait(false));
 
@@ -761,7 +780,7 @@ internal sealed class AzureProvisioningController(
             () => CreateAzureResourceInfoCommandResultDataAsync(model, resourceName, context.CancellationToken));
     }
 
-    private Task<ExecuteCommandResult> ExecuteCancelResourceDeploymentCommandAsync(string resourceName, ExecuteCommandContext context)
+    private Task<ExecuteCommandResult> ExecuteCancelCommandAsync(string resourceName, ExecuteCommandContext context)
     {
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
         ArgumentNullException.ThrowIfNull(context);
@@ -769,9 +788,9 @@ internal sealed class AzureProvisioningController(
         var model = context.Services.GetRequiredService<DistributedApplicationModel>();
 
         return ExecuteCommandAsync(
-            () => CancelResourceDeploymentAsync(model, resourceName, context.CancellationToken),
-            AzureProvisioningStrings.CancelDeploymentCommandSuccess,
-            () => CreateResourceCommandResultDataAsync(CancelDeploymentCommandName, model, resourceName, context.CancellationToken));
+            () => CancelResourceAsync(model, resourceName, context.CancellationToken),
+            AzureProvisioningStrings.CancelCommandSuccess,
+            () => CreateResourceCommandResultDataAsync(CancelCommandName, model, resourceName, context.CancellationToken));
     }
 
     private Task<ExecuteCommandResult> ExecuteDeleteAzureResourceCommandAsync(string resourceName, ExecuteCommandContext context)
@@ -879,9 +898,16 @@ internal sealed class AzureProvisioningController(
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
         ArgumentNullException.ThrowIfNull(context);
 
+        if (command == AzureResourceCommand.ChangeLocation &&
+            IsKeyVaultTarget(context.Services.GetRequiredService<DistributedApplicationModel>(), resourceName))
+        {
+            return ResourceCommandState.Hidden;
+        }
+
         lock (_operationStateLock)
         {
-            var currentOperation = _state.Status.CurrentIntent?.Operation;
+            var activeOperation = _state.Status.ActiveOperation;
+            var currentOperation = activeOperation?.Operation;
             if (currentOperation is not null)
             {
                 if (command == AzureResourceCommand.GetAzureResource)
@@ -892,14 +918,22 @@ internal sealed class AzureProvisioningController(
                 }
 
                 var currentOperationAffectsResource = currentOperation.IsAllResources || currentOperation.ResourceNames.Contains(resourceName);
-                if (command == AzureResourceCommand.CancelDeployment)
+                if (command == AzureResourceCommand.Cancel)
                 {
-                    // Cancellation is the only mutating command that can be enabled during another
-                    // operation, and only for resources that are currently in a deployment state the
-                    // provisioner can cancel.
-                    return currentOperationAffectsResource && IsCancelableDeploymentState(context.ResourceSnapshot)
-                        ? ResourceCommandState.Enabled
-                        : ResourceCommandState.Disabled;
+                    // Cancellation is the only mutating command that can be enabled during another operation.
+                    // Keep one user-facing command that cancels both the active Aspire operation and any
+                    // cached ARM deployment associated with the resource.
+                    if (!currentOperationAffectsResource)
+                    {
+                        return ResourceCommandState.Hidden;
+                    }
+
+                    if (!IsActiveOperationCancelableResourceState(context.ResourceSnapshot))
+                    {
+                        return ResourceCommandState.Hidden;
+                    }
+
+                    return activeOperation!.CancellationRequested ? ResourceCommandState.Disabled : ResourceCommandState.Enabled;
                 }
 
                 return currentOperationAffectsResource
@@ -908,13 +942,32 @@ internal sealed class AzureProvisioningController(
             }
         }
 
-        return command == AzureResourceCommand.CancelDeployment && !IsCancelableDeploymentState(context.ResourceSnapshot)
-            ? ResourceCommandState.Disabled
-            : ResourceCommandState.Enabled;
+        return command switch
+        {
+            AzureResourceCommand.Cancel when !IsCancelableDeploymentState(context.ResourceSnapshot) => ResourceCommandState.Hidden,
+            _ => ResourceCommandState.Enabled
+        };
     }
 
     private static bool IsCancelableDeploymentState(CustomResourceSnapshot snapshot)
-        => snapshot.State?.Text is CreatingArmDeploymentState or WaitingForDeploymentState;
+    {
+        var state = snapshot.State?.Text;
+        return state == CreatingArmDeploymentState || state == WaitingForDeploymentState;
+    }
+
+    private static bool IsActiveOperationCancelableResourceState(CustomResourceSnapshot snapshot)
+    {
+        var state = snapshot.State?.Text;
+        return state == StartingState ||
+            state == CompilingArmTemplateState ||
+            state == CreatingArmDeploymentState ||
+            state == WaitingForDeploymentState ||
+            state == ChangingLocationState ||
+            state == DeletingState ||
+            state == CancelingState ||
+            state == ProvisionedState ||
+            state?.StartsWith(ProvisioningStatePrefix, StringComparison.Ordinal) == true;
+    }
 
     private async Task RunOperationAsync(DistributedApplicationModel model, AzureIntent intent, CancellationToken cancellationToken)
     {
@@ -944,7 +997,7 @@ internal sealed class AzureProvisioningController(
 
         await PublishAzureEnvironmentStateAsync(
             model,
-            new ResourceStateSnapshot("Starting", KnownResourceStateStyles.Info),
+            new ResourceStateSnapshot(StartingState, KnownResourceStateStyles.Info),
             cancellationToken).ConfigureAwait(false);
 
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
@@ -966,7 +1019,7 @@ internal sealed class AzureProvisioningController(
 
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new("Starting", KnownResourceStateStyles.Info),
+                State = new(StartingState, KnownResourceStateStyles.Info),
                 Properties = state.Properties.WithoutAzureProvisioningFailureProperties()
             }).ConfigureAwait(false);
 
@@ -987,8 +1040,9 @@ internal sealed class AzureProvisioningController(
         await PublishAzureEnvironmentStateAsync(
             model,
             hasFailures
-                ? new ResourceStateSnapshot("Failed to Provision", KnownResourceStateStyles.Error)
-                : new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+                ? new ResourceStateSnapshot(AzureProvisioningStrings.ResourceStateFailedToProvision, KnownResourceStateStyles.Error)
+                : new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+            hasFailures ? CreateAzureEnvironmentFailureProperties(azureResources) : [],
             cancellationToken).ConfigureAwait(false);
 
         if (hasFailures && HasMissingAzureContextFailure(azureResources))
@@ -1002,6 +1056,20 @@ internal sealed class AzureProvisioningController(
     private static bool HasMissingAzureContextFailure(IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources)
         => azureResources.Any(static resource =>
             resource.AzureResource.ProvisioningTaskCompletionSource?.Task.Exception?.InnerExceptions.Any(IsMissingAzureContextFailure) == true);
+
+    private static ImmutableArray<ResourcePropertySnapshot> CreateAzureEnvironmentFailureProperties(IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources)
+    {
+        var failedResourceNames = azureResources
+            .Where(static resource => resource.AzureResource.ProvisioningTaskCompletionSource?.Task is { IsFaulted: true } or { IsCanceled: true })
+            .Select(static resource => resource.Resource.Name)
+            .Distinct(StringComparers.ResourceName)
+            .Order(StringComparers.ResourceName)
+            .ToArray();
+
+        return failedResourceNames.Length == 0
+            ? []
+            : [AzureProvisioningFailureDetails.CreateHighlightedFailureProperty("failed.resources", failedResourceNames, AzureProvisioningStrings.FailurePropertyFailedResourcesDisplayName)];
+    }
 
     private static Exception? GetProvisioningFailureException(IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources)
         => azureResources
@@ -1193,6 +1261,35 @@ internal sealed class AzureProvisioningController(
         }
     }
 
+    private static bool IsKeyVaultTarget(DistributedApplicationModel model, string resourceName)
+    {
+        return GetTargetAzureResources(model, resourceName)
+            .Any(static resource => resource.AzureResource is IAzureKeyVaultResource);
+    }
+
+    private static void ThrowIfKeyVaultLocationChangeTarget(DistributedApplicationModel model, string resourceName)
+        => ThrowIfKeyVaultLocationChangeTarget(GetTargetAzureResources(model, resourceName));
+
+    private static void ThrowIfKeyVaultLocationChangeTarget(IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> targetResources)
+    {
+        if (targetResources.Any(static resource => resource.AzureResource is IAzureKeyVaultResource))
+        {
+            throw new InvalidOperationException(AzureProvisioningStrings.ChangeResourceLocationKeyVaultUnsupported);
+        }
+    }
+
+    private static void ThrowIfKeyVaultEnvironmentLocationChange(DistributedApplicationModel model, string? currentLocation, string? requestedLocation)
+    {
+        if (string.IsNullOrWhiteSpace(currentLocation) ||
+            string.IsNullOrWhiteSpace(requestedLocation) ||
+            string.Equals(currentLocation, requestedLocation, StringComparisons.AzureLocation))
+        {
+            return;
+        }
+
+        ThrowIfKeyVaultLocationChangeTarget(GetProvisionableAzureResources(model));
+    }
+
     private static bool TryGetAzureResource(
         IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources,
         IResource target,
@@ -1211,6 +1308,18 @@ internal sealed class AzureProvisioningController(
         return false;
     }
 
+    private static List<(IResource Resource, IAzureResource AzureResource)> GetActiveOperationTargetAzureResources(DistributedApplicationModel model, ActiveAzureOperation activeOperation)
+    {
+        if (activeOperation.Operation.IsAllResources)
+        {
+            return GetProvisionableAzureResources(model);
+        }
+
+        return GetProvisionableAzureResources(model).Where(resource =>
+            activeOperation.Operation.ResourceNames.Contains(resource.Resource.Name) ||
+            activeOperation.Operation.ResourceNames.Contains(resource.AzureResource.Name)).ToList();
+    }
+
     private async Task<object?> QueueAndWaitForOperationAsync(
         DistributedApplicationModel model,
         AzureIntent intent,
@@ -1221,6 +1330,8 @@ internal sealed class AzureProvisioningController(
         // in apps that reference Azure hosting packages but never provision in run mode.
         EnsureDriftMonitorStarted(model);
         EnsureOperationLoopStarted();
+        var queuedOperationState = CreateQueuedOperationState(model, intent);
+        RegisterQueuedOperation(intent, queuedOperationState);
 
         var queuedOperation = new QueuedOperation(
             model,
@@ -1228,11 +1339,30 @@ internal sealed class AzureProvisioningController(
             new(TaskCreationOptions.RunContinuationsAsynchronously),
             cancellationToken);
 
-        // All dashboard, CLI, and background Azure operations enter through this queue.
-        // Running them inline would reintroduce re-entrancy between command handlers and
-        // provisioning callbacks; the single reader below is the synchronization boundary.
-        await _operationChannel.Writer.WriteAsync(queuedOperation, cancellationToken).ConfigureAwait(false);
-        return await queuedOperation.Completion.Task.ConfigureAwait(false);
+        try
+        {
+            // All dashboard, CLI, and background Azure operations enter through this queue.
+            // Running them inline would reintroduce re-entrancy between command handlers and
+            // provisioning callbacks; the single reader below is the synchronization boundary.
+            await _operationChannel.Writer.WriteAsync(queuedOperation, cancellationToken).ConfigureAwait(false);
+            return await queuedOperation.Completion.Task.ConfigureAwait(false);
+        }
+        finally
+        {
+            UnregisterQueuedOperation(queuedOperationState);
+        }
+    }
+
+    internal static QueuedOperationForTesting CreateEnsureProvisionedQueuedOperationForTesting(DistributedApplicationModel model, TaskCompletionSource<object?> completion, CancellationToken cancellationToken)
+    {
+        return new(new QueuedOperation(model, new EnsureProvisionedIntent(), completion, cancellationToken));
+    }
+
+    internal Task ProcessQueuedOperationForTesting(QueuedOperationForTesting queuedOperation)
+    {
+        ArgumentNullException.ThrowIfNull(queuedOperation);
+
+        return ProcessQueuedOperationAsync((QueuedOperation)queuedOperation.Operation);
     }
 
     private void EnsureDriftMonitorStarted(DistributedApplicationModel model)
@@ -1243,7 +1373,6 @@ internal sealed class AzureProvisioningController(
         }
 
         var stoppingToken = serviceProvider.GetService<IHostApplicationLifetime>()?.ApplicationStopping ?? CancellationToken.None;
-        var timeProvider = serviceProvider.GetService<TimeProvider>() ?? TimeProvider.System;
 
         _ = Task.Run(async () =>
         {
@@ -1253,7 +1382,7 @@ internal sealed class AzureProvisioningController(
             {
                 try
                 {
-                    await Task.Delay(DriftCheckInterval, timeProvider, stoppingToken).ConfigureAwait(false);
+                    await Task.Delay(DriftCheckInterval, _timeProvider, stoppingToken).ConfigureAwait(false);
                     await CheckForDriftAsync(model, stoppingToken).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -1331,26 +1460,34 @@ internal sealed class AzureProvisioningController(
     {
         var updatesCommandState = queuedOperation.Intent is not DetectDriftIntent;
         var shouldPromptForMissingAzureContext = false;
+        ActiveAzureOperation? activeOperation = null;
+        var operationCancellationToken = queuedOperation.CancellationToken;
+        object? result = null;
+        Exception? failure = null;
+        var canceled = false;
+        var canceledToken = CancellationToken.None;
+
         if (updatesCommandState)
         {
             // Publish command-state changes before running the operation so dashboard buttons
             // disable immediately instead of remaining clickable until the first resource update.
-            StartOperation(queuedOperation.Intent);
+            activeOperation = StartOperation(queuedOperation.Model, queuedOperation.Intent, queuedOperation.CancellationToken);
+            operationCancellationToken = activeOperation.CancellationToken;
         }
 
         try
         {
             if (updatesCommandState)
             {
-                await RefreshCommandStatesAsync(queuedOperation.Model, queuedOperation.CancellationToken).ConfigureAwait(false);
+                await RefreshCommandStatesAsync(queuedOperation.Model, operationCancellationToken).ConfigureAwait(false);
             }
 
-            var result = await ExecuteIntentAsync(queuedOperation.Model, queuedOperation.Intent, queuedOperation.CancellationToken).ConfigureAwait(false);
-            queuedOperation.Completion.TrySetResult(result);
+            result = await ExecuteIntentAsync(queuedOperation.Model, queuedOperation.Intent, operationCancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException ex) when (queuedOperation.CancellationToken.IsCancellationRequested || ex.CancellationToken == queuedOperation.CancellationToken)
+        catch (OperationCanceledException ex) when (operationCancellationToken.IsCancellationRequested || ex.CancellationToken == operationCancellationToken || queuedOperation.CancellationToken.IsCancellationRequested)
         {
-            queuedOperation.Completion.TrySetCanceled(queuedOperation.CancellationToken.IsCancellationRequested ? queuedOperation.CancellationToken : ex.CancellationToken);
+            canceled = true;
+            canceledToken = operationCancellationToken.IsCancellationRequested ? operationCancellationToken : ex.CancellationToken;
         }
         catch (Exception ex)
         {
@@ -1359,28 +1496,54 @@ internal sealed class AzureProvisioningController(
                 shouldPromptForMissingAzureContext = true;
             }
 
-            queuedOperation.Completion.TrySetException(ex);
+            failure = ex;
         }
         finally
         {
-            if (updatesCommandState)
+            try
             {
-                CompleteOperation(queuedOperation.Intent);
-                // Use CancellationToken.None for the final refresh because command state must be
-                // re-enabled even if the operation request token was canceled after the work stopped.
-                await RefreshCommandStatesAsync(queuedOperation.Model, CancellationToken.None).ConfigureAwait(false);
+                if (updatesCommandState)
+                {
+                    CompleteOperation(queuedOperation.Intent, activeOperation);
+                    // Use CancellationToken.None for the final refresh because command state must be
+                    // re-enabled even if the operation request token was canceled after the work stopped.
+                    await RefreshCommandStatesAsync(queuedOperation.Model, CancellationToken.None).ConfigureAwait(false);
+                }
+                else
+                {
+                    // Drift detection is a background probe. It must serialize with commands, but it
+                    // should not make dashboard commands flicker disabled while it checks ARM state.
+                    CompleteDriftCheck();
+                }
+
+                if (shouldPromptForMissingAzureContext)
+                {
+                    EnsureAzureContextNotificationStarted(queuedOperation.Model);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                // Drift detection is a background probe. It must serialize with commands, but it
-                // should not make dashboard commands flicker disabled while it checks ARM state.
-                CompleteDriftCheck();
+                queuedOperation.Completion.TrySetException(ex);
+                throw;
             }
 
-            if (shouldPromptForMissingAzureContext)
-            {
-                EnsureAzureContextNotificationStarted(queuedOperation.Model);
-            }
+            CompleteQueuedOperation(queuedOperation, result, canceled, canceledToken, failure);
+        }
+    }
+
+    private static void CompleteQueuedOperation(QueuedOperation queuedOperation, object? result, bool canceled, CancellationToken canceledToken, Exception? failure)
+    {
+        if (failure is not null)
+        {
+            queuedOperation.Completion.TrySetException(failure);
+        }
+        else if (canceled)
+        {
+            queuedOperation.Completion.TrySetCanceled(canceledToken);
+        }
+        else
+        {
+            queuedOperation.Completion.TrySetResult(result);
         }
     }
 
@@ -1485,7 +1648,6 @@ internal sealed class AzureProvisioningController(
             DeleteAzureResourcesIntent => await ExecuteDeleteAzureResourcesAsync(model, cancellationToken).ConfigureAwait(false),
             ChangeResourceLocationIntent changeResourceLocation => await ExecuteChangeResourceLocationAsync(model, changeResourceLocation, cancellationToken).ConfigureAwait(false),
             ReprovisionResourceIntent reprovisionResource => await ExecuteReprovisionResourceAsync(model, reprovisionResource, cancellationToken).ConfigureAwait(false),
-            CancelResourceDeploymentIntent cancelResourceDeployment => await ExecuteCancelResourceDeploymentAsync(model, cancelResourceDeployment, cancellationToken).ConfigureAwait(false),
             DeleteAzureResourceIntent deleteAzureResource => await ExecuteDeleteAzureResourceAsync(model, deleteAzureResource, cancellationToken).ConfigureAwait(false),
             DetectDriftIntent => await ExecuteDetectDriftAsync(model, cancellationToken).ConfigureAwait(false),
             _ => throw new ArgumentOutOfRangeException(nameof(intent), intent, "Unexpected Azure intent.")
@@ -1494,6 +1656,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<bool> ExecuteResetStateAsync(DistributedApplicationModel model, ResetStateIntent intent, CancellationToken cancellationToken)
     {
+        UpdateActiveOperationPhase(intent, AzureProvisioningStrings.OperationPhaseResettingProvisioningState);
         // Resetting the environment removes the top-level provisioning context first, then clears
         // each deployment section. This makes future prompts fall back to configuration/defaults and
         // prevents resources from showing old Azure identity properties.
@@ -1526,6 +1689,8 @@ internal sealed class AzureProvisioningController(
 
     private async Task<bool> ExecuteChangeAzureContextAsync(DistributedApplicationModel model, ChangeAzureContextIntent intent, CancellationToken cancellationToken)
     {
+        UpdateActiveOperationPhase(intent, AzureProvisioningStrings.OperationPhaseChangingAzureContext);
+        var currentContext = await GetCurrentAzureContextAsync(cancellationToken).ConfigureAwait(false);
         if (intent.Options is null)
         {
             // This is the legacy/non-dashboard path. The options manager owns prompting and
@@ -1536,10 +1701,13 @@ internal sealed class AzureProvisioningController(
                 return false;
             }
 
+            var provisioningOptions = await provisioningOptionsManager.GetProvisioningOptionsAsync(cancellationToken).ConfigureAwait(false);
+            ThrowIfKeyVaultEnvironmentLocationChange(model, currentContext.Location, provisioningOptions.Location);
             await provisioningOptionsManager.PersistProvisioningOptionsAsync(cancellationToken).ConfigureAwait(false);
         }
         else
         {
+            ThrowIfKeyVaultEnvironmentLocationChange(model, currentContext.Location, intent.Options.Location);
             await provisioningOptionsManager.ApplyProvisioningOptionsAsync(intent.Options, cancellationToken).ConfigureAwait(false);
         }
 
@@ -1553,6 +1721,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<bool> ExecuteApplyAzureContextAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
     {
+        UpdateCurrentActiveOperationPhase(AzureProvisioningStrings.OperationPhaseApplyingAzureContext);
         // The notification prompt runs outside the operation queue so dashboard commands stay responsive
         // while the dialog is open. This queued operation only applies the saved context and reprovisions.
         await ResetResourcesAsync(model, GetProvisionableAzureResources(model), preserveOverrides: true, cancellationToken, preserveInferredLocationOverrides: false).ConfigureAwait(false);
@@ -1562,6 +1731,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<object?> ExecuteEnsureProvisionedAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
     {
+        UpdateCurrentActiveOperationPhase(AzureProvisioningStrings.OperationPhaseProvisioningAzureResources);
         var azureResources = GetProvisionableAzureResources(model);
         await EnsureProvisionedCoreAsync(model, azureResources, cancellationToken).ConfigureAwait(false);
         return null;
@@ -1569,6 +1739,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<bool> ExecuteReprovisionAllAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
     {
+        UpdateCurrentActiveOperationPhase(AzureProvisioningStrings.OperationPhaseReprovisioningAzureResources);
         await ResetResourcesAsync(model, GetProvisionableAzureResources(model), preserveOverrides: true, cancellationToken).ConfigureAwait(false);
         await PublishAzureEnvironmentStateAsync(model, KnownResourceStates.NotStarted, cancellationToken).ConfigureAwait(false);
         return await EnsureProvisionedOrThrowAsync(model, GetProvisionableAzureResources(model), cancellationToken).ConfigureAwait(false);
@@ -1576,12 +1747,13 @@ internal sealed class AzureProvisioningController(
 
     private async Task<object?> ExecuteDeleteAzureResourcesAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
     {
+        UpdateCurrentActiveOperationPhase(AzureProvisioningStrings.OperationPhaseDeletingAzureResources);
         // Delete-all operates at the resource-group boundary because run-mode provisioning creates a
         // single environment resource group. Per-resource deletion uses cached deployment outputs
         // instead, since individual Azure resources may not map one-to-one to a resource group.
         await PublishAzureEnvironmentStateAsync(
             model,
-            new ResourceStateSnapshot("Deleting", KnownResourceStateStyles.Info),
+            new ResourceStateSnapshot(DeletingState, KnownResourceStateStyles.Info),
             cancellationToken).ConfigureAwait(false);
 
         string? resourceGroupName;
@@ -1596,7 +1768,7 @@ internal sealed class AzureProvisioningController(
         {
             await PublishAzureEnvironmentStateAsync(
                 model,
-                new ResourceStateSnapshot("Failed to Delete", KnownResourceStateStyles.Error),
+                new ResourceStateSnapshot(AzureProvisioningStrings.ResourceStateFailedToDelete, KnownResourceStateStyles.Error),
                 cancellationToken).ConfigureAwait(false);
             throw;
         }
@@ -1647,45 +1819,171 @@ internal sealed class AzureProvisioningController(
     private async Task<bool> ExecuteChangeResourceLocationAsync(DistributedApplicationModel model, ChangeResourceLocationIntent intent, CancellationToken cancellationToken)
     {
         var targetResources = GetTargetAzureResources(model, intent.ResourceName);
+        ThrowIfKeyVaultLocationChangeTarget(targetResources);
+
+        var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
+        UpdateActiveOperationPhase(
+            intent,
+            ChangingLocationState,
+            FormatUserString(AzureProvisioningStrings.OperationPhaseChangingLocationToFormat, intent.Location));
+        foreach (var resource in targetResources)
+        {
+            await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
+            {
+                State = new(ChangingLocationState, KnownResourceStateStyles.Info)
+            }).ConfigureAwait(false);
+        }
+
         if (targetResources[0].AzureResource is AzureBicepResource targetBicepResource)
         {
             // ARM rejects redeploying many resource types to a different location while the old
             // resource still exists. Delete the cached live resource first, then save the override
             // that the next provisioning pass will apply.
+            UpdateActiveOperationPhase(
+                intent,
+                AzureProvisioningStrings.OperationPhaseDeletingAzureResource,
+                FormatUserString(AzureProvisioningStrings.OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat, intent.Location));
             await DeleteCachedResourceForLocationChangeAsync(targetBicepResource, intent.Location, cancellationToken).ConfigureAwait(false);
             await SetResourceLocationOverrideAsync(targetBicepResource.Name, intent.Location, cancellationToken).ConfigureAwait(false);
         }
+
+        UpdateActiveOperationPhase(
+            intent,
+            AzureProvisioningStrings.OperationPhaseReprovisioning,
+            FormatUserString(AzureProvisioningStrings.OperationPhaseReprovisioningInLocationFormat, intent.Location));
         await ResetResourcesAsync(model, targetResources, preserveOverrides: true, cancellationToken).ConfigureAwait(false);
         return await EnsureProvisionedOrThrowAsync(model, targetResources, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> ExecuteReprovisionResourceAsync(DistributedApplicationModel model, ReprovisionResourceIntent intent, CancellationToken cancellationToken)
     {
+        UpdateActiveOperationPhase(intent, AzureProvisioningStrings.OperationPhaseReprovisioning);
         var targetResources = GetTargetAzureResources(model, intent.ResourceName);
+        var effectiveLocation = await GetEffectiveResourceLocationAsync(GetDeploymentStateResourceName(targetResources[0]), cancellationToken).ConfigureAwait(false);
+        var currentContext = await GetCurrentAzureContextAsync(cancellationToken).ConfigureAwait(false);
         await ResetResourcesAsync(model, targetResources, preserveOverrides: true, cancellationToken).ConfigureAwait(false);
-        return await EnsureProvisionedOrThrowAsync(model, targetResources, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await EnsureProvisionedOrThrowAsync(model, targetResources, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested &&
+            ex is InvalidOperationException or AzureProvisioningFailureException &&
+            TryGetKeyVaultSoftDeleteConflictResourceId(ex, out var keyVaultResourceId))
+        {
+            // If a delete command is canceled after the live vault is deleted but before purge finishes,
+            // the next reprovision sees ARM's soft-delete conflict. At that point the user explicitly
+            // asked to recreate this resource, so purge the tombstone for the same target ID and retry once.
+            UpdateActiveOperationPhase(
+                intent,
+                AzureProvisioningStrings.OperationPhasePurgingDeletedKeyVault,
+                FormatUserString(AzureProvisioningStrings.OperationPhasePurgingRecoverableKeyVaultFormat, new ResourceIdentifier(keyVaultResourceId).Name));
+            await DeleteAzureResourceIdsAsync([keyVaultResourceId], intent.ResourceName, effectiveLocation, currentContext.Location, allowKeyVaultPurgeTimeout: false, cancellationToken).ConfigureAwait(false);
+            await ResetResourcesAsync(model, targetResources, preserveOverrides: true, cancellationToken).ConfigureAwait(false);
+            return await EnsureProvisionedOrThrowAsync(model, targetResources, cancellationToken).ConfigureAwait(false);
+        }
     }
 
-    private async Task<object?> ExecuteCancelResourceDeploymentAsync(DistributedApplicationModel model, CancelResourceDeploymentIntent intent, CancellationToken cancellationToken)
+    // Key Vault is special because deleting a vault leaves a location-scoped soft-delete tombstone.
+    // A later create with the same vault name can fail until that tombstone is purged, even though
+    // the live resource no longer exists. Detect that specific provisioning failure so reprovision
+    // can purge the recoverable vault for the same target resource ID and retry once.
+    private static bool TryGetKeyVaultSoftDeleteConflictResourceId(Exception exception, out string keyVaultResourceId)
     {
-        var targetResources = GetTargetAzureResources(model, intent.ResourceName);
-        var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
-        var canceledDeploymentCount = await CancelCachedDeploymentsAsync(targetResources, requireDeployment: true, cancellationToken).ConfigureAwait(false);
-
-        foreach (var resource in targetResources)
+        keyVaultResourceId = string.Empty;
+        if (AzureProvisioningFailureDetails.TryCreate(exception, AzureProvisioningFailureDetails.ProvisionOperation) is not { } failure ||
+            !string.Equals(failure.ResourceType, KeyVaultVaultResourceType, StringComparisons.AzureResourceType) ||
+            string.IsNullOrWhiteSpace(failure.TargetResourceId) ||
+            !ResourceIdentifier.TryParse(failure.TargetResourceId, out var parsedResourceId) ||
+            parsedResourceId is null ||
+            !string.Equals(parsedResourceId.ResourceType.ToString(), KeyVaultVaultResourceType, StringComparisons.AzureResourceType))
         {
-            await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
-            {
-                State = new("Canceled", KnownResourceStateStyles.Info)
-            }).ConfigureAwait(false);
+            return false;
         }
 
-        _logger.LogInformation("Canceled {Count} Azure deployment(s) for resource {ResourceName}.", canceledDeploymentCount, intent.ResourceName);
-        return null;
+        // Observed ARM shapes include:
+        //   code: ConflictError, message: "... is currently in a deleted state ... purge ..."
+        //   code: VaultAlreadyExists, message: "... is currently in a deleted state ..."
+        // Some providers vary the code, so keep the message check as the fallback signal.
+        if (string.Equals(failure.ErrorCode, "ConflictError", StringComparisons.AzureProvisioningErrorCode) ||
+            string.Equals(failure.ErrorCode, "VaultAlreadyExists", StringComparisons.AzureProvisioningErrorCode) ||
+            (failure.ErrorMessage.Contains("deleted state", StringComparison.OrdinalIgnoreCase) &&
+             failure.ErrorMessage.Contains("purge", StringComparison.OrdinalIgnoreCase)))
+        {
+            keyVaultResourceId = failure.TargetResourceId;
+            return true;
+        }
+
+        return false;
+    }
+
+    private async Task CancelResourceCoreAsync(DistributedApplicationModel model, string resourceName, CancellationToken cancellationToken)
+    {
+        var targetResources = GetTargetAzureResources(model, resourceName);
+        var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
+
+        ActiveAzureOperation? activeOperation = null;
+        lock (_operationStateLock)
+        {
+            var currentActiveOperation = _state.Status.ActiveOperation;
+            if (currentActiveOperation is not null &&
+                (currentActiveOperation.Operation.IsAllResources || currentActiveOperation.Operation.ResourceNames.Contains(resourceName)))
+            {
+                activeOperation = currentActiveOperation;
+            }
+        }
+
+        var targetResourcesToCancel = activeOperation is not null
+            ? GetActiveOperationTargetAzureResources(model, activeOperation)
+            : targetResources;
+        var inFlightResourcesToCancel = activeOperation is not null
+            ? targetResourcesToCancel
+                .Where(static resource => resource.AzureResource.ProvisioningTaskCompletionSource?.Task.IsCompleted == false)
+                .ToList()
+            : [];
+
+        // Snapshot in-flight resources before canceling the CTS. Cancellation continuations can
+        // complete provisioning tasks synchronously, but those resources should still show the
+        // user that the cancel request was accepted.
+        activeOperation?.Cancel();
+
+        if (activeOperation is not null)
+        {
+            foreach (var resource in inFlightResourcesToCancel)
+            {
+                await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
+                {
+                    State = new(CancelingState, KnownResourceStateStyles.Info)
+                }).ConfigureAwait(false);
+            }
+        }
+
+        var canceledDeploymentCount = await CancelCachedDeploymentsAsync(
+            targetResourcesToCancel,
+            requireDeployment: activeOperation is null,
+            requiredDeploymentResourceName: resourceName,
+            cancellationToken).ConfigureAwait(false);
+
+        if (activeOperation is null)
+        {
+            foreach (var resource in targetResourcesToCancel)
+            {
+                await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
+                {
+                    State = new(AzureProvisioningStrings.ResourceStateCanceled, KnownResourceStateStyles.Info)
+                }).ConfigureAwait(false);
+            }
+        }
+
+        _logger.LogInformation(
+            "Cancellation requested for Azure resource {ResourceName}. Active operation canceled: {ActiveOperationCanceled}. Canceled {Count} cached deployment(s).",
+            resourceName,
+            activeOperation is not null,
+            canceledDeploymentCount);
     }
 
     private async Task<DeleteAzureResourceResult> ExecuteDeleteAzureResourceAsync(DistributedApplicationModel model, DeleteAzureResourceIntent intent, CancellationToken cancellationToken)
     {
+        UpdateActiveOperationPhase(intent, AzureProvisioningStrings.OperationPhaseDeletingAzureResource);
         var targetResources = GetTargetAzureResources(model, intent.ResourceName);
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
 
@@ -1695,7 +1993,7 @@ internal sealed class AzureProvisioningController(
             // dashboard reflects that child resources/role assignments are part of the operation.
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new("Deleting", KnownResourceStateStyles.Info)
+                State = new(DeletingState, KnownResourceStateStyles.Info)
             }).ConfigureAwait(false);
         }
 
@@ -1705,15 +2003,33 @@ internal sealed class AzureProvisioningController(
             // A resource can have an in-progress deployment and already-created target resources.
             // Cancel first to stop ARM from continuing to create/update resources while deletion is
             // collecting and removing the known targets.
-            await CancelCachedDeploymentsAsync(targetResources, requireDeployment: false, cancellationToken).ConfigureAwait(false);
+            await CancelCachedDeploymentsAsync(
+                targetResources,
+                requireDeployment: false,
+                requiredDeploymentResourceName: null,
+                cancellationToken).ConfigureAwait(false);
             resourceIds = await GetAzureResourceIdsForDeletionAsync(targetResources, cancellationToken).ConfigureAwait(false);
             if (resourceIds.Count == 0)
             {
                 throw new InvalidOperationException($"No cached Azure resource IDs were found for resource '{intent.ResourceName}'. Use '{ForgetStateCommandName}' to clear local state only.");
             }
 
-            await DeleteAzureResourceIdsAsync(resourceIds, intent.ResourceName, cancellationToken).ConfigureAwait(false);
+            var effectiveLocation = await GetEffectiveResourceLocationAsync(GetDeploymentStateResourceName(targetResources[0]), cancellationToken).ConfigureAwait(false);
+            var currentContext = await GetCurrentAzureContextAsync(cancellationToken).ConfigureAwait(false);
+            await DeleteAzureResourceIdsAsync(resourceIds, intent.ResourceName, effectiveLocation, currentContext.Location, allowKeyVaultPurgeTimeout: true, cancellationToken).ConfigureAwait(false);
             await ResetResourcesAsync(model, targetResources, preserveOverrides: true, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            foreach (var resource in targetResources)
+            {
+                await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
+                {
+                    State = new(AzureProvisioningStrings.ResourceStateCanceled, KnownResourceStateStyles.Info)
+                }).ConfigureAwait(false);
+            }
+
+            throw;
         }
         catch (Exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -1721,7 +2037,7 @@ internal sealed class AzureProvisioningController(
             {
                 await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
                 {
-                    State = new("Failed to Delete", KnownResourceStateStyles.Error)
+                    State = new(AzureProvisioningStrings.ResourceStateFailedToDelete, KnownResourceStateStyles.Error)
                 }).ConfigureAwait(false);
             }
 
@@ -1796,25 +2112,33 @@ internal sealed class AzureProvisioningController(
         return null;
     }
 
-    private void StartOperation(AzureIntent intent)
+    private ActiveAzureOperation StartOperation(DistributedApplicationModel model, AzureIntent intent, CancellationToken cancellationToken)
     {
+        var activeOperation = ActiveAzureOperation.Create(intent, CreateActiveOperationState(model, intent), _timeProvider.GetUtcNow(), cancellationToken);
         lock (_operationStateLock)
         {
             // Store the intent rather than just a boolean so command-state calculation can keep
             // unaffected resources enabled while a per-resource operation is running.
-            _state = CreateControllerState(intent);
+            _state = CreateControllerState(intent, activeOperation);
         }
+
+        return activeOperation;
     }
 
-    private void CompleteOperation(AzureIntent intent)
+    private void CompleteOperation(AzureIntent intent, ActiveAzureOperation? activeOperation)
     {
+        ActiveAzureOperation? operationToDispose = null;
         lock (_operationStateLock)
         {
-            if (ReferenceEquals(_state.Status.CurrentIntent, intent))
+            if (ReferenceEquals(_state.Status.CurrentIntent, intent) &&
+                ReferenceEquals(_state.Status.ActiveOperation, activeOperation))
             {
-                _state = CreateControllerState(currentIntent: null);
+                operationToDispose = _state.Status.ActiveOperation;
+                _state = CreateControllerState(currentIntent: null, activeOperation: null);
             }
         }
+
+        operationToDispose?.Dispose();
     }
 
     private void CompleteDriftCheck()
@@ -1825,8 +2149,122 @@ internal sealed class AzureProvisioningController(
         }
     }
 
-    private static AzureControllerState CreateControllerState(AzureIntent? currentIntent)
-        => new(new AzureControllerStatus(currentIntent));
+    private void UpdateActiveOperationPhase(AzureIntent intent, string phase, string? status = null)
+    {
+        lock (_operationStateLock)
+        {
+            if (ReferenceEquals(_state.Status.CurrentIntent, intent))
+            {
+                _state.Status.ActiveOperation?.SetPhase(phase, status);
+            }
+        }
+    }
+
+    private void UpdateCurrentActiveOperationPhase(string phase, string? status = null)
+    {
+        lock (_operationStateLock)
+        {
+            _state.Status.ActiveOperation?.SetPhase(phase, status);
+        }
+    }
+
+    private static string FormatUserString(string format, params object?[] args)
+        => string.Format(CultureInfo.CurrentCulture, format, args);
+
+    private static AzureOperationState CreateActiveOperationState(DistributedApplicationModel model, AzureIntent intent)
+    {
+        if (intent.Operation.IsAllResources)
+        {
+            return intent.Operation;
+        }
+
+        var resourceNames = GetTargetAzureResources(model, intent.Operation.ResourceNames.Single())
+            .SelectMany(static resource => resource.Resource == resource.AzureResource
+                ? [resource.Resource.Name]
+                : new[] { resource.Resource.Name, resource.AzureResource.Name })
+            .ToHashSet(StringComparers.ResourceName);
+
+        return AzureOperationState.Resources(resourceNames, intent.Operation.DisplayName);
+    }
+
+    private static AzureOperationState CreateQueuedOperationState(DistributedApplicationModel model, AzureIntent intent)
+    {
+        if (intent.Operation.IsNone)
+        {
+            return AzureOperationState.None;
+        }
+
+        return CreateActiveOperationState(model, intent);
+    }
+
+    private void RegisterQueuedOperation(AzureIntent intent, AzureOperationState queuedOperationState)
+    {
+        if (queuedOperationState.IsNone)
+        {
+            return;
+        }
+
+        lock (_operationStateLock)
+        {
+            if (_state.Status.ActiveOperation?.Operation is { } activeOperation &&
+                OperationsConflict(activeOperation, queuedOperationState))
+            {
+                throw new InvalidOperationException(FormatUserString(
+                    AzureProvisioningStrings.OperationAlreadyRunningOrQueued,
+                    activeOperation.DisplayName,
+                    intent.Operation.DisplayName,
+                    CancelCommandName));
+            }
+
+            foreach (var queuedOperation in _queuedOperationStates)
+            {
+                if (OperationsConflict(queuedOperation, queuedOperationState))
+                {
+                    throw new InvalidOperationException(FormatUserString(
+                        AzureProvisioningStrings.OperationAlreadyRunningOrQueued,
+                        queuedOperation.DisplayName,
+                        intent.Operation.DisplayName,
+                        CancelCommandName));
+                }
+            }
+
+            // The queue is single-reader but multi-writer. Track accepted operations before they
+            // become active so rapid CLI/MCP calls cannot bypass dashboard disabled-state checks by
+            // slipping multiple conflicting commands into the channel before the reader runs.
+            _queuedOperationStates.Add(queuedOperationState);
+        }
+    }
+
+    private void UnregisterQueuedOperation(AzureOperationState queuedOperationState)
+    {
+        if (queuedOperationState.IsNone)
+        {
+            return;
+        }
+
+        lock (_operationStateLock)
+        {
+            _queuedOperationStates.Remove(queuedOperationState);
+        }
+    }
+
+    private static bool OperationsConflict(AzureOperationState currentOperation, AzureOperationState requestedOperation)
+    {
+        if (currentOperation.IsNone || requestedOperation.IsNone)
+        {
+            return false;
+        }
+
+        if (currentOperation.IsAllResources || requestedOperation.IsAllResources)
+        {
+            return true;
+        }
+
+        return currentOperation.ResourceNames.Any(requestedOperation.ResourceNames.Contains);
+    }
+
+    private static AzureControllerState CreateControllerState(AzureIntent? currentIntent, ActiveAzureOperation? activeOperation)
+        => new(new AzureControllerStatus(currentIntent, activeOperation));
 
     private static async Task<ExecuteCommandResult> ExecuteCommandAsync(Func<Task> action, string successMessage, Func<Task<CommandResultData>> createResultData, string? failureOperation = null)
     {
@@ -1975,11 +2413,13 @@ internal sealed class AzureProvisioningController(
             ["resourcePortalUrl"] = resourceId is not null ? AzurePortalUrls.GetResourceUrl(resourceId, tenantId) : null,
             ["locationOverride"] = section.Data[LocationOverrideKey]?.GetValue<string>(),
             ["checksum"] = section.Data["CheckSum"]?.GetValue<string>(),
-            ["parameters"] = ParseDeploymentStateJson(resource.Name, "Parameters", section.Data["Parameters"]?.GetValue<string>()),
             ["outputs"] = outputs,
             ["scope"] = ParseDeploymentStateJson(resource.Name, "Scope", section.Data["Scope"]?.GetValue<string>())
         };
 
+        // Do not echo cached deployment parameters in user-facing diagnostics. ARM parameter
+        // files can contain secure values such as generated passwords or connection strings;
+        // location and override information is surfaced separately above.
         if (section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey]?.GetValue<string>() is { Length: > 0 } provisioningState)
         {
             json["provisioningState"] = provisioningState;
@@ -2237,6 +2677,7 @@ internal sealed class AzureProvisioningController(
     private async Task<int> CancelCachedDeploymentsAsync(
         IReadOnlyCollection<(IResource Resource, IAzureResource AzureResource)> targetResources,
         bool requireDeployment,
+        string? requiredDeploymentResourceName,
         CancellationToken cancellationToken)
     {
         var canceledDeploymentIds = new HashSet<string>(StringComparers.AzureResourceId);
@@ -2265,21 +2706,55 @@ internal sealed class AzureProvisioningController(
                 await CancelCachedDeploymentAsync(deploymentId, loggerService.GetLogger(resource.AzureResource), cancellationToken).ConfigureAwait(false);
             }
 
-            // Mark local deployment state canceled even if ARM had already finished between reading
-            // state and sending the cancel request. That prevents future command state from treating
-            // this cached deployment as still cancelable.
-            section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey] = BicepProvisioner.DeploymentStateProvisioningStateCanceled;
-            await deploymentStateManager.SaveSectionAsync(section, cancellationToken).ConfigureAwait(false);
+            await MarkCachedDeploymentCanceledAsync(
+                $"Azure:Deployments:{bicepResource.Name}",
+                deploymentId,
+                cancellationToken).ConfigureAwait(false);
         }
 
         if (requireDeployment && canceledDeploymentIds.Count == 0)
         {
-            var resourceName = targetResources.Count == 1 ? targetResources.Single().Resource.Name : string.Join(", ", targetResources.Select(static resource => resource.Resource.Name));
+            var resourceName = requiredDeploymentResourceName ?? (targetResources.Count == 1 ? targetResources.Single().Resource.Name : string.Join(", ", targetResources.Select(static resource => resource.Resource.Name)));
             throw new InvalidOperationException($"No active cached Azure deployment was found for resource '{resourceName}'.");
         }
 
         return canceledDeploymentIds.Count;
     }
+
+    private async Task MarkCachedDeploymentCanceledAsync(string sectionName, string deploymentId, CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 3;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            var section = await deploymentStateManager.AcquireSectionAsync(sectionName, cancellationToken).ConfigureAwait(false);
+            if (TryGetCachedDeploymentId(section) is not { } currentDeploymentId ||
+                !StringComparers.AzureResourceId.Equals(currentDeploymentId, deploymentId) ||
+                !IsActiveCachedDeployment(section))
+            {
+                return;
+            }
+
+            // The active provisioner and the fast-path cancel command can update the same deployment
+            // state section concurrently. Re-acquire before marking the state canceled and retry when
+            // optimistic concurrency detects that the provisioner saved a newer snapshot first.
+            section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey] = BicepProvisioner.DeploymentStateProvisioningStateCanceled;
+            try
+            {
+                await deploymentStateManager.SaveSectionAsync(section, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (InvalidOperationException ex) when (IsDeploymentStateConcurrencyConflict(ex))
+            {
+                if (attempt == maxAttempts - 1)
+                {
+                    throw;
+                }
+            }
+        }
+    }
+
+    private static bool IsDeploymentStateConcurrencyConflict(InvalidOperationException ex)
+        => ex.Message.Contains("Concurrency conflict detected in section", StringComparison.Ordinal);
 
     private async Task CancelCachedDeploymentAsync(string deploymentId, ILogger resourceLogger, CancellationToken cancellationToken)
     {
@@ -2358,7 +2833,7 @@ internal sealed class AzureProvisioningController(
         }
     }
 
-    private async Task DeleteAzureResourceIdsAsync(IReadOnlyList<string> resourceIds, string resourceName, CancellationToken cancellationToken)
+    private async Task DeleteAzureResourceIdsAsync(IReadOnlyList<string> resourceIds, string resourceName, string? resourceLocation, string? fallbackResourceLocation, bool allowKeyVaultPurgeTimeout, CancellationToken cancellationToken)
     {
         foreach (var resourceId in resourceIds)
         {
@@ -2376,7 +2851,56 @@ internal sealed class AzureProvisioningController(
             {
                 _logger.LogInformation(ex, "Azure resource {ResourceId} was already absent while deleting resources for {ResourceName}.", resourceId, resourceName);
             }
+
+            await PurgeDeletedKeyVaultAsync(armClient, resourceId, resourceName, resourceLocation, fallbackResourceLocation, allowKeyVaultPurgeTimeout, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private async Task PurgeDeletedKeyVaultAsync(IArmClient armClient, string resourceId, string resourceName, string? resourceLocation, string? fallbackResourceLocation, bool allowTimeout, CancellationToken cancellationToken)
+    {
+        if (!IsKeyVaultResourceId(resourceId))
+        {
+            return;
+        }
+
+        var keyVaultLocations = new List<string>();
+        AddLocationIfPresent(keyVaultLocations, resourceLocation);
+        AddLocationIfPresent(keyVaultLocations, fallbackResourceLocation);
+
+        foreach (var keyVaultLocation in keyVaultLocations)
+        {
+            try
+            {
+                if (await armClient.PurgeDeletedKeyVaultAsync(resourceId, keyVaultLocation, cancellationToken).ConfigureAwait(false))
+                {
+                    _logger.LogInformation("Purged deleted Azure Key Vault {ResourceId} in {Location} for {ResourceName}.", resourceId, keyVaultLocation, resourceName);
+                    return;
+                }
+            }
+            catch (TimeoutException ex) when (allowTimeout)
+            {
+                _logger.LogWarning(ex, "Timed out waiting for deleted Azure Key Vault {ResourceId} in {Location} to be purged for {ResourceName}. The live vault was deleted and purge was requested; a later reprovision can retry if Azure is still finalizing the tombstone.", resourceId, keyVaultLocation, resourceName);
+                return;
+            }
+        }
+    }
+
+    private static bool IsKeyVaultResourceId(string resourceId)
+    {
+        return ResourceIdentifier.TryParse(resourceId, out var parsedResourceId) &&
+            parsedResourceId is not null &&
+            string.Equals(parsedResourceId.ResourceType.ToString(), KeyVaultVaultResourceType, StringComparisons.AzureResourceType);
+    }
+
+    private static void AddLocationIfPresent(List<string> locations, string? location)
+    {
+        if (string.IsNullOrWhiteSpace(location) ||
+            locations.Contains(location, StringComparers.AzureLocation))
+        {
+            return;
+        }
+
+        locations.Add(location);
     }
 
     private async Task<IArmClient> GetArmClientForResourceIdAsync(string resourceId, CancellationToken cancellationToken)
@@ -2783,6 +3307,8 @@ internal sealed class AzureProvisioningController(
                 currentLocation,
                 requestedLocation);
         }
+
+        await PurgeDeletedKeyVaultAsync(armClient, resourceId, resource.Name, currentLocation, null, allowTimeout: false, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<string?> TryGetPersistedResourceLocationAsync(AzureBicepResource resource, CancellationToken cancellationToken)
@@ -2881,6 +3407,33 @@ internal sealed class AzureProvisioningController(
         }
     }
 
+    private CustomResourceSnapshot ApplyActiveOperationProperties(IResource resource, CustomResourceSnapshot state)
+    {
+        ActiveAzureOperationSnapshot? activeOperation;
+        lock (_operationStateLock)
+        {
+            activeOperation = _state.Status.ActiveOperation?.CreateSnapshot();
+        }
+
+        var properties = state.Properties.WithoutActiveOperationProperties();
+        if (activeOperation is null ||
+            resource is not AzureEnvironmentResource && !activeOperation.AffectsResource(resource.Name))
+        {
+            return state with { Properties = properties };
+        }
+
+        return state with
+        {
+            Properties = properties.SetResourcePropertyRange(
+                AzureResourceProperties.CreateActiveOperationProperties(
+                    activeOperation.DisplayName,
+                    activeOperation.Phase,
+                    activeOperation.Status,
+                    activeOperation.TargetLocation,
+                    activeOperation.StartedAt))
+        };
+    }
+
     private async Task RefreshCommandStatesAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -2889,7 +3442,7 @@ internal sealed class AzureProvisioningController(
         {
             // Publishing the same state is intentional: command availability is calculated during
             // snapshot publication, so a no-op state update still refreshes dashboard command state.
-            await notificationService.PublishUpdateAsync(resource, static state => state).ConfigureAwait(false);
+            await notificationService.PublishUpdateAsync(resource, state => ApplyActiveOperationProperties(resource, state)).ConfigureAwait(false);
         }
     }
 
@@ -2929,7 +3482,7 @@ internal sealed class AzureProvisioningController(
     {
         async Task PublishAsync(IResource targetResource)
         {
-            await notificationService.PublishUpdateAsync(targetResource, stateFactory).ConfigureAwait(false);
+            await notificationService.PublishUpdateAsync(targetResource, state => ApplyActiveOperationProperties(targetResource, stateFactory(state))).ConfigureAwait(false);
         }
 
         // Some model resources are represented by a surrogate AzureBicepResource during
@@ -2978,7 +3531,7 @@ internal sealed class AzureProvisioningController(
             {
                 await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
                 {
-                    State = new("Running", KnownResourceStateStyles.Success)
+                    State = new(KnownResourceStates.Running, KnownResourceStateStyles.Success)
                 }).ConfigureAwait(false);
             }
         }
@@ -2986,20 +3539,101 @@ internal sealed class AzureProvisioningController(
         {
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new("Missing subscription configuration", KnownResourceStateStyles.Error)
+                State = new(AzureProvisioningStrings.ResourceStateMissingSubscriptionConfiguration, KnownResourceStateStyles.Error)
+            }).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
+            {
+                State = new(AzureProvisioningStrings.ResourceStateCanceled, KnownResourceStateStyles.Info)
             }).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
+            if (await TryPublishTerminalDeploymentStateAsync(resource, parentChildLookup).ConfigureAwait(false))
+            {
+                return;
+            }
+
             var failureDetails = AzureProvisioningFailureDetails.TryCreate(ex, AzureProvisioningFailureDetails.ProvisionOperation);
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new("Failed to Provision", KnownResourceStateStyles.Error),
+                State = new(AzureProvisioningStrings.ResourceStateFailedToProvision, KnownResourceStateStyles.Error),
                 Properties = failureDetails is null
                     ? state.Properties
                     : failureDetails.SetResourceProperties(state.Properties, AzureProvisioningFailureDetails.ProvisionOperation)
             }).ConfigureAwait(false);
         }
+    }
+
+    private async Task<bool> TryPublishTerminalDeploymentStateAsync(
+        (IResource Resource, IAzureResource AzureResource) resource,
+        ILookup<IResource, IResourceWithParent> parentChildLookup)
+    {
+        if (resource.AzureResource is not AzureBicepResource bicepResource)
+        {
+            return false;
+        }
+
+        if (TryGetPublishedTerminalDeploymentState(resource.Resource.Name, out var publishedTerminalState) ||
+            TryGetPublishedTerminalDeploymentState(bicepResource.Name, out publishedTerminalState))
+        {
+            // The provisioner already published an ARM-specific terminal state before throwing to
+            // stop normal provisioning. Do not replace that more precise state with generic failure,
+            // and make sure projected resources see the same terminal state as the Bicep resource.
+            await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
+            {
+                State = publishedTerminalState
+            }).ConfigureAwait(false);
+
+            return true;
+        }
+
+        if (!IsResourceInState(resource.Resource.Name, CancelingState) &&
+            !IsResourceInState(bicepResource.Name, CancelingState))
+        {
+            return false;
+        }
+
+        var section = await deploymentStateManager.AcquireSectionAsync($"Azure:Deployments:{bicepResource.Name}").ConfigureAwait(false);
+        if (!string.Equals(
+            section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey]?.GetValue<string>(),
+            BicepProvisioner.DeploymentStateProvisioningStateCanceled,
+            StringComparisons.AzureProvisioningState))
+        {
+            return false;
+        }
+
+        // ARM can win the cancellation race and report a canceled deployment as a non-cancellation
+        // failure from the SDK path. The cache is the source of truth for that terminal outcome.
+        await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
+        {
+            State = new(AzureProvisioningStrings.ResourceStateCanceled, KnownResourceStateStyles.Info)
+        }).ConfigureAwait(false);
+
+        return true;
+    }
+
+    private bool IsResourceInState(string resourceName, string state)
+    {
+        return notificationService.TryGetCurrentState(resourceName, out var currentEvent) &&
+            string.Equals(currentEvent.Snapshot.State?.Text, state, StringComparison.Ordinal);
+    }
+
+    private bool TryGetPublishedTerminalDeploymentState(string resourceName, out ResourceStateSnapshot state)
+    {
+        if (notificationService.TryGetCurrentState(resourceName, out var currentEvent) &&
+            currentEvent.Snapshot.State is { Text: { } stateText } currentState &&
+            (string.Equals(stateText, AzureProvisioningStrings.ResourceStateAzureDeploymentCanceled, StringComparison.Ordinal) ||
+             string.Equals(stateText, AzureProvisioningStrings.ResourceStateAzureDeploymentFailed, StringComparison.Ordinal)))
+        {
+            state = currentState;
+            return true;
+        }
+
+        state = default!;
+        return false;
     }
 
     private async Task<bool> WaitForRoleAssignmentsAsync(
@@ -3128,13 +3762,16 @@ internal sealed class AzureProvisioningController(
 
                     var provisioningContext = await provisioningContextLazy.Value.ConfigureAwait(false);
 
-                    // The provisioner owns Bicep compilation, state persistence, and ARM operations.
-                    // The controller is responsible for sequencing, cancellation, and publishing the
-                    // resource lifecycle around this call.
-                    await bicepProvisioner.GetOrCreateResourceAsync(
-                        bicepResource,
-                        provisioningContext,
-                        cancellationToken).ConfigureAwait(false);
+                    if (!await bicepProvisioner.ReconcileDeploymentStateAsync(bicepResource, provisioningContext, cancellationToken).ConfigureAwait(false))
+                    {
+                        // The provisioner owns Bicep compilation, state persistence, and ARM operations.
+                        // The controller is responsible for sequencing, cancellation, and publishing the
+                        // resource lifecycle around this call.
+                        await bicepProvisioner.GetOrCreateResourceAsync(
+                            bicepResource,
+                            provisioningContext,
+                            cancellationToken).ConfigureAwait(false);
+                    }
 
                     CompleteProvisioning(resource.AzureResource);
                     await PublishConnectionStringAvailableEventAsync(resource.Resource, parentChildLookup, cancellationToken).ConfigureAwait(false);
@@ -3293,6 +3930,19 @@ internal sealed class AzureProvisioningController(
         ResourceStateSnapshot state,
         CancellationToken cancellationToken)
     {
+        await PublishAzureEnvironmentStateAsync(
+            model,
+            state,
+            [],
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task PublishAzureEnvironmentStateAsync(
+        DistributedApplicationModel model,
+        ResourceStateSnapshot state,
+        ImmutableArray<ResourcePropertySnapshot> additionalProperties,
+        CancellationToken cancellationToken)
+    {
         if (model.Resources.OfType<AzureEnvironmentResource>().SingleOrDefault() is not { } azureEnvironmentResource)
         {
             return;
@@ -3301,11 +3951,15 @@ internal sealed class AzureProvisioningController(
         var azureEnvironmentProperties = state.Text == KnownResourceStates.NotStarted
             ? ImmutableArray<ResourcePropertySnapshot>.Empty
             : BuildAzureEnvironmentProperties(await GetCurrentAzureContextAsync(cancellationToken).ConfigureAwait(false));
+        if (!additionalProperties.IsDefaultOrEmpty)
+        {
+            azureEnvironmentProperties = azureEnvironmentProperties.SetResourcePropertyRange(additionalProperties);
+        }
 
         // NotStarted represents "no active Azure context for this run" after reset/delete/forget.
         // Strip Azure-specific properties and URLs so the dashboard does not show stale subscription,
         // resource group, or portal links from the previous context.
-        await notificationService.PublishUpdateAsync(azureEnvironmentResource, existingState => existingState with
+        await notificationService.PublishUpdateAsync(azureEnvironmentResource, existingState => ApplyActiveOperationProperties(azureEnvironmentResource, existingState with
         {
             State = state,
             Properties = state.Text == KnownResourceStates.NotStarted
@@ -3315,7 +3969,7 @@ internal sealed class AzureProvisioningController(
             CreationTimeStamp = state.Text == KnownResourceStates.NotStarted ? null : existingState.CreationTimeStamp,
             StartTimeStamp = state.Text == KnownResourceStates.NotStarted ? null : existingState.StartTimeStamp,
             StopTimeStamp = state.Text == KnownResourceStates.NotStarted ? null : existingState.StopTimeStamp
-        }).ConfigureAwait(false);
+        })).ConfigureAwait(false);
 
         if (state.Text == KnownResourceStates.NotStarted)
         {
@@ -3333,27 +3987,119 @@ internal sealed class AzureProvisioningController(
             context.Location);
     }
 
-    private sealed class AzureOperationState(string displayName, bool isAllResources, IReadOnlySet<string> resourceNames)
+    private sealed class AzureOperationState(string displayName, bool isAllResources, IEnumerable<string> resourceNames)
     {
         // Read under _operationStateLock on the hot command-state path, so it holds only what command
         // enablement needs: target resource names and whether the operation affects all resources.
         public string DisplayName { get; } = displayName;
         public bool IsAllResources { get; } = isAllResources;
-        public IReadOnlySet<string> ResourceNames { get; } = resourceNames;
+        public IReadOnlySet<string> ResourceNames { get; } = new HashSet<string>(resourceNames, StringComparers.ResourceName);
+        public bool IsNone => !IsAllResources && ResourceNames.Count == 0;
 
-        public static AzureOperationState None { get; } = new(string.Empty, false, new HashSet<string>(StringComparers.ResourceName));
+        public static AzureOperationState None { get; } = new(string.Empty, false, []);
 
-        public static AzureOperationState All(string displayName) => new(displayName, true, new HashSet<string>(StringComparers.ResourceName));
+        public static AzureOperationState All(string displayName) => new(displayName, true, []);
 
-        public static AzureOperationState Resource(string resourceName, string displayName) => new(displayName, false, new HashSet<string>([resourceName], StringComparers.ResourceName));
+        public static AzureOperationState Resource(string resourceName, string displayName) => new(displayName, false, [resourceName]);
+
+        public static AzureOperationState Resources(IReadOnlySet<string> resourceNames, string displayName) => new(displayName, false, resourceNames);
+    }
+
+    private sealed class ActiveAzureOperation : IDisposable
+    {
+        private readonly CancellationTokenSource _cancellationTokenSource;
+        private readonly object _lock = new();
+        private string _phase;
+        private string _status;
+
+        private ActiveAzureOperation(AzureIntent intent, AzureOperationState operation, DateTimeOffset startedAt, CancellationTokenSource cancellationTokenSource)
+        {
+            Intent = intent;
+            Operation = operation;
+            StartedAt = startedAt;
+            _cancellationTokenSource = cancellationTokenSource;
+            _phase = operation.DisplayName;
+            _status = KnownResourceStates.Running;
+        }
+
+        public AzureIntent Intent { get; }
+
+        public AzureOperationState Operation { get; }
+
+        public DateTimeOffset StartedAt { get; }
+
+        public CancellationToken CancellationToken => _cancellationTokenSource.Token;
+
+        public bool CancellationRequested => _cancellationTokenSource.IsCancellationRequested;
+
+        public string? TargetLocation => Intent is ChangeResourceLocationIntent changeLocation ? changeLocation.Location : null;
+
+        public static ActiveAzureOperation Create(AzureIntent intent, AzureOperationState operation, DateTimeOffset startedAt, CancellationToken cancellationToken)
+            => new(intent, operation, startedAt, CancellationTokenSource.CreateLinkedTokenSource(cancellationToken));
+
+        public void SetPhase(string phase, string? status = null)
+        {
+            lock (_lock)
+            {
+                _phase = phase;
+                if (status is not null)
+                {
+                    _status = status;
+                }
+            }
+        }
+
+        public ActiveAzureOperationSnapshot CreateSnapshot()
+        {
+            lock (_lock)
+            {
+                return new ActiveAzureOperationSnapshot(
+                    Operation.DisplayName,
+                    _phase,
+                    _status,
+                    TargetLocation,
+                    StartedAt,
+                    Operation.IsAllResources,
+                    Operation.ResourceNames,
+                    CancellationRequested);
+            }
+        }
+
+        public void Cancel()
+        {
+            lock (_lock)
+            {
+                _status = AzureProvisioningStrings.ResourceStateCanceling;
+            }
+
+            _cancellationTokenSource.Cancel();
+        }
+
+        public void Dispose()
+        {
+            _cancellationTokenSource.Dispose();
+        }
+    }
+
+    private sealed record ActiveAzureOperationSnapshot(
+        string DisplayName,
+        string Phase,
+        string Status,
+        string? TargetLocation,
+        DateTimeOffset StartedAt,
+        bool IsAllResources,
+        IReadOnlySet<string> ResourceNames,
+        bool CancellationRequested)
+    {
+        public bool AffectsResource(string resourceName) => IsAllResources || ResourceNames.Contains(resourceName);
     }
 
     private sealed record AzureControllerState(AzureControllerStatus Status)
     {
-        public static AzureControllerState Empty { get; } = new(new AzureControllerStatus(null));
+        public static AzureControllerState Empty { get; } = new(new AzureControllerStatus(null, null));
     }
 
-    private sealed record AzureControllerStatus(AzureIntent? CurrentIntent);
+    private sealed record AzureControllerStatus(AzureIntent? CurrentIntent, ActiveAzureOperation? ActiveOperation);
 
     private sealed record DeleteAzureResourceResult(IReadOnlyList<string> ResourceIds);
 
@@ -3369,7 +4115,7 @@ internal sealed class AzureProvisioningController(
     {
         ChangeLocation,
         GetAzureResource,
-        CancelDeployment,
+        Cancel,
         DeleteAzureResource,
         ForgetState,
         Reprovision
@@ -3423,8 +4169,6 @@ internal sealed class AzureProvisioningController(
 
     private sealed record ReprovisionResourceIntent(string ResourceName) : AzureIntent(AzureOperationState.Resource(ResourceName, "Reprovision Azure resource"));
 
-    private sealed record CancelResourceDeploymentIntent(string ResourceName) : AzureIntent(AzureOperationState.Resource(ResourceName, "Cancel Azure deployment"));
-
     private sealed record DeleteAzureResourceIntent(string ResourceName) : AzureIntent(AzureOperationState.Resource(ResourceName, "Delete Azure resource"));
 
     // Drift checks use AzureOperationState.None so they serialize with commands without disabling
@@ -3436,6 +4180,16 @@ internal sealed class AzureProvisioningController(
         AzureIntent Intent,
         TaskCompletionSource<object?> Completion,
         CancellationToken CancellationToken);
+
+    internal sealed class QueuedOperationForTesting
+    {
+        internal object Operation { get; }
+
+        internal QueuedOperationForTesting(object operation)
+        {
+            Operation = operation;
+        }
+    }
 
     private sealed record AzureContextState(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId, string? TenantDomain);
 }

@@ -4,11 +4,11 @@
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using System.Diagnostics;
 
 namespace Aspire.Cli.Tests.Scaffolding;
 
@@ -85,11 +85,12 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             {
                 CreateAsyncCallback = (_, _) => Task.FromResult<IAppHostServerProject>(appHostServerProject)
             },
-            appHostServerSessionFactory: new TestAppHostServerSessionFactory(),
+            serverSessionFactory: new FakeAppHostServerSessionFactory(),
             languageDiscovery: new TestLanguageDiscovery(language),
             interactionService: new TestInteractionService(),
             logger: NullLogger<ScaffoldingService>.Instance,
-            executionContext: workspace.CreateExecutionContext());
+            executionContext: workspace.CreateExecutionContext(),
+            profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));
 
         var context = new ScaffoldContext(
             Language: language,
@@ -116,11 +117,12 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
     {
         return new ScaffoldingService(
             appHostServerProjectFactory: new TestAppHostServerProjectFactory(),
-            appHostServerSessionFactory: new TestAppHostServerSessionFactory(),
+            serverSessionFactory: new FakeAppHostServerSessionFactory(),
             languageDiscovery: new TestLanguageDiscovery(s_testLanguage),
             interactionService: new TestInteractionService(),
             logger: NullLogger<ScaffoldingService>.Instance,
-            executionContext: workspace.CreateExecutionContext());
+            executionContext: workspace.CreateExecutionContext(),
+            profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));
     }
 
     private sealed class CapturingAppHostServerProject(string appDirectoryPath) : IAppHostServerProject
@@ -142,11 +144,12 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             return Task.FromResult(new AppHostServerPrepareResult(Success: false, Output: null));
         }
 
-        public (string SocketPath, Process Process, OutputCollector OutputCollector) Run(
+        public Task<AppHostServerRunResult> RunAsync(
             int hostPid,
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
-            bool debug = false) =>
+            bool debug = false,
+            AppHostServerRunControl? runControl = null) =>
             throw new NotSupportedException("Run should not be invoked when PrepareAsync fails.");
     }
 }

@@ -12,6 +12,7 @@ using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.CopilotCli;
 using Aspire.Cli.Agents.OpenCode;
+using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Agents.VsCode;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
@@ -28,6 +29,7 @@ using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
+using Aspire.Cli.Npm;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Processes;
@@ -324,7 +326,9 @@ public class Program
         builder.Services.AddSingleton<ILoggerFactory>(startupContext.LoggerFactory);
         builder.Services.TryAddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
-        // Register the cancellation manager so commands can observe forced-termination signals
+        // Register the cancellation manager so commands can observe forced-termination signals.
+        // It is registered as the existing instance (not a type) so disposal ownership stays with
+        // Program.Main, which owns its lifetime via a `using` statement.
         builder.Services.AddSingleton(startupContext.CancellationManager);
 
         // Register file logger provider for components that write directly to the log file
@@ -336,6 +340,12 @@ public class Program
         // Register logging options so components can read the user's chosen log level
         builder.Services.AddSingleton(startupContext.LoggingOptions);
 
+        // The graceful-shutdown window is the same object as the CCM (CCM owns the OS-signal
+        // registration AND the graceful budget/clock/token). Map the consumer-facing interface to
+        // the CCM singleton so per-child shutdown ladders depend on the narrow contract rather than
+        // the whole signal manager.
+        builder.Services.AddSingleton<IGracefulShutdownWindow>(sp => sp.GetRequiredService<ConsoleCancellationManager>());
+
         // Configure OpenTelemetry tracing. TelemetryManager reads configuration and creates
         // separate TracerProvider instances:
         // - Azure Monitor provider with filtering (only exports activities with EXTERNAL_TELEMETRY=true)
@@ -344,12 +354,23 @@ public class Program
         builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
 
         // Shared services.
+        builder.Services.AddSingleton<IProcessPathProvider, EnvironmentProcessPathProvider>();
         // Two identity readers coexist by design. `IdentityChannelReader` is constructed early in
         // CliStartupContext so the channel can be logged at startup before DI is fully wired, and it
         // continues to power that early startup log. `IIdentityResolver` is the richer reader that
         // also resolves sidecar/env overrides for version, commit, and the NuGet service index; it
-        // powers `CliExecutionContext` construction.
+        // powers `CliExecutionContext` identity population.
         builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
+        builder.Services.AddSingleton<IEnvironment, HostEnvironment>();
+        if (OperatingSystem.IsWindows())
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
+        }
+        builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton<IIdentityResolver>(sp =>
         {
             // Binary dir is the directory containing the running executable.
@@ -357,7 +378,7 @@ public class Program
             // sidecar path relative to it (<binaryDir>/.aspire-install.json).
             //
             // This is the right anchor for every shipping install route because
-            // Environment.ProcessPath resolves to the actual native CLI binary
+            // IProcessPathProvider resolves to the actual native CLI binary
             // that is running, and each route either co-locates its sidecar next
             // to that binary or intentionally ships none (see
             // docs/specs/install-routes.md):
@@ -373,23 +394,16 @@ public class Program
             //   - managed-host launch (dotnet aspire.dll in tests/dev) or a null
             //     ProcessPath: the resolver simply skips the sidecar layer and the
             //     env → assembly → terminal default fallbacks still apply.
-            var binaryDir = Environment.ProcessPath is { Length: > 0 } p
+            var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
+            var binaryDir = processPathProvider.ProcessPath is { Length: > 0 } p
                 ? Path.GetDirectoryName(p)
                 : null;
             return new IdentityResolver(
                 sp.GetRequiredService<IInstallSidecarReader>(),
                 typeof(Program).Assembly,
-                binaryDir);
+                binaryDir,
+                sp.GetRequiredService<IEnvironment>());
         });
-        if (OperatingSystem.IsWindows())
-        {
-            builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
-        }
-        else
-        {
-            builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
-        }
-        builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton(sp =>
         {
             // Use the resolver overload so env/sidecar overrides apply to
@@ -431,11 +445,20 @@ public class Program
         builder.Services.AddTelemetryServices();
         builder.Services.AddTransient<IProcessExecutionFactory, ProcessExecutionFactory>();
         builder.Services.AddSingleton<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
+        // Windows-only crash-time safety net for interactive children spawned by
+        // IsolatedProcess is provided by WindowsConsoleProcessJob.Shared — a process-wide
+        // job created on first isolated spawn. The OS closes the job handle automatically on
+        // process exit, firing KILL_ON_JOB_CLOSE on any assigned children that haven't already
+        // exited (e.g. orphaned tsx after the CLI crashes). On non-Windows, process-group
+        // reparenting + ordinary signal delivery cover the same case, so nothing is needed.
         builder.Services.AddTransient<LayoutProcessRunner>();
-        builder.Services.AddTransient<ProcessShutdownService>();
+        builder.Services.AddTransient<ProcessTreeGracefulShutdownService>();
+        // Forward the interface to the existing concrete service so consumers can depend on the
+        // abstraction (used by AppHostServerSession + GuestLaunchOptions in the aspire run path).
+        builder.Services.AddTransient<IProcessTreeGracefulShutdownSignaler>(sp => sp.GetRequiredService<ProcessTreeGracefulShutdownService>());
 
         // Register certificate tool runner - uses native CertificateManager directly (no subprocess needed)
-        builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>()));
+        builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>(), sp.GetRequiredService<IEnvironment>()));
         builder.Services.AddSingleton<ICertificateToolRunner, NativeCertificateToolRunner>();
 
         builder.Services.AddTransient<IDotNetCliRunner, DotNetCliRunner>();
@@ -478,6 +501,7 @@ public class Program
         builder.Services.AddSingleton<IBundleService, BundleService>();
         builder.Services.AddSingleton<ProfileCaptureService>();
         builder.Services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
+        builder.Services.AddSingleton<IAppHostServerSessionFactory, AppHostServerSessionFactory>();
         builder.Services.AddSingleton<ICliDownloader, CliDownloader>();
         builder.Services.AddSingleton<IFirstTimeUseNoticeSentinel>(_ => new FirstTimeUseNoticeSentinel(GetUsersAspirePath()));
         builder.Services.AddSingleton<IBannerService, BannerService>();
@@ -512,13 +536,13 @@ public class Program
         builder.Services.AddSingleton<ICopilotCliRunner, CopilotCliRunner>();
 
         // Npm and Playwright CLI operations.
-        builder.Services.AddSingleton<Aspire.Cli.Npm.INpmRunner, Aspire.Cli.Npm.NpmRunner>();
-        builder.Services.AddHttpClient<Aspire.Cli.Npm.INpmProvenanceChecker, Aspire.Cli.Npm.SigstoreNpmProvenanceChecker>();
+        builder.Services.AddSingleton<INpmRunner, NpmRunner>();
+        builder.Services.AddHttpClient<INpmProvenanceChecker, SigstoreNpmProvenanceChecker>();
         builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
         builder.Services.AddSingleton<IEmbeddedAspireSkillsBundleProvider, EmbeddedAspireSkillsBundleProvider>();
         builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
-        builder.Services.AddSingleton<Aspire.Cli.Agents.Playwright.IPlaywrightCliRunner, Aspire.Cli.Agents.Playwright.PlaywrightCliRunner>();
-        builder.Services.AddSingleton<Aspire.Cli.Agents.Playwright.PlaywrightCliInstaller>();
+        builder.Services.AddSingleton<IPlaywrightCliRunner, PlaywrightCliRunner>();
+        builder.Services.AddSingleton<PlaywrightCliInstaller>();
 
         // Agent environment detection.
         builder.Services.AddSingleton<IAgentEnvironmentDetector, AgentEnvironmentDetector>();
@@ -536,9 +560,6 @@ public class Program
 
         // Language discovery for polyglot support.
         builder.Services.AddSingleton<ILanguageDiscovery, DefaultLanguageDiscovery>();
-
-        // AppHost server session factory for RPC communication.
-        builder.Services.AddSingleton<IAppHostServerSessionFactory, AppHostServerSessionFactory>();
 
         // AppHost project handlers.
         builder.Services.AddSingleton<DotNetAppHostProject>();
@@ -658,17 +679,6 @@ public class Program
         var homeDirectory = GetUsersAspirePath(processPath);
         var sdksPath = Path.Combine(homeDirectory, "sdks");
         return new DirectoryInfo(sdksPath);
-    }
-
-    internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, string channel, string? processPath = null)
-    {
-        var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        var hivesDirectory = GetHivesDirectory(processPath);
-        var cacheDirectory = GetCacheDirectory(processPath);
-        var sdksDirectory = GetSdksDirectory(processPath);
-        var packagesDirectory = GetPackagesDirectory(processPath);
-        var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, identityChannel: channel, debugMode: debugMode, packagesDirectory: packagesDirectory, aspireHomeDirectory: aspireHomeDirectory);
     }
 
     internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, IIdentityResolver identityResolver, string? processPath = null)
@@ -911,10 +921,28 @@ public class Program
 
     public static async Task<int> Main(string[] args)
     {
+        // Re-enable CTRL+C delivery for ourselves and any process we subsequently spawn.
+        // Per https://learn.microsoft.com/windows/console/setconsolectrlhandler, the "ignore
+        // CTRL+C" state is process-level and inherited across CreateProcess. If our parent was
+        // started with CREATE_NEW_PROCESS_GROUP (or otherwise called SetConsoleCtrlHandler(NULL,
+        // TRUE)), we inherit "CTRL+C disabled" and the kernel will silently drop CTRL_C_EVENT
+        // for both us and our descendants — including the AppHost and DCP-launched services.
+        // Calling SetConsoleCtrlHandler(NULL, FALSE) once at startup clears that inherited
+        // state so the CLI's signal ladder (CCM → AppHost SIGINT → DCP stop-process-tree)
+        // can actually deliver. The runtime/Spectre still own the actual CTRL+C handler chain;
+        // we only flip the inherited "ignored" attribute.
+        if (OperatingSystem.IsWindows())
+        {
+            WindowsProcessInterop.SetConsoleCtrlHandler(nint.Zero, false);
+        }
+
         // Setup handling of CTRL-C and SIGTERM as early as possible so that if
         // we get a signal anywhere that is not handled by Spectre Console
-        // already that we know to trigger cancellation.
-        using var cancellationManager = new ConsoleCancellationManager(processTerminationTimeout: TimeSpan.FromSeconds(5));
+        // already that we know to trigger cancellation. The cancellation manager
+        // owns both the OS-signal registration and the graceful-shutdown budget,
+        // clock, and token. It is registered as a DI singleton below via
+        // AddSingleton(instance) so the container does not take disposal ownership.
+        using var cancellationManager = new ConsoleCancellationManager(finalDrainBudget: TimeSpan.FromSeconds(5));
 
         Console.OutputEncoding = Encoding.UTF8;
 
@@ -1050,6 +1078,14 @@ public class Program
                 // Log exit code for debugging
                 logger.LogInformation("Exit code: {ExitCode}", exitCode);
             }
+            catch (OperationCanceledException)
+            {
+                // The command observed cancellation and propagated OCE rather than returning a
+                // normal exit code. Internal failures `return X` directly from the command, so
+                // anything reaching here is user-initiated cancellation (Ctrl+C / SIGTERM).
+                exitCode = CliExitCodes.Cancelled;
+                logger.LogInformation("Command cancelled. Exit code: {ExitCode}", exitCode);
+            }
             catch (Exception ex)
             {
                 // Should never get here because RootCommand's handler should catch all exceptions, but log just in case.
@@ -1135,9 +1171,10 @@ public class Program
                 consoleEnvironment.Out.Profile.Width = 256; // VS code terminal will handle wrapping so set a large width here.
                 var executionContext = provider.GetRequiredService<CliExecutionContext>();
                 var hostEnvironment = provider.GetRequiredService<ICliHostEnvironment>();
+                var processPathProvider = provider.GetRequiredService<IProcessPathProvider>();
                 var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
                 var logBufferCtx = provider.GetRequiredService<ConsoleLogBufferContext>();
-                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory, logBufferCtx);
+                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, processPathProvider, loggerFactory, logBufferCtx);
                 return new ExtensionInteractionService(consoleInteractionService,
                     provider.GetRequiredService<IExtensionBackchannel>(),
                     extensionPromptEnabled,
@@ -1151,9 +1188,10 @@ public class Program
                 var consoleEnvironment = provider.GetRequiredService<ConsoleEnvironment>();
                 var executionContext = provider.GetRequiredService<CliExecutionContext>();
                 var hostEnvironment = provider.GetRequiredService<ICliHostEnvironment>();
+                var processPathProvider = provider.GetRequiredService<IProcessPathProvider>();
                 var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
                 var logBufferCtx = provider.GetRequiredService<ConsoleLogBufferContext>();
-                return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory, logBufferCtx);
+                return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, processPathProvider, loggerFactory, logBufferCtx);
             });
         }
     }

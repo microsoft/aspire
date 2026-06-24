@@ -14,6 +14,7 @@ using Aspire.Cli.Caching;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -64,6 +65,42 @@ internal sealed class ProcessInvocationOptions
     /// Useful for background operations like NuGet package cache refreshes.
     /// </summary>
     public bool SuppressLogging { get; set; }
+
+    /// <summary>
+    /// Controls whether cancellation should terminate the whole process tree or only the root process.
+    /// </summary>
+    public bool KillEntireProcessTreeOnCancel { get; set; } = true;
+
+    /// <summary>
+    /// When <c>true</c>, the spawned process is given its own hidden console group (Windows)
+    /// and, on Windows, is assigned to the CLI's kill-on-close job object. Required so the
+    /// shutdown ladder in <see cref="ProcessExecution"/> can target the child with
+    /// DCP's <c>stop-process-tree</c> CTRL+C dance.
+    /// </summary>
+    /// <remarks>
+    /// Pair with <see cref="GracefulShutdownSignaler"/> and <see cref="ShutdownService"/>.
+    /// On Windows the spawned process is bound to the process-wide
+    /// <see cref="WindowsConsoleProcessJob"/> kill-on-close job automatically.
+    /// Leaving the signaler/service unset means cancellation falls back to
+    /// <see cref="ProcessExecution"/>'s force-kill mode, preserving back-compat
+    /// for the many non-Run callers (build, restore, package add, layout, etc.).
+    /// </remarks>
+    public bool IsolateConsole { get; set; }
+
+    /// <summary>
+    /// Issues the graceful shutdown signal during the shutdown ladder (DCP
+    /// <c>stop-process-tree</c> on Windows, SIGTERM on Unix). When <c>null</c>, the cancellation
+    /// path uses <see cref="ProcessExecution"/>'s force-kill mode.
+    /// </summary>
+    public IProcessTreeGracefulShutdownSignaler? GracefulShutdownSignaler { get; set; }
+
+    /// <summary>
+    /// The central graceful-shutdown window whose
+    /// <see cref="ConsoleCancellationManager.GracefulShutdownToken"/> bounds the shutdown ladder. When
+    /// <c>null</c>, the cancellation path uses <see cref="ProcessExecution"/>'s
+    /// force-kill mode.
+    /// </summary>
+    public IGracefulShutdownWindow? ShutdownService { get; set; }
 }
 
 internal sealed class DotNetCliRunner(
@@ -76,7 +113,8 @@ internal sealed class DotNetCliRunner(
     IFeatures features,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
-    IProcessExecutionFactory executionFactory) : IDotNetCliRunner
+    IProcessExecutionFactory executionFactory,
+    IEnvironment environment) : IDotNetCliRunner
 {
     private readonly IDiskCache _diskCache = diskCache;
 
@@ -146,10 +184,13 @@ internal sealed class DotNetCliRunner(
         var outputCounters = new ProcessOutputCounters();
         var instrumentedOptions = CreateInstrumentedProcessOptions(options, processActivity, outputCounters);
 
-        // Do not use 'using' here: StartBackchannelAsync runs fire-and-forget and
+        // Do not use 'await using' here: StartBackchannelAsync runs fire-and-forget and
         // accesses execution.HasExited / ExitCode after this method returns. Disposing
         // the underlying Process while the backchannel task is still polling would
-        // cause ObjectDisposedException. Let the GC handle cleanup instead.
+        // cause ObjectDisposedException. We intentionally never dispose this execution:
+        // IAsyncDisposable.DisposeAsync is not called by the finalizer, but the Process's
+        // native handles are still reclaimed by the SafeHandle finalizers, so this is not
+        // a resource leak.
         var execution = executionFactory.CreateExecution(processFileName, effectiveArgs, finalEnv, workingDirectory, instrumentedOptions);
 
         // Get socket path from env if present
@@ -279,6 +320,16 @@ internal sealed class DotNetCliRunner(
             StartDebugSession = options.StartDebugSession,
             Debug = options.Debug,
             SuppressLogging = options.SuppressLogging,
+            KillEntireProcessTreeOnCancel = options.KillEntireProcessTreeOnCancel,
+            // Forward the Run-path shutdown ladder opt-ins. Forgetting any of these silently
+            // demotes the run to the force-kill fallback: IsolateConsole=false skips console
+            // isolation, and the null signaler/service pair causes ProcessExecution's OCE catch
+            // (DotNet/ProcessExecution.cs) to route through its force-kill mode (best-effort SIGTERM
+            // then kill) instead of its graceful ladder. Build/restore/etc. callers leave these unset
+            // and intentionally keep the force-kill path.
+            IsolateConsole = options.IsolateConsole,
+            GracefulShutdownSignaler = options.GracefulShutdownSignaler,
+            ShutdownService = options.ShutdownService,
             StandardOutputCallback = line =>
             {
                 var lineCount = Interlocked.Increment(ref outputCounters.StdoutLineCount);
@@ -383,7 +434,7 @@ internal sealed class DotNetCliRunner(
             // Prepend the private SDK path to PATH. Check if the caller already provided a PATH override.
             var currentPath = env.TryGetValue("PATH", out var userPath)
                 ? userPath
-                : Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+                : environment.GetEnvironmentVariable("PATH") ?? string.Empty;
             env["PATH"] = $"{sdkInstallPath}{Path.PathSeparator}{currentPath}";
 
             logger.LogDebug("Using private SDK installation at {SdkPath}", sdkInstallPath);
@@ -1047,7 +1098,7 @@ internal sealed class DotNetCliRunner(
     internal static bool TryParsePackageVersionFromStdout(string stdout, [NotNullWhen(true)] out string? version)
     {
         var lines = stdout.Split(Environment.NewLine);
-        var successLine = lines.SingleOrDefault(x => x.StartsWith("Success: Aspire.ProjectTemplates"));
+        var successLine = lines.SingleOrDefault(x => x.StartsWith("Success: Aspire.ProjectTemplates", StringComparison.Ordinal));
 
         if (successLine is null)
         {

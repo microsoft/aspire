@@ -44,6 +44,16 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         GC.SuppressFinalize(this);
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void ShouldKillEntireProcessTreeOnCancel_KillsOnlyTargetProcessOnWindows(bool isWindows, bool expected)
+    {
+        var result = DotNetAppHostProject.ShouldKillEntireProcessTreeOnCancel(isWindows);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void ConfigureSingleFileRunEnvironment_DefaultsToDevelopmentForRun()
     {
@@ -2207,13 +2217,15 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                     PackageChannelQuality.Both,
                     [new PackageMapping("Aspire*", oldSource)],
                     new FakeNuGetPackageCache(),
-                    new TestFeatures());
+                    new TestFeatures(),
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
                 var stagingChannel = PackageChannel.CreateExplicitChannel(
                     "staging",
                     PackageChannelQuality.Both,
                     [new PackageMapping("Aspire*", currentSource)],
                     new FakeNuGetPackageCache(),
-                    new TestFeatures());
+                    new TestFeatures(),
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel, stagingChannel]);
             }
         };

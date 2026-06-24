@@ -162,7 +162,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
             return File.WriteAllTextAsync(kubeconfigPath, completeKubeconfig, cancellationToken);
         }
 
-        using var parsed = await DcpKubeconfig.ReadFileWithRetryAsync(kubeconfigPath, TestContext.Current.CancellationToken, DelayAsync);
+        using var parsed = await DcpKubeconfig.ReadFileWithRetryAsync(kubeconfigPath, DelayAsync, TestContext.Current.CancellationToken);
 
         Assert.Equal(1, retryCount);
         Assert.Equal(new Uri("https://127.0.0.1:12345"), parsed.Server);
@@ -180,7 +180,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
 
         RemoteExecutor.Invoke(static homePath =>
         {
-            var certificateManager = CertificateManager.Create(NullLogger.Instance);
+            var certificateManager = CertificateManager.Create(NullLogger.Instance, new HostEnvironment());
             using var certificate = certificateManager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
                 DateTimeOffset.UtcNow.AddDays(30));

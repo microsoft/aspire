@@ -291,7 +291,7 @@ internal sealed class DcpConnectionChecker(
                     }
                     finally
                     {
-                        process.Dispose();
+                        await process.DisposeAsync().ConfigureAwait(false);
                     }
                 }
 
@@ -312,7 +312,7 @@ internal sealed class DcpConnectionChecker(
         {
             await WaitForKubeconfigFileAsync(cancellationToken).ConfigureAwait(false);
 
-            return await DcpKubeconfig.ReadFileWithRetryAsync(_kubeconfigPath, cancellationToken).ConfigureAwait(false);
+            return await DcpKubeconfig.ReadFileWithRetryAsync(_kubeconfigPath, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
         public async Task StopDcpAsync(HttpClient client, DcpKubeconfig kubeconfig, CancellationToken cancellationToken)
@@ -360,7 +360,7 @@ internal sealed class DcpConnectionChecker(
             }
             finally
             {
-                _process.Dispose();
+                await _process.DisposeAsync().ConfigureAwait(false);
 
                 try
                 {
