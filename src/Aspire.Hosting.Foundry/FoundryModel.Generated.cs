@@ -1884,6 +1884,12 @@ public partial class FoundryModel
         public static readonly FoundryModel MistralMedium2505 = new() { Name = "mistral-medium-2505", Version = "1", Format = "Mistral AI" };
 
         /// <summary>
+        /// Document conversion to markdown with interleaved images and text
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MistralOcr40 = new() { Name = "mistral-ocr-4-0", Version = "1", Format = "Mistral AI" };
+
+        /// <summary>
         /// Enhanced Mistral Small 3 with multimodal capabilities and a 128k context length.
         /// </summary>
         [AspireValue("FoundryModels")]
