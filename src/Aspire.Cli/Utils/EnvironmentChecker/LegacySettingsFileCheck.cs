@@ -20,6 +20,8 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// </remarks>
 internal sealed class LegacySettingsFileCheck(CliExecutionContext executionContext) : IEnvironmentCheck
 {
+    internal const string CheckName = "legacy-settings-file";
+
     /// <inheritdoc />
     public int Order => 101; // Run after core checks and deprecated agent config check (100)
 
@@ -48,8 +50,8 @@ internal sealed class LegacySettingsFileCheck(CliExecutionContext executionConte
                 // Found a legacy file without a sibling modern config — surface the hint.
                 var result = new EnvironmentCheckResult
                 {
-                    Category = "environment",
-                    Name = "legacy-settings-file",
+                    Category = EnvironmentCheckCategories.Environment,
+                    Name = CheckName,
                     Status = EnvironmentCheckStatus.Warning,
                     Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.LegacySettingsDetectedMessageFormat, legacySettingsPath),
                     Fix = DoctorCommandStrings.LegacySettingsDetectedFix

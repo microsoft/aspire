@@ -512,8 +512,8 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         ContainerNetworkService[] containerNetworkServices;
 
         // While not strictly necessary from correctness perspective, it is better for performance if tunnel creation
-        // is as "chunky" as possible. That is why we serialize the discovery of host dependencies, 
-        // so concurrently-created containers that share host dependencies do not "split" these dependencies 
+        // is as "chunky" as possible. That is why we serialize the discovery of host dependencies,
+        // so concurrently-created containers that share host dependencies do not "split" these dependencies
         // (and associated tunnels) between themselves.
         await _tunnelSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -570,7 +570,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             finally
             {
                 _tunnelSemaphore.Release();
-            };
+            }
         }
 
         await factory.UpdateWithEffectiveAddressInfo(serviceObjects, cancellationToken, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
@@ -724,6 +724,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             {
                 CertificatePath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.crt"),
                 KeyPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.key"),
+                CertificateWithKeyPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.pem"),
                 PfxPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.pfx"),
             })
             .BuildAsync(_executionContext, resourceLogger, cancellationToken)
@@ -776,6 +777,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             {
                 CertificatePath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{thumbprint}.crt"),
                 KeyPath = tlsCertificateConfiguration.KeyPathReference,
+                CertificateWithKeyPath = tlsCertificateConfiguration.CertificateWithKeyPathReference,
                 PfxPath = tlsCertificateConfiguration.PfxPathReference,
                 Password = tlsCertificateConfiguration.Password,
             };
@@ -804,10 +806,10 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             var thumbprint = tlsCertificateConfiguration.Certificate.Thumbprint;
             var publicCertificatePem = tlsCertificateConfiguration.Certificate.ExportCertificatePem();
             (var keyPem, var pfxBytes) = await DeveloperCertificateService.GetKeyMaterialAsync(
-                tlsCertificateConfiguration.Certificate,
-                tlsCertificateConfiguration.Password,
-                tlsCertificateConfiguration.IsKeyPathReferenced,
-                tlsCertificateConfiguration.IsPfxPathReferenced,
+                certificate: tlsCertificateConfiguration.Certificate,
+                password: tlsCertificateConfiguration.Password,
+                needKeyPem: tlsCertificateConfiguration.IsKeyPathReferenced || tlsCertificateConfiguration.IsCertificateWithKeyPathReferenced,
+                needPfx: tlsCertificateConfiguration.IsPfxPathReferenced,
                 cancellationToken
             ).ConfigureAwait(false);
 
@@ -818,7 +820,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     Name = thumbprint + ".crt",
                     Type = ContainerFileSystemEntryType.File,
                     Contents = new string(publicCertificatePem),
-                }
+                },
             };
 
             if (keyPem is not null)
@@ -829,6 +831,16 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     Type = ContainerFileSystemEntryType.File,
                     Contents = new string(keyPem),
                 });
+
+                if (tlsCertificateConfiguration.IsCertificateWithKeyPathReferenced)
+                {
+                    certificateFiles.Add(new ContainerFileSystemEntry
+                    {
+                        Name = thumbprint + ".pem",
+                        Type = ContainerFileSystemEntryType.File,
+                        Contents = new string([.. keyPem, '\n', .. publicCertificatePem]),
+                    });
+                }
 
                 Array.Clear(keyPem, 0, keyPem.Length);
             }

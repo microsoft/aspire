@@ -577,6 +577,7 @@ public class AddViteAppTests
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
@@ -637,6 +638,7 @@ public class AddViteAppTests
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
@@ -688,6 +690,7 @@ public class AddViteAppTests
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
@@ -744,6 +747,7 @@ public class AddViteAppTests
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = password,
             CancellationToken = CancellationToken.None
@@ -800,6 +804,7 @@ public class AddViteAppTests
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
@@ -875,6 +880,7 @@ public class AddViteAppTests
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None

@@ -108,7 +108,7 @@ public sealed class SpanMenuBuilder
 
         menuItems.Add(new MenuButtonItem
         {
-            Text = _controlsLoc[nameof(ControlsStrings.ExportJson)],
+            Text = _controlsLoc[nameof(ControlsStrings.ViewJson)],
             Icon = s_bracesIcon,
             OnClick = async () =>
             {

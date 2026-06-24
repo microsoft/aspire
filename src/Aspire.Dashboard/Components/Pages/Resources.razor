@@ -103,23 +103,23 @@
                                 <FluentTabs Class="resources-tab-header" ActiveTabId="@($"tab-{PageViewModel.SelectedViewKind}")" OnTabChange="@OnTabChangeAsync" Size="null">
                                     <FluentTab LabelClass="tab-label"
                                                Id="@($"tab-{ResourceViewKind.Table}")"
-                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerTableTab)]"
+                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerTableTab)]"
                                                Icon="@(new Icons.Regular.Size24.Table())">
                                     </FluentTab>
                                     <FluentTab LabelClass="tab-label"
                                                Id="@($"tab-{ResourceViewKind.Parameters}")"
-                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerParametersTab)]"
+                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerParametersTab)]"
                                                Icon="@(new Icons.Regular.Size24.Key())">
                                     </FluentTab>
                                     <FluentTab LabelClass="tab-label"
                                                Id="@($"tab-{ResourceViewKind.Graph}")"
-                                               aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]"
-                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphTab)]"
+                                               aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerGraphAccessibleLabel)]"
+                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerGraphTab)]"
                                                Icon="@(new Icons.Regular.Size24.ShareAndroid())">
                                     </FluentTab>
                                 </FluentTabs>
                             }
-                            <div class="resources-grid-container" hidden="@(PageViewModel.SelectedViewKind == ResourceViewKind.Graph)">
+                            <div id="@ScrollContainerId" class="resources-grid-container" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesHeader)]" hidden="@(PageViewModel.SelectedViewKind == ResourceViewKind.Graph)">
                                 <GridColumnManager @ref="_manager" Columns="@_gridColumns">
                                     <FluentDataGrid @ref="_dataGrid"
                                                     ColumnResizeLabels="@_resizeLabels"
@@ -139,7 +139,7 @@
                                                     ShowHover="true"
                                                     TGridItem="ResourceGridViewModel"
                                                     ItemKey="@(r => r.Resource.Name)"
-                                                    OnRowClick="@(r => r.ExecuteOnDefault(d => ShowResourceDetailsAsync(d.Resource, buttonId: null)))"
+                                                    OnRowClick="@(r => r.ExecuteOnDefault(d => ShowResourceDetailsAsync(d.Resource, focusElementId: ScrollContainerId)))"
                                                     Class="main-grid enable-row-click">
                                         <ChildContent>
                                             <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" Sortable="true" SortBy="@_nameSort" Tooltip="true" TooltipText="@(c => $"{c.Resource.ResourceType}: {GetResourceName(c.Resource)}")" Class="expand-col">
@@ -199,7 +199,7 @@
                                                     <span class="empty-data"></span>
                                                 }
                                             </AspireTemplateColumn>
-                                            <AspireTemplateColumn ColumnId="@UrlsColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesUrlsColumnHeader)]" Tooltip="true" TooltipText="@(ctx => GetUrlsTooltip(ctx.Resource))">
+                                            <AspireTemplateColumn ColumnId="@UrlsColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesUrlsColumnHeader)]">
                                                 <UrlsColumnDisplay Resource="context.Resource"
                                                                    HasMultipleReplicas="HasMultipleReplicas(context.Resource)"
                                                                    DisplayedUrls="GetDisplayedUrls(context.Resource)" />
@@ -208,7 +208,7 @@
                                                 <div class="grid-action-container" @onclick:stopPropagation="true">
                                                     <ResourceActions CommandSelected="async (command) => await ExecuteResourceCommandAsync(context.Resource, command)"
                                                                      IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))"
-                                                                     OnViewDetails="@((buttonId) => ShowResourceDetailsAsync(context.Resource, buttonId))"
+                                                                     OnViewDetails="@((focusElementId) => ShowResourceDetailsAsync(context.Resource, focusElementId))"
                                                                      Resource="context.Resource"
                                                                      MaxHighlightedCount="_maxHighlightedCount"
                                                                      ResourceByName="@_resourceByName" />
@@ -223,7 +223,7 @@
                             </div>
                             @if (!_hideResourceGraph)
                             {
-                                <div class="resource-graph-container" hidden="@(PageViewModel.SelectedViewKind != ResourceViewKind.Graph)">
+                                <div id="@GraphContainerId" class="resource-graph-container" tabindex="0" role="region" aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]" hidden="@(PageViewModel.SelectedViewKind != ResourceViewKind.Graph)">
                                     <svg class="resource-graph">
                                     </svg>
                                     <div class="resource-graph-controls">

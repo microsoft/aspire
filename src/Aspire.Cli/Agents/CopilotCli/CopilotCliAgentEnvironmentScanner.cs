@@ -22,6 +22,7 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
     private readonly ICopilotCliRunner _copilotCliRunner;
     private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
     private readonly ILogger<CopilotCliAgentEnvironmentScanner> _logger;
 
     /// <summary>
@@ -30,16 +31,19 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
     /// <param name="copilotCliRunner">The Copilot CLI runner for checking if Copilot CLI is installed.</param>
     /// <param name="playwrightCliInstaller">The Playwright CLI installer for secure installation.</param>
     /// <param name="executionContext">The CLI execution context for accessing environment variables and settings.</param>
+    /// <param name="environment">The environment abstraction for reading environment variables.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
-    public CopilotCliAgentEnvironmentScanner(ICopilotCliRunner copilotCliRunner, PlaywrightCliInstaller playwrightCliInstaller, CliExecutionContext executionContext, ILogger<CopilotCliAgentEnvironmentScanner> logger)
+    public CopilotCliAgentEnvironmentScanner(ICopilotCliRunner copilotCliRunner, PlaywrightCliInstaller playwrightCliInstaller, CliExecutionContext executionContext, IEnvironment environment, ILogger<CopilotCliAgentEnvironmentScanner> logger)
     {
         ArgumentNullException.ThrowIfNull(copilotCliRunner);
         ArgumentNullException.ThrowIfNull(playwrightCliInstaller);
         ArgumentNullException.ThrowIfNull(executionContext);
+        ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(logger);
         _copilotCliRunner = copilotCliRunner;
         _playwrightCliInstaller = playwrightCliInstaller;
         _executionContext = executionContext;
+        _environment = environment;
         _logger = logger;
     }
 
@@ -51,7 +55,7 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
         var homeDirectory = _executionContext.HomeDirectory;
 
         // Check if we're running in a VSCode terminal
-        var isVSCode = _executionContext.GetEnvironmentVariable("TERM_PROGRAM") == "vscode";
+        var isVSCode = _environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode";
 
         if (isVSCode)
         {
@@ -193,7 +197,7 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
             Directory.CreateDirectory(configDirectory);
         }
 
-        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, cancellationToken);
+        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, null, cancellationToken);
 
         // Ensure "mcpServers" object exists
         if (!config.ContainsKey("mcpServers") || config["mcpServers"] is not JsonObject)

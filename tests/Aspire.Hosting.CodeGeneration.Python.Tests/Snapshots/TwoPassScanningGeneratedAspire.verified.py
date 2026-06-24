@@ -1870,6 +1870,7 @@ class HttpCommandRequestExportData(typing.TypedDict, total=False):
 class HttpsCertificateExecutionConfigurationContext(typing.TypedDict, total=False):
     CertificatePath: ReferenceExpression
     KeyPath: ReferenceExpression
+    CertificateWithKeyPath: ReferenceExpression
     PfxPath: ReferenceExpression
 
 class HttpsCertificateExecutionConfigurationExportData(typing.TypedDict, total=False):
@@ -1878,6 +1879,7 @@ class HttpsCertificateExecutionConfigurationExportData(typing.TypedDict, total=F
     KeyPathExpression: str
     PfxPathExpression: str
     IsKeyPathReferenced: bool
+    IsCertificateWithKeyPathReferenced: bool
     IsPfxPathReferenced: bool
     Password: str | None
 
@@ -5461,6 +5463,15 @@ class HttpsCertificateConfigurationCallbackAnnotationContext:
         """A value provider that will resolve to a path to the private key for the certificate."""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath',
+            {'context': self._handle}
+        )
+        return typing.cast(ReferenceExpression, result)
+
+    @_cached_property
+    def certificate_with_key_path(self) -> ReferenceExpression:
+        """A value provider that will resolve to a path to the certificate and key concatenated together in PEM format."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificateWithKeyPath',
             {'context': self._handle}
         )
         return typing.cast(ReferenceExpression, result)

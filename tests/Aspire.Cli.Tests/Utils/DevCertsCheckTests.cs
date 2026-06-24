@@ -30,10 +30,10 @@ public class DevCertsCheckTests
     [Fact]
     public void EvaluateCertificateResults_NoCertificates_ReturnsWarning()
     {
-        var results = DevCertsCheck.EvaluateCertificateResults([]);
+        var results = DevCertsCheck.EvaluateCertificateResults([], new HostEnvironment());
 
         var devCertsResult = Assert.Single(results);
-        Assert.Equal("dev-certs", devCertsResult.Name);
+        Assert.Equal(DevCertsCheck.CheckName, devCertsResult.Name);
         Assert.Equal(EnvironmentCheckStatus.Warning, devCertsResult.Status);
         Assert.Contains("No HTTPS development certificate found", devCertsResult.Message);
     }
@@ -47,9 +47,9 @@ public class DevCertsCheckTests
             CreateDevCertInfo(CertificateManager.TrustLevel.Full, "CCCC3333DDDD4444", MinVersion),
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certs);
+        var results = DevCertsCheck.EvaluateCertificateResults(certs, new HostEnvironment());
 
-        var devCertsResult = Assert.Single(results, r => r.Name == "dev-certs");
+        var devCertsResult = Assert.Single(results, r => r.Name == DevCertsCheck.CheckName);
         Assert.Equal(EnvironmentCheckStatus.Pass, devCertsResult.Status);
         Assert.Contains("trusted", devCertsResult.Message);
     }
@@ -63,9 +63,9 @@ public class DevCertsCheckTests
             CreateDevCertInfo(CertificateManager.TrustLevel.None, "CCCC3333DDDD4444", MinVersion),
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certs);
+        var results = DevCertsCheck.EvaluateCertificateResults(certs, new HostEnvironment());
 
-        var devCertsResult = Assert.Single(results, r => r.Name == "dev-certs");
+        var devCertsResult = Assert.Single(results, r => r.Name == DevCertsCheck.CheckName);
         Assert.Equal(EnvironmentCheckStatus.Warning, devCertsResult.Status);
         Assert.Contains("none are trusted", devCertsResult.Message);
     }
@@ -79,9 +79,9 @@ public class DevCertsCheckTests
             CreateDevCertInfo(CertificateManager.TrustLevel.None, "CCCC3333DDDD4444", MinVersion),
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certs);
+        var results = DevCertsCheck.EvaluateCertificateResults(certs, new HostEnvironment());
 
-        var devCertsResult = Assert.Single(results, r => r.Name == "dev-certs");
+        var devCertsResult = Assert.Single(results, r => r.Name == DevCertsCheck.CheckName);
         Assert.Equal(EnvironmentCheckStatus.Warning, devCertsResult.Status);
         Assert.Contains("Multiple HTTPS development certificates found", devCertsResult.Message);
     }
@@ -94,9 +94,9 @@ public class DevCertsCheckTests
             CreateDevCertInfo(CertificateManager.TrustLevel.Full, "AAAA1111BBBB2222", MinVersion),
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certs);
+        var results = DevCertsCheck.EvaluateCertificateResults(certs, new HostEnvironment());
 
-        var devCertsResult = Assert.Single(results, r => r.Name == "dev-certs");
+        var devCertsResult = Assert.Single(results, r => r.Name == DevCertsCheck.CheckName);
         Assert.Equal(EnvironmentCheckStatus.Pass, devCertsResult.Status);
         Assert.Contains("trusted", devCertsResult.Message);
     }
@@ -109,9 +109,9 @@ public class DevCertsCheckTests
             CreateDevCertInfo(CertificateManager.TrustLevel.None, "AAAA1111BBBB2222", MinVersion),
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certs);
+        var results = DevCertsCheck.EvaluateCertificateResults(certs, new HostEnvironment());
 
-        var devCertsResult = Assert.Single(results, r => r.Name == "dev-certs");
+        var devCertsResult = Assert.Single(results, r => r.Name == DevCertsCheck.CheckName);
         Assert.Equal(EnvironmentCheckStatus.Warning, devCertsResult.Status);
         Assert.Contains("not trusted", devCertsResult.Message);
     }
@@ -124,9 +124,9 @@ public class DevCertsCheckTests
             CreateDevCertInfo(CertificateManager.TrustLevel.Partial, "AAAA1111BBBB2222", MinVersion),
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certs);
+        var results = DevCertsCheck.EvaluateCertificateResults(certs, new HostEnvironment());
 
-        var devCertsResult = Assert.Single(results, r => r.Name == "dev-certs");
+        var devCertsResult = Assert.Single(results, r => r.Name == DevCertsCheck.CheckName);
         Assert.Equal(EnvironmentCheckStatus.Warning, devCertsResult.Status);
         Assert.Contains("partially trusted", devCertsResult.Message);
     }
@@ -139,10 +139,10 @@ public class DevCertsCheckTests
             CreateDevCertInfo(CertificateManager.TrustLevel.Full, "AAAA1111BBBB2222", MinVersion - 1),
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certs);
+        var results = DevCertsCheck.EvaluateCertificateResults(certs, new HostEnvironment());
 
         Assert.Equal(2, results.Count);
-        var versionResult = Assert.Single(results, r => r.Name == "dev-certs-version");
+        var versionResult = Assert.Single(results, r => r.Name == DevCertsCheck.VersionCheckName);
         Assert.Equal(EnvironmentCheckStatus.Warning, versionResult.Status);
         Assert.Contains("older version", versionResult.Message);
     }
@@ -156,11 +156,11 @@ public class DevCertsCheckTests
             CreateDevCertInfo(CertificateManager.TrustLevel.Full, "CCCC3333DDDD4444", MinVersion + 1),
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certs);
+        var results = DevCertsCheck.EvaluateCertificateResults(certs, new HostEnvironment());
 
         // Should only have the pass result, no version warning
         var devCertsResult = Assert.Single(results);
-        Assert.Equal("dev-certs", devCertsResult.Name);
+        Assert.Equal(DevCertsCheck.CheckName, devCertsResult.Name);
         Assert.Equal(EnvironmentCheckStatus.Pass, devCertsResult.Status);
     }
 
@@ -174,10 +174,10 @@ public class DevCertsCheckTests
             CreateDevCertInfo(CertificateManager.TrustLevel.Partial, "CCCC3333DDDD4444", MinVersion),
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certs);
+        var results = DevCertsCheck.EvaluateCertificateResults(certs, new HostEnvironment());
 
         // Should not have a "Multiple certs" warning since all are trusted
-        var devCertsResult = Assert.Single(results, r => r.Name == "dev-certs");
+        var devCertsResult = Assert.Single(results, r => r.Name == DevCertsCheck.CheckName);
         Assert.NotEqual(EnvironmentCheckStatus.Warning, devCertsResult.Status);
     }
 
@@ -191,9 +191,9 @@ public class DevCertsCheckTests
             CreateDevCertInfo(CertificateManager.TrustLevel.None, "EEEE5555FFFF6666", MinVersion),
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certs);
+        var results = DevCertsCheck.EvaluateCertificateResults(certs, new HostEnvironment());
 
-        var devCertsResult = Assert.Single(results, r => r.Name == "dev-certs");
+        var devCertsResult = Assert.Single(results, r => r.Name == DevCertsCheck.CheckName);
         Assert.Equal(EnvironmentCheckStatus.Warning, devCertsResult.Status);
         Assert.Contains("3 certificates", devCertsResult.Message);
     }
@@ -206,9 +206,9 @@ public class DevCertsCheckTests
             CreateDevCertInfo(CertificateManager.TrustLevel.Full, "AAAA1111BBBB2222", MinVersion),
         };
 
-        var results = DevCertsCheck.EvaluateCertificateResults(certs);
+        var results = DevCertsCheck.EvaluateCertificateResults(certs, new HostEnvironment());
 
-        var devCertsResult = Assert.Single(results, r => r.Name == "dev-certs");
+        var devCertsResult = Assert.Single(results, r => r.Name == DevCertsCheck.CheckName);
         Assert.NotNull(devCertsResult.Metadata);
         Assert.True(devCertsResult.Metadata.ContainsKey("certificates"));
 
@@ -226,7 +226,7 @@ public class DevCertsCheckTests
     [Fact]
     public void EvaluateCertificateResults_NoCertificates_DoesNotIncludeMetadata()
     {
-        var results = DevCertsCheck.EvaluateCertificateResults([]);
+        var results = DevCertsCheck.EvaluateCertificateResults([], new HostEnvironment());
 
         var devCertsResult = Assert.Single(results);
         Assert.Null(devCertsResult.Metadata);

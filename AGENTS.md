@@ -32,6 +32,7 @@ Instructions for GitHub Copilot and other AI coding agents working with the Aspi
 * Do not use cryptographic hashes such as SHA-256 when the hash is not security-related. Prefer `System.IO.Hashing.XxHash3` when you need a stable non-cryptographic hash.
 * When code needs a temporary directory, prefer the repository temp directory abstractions first (for example `IFileSystemService.TempDirectory` / `ITempFileSystemService`) and otherwise use `Directory.CreateTempSubdirectory()` instead of `Path.Combine(Path.GetTempPath(), Path.GetRandomFileName())`; if you need a temporary file path, place it under a securely created temp directory.
 * Don't update files under `*/api/*.cs` (e.g. src/Aspire.Hosting/api/Aspire.Hosting.cs) as they are generated.
+* Do not make new parameters optional just to avoid updating call sites. A parameter should only be optional when it has a sensible semantic default and the API is frequently used (where call-site brevity outweighs explicitness). If a parameter is logically required, make it required and update all call sites.
 
 ## Code Review Instructions
 
@@ -264,6 +265,7 @@ kill <pid>
 * Prefer using shared test service implementations (e.g., project-level `TestServices/` or `Helpers/` directories, or the cross-project `tests/Shared/` folder) rather than creating private implementation classes within individual test files. Reusing existing test fakes and helpers keeps tests consistent, reduces duplication, and makes maintenance easier. Do not create private test classes when a shared one already exists or can be extended.
 * MTP diagnostic args (hang dump, crash dump, exit code handling) are defined in `eng/Testing.props` via `MtpBaseArgs`. Do not hardcode these args in workflow YAML. See [docs/ci/mtp-args-pipeline.md](docs/ci/mtp-args-pipeline.md) for details.
 * Use `Verify` (snapshot testing) for generated artifacts (files, serialized output, structured text). Prefer `await Verify(value, "ext")` over `Assert.Contains` / `Assert.DoesNotContain` / `Assert.Equal` on the same value. Run the test once to generate the `.received.` file, review it, then rename it to `.verified.` to accept it.
+* Avoid `Assert.DoesNotContain` as it is a weak assertion that easily goes out of date — it only proves something is absent without verifying what *is* present. Prefer `Assert.Equal` to check the entire string value, or `Assert.Collection` to verify the complete contents of a collection.
 
 ## Running tests
 
@@ -527,6 +529,7 @@ The following specialized skills are available in `.agents/skills/`:
 - **startup-perf**: Measures Aspire startup profiling with CLI self-profile capture and dashboard export traces
 - **reviewing-aspire-architecture**: Reviews PRs for Aspire-specific architectural patterns across 15 dimensions including API design, resource model, Azure provisioning, pattern conformance, dashboard UX, CLI behavior, and more. Complements the code-review skill with domain knowledge that generic review cannot catch.
 - **vscode-extension**: Guide for developing, building, testing, and debugging the Aspire VS Code extension under `extension/`. Use when investigating an issue in, debugging, or working on a feature for the VS Code extension.
+- **deprecate-integration**: Soft-sunsets a shipped hosting integration: marks its API `[Obsolete]`, adds a README warning, hides the package from `aspire add`, removes integration-specific automation, suppresses the resulting warnings in first-party consumers, and ships one final obsolete release. Use when deprecating, sunsetting, or retiring an integration.
 
 ## Pattern-Based Instructions
 

@@ -5,6 +5,7 @@ using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Utils;
@@ -376,7 +377,12 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(backchannelsDir);
 
         var appHostPath = "/path/to/MyApp.AppHost.csproj";
-        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, workspace.WorkspaceRoot.FullName);
+        // FindMatchingNonOrphanedSockets resolves symlinks (which canonicalizes via Path.GetFullPath)
+        // before hashing, so the socket files must be keyed off the same resolved path. On Windows
+        // Path.GetFullPath roots the drive-less "/path/to/..." to "C:\path\to\...", giving a different
+        // hash than the raw string; resolving here keeps both sides consistent across all platforms.
+        var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, workspace.WorkspaceRoot.FullName);
         var appHostId = Path.GetFileName(prefix);
         var deadPid = int.MaxValue - 1;
         var currentPid = Environment.ProcessId;
@@ -401,6 +407,37 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(orphanedSocket));
         Assert.True(File.Exists(liveSocket));
         Assert.True(File.Exists(pidlessSocket));
+    }
+
+    [Fact]
+    public void FindMatchingNonOrphanedSockets_WithSymlinkedPath_MatchesCanonicalSocket()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real");
+        var symlinkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+        Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
+
+        var projectFileViaSymlink = Path.Combine(symlinkDirectory, "TestAppHost.csproj");
+        File.WriteAllText(projectFileViaSymlink, "<Project />");
+
+        var canonicalProjectPath = PathNormalizer.ResolveSymlinks(projectFileViaSymlink);
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(canonicalProjectPath, workspace.WorkspaceRoot.FullName);
+        var appHostId = Path.GetFileName(prefix);
+        var currentPid = Environment.ProcessId;
+        var liveSocket = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch", $"{appHostId}a1b2C3d4.{currentPid}");
+        Directory.CreateDirectory(Path.GetDirectoryName(liveSocket)!);
+        File.WriteAllText(liveSocket, "");
+
+        var remainingSockets = AppHostHelper.FindMatchingNonOrphanedSockets(
+            projectFileViaSymlink,
+            workspace.WorkspaceRoot.FullName,
+            currentPid,
+            NullLogger.Instance);
+
+        Assert.Collection(remainingSockets, socket => Assert.Equal(liveSocket, socket));
     }
 
     [Theory]

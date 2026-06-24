@@ -40,7 +40,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         // Use workspace root as repo root for testing
         var repoRoot = _workspace.WorkspaceRoot.FullName;
 
-        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, logger);
+        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, new TestProcessExecutionFactory(), logger);
     }
 
     [Fact]
@@ -286,15 +286,15 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
                 {
                     new PackageMapping("Aspire*", prOldHivePath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-                }, nugetCache, new TestFeatures());
+                }, nugetCache, new TestFeatures(), NullLogger.Instance);
 
                 var prNewChannel = PackageChannel.CreateExplicitChannel("pr-new", PackageChannelQuality.Prerelease, new[]
                 {
                     new PackageMapping("Aspire*", prNewHivePath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-                }, nugetCache, new TestFeatures());
+                }, nugetCache, new TestFeatures(), NullLogger.Instance);
 
-                var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache, new TestFeatures());
+                var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache, new TestFeatures(), NullLogger.Instance);
 
                 return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, prOldChannel, prNewChannel });
             }
@@ -312,7 +312,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         // Use a workspace-local ProjectModelPath for test isolation
         var projectModelPath = Path.Combine(appPath, ".aspire_server");
-        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, logger, projectModelPath);
+        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, new TestProcessExecutionFactory(), logger, projectModelPath);
 
         var packages = new List<IntegrationReference>
         {
@@ -379,7 +379,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         {
             new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/fake/v3/index.json"),
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-        }, nugetCache, new TestFeatures());
+        }, nugetCache, new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(new[] { dailyChannel })
@@ -392,6 +392,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
             appPath,
             new TestDotNetCliRunner(),
             packagingService,
+            new TestProcessExecutionFactory(),
             NullLogger<DotNetBasedAppHostServerProject>.Instance,
             projectModelPath);
 
@@ -431,7 +432,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, new[]
         {
             new PackageMapping("Aspire*", channelFeed)
-        }, nugetCache, new TestFeatures());
+        }, nugetCache, new TestFeatures(), NullLogger.Instance);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(new[] { dailyChannel })
@@ -444,6 +445,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
             appPath,
             new TestDotNetCliRunner(),
             packagingService,
+            new TestProcessExecutionFactory(),
             NullLogger<DotNetBasedAppHostServerProject>.Instance,
             projectModelPath);
 

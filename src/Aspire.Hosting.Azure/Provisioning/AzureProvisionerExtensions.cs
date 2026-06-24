@@ -4,6 +4,7 @@
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
+using Azure.ResourceManager;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -41,32 +42,33 @@ public static class AzureProvisionerExtensions
 
         // Register ACR login service for container registry authentication
         builder.Services.TryAddSingleton<IAcrLoginService, AcrLoginService>();
-        
+
         // Add named HTTP client for ACR OAuth2 exchange
         // HTTP request logging can be controlled via logging configuration:
         // "Logging": { "LogLevel": { "System.Net.Http.HttpClient.AcrLogin": "Debug" } }
         builder.Services.AddHttpClient("AcrLogin");
-        
+
         builder.Services.AddHttpClient(); // Add default IHttpClientFactory
 
         // Register BicepProvisioner via interface
         builder.Services.TryAddSingleton<IBicepProvisioner, BicepProvisioner>();
 
         // Register the new internal services for testability
-        builder.Services.TryAddSingleton<IArmClientProvider, DefaultArmClientProvider>();
+        builder.Services.TryAddSingleton<IArmClientProvider>(sp =>
+            new DefaultArmClientProvider(new ArmClientOptions(), sp.GetService<TimeProvider>() ?? TimeProvider.System));
         builder.Services.TryAddSingleton<ISecretClientProvider, DefaultSecretClientProvider>();
         builder.Services.TryAddSingleton<IBicepCompiler, BicepCliCompiler>();
         builder.Services.TryAddSingleton<IUserPrincipalProvider, DefaultUserPrincipalProvider>();
 
         if (builder.ExecutionContext.IsPublishMode)
         {
-            builder.Services.AddSingleton<IProvisioningContextProvider, PublishModeProvisioningContextProvider>();
+            builder.Services.TryAddSingleton<IProvisioningContextProvider, PublishModeProvisioningContextProvider>();
         }
         else
         {
-            builder.Services.AddSingleton<RunModeProvisioningContextProvider>();
-            builder.Services.AddSingleton<IProvisioningContextProvider>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
-            builder.Services.AddSingleton<IAzureProvisioningOptionsManager>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
+            builder.Services.TryAddSingleton<RunModeProvisioningContextProvider>();
+            builder.Services.TryAddSingleton<IProvisioningContextProvider>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
+            builder.Services.TryAddSingleton<IAzureProvisioningOptionsManager>(sp => sp.GetRequiredService<RunModeProvisioningContextProvider>());
         }
 
         // The controller is registered unconditionally because AzureProvisioner is resolved by the run-mode

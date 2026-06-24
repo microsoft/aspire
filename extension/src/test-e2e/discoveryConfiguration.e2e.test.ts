@@ -167,15 +167,10 @@ suite('Aspire workspace discovery and configuration E2E', function () {
                 }
             }
 
-            try {
-                restoreWorkspaceAppHostConfig();
-            } catch (error) {
-                failures.push(error);
-            }
-
-            if (failures.length > 0) {
-                throw new AggregateError(failures, 'Discovery configuration E2E test or cleanup failed.');
-            }
+            await runE2eTeardown([
+                ...failures.map(failure => () => { throw failure; }),
+                () => restoreWorkspaceAppHostConfig(),
+            ], 'Discovery configuration E2E test or cleanup failed.');
         }
     });
 });

@@ -10,6 +10,7 @@ using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Azure.Resources;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
 using Azure;
 using Azure.Core;
@@ -1058,6 +1059,7 @@ public class AzureBicepProvisionerTests
             property => AssertHighlightedResourceProperty(property, "azure.tenant.domain", "testdomain.onmicrosoft.com", AzureProvisioningStrings.ContextPropertyTenantDomainDisplayName),
             property => AssertHighlightedResourceProperty(property, "azure.location", "westus2", AzureProvisioningStrings.ContextPropertyLocationDisplayName),
             property => AssertResourceProperty(property, CustomResourceKnownProperties.Source, deploymentId),
+            property => AssertHighlightedResourceProperty(property, "azure.deployment.operations.summary", "Failed Azure resources: alpha-search (Microsoft.Search/searchServices), search (Microsoft.Search/searchServices)", AzureProvisioningStrings.DeploymentOperationSummaryDisplayName),
             property => AssertResourceProperty(property, "azure.deployment.operations.total", 3),
             property => AssertResourceProperty(property, "azure.deployment.operations.running", 0),
             property => AssertResourceProperty(property, "azure.deployment.operations.succeeded", 0),
@@ -1094,7 +1096,9 @@ public class AzureBicepProvisionerTests
             });
 
         Assert.All(
-            resourceEvent.Snapshot.Properties.Where(property => property.Name.StartsWith("azure.deployment.operations.", StringComparison.Ordinal)),
+            resourceEvent.Snapshot.Properties.Where(static property =>
+                property.Name.StartsWith("azure.deployment.operations.", StringComparison.Ordinal) &&
+                !string.Equals(property.Name, "azure.deployment.operations.summary", StringComparison.Ordinal)),
             property => Assert.False(property.IsHighlighted));
 
         static void AssertResourceProperty(ResourcePropertySnapshot property, string name, object value)
@@ -1274,6 +1278,68 @@ public class AzureBicepProvisionerTests
     }
 
     [Fact]
+    public async Task GetOrCreateResourceAsync_AdoptsActiveCachedDeploymentWhenCreateReportsDeploymentActive()
+    {
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var services = builder.Services.BuildServiceProvider();
+        var resource = CreateReconciledStorageResource();
+        var deploymentId = GetTestDeploymentId(resource.Name);
+        await SeedRunningDeploymentStateAsync(deploymentStateManager, resource, deploymentId);
+        var armClient = new TestArmClient();
+        armClient.DeploymentStates.Enqueue(new(AzureDeploymentOperationDetails.RunningState, Outputs: null));
+        armClient.DeploymentStates.Enqueue(new(
+            AzureDeploymentOperationDetails.SucceededState,
+            CreateDeploymentOutputs("https://storage.blob.core.windows.net/")));
+        var deploymentCollection = new ActiveDeploymentConflictArmDeploymentCollection();
+        var resourceGroup = new DeploymentCollectionResourceGroupResource(deploymentCollection);
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            armClient: armClient,
+            resourceGroup: resourceGroup,
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+        var provisioner = CreateProvisioner(services, DistributedApplicationOperation.Run, new ImmediateTimeProvider());
+
+        await provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None);
+
+        Assert.Equal(1, deploymentCollection.CreateCallCount);
+        Assert.Equal(resource.Name, deploymentCollection.DeploymentName);
+        Assert.Equal(2, armClient.GetDeploymentCallCount);
+        Assert.Equal("https://storage.blob.core.windows.net/", resource.Outputs["blobEndpoint"]);
+
+        var section = await deploymentStateManager.AcquireSectionAsync($"Azure:Deployments:{resource.Name}");
+        Assert.Null(section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey]);
+        Assert.Equal(deploymentId, section.Data[BicepUtilities.DeploymentStateIdKey]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task GetOrCreateResourceAsync_DoesNotAdoptActiveDeploymentWhenCachedChecksumDoesNotMatch()
+    {
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var services = builder.Services.BuildServiceProvider();
+        var resource = CreateReconciledStorageResource();
+        var deploymentId = GetTestDeploymentId(resource.Name);
+        await SeedRunningDeploymentStateAsync(deploymentStateManager, resource, deploymentId);
+        resource.Parameters["sku"] = "Standard_LRS";
+        var armClient = new TestArmClient();
+        var deploymentCollection = new ActiveDeploymentConflictArmDeploymentCollection();
+        var resourceGroup = new DeploymentCollectionResourceGroupResource(deploymentCollection);
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            armClient: armClient,
+            resourceGroup: resourceGroup,
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+        var provisioner = CreateProvisioner(services, DistributedApplicationOperation.Run, new ImmediateTimeProvider());
+
+        await Assert.ThrowsAsync<RequestFailedException>(() =>
+            provisioner.GetOrCreateResourceAsync(resource, context, CancellationToken.None));
+
+        Assert.Equal(1, deploymentCollection.CreateCallCount);
+        Assert.Equal(0, armClient.GetDeploymentCallCount);
+    }
+
+    [Fact]
     public async Task GetOrCreateResourceAsync_SavesTerminalDeploymentStateWhenDeploymentFails()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -1376,6 +1442,230 @@ public class AzureBicepProvisionerTests
         Assert.True(token.ExpiresOn > DateTimeOffset.UtcNow);
     }
 
+    [Fact]
+    public async Task ReconcileDeploymentStateAsync_ConfiguresSucceededDeploymentFromArm()
+    {
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var services = builder.Services.BuildServiceProvider();
+        var resource = CreateReconciledStorageResource();
+        var deploymentId = GetTestDeploymentId(resource.Name);
+        await SeedRunningDeploymentStateAsync(deploymentStateManager, resource, deploymentId);
+        var armClient = new TestArmClient();
+        armClient.DeploymentStates.Enqueue(new(
+            AzureDeploymentOperationDetails.SucceededState,
+            CreateDeploymentOutputs("https://storage.blob.core.windows.net/")));
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            armClient: armClient,
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+        var provisioner = CreateProvisioner(services, DistributedApplicationOperation.Run);
+
+        var result = await provisioner.ReconcileDeploymentStateAsync(resource, context, CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal("https://storage.blob.core.windows.net/", resource.Outputs["blobEndpoint"]);
+        Assert.Equal(1, armClient.GetDeploymentCallCount);
+
+        var section = await deploymentStateManager.AcquireSectionAsync($"Azure:Deployments:{resource.Name}");
+        Assert.Null(section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey]);
+        Assert.Equal(deploymentId, section.Data[BicepUtilities.DeploymentStateIdKey]?.GetValue<string>());
+        var outputs = JsonNode.Parse(section.Data[BicepUtilities.DeploymentStateOutputsKey]!.GetValue<string>())!.AsObject();
+        Assert.Equal("https://storage.blob.core.windows.net/", outputs["blobEndpoint"]?["value"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ReconcileDeploymentStateAsync_WaitsForRunningDeploymentBeforeConfiguring()
+    {
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var services = builder.Services.BuildServiceProvider();
+        var resource = CreateReconciledStorageResource();
+        var deploymentId = GetTestDeploymentId(resource.Name);
+        await SeedRunningDeploymentStateAsync(deploymentStateManager, resource, deploymentId);
+        var armClient = new TestArmClient();
+        armClient.DeploymentStates.Enqueue(new(AzureDeploymentOperationDetails.RunningState, Outputs: null));
+        armClient.DeploymentStates.Enqueue(new(
+            AzureDeploymentOperationDetails.SucceededState,
+            CreateDeploymentOutputs("https://storage.blob.core.windows.net/")));
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            armClient: armClient,
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+        var provisioner = CreateProvisioner(services, DistributedApplicationOperation.Run, new ImmediateTimeProvider());
+
+        var result = await provisioner.ReconcileDeploymentStateAsync(resource, context, CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal("https://storage.blob.core.windows.net/", resource.Outputs["blobEndpoint"]);
+        Assert.Equal(2, armClient.GetDeploymentCallCount);
+        Assert.True(armClient.DeploymentOperationsCallCount > 0);
+    }
+
+    [Fact]
+    public async Task ReconcileDeploymentStateAsync_ClearsStaleRunningStateWhenDeploymentIsMissing()
+    {
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var services = builder.Services.BuildServiceProvider();
+        var resource = CreateReconciledStorageResource();
+        var deploymentId = GetTestDeploymentId(resource.Name);
+        await SeedRunningDeploymentStateAsync(deploymentStateManager, resource, deploymentId);
+        var armClient = new TestArmClient();
+        armClient.DeploymentStates.Enqueue(null);
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            armClient: armClient,
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+        var provisioner = CreateProvisioner(services, DistributedApplicationOperation.Run);
+
+        var result = await provisioner.ReconcileDeploymentStateAsync(resource, context, CancellationToken.None);
+
+        Assert.False(result);
+        var section = await deploymentStateManager.AcquireSectionAsync($"Azure:Deployments:{resource.Name}");
+        Assert.Empty(section.Data);
+    }
+
+    [Fact]
+    public async Task ReconcileDeploymentStateAsync_LeavesRunningStateWhenArmCannotBeQueried()
+    {
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var services = builder.Services.BuildServiceProvider();
+        var resource = CreateReconciledStorageResource();
+        var deploymentId = GetTestDeploymentId(resource.Name);
+        await SeedRunningDeploymentStateAsync(deploymentStateManager, resource, deploymentId);
+        var armClient = new TestArmClient
+        {
+            GetDeploymentException = new global::Azure.Identity.CredentialUnavailableException("Credential unavailable.")
+        };
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            armClient: armClient,
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+        var provisioner = CreateProvisioner(services, DistributedApplicationOperation.Run);
+
+        var result = await provisioner.ReconcileDeploymentStateAsync(resource, context, CancellationToken.None);
+
+        Assert.False(result);
+        var section = await deploymentStateManager.AcquireSectionAsync($"Azure:Deployments:{resource.Name}");
+        Assert.Equal(BicepProvisioner.DeploymentStateProvisioningStateRunning, section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey]?.GetValue<string>());
+        Assert.Equal(deploymentId, section.Data[BicepUtilities.DeploymentStateIdKey]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ReconcileDeploymentStateAsync_LeavesRunningStateWhenArmFailsDuringWait()
+    {
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var services = builder.Services.BuildServiceProvider();
+        var resource = CreateReconciledStorageResource();
+        var deploymentId = GetTestDeploymentId(resource.Name);
+        await SeedRunningDeploymentStateAsync(deploymentStateManager, resource, deploymentId);
+        var armClient = new TestArmClient();
+        armClient.DeploymentProbeResults.Enqueue(new AzureDeploymentState(AzureDeploymentOperationDetails.RunningState, Outputs: null));
+        armClient.DeploymentProbeResults.Enqueue(new RequestFailedException(503, "Service unavailable."));
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            armClient: armClient,
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+        var provisioner = CreateProvisioner(services, DistributedApplicationOperation.Run, new ImmediateTimeProvider());
+
+        var result = await provisioner.ReconcileDeploymentStateAsync(resource, context, CancellationToken.None);
+
+        Assert.False(result);
+        Assert.Equal(2, armClient.GetDeploymentCallCount);
+        Assert.False(resource.Outputs.ContainsKey("blobEndpoint"));
+
+        var section = await deploymentStateManager.AcquireSectionAsync($"Azure:Deployments:{resource.Name}");
+        Assert.Equal(BicepProvisioner.DeploymentStateProvisioningStateRunning, section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey]?.GetValue<string>());
+        Assert.Equal(deploymentId, section.Data[BicepUtilities.DeploymentStateIdKey]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ReconcileDeploymentStateAsync_PersistsFailedStateAndThrowsWhenDeploymentFailed()
+    {
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var services = builder.Services.BuildServiceProvider();
+        var resource = CreateReconciledStorageResource();
+        var deploymentId = GetTestDeploymentId(resource.Name);
+        await SeedRunningDeploymentStateAsync(deploymentStateManager, resource, deploymentId);
+        var armClient = new TestArmClient();
+        armClient.DeploymentStates.Enqueue(new(AzureDeploymentOperationDetails.FailedState, Outputs: null));
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            armClient: armClient,
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+        var provisioner = CreateProvisioner(services, DistributedApplicationOperation.Run);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provisioner.ReconcileDeploymentStateAsync(resource, context, CancellationToken.None));
+
+        Assert.Contains(resource.Name, exception.Message, StringComparison.Ordinal);
+        var section = await deploymentStateManager.AcquireSectionAsync($"Azure:Deployments:{resource.Name}");
+        Assert.Equal(BicepProvisioner.DeploymentStateProvisioningStateFailed, section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task ReconcileDeploymentStateAsync_PersistsCanceledStateAndThrowsWhenDeploymentCanceled()
+    {
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var services = builder.Services.BuildServiceProvider();
+        var resource = CreateReconciledStorageResource();
+        var deploymentId = GetTestDeploymentId(resource.Name);
+        await SeedRunningDeploymentStateAsync(deploymentStateManager, resource, deploymentId);
+        var armClient = new TestArmClient();
+        armClient.DeploymentStates.Enqueue(new(AzureDeploymentOperationDetails.CanceledState, Outputs: null));
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            armClient: armClient,
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+        var provisioner = CreateProvisioner(services, DistributedApplicationOperation.Run);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            provisioner.ReconcileDeploymentStateAsync(resource, context, CancellationToken.None));
+
+        Assert.Contains(resource.Name, exception.Message, StringComparison.Ordinal);
+        var section = await deploymentStateManager.AcquireSectionAsync($"Azure:Deployments:{resource.Name}");
+        Assert.Equal(BicepProvisioner.DeploymentStateProvisioningStateCanceled, section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey]?.GetValue<string>());
+
+        var notificationService = services.GetRequiredService<ResourceNotificationService>();
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var resourceEvent));
+        Assert.Equal("Azure deployment canceled", resourceEvent.Snapshot.State?.Text);
+    }
+
+    [Fact]
+    public async Task ReconcileDeploymentStateAsync_ReturnsFalseWhenSucceededDeploymentChecksumDoesNotMatch()
+    {
+        var deploymentStateManager = new InMemoryDeploymentStateManager();
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        using var services = builder.Services.BuildServiceProvider();
+        var resource = CreateReconciledStorageResource();
+        var deploymentId = GetTestDeploymentId(resource.Name);
+        await SeedRunningDeploymentStateAsync(deploymentStateManager, resource, deploymentId);
+        resource.Parameters["sku"] = "Standard_LRS";
+        var armClient = new TestArmClient();
+        armClient.DeploymentStates.Enqueue(new(
+            AzureDeploymentOperationDetails.SucceededState,
+            CreateDeploymentOutputs("https://storage.blob.core.windows.net/")));
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            armClient: armClient,
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+        var provisioner = CreateProvisioner(services, DistributedApplicationOperation.Run);
+
+        var result = await provisioner.ReconcileDeploymentStateAsync(resource, context, CancellationToken.None);
+
+        Assert.False(result);
+        Assert.False(resource.Outputs.ContainsKey("blobEndpoint"));
+
+        var section = await deploymentStateManager.AcquireSectionAsync($"Azure:Deployments:{resource.Name}");
+        Assert.Null(section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey]);
+        Assert.Equal(deploymentId, section.Data[BicepUtilities.DeploymentStateIdKey]?.GetValue<string>());
+    }
+
     private static void AssertResourceGroupPropertyIsNull(IServiceProvider services, string resourceName)
     {
         var notificationService = services.GetRequiredService<ResourceNotificationService>();
@@ -1414,7 +1704,43 @@ public class AzureBicepProvisionerTests
         return [.. logEnumerator.Current.Select(static log => (log.Content, log.IsErrorMessage))];
     }
 
-    private static BicepProvisioner CreateProvisioner(IServiceProvider services, DistributedApplicationOperation operation = DistributedApplicationOperation.Publish)
+    private static AzureBicepResource CreateReconciledStorageResource()
+    {
+        var resource = new AzureBicepResource("storage", templateString: "output blobEndpoint string = 'https://storage.blob.core.windows.net/'");
+        resource.Parameters[AzureBicepResource.KnownParameters.Location] = "westus2";
+        return resource;
+    }
+
+    private static async Task SeedRunningDeploymentStateAsync(IDeploymentStateManager deploymentStateManager, AzureBicepResource resource, string deploymentId)
+    {
+        var parameters = new JsonObject();
+        await BicepUtilities.SetParametersAsync(parameters, resource);
+
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        var section = await deploymentStateManager.AcquireSectionAsync($"Azure:Deployments:{resource.Name}");
+        section.Data[BicepUtilities.DeploymentStateIdKey] = deploymentId;
+        section.Data[BicepUtilities.DeploymentStateParametersKey] = parameters.ToJsonString();
+        section.Data[BicepUtilities.DeploymentStateScopeKey] = scope.ToJsonString();
+        section.Data[BicepUtilities.DeploymentStateChecksumKey] = BicepUtilities.GetChecksum(resource, parameters, scope);
+        section.Data[BicepProvisioner.DeploymentStateProvisioningStateKey] = BicepProvisioner.DeploymentStateProvisioningStateRunning;
+        await deploymentStateManager.SaveSectionAsync(section);
+    }
+
+    private static JsonObject CreateDeploymentOutputs(string blobEndpoint)
+        => new()
+        {
+            ["blobEndpoint"] = new JsonObject
+            {
+                ["value"] = blobEndpoint
+            }
+        };
+
+    private static string GetTestDeploymentId(string deploymentName)
+        => $"/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Resources/deployments/{deploymentName}";
+
+    private static BicepProvisioner CreateProvisioner(IServiceProvider services, DistributedApplicationOperation operation = DistributedApplicationOperation.Publish, TimeProvider? timeProvider = null)
     {
         return new BicepProvisioner(
             services.GetRequiredService<ResourceNotificationService>(),
@@ -1424,7 +1750,8 @@ public class AzureBicepProvisionerTests
             services.GetRequiredService<IDeploymentStateManager>(),
             new DistributedApplicationExecutionContext(operation),
             services.GetRequiredService<IFileSystemService>(),
-            NullLogger<BicepProvisioner>.Instance);
+            NullLogger<BicepProvisioner>.Instance,
+            timeProvider);
     }
 
     private sealed class TestTokenCredentialProvider : ITokenCredentialProvider
@@ -1452,6 +1779,27 @@ public class AzureBicepProvisionerTests
             CompileBicepToArmAsyncCalled = true;
             LastCompiledPath = bicepFilePath;
             return Task.FromResult(CompilationResult);
+        }
+    }
+
+    private sealed class ImmediateTimeProvider : TimeProvider
+    {
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new ImmediateTimer();
+            callback(state);
+            return timer;
+        }
+
+        private sealed class ImmediateTimer : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+
+            public void Dispose()
+            {
+            }
+
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         }
     }
 
@@ -1592,6 +1940,29 @@ public class AzureBicepProvisionerTests
             ArmDeploymentContent content,
             CancellationToken cancellationToken = default) =>
             throw new RequestFailedException(409, "Deployment creation failed.");
+
+        public Task CancelAsync(string deploymentName, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class ActiveDeploymentConflictArmDeploymentCollection : IArmDeploymentCollection
+    {
+        public int CreateCallCount { get; private set; }
+        public string? DeploymentName { get; private set; }
+
+        public Task<ArmOperation<ArmDeploymentResource>> CreateOrUpdateAsync(
+            WaitUntil waitUntil,
+            string deploymentName,
+            ArmDeploymentContent content,
+            CancellationToken cancellationToken = default)
+        {
+            CreateCallCount++;
+            DeploymentName = deploymentName;
+            return Task.FromException<ArmOperation<ArmDeploymentResource>>(new RequestFailedException(
+                409,
+                "The deployment is still active.",
+                "DeploymentActive",
+                innerException: null));
+        }
 
         public Task CancelAsync(string deploymentName, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }

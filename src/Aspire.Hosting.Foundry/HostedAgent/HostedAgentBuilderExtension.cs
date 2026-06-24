@@ -412,6 +412,18 @@ public static class HostedAgentResourceBuilderExtensions
             throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
         }
 
+        EnsureDefaultHostedAgentEndpoint(builder, target);
+
+        if (target is ProjectResource projectTarget)
+        {
+            // Foundry hosted agents are containerized and the platform owns the listening port contract.
+            // Keep the user's local endpoint metadata intact, but do not emit project endpoint variables
+            // such as ASPNETCORE_URLS/HTTP_PORTS because they require EndpointProperty.TargetPort, which
+            // Foundry hosted-agent deployment endpoints intentionally do not support.
+            builder.ApplicationBuilder.CreateResourceBuilder(projectTarget)
+                .WithEndpointsInEnvironment(_ => false);
+        }
+
         // The hosted agent wrapper is not the deployed workload. Apply the Foundry
         // reference to the target so its connection annotations flow into the deployment.
         builder.ApplicationBuilder.CreateResourceBuilder(target)
@@ -459,6 +471,19 @@ public static class HostedAgentResourceBuilderExtensions
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         target.Annotations.Add(new ReferenceRoleAssignmentAnnotation(account, roles));
 #pragma warning restore ASPIREAZURE003
+    }
+
+    private static void EnsureDefaultHostedAgentEndpoint<T>(IResourceBuilder<T> builder, IResourceWithEnvironment target)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        if (target is not IResourceWithEndpoints targetWithEndpoints ||
+            targetWithEndpoints.Annotations.OfType<EndpointAnnotation>().Any(e => string.Equals(e.Name, "http", StringComparisons.EndpointAnnotationName)))
+        {
+            return;
+        }
+
+        builder.ApplicationBuilder.CreateResourceBuilder(targetWithEndpoints)
+            .WithHttpEndpoint(name: "http", isProxied: true);
     }
 
     private sealed class HostedAgentRunProtocol

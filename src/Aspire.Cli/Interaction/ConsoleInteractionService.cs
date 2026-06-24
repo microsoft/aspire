@@ -30,6 +30,7 @@ internal class ConsoleInteractionService : IInteractionService
     private readonly IAnsiConsole _errorConsole;
     private readonly CliExecutionContext _executionContext;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly IProcessPathProvider _processPathProvider;
     private readonly ILogger _stdoutLogger;
     private readonly ILogger _stderrLogger;
     private readonly ConsoleLogBufferContext _logBufferContext;
@@ -59,17 +60,19 @@ internal class ConsoleInteractionService : IInteractionService
 
     public bool SupportsLinks => MessageConsole.Profile.Capabilities.Links;
 
-    public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, ILoggerFactory loggerFactory, ConsoleLogBufferContext logBufferContext)
+    public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IProcessPathProvider processPathProvider, ILoggerFactory loggerFactory, ConsoleLogBufferContext logBufferContext)
     {
         ArgumentNullException.ThrowIfNull(consoleEnvironment);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(hostEnvironment);
+        ArgumentNullException.ThrowIfNull(processPathProvider);
         ArgumentNullException.ThrowIfNull(loggerFactory);
         ArgumentNullException.ThrowIfNull(logBufferContext);
         _outConsole = consoleEnvironment.Out;
         _errorConsole = consoleEnvironment.Error;
         _executionContext = executionContext;
         _hostEnvironment = hostEnvironment;
+        _processPathProvider = processPathProvider;
         _stdoutLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stdout}");
         _stderrLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stderr}");
         _logBufferContext = logBufferContext;
@@ -460,7 +463,7 @@ internal class ConsoleInteractionService : IInteractionService
             else if (comparison > 0)
             {
                 errorMessage = InteractionServiceStrings.AppHostNotCompatibleUpdateCli;
-                updateCommand = DotNetToolDetection.GetDotNetToolUpdateCommand()
+                updateCommand = DotNetToolDetection.GetDotNetToolUpdateCommand(_processPathProvider.ProcessPath)
                     ?? NpmInstallDetection.GetNpmUpdateCommand()
                     ?? "aspire update";
             }
@@ -517,19 +520,7 @@ internal class ConsoleInteractionService : IInteractionService
 
         var displayMessage = allowMarkup ? message : message.EscapeMarkup();
 
-        // Use a grid to keep the icon in a fixed first column so long text wraps
-        // without pushing under the emoji prefix.
-        var grid = new Grid();
-        grid.AddColumn();
-        grid.AddColumn();
-        grid.Columns[0].NoWrap = true;
-        grid.Columns[0].Padding = new Padding(0);
-        grid.Columns[1].Padding = new Padding(0);
-
-        grid.AddRow(
-            new Markup(ConsoleHelpers.FormatEmojiPrefix(emoji, target)),
-            new Markup(displayMessage));
-
+        var grid = ConsoleHelpers.CreateEmojiGrid(emoji, target, new Markup(displayMessage));
         target.Write(grid);
     }
 

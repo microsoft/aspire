@@ -7,7 +7,6 @@ using System.Globalization;
 using System.Net.Sockets;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tui;
 using Microsoft.Extensions.Logging;
@@ -58,15 +57,14 @@ internal sealed class TerminalAttachCommand : BaseCommand
     };
 
     public TerminalAttachCommand(
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IProjectLocator projectLocator,
+        AppHostConnectionResolver connectionResolver,
         ILogger<TerminalAttachCommand> logger,
         CommonCommandServices services)
         : base("attach", "Attach the local terminal to an interactive PTY session for a resource.", services)
     {
         _interactionService = services.InteractionService;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, services.InteractionService, projectLocator, services.ExecutionContext, logger);
+        _connectionResolver = connectionResolver;
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);

@@ -3,6 +3,7 @@
 
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Cli.Certificates;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -14,7 +15,7 @@ public class NativeCertificateToolRunnerTests
     public void TrustHttpCertificateOnLinux_WithNoCurrentCertificate_CreatesAndTrustsCertificate()
     {
         var certificateManager = new TestCertificateManager();
-        var runner = new NativeCertificateToolRunner(certificateManager, isLinux: () => true);
+        var runner = new NativeCertificateToolRunner(certificateManager, new TestEnvironment { IsLinux = true });
 
         var result = runner.TrustHttpCertificateOnLinux([], DateTimeOffset.UtcNow);
 
@@ -30,7 +31,7 @@ public class NativeCertificateToolRunnerTests
         using var certificate = certificateManager.CreateAspNetCoreHttpsDevelopmentCertificate(
             DateTimeOffset.UtcNow.AddDays(-1),
             DateTimeOffset.UtcNow.AddDays(365));
-        var runner = new NativeCertificateToolRunner(certificateManager, isLinux: () => true);
+        var runner = new NativeCertificateToolRunner(certificateManager, new TestEnvironment { IsLinux = true });
 
         var result = runner.TrustHttpCertificateOnLinux([certificate], DateTimeOffset.UtcNow);
 
@@ -47,7 +48,7 @@ public class NativeCertificateToolRunnerTests
         using var olderCertificate = olderVersionManager.CreateAspNetCoreHttpsDevelopmentCertificate(
             DateTimeOffset.UtcNow.AddDays(-1),
             DateTimeOffset.UtcNow.AddDays(365));
-        var runner = new NativeCertificateToolRunner(currentVersionManager, isLinux: () => true);
+        var runner = new NativeCertificateToolRunner(currentVersionManager, new TestEnvironment { IsLinux = true });
 
         var result = runner.TrustHttpCertificateOnLinux([olderCertificate], DateTimeOffset.UtcNow);
 

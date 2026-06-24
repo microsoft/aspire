@@ -27,7 +27,8 @@ internal class DotNetTemplateFactory(
     IFeatures features,
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
-    TemplateNuGetConfigService templateNuGetConfigService)
+    TemplateNuGetConfigService templateNuGetConfigService,
+    IEnvironment environment)
     : ITemplateFactory
 {
     // Template-specific options
@@ -106,7 +107,7 @@ internal class DotNetTemplateFactory(
 
         // Fall back to checking for dotnet on the system PATH.
         var dotnetFileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "dotnet.exe" : "dotnet";
-        var pathVariable = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        var pathVariable = environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 
         foreach (var directory in pathVariable.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
