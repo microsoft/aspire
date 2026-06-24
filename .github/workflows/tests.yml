@@ -247,14 +247,14 @@ jobs:
 
   build_packages:
     name: Build packages
-    if: false  # [ignore][experiment] disabled foo
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'experiment-fast-ci') }}  # [ignore][experiment] skipped only when the 'experiment-fast-ci' label is present (default: runs, merge-safe)
     uses: ./.github/workflows/build-packages.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
   build_cli_archive_linux:
     name: Build native CLI archive (Linux)
-    if: false  # [ignore][experiment] disabled for fast validation CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'experiment-fast-ci') }}  # [ignore][experiment] skipped only when the 'experiment-fast-ci' label is present (default: runs, merge-safe)
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -262,7 +262,7 @@ jobs:
 
   build_cli_archive_linux_arm64:
     name: Build native CLI archive (Linux ARM64)
-    if: false  # [ignore][experiment] disabled for fast validation CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'experiment-fast-ci') }}  # [ignore][experiment] skipped only when the 'experiment-fast-ci' label is present (default: runs, merge-safe)
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -274,7 +274,7 @@ jobs:
   # without waiting for the slower Windows/macOS builds.
   build_cli_archive_windows:
     name: Build native CLI archive (Windows)
-    if: false  # [ignore][experiment] disabled for fast validation CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'experiment-fast-ci') }}  # [ignore][experiment] skipped only when the 'experiment-fast-ci' label is present (default: runs, merge-safe)
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -282,7 +282,7 @@ jobs:
 
   build_cli_archive_windows_arm64:
     name: Build native CLI archive (Windows ARM64)
-    if: false  # [ignore][experiment] disabled for fast validation CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'experiment-fast-ci') }}  # [ignore][experiment] skipped only when the 'experiment-fast-ci' label is present (default: runs, merge-safe)
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -290,7 +290,7 @@ jobs:
 
   build_cli_archive_macos:
     name: Build native CLI archive (macOS)
-    if: false  # [ignore][experiment] disabled for fast validation CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'experiment-fast-ci') }}  # [ignore][experiment] skipped only when the 'experiment-fast-ci' label is present (default: runs, merge-safe)
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -298,7 +298,7 @@ jobs:
 
   build_cli_archive_macos_x64:
     name: Build native CLI archive (macOS x64)
-    if: false  # [ignore][experiment] disabled for fast validation CI
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'experiment-fast-ci') }}  # [ignore][experiment] skipped only when the 'experiment-fast-ci' label is present (default: runs, merge-safe)
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -839,6 +839,14 @@ jobs:
         #   were removed below. Restore them when re-enabling the job.
         # - polyglot_validation: this job runs for pull requests and main branch builds; it is
         #   expected to be skipped for other workflow events.
+        # - build_packages and the build_cli_archive_* jobs ([ignore][experiment]): these package and
+        #   native CLI archive jobs are gated on the ABSENCE of the 'experiment-fast-ci' PR label, so by
+        #   default (no label, and on non-PR events) they still run and a real failure is caught via the
+        #   contains(needs.*.result, 'failure') check above. When that label is present they are
+        #   intentionally skipped for fast validation CI; the build_cli_archive_macos_x64 skip-as-failure
+        #   check below is therefore suppressed under the same label (its only required-archive guard).
+        #   Remove this bullet, the job-level label gates, and the macos_x64 label guards when the
+        #   experiment ends.
         # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
         if: >-
           ${{ always() &&
@@ -851,6 +859,8 @@ jobs:
                   (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
                  (needs.typescript_api_compat.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.run_typescript_api_compat == 'true')) ||
+                 (needs.build_cli_archive_macos_x64.result == 'skipped' &&
+                  !contains(github.event.pull_request.labels.*.name, 'experiment-fast-ci')) ||
                  (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
                  (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
                  (needs.nix_package.result == 'skipped' && (needs.setup_for_tests.outputs.run_nix_package == 'true')) ||
@@ -871,6 +881,8 @@ jobs:
                 ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true')) ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
+                 (needs.build_cli_archive_macos_x64.result == 'skipped' &&
+                  !contains(github.event.pull_request.labels.*.name, 'experiment-fast-ci')) ||
                  (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
                  (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
                  (needs.nix_package.result == 'skipped' && (needs.setup_for_tests.outputs.run_nix_package == 'true')) ||
