@@ -59,7 +59,7 @@ Run `build.ps1` (Windows) or `build.sh` (Mac/Linux) from the repository root to 
 
 ### Optional: set the CLI path
 
-If you want to effectively debug the Aspire CLI together with the Aspire VS Code extension, you must set the `Aspire Cli Executable Path` setting to the Aspire CLI output path. The output path, relative to the Aspire repository root directory, is `artifacts/bin/Aspire.Cli/Debug/net10.0/aspire`.
+If you want to effectively debug the Aspire CLI together with the Aspire VS Code extension, set the `Aspire Cli Executable Path` setting to the Aspire CLI output path. The raw local build output path, relative to the Aspire repository root directory, is `artifacts/bin/Aspire.Cli/Debug/net10.0/aspire`.
 
 You may also want to use the `Run Extension (cli stop on entry)` launch configuration, as `Run Extension` does not prevent the Aspire CLI from executing immediately.
 
@@ -67,9 +67,9 @@ You can use the `Aspire: Extension settings` command to open VS Code settings di
 
 #### Dogfooding a CLI build alongside the extension
 
-When `Aspire Cli Executable Path` points at an **absolute** path, the extension forwards that value as the `AspireCliPath` MSBuild property/environment variable to every terminal, task, and debug process it creates. The Aspire SDK's `ResolveAspireCliBundle` task uses `AspireCliPath` (defined in [`src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs`](/src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs)) to locate the matching bundle layout — DCP, dashboard, and terminal-host binaries — and bakes those paths into the built AppHost as `[AssemblyMetadata]` attributes. Without this forwarding, MSBuild probes `PATH` and can stamp the *stable* CLI's bundle into the AppHost while the extension is launching it through the *dev* CLI, producing surprising runtime mismatches such as `<unresolved-aspire-terminalhost>` even though the new CLI is correctly invoked (tracked in [issue #18073](https://github.com/microsoft/aspire/issues/18073)).
+When `Aspire Cli Executable Path` points at a bundle-valid **absolute** path, the extension forwards that value as the `AspireCliPath` MSBuild property/environment variable to every terminal, task, and debug process it creates. The Aspire SDK's `ResolveAspireCliBundle` task uses `AspireCliPath` (defined in [`src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs`](/src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs)) to locate the matching bundle layout — DCP, dashboard, and terminal-host binaries — and bakes those paths into the built AppHost as `[AssemblyMetadata]` attributes. Without this forwarding, MSBuild probes `PATH` and can stamp the *stable* CLI's bundle into the AppHost while the extension is launching it through the *dev* CLI, producing surprising runtime mismatches such as `<unresolved-aspire-terminalhost>` even though the new CLI is correctly invoked (tracked in [issue #18073](https://github.com/microsoft/aspire/issues/18073)).
 
-A relative value (for example the bare `aspire` literal), or an absolute path that no longer exists, is intentionally not forwarded: `ResolveAspireCliBundle` requires an existing file and would emit a warning rather than fall back. Clear the setting to revert to default PATH/ASPIRE_HOME resolution.
+A relative value (for example the bare `aspire` literal), an absolute path that no longer exists, or a raw framework-dependent local build output such as `artifacts/bin/Aspire.Cli/Debug/net10.0/aspire` is intentionally not forwarded: `ResolveAspireCliBundle` requires an existing bundle layout and would otherwise fall back to unrelated `ASPIRE_HOME` metadata. Symlinks to that raw local build output are filtered the same way. To dogfood bundle metadata end-to-end, point the setting at an installed/bundled CLI layout with a sidecar or adjacent bundle assets. Clear the setting to revert to default PATH/ASPIRE_HOME resolution.
 
 ## Running tests
 
