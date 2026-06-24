@@ -5,6 +5,7 @@ import {
     ASPIRE_CLI_PATH_ENV_VAR,
     CliPathEnvironmentCollection,
     CliPathEnvironmentDependencies,
+    createAspireCliPathProcessEnvironment,
     getForwardableAspireCliPath,
     registerCliPathEnvironmentSync,
     syncAspireCliPathEnvironment,
@@ -28,11 +29,15 @@ function makeDeps(overrides: Partial<CliPathEnvironmentDependencies> = {}): CliP
     return {
         getConfiguredPath: () => '',
         isAbsolute: (cliPath: string) => cliPath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(cliPath),
-        fileExists: () => true,
+        fileExists: (cliPath: string) => cliPath.endsWith('/aspire') || cliPath.endsWith('\\aspire.exe') || cliPath.endsWith('/aspire.exe'),
         log: () => { },
         warn: () => { },
         ...overrides,
     };
+}
+
+function normalizeCandidate(candidate: string): string {
+    return candidate.replace(/\\/g, '/');
 }
 
 suite('cliPathEnvironment.getForwardableAspireCliPath tests', () => {
@@ -53,6 +58,53 @@ suite('cliPathEnvironment.getForwardableAspireCliPath tests', () => {
             getConfiguredPath: () => '/missing/aspire',
             fileExists: () => false,
         })), undefined);
+    });
+
+    test('returns undefined when the configured path is an unbundled framework-dependent CLI build', () => {
+        assert.strictEqual(getForwardableAspireCliPath(makeDeps({
+            getConfiguredPath: () => '/work/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire',
+            fileExists: (candidate) => {
+                const normalized = normalizeCandidate(candidate);
+                return normalized === '/work/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire'
+                    || normalized === '/work/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire.dll';
+            },
+        })), undefined);
+    });
+
+    test('returns the configured path for a framework-dependent CLI with an install sidecar', () => {
+        assert.strictEqual(getForwardableAspireCliPath(makeDeps({
+            getConfiguredPath: () => '/work/aspire/bin/aspire',
+            fileExists: (candidate) => {
+                const normalized = normalizeCandidate(candidate);
+                return normalized === '/work/aspire/bin/aspire'
+                    || normalized === '/work/aspire/bin/aspire.dll'
+                    || normalized === '/work/aspire/bin/.aspire-install.json';
+            },
+        })), '/work/aspire/bin/aspire');
+    });
+});
+
+suite('cliPathEnvironment.createAspireCliPathProcessEnvironment tests', () => {
+    test('overlays AspireCliPath for direct extension-owned child processes', () => {
+        const env = createAspireCliPathProcessEnvironment(
+            { PATH: '/usr/bin', AspireCliPath: '/old/aspire' },
+            makeDeps({ getConfiguredPath: () => '/work/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire' }),
+        );
+
+        assert.deepStrictEqual(env, {
+            PATH: '/usr/bin',
+            AspireCliPath: '/work/aspire/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire',
+        });
+    });
+
+    test('leaves the process environment unchanged when no configured path can be forwarded', () => {
+        const baseEnv = { PATH: '/usr/bin', AspireCliPath: '/ambient/aspire' };
+        const env = createAspireCliPathProcessEnvironment(
+            baseEnv,
+            makeDeps({ getConfiguredPath: () => 'aspire' }),
+        );
+
+        assert.strictEqual(env, baseEnv);
     });
 });
 

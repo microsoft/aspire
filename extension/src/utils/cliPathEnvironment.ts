@@ -63,12 +63,30 @@ export function isForwardableAspireCliPath(
     configuredPath: string,
     deps: ForwardableCliPathDependencies = defaultForwardableCliPathDeps,
 ): boolean {
-    return configuredPath.length > 0 && deps.isAbsolute(configuredPath) && deps.fileExists(configuredPath);
+    return configuredPath.length > 0
+        && deps.isAbsolute(configuredPath)
+        && deps.fileExists(configuredPath)
+        && !isUnbundledFrameworkDependentCliPath(configuredPath, deps);
 }
 
 export function getForwardableAspireCliPath(deps: CliPathEnvironmentDependencies = defaultDeps): string | undefined {
     const configuredPath = deps.getConfiguredPath();
     return isForwardableAspireCliPath(configuredPath, deps) ? configuredPath : undefined;
+}
+
+export function createAspireCliPathProcessEnvironment(
+    baseEnv: NodeJS.ProcessEnv = process.env,
+    deps: CliPathEnvironmentDependencies = defaultDeps,
+): NodeJS.ProcessEnv {
+    const forwardablePath = getForwardableAspireCliPath(deps);
+    if (forwardablePath === undefined) {
+        return baseEnv;
+    }
+
+    return {
+        ...baseEnv,
+        [ASPIRE_CLI_PATH_ENV_VAR]: forwardablePath,
+    };
 }
 
 function fileExists(filePath: string): boolean {
@@ -78,6 +96,37 @@ function fileExists(filePath: string): boolean {
     catch {
         return false;
     }
+}
+
+function isUnbundledFrameworkDependentCliPath(configuredPath: string, deps: ForwardableCliPathDependencies): boolean {
+    const cliDirectory = path.dirname(configuredPath);
+    const cliAssemblyPath = path.join(cliDirectory, 'aspire.dll');
+
+    if (!deps.fileExists(cliAssemblyPath)) {
+        return false;
+    }
+
+    // Inner-loop `dotnet build` outputs place the apphost next to aspire.dll,
+    // but they do not contain an embedded bundle or a sidecar that identifies an
+    // extraction root. Forwarding those paths makes MSBuild resolve whatever
+    // unrelated ASPIRE_HOME bundle happens to exist and stamp stale metadata.
+    // Installed layouts either have a sidecar or an adjacent bundle layout that
+    // `ResolveAspireCliBundle` can bind to the selected CLI path.
+    return !hasInstallSidecar(cliDirectory, deps) && !hasAdjacentBundleLayout(cliDirectory, deps);
+}
+
+function hasInstallSidecar(cliDirectory: string, deps: ForwardableCliPathDependencies): boolean {
+    return deps.fileExists(path.join(cliDirectory, '.aspire-install.json'));
+}
+
+function hasAdjacentBundleLayout(cliDirectory: string, deps: ForwardableCliPathDependencies): boolean {
+    return hasBundleRoot(cliDirectory, deps)
+        || hasBundleRoot(path.join(cliDirectory, 'bundle'), deps);
+}
+
+function hasBundleRoot(bundleRoot: string, deps: ForwardableCliPathDependencies): boolean {
+    return (deps.fileExists(path.join(bundleRoot, 'dcp', 'dcp')) || deps.fileExists(path.join(bundleRoot, 'dcp', 'dcp.exe')))
+        && (deps.fileExists(path.join(bundleRoot, 'managed', 'aspire-managed')) || deps.fileExists(path.join(bundleRoot, 'managed', 'aspire-managed.exe')));
 }
 
 /**
@@ -107,7 +156,7 @@ export function syncAspireCliPathEnvironment(
 
     // Only forward paths that `ResolveAspireCliBundle` can consume. Relative,
     // shell-resolved, or stale absolute values fail the task's File.Exists guard
-    // and make it stop before its PATH/ASPIRE_HOME fallback logic runs.
+    // and make it stop before its PATH fallback logic runs.
     if (forwardablePath === undefined) {
         collection.description = undefined;
         collection.delete(ASPIRE_CLI_PATH_ENV_VAR);
