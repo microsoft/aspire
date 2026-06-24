@@ -482,12 +482,55 @@ internal sealed class DotNetCliRunner(
 
     private static void AddAspireCliPathEnvironment(Dictionary<string, string> env, FileInfo? projectFile)
     {
-        if (projectFile is null || env.ContainsKey("AspireCliPath") || string.IsNullOrWhiteSpace(Environment.ProcessPath))
+        var processPath = Environment.ProcessPath;
+        if (projectFile is null || env.ContainsKey("AspireCliPath") || string.IsNullOrWhiteSpace(processPath) || !ShouldForwardProcessPathAsAspireCliPath(processPath))
         {
             return;
         }
 
-        env["AspireCliPath"] = Environment.ProcessPath;
+        env["AspireCliPath"] = processPath;
+    }
+
+    internal static bool ShouldForwardProcessPathAsAspireCliPath(string processPath)
+    {
+        var cliDirectory = Path.GetDirectoryName(processPath);
+        if (string.IsNullOrEmpty(cliDirectory))
+        {
+            return false;
+        }
+
+        return !IsUnbundledFrameworkDependentCliPath(cliDirectory);
+    }
+
+    private static bool IsUnbundledFrameworkDependentCliPath(string cliDirectory)
+    {
+        var cliAssemblyPath = Path.Combine(cliDirectory, "aspire.dll");
+        if (!File.Exists(cliAssemblyPath))
+        {
+            return false;
+        }
+
+        // Raw `dotnet build` outputs place the apphost next to aspire.dll, but
+        // they do not contain a bundle layout. If we forward that path as
+        // AspireCliPath, ResolveAspireCliBundle treats it as an explicit CLI and
+        // falls through to ASPIRE_HOME, which can stamp stale bundle metadata.
+        return !HasInstallSidecar(cliDirectory) && !HasAdjacentBundleLayout(cliDirectory);
+    }
+
+    private static bool HasInstallSidecar(string cliDirectory)
+    {
+        return File.Exists(Path.Combine(cliDirectory, ".aspire-install.json"));
+    }
+
+    private static bool HasAdjacentBundleLayout(string cliDirectory)
+    {
+        return HasBundleRoot(cliDirectory) || HasBundleRoot(Path.Combine(cliDirectory, "bundle"));
+    }
+
+    private static bool HasBundleRoot(string bundleRoot)
+    {
+        return BundleDiscovery.TryDiscoverDcpFromDirectory(bundleRoot, out _, out _, out _)
+            && BundleDiscovery.TryDiscoverManagedFromDirectory(bundleRoot, out _);
     }
 
     private TimeSpan GetBackchannelConnectionTimeout()

@@ -206,13 +206,61 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             (_, env, _, _) =>
             {
                 Assert.NotNull(env);
-                Assert.Equal(Environment.ProcessPath, env["AspireCliPath"]);
+                if (Environment.ProcessPath is { } processPath && DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(processPath))
+                {
+                    Assert.Equal(processPath, env["AspireCliPath"]);
+                }
+                else
+                {
+                    Assert.False(env.ContainsKey("AspireCliPath"));
+                }
             },
             0);
 
         var exitCode = await runner.BuildAsync(projectFile, noRestore: false, new ProcessInvocationOptions(), CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public void ShouldForwardProcessPathAsAspireCliPathRejectsUnbundledFrameworkDependentCliBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "artifacts", "bin", "Aspire.Cli", "Debug", "net10.0"));
+        var cliPath = Path.Combine(cliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(cliPath, string.Empty);
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, "aspire.dll"), string.Empty);
+
+        Assert.False(DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(cliPath));
+    }
+
+    [Fact]
+    public void ShouldForwardProcessPathAsAspireCliPathAllowsFrameworkDependentCliWithInstallSidecar()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "bin"));
+        var cliPath = Path.Combine(cliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(cliPath, string.Empty);
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, "aspire.dll"), string.Empty);
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, ".aspire-install.json"), """{"source":"script"}""");
+
+        Assert.True(DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(cliPath));
+    }
+
+    [Fact]
+    public void ShouldForwardProcessPathAsAspireCliPathAllowsAdjacentBundleLayout()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "bin"));
+        var cliPath = Path.Combine(cliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(cliPath, string.Empty);
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, "aspire.dll"), string.Empty);
+        Directory.CreateDirectory(Path.Combine(cliDirectory.FullName, "dcp"));
+        Directory.CreateDirectory(Path.Combine(cliDirectory.FullName, "managed"));
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, "dcp", OperatingSystem.IsWindows() ? "dcp.exe" : "dcp"), string.Empty);
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, "managed", OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed"), string.Empty);
+
+        Assert.True(DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(cliPath));
     }
 
     [Fact]
