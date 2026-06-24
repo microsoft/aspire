@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { AppHostDiscoveryService } from './appHostDiscovery';
 import { summarizeAppHostLanguages } from './appHostLanguage';
-import { summarizeAppHostTargetVersions } from './appHostTargetVersion';
+import { type AppHostTargetVersionSummary, summarizeAppHostTargetVersions } from './appHostTargetVersion';
 import { sendTelemetryEvent, setCommandInvocationListener, setCommonTelemetryProperties } from './telemetry';
 
 /**
@@ -141,7 +141,7 @@ export class MeaningfulEngagementReporter implements vscode.Disposable {
 
     private async _safeAppHostSummary(): Promise<{
         languages: ReturnType<typeof summarizeAppHostLanguages>;
-        targetVersions: ReturnType<typeof summarizeAppHostTargetVersions>;
+        targetVersions: AppHostTargetVersionSummary;
     }> {
         const folders = vscode.workspace.workspaceFolders;
         if (!folders || folders.length === 0) {
@@ -162,7 +162,7 @@ export class MeaningfulEngagementReporter implements vscode.Disposable {
         }
         return {
             languages: summarizeAppHostLanguages(all),
-            targetVersions: summarizeAppHostTargetVersions(all),
+            targetVersions: await summarizeAppHostTargetVersions(all),
         };
     }
 }

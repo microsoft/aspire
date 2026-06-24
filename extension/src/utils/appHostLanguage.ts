@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { promises as fs } from 'node:fs';
 import { CandidateAppHostDisplayInfo } from './appHostDiscovery';
 
 /**
@@ -112,22 +112,19 @@ export function classifyAppHostPath(appHostPath: string | undefined): 'csharp' |
  * launches AppHosts as a directory (e.g. `aspire run` without `--apphost`)
  * because the entry file lives next to `package.json` / `*.csproj` and is
  * discovered at runtime. Looking only at the directory name itself loses the
- * language signal entirely, so we synchronously enumerate the directory and
- * match well-known AppHost file names.
+ * language signal entirely, so we enumerate the directory and match well-known
+ * AppHost file names.
  *
- * Used at telemetry-emit time only — the function is intentionally synchronous
- * to keep the launch-telemetry call path simple and to avoid plumbing async
- * through {@link AspireDebugSession.handleMessage}. Directory reads are
- * O(entries), small for typical AppHost roots; any failure (permissions,
- * missing directory) returns `'unknown'` rather than throwing.
+ * Directory reads are O(entries), small for typical AppHost roots; any failure
+ * (permissions, missing directory) returns `'unknown'` rather than throwing.
  */
-export function classifyAppHostDirectory(directoryPath: string | undefined): 'csharp' | 'typescript' | 'unknown' {
+export async function classifyAppHostDirectory(directoryPath: string | undefined): Promise<'csharp' | 'typescript' | 'unknown'> {
     if (!directoryPath) {
         return 'unknown';
     }
     let entries: string[];
     try {
-        entries = readdirSync(directoryPath);
+        entries = await fs.readdir(directoryPath);
     }
     catch {
         return 'unknown';

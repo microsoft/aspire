@@ -51,7 +51,7 @@ suite('AspireDebugSession tests', () => {
         tempDirs.length = 0;
     });
 
-    test('suppresses the Aspire CLI first-run banner for extension-managed launches', () => {
+    test('suppresses the Aspire CLI first-run banner for extension-managed launches', async () => {
         const parentDebugSession = {
             id: 'aspire-session',
             type: 'aspire',
@@ -75,6 +75,7 @@ suite('AspireDebugSession tests', () => {
 
         aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
 
+        await waitFor(() => spawnStub.calledOnce);
         assert.strictEqual(spawnStub.calledOnce, true);
         assert.deepStrictEqual(spawnStub.firstCall.args[0], [
             'run',
@@ -85,7 +86,7 @@ suite('AspireDebugSession tests', () => {
         ]);
     });
 
-    test('reports AppHost target version in start telemetry', () => {
+    test('reports AppHost target version in start telemetry', async () => {
         const tempDir = makeTempDir();
         const appHostPath = join(tempDir, 'apphost.cs');
         writeFileSync(appHostPath, `#:sdk Aspire.AppHost.Sdk@13.6.0
@@ -118,6 +119,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         try {
             aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
 
+            await waitFor(() => fake.events.some(event => event.name === 'debug/apphost/start'));
             const event = fake.events.find(event => event.name === 'debug/apphost/start');
             assert.ok(event);
             assert.strictEqual(event.properties?.apphost_language, 'csharp');
@@ -163,14 +165,16 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             }),
         };
         sinon.stub(vscode.debug, 'stopDebugging').resolves();
-        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
         const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, dcpServer as any, terminalProvider as any, () => { });
         sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
 
         try {
             aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
+            await waitFor(() => fake.events.some(event => event.name === 'debug/apphost/start'));
+            const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
             aspireDebugSession.dispose();
             await clock.tickAsync(500);
+            await clock.tickAsync(0);
 
             const event = fake.events.find(event => event.name === 'debug/apphost/end');
             assert.ok(event);
@@ -516,4 +520,15 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             assert.deepStrictEqual(args, ['run', '--isolated', '--apphost', '/workspace/AppHost.csproj', '--', '--custom-arg', 'value']);
         });
     });
+
+    async function waitFor(predicate: () => boolean): Promise<void> {
+        const start = Date.now();
+        while (!predicate()) {
+            if (Date.now() - start > 5000) {
+                throw new Error('Timed out waiting for condition.');
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 10));
+        }
+    }
 });
