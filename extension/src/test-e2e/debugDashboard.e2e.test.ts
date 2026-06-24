@@ -75,7 +75,10 @@ suite('Aspire debug dashboard E2E', function () {
 
         await setShowStatusDelayForE2E(2500);
         try {
-            await executeE2eControlCommand({ name: 'stopDebugging' });
+            // Only wait for the E2E bridge to start the command. On Windows, waiting
+            // for stopDebugging to fully apply can let the transient stopping state
+            // appear and clear before the assertion starts polling for it.
+            await executeE2eControlCommand({ name: 'stopDebugging' }, { waitFor: 'started' });
             await waitForExtensionState(
                 file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
                 `AppHost '${appHostPath}' to enter stopping state`,
@@ -107,7 +110,10 @@ suite('Aspire debug dashboard E2E', function () {
 
         await setShowStatusDelayForE2E(2500);
         try {
-            await executeE2eControlCommand({ name: 'stopDebugging' });
+            // Only wait for the E2E bridge to start the command. On Windows, waiting
+            // for stopDebugging to fully apply can let the transient stopping state
+            // appear and clear before the assertion starts polling for it.
+            await executeE2eControlCommand({ name: 'stopDebugging' }, { waitFor: 'started' });
             await waitForExtensionState(
                 file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
                 `AppHost '${appHostPath}' to enter stopping state`,
