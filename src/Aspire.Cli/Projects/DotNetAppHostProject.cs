@@ -51,7 +51,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
     private const string AspireAppHostSdkName = "Aspire.AppHost.Sdk";
     private const string IsAspireHostProperty = "IsAspireHost";
-    private const string AppHostSourceFileName = "apphost.cs";
     private const string ProjectAppHostSourceFileName = "AppHost.cs";
     private const string DirectoryBuildPropsName = "Directory.Build.props";
     private const string DirectoryBuildTargetsName = "Directory.Build.targets";
@@ -325,7 +324,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     // ═══════════════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public string? AppHostFileName => AppHostSourceFileName;
+    public string? AppHostFileName => "apphost.cs";
 
     /// <inheritdoc />
     public bool IsUsingProjectReferences(FileInfo appHostFile)
