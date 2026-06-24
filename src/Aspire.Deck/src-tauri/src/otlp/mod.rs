@@ -11,7 +11,6 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use indexmap::IndexMap;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tonic::transport::Server;
@@ -38,6 +37,9 @@ use crate::proto::opentelemetry::proto::collector::trace::v1::{
     ExportTraceServiceRequest, ExportTraceServiceResponse,
 };
 use crate::proto::opentelemetry::proto::common::v1::{any_value, AnyValue, KeyValue};
+
+pub mod metrics;
+pub use metrics::{MetricKind, MetricSeriesResponse};
 
 const RECENT_CAP: usize = 200;
 const EMIT_DEBOUNCE: Duration = Duration::from_millis(400);
@@ -78,6 +80,7 @@ pub struct MetricSummary {
     pub name: String,
     pub unit: Option<String>,
     pub resource_name: Option<String>,
+    pub kind: MetricKind,
     pub last_value: Option<f64>,
     pub point_count: u64,
 }
@@ -103,7 +106,7 @@ pub struct TelemetryStore {
     metric_count: u64,
     recent_logs: VecDeque<LogRecordSummary>,
     recent_spans: VecDeque<SpanSummary>,
-    metrics: IndexMap<String, MetricSummary>,
+    metrics: metrics::MetricStore,
     last_emit: Option<Instant>,
 }
 
@@ -115,7 +118,7 @@ impl TelemetryStore {
             metric_count: 0,
             recent_logs: VecDeque::with_capacity(RECENT_CAP),
             recent_spans: VecDeque::with_capacity(RECENT_CAP),
-            metrics: IndexMap::new(),
+            metrics: metrics::MetricStore::default(),
             last_emit: None,
         }
     }
@@ -136,25 +139,51 @@ impl TelemetryStore {
         self.recent_spans.push_front(span);
     }
 
-    fn record_metric(&mut self, name: String, unit: Option<String>, resource: Option<String>, value: Option<f64>) {
+    /// Records one numeric (gauge/sum) data point into its series.
+    fn record_number_point(
+        &mut self,
+        name: &str,
+        unit: Option<String>,
+        resource: Option<&str>,
+        kind: MetricKind,
+        t_ms: i64,
+        value: f64,
+        is_delta: bool,
+    ) {
         self.metric_count += 1;
-        let entry = self.metrics.entry(name.clone()).or_insert_with(|| MetricSummary {
-            name,
-            unit: unit.clone(),
-            resource_name: resource.clone(),
-            last_value: None,
-            point_count: 0,
-        });
-        entry.point_count += 1;
-        if value.is_some() {
-            entry.last_value = value;
-        }
-        if entry.unit.is_none() {
-            entry.unit = unit;
-        }
-        if entry.resource_name.is_none() {
-            entry.resource_name = resource;
-        }
+        self.metrics.point_count += 1;
+        self.metrics
+            .series_mut(name, resource, unit, kind)
+            .record_number(t_ms, value, is_delta);
+    }
+
+    /// Records one histogram data point into its series.
+    fn record_histogram_point(
+        &mut self,
+        name: &str,
+        unit: Option<String>,
+        resource: Option<&str>,
+        t_ms: i64,
+        bounds: &[f64],
+        counts: &[u64],
+        is_delta: bool,
+    ) {
+        self.metric_count += 1;
+        self.metrics.point_count += 1;
+        self.metrics
+            .series_mut(name, resource, unit, MetricKind::Histogram)
+            .record_histogram_point(t_ms, bounds, counts, is_delta);
+    }
+
+    /// Returns the time series for a metric, downsampled to the requested window.
+    pub fn query_metric(
+        &self,
+        name: &str,
+        resource: Option<&str>,
+        window_ms: i64,
+        max_points: usize,
+    ) -> Option<MetricSeriesResponse> {
+        self.metrics.get(name, resource).map(|s| s.query(window_ms, max_points))
     }
 
     pub fn summary(&self) -> TelemetrySummary {
@@ -164,7 +193,19 @@ impl TelemetryStore {
             metric_count: self.metric_count,
             recent_logs: self.recent_logs.iter().cloned().collect(),
             recent_spans: self.recent_spans.iter().cloned().collect(),
-            metrics: self.metrics.values().cloned().collect(),
+            // One summary row per (name, resource) series, for the metric list.
+            metrics: self
+                .metrics
+                .iter()
+                .map(|s| MetricSummary {
+                    name: s.name.clone(),
+                    unit: s.unit.clone(),
+                    resource_name: s.resource_name.clone(),
+                    kind: s.kind,
+                    last_value: s.last_value(),
+                    point_count: s.point_count(),
+                })
+                .collect(),
         }
     }
 }
@@ -410,6 +451,8 @@ fn ingest_logs(shared: &OtlpShared, request: ExportLogsServiceRequest) {
 fn ingest_metrics(shared: &OtlpShared, request: ExportMetricsServiceRequest) {
     use crate::proto::opentelemetry::proto::metrics::v1::metric::Data;
     use crate::proto::opentelemetry::proto::metrics::v1::number_data_point::Value as PointValue;
+    use crate::proto::opentelemetry::proto::metrics::v1::AggregationTemporality;
+
     {
         let mut store = shared.store.lock().unwrap();
         for resource_metrics in &request.resource_metrics {
@@ -421,17 +464,49 @@ fn ingest_metrics(shared: &OtlpShared, request: ExportMetricsServiceRequest) {
                     } else {
                         Some(metric.unit.clone())
                     };
-                    // Extract the most recent numeric value from gauge/sum points.
-                    let last_value = match &metric.data {
-                        Some(Data::Gauge(g)) => g.data_points.last().and_then(point_value),
-                        Some(Data::Sum(s)) => s.data_points.last().and_then(point_value),
-                        _ => None,
-                    };
-                    store.record_metric(metric.name.clone(), unit, res_name.clone(), last_value);
+                    let res = res_name.as_deref();
+
+                    match &metric.data {
+                        Some(Data::Gauge(g)) => {
+                            for p in &g.data_points {
+                                if let (Some(v), t) = (point_value(p), point_time_ms(p.time_unix_nano)) {
+                                    store.record_number_point(&metric.name, unit.clone(), res, MetricKind::Gauge, t, v, false);
+                                }
+                            }
+                        }
+                        Some(Data::Sum(s)) => {
+                            // Monotonic sum is a counter (charted as a rate); a
+                            // non-monotonic sum is an up/down counter (charted raw).
+                            let kind = if s.is_monotonic { MetricKind::Counter } else { MetricKind::UpDownCounter };
+                            let is_delta = s.aggregation_temporality == AggregationTemporality::Delta as i32;
+                            for p in &s.data_points {
+                                if let (Some(v), t) = (point_value(p), point_time_ms(p.time_unix_nano)) {
+                                    store.record_number_point(&metric.name, unit.clone(), res, kind, t, v, is_delta);
+                                }
+                            }
+                        }
+                        Some(Data::Histogram(h)) => {
+                            let is_delta = h.aggregation_temporality == AggregationTemporality::Delta as i32;
+                            for p in &h.data_points {
+                                let t = point_time_ms(p.time_unix_nano);
+                                store.record_histogram_point(
+                                    &metric.name,
+                                    unit.clone(),
+                                    res,
+                                    t,
+                                    &p.explicit_bounds,
+                                    &p.bucket_counts,
+                                    is_delta,
+                                );
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
         }
     }
+
     fn point_value(p: &crate::proto::opentelemetry::proto::metrics::v1::NumberDataPoint) -> Option<f64> {
         match &p.value {
             Some(PointValue::AsDouble(d)) => Some(*d),
@@ -439,6 +514,12 @@ fn ingest_metrics(shared: &OtlpShared, request: ExportMetricsServiceRequest) {
             None => None,
         }
     }
+
+    // OTLP timestamps are unix nanoseconds; charts work in unix milliseconds.
+    fn point_time_ms(time_unix_nano: u64) -> i64 {
+        (time_unix_nano / 1_000_000) as i64
+    }
+
     shared.maybe_emit();
 }
 

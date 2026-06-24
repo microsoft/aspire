@@ -139,12 +139,37 @@ export interface SpanSummary {
   statusCode: string | null;
 }
 
+export type MetricKind = "gauge" | "counter" | "upDownCounter" | "histogram";
+
 export interface MetricSummary {
   name: string;
   unit: string | null;
   resourceName: string | null;
+  kind: MetricKind;
   lastValue: number | null;
   pointCount: number;
+}
+
+// Downsampled time series for a metric. Non-histogram metrics fill `values`;
+// histograms fill `p50`/`p90`/`p99`. All y-arrays align with `timestampsMs`.
+export interface MetricSeriesResponse {
+  name: string;
+  resourceName: string | null;
+  unit: string | null;
+  kind: MetricKind;
+  timestampsMs: number[];
+  values?: number[];
+  p50?: number[];
+  p90?: number[];
+  p99?: number[];
+}
+
+// Options for a metric series query.
+export interface MetricSeriesQuery {
+  name: string;
+  resourceName?: string | null;
+  windowSeconds?: number;
+  maxPoints?: number;
 }
 
 export interface TelemetrySummary {

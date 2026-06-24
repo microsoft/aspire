@@ -822,14 +822,28 @@ table.data tbody tr.selected {
 }
 .metric-detail__head {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 12px;
   margin-bottom: 4px;
+}
+.metric-detail__head > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
 }
 .metric-detail__value {
   font-size: 30px;
   font-weight: 680;
   letter-spacing: -0.02em;
+}
+.metric-detail__sub {
+  font-size: 12px;
+}
+.metric-paused {
+  color: var(--warning);
+  font-weight: 600;
 }
 .metric-detail__chart {
   flex: 1;
@@ -837,9 +851,62 @@ table.data tbody tr.selected {
   margin-top: 14px;
 }
 
-/* ---------- Sparkline ---------- */
-.sparkline {
+/* Metric chart toolbar: pause + time-range segmented control. */
+.metric-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--bg-base);
+}
+.seg__btn {
+  padding: 5px 11px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border);
+}
+.seg__btn:last-child {
+  border-right: none;
+}
+.seg__btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.seg__btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------- Metric chart (uPlot) ---------- */
+.metric-chart {
   width: 100%;
+}
+.metric-chart .u-legend {
+  font-size: 12px;
+  margin-top: 6px;
+}
+.metric-chart .u-legend .u-marker {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.metric-chart .u-legend .u-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.metric-chart .u-legend th {
+  color: var(--text-muted);
+  font-weight: 500;
 }
 
 /* ---------- Empty state ---------- */

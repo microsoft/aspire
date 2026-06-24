@@ -18,6 +18,7 @@ The backend exposes **commands** (request/response via `@tauri-apps/api/core` `i
 | `deck_execute_command` | `{ resourceName, resourceType, commandName }` | `CommandResponse` |
 | `deck_list_canvases` | – | `CanvasManifest[]` |
 | `deck_get_telemetry_summary` | – | `TelemetrySummary` |
+| `deck_get_metric_series` | `{ name, resourceName?, windowSeconds?, maxPoints? }` | `MetricSeriesResponse \| null` (downsampled time series) |
 | `deck_list_apphosts` | – | `AppHostInfo[]` (attached AppHosts) |
 | `deck_select_apphost` | `{ id: string }` | `void` (switches the active AppHost) |
 | `deck_respond_interaction` | `{ action: string, values: Record<string,string> }` | `void` (replies to the active interaction) |
@@ -148,12 +149,30 @@ export interface SpanSummary {
   durationNanos: string;
   statusCode: string | null;   // "Unset" | "Ok" | "Error"
 }
+export type MetricKind = "gauge" | "counter" | "upDownCounter" | "histogram";
+
 export interface MetricSummary {
   name: string;
   unit: string | null;
   resourceName: string | null;
-  lastValue: number | null;
+  kind: MetricKind;             // how the series should be charted
+  lastValue: number | null;     // latest raw value (cumulative for counters)
   pointCount: number;
+}
+
+// Downsampled time series for one (name, resource) metric within a window.
+// Non-histogram metrics fill `values` (rate/s for counters, raw otherwise);
+// histograms fill `p50`/`p90`/`p99`. All y-arrays align with `timestampsMs`.
+export interface MetricSeriesResponse {
+  name: string;
+  resourceName: string | null;
+  unit: string | null;
+  kind: MetricKind;
+  timestampsMs: number[];
+  values?: number[];
+  p50?: number[];
+  p90?: number[];
+  p99?: number[];
 }
 export interface TelemetrySummary {
   logCount: number;
@@ -161,7 +180,7 @@ export interface TelemetrySummary {
   metricCount: number;
   recentLogs: LogRecordSummary[];   // newest first, capped (e.g. 200)
   recentSpans: SpanSummary[];       // newest first, capped
-  metrics: MetricSummary[];
+  metrics: MetricSummary[];         // one row per (name, resource) series
 }
 
 // --- Canvas ---

@@ -19,8 +19,13 @@ import type {
   InteractionInfo,
   Resource,
   ResourcesEvent,
+  MetricSeriesResponse,
+  MetricSeriesQuery,
   TelemetrySummary,
 } from "./types";
+
+// (MetricSeriesQuery re-exported from types for callers that import from deck.)
+export type { MetricSeriesQuery } from "./types";
 
 type Unsubscribe = () => void;
 
@@ -115,6 +120,20 @@ export function getTelemetrySummary(): Promise<TelemetrySummary> {
     return invoke<TelemetrySummary>("deck_get_telemetry_summary");
   }
   return Promise.resolve(mockBackend.getTelemetrySummary());
+}
+
+// Fetches the downsampled time series for a metric within a window. Returns null
+// when the metric has no data yet.
+export function getMetricSeries(query: MetricSeriesQuery): Promise<MetricSeriesResponse | null> {
+  if (isTauri()) {
+    return invoke<MetricSeriesResponse | null>("deck_get_metric_series", {
+      name: query.name,
+      resourceName: query.resourceName ?? null,
+      windowSeconds: query.windowSeconds ?? null,
+      maxPoints: query.maxPoints ?? null,
+    });
+  }
+  return Promise.resolve(mockBackend.getMetricSeries(query));
 }
 
 export function executeCommand(args: ExecuteCommandArgs): Promise<CommandResponse> {

@@ -12,7 +12,7 @@ use tauri::{AppHandle, State};
 use crate::canvas::CanvasManifest;
 use crate::config::DeckConfigView;
 use crate::model::{AppHostInfo, CommandResponse, Resource};
-use crate::otlp::TelemetrySummary;
+use crate::otlp::{MetricSeriesResponse, TelemetrySummary};
 use crate::resource_client;
 use crate::state::AppState;
 
@@ -54,6 +54,27 @@ pub fn deck_list_canvases(state: State<'_, Arc<AppState>>) -> Vec<CanvasManifest
 #[tauri::command]
 pub fn deck_get_telemetry_summary(state: State<'_, Arc<AppState>>) -> TelemetrySummary {
     state.otlp.store.lock().unwrap().summary()
+}
+
+/// Returns the downsampled time series for a metric within the requested window.
+/// `resourceName` disambiguates when several resources emit the same metric name;
+/// when omitted, the first matching series is returned.
+#[tauri::command]
+pub fn deck_get_metric_series(
+    state: State<'_, Arc<AppState>>,
+    name: String,
+    resource_name: Option<String>,
+    window_seconds: Option<u64>,
+    max_points: Option<usize>,
+) -> Option<MetricSeriesResponse> {
+    let window_ms = window_seconds.unwrap_or(300) as i64 * 1000;
+    let max_points = max_points.unwrap_or(400).clamp(2, 4000);
+    state
+        .otlp
+        .store
+        .lock()
+        .unwrap()
+        .query_metric(&name, resource_name.as_deref(), window_ms, max_points)
 }
 
 #[tauri::command]

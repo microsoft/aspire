@@ -13,7 +13,10 @@ import type {
   InteractionInfo,
   InteractionInputInfo,
   LogRecordSummary,
+  MetricKind,
   MetricSummary,
+  MetricSeriesResponse,
+  MetricSeriesQuery,
   Resource,
   ResourcesEvent,
   SpanSummary,
@@ -264,13 +267,14 @@ const mockApphosts: AppHostInfo[] = [
   { id: "demo-2", name: "OrdersService", state: "connected", active: false },
 ];
 
-const metricDefs: Array<{ name: string; unit: string | null; resource: string; base: number; jitter: number }> = [
-  { name: "http.server.request.duration", unit: "ms", resource: "frontend", base: 42, jitter: 18 },
-  { name: "http.server.active_requests", unit: "{request}", resource: "frontend", base: 7, jitter: 6 },
-  { name: "http.client.request.duration", unit: "ms", resource: "apiservice", base: 28, jitter: 12 },
-  { name: "db.client.connections.usage", unit: "{connection}", resource: "postgres", base: 14, jitter: 4 },
-  { name: "process.runtime.dotnet.gc.heap.size", unit: "By", resource: "apiservice", base: 33_554_432, jitter: 4_194_304 },
-  { name: "cache.hit_ratio", unit: "1", resource: "cache", base: 0.92, jitter: 0.06 },
+const metricDefs: Array<{ name: string; unit: string | null; resource: string; base: number; jitter: number; kind: MetricKind }> = [
+  { name: "http.server.request.duration", unit: "ms", resource: "frontend", base: 42, jitter: 18, kind: "histogram" },
+  { name: "http.server.active_requests", unit: "{request}", resource: "frontend", base: 7, jitter: 6, kind: "upDownCounter" },
+  { name: "http.server.requests", unit: "{request}", resource: "frontend", base: 0, jitter: 0, kind: "counter" },
+  { name: "http.client.request.duration", unit: "ms", resource: "apiservice", base: 28, jitter: 12, kind: "histogram" },
+  { name: "db.client.connections.usage", unit: "{connection}", resource: "postgres", base: 14, jitter: 4, kind: "upDownCounter" },
+  { name: "process.runtime.dotnet.gc.heap.size", unit: "By", resource: "apiservice", base: 33_554_432, jitter: 4_194_304, kind: "gauge" },
+  { name: "cache.hit_ratio", unit: "1", resource: "cache", base: 0.92, jitter: 0.06, kind: "gauge" },
 ];
 
 const logBodies = [
@@ -307,10 +311,16 @@ class MockBackend {
       name: m.name,
       unit: m.unit,
       resourceName: m.resource,
+      kind: m.kind,
       lastValue: m.base,
       pointCount: 1,
     })),
   };
+
+  // Per-metric timestamped history so the Metrics chart has a real time series.
+  // Each entry holds the raw value samples; for histograms we also keep synthetic
+  // p50/p90/p99 so the percentile chart has something to draw.
+  private metricHistory = new Map<string, { t: number[]; v: number[]; p50: number[]; p90: number[]; p99: number[]; counter: number }>();
 
   private resourceSubs = new Set<(e: ResourcesEvent) => void>();
   private connectionSubs = new Set<(s: ConnectionStatus) => void>();
@@ -376,6 +386,46 @@ class MockBackend {
 
   getTelemetrySummary(): TelemetrySummary {
     return structuredClone(this.telemetry);
+  }
+
+  getMetricSeries(query: MetricSeriesQuery): MetricSeriesResponse | null {
+    const def = metricDefs.find((m) => m.name === query.name);
+    const hist = this.metricHistory.get(query.name);
+    if (!def || !hist || hist.t.length === 0) {
+      return null;
+    }
+    const windowMs = (query.windowSeconds ?? 300) * 1000;
+    const cutoff = hist.t[hist.t.length - 1]! - windowMs;
+    const idx = hist.t.findIndex((t) => t >= cutoff);
+    const start = idx < 0 ? 0 : idx;
+
+    const ts = hist.t.slice(start);
+    const base: MetricSeriesResponse = {
+      name: def.name,
+      resourceName: def.resource,
+      unit: def.unit,
+      kind: def.kind,
+      timestampsMs: ts,
+    };
+
+    if (def.kind === "histogram") {
+      return { ...base, p50: hist.p50.slice(start), p90: hist.p90.slice(start), p99: hist.p99.slice(start) };
+    }
+    if (def.kind === "counter") {
+      // Convert the cumulative samples to a per-second rate between points.
+      const rateT: number[] = [];
+      const rateV: number[] = [];
+      for (let i = start + 1; i < hist.t.length; i++) {
+        const dt = (hist.t[i]! - hist.t[i - 1]!) / 1000;
+        if (dt <= 0) {
+          continue;
+        }
+        rateT.push(hist.t[i]!);
+        rateV.push(Math.max(0, (hist.v[i]! - hist.v[i - 1]!) / dt));
+      }
+      return { ...base, timestampsMs: rateT, values: rateV };
+    }
+    return { ...base, values: hist.v.slice(start) };
   }
 
   executeCommand(args: ExecuteCommandArgs): CommandResponse {
@@ -659,17 +709,44 @@ class MockBackend {
     this.telemetry.recentSpans = [...newSpans, ...this.telemetry.recentSpans].slice(0, 200);
     this.telemetry.spanCount += newSpans.length;
 
-    // Advance each metric's last value with bounded jitter.
+    // Advance each metric's last value with bounded jitter, and append a
+    // timestamped sample to its history so the chart shows a real time series.
+    const now = Date.now();
     this.telemetry.metrics = this.telemetry.metrics.map((metric, i) => {
       const def = metricDefs[i]!;
       const prev = metric.lastValue ?? def.base;
-      let next = prev + (Math.random() - 0.5) * def.jitter;
-      // Keep ratios within [0, 1].
-      if (def.unit === "1") {
-        next = Math.max(0, Math.min(1, next));
+      let next: number;
+      if (def.kind === "counter") {
+        // Monotonic cumulative counter: grows by a random per-tick increment.
+        next = prev + Math.floor(Math.random() * 12);
       } else {
-        next = Math.max(0, next);
+        next = prev + (Math.random() - 0.5) * def.jitter;
+        if (def.unit === "1") {
+          next = Math.max(0, Math.min(1, next)); // ratios within [0, 1]
+        } else {
+          next = Math.max(0, next);
+        }
       }
+
+      const hist = this.metricHistory.get(metric.name) ?? { t: [], v: [], p50: [], p90: [], p99: [], counter: 0 };
+      hist.t.push(now);
+      hist.v.push(next);
+      if (def.kind === "histogram") {
+        // Synthesize plausible latency percentiles around the base value.
+        const p50 = next;
+        hist.p50.push(p50);
+        hist.p90.push(p50 * (1.6 + Math.random() * 0.3));
+        hist.p99.push(p50 * (2.4 + Math.random() * 0.6));
+      }
+      // Bound history.
+      const CAP = 4000;
+      for (const arr of [hist.t, hist.v, hist.p50, hist.p90, hist.p99]) {
+        if (arr.length > CAP) {
+          arr.splice(0, arr.length - CAP);
+        }
+      }
+      this.metricHistory.set(metric.name, hist);
+
       return { ...metric, lastValue: next, pointCount: metric.pointCount + 1 };
     });
 
