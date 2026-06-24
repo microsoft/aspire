@@ -947,13 +947,18 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
     {
         var logger = loggerCache.GetOrAdd(logMessage.Category, static (string category, ILoggerFactory loggerFactory) =>
         {
-            // Looks strange to see Aspire.Hosting.Dashboard.Aspire.Dashboard.Category,
-            // so trim the prefix and append Aspire.Hosting.Why is this important?
-            // Well there are logs emitting from categories that don't start with Aspire.Dashboard so we want to prefix all logs so that they can be controlled by config.
-            var categoryTrimmed = category.StartsWith("Aspire.Dashboard.") ?
-                category["Aspire.Dashboard.".Length..] : category;
+            // Dashboard logs arrive with their original category. Aspire's own categories start with
+            // "Aspire.Dashboard." — trim that prefix so the resulting logger category reads naturally
+            // (e.g. Aspire.Hosting.Dashboard.Model.IconResolver). Third-party categories (e.g.
+            // Microsoft.AspNetCore.Server.Kestrel) get a "ThirdParty" segment so they can be filtered
+            // with a single rule on "Aspire.Hosting.Dashboard.ThirdParty".
+            if (category.StartsWith("Aspire.Dashboard.", StringComparison.Ordinal))
+            {
+                var categoryTrimmed = category["Aspire.Dashboard.".Length..];
+                return loggerFactory.CreateLogger($"Aspire.Hosting.Dashboard.{categoryTrimmed}");
+            }
 
-            return loggerFactory.CreateLogger($"Aspire.Hosting.Dashboard.{categoryTrimmed}");
+            return loggerFactory.CreateLogger($"Aspire.Hosting.Dashboard.ThirdParty.{category}");
         },
         loggerFactory);
 

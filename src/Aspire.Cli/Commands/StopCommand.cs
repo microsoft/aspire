@@ -6,7 +6,6 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -23,7 +22,7 @@ internal sealed class StopCommand : BaseCommand
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<StopCommand> _logger;
     private readonly ICliHostEnvironment _hostEnvironment;
-    private readonly ProcessShutdownService _processShutdownService;
+    private readonly ProcessTreeGracefulShutdownService _processShutdownService;
     private readonly ProfilingTelemetry _profilingTelemetry;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", StopCommandStrings.ProjectArgumentDescription);
@@ -34,17 +33,15 @@ internal sealed class StopCommand : BaseCommand
     };
 
     public StopCommand(
-        IInteractionService interactionService,
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IProjectLocator projectLocator,
+        AppHostConnectionResolver connectionResolver,
         ICliHostEnvironment hostEnvironment,
-        ProcessShutdownService processShutdownService,
+        ProcessTreeGracefulShutdownService processShutdownService,
         ILogger<StopCommand> logger,
         ProfilingTelemetry profilingTelemetry,
         CommonCommandServices services)
         : base("stop", StopCommandStrings.Description, services)
     {
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger, profilingTelemetry);
+        _connectionResolver = connectionResolver;
         _hostEnvironment = hostEnvironment;
         _processShutdownService = processShutdownService;
         _logger = logger;
@@ -209,6 +206,12 @@ internal sealed class StopCommand : BaseCommand
 
         if (stopped)
         {
+            // ProcessShutdownService only reports success once it has confirmed the AppHost process has
+            // terminated, so the socket's owner is gone and the file is safe to remove by exact path. Doing
+            // it here is the primary guard against a stale socket tripping up later commands: the AppHost's own
+            // cleanup is skipped if it crashes hard, and the orphan-pruning backstop misfires on Windows when the
+            // dead PID is reused (https://github.com/microsoft/aspire/issues/17587).
+            AppHostHelper.TryDeleteSocketFile(connection.SocketPath, _logger);
             InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier));
             return CompleteStopActivity(activity, CliExitCodes.Success);
         }

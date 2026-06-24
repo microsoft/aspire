@@ -6,6 +6,8 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -23,15 +25,18 @@ internal sealed class RunningInstanceManager
     private readonly ILogger _logger;
     private readonly IInteractionService _interactionService;
     private readonly TimeProvider _timeProvider;
+    private readonly ProfilingTelemetry _profilingTelemetry;
 
     public RunningInstanceManager(
         ILogger logger,
         IInteractionService interactionService,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ProfilingTelemetry profilingTelemetry)
     {
         _logger = logger;
         _interactionService = interactionService;
         _timeProvider = timeProvider;
+        _profilingTelemetry = profilingTelemetry;
     }
 
     /// <summary>
@@ -45,7 +50,7 @@ internal sealed class RunningInstanceManager
         try
         {
             // Connect to the auxiliary backchannel
-            using var backchannel = await AppHostAuxiliaryBackchannel.ConnectAsync(socketPath, _logger, cancellationToken).ConfigureAwait(false);
+            using var backchannel = await AppHostAuxiliaryBackchannel.ConnectAsync(socketPath, _logger, _profilingTelemetry, cancellationToken).ConfigureAwait(false);
 
             // Get the AppHost information
             var appHostInfo = backchannel.AppHostInfo;
@@ -65,6 +70,9 @@ internal sealed class RunningInstanceManager
             if (stopped)
             {
                 _interactionService.DisplaySuccess(RunCommandStrings.RunningInstanceStopped);
+                // Clean up the socket file now that the instance has been stopped so a later command does not
+                // rediscover it and try to connect to a dead process (https://github.com/microsoft/aspire/issues/17587).
+                AppHostHelper.TryDeleteSocketFile(socketPath, _logger);
             }
             else
             {

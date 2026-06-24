@@ -33,7 +33,7 @@ internal sealed class AppHostLauncher(
     AspireCliTelemetry telemetry,
     ProfilingTelemetry profilingTelemetry,
     FileLoggerProvider fileLoggerProvider,
-    ProcessShutdownService processShutdownService,
+    ProcessTreeGracefulShutdownService processShutdownService,
     IDetachedProcessLauncher detachedProcessLauncher,
     ILogger<AppHostLauncher> logger,
     TimeProvider timeProvider)
@@ -202,7 +202,7 @@ internal sealed class AppHostLauncher(
         {
             // Reuse the shared "RPC stop + wait for termination" flow so capture mode follows the
             // same teardown path as socket-discovered running-instance stops.
-            var manager = new RunningInstanceManager(logger, interactionService, timeProvider);
+            var manager = new RunningInstanceManager(logger, interactionService, timeProvider, profilingTelemetry);
             await manager.StopAndMonitorAsync(result.Backchannel, cancellationToken).ConfigureAwait(false);
         }
 
@@ -238,7 +238,7 @@ internal sealed class AppHostLauncher(
         if (existingSockets.Length > 0)
         {
             logger.LogDebug("Found {Count} running instance(s) for this AppHost, stopping them first.", existingSockets.Length);
-            var manager = new RunningInstanceManager(logger, interactionService, timeProvider);
+            var manager = new RunningInstanceManager(logger, interactionService, timeProvider, profilingTelemetry);
             var stopTasks = existingSockets.Select(socket =>
                 manager.StopRunningInstanceAsync(socket, cancellationToken));
             await Task.WhenAll(stopTasks).ConfigureAwait(false);

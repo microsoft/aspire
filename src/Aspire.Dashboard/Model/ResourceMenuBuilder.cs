@@ -333,13 +333,11 @@ public sealed class ResourceMenuBuilder
 
         MenuButtonItem CreateMenuItem(CommandViewModel command)
         {
-            var icon = (!string.IsNullOrEmpty(command.IconName) && _iconResolver.ResolveIconName(command.IconName, IconSize.Size16, command.IconVariant) is { } i) ? i : null;
-
             return new MenuButtonItem
             {
                 Text = command.GetDisplayName(),
                 Tooltip = command.GetDisplayDescription(),
-                Icon = icon,
+                Icon = _iconResolver.ResolveCommandIcon(command.IconName, command.IconVariant),
                 OnClick = () => commandSelected.InvokeAsync(command),
                 IsDisabled = command.State == CommandViewModelState.Disabled || isCommandExecuting(resource, command)
             };

@@ -41,7 +41,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         uses: ./.github/actions/check-changed-files
         with:
-          patterns_file: eng/testing/github-ci-trigger-patterns.txt
+          patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
 
       - id: compute_version_suffix
         name: Compute version suffix for PRs
@@ -70,6 +70,14 @@ jobs:
     uses: ./.github/workflows/tests.yml
     name: Tests
     needs: [prepare_for_ci]
+    # issues:write + pull-requests:write are used only by tests.yml's isolated comment_selection job
+    # (which runs no PR code) to post the "selected tests" issue comment; every job that runs PR code
+    # stays at contents:read. Reusable-workflow tokens are capped by the caller, so this is where the
+    # elevated scope must be granted.
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
     if: ${{ github.repository_owner == 'microsoft' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
     with:
       versionOverrideArg: ${{ needs.prepare_for_ci.outputs.VERSION_SUFFIX_OVERRIDE }}

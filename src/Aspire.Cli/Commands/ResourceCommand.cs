@@ -10,6 +10,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
@@ -76,13 +77,14 @@ internal sealed class ResourceCommand : BaseCommand
     public ResourceCommand(
         IAuxiliaryBackchannelMonitor backchannelMonitor,
         IProjectLocator projectLocator,
+        AppHostConnectionResolver connectionResolver,
         ILogger<ResourceCommand> logger,
         CommonCommandServices services)
         : base("resource", ResourceCommandStrings.CommandDescription, services)
     {
         _backchannelMonitor = backchannelMonitor;
         _projectLocator = projectLocator;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, services.HostEnvironment, logger);
+        _connectionResolver = connectionResolver;
         _logger = logger;
 
         Arguments.Add(s_resourceArgument);
@@ -112,6 +114,12 @@ internal sealed class ResourceCommand : BaseCommand
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
+        // Route human-readable status messages to stderr so that structured command output
+        // (e.g., JSON) on stdout remains valid and pipeable (e.g., | jq).
+        // Always route to stderr unconditionally because we cannot know ahead of time whether
+        // the resource command will produce structured output.
+        InteractionService.Console = ConsoleOutput.Error;
+
         var resourceName = parseResult.GetValue(s_resourceArgument)!;
         var commandName = parseResult.GetValue(s_commandArgument)!;
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);

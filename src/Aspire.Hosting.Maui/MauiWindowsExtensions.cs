@@ -18,7 +18,7 @@ public static class MauiWindowsExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// This method creates a new Windows platform resource that will run the MAUI application
-    /// targeting the Windows platform using <c>dotnet run</c>. The resource does not auto-start 
+    /// targeting the Windows platform using <c>dotnet run</c>. The resource does not auto-start
     /// and must be explicitly started from the dashboard by clicking the start button.
     /// <para>
     /// The resource name will default to "{projectName}-windows".
@@ -31,10 +31,10 @@ public static class MauiWindowsExtensions
     /// Add a Windows device to a MAUI project:
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// 
+    ///
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
     /// var windowsDevice = maui.AddWindowsDevice();
-    /// 
+    ///
     /// builder.Build().Run();
     /// </code>
     /// </example>
@@ -57,7 +57,7 @@ public static class MauiWindowsExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a new Windows platform resource that will run the MAUI application
-    /// targeting the Windows platform using <c>dotnet run</c>. The resource does not auto-start 
+    /// targeting the Windows platform using <c>dotnet run</c>. The resource does not auto-start
     /// and must be explicitly started from the dashboard by clicking the start button.
     /// <para>
     /// You can add multiple Windows device resources to a MAUI project by calling this method multiple times with different names.
@@ -67,11 +67,11 @@ public static class MauiWindowsExtensions
     /// Add multiple Windows devices to a MAUI project:
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
-    /// 
+    ///
     /// var maui = builder.AddMauiProject("mauiapp", "../MyMauiApp/MyMauiApp.csproj");
     /// var windowsDevice1 = maui.AddWindowsDevice("windows-device-1");
     /// var windowsDevice2 = maui.AddWindowsDevice("windows-device-2");
-    /// 
+    ///
     /// builder.Build().Run();
     /// </code>
     /// </example>
@@ -97,7 +97,7 @@ public static class MauiWindowsExtensions
             });
 
         // Configure the platform resource with common settings
-        MauiPlatformHelper.ConfigurePlatformResource(
+        var targetFramework = MauiPlatformHelper.ConfigurePlatformResource(
             resourceBuilder,
             projectPath,
             "windows",
@@ -105,6 +105,12 @@ public static class MauiWindowsExtensions
             "net10.0-windows10.0.19041.0",
             OperatingSystem.IsWindows,
             "Desktop");
+
+        resourceBuilder.WithMauiIdeLaunchConfiguration(
+            projectPath,
+            targetFramework,
+            "windows",
+            "device");
 
         return resourceBuilder;
     }

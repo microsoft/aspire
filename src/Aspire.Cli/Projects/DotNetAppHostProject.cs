@@ -10,6 +10,7 @@ using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -42,6 +43,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly Program.CliLoggingOptions _loggingOptions;
     private readonly IAppHostInfoResolver _appHostInfoResolver;
     private readonly IConfigurationService _configurationService;
+    private readonly IGracefulShutdownWindow _shutdownService;
+    private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
     private readonly CliExecutionContext _executionContext;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
@@ -72,8 +75,10 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         Program.CliLoggingOptions loggingOptions,
         IAppHostInfoResolver appHostInfoResolver,
         IConfigurationService configurationService,
+        IGracefulShutdownWindow shutdownService,
+        IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
         CliExecutionContext executionContext,
-        TimeProvider? timeProvider = null)
+        TimeProvider timeProvider)
     {
         _runner = runner;
         _interactionService = interactionService;
@@ -89,9 +94,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _loggingOptions = loggingOptions;
         _appHostInfoResolver = appHostInfoResolver;
         _configurationService = configurationService;
+        _shutdownService = shutdownService;
+        _gracefulShutdownSignaler = gracefulShutdownSignaler;
         _executionContext = executionContext;
-        _timeProvider = timeProvider ?? TimeProvider.System;
-        _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
+        _timeProvider = timeProvider;
+        _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider, _profilingTelemetry);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -205,6 +212,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         // The resolver owns the cache/MSBuild fallback so validation and later run/publish
         // decisions share a single source of truth for AppHost project metadata.
+        using var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
         var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
 
         if (information.ExitCode == 0 && information.IsAspireHost)
@@ -226,6 +234,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Use the same MSBuild-based inspection as validation so version resolution
         // follows the project model that run/publish already rely on, including
         // SDK-style projects, package references, and Central Package Management.
+        using var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
         var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
         return information.ExitCode == 0 && information.IsAspireHost
             ? information.AspireHostingVersion
@@ -293,6 +302,10 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         await EnsureDevCertificatesTrustedAsync(context, env, cancellationToken);
 
+        var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
+        using var cliBundleLeaseScope = cliBundleLease;
+        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false);
+
         var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
         var preparationExitCode = await PrepareAppHostAsync(
             context,
@@ -317,8 +330,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         var canQueryCliBundleProperty = !isSingleFileAppHost || !context.NoBuild;
         var injectDcpAndDashboard = canQueryCliBundleProperty
             && await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken);
-        var cliBundleLease = await ConfigureCliBundleEnvironmentAsync(env, injectDcpAndDashboard, cancellationToken);
-        using var cliBundleLeaseScope = cliBundleLease;
+        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard);
 
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
         // Store the collector first so failures that occur immediately after preparation are not lost
@@ -335,7 +347,16 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             StandardOutputCallback = runOutputCollector.AppendOutput,
             StandardErrorCallback = runOutputCollector.AppendError,
             StartDebugSession = context.StartDebugSession,
-            Debug = context.Debug
+            Debug = context.Debug,
+            KillEntireProcessTreeOnCancel = ShouldKillEntireProcessTreeOnCancel(OperatingSystem.IsWindows()),
+            // Run path opts into the shared shutdown ladder so pure .NET AppHosts get the
+            // same graceful-then-tree-kill semantics as TypeScript AppHosts (which already
+            // route through AppHostServerSession/ProcessGuestLauncher). Build, restore,
+            // package add, layout, and other short-lived invocations leave these unset so
+            // they continue to use the shared ladder's force-kill mode.
+            IsolateConsole = true,
+            GracefulShutdownSignaler = _gracefulShutdownSignaler,
+            ShutdownService = _shutdownService,
         };
 
         // The backchannel completion source is the contract with RunCommand
@@ -399,6 +420,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             }
         }
     }
+
+    internal static bool ShouldKillEntireProcessTreeOnCancel(bool isWindows) => !isWindows;
 
     private async Task EnsureDevCertificatesTrustedAsync(AppHostProjectContext context, Dictionary<string, string> env, CancellationToken cancellationToken)
     {
@@ -1069,6 +1092,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         var effectiveAppHostFile = context.AppHostFile;
         var isSingleFileAppHost = !IsProjectFile(effectiveAppHostFile) && IsValidSingleFileAppHost(effectiveAppHostFile);
         var env = new Dictionary<string, string>(context.EnvironmentVariables);
+        var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
+        using var cliBundleLeaseScope = cliBundleLease;
+        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false);
 
         // Check compatibility for project-based apphosts
         if (!isSingleFileAppHost)
@@ -1097,7 +1123,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // the AppHost did not opt into AspireUseCliBundle, but DCP/Dashboard env vars are
         // not (they would clobber per-RID NuGet metadata).
         var injectDcpAndDashboardForPublish = await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken);
-        using var cliBundleLease = await ConfigureCliBundleEnvironmentAsync(env, injectDcpAndDashboardForPublish, cancellationToken);
+        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboardForPublish);
 
         // Build the apphost (unless --no-build is specified)
         if (!isSingleFileAppHost && !context.NoBuild)
@@ -1266,17 +1292,17 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         return info.IsUsingCliBundle;
     }
 
-    private async Task<BundleLayoutLease?> ConfigureCliBundleEnvironmentAsync(
+    private Task<BundleLayoutLease?> AcquireCliBundleLayoutAsync(CancellationToken cancellationToken)
+        => _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dotnet-apphost", cancellationToken);
+
+    private void ConfigureCliBundleEnvironment(
         Dictionary<string, string> env,
-        bool injectDcpAndDashboard,
-        CancellationToken cancellationToken)
+        BundleLayoutLease? layoutLease,
+        bool injectDcpAndDashboard)
     {
-        var layoutLease = await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dotnet-apphost", cancellationToken);
         var layout = layoutLease?.Layout;
         if (layout is null)
         {
-            layoutLease?.Dispose();
-            layoutLease = null;
             // Only log when the AppHost actually opted into the bundle; for non-CliBundle
             // AppHosts a missing layout is expected (e.g. the CLI may not have a bundle on
             // disk) and would otherwise spam the debug log on every run.
@@ -1287,6 +1313,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             // Don't return yet — repo-mode runs (DEBUG, `dotnet run --project src/Aspire.Cli`)
             // can still inject the terminal host path from the just-built artifact even when
             // no bundle layout exists at all (e.g. clean dev machine with no `aspire` install).
+        }
+
+        if (!env.ContainsKey("AspireCliBundlePath") && !string.IsNullOrEmpty(layout?.LayoutPath))
+        {
+            env["AspireCliBundlePath"] = layout.LayoutPath;
         }
 
         if (injectDcpAndDashboard && layout is not null)
@@ -1336,7 +1367,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
 
         layoutLease?.AddEnvironment(env);
-        return layoutLease;
     }
 
     /// <summary>

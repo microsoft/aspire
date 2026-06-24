@@ -40,6 +40,16 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         GC.SuppressFinalize(this);
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void ShouldKillEntireProcessTreeOnCancel_KillsOnlyTargetProcessOnWindows(bool isWindows, bool expected)
+    {
+        var result = DotNetAppHostProject.ShouldKillEntireProcessTreeOnCancel(isWindows);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public void ConfigureSingleFileRunEnvironment_DefaultsToDevelopmentForRun()
     {
@@ -274,6 +284,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(watch);
             Assert.True(noBuild);
             Assert.False(noRestore);
+            Assert.Equal(bundleRoot.FullName, env!["AspireCliBundlePath"]);
             Assert.Equal(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName), env![BundleDiscovery.DcpPathEnvVar]);
             Assert.Equal(
                 Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),

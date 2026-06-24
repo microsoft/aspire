@@ -22,7 +22,7 @@ internal sealed class ProviderConfiguration(string providerType, string? service
         var resourceType = resourceBuilder.Resource.GetType().Name;
 
         // Use a simple transformation to get the provider type: remove the "Resource" suffix if it exists.
-        var providerType = resourceType.EndsWith(resource) ? resourceType[..^resource.Length] : resourceType;
+        var providerType = resourceType.EndsWith(resource, StringComparison.Ordinal) ? resourceType[..^resource.Length] : resourceType;
 
         return new(providerType, serviceKey, resourceBuilder);
     }

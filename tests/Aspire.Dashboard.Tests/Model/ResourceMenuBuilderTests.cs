@@ -298,6 +298,90 @@ public sealed class ResourceMenuBuilderTests
             e => Assert.Equal("Stop", e.Text));
     }
 
+    [Fact]
+    public void AddMenuItems_UnresolvableIconName_UsesFallbackIcon()
+    {
+        // A command with an icon name that doesn't map to any FluentUI icon should
+        // get a QuestionCircle fallback instead of null, preventing the overflow issue in #18385.
+        var command = new CommandViewModel(
+            "test-command",
+            CommandViewModelState.Enabled,
+            "Test Command",
+            "A command with a bad icon name.",
+            confirmationMessage: "",
+            argumentInputs: [],
+            isHighlighted: false,
+            iconName: "NotARealIconName",
+            iconVariant: IconVariant.Regular);
+        var resource = ModelTestHelpers.CreateResource(commands: [command]);
+        var repository = TelemetryTestHelpers.CreateRepository();
+        var aiContextProvider = new TestAIContextProvider();
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+
+        var menuItems = new List<MenuButtonItem>();
+        resourceMenuBuilder.AddMenuItems(
+            menuItems,
+            resource,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
+            EventCallback.Empty,
+            EventCallback<CommandViewModel>.Empty,
+            (_, _) => false,
+            showViewDetails: false,
+            showConsoleLogsItem: false,
+            showUrls: false);
+
+        Assert.Collection(menuItems,
+            e => Assert.Equal("Localized:ViewJson", e.Text),
+            e => Assert.True(e.IsDivider),
+            e =>
+            {
+                Assert.Equal("Test Command", e.Text);
+                Assert.IsType<Microsoft.FluentUI.AspNetCore.Components.Icons.Regular.Size16.QuestionCircle>(e.Icon);
+            });
+    }
+
+    [Fact]
+    public void AddMenuItems_NoIconName_IconIsNull()
+    {
+        // A command with no icon name should have a null icon in the menu
+        // (menu items have text labels so no fallback icon is needed).
+        var command = new CommandViewModel(
+            "test-command",
+            CommandViewModelState.Enabled,
+            "Test Command",
+            "A command with no icon.",
+            confirmationMessage: "",
+            argumentInputs: [],
+            isHighlighted: false,
+            iconName: string.Empty,
+            iconVariant: IconVariant.Regular);
+        var resource = ModelTestHelpers.CreateResource(commands: [command]);
+        var repository = TelemetryTestHelpers.CreateRepository();
+        var aiContextProvider = new TestAIContextProvider();
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+
+        var menuItems = new List<MenuButtonItem>();
+        resourceMenuBuilder.AddMenuItems(
+            menuItems,
+            resource,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
+            EventCallback.Empty,
+            EventCallback<CommandViewModel>.Empty,
+            (_, _) => false,
+            showViewDetails: false,
+            showConsoleLogsItem: false,
+            showUrls: false);
+
+        Assert.Collection(menuItems,
+            e => Assert.Equal("Localized:ViewJson", e.Text),
+            e => Assert.True(e.IsDivider),
+            e =>
+            {
+                Assert.Equal("Test Command", e.Text);
+                Assert.Null(e.Icon);
+            });
+    }
+
     private sealed class TestNavigationManager : NavigationManager
     {
     }
