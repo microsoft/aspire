@@ -131,6 +131,15 @@ export const SearchIcon = (p: IconProps) =>
 
 export const PlayIcon = (p: IconProps) => svg(<path d="m6 4 14 8-14 8z" />, p);
 
+export const PauseIcon = (p: IconProps) =>
+  svg(
+    <>
+      <line x1="8" y1="5" x2="8" y2="19" />
+      <line x1="16" y1="5" x2="16" y2="19" />
+    </>,
+    p,
+  );
+
 export const StopIcon = (p: IconProps) =>
   svg(<rect x="5" y="5" width="14" height="14" rx="2" />, p);
 

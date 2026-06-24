@@ -5,7 +5,7 @@ import { getMetricSeries } from "../api/deck";
 import { formatMetricValue, displayUnit } from "../lib/format";
 import { MetricChart, type ChartLine } from "../components/MetricChart";
 import { EmptyState } from "../components/EmptyState";
-import { MetricsIcon } from "../components/Icons";
+import { MetricsIcon, PauseIcon, PlayIcon } from "../components/Icons";
 
 const TIME_RANGES: { label: string; seconds: number }[] = [
   { label: "1m", seconds: 60 },
@@ -178,13 +178,15 @@ export function MetricsPage() {
                       onClick={() => setPaused((p) => !p)}
                       title={paused ? "Resume live updates" : "Pause live updates"}
                     >
-                      {paused ? "▶ Resume" : "⏸ Pause"}
+                      {paused ? <PlayIcon size={13} /> : <PauseIcon size={13} />}
+                      {paused ? "Resume" : "Pause"}
                     </button>
-                    <div className="seg">
+                    <div className="seg" role="group" aria-label="Time range">
                       {TIME_RANGES.map((r) => (
                         <button
                           key={r.seconds}
                           className={`seg__btn ${r.seconds === windowSeconds ? "active" : ""}`}
+                          aria-pressed={r.seconds === windowSeconds}
                           onClick={() => setWindowSeconds(r.seconds)}
                         >
                           {r.label}

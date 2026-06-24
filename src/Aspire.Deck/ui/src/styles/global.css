@@ -48,6 +48,26 @@ select {
   color: var(--text);
 }
 
+/* Keyboard focus ring. A single accent outline applied only for keyboard
+   navigation (:focus-visible) so mouse users don't see rings, while every
+   interactive control stays reachable and visible via the keyboard. */
+.nav-item:focus-visible,
+.icon-btn:focus-visible,
+.btn:focus-visible,
+.canvas-card:focus-visible,
+.apphost-switcher__button:focus-visible,
+.url-chip:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 2px;
+}
+/* Full-bleed list rows read cleaner with an inset ring than an outset one
+   that would overlap the row's own border and its neighbours. */
+.metric-item:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: -2px;
+}
+
 ::selection {
   background: var(--accent-soft);
 }
@@ -851,28 +871,36 @@ table.data tbody tr.selected {
   margin-top: 14px;
 }
 
-/* Metric chart toolbar: pause + time-range segmented control. */
+/* Metric chart toolbar: pause + time-range segmented control. Both controls
+   share an explicit height so they align cleanly on the same row. */
 .metric-toolbar {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
 }
+.metric-toolbar .btn--sm {
+  height: 30px;
+}
 .seg {
   display: inline-flex;
+  height: 30px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--bg-base);
 }
 .seg__btn {
-  padding: 5px 11px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 11px;
   font-size: 12px;
   font-weight: 500;
   color: var(--text-muted);
   background: transparent;
   border: none;
   border-right: 1px solid var(--border);
+  transition: background 0.14s ease, color 0.14s ease;
 }
 .seg__btn:last-child {
   border-right: none;
@@ -885,6 +913,10 @@ table.data tbody tr.selected {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 600;
+}
+.seg__btn:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: -2px;
 }
 
 /* ---------- Metric chart (uPlot) ---------- */

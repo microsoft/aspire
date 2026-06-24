@@ -25,7 +25,10 @@
 
   --text: #ececf1;
   --text-secondary: #a6a6b4;
-  --text-muted: #6f6f80;
+  /* Muted secondary text. Tuned to clear WCAG AA (>=4.5:1) on the surface,
+     surface-2 and elevated backgrounds it labels, while staying clearly below
+     --text-secondary in the hierarchy. */
+  --text-muted: #8a8a99;
   --text-inverted: #0d0d12;
 
   --success: #34d399;
@@ -94,7 +97,8 @@
 
   --text: #1a1a22;
   --text-secondary: #54545f;
-  --text-muted: #8a8a95;
+  /* Muted secondary text — AA-compliant on light surfaces (see dark note). */
+  --text-muted: #6b6b77;
   --text-inverted: #ffffff;
 
   --success: #059669;
