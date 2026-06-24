@@ -13,7 +13,7 @@ namespace Aspire.Cli.Tests.Projects;
 public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task GetAppHostInfoAsync_EvaluateMode_UsesDiskCacheWhenPresent()
+    public async Task GetAppHostInfoAsync_UsesDiskCacheWhenPresent()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = CreateProjectFile(workspace);
@@ -54,7 +54,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetAppHostInfoAsync_EvaluateMode_CachesSuccessfulMsBuildEvaluationInMemory()
+    public async Task GetAppHostInfoAsync_CachesSuccessfulMsBuildEvaluationInMemory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = CreateProjectFile(workspace);
@@ -78,7 +78,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetAppHostInfoAsync_EvaluateMode_DoesNotCacheFailedMsBuildEvaluationInMemory()
+    public async Task GetAppHostInfoAsync_DoesNotCacheFailedMsBuildEvaluationInMemory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = CreateProjectFile(workspace);
@@ -104,7 +104,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetAppHostInfoAsync_EvaluateMode_CoalescesConcurrentMsBuildEvaluationInMemory()
+    public async Task GetAppHostInfoAsync_CoalescesConcurrentMsBuildEvaluationInMemory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = CreateProjectFile(workspace);
@@ -135,7 +135,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetAppHostInfoAsync_EvaluateMode_CallerCancellationDoesNotCancelSharedEvaluation()
+    public async Task GetAppHostInfoAsync_CallerCancellationDoesNotCancelSharedEvaluation()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = CreateProjectFile(workspace);
@@ -169,7 +169,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetAppHostInfoAsync_EvaluateMode_RequestsComputeRunArgumentsTarget()
+    public async Task GetAppHostInfoAsync_RequestsComputeRunArgumentsTarget()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = CreateProjectFile(workspace);

@@ -2267,8 +2267,9 @@ builder.Build().Run();");
 
         var projectFactory = new TestAppHostProjectFactory
         {
-            ValidateAppHostCallback = projectFile => projectFile.FullName == buildableAppHost.FullName ? new AppHostValidationResult(IsValid: true) :
-                new AppHostValidationResult(IsValid: false, IsPossiblyUnbuildable: true)
+            ValidateAppHostCallback = projectFile => projectFile.FullName == buildableAppHost.FullName
+                ? new AppHostValidationResult(IsValid: true)
+                : new AppHostValidationResult(IsValid: false, IsPossiblyUnbuildable: true)
         };
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
