@@ -144,7 +144,7 @@ internal sealed class ProjectLocator(
     private static readonly string[] s_dotNetProjectExtensions = [".csproj", ".fsproj", ".vbproj"];
     private static readonly string[] s_dotNetAppHostProjectContentMarkers =
     [
-        "<IsAspireHost>",
+        "<IsAspireHost",
         "Aspire.AppHost.Sdk",
         "Aspire.Hosting"
     ];
