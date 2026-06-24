@@ -366,7 +366,6 @@ jobs:
           ./result/bin/aspire --version
 
   build_cli_e2e_image:
-    if: false  # [ignore][experiment] disabled for fast validation CI
     name: Build CLI E2E Docker image
     uses: ./.github/workflows/build-cli-e2e-image.yml
     needs: setup_for_tests
