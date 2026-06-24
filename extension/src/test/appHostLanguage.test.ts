@@ -152,6 +152,24 @@ suite('appHostLanguage.classifyAppHostDirectory', () => {
         assert.strictEqual(await classifyAppHostDirectory(dir), 'typescript');
     });
 
+    test('ignores non-AppHost C# projects when classifying a TypeScript AppHost directory', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'apphost.ts'), '');
+        writeFileSync(join(dir, 'Helper.csproj'), '<Project Sdk="Microsoft.NET.Sdk" />');
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'typescript');
+    });
+
+    test('classifies non-standard C# project names that reference Aspire Hosting as csharp', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'Orchestration.csproj'), `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.1" />
+  </ItemGroup>
+</Project>
+`);
+        assert.strictEqual(await classifyAppHostDirectory(dir), 'csharp');
+    });
+
     test('returns csharp when both csharp and typescript markers exist (deterministic fallback)', async () => {
         // Highly unusual but plausible during polyglot migration. The
         // classifier prefers csharp so the dimension stays deterministic

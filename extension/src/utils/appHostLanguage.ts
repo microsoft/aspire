@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
 import { CandidateAppHostDisplayInfo } from './appHostDiscovery';
 
 /**
@@ -132,7 +133,7 @@ export async function classifyAppHostDirectory(directoryPath: string | undefined
     let sawCsharp = false;
     let sawTypescript = false;
     for (const entry of entries) {
-        if (isCsharpAppHostMarker(entry)) {
+        if (await isCsharpAppHostMarker(directoryPath, entry)) {
             sawCsharp = true;
         }
         else if (isTypescriptAppHostMarker(entry)) {
@@ -154,9 +155,60 @@ export async function classifyAppHostDirectory(directoryPath: string | undefined
     return 'unknown';
 }
 
-function isCsharpAppHostMarker(entry: string): boolean {
+async function isCsharpAppHostMarker(directoryPath: string, entry: string): Promise<boolean> {
     const lower = entry.toLowerCase();
-    return lower === 'apphost.cs' || lower.endsWith('.csproj') || lower.endsWith('.fsproj') || lower.endsWith('.vbproj');
+    if (lower === 'apphost.cs') {
+        return true;
+    }
+
+    if (!lower.endsWith('.csproj') && !lower.endsWith('.fsproj') && !lower.endsWith('.vbproj')) {
+        return false;
+    }
+
+    if (projectFileNameLooksLikeAppHost(lower)) {
+        return true;
+    }
+
+    return await projectFileReferencesAspireAppHost(directoryPath, entry);
+}
+
+function projectFileNameLooksLikeAppHost(fileName: string): boolean {
+    const nameWithoutExtension = fileName.replace(/\.[^.]+$/, '');
+    return nameWithoutExtension === 'apphost'
+        || nameWithoutExtension.startsWith('apphost')
+        || nameWithoutExtension.endsWith('.apphost')
+        || nameWithoutExtension.includes('.apphost.');
+}
+
+async function projectFileReferencesAspireAppHost(directoryPath: string, entry: string): Promise<boolean> {
+    let contents: string;
+    try {
+        contents = await fs.readFile(join(directoryPath, entry), 'utf8');
+    }
+    catch {
+        return false;
+    }
+
+    const uncommentedContents = contents.replace(/<!--[\s\S]*?-->/g, '');
+    // C# AppHost project files can advertise Aspire through SDK, package, or evaluated properties:
+    //   <Project Sdk="Aspire.AppHost.Sdk/13.5.0">
+    //   <Sdk Name="Aspire.AppHost.Sdk" Version="13.5.0" />
+    //   <PackageReference Include="Aspire.Hosting.AppHost" />
+    //   <IsAspireHost>true</IsAspireHost>
+    return projectSdkReferencesAspireAppHost(uncommentedContents)
+        || /<Sdk\b(?=[^>]*\bName\s*=\s*(["'])Aspire\.AppHost\.Sdk\1)[^>]*>/is.test(uncommentedContents)
+        || /<(?:PackageReference|AspireProjectOrPackageReference)\b(?=[^>]*\bInclude\s*=\s*["']Aspire\.Hosting(?:\.AppHost)?["'])[^>]*>/is.test(uncommentedContents)
+        || /<IsAspireHost>\s*true\s*<\/IsAspireHost>/i.test(uncommentedContents);
+}
+
+function projectSdkReferencesAspireAppHost(contents: string): boolean {
+    const projectSdkMatch = /<Project\b[^>]*\bSdk\s*=\s*(["'])(?<sdks>.*?)\1/is.exec(contents);
+    const sdkAttribute = projectSdkMatch?.groups?.sdks;
+    if (!sdkAttribute) {
+        return false;
+    }
+
+    return sdkAttribute.split(';').some(sdk => /^Aspire\.AppHost\.Sdk(?:\/|$)/i.test(sdk.trim()));
 }
 
 function isTypescriptAppHostMarker(entry: string): boolean {
