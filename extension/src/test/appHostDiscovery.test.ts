@@ -8,7 +8,7 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
 import * as configInfoProviderModule from '../utils/configInfoProvider';
-import { AppHostDiscoveryService, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
+import { AppHostDiscoveryService, CandidateAppHostDisplayInfo, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { appHostDiscoveryFindFilesMaxResults } from '../utils/workspaceFileSearch';
 import { lsStreamCapability } from '../types/configInfo';
@@ -580,6 +580,96 @@ suite('AppHost discovery', () => {
                     language: 'csharp',
                     status: 'buildable',
                 }]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('invokes onCandidate once per streamed aspire ls candidate', async () => {
+            stubFileSystemWatchers(sandbox);
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                emitLsStream(options, [
+                    {
+                        path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                        language: 'csharp',
+                        status: 'buildable',
+                    },
+                    {
+                        path: buildPath('workspace', 'Worker', 'AppHost.csproj'),
+                        language: 'csharp',
+                        status: 'running',
+                    },
+                ]);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                const observed: CandidateAppHostDisplayInfo[] = [];
+                const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')), false, undefined, candidate => {
+                    observed.push(candidate);
+                });
+
+                const expected = [
+                    {
+                        path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                        language: 'csharp',
+                        status: 'buildable',
+                    },
+                    {
+                        path: buildPath('workspace', 'Worker', 'AppHost.csproj'),
+                        language: 'csharp',
+                        status: 'running',
+                    },
+                ];
+                assert.deepStrictEqual(observed, expected);
+                assert.deepStrictEqual(result, expected);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('continues discovery when an onCandidate callback throws', async () => {
+            stubFileSystemWatchers(sandbox);
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                emitLsStream(options, [
+                    {
+                        path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                        language: 'csharp',
+                        status: 'buildable',
+                    },
+                    {
+                        path: buildPath('workspace', 'Worker', 'AppHost.csproj'),
+                        language: 'csharp',
+                        status: 'running',
+                    },
+                ]);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                let callbackCount = 0;
+                const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')), false, undefined, () => {
+                    callbackCount++;
+                    throw new Error('callback boom');
+                });
+
+                assert.strictEqual(callbackCount, 2);
+                assert.deepStrictEqual(result, [
+                    {
+                        path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                        language: 'csharp',
+                        status: 'buildable',
+                    },
+                    {
+                        path: buildPath('workspace', 'Worker', 'AppHost.csproj'),
+                        language: 'csharp',
+                        status: 'running',
+                    },
+                ]);
             }
             finally {
                 service.dispose();
