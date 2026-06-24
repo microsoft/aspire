@@ -100,8 +100,7 @@ public class AppHostSdkTargetsTests
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(project, [$"-p:AspireCliPath={aspireCliPath}"]);
 
-        Assert.Equal(aspireCliPath, properties["RunCommand"]);
-        Assert.Equal(GetExpectedExplicitAspireRunArguments(project), properties["RunArguments"]);
+        AssertUsesExplicitAspireCli(properties, project, aspireCliPath);
     }
 
     [Fact]
@@ -265,8 +264,7 @@ public class AppHostSdkTargetsTests
             project,
             [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
 
-        Assert.Equal(cliPath, properties["RunCommand"]);
-        Assert.Equal(GetExpectedExplicitAspireRunArguments(project, "--custom foo"), properties["RunArguments"]);
+        AssertUsesExplicitAspireCli(properties, project, cliPath, "--custom foo");
     }
 
     [Fact]
@@ -282,8 +280,7 @@ public class AppHostSdkTargetsTests
             project,
             [$"-p:AspireCliPath={cliPath}", "-p:RunArguments=--custom foo"]);
 
-        Assert.Equal(cliPath, properties["RunCommand"]);
-        Assert.Equal(GetExpectedExplicitAspireRunArguments(project, "--custom foo"), properties["RunArguments"]);
+        AssertUsesExplicitAspireCli(properties, project, cliPath, "--custom foo");
     }
 
     [Fact]
@@ -684,6 +681,24 @@ public class AppHostSdkTargetsTests
 
         return string.IsNullOrEmpty(extraArguments) ? arguments : $"{arguments} {extraArguments}";
     }
+
+    private static void AssertUsesExplicitAspireCli(Dictionary<string, string> properties, RunHookProject project, string cliPath, string? expectedArguments = null)
+    {
+        if (OperatingSystem.IsWindows() && IsWindowsCommandShim(cliPath))
+        {
+            Assert.Equal("cmd", properties["RunCommand"]);
+            Assert.Equal($"/D /C call \"{cliPath}\" {GetExpectedExplicitAspireRunArguments(project, expectedArguments)}", properties["RunArguments"]);
+
+            return;
+        }
+
+        Assert.Equal(cliPath, properties["RunCommand"]);
+        Assert.Equal(GetExpectedExplicitAspireRunArguments(project, expectedArguments), properties["RunArguments"]);
+    }
+
+    private static bool IsWindowsCommandShim(string path) =>
+        path.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase) ||
+        path.EndsWith(".bat", StringComparison.OrdinalIgnoreCase);
 
     private static void AssertUsesDotNetRun(Dictionary<string, string> properties, RunHookProject project, string expectedArguments = "")
     {
