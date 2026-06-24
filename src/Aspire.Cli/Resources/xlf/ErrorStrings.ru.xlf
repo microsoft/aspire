@@ -237,11 +237,6 @@
         <target state="needs-review-translation">Файл проекта не является проектом Aspire AppHost.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ProjectFileNotEvaluated">
-        <source>Did not evaluate: {0}</source>
-        <target state="new">Did not evaluate: {0}</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ProjectFileUnsupportedInCurrentEnvironment">
         <source>Project is not supported in the current environment: {0}</source>
         <target state="new">Project is not supported in the current environment: {0}</target>

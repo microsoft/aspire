@@ -11,18 +11,18 @@ namespace Aspire.Cli.Projects;
 
 internal interface IAppHostInfoResolver
 {
-    Task<AppHostProjectInfo> GetAppHostInfoAsync(FileInfo projectFile, CancellationToken cancellationToken, bool noEvaluate = false);
+    Task<AppHostProjectInfo> GetAppHostInfoAsync(FileInfo projectFile, CancellationToken cancellationToken);
 }
 
 internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoDiskCache diskCache) : IAppHostInfoResolver
 {
-    private readonly ConcurrentDictionary<(string Path, DateTime LastWriteUtc, bool NoEvaluate), Task<AppHostProjectInfo>> _cache = new();
+    private readonly ConcurrentDictionary<(string Path, DateTime LastWriteUtc), Task<AppHostProjectInfo>> _cache = new();
 
-    public async Task<AppHostProjectInfo> GetAppHostInfoAsync(FileInfo projectFile, CancellationToken cancellationToken, bool noEvaluate = false)
+    public async Task<AppHostProjectInfo> GetAppHostInfoAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
         // Refresh so FileInfo reflects the on-disk mtime even when callers pass a long-lived instance.
         projectFile.Refresh();
-        var key = (projectFile.FullName, projectFile.LastWriteTimeUtc, noEvaluate);
+        var key = (projectFile.FullName, projectFile.LastWriteTimeUtc);
         var task = GetOrAddSharedFetch(key, projectFile);
 
         try
@@ -51,7 +51,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         }
     }
 
-    private Task<AppHostProjectInfo> GetOrAddSharedFetch((string Path, DateTime LastWriteUtc, bool NoEvaluate) key, FileInfo projectFile)
+    private Task<AppHostProjectInfo> GetOrAddSharedFetch((string Path, DateTime LastWriteUtc) key, FileInfo projectFile)
     {
         while (true)
         {
@@ -72,11 +72,11 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         }
     }
 
-    private async Task CompleteSharedFetchAsync((string Path, DateTime LastWriteUtc, bool NoEvaluate) key, FileInfo projectFile, TaskCompletionSource<AppHostProjectInfo> completion)
+    private async Task CompleteSharedFetchAsync((string Path, DateTime LastWriteUtc) key, FileInfo projectFile, TaskCompletionSource<AppHostProjectInfo> completion)
     {
         try
         {
-            var result = await FetchAppHostInfoCoreAsync(projectFile, CancellationToken.None, noEvaluate: key.NoEvaluate).ConfigureAwait(false);
+            var result = await FetchAppHostInfoCoreAsync(projectFile, CancellationToken.None).ConfigureAwait(false);
             completion.TrySetResult(result);
         }
         catch (Exception ex)
@@ -88,7 +88,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         }
     }
 
-    private async Task<AppHostProjectInfo> FetchAppHostInfoCoreAsync(FileInfo projectFile, CancellationToken cancellationToken, bool noEvaluate = false)
+    private async Task<AppHostProjectInfo> FetchAppHostInfoCoreAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
         // First, see if a previous CLI invocation already cached the answer on disk. The
         // cache key includes mtimes of the tracked inputs that affect this metadata query, so a
@@ -110,14 +110,6 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
                 RunArguments: diskEntry.RunArguments,
                 TargetFramework: diskEntry.TargetFramework,
                 TargetFrameworks: diskEntry.TargetFrameworks);
-        }
-
-        if (noEvaluate)
-        {
-            // No-evaluate discovery is intentionally cache-first and must not trigger a fresh
-            // design-time MSBuild probe. On cache miss, return the same heuristic signal used by
-            // project discovery so callers can surface likely AppHosts without evaluation.
-            return CreateHeuristicInfo(projectFile);
         }
 
         // Capture the input fingerprint before evaluating MSBuild. If any tracked input changes
@@ -177,7 +169,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         await diskCache.SetAsync(projectFile, expectedCacheKey, new AppHostInfoCacheEntry
         {
             ExitCode = info.ExitCode,
-            IsAspireHost = info.IsAspireHost ?? throw new InvalidOperationException("Evaluated AppHost info unexpectedly had a null IsAspireHost value."),
+            IsAspireHost = info.IsAspireHost,
             AspireHostingVersion = info.AspireHostingVersion,
             IsUsingCliBundle = info.IsUsingCliBundle,
             UserSecretsId = info.UserSecretsId,
@@ -190,24 +182,6 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         }, cancellationToken).ConfigureAwait(false);
 
         return info;
-    }
-
-    private static AppHostProjectInfo CreateHeuristicInfo(FileInfo projectFile)
-    {
-        var isLikelyAppHost = AppHostProjectUtils.IsLikelyAppHost(projectFile);
-
-        return new AppHostProjectInfo(
-            ExitCode: isLikelyAppHost ? 0 : 1,
-            IsAspireHost: null,
-            AspireHostingVersion: null,
-            IsUsingCliBundle: false,
-            UserSecretsId: null,
-            RunCommand: null,
-            TargetPath: null,
-            RunWorkingDirectory: null,
-            RunArguments: null,
-            TargetFramework: null,
-            TargetFrameworks: null);
     }
 
     private static AppHostProjectInfo ParseAppHostInfo(AppHostProjectInspectionOutput? msbuildOutput, int exitCode)
@@ -279,7 +253,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
 
 internal sealed record AppHostProjectInfo(
     int ExitCode,
-    bool? IsAspireHost,
+    bool IsAspireHost,
     string? AspireHostingVersion,
     bool IsUsingCliBundle,
     string? UserSecretsId,

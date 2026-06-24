@@ -154,9 +154,6 @@
   <data name="LsStreamOptionDescription" xml:space="preserve">
     <value>Output discovered AppHosts as newline-delimited JSON. Requires --format json</value>
   </data>
-  <data name="LsNoEvaluateOptionDescription" xml:space="preserve">
-    <value>Skip fresh project evaluation and use cache-first discovery with heuristic fallback</value>
-  </data>
   <data name="LsStreamRequiresJson" xml:space="preserve">
     <value>The --stream option requires --format json.</value>
   </data>

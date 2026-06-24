@@ -13,7 +13,6 @@ internal record AppHostValidationResult(
     bool IsValid,
     bool IsPossiblyUnbuildable = false,
     bool IsUnsupported = false,
-    bool IsNotEvaluated = false,
     string? Message = null,
     string? AspireHostingVersion = null);
 
@@ -219,9 +218,8 @@ internal interface IAppHostProject
     /// </summary>
     /// <param name="appHostFile">The candidate AppHost file to validate.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
-    /// <param name="noEvaluate">Avoid expensive project evaluation. Defaults to <see langword="false" />.</param>
     /// <returns>A validation result indicating if the file is valid and any additional status.</returns>
-    Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken, bool noEvaluate = false);
+    Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken);
 
     /// <summary>
     /// Gets the Aspire SDK version used by the specified AppHost.

@@ -372,13 +372,6 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ProjectFileMayBeUnbuildableAppHost", resourceCulture);
             }
         }
-        public static string ProjectFileNotEvaluated
-        {
-            get
-            {
-                return ResourceManager.GetString("ProjectFileNotEvaluated", resourceCulture);
-            }
-        }
         public static string ProjectFilesCreatedButNodeToolsNotFound
         {
             get

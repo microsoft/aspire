@@ -67,11 +67,6 @@
         <target state="new">No candidate AppHosts found.</target>
         <note />
       </trans-unit>
-      <trans-unit id="LsNoEvaluateOptionDescription">
-        <source>Skip fresh project evaluation and use cache-first discovery with heuristic fallback</source>
-        <target state="new">Skip fresh project evaluation and use cache-first discovery with heuristic fallback</target>
-        <note />
-      </trans-unit>
       <trans-unit id="LsSearchingForAppHostsStatus">
         <source>Searching for Aspire AppHosts. {0} directories searched. {1} AppHosts found...</source>
         <target state="new">Searching for Aspire AppHosts. {0} directories searched. {1} AppHosts found...</target>

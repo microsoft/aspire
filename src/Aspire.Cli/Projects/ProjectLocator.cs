@@ -25,13 +25,11 @@ internal interface IProjectLocator
     /// <param name="searchDirectory">The directory to search recursively.</param>
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <param name="noEvaluate">Controls whether candidates are fully validated.</param>
     /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
     Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(
         DirectoryInfo searchDirectory,
         AppHostDiscoveryScope scope,
-        CancellationToken cancellationToken,
-        bool noEvaluate = false);
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// Streams candidate AppHost projects as discovery/validation completes.
@@ -44,16 +42,14 @@ internal interface IProjectLocator
     /// <see cref="IAppHostCandidateFinder.FindCandidateFilesAsync"/> for caller obligations.
     /// </param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <param name="noEvaluate">Controls whether candidates are fully validated.</param>
     /// <returns>An async stream of candidate AppHost projects in completion order.</returns>
     async IAsyncEnumerable<AppHostProjectCandidate> FindAppHostProjectsStreamAsync(
         DirectoryInfo searchDirectory,
         AppHostDiscoveryScope scope,
         Action<int>? onDirectoryEnumerated = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default,
-        bool noEvaluate = false)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        var candidates = await FindAppHostProjectsAsync(searchDirectory, scope, cancellationToken, noEvaluate).ConfigureAwait(false);
+        var candidates = await FindAppHostProjectsAsync(searchDirectory, scope, cancellationToken).ConfigureAwait(false);
         foreach (var candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -68,11 +64,10 @@ internal interface IProjectLocator
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="maxDepth">The maximum subdirectory depth to search, where 0 only considers files in <paramref name="searchDirectory"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <param name="noEvaluate">Controls whether candidates are fully validated.</param>
     /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
-    Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken, bool noEvaluate = false)
+    Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken)
         => maxDepth is null
-            ? FindAppHostProjectsAsync(searchDirectory, scope, cancellationToken, noEvaluate)
+            ? FindAppHostProjectsAsync(searchDirectory, scope, cancellationToken)
             : throw new NotSupportedException();
 
     /// <summary>
@@ -81,9 +76,8 @@ internal interface IProjectLocator
     /// <param name="searchDirectory">The directory to search recursively.</param>
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <param name="noEvaluate">Controls whether candidates are fully validated. Defaults to <see langword="false" />.</param>
     /// <returns>A list of candidate AppHost project files sorted by full path.</returns>
-    Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool noEvaluate = false);
+    Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken);
 
     /// <summary>
     /// Finds all candidate AppHost project files in the specified search directory up to the specified depth, without language metadata.
@@ -92,11 +86,10 @@ internal interface IProjectLocator
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="maxDepth">The maximum subdirectory depth to search, where 0 only considers files in <paramref name="searchDirectory"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <param name="noEvaluate">Controls whether candidates are fully validated. Defaults to <see langword="false" />.</param>
     /// <returns>A list of candidate AppHost project files sorted by full path.</returns>
-    Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken, bool noEvaluate = false)
+    Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken)
         => maxDepth is null
-            ? FindAppHostProjectFilesAsync(searchDirectory, scope, cancellationToken, noEvaluate)
+            ? FindAppHostProjectFilesAsync(searchDirectory, scope, cancellationToken)
             : throw new NotSupportedException();
     Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default);
 
@@ -131,8 +124,7 @@ internal sealed record AppHostProjectCandidate(FileInfo AppHostFile, string Lang
 internal enum AppHostProjectCandidateStatus
 {
     Buildable,
-    PossiblyUnbuildable,
-    PossiblyBuildable
+    PossiblyUnbuildable
 }
 
 internal sealed class ProjectLocator(
@@ -155,15 +147,13 @@ internal sealed class ProjectLocator(
     /// <param name="searchDirectory">The directory to search recursively.</param>
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <param name="noEvaluate">Controls whether candidates are fully validated.</param>
     /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
     public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(
         DirectoryInfo searchDirectory,
         AppHostDiscoveryScope scope,
-        CancellationToken cancellationToken,
-        bool noEvaluate = false)
+        CancellationToken cancellationToken)
     {
-        return await FindAppHostProjectsAsync(searchDirectory, scope, maxDepth: null, cancellationToken, noEvaluate);
+        return await FindAppHostProjectsAsync(searchDirectory, scope, maxDepth: null, cancellationToken);
     }
 
     /// <summary>
@@ -173,11 +163,10 @@ internal sealed class ProjectLocator(
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="maxDepth">The maximum subdirectory depth to search, where 0 only considers files in <paramref name="searchDirectory"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <param name="noEvaluate">Controls whether candidates are fully validated.</param>
     /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
-    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken, bool noEvaluate = false)
+    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken)
     {
-        var allCandidates = await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, maxDepth, cancellationToken, noEvaluate);
+        var allCandidates = await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, maxDepth, cancellationToken);
         var candidates = allCandidates.BuildableAppHost.Concat(allCandidates.UnbuildableSuspectedAppHostProjects).ToList();
         candidates.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
         return candidates;
@@ -187,8 +176,7 @@ internal sealed class ProjectLocator(
         DirectoryInfo searchDirectory,
         AppHostDiscoveryScope scope,
         Action<int>? onDirectoryEnumerated = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default,
-        bool noEvaluate = false)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var channel = Channel.CreateUnbounded<AppHostProjectCandidate>(new UnboundedChannelOptions
         {
@@ -196,7 +184,7 @@ internal sealed class ProjectLocator(
             SingleWriter = false
         });
         using var discoveryCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var discoveryTask = CompleteFindAppHostProjectsStreamAsync(searchDirectory, scope, channel.Writer, onDirectoryEnumerated, discoveryCancellationTokenSource.Token, noEvaluate);
+        var discoveryTask = CompleteFindAppHostProjectsStreamAsync(searchDirectory, scope, channel.Writer, onDirectoryEnumerated, discoveryCancellationTokenSource.Token);
 
         try
         {
@@ -231,12 +219,11 @@ internal sealed class ProjectLocator(
         AppHostDiscoveryScope scope,
         ChannelWriter<AppHostProjectCandidate> candidateWriter,
         Action<int>? onDirectoryEnumerated,
-        CancellationToken cancellationToken,
-        bool noEvaluate = false)
+        CancellationToken cancellationToken)
     {
         try
         {
-            await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, maxDepth: null, cancellationToken, noEvaluate, candidateWriter, onDirectoryEnumerated).ConfigureAwait(false);
+            await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, maxDepth: null, cancellationToken, candidateWriter, onDirectoryEnumerated).ConfigureAwait(false);
             candidateWriter.TryComplete();
         }
         catch (Exception ex)
@@ -251,11 +238,10 @@ internal sealed class ProjectLocator(
     /// <param name="searchDirectory">The directory path to search recursively.</param>
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <param name="noEvaluate">Controls whether candidates are fully validated. Defaults to <see langword="false" />.</param>
     /// <returns>A list of candidate AppHost project files sorted by full path.</returns>
-    public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool noEvaluate = false)
+    public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
     {
-        return await FindAppHostProjectFilesAsync(searchDirectory, scope, maxDepth: null, cancellationToken, noEvaluate);
+        return await FindAppHostProjectFilesAsync(searchDirectory, scope, maxDepth: null, cancellationToken);
     }
 
     /// <summary>
@@ -265,11 +251,10 @@ internal sealed class ProjectLocator(
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="maxDepth">The maximum subdirectory depth to search, where 0 only considers files in <paramref name="searchDirectory"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <param name="noEvaluate">Controls whether candidates are fully validated. Defaults to <see langword="false" />.</param>
     /// <returns>A list of candidate AppHost project files sorted by full path.</returns>
-    public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken, bool noEvaluate = false)
+    public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken)
     {
-        var candidates = await FindAppHostProjectsAsync(searchDirectory, scope, maxDepth, cancellationToken, noEvaluate);
+        var candidates = await FindAppHostProjectsAsync(searchDirectory, scope, maxDepth, cancellationToken);
         return candidates.Select(c => c.AppHostFile).ToList();
     }
 
@@ -288,12 +273,12 @@ internal sealed class ProjectLocator(
         return await FindAppHostProjectFilesAsync(new DirectoryInfo(searchDirectory), AppHostDiscoveryScope.AllFiles, cancellationToken);
     }
 
-    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool noEvaluate = false)
+    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
     {
-        return await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts, displayProgress: true, scope, maxDepth: null, cancellationToken, noEvaluate);
+        return await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts, displayProgress: true, scope, maxDepth: null, cancellationToken);
     }
 
-    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken, bool noEvaluate = false, ChannelWriter<AppHostProjectCandidate>? candidateWriter = null, Action<int>? onDirectoryEnumerated = null)
+    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken, ChannelWriter<AppHostProjectCandidate>? candidateWriter = null, Action<int>? onDirectoryEnumerated = null)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
@@ -390,7 +375,7 @@ internal sealed class ProjectLocator(
                     var (candidateFile, handler) = candidate;
 
                     // Validate the candidate file using the handler
-                    var validationResult = await handler.ValidateAppHostAsync(candidateFile, ct, noEvaluate);
+                    var validationResult = await handler.ValidateAppHostAsync(candidateFile, ct);
 
                     if (validationResult.IsValid)
                     {
@@ -403,8 +388,7 @@ internal sealed class ProjectLocator(
                         }
                         lock (lockObject)
                         {
-                            var status = validationResult.IsNotEvaluated ? AppHostProjectCandidateStatus.PossiblyBuildable : AppHostProjectCandidateStatus.Buildable;
-                            appHostProject = new AppHostProjectCandidate(candidateFile, handler.LanguageId, status);
+                            appHostProject = new AppHostProjectCandidate(candidateFile, handler.LanguageId, AppHostProjectCandidateStatus.Buildable);
                             appHostProjects.Add(appHostProject);
 
                             if (stopAfterMultipleBuildableAppHosts && appHostProjects.Count >= 2)
@@ -520,21 +504,16 @@ internal sealed class ProjectLocator(
                     return;
                 }
 
-                var validationResult = await handler.ValidateAppHostAsync(settingsAppHost, cancellationToken, noEvaluate).ConfigureAwait(false);
+                var validationResult = await handler.ValidateAppHostAsync(settingsAppHost, cancellationToken).ConfigureAwait(false);
                 var settingsAppHostRelativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, settingsAppHost.FullName);
                 if (validationResult.IsValid)
                 {
                     if (displayProgress)
                     {
                         interactionService.DisplaySubtleMessage(settingsAppHostRelativePath);
-                        if (validationResult.IsNotEvaluated)
-                        {
-                            interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileNotEvaluated, settingsAppHostRelativePath));
-                        }
                     }
 
-                    var status = validationResult.IsNotEvaluated ? AppHostProjectCandidateStatus.PossiblyBuildable : AppHostProjectCandidateStatus.Buildable;
-                    var appHostProject = new AppHostProjectCandidate(settingsAppHost, handler.LanguageId, status);
+                    var appHostProject = new AppHostProjectCandidate(settingsAppHost, handler.LanguageId, AppHostProjectCandidateStatus.Buildable);
                     appHostProjects.Add(appHostProject);
                     await ReportCandidateFoundAsync(appHostProject, cancellationToken).ConfigureAwait(false);
                 }

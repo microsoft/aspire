@@ -43,12 +43,8 @@ internal static class KnownCapabilities
     // pass it and parse (localized) error output when an older CLI rejects it.
     public const string DescribeIncludeDisabledCommands = "describe-include-disabled-commands.v1";
 
-    // Advertised so tooling can opt in to `aspire ls --no-evaluate` for ambient AppHost discovery
-    // without probing command-line parsing behavior of potentially older CLI versions.
-    public const string LsNoEvaluate = "ls-no-evaluate.v1";
-
     /// <summary>
     /// Gets the set of capabilities this CLI advertises to extensions.
     /// </summary>
-    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, DescribeIncludeDisabledCommands, LsNoEvaluate];
+    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, DescribeIncludeDisabledCommands];
 }

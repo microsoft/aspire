@@ -94,7 +94,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost.csproj");
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsAsyncCallback = (_, _, _, _) => Task.FromResult(new List<AppHostProjectCandidate>
+            FindAppHostProjectsAsyncCallback = (_, _, _) => Task.FromResult(new List<AppHostProjectCandidate>
             {
                 new(new FileInfo(appHostPath1), KnownLanguageId.CSharp),
                 new(new FileInfo(appHostPath2), KnownLanguageId.TypeScript, AppHostProjectCandidateStatus.PossiblyUnbuildable)
@@ -215,7 +215,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost.csproj");
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsAsyncCallback = (_, _, _, _) => Task.FromResult(new List<AppHostProjectCandidate>
+            FindAppHostProjectsAsyncCallback = (_, _, _) => Task.FromResult(new List<AppHostProjectCandidate>
             {
                 new(new FileInfo(appHostPath1), KnownLanguageId.CSharp),
                 new(new FileInfo(appHostPath2), KnownLanguageId.TypeScript, AppHostProjectCandidateStatus.PossiblyUnbuildable)
@@ -292,7 +292,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var appHost2 = new AppHostProjectCandidate(new FileInfo(appHostPath2), KnownLanguageId.TypeScript, AppHostProjectCandidateStatus.PossiblyUnbuildable);
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsStreamAsyncCallback = (_, _, _, _, _) => ToAsyncEnumerable(appHost1, appHost2)
+            FindAppHostProjectsStreamAsyncCallback = (_, _, _, _) => ToAsyncEnumerable(appHost1, appHost2)
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -379,7 +379,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var appHostM = new AppHostProjectCandidate(new FileInfo(appHostPathM), KnownLanguageId.CSharp);
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsStreamAsyncCallback = (_, _, _, _, _) => ToAsyncEnumerable(appHostZ, appHostA, appHostM)
+            FindAppHostProjectsStreamAsyncCallback = (_, _, _, _) => ToAsyncEnumerable(appHostZ, appHostA, appHostM)
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -420,7 +420,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var appHost = new AppHostProjectCandidate(new FileInfo(appHostPath), KnownLanguageId.CSharp);
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsStreamAsyncCallback = (_, _, _, cancellationToken, _) => GetCandidatesAsync(cancellationToken)
+            FindAppHostProjectsStreamAsyncCallback = (_, _, _, cancellationToken) => GetCandidatesAsync(cancellationToken)
         };
 
         async IAsyncEnumerable<AppHostProjectCandidate> GetCandidatesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
@@ -464,7 +464,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var textWriter = new TestOutputTextWriter(outputHelper);
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsStreamAsyncCallback = (_, _, _, cancellationToken, _) => CancelDiscoveryAsync(cancellationToken)
+            FindAppHostProjectsStreamAsyncCallback = (_, _, _, cancellationToken) => CancelDiscoveryAsync(cancellationToken)
         };
 
         async IAsyncEnumerable<AppHostProjectCandidate> CancelDiscoveryAsync([EnumeratorCancellation] CancellationToken cancellationToken)
@@ -521,7 +521,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost.csproj");
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsAsyncCallback = (_, _, _, _) => Task.FromResult(new List<AppHostProjectCandidate>
+            FindAppHostProjectsAsyncCallback = (_, _, _) => Task.FromResult(new List<AppHostProjectCandidate>
             {
                 new(new FileInfo(appHostPath1), KnownLanguageId.CSharp),
                 new(new FileInfo(appHostPath2), KnownLanguageId.TypeScript, AppHostProjectCandidateStatus.PossiblyUnbuildable)
@@ -559,7 +559,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var appHost2 = new AppHostProjectCandidate(new FileInfo(appHostPath2), KnownLanguageId.TypeScript, AppHostProjectCandidateStatus.PossiblyUnbuildable);
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsStreamAsyncCallback = (_, _, onDirectoryEnumerated, _, _) =>
+            FindAppHostProjectsStreamAsyncCallback = (_, _, onDirectoryEnumerated, _) =>
             {
                 onDirectoryEnumerated?.Invoke(42);
                 return ToAsyncEnumerable(appHost1, appHost2);
@@ -610,7 +610,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var appHost = new AppHostProjectCandidate(new FileInfo(appHostPath), KnownLanguageId.CSharp);
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsStreamAsyncCallback = (_, _, onDirectoryEnumerated, cancellationToken, _) =>
+            FindAppHostProjectsStreamAsyncCallback = (_, _, onDirectoryEnumerated, cancellationToken) =>
                 GetCandidatesAsync(cancellationToken, onDirectoryEnumerated)
         };
 
@@ -671,7 +671,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var interactionService = new TestInteractionService();
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsAsyncCallback = (_, _, cancellationToken, _) =>
+            FindAppHostProjectsAsyncCallback = (_, _, cancellationToken) =>
             {
                 cancellationTokenSource.Cancel();
                 return Task.FromCanceled<List<AppHostProjectCandidate>>(cancellationToken);
@@ -701,7 +701,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         AppHostDiscoveryScope? capturedScope = null;
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsAsyncCallback = (_, scope, _, _) =>
+            FindAppHostProjectsAsyncCallback = (_, scope, _) =>
             {
                 capturedScope = scope;
                 return Task.FromResult(new List<AppHostProjectCandidate>());
@@ -730,7 +730,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         AppHostDiscoveryScope? capturedScope = null;
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsAsyncCallback = (_, scope, _, _) =>
+            FindAppHostProjectsAsyncCallback = (_, scope, _) =>
             {
                 capturedScope = scope;
                 return Task.FromResult(new List<AppHostProjectCandidate>());
@@ -753,64 +753,6 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task LsCommand_DefaultsToEvaluateWhenNoEvaluateFlagIsNotSet()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        bool? capturedNoEvaluate = null;
-        var projectLocator = new TestProjectLocator
-        {
-            FindAppHostProjectsAsyncCallback = (_, _, _, noEvaluate) =>
-            {
-                capturedNoEvaluate = noEvaluate;
-                return Task.FromResult(new List<AppHostProjectCandidate>());
-            }
-        };
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.ProjectLocatorFactory = _ => projectLocator;
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("ls --format json");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.False(capturedNoEvaluate);
-    }
-
-    [Fact]
-    public async Task LsCommand_NoEvaluate_PassesNoEvaluateFlagToStreamDiscovery()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        bool? capturedNoEvaluate = null;
-        var projectLocator = new TestProjectLocator
-        {
-            FindAppHostProjectsStreamAsyncCallback = (_, _, _, _, noEvaluate) =>
-            {
-                capturedNoEvaluate = noEvaluate;
-                return ToAsyncEnumerable();
-            }
-        };
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.ProjectLocatorFactory = _ => projectLocator;
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("ls --format json --stream --no-evaluate");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.True(capturedNoEvaluate);
-    }
-
-    [Fact]
     public async Task LsCommand_EmitsProfilingActivities()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -820,7 +762,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App", "App.AppHost.csproj");
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsAsyncCallback = (_, _, _, _) => Task.FromResult(new List<AppHostProjectCandidate>
+            FindAppHostProjectsAsyncCallback = (_, _, _) => Task.FromResult(new List<AppHostProjectCandidate>
             {
                 new(new FileInfo(appHostPath), KnownLanguageId.CSharp)
             })

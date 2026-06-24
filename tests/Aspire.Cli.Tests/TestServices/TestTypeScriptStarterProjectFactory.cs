@@ -80,7 +80,7 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
         throw new NotImplementedException();
     }
 
-    public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken, bool noEvaluate = false)
+    public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
     {
         return Task.FromResult(new AppHostValidationResult(IsValid: CanHandle(appHostFile)));
     }

@@ -15,23 +15,22 @@ internal sealed class TestProjectLocator : IProjectLocator
 
     public Func<CancellationToken, Task<FileInfo?>>? GetAppHostFromSettingsAsyncCallback { get; set; }
 
-    public Func<DirectoryInfo, AppHostDiscoveryScope, CancellationToken, bool, Task<List<AppHostProjectCandidate>>>? FindAppHostProjectsAsyncCallback { get; set; }
+    public Func<DirectoryInfo, AppHostDiscoveryScope, CancellationToken, Task<List<AppHostProjectCandidate>>>? FindAppHostProjectsAsyncCallback { get; set; }
 
-    public Func<DirectoryInfo, AppHostDiscoveryScope, Action<int>?, CancellationToken, bool, IAsyncEnumerable<AppHostProjectCandidate>>? FindAppHostProjectsStreamAsyncCallback { get; set; }
+    public Func<DirectoryInfo, AppHostDiscoveryScope, Action<int>?, CancellationToken, IAsyncEnumerable<AppHostProjectCandidate>>? FindAppHostProjectsStreamAsyncCallback { get; set; }
 
-    public Func<DirectoryInfo, AppHostDiscoveryScope, CancellationToken, bool, Task<List<FileInfo>>>? FindAppHostProjectFilesAsyncCallback { get; set; }
+    public Func<DirectoryInfo, AppHostDiscoveryScope, CancellationToken, Task<List<FileInfo>>>? FindAppHostProjectFilesAsyncCallback { get; set; }
 
-    public Func<DirectoryInfo, AppHostDiscoveryScope, int?, CancellationToken, bool, Task<List<FileInfo>>>? FindAppHostProjectFilesWithDepthAsyncCallback { get; set; }
+    public Func<DirectoryInfo, AppHostDiscoveryScope, int?, CancellationToken, Task<List<FileInfo>>>? FindAppHostProjectFilesWithDepthAsyncCallback { get; set; }
 
     public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(
         DirectoryInfo searchDirectory,
         AppHostDiscoveryScope scope,
-        CancellationToken cancellationToken,
-        bool noEvaluate = false)
+        CancellationToken cancellationToken)
     {
         if (FindAppHostProjectsAsyncCallback != null)
         {
-            return await FindAppHostProjectsAsyncCallback(searchDirectory, scope, cancellationToken, noEvaluate);
+            return await FindAppHostProjectsAsyncCallback(searchDirectory, scope, cancellationToken);
         }
 
         return [];
@@ -41,12 +40,11 @@ internal sealed class TestProjectLocator : IProjectLocator
         DirectoryInfo searchDirectory,
         AppHostDiscoveryScope scope,
         Action<int>? onDirectoryEnumerated = null,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default,
-        bool noEvaluate = false)
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         if (FindAppHostProjectsStreamAsyncCallback is not null)
         {
-            await foreach (var candidate in FindAppHostProjectsStreamAsyncCallback(searchDirectory, scope, onDirectoryEnumerated, cancellationToken, noEvaluate).WithCancellation(cancellationToken))
+            await foreach (var candidate in FindAppHostProjectsStreamAsyncCallback(searchDirectory, scope, onDirectoryEnumerated, cancellationToken).WithCancellation(cancellationToken))
             {
                 yield return candidate;
             }
@@ -54,31 +52,31 @@ internal sealed class TestProjectLocator : IProjectLocator
             yield break;
         }
 
-        var candidates = await FindAppHostProjectsAsync(searchDirectory, scope, cancellationToken, noEvaluate: noEvaluate);
+        var candidates = await FindAppHostProjectsAsync(searchDirectory, scope, cancellationToken);
         foreach (var candidate in candidates)
         {
             yield return candidate;
         }
     }
 
-    public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, bool noEvaluate = false)
+    public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
     {
         if (FindAppHostProjectFilesAsyncCallback != null)
         {
-            return await FindAppHostProjectFilesAsyncCallback(searchDirectory, scope, cancellationToken, noEvaluate);
+            return await FindAppHostProjectFilesAsyncCallback(searchDirectory, scope, cancellationToken);
         }
 
         return [];
     }
 
-    public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken, bool noEvaluate = false)
+    public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken)
     {
         if (FindAppHostProjectFilesWithDepthAsyncCallback != null)
         {
-            return await FindAppHostProjectFilesWithDepthAsyncCallback(searchDirectory, scope, maxDepth, cancellationToken, noEvaluate);
+            return await FindAppHostProjectFilesWithDepthAsyncCallback(searchDirectory, scope, maxDepth, cancellationToken);
         }
 
-        return await FindAppHostProjectFilesAsync(searchDirectory, scope, cancellationToken, noEvaluate);
+        return await FindAppHostProjectFilesAsync(searchDirectory, scope, cancellationToken);
     }
 
     public async Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken)

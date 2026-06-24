@@ -193,7 +193,7 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
         public Task<IReadOnlyList<(string PackageId, string Version)>> GetPackageReferencesAsync(FileInfo appHostFile, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken, bool noEvaluate = false)
+        public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
         {
             if (IsUnsupported)
             {

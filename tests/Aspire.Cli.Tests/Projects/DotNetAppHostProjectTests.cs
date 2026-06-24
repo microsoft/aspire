@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Projects;
-using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -43,16 +42,32 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public async Task ValidateAppHostAsync_NoEvaluate_UsesCachedInfoWhenAvailable()
+    public async Task ValidateAppHostAsync_OrdinaryMarkerFreeProject_SkipsEvaluation()
     {
+        // An ordinary library project with no AppHost markers is rejected by the cheap heuristic
+        // before the expensive MSBuild evaluation runs, so the resolver is never consulted.
+        var ordinaryProject = CreateOrdinaryProject("Library.csproj");
+        var runner = new TestDotNetCliRunner();
+        var resolver = new TestAppHostInfoResolver();
+        var project = CreateDotNetAppHostProject(runner, appHostInfoResolver: resolver);
+
+        var validation = await project.ValidateAppHostAsync(ordinaryProject, CancellationToken.None);
+
+        Assert.False(validation.IsValid);
+        Assert.False(validation.IsPossiblyUnbuildable);
+        Assert.Equal(0, resolver.CallCount);
+    }
+
+    [Fact]
+    public async Task ValidateAppHostAsync_AppHostConventionalProject_EvaluatesViaResolver()
+    {
+        // An AppHost-conventional project is not confidently rejected, so it flows into MSBuild
+        // evaluation via the resolver, which confirms it is an Aspire host.
         var appHostFile = CreateProjectAppHost();
         var runner = new TestDotNetCliRunner();
         var resolver = new TestAppHostInfoResolver
         {
-            GetAppHostInfoAsyncCallback = (_, noEvaluate, _) =>
-            {
-                Assert.True(noEvaluate);
-                return Task.FromResult(new AppHostProjectInfo(
+            GetAppHostInfoAsyncCallback = (_, _) => Task.FromResult(new AppHostProjectInfo(
                 ExitCode: 0,
                 IsAspireHost: true,
                 AspireHostingVersion: "13.0.0",
@@ -63,96 +78,80 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                 RunWorkingDirectory: null,
                 RunArguments: null,
                 TargetFramework: "net10.0",
-                TargetFrameworks: null));
-            }
+                TargetFrameworks: null))
         };
         var project = CreateDotNetAppHostProject(runner, appHostInfoResolver: resolver);
 
-        var validation = await project.ValidateAppHostAsync(appHostFile, CancellationToken.None, noEvaluate: true);
+        var validation = await project.ValidateAppHostAsync(appHostFile, CancellationToken.None);
 
         Assert.True(validation.IsValid);
-        Assert.False(validation.IsNotEvaluated);
-        Assert.Equal(1, resolver.NoEvaluateCallCount);
-        Assert.Equal(0, resolver.EvaluateCallCount);
+        Assert.Equal("13.0.0", validation.AspireHostingVersion);
+        Assert.Equal(1, resolver.CallCount);
     }
 
     [Fact]
-    public async Task ValidateAppHostAsync_NoEvaluate_WhenCacheMiss_UsesHeuristicFallback()
+    public async Task ValidateAppHostAsync_EvaluatesCleanlyButNotAspireHost_RejectsWithoutPossiblyUnbuildable()
     {
-        var appHostFile = CreateProjectAppHost();
-        var nonAppHostFile = CreateProjectAppHost("Web.csproj");
-        var runner = new TestDotNetCliRunner();
-        var resolver = new TestAppHostInfoResolver
-        {
-            GetAppHostInfoAsyncCallback = (projectFile, noEvaluate, _) =>
-            {
-                Assert.True(noEvaluate);
-                var isLikelyAppHost = projectFile.Name.EndsWith("AppHost.csproj", StringComparison.OrdinalIgnoreCase) ||
-                    projectFile.Directory!.EnumerateFiles("*", SearchOption.TopDirectoryOnly)
-                        .Any(f => f.Name.Equals("AppHost.cs", StringComparison.OrdinalIgnoreCase));
-                return Task.FromResult(new AppHostProjectInfo(
-                    ExitCode: isLikelyAppHost ? 0 : 1,
-                    IsAspireHost: null,
-                    AspireHostingVersion: null,
-                    IsUsingCliBundle: false,
-                    UserSecretsId: null,
-                    RunCommand: null,
-                    TargetPath: null,
-                    RunWorkingDirectory: null,
-                    RunArguments: null,
-                    TargetFramework: null,
-                    TargetFrameworks: null));
-            }
-        };
-        var project = CreateDotNetAppHostProject(runner, appHostInfoResolver: resolver);
-
-        var appHostValidation = await project.ValidateAppHostAsync(appHostFile, CancellationToken.None, noEvaluate: true);
-        var nonAppHostValidation = await project.ValidateAppHostAsync(nonAppHostFile, CancellationToken.None, noEvaluate: true);
-
-        Assert.True(appHostValidation.IsValid);
-        Assert.False(nonAppHostValidation.IsValid);
-        Assert.False(nonAppHostValidation.IsPossiblyUnbuildable);
-        Assert.True(appHostValidation.IsNotEvaluated);
-        Assert.True(nonAppHostValidation.IsNotEvaluated);
-        Assert.Equal(2, resolver.NoEvaluateCallCount);
-        Assert.Equal(0, resolver.EvaluateCallCount);
-    }
-
-    [Fact]
-    public async Task ValidateAppHostAsync_NoEvaluate_DoesNotAcquireCliBundleLayout()
-    {
+        // A project can pass the cheap name heuristic without being an Aspire host: e.g. a
+        // Microsoft.NET.Sdk.Web project that merely sits next to an apphost.cs. MSBuild then evaluates it
+        // cleanly (exit code 0) and authoritatively reports IsAspireHost == false. That is a definitive "no",
+        // so it must be rejected quietly rather than surfaced as a spurious possibly-unbuildable AppHost.
         var appHostFile = CreateProjectAppHost();
         var runner = new TestDotNetCliRunner();
         var resolver = new TestAppHostInfoResolver
         {
-            GetAppHostInfoAsyncCallback = (_, noEvaluate, _) =>
-            {
-                Assert.True(noEvaluate);
-                return Task.FromResult(new AppHostProjectInfo(
-                    ExitCode: 0,
-                    IsAspireHost: null,
-                    AspireHostingVersion: null,
-                    IsUsingCliBundle: false,
-                    UserSecretsId: null,
-                    RunCommand: null,
-                    TargetPath: null,
-                    RunWorkingDirectory: null,
-                    RunArguments: null,
-                    TargetFramework: null,
-                    TargetFrameworks: null));
-            }
+            GetAppHostInfoAsyncCallback = (_, _) => Task.FromResult(new AppHostProjectInfo(
+                ExitCode: 0,
+                IsAspireHost: false,
+                AspireHostingVersion: null,
+                IsUsingCliBundle: false,
+                UserSecretsId: null,
+                RunCommand: null,
+                TargetPath: null,
+                RunWorkingDirectory: null,
+                RunArguments: null,
+                TargetFramework: "net10.0",
+                TargetFrameworks: null))
         };
-        var bundleService = new CountingBundleService();
-        var project = CreateDotNetAppHostProject(
-            runner,
-            appHostInfoResolver: resolver,
-            configureServices: options => options.BundleServiceFactory = _ => bundleService);
+        var project = CreateDotNetAppHostProject(runner, appHostInfoResolver: resolver);
 
-        var validation = await project.ValidateAppHostAsync(appHostFile, CancellationToken.None, noEvaluate: true);
+        var validation = await project.ValidateAppHostAsync(appHostFile, CancellationToken.None);
 
-        Assert.True(validation.IsValid);
-        Assert.True(validation.IsNotEvaluated);
-        Assert.Equal(0, bundleService.AcquireCallCount);
+        Assert.False(validation.IsValid);
+        Assert.False(validation.IsPossiblyUnbuildable);
+        Assert.Equal(1, resolver.CallCount);
+    }
+
+    [Fact]
+    public async Task ValidateAppHostAsync_LikelyAppHostFailsEvaluation_MarksPossiblyUnbuildable()
+    {
+        // A likely AppHost that MSBuild cannot evaluate (non-zero exit) may still be a real AppHost that
+        // currently fails to build, so it is kept as a candidate and surfaced as possibly-unbuildable rather
+        // than silently discarded.
+        var appHostFile = CreateProjectAppHost();
+        var runner = new TestDotNetCliRunner();
+        var resolver = new TestAppHostInfoResolver
+        {
+            GetAppHostInfoAsyncCallback = (_, _) => Task.FromResult(new AppHostProjectInfo(
+                ExitCode: 1,
+                IsAspireHost: false,
+                AspireHostingVersion: null,
+                IsUsingCliBundle: false,
+                UserSecretsId: null,
+                RunCommand: null,
+                TargetPath: null,
+                RunWorkingDirectory: null,
+                RunArguments: null,
+                TargetFramework: null,
+                TargetFrameworks: null))
+        };
+        var project = CreateDotNetAppHostProject(runner, appHostInfoResolver: resolver);
+
+        var validation = await project.ValidateAppHostAsync(appHostFile, CancellationToken.None);
+
+        Assert.False(validation.IsValid);
+        Assert.True(validation.IsPossiblyUnbuildable);
+        Assert.Equal(1, resolver.CallCount);
     }
 
     [Fact]
@@ -1822,6 +1821,224 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public void IsLikelyAppHost_SdkAttributeWithVersion_ReturnsTrue()
+    {
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Aspire.AppHost.Sdk/9.5.0" />
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_SdkAttributeWithoutVersion_ReturnsTrue()
+    {
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Aspire.AppHost.Sdk" />
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_SdkAttributeWithMultipleSdks_ReturnsTrue()
+    {
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk;Aspire.AppHost.Sdk/9.5.0" />
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_NestedSdkElement_ReturnsTrue()
+    {
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_NestedSdkElementInLegacyNamespace_ReturnsTrue()
+    {
+        // Legacy MSBuild XML namespace projects should be matched the same as SDK-style ones.
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+              <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_IsAspireHostPropertyTrue_ReturnsTrue()
+    {
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_IsAspireHostPropertyFalse_ReturnsFalse()
+    {
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <IsAspireHost>false</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_AppHostNamedProjectWithoutInlineMarker_ReturnsTrue()
+    {
+        // No inline Aspire marker, but the file name follows the "*.AppHost.csproj" convention, so it is a
+        // candidate worth confirming via MSBuild rather than being dropped.
+        var projectFile = WriteIsLikelyAppHostProject("Test.AppHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_OrdinaryProjectWithoutInlineMarker_ReturnsFalse()
+    {
+        // Ordinary name, parseable content, and no Aspire signal: not a candidate, so it never reaches MSBuild.
+        var projectFile = WriteIsLikelyAppHostProject("Library.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_SiblingAppHostSourceFile_ReturnsTrue()
+    {
+        // The project has no inline marker and an ordinary name, but a sibling apphost.cs (shipped by
+        // project-based AppHosts created with `aspire new`) marks it as a candidate.
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("apphost.cs", "// builder entrypoint");
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_UnparseableAppHostNamedCsproj_ReturnsTrue()
+    {
+        // Malformed XML can't be parsed, so the verdict falls back to the name heuristic. The
+        // "*.AppHost.csproj" name keeps it a candidate so a broken AppHost can still surface as
+        // possibly-unbuildable rather than being silently dropped.
+        var projectFile = WriteIsLikelyAppHostProject("Test.AppHost.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\"");
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_UnparseableOrdinaryCsproj_ReturnsFalse()
+    {
+        // Malformed XML falls back to the name heuristic; an ordinary name with no sibling apphost.cs is not
+        // a candidate, so a broken ordinary project is not dragged onto the MSBuild path.
+        var projectFile = WriteIsLikelyAppHostProject("Library.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\"");
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_FsprojWithSdkAttribute_ReturnsTrue()
+    {
+        // Detection is language-agnostic: the same MSBuild XML signals are inspected for .fsproj/.vbproj
+        // AppHosts, not just .csproj.
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.fsproj", """
+            <Project Sdk="Aspire.AppHost.Sdk/9.5.0" />
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_CoLocatedDirectoryBuildPropsSetsIsAspireHost_ReturnsTrue()
+    {
+        // Real-world regression case: the project file has no inline marker and an ordinary name, but a
+        // co-located Directory.Build.props (auto-imported by MSBuild) sets <IsAspireHost>true</IsAspireHost>,
+        // which promotes it to an AppHost during evaluation. The repo's own tests/Aspire.Hosting.Tests does
+        // exactly this, and it must remain a candidate.
+        var projectFile = WriteIsLikelyAppHostProject("Aspire.Hosting.Tests.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.props", """
+            <Project>
+              <PropertyGroup>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_CoLocatedDirectoryBuildTargetsImportsAppHostSdk_ReturnsTrue()
+    {
+        // A co-located Directory.Build.targets that imports the Aspire.AppHost.Sdk also promotes an
+        // otherwise ordinary-looking project to an AppHost during evaluation.
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.targets", """
+            <Project>
+              <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_CoLocatedDirectoryBuildFileOnlyConsumesIsAspireHost_ReturnsFalse()
+    {
+        // A co-located build file that merely *reads* IsAspireHost in a condition (never sets it) must not be
+        // treated as a marker. The playground's Directory.Build.targets does this with
+        // Condition="'$(IsAspireHost)' == 'true'"; a loose substring match would over-promote every sibling
+        // project. Matching on the property *element* threads this needle.
+        var projectFile = WriteIsLikelyAppHostProject("Library.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.targets", """
+            <Project>
+              <PropertyGroup Condition="'$(IsAspireHost)' == 'true'">
+                <SomeSetting>value</SomeSetting>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    private FileInfo WriteIsLikelyAppHostProject(string fileName, string content)
+    {
+        var path = Path.Combine(_workspace.WorkspaceRoot.FullName, fileName);
+        File.WriteAllText(path, content);
+        return new FileInfo(path);
+    }
+
     private static JsonDocument CreateAppHostInfoJson(
         string? runCommand,
         string? targetPath = null,
@@ -1852,12 +2069,27 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <IsAspireHost>true</IsAspireHost>
-                <AspireUseCliBundle>true</AspireUseCliBundle>
-              </PropertyGroup>
             </Project>
             """);
 
         return new FileInfo(appHostPath);
+    }
+
+    private FileInfo CreateOrdinaryProject(string fileName = "Library.csproj")
+    {
+        // A plain SDK-style library: no AppHost markers, no imports, and a non-AppHost name.
+        // This is exactly the shape DotNetAppHostProject.IsLikelyAppHost returns false for, so the
+        // cheap heuristic short-circuits validation before MSBuild evaluation runs.
+        var projectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, fileName);
+        File.WriteAllText(projectPath, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        return new FileInfo(projectPath);
     }
 
     private DirectoryInfo CreateCliBundle(out LayoutConfiguration layout)
@@ -1915,48 +2147,20 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
     private sealed class TestAppHostInfoResolver : IAppHostInfoResolver
     {
-        public Func<FileInfo, bool, CancellationToken, Task<AppHostProjectInfo>>? GetAppHostInfoAsyncCallback { get; init; }
+        public Func<FileInfo, CancellationToken, Task<AppHostProjectInfo>>? GetAppHostInfoAsyncCallback { get; init; }
 
-        public int EvaluateCallCount { get; private set; }
-        public int NoEvaluateCallCount { get; private set; }
+        public int CallCount { get; private set; }
 
-        public Task<AppHostProjectInfo> GetAppHostInfoAsync(FileInfo projectFile, CancellationToken cancellationToken, bool noEvaluate = false)
+        public Task<AppHostProjectInfo> GetAppHostInfoAsync(FileInfo projectFile, CancellationToken cancellationToken)
         {
-            if (noEvaluate)
-            {
-                NoEvaluateCallCount++;
-            }
-            else
-            {
-                EvaluateCallCount++;
-            }
+            CallCount++;
 
             if (GetAppHostInfoAsyncCallback is not null)
             {
-                return GetAppHostInfoAsyncCallback(projectFile, noEvaluate, cancellationToken);
+                return GetAppHostInfoAsyncCallback(projectFile, cancellationToken);
             }
 
             throw new InvalidOperationException("GetAppHostInfoAsync should not be called in this test.");
         }
-    }
-
-    private sealed class CountingBundleService : IBundleService
-    {
-        public bool IsBundle => false;
-
-        public int AcquireCallCount { get; private set; }
-
-        public Task EnsureExtractedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-
-        public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
-            => Task.FromResult(BundleExtractResult.NoPayload);
-
-        public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
-        {
-            AcquireCallCount++;
-            return Task.FromResult<BundleLayoutLease?>(null);
-        }
-
-        public string? GetDefaultExtractDir(string processPath) => null;
     }
 }

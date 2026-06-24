@@ -1403,7 +1403,7 @@ builder.Build().Run();");
             public Task<IReadOnlyList<(string PackageId, string Version)>> GetPackageReferencesAsync(FileInfo appHostFile, CancellationToken cancellationToken)
                 => throw new NotImplementedException();
 
-            public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken, bool noEvaluate = false)
+            public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
                 => Task.FromResult(new AppHostValidationResult(IsValid: appHostFile.Name.Equals(supportedFileName, StringComparison.OrdinalIgnoreCase)));
 
             public Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken)
@@ -2265,32 +2265,22 @@ builder.Build().Run();");
         Directory.CreateDirectory(unbuildableAppHost.DirectoryName!);
         await File.WriteAllTextAsync(unbuildableAppHost.FullName, "Not a real project file.");
 
-        var notEvaluatedAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "NotEvaluatedValid", "AppHost.csproj"));
-        Directory.CreateDirectory(notEvaluatedAppHost.DirectoryName!);
-        await File.WriteAllTextAsync(notEvaluatedAppHost.FullName, "Not a real project file.");
-
         var projectFactory = new TestAppHostProjectFactory
         {
-            ValidateAppHostCallback = projectFile => projectFile.FullName == buildableAppHost.FullName ? new AppHostValidationResult(IsValid: true) : 
-                projectFile.FullName == unbuildableAppHost.FullName ? new AppHostValidationResult(IsValid: false, IsPossiblyUnbuildable: true) : 
-                projectFile.FullName == notEvaluatedAppHost.FullName ? new AppHostValidationResult(IsValid: true, IsNotEvaluated: true) : new AppHostValidationResult(IsValid: false, IsNotEvaluated: true)
+            ValidateAppHostCallback = projectFile => projectFile.FullName == buildableAppHost.FullName ? new AppHostValidationResult(IsValid: true) :
+                new AppHostValidationResult(IsValid: false, IsPossiblyUnbuildable: true)
         };
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
 
-        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.AllFiles, CancellationToken.None, noEvaluate: true).DefaultTimeout();
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.AllFiles, CancellationToken.None).DefaultTimeout();
 
         Assert.Collection(found.OrderBy(candidate => candidate.AppHostFile.FullName),
             candidate =>
             {
                 Assert.Equal(buildableAppHost.FullName, candidate.AppHostFile.FullName);
                 Assert.Equal(AppHostProjectCandidateStatus.Buildable, candidate.Status);
-            },
-            candidate =>
-            {
-                Assert.Equal(notEvaluatedAppHost.FullName, candidate.AppHostFile.FullName);
-                Assert.Equal(AppHostProjectCandidateStatus.PossiblyBuildable, candidate.Status);
             },
             candidate =>
             {
@@ -2979,7 +2969,7 @@ builder.Build().Run();");
     }
 
     [Fact]
-    public async Task FindAppHostProjectsAsync_DefaultFiltered_SettingsCandidateNotEvaluated_IsPossiblyBuildable()
+    public async Task FindAppHostProjectsAsync_DefaultFiltered_IncludesSettingsCandidateUnderSkippedDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -2998,7 +2988,7 @@ builder.Build().Run();");
 
         var projectFactory = new TestAppHostProjectFactory
         {
-            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true, IsNotEvaluated: true)
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
         };
 
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
@@ -3006,11 +2996,11 @@ builder.Build().Run();");
 
         // DefaultFiltered discovery skips node_modules, so this candidate is included only
         // through the configured settings path.
-        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None, noEvaluate: true).DefaultTimeout();
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
 
         var candidate = Assert.Single(found);
         Assert.Equal(configuredAppHost.FullName, candidate.AppHostFile.FullName);
-        Assert.Equal(AppHostProjectCandidateStatus.PossiblyBuildable, candidate.Status);
+        Assert.Equal(AppHostProjectCandidateStatus.Buildable, candidate.Status);
     }
 
     private static ProjectLocator CreateProjectLocator(
