@@ -66,7 +66,7 @@ jobs:
         uses: ./.github/actions/select-tests
         with:
           checkout: 'false'
-          enforce: 'false'
+          enforce: 'true'
           commentFile: ${{ env.SELECT_TESTS_COMMENT_FILE }}
           # Kill switch: the 'run-full-ci' PR label forces the full matrix + all jobs. Read from the event
           # payload snapshot, so adding the label takes effect on the next push (or reopen), not on a
@@ -246,12 +246,14 @@ jobs:
 
   build_packages:
     name: Build packages
+    if: false  # [ignore][experiment] disabled for fast validation CI
     uses: ./.github/workflows/build-packages.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
   build_cli_archive_linux:
     name: Build native CLI archive (Linux)
+    if: false  # [ignore][experiment] disabled for fast validation CI
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -259,6 +261,7 @@ jobs:
 
   build_cli_archive_linux_arm64:
     name: Build native CLI archive (Linux ARM64)
+    if: false  # [ignore][experiment] disabled for fast validation CI
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -270,6 +273,7 @@ jobs:
   # without waiting for the slower Windows/macOS builds.
   build_cli_archive_windows:
     name: Build native CLI archive (Windows)
+    if: false  # [ignore][experiment] disabled for fast validation CI
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -277,6 +281,7 @@ jobs:
 
   build_cli_archive_windows_arm64:
     name: Build native CLI archive (Windows ARM64)
+    if: false  # [ignore][experiment] disabled for fast validation CI
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -284,6 +289,7 @@ jobs:
 
   build_cli_archive_macos:
     name: Build native CLI archive (macOS)
+    if: false  # [ignore][experiment] disabled for fast validation CI
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -291,6 +297,7 @@ jobs:
 
   build_cli_archive_macos_x64:
     name: Build native CLI archive (macOS x64)
+    if: false  # [ignore][experiment] disabled for fast validation CI
     uses: ./.github/workflows/build-cli-native-archives.yml
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
@@ -359,6 +366,7 @@ jobs:
           ./result/bin/aspire --version
 
   build_cli_e2e_image:
+    if: false  # [ignore][experiment] disabled for fast validation CI
     name: Build CLI E2E Docker image
     uses: ./.github/workflows/build-cli-e2e-image.yml
     needs: setup_for_tests
@@ -843,7 +851,6 @@ jobs:
                   (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
                  (needs.typescript_api_compat.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.run_typescript_api_compat == 'true')) ||
-                 needs.build_cli_archive_macos_x64.result == 'skipped' ||
                  (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
                  (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
                  (needs.nix_package.result == 'skipped' && (needs.setup_for_tests.outputs.run_nix_package == 'true')) ||
@@ -864,7 +871,6 @@ jobs:
                 ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true')) ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
-                 needs.build_cli_archive_macos_x64.result == 'skipped' ||
                  (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
                  (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
                  (needs.nix_package.result == 'skipped' && (needs.setup_for_tests.outputs.run_nix_package == 'true')) ||

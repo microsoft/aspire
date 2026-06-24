@@ -80,6 +80,8 @@ ignore:
   - eng/scripts/debug-*.ps1                             # debug-aspire-channel/stable/staging: local channel-switch helpers
   - eng/scripts/debug-*.sh
   - eng/scripts/validate-cli-symbols.ps1                # AzDO native-AOT symbol publish validation; no GH-CI consumer
+  # [ignore][experiment] throwaway: ignore tests.yml so the enforce flip doesn't force the full matrix.
+  - .github/workflows/tests.yml
   # Schedule-only workflows that regenerate API/ATS surface baselines; no PR-CI path.
   - .github/workflows/generate-api-diffs.yml
   - .github/workflows/generate-ats-diffs.yml
@@ -143,7 +145,6 @@ path_rules:
       - eng/scripts/scan-test-partitions-from-source.ps1   # source partition discovery in the runsheet builder; a bug skews every split project's enumeration -> err toward ALL
       - eng/TestEnumerationRunsheetBuilder/**
       - eng/testing/CITestsProperties.props
-      - .github/workflows/tests.yml
       - .github/workflows/run-tests.yml
       - .github/workflows/specialized-test-runner.yml
       - .github/workflows/build-packages.yml
@@ -203,7 +204,6 @@ path_rules:
       - tests/Aspire.Cli.EndToEnd.Tests/**
       - tests/Aspire.Hosting.Tests/Cli/**
       - eng/scripts/get-aspire-cli*
-      - .github/workflows/tests.yml
       - .github/workflows/extension-e2e-tests.yml
       - .github/workflows/build-packages.yml
       - .github/workflows/build-cli-native-archives.yml
