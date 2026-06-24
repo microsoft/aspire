@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.AspNetCore.InternalTesting;
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Configuration;
@@ -39,7 +38,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void StartDiagnosticActivity_CreatesActivityWithCorrectNameAndDefaultTags()
+    public async Task StartDiagnosticActivity_CreatesActivityWithCorrectNameAndDefaultTags()
     {
         using var fixture = new TelemetryFixture(sampleResult: ActivitySamplingResult.AllData);
 
@@ -49,12 +48,12 @@ public class AspireCliTelemetryTests
         Assert.Equal("test-diagnostic", activity.OperationName);
 
         // Verify all default tags are included
-        var defaultTags = fixture.Telemetry.GetDefaultTags();
-        var activityTags = activity.TagObjects.ToDictionary(t => t.Key, t => t.Value);
+        var defaultTags = await fixture.Telemetry.GetDefaultTagsAsync();
+        var activityTags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
         foreach (var tag in defaultTags)
         {
             Assert.True(activityTags.ContainsKey(tag.Key), $"Activity is missing tag '{tag.Key}'");
-            Assert.Equal(tag.Value, activityTags[tag.Key]);
+            Assert.Equal(tag.Value?.ToString(), activityTags[tag.Key]);
         }
     }
 
@@ -110,7 +109,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void RecordError_AddsActivityEventWithDefaultTags_WhenReportedActivityIsActive()
+    public async Task RecordError_AddsActivityEventWithDefaultTags_WhenReportedActivityIsActive()
     {
         using var fixture = new TelemetryFixture();
         var exception = new InvalidOperationException("Test exception");
@@ -129,12 +128,14 @@ public class AspireCliTelemetryTests
         Assert.Equal("Test exception", eventTags[TelemetryConstants.Tags.ExceptionMessage]);
         // Note: exception.stacktrace may not be present if the exception was never thrown
 
-        // Verify all default tags are included in the event
-        var defaultTags = fixture.Telemetry.GetDefaultTags();
+        // RecordError adds default tags directly to the error event at creation time
+        // so they are available even if the enrichment processor has not run yet.
+        var defaultTags = await fixture.Telemetry.GetDefaultTagsAsync();
+        Assert.NotEmpty(defaultTags);
         foreach (var tag in defaultTags)
         {
-            Assert.True(eventTags.ContainsKey(tag.Key), $"Event is missing tag '{tag.Key}'");
-            Assert.Equal(tag.Value, eventTags[tag.Key]);
+            Assert.True(eventTags.ContainsKey(tag.Key), $"Error event is missing default tag '{tag.Key}'");
+            Assert.Equal(tag.Value?.ToString(), eventTags[tag.Key]?.ToString());
         }
     }
 
@@ -210,7 +211,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void InitializeAsync_AddsMachineInformationTags()
+    public async Task Initialize_AddsMachineInformationTags()
     {
         var machineInfoProvider = new TelemetryFixture.TestMachineInformationProvider
         {
@@ -219,18 +220,18 @@ public class AspireCliTelemetryTests
         };
         using var fixture = new TelemetryFixture(machineInfoProvider);
 
-        var tags = fixture.Telemetry.GetDefaultTags();
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
 
         Assert.Contains(tags, t => t.Key == "machine.device_id" && (string?)t.Value == "test-device-id");
         Assert.Contains(tags, t => t.Key == "machine.mac_address_hash" && (string?)t.Value == "test-mac-hash");
     }
 
     [Fact]
-    public void InitializeAsync_AddsOsInformationTags()
+    public async Task Initialize_AddsOsInformationTags()
     {
         using var fixture = new TelemetryFixture();
 
-        var tags = fixture.Telemetry.GetDefaultTags();
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
 
         var expectedOsName = AspireCliTelemetry.GetOsName();
         var expectedOsType = AspireCliTelemetry.GetOsType();
@@ -240,7 +241,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void InitializeAsync_AddsCodingAgentTag_WhenCodingAgentIsDetected()
+    public void Initialize_AddsCodingAgentTag_WhenCodingAgentIsDetected()
     {
         var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector
         {
@@ -255,17 +256,17 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void InitializeAsync_DoesNotAddCodingAgentTag_WhenCodingAgentIsNotDetected()
+    public async Task Initialize_DoesNotAddCodingAgentTag_WhenCodingAgentIsNotDetected()
     {
         using var fixture = new TelemetryFixture();
 
-        var tags = fixture.Telemetry.GetDefaultTags();
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
 
         Assert.DoesNotContain(tags, t => t.Key == TelemetryConstants.Tags.CodingAgent);
     }
 
     [Fact]
-    public void InitializeAsync_AddsInternalMicrosoftTag()
+    public async Task Initialize_AddsInternalMicrosoftTag()
     {
         Assert.Equal("aspire.cli.microsoft_internal_source", TelemetryConstants.Tags.InternalMicrosoftSource);
         Assert.Equal("aspire.cli.microsoft_internal_alias", TelemetryConstants.Tags.InternalMicrosoftAlias);
@@ -280,7 +281,7 @@ public class AspireCliTelemetryTests
         };
         using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
 
-        var tags = fixture.Telemetry.GetDefaultTags();
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
 
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoft && t.Value is true);
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.InternalMicrosoftSource && (string?)t.Value == "test source");
@@ -289,7 +290,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void InitializeAsync_DoesNotAddOptionalInternalMicrosoftTags_WhenValuesAreNotDetected()
+    public async Task Initialize_DoesNotAddOptionalInternalMicrosoftTags_WhenValuesAreNotDetected()
     {
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
@@ -298,7 +299,7 @@ public class AspireCliTelemetryTests
         };
         using var fixture = new TelemetryFixture(internalMicrosoftDetector: internalMicrosoftDetector);
 
-        var tags = fixture.Telemetry.GetDefaultTags();
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
 
         Assert.Collection(
             GetInternalMicrosoftTags(tags),
@@ -315,7 +316,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public async Task InitializeAsync_DoesNotRunInternalMicrosoftDetectorWhenReportedTelemetryIsDisabled()
+    public async Task Initialize_DoesNotRunInternalMicrosoftDetectorWhenReportedTelemetryIsDisabled()
     {
         var provider = new TelemetryFixture.TestMachineInformationProvider();
         var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
@@ -324,6 +325,7 @@ public class AspireCliTelemetryTests
         {
             IsInternalMicrosoft = true
         };
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
         var telemetry = new AspireCliTelemetry(
             NullLogger<AspireCliTelemetry>.Instance,
             provider,
@@ -333,16 +335,18 @@ public class AspireCliTelemetryTests
             new TelemetryConfiguration { ReportedTelemetryEnabled = false },
             AspireCliTelemetry.ReportedActivitySourceName,
             AspireCliTelemetry.DiagnosticsActivitySourceName,
-            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            tagsSource);
 
-        await telemetry.InitializeAsync().DefaultTimeout();
+        telemetry.Initialize();
+        await tagsSource.TagsTask;
 
         Assert.Equal(0, internalMicrosoftDetector.InvocationCount);
-        Assert.Empty(GetInternalMicrosoftTags(telemetry.GetDefaultTags()));
+        Assert.Empty(GetInternalMicrosoftTags(await telemetry.GetDefaultTagsAsync()));
     }
 
     [Fact]
-    public async Task InitializeAsync_AddsDefaultTags_WhenInternalMicrosoftDetectorFails()
+    public async Task Initialize_AddsDefaultTags_WhenInternalMicrosoftDetectorFails()
     {
         var provider = new TelemetryFixture.TestMachineInformationProvider
         {
@@ -353,6 +357,7 @@ public class AspireCliTelemetryTests
         {
             ExceptionToThrow = new NotSupportedException("Unexpected probe failure.")
         };
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
         var telemetry = new AspireCliTelemetry(
             NullLogger<AspireCliTelemetry>.Instance,
             provider,
@@ -362,11 +367,13 @@ public class AspireCliTelemetryTests
             new TelemetryConfiguration { ReportedTelemetryEnabled = true },
             AspireCliTelemetry.ReportedActivitySourceName,
             AspireCliTelemetry.DiagnosticsActivitySourceName,
-            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            tagsSource);
 
-        await telemetry.InitializeAsync().DefaultTimeout();
+        telemetry.Initialize();
+        await tagsSource.TagsTask;
 
-        var tags = telemetry.GetDefaultTags();
+        var tags = await telemetry.GetDefaultTagsAsync();
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.MacAddressHash && (string?)t.Value == "test-mac-hash");
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.DeviceId && (string?)t.Value == "test-device-id");
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.CliVersion);
@@ -397,7 +404,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void StartReportedActivity_IncludesAllDefaultTags()
+    public async Task StartReportedActivity_IncludesAllDefaultTags()
     {
         var machineInfoProvider = new TelemetryFixture.TestMachineInformationProvider
         {
@@ -411,22 +418,23 @@ public class AspireCliTelemetryTests
         Assert.NotNull(activity);
 
         // Verify all default tags are included
-        var defaultTags = fixture.Telemetry.GetDefaultTags();
-        var activityTags = activity.TagObjects.ToDictionary(t => t.Key, t => t.Value);
+        var defaultTags = await fixture.Telemetry.GetDefaultTagsAsync();
+        var activityTags = activity.Tags.ToDictionary(t => t.Key, t => t.Value);
         foreach (var tag in defaultTags)
         {
             Assert.True(activityTags.ContainsKey(tag.Key), $"Activity is missing tag '{tag.Key}'");
-            Assert.Equal(tag.Value, activityTags[tag.Key]);
+            Assert.Equal(tag.Value?.ToString(), activityTags[tag.Key]);
         }
     }
 
     [Fact]
-    public void StartReportedActivity_ThrowsIfNotInitialized()
+    public async Task Initialize_IsIdempotent()
     {
         var provider = new TelemetryFixture.TestMachineInformationProvider();
         var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
         var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector();
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
         var telemetry = new AspireCliTelemetry(
             NullLogger<AspireCliTelemetry>.Instance,
             provider,
@@ -436,35 +444,15 @@ public class AspireCliTelemetryTests
             new TelemetryConfiguration { ReportedTelemetryEnabled = true },
             AspireCliTelemetry.ReportedActivitySourceName,
             AspireCliTelemetry.DiagnosticsActivitySourceName,
-            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            tagsSource);
 
-        var exception = Assert.Throws<InvalidOperationException>(() => telemetry.StartReportedActivity("test"));
-        Assert.Contains("not been initialized", exception.Message);
-    }
+        telemetry.Initialize();
+        await tagsSource.TagsTask;
+        var tagsAfterFirstInit = (await telemetry.GetDefaultTagsAsync()).Count;
+        telemetry.Initialize(); // Should not throw
 
-    [Fact]
-    public async Task InitializeAsync_IsIdempotent()
-    {
-        var provider = new TelemetryFixture.TestMachineInformationProvider();
-        var ciDetector = new TelemetryFixture.TestCIEnvironmentDetector();
-        var codingAgentDetector = new TelemetryFixture.TestCodingAgentDetector();
-        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector();
-        var telemetry = new AspireCliTelemetry(
-            NullLogger<AspireCliTelemetry>.Instance,
-            provider,
-            ciDetector,
-            codingAgentDetector,
-            internalMicrosoftDetector,
-            new TelemetryConfiguration { ReportedTelemetryEnabled = true },
-            AspireCliTelemetry.ReportedActivitySourceName,
-            AspireCliTelemetry.DiagnosticsActivitySourceName,
-            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
-
-        await telemetry.InitializeAsync().DefaultTimeout();
-        var tagsAfterFirstInit = telemetry.GetDefaultTags().Count;
-        await telemetry.InitializeAsync(); // Should not throw
-
-        var tags = telemetry.GetDefaultTags();
+        var tags = await telemetry.GetDefaultTagsAsync();
         Assert.Equal(tagsAfterFirstInit, tags.Count); // Should have the same number of tags after second init
     }
 
@@ -475,7 +463,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void InitializeAsync_AddsIdentityTags_WhenExecutionContextProvided()
+    public async Task Initialize_AddsIdentityTags_WhenExecutionContextProvided()
     {
         // The execution context only needs a valid root for path composition; telemetry init
         // does not touch the filesystem for identity, so reuse the test base directory.
@@ -488,7 +476,7 @@ public class AspireCliTelemetryTests
 
         using var fixture = new TelemetryFixture(executionContext: executionContext);
 
-        var tags = fixture.Telemetry.GetDefaultTags();
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
 
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityVersion && (string?)t.Value == "13.5.0-preview.1.26310.9");
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityChannel && (string?)t.Value == "daily");
@@ -501,7 +489,7 @@ public class AspireCliTelemetryTests
     }
 
     [Fact]
-    public void InitializeAsync_OmitsIdentityCommitTag_WhenCommitIsEmpty()
+    public async Task Initialize_OmitsIdentityCommitTag_WhenCommitIsEmpty()
     {
         var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
             new DirectoryInfo(AppContext.BaseDirectory),
@@ -512,7 +500,7 @@ public class AspireCliTelemetryTests
 
         using var fixture = new TelemetryFixture(executionContext: executionContext);
 
-        var tags = fixture.Telemetry.GetDefaultTags();
+        var tags = await fixture.Telemetry.GetDefaultTagsAsync();
 
         Assert.Contains(tags, t => t.Key == TelemetryConstants.Tags.IdentityVersion && (string?)t.Value == "13.5.0");
         Assert.DoesNotContain(tags, t => t.Key == TelemetryConstants.Tags.IdentityCommit);

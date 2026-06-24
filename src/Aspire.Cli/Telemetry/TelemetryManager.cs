@@ -55,7 +55,8 @@ internal sealed class TelemetryManager : IDisposable
     /// Initializes a new instance of the <see cref="TelemetryManager"/> class.
     /// </summary>
     /// <param name="telemetryConfiguration">The telemetry configuration.</param>
-    public TelemetryManager(TelemetryConfiguration telemetryConfiguration)
+    /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
+    public TelemetryManager(TelemetryConfiguration telemetryConfiguration, TelemetryTagsSource tagsSource)
     {
 #if DEBUG
         // Preserve the DEBUG-only diagnostic OTLP path for non-profiling diagnostics. When
@@ -102,6 +103,10 @@ internal sealed class TelemetryManager : IDisposable
             }
 #endif
 
+            // Tags are applied at export time by the enrichment processor, which reads from
+            // TelemetryTagsSource. This avoids blocking activity start on background tag calculation.
+            azureMonitorBuilder.AddProcessor(new CliTagEnrichmentProcessor(tagsSource));
+
             _azureMonitorProvider = azureMonitorBuilder.Build();
         }
 
@@ -110,6 +115,7 @@ internal sealed class TelemetryManager : IDisposable
             _profilingProvider = Sdk.CreateTracerProviderBuilder()
                 .AddSource(ProfilingTelemetry.ActivitySourceName)
                 .SetResourceBuilder(resource)
+                .AddProcessor(new CliTagEnrichmentProcessor(tagsSource))
                 .AddOtlpExporter()
                 .Build();
         }
@@ -138,9 +144,10 @@ internal sealed class TelemetryManager : IDisposable
     /// Initializes a new instance of the <see cref="TelemetryManager"/> class.
     /// </summary>
     /// <param name="configuration">The configuration to read telemetry settings from.</param>
+    /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
     /// <param name="args">The command-line arguments.</param>
-    internal TelemetryManager(IConfiguration configuration, string[]? args = null)
-        : this(TelemetryConfiguration.Create(configuration, args))
+    internal TelemetryManager(IConfiguration configuration, TelemetryTagsSource tagsSource, string[]? args = null)
+        : this(TelemetryConfiguration.Create(configuration, args), tagsSource)
     {
     }
 
