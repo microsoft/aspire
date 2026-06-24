@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Service Topology</title>
+    <style>
+      /*
+       * Aspire Deck sample canvas: a live force-directed graph of the app's
+       * resources and their relationships, colored by health. Sandboxed HTML in
+       * an <iframe>; talks to the Deck host over the documented postMessage bridge
+       * (see .agents/skills/deck-canvas/SKILL.md). Dependency-free and self
+       * contained so it also works from a file:// URL.
+       */
+      :root {
+        color-scheme: dark;
+        --bg: #121016;
+        --panel: #1c1923;
+        --border: #2f2940;
+        --text: #ece9f1;
+        --muted: #a59fb3;
+        --accent: #b794f6;
+        --green: #48bb78;
+        --blue: #60a5fa;
+        --amber: #ecc94b;
+        --red: #f56565;
+        --grey: #718096;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; overflow: hidden; }
+      body {
+        background: radial-gradient(1200px 600px at 75% -10%, #241d31 0%, var(--bg) 60%);
+        color: var(--text);
+        font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      header {
+        position: fixed; top: 0; left: 0; right: 0;
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px; z-index: 10; pointer-events: none;
+      }
+      h1 { font-size: 16px; margin: 0; letter-spacing: 0.2px; }
+      .sub { color: var(--muted); font-size: 12px; }
+      .legend {
+        margin-left: auto; display: flex; gap: 14px; align-items: center;
+        background: rgba(28, 25, 35, 0.7); border: 1px solid var(--border);
+        border-radius: 10px; padding: 7px 12px; backdrop-filter: blur(8px);
+        pointer-events: auto;
+      }
+      .legend span { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11.5px; }
+      .legend .dot { width: 9px; height: 9px; border-radius: 50%; }
+      svg { width: 100vw; height: 100vh; display: block; cursor: grab; }
+      svg.panning { cursor: grabbing; }
+      .edge { stroke: var(--border); stroke-width: 1.5; fill: none; transition: stroke 120ms ease, opacity 120ms ease; }
+      .edge.hot { stroke: var(--accent); opacity: 1; }
+      .node { cursor: pointer; }
+      .node .halo { fill: none; stroke-width: 2.5; opacity: 0.9; transition: stroke 200ms ease; }
+      .node .body { fill: var(--panel); stroke: var(--border); stroke-width: 1; }
+      .node .glyph { font-size: 15px; }
+      .node .label {
+        fill: var(--text); font-size: 11.5px; font-weight: 600;
+        text-anchor: middle; dominant-baseline: middle;
+        paint-order: stroke; stroke: #121016; stroke-width: 3px; stroke-linejoin: round;
+      }
+      .node .state { fill: var(--muted); font-size: 10px; text-anchor: middle; }
+      .node.dim { opacity: 0.22; }
+      .node.dim .label { opacity: 0.6; }
+      .arrow { fill: var(--border); }
+      .arrow.hot { fill: var(--accent); }
+      .tooltip {
+        position: fixed; pointer-events: none; z-index: 20; max-width: 280px;
+        background: rgba(20, 18, 26, 0.96); border: 1px solid var(--border);
+        border-radius: 10px; padding: 9px 11px; font-size: 12px;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.5); opacity: 0; transition: opacity 100ms ease;
+      }
+      .tooltip.show { opacity: 1; }
+      .tooltip .t-name { font-weight: 700; margin-bottom: 3px; }
+      .tooltip .t-row { color: var(--muted); }
+      .tooltip .t-row b { color: var(--text); font-weight: 600; }
+      .empty {
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        color: var(--muted);
+      }
+      .hint {
+        position: fixed; bottom: 12px; left: 18px; color: var(--muted); font-size: 11px;
+        opacity: 0.7; pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>🕸️ Service Topology</h1>
+        <div class="sub" id="status">connecting…</div>
+      </div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--green)"></i>Running</span>
+        <span><i class="dot" style="background:var(--amber)"></i>Unhealthy</span>
+        <span><i class="dot" style="background:var(--blue)"></i>Stopped/Starting</span>
+        <span><i class="dot" style="background:var(--red)"></i>Failed</span>
+      </div>
+    </header>
+
+    <svg id="svg">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="arrow" d="M0,0 L10,5 L0,10 z" />
+        </marker>
+        <marker id="arrowHot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path class="arrow hot" d="M0,0 L10,5 L0,10 z" />
+        </marker>
+      </defs>
+      <g id="viewport">
+        <g id="edges"></g>
+        <g id="nodes"></g>
+      </g>
+    </svg>
+    <div class="empty" id="empty">Waiting for resources…</div>
+    <div class="tooltip" id="tooltip"></div>
+    <div class="hint">scroll to zoom · drag background to pan · drag a node to move it</div>
+
+    <script>
+      // --- Aspire Deck canvas bridge client -------------------------------
+      const CHANNEL = "aspire-deck";
+      let nextId = 1;
+      const pending = new Map();
+      function request(method, params) {
+        return new Promise((resolve, reject) => {
+          const id = nextId++;
+          pending.set(id, { resolve, reject });
+          parent.postMessage({ channel: CHANNEL, kind: "request", id, method, params }, "*");
+        });
+      }
+      const handlers = {};
+      function on(event, cb) { handlers[event] = cb; }
+      window.addEventListener("message", (e) => {
+        const msg = e.data;
+        if (!msg || msg.channel !== CHANNEL) return;
+        if (msg.kind === "response") {
+          const p = pending.get(msg.id);
+          if (!p) return;
+          pending.delete(msg.id);
+          msg.ok ? p.resolve(msg.result) : p.reject(new Error(msg.error));
+        } else if (msg.kind === "event") {
+          handlers[msg.event]?.(msg.payload);
+        }
+      });
+
+      // --- Health → color (mirrors Deck's StateDot cascade) ---------------
+      function colorOf(r) {
+        const s = (r.state || "").trim();
+        if (s === "Finished" || s === "Exited") return "var(--blue)";
+        if (s === "FailedToStart") return "var(--red)";
+        if (["Starting", "Building", "Waiting", "Stopping", "NotStarted", "Unknown", ""].includes(s)) return "var(--blue)";
+        if (s === "RuntimeUnhealthy") return "var(--amber)";
+        const style = r.stateStyle;
+        if (style === "warning") return "var(--amber)";
+        if (style === "error") return "var(--red)";
+        if (style === "info") return "var(--blue)";
+        const h = (r.health || "").toLowerCase();
+        if (h === "unhealthy" || h === "degraded") return "var(--amber)";
+        return "var(--green)";
+      }
+
+      function glyphOf(type) {
+        const t = (type || "").toLowerCase();
+        if (t.includes("project")) return "❖";
+        if (t.includes("container")) return "▣";
+        if (t.includes("executable")) return "≫";
+        if (t.includes("parameter")) return "✦";
+        if (t.includes("command")) return "⌘";
+        return "●";
+      }
+
+      // --- Graph state ----------------------------------------------------
+      const SVG_NS = "http://www.w3.org/2000/svg";
+      const nodesG = document.getElementById("nodes");
+      const edgesG = document.getElementById("edges");
+      const viewport = document.getElementById("viewport");
+      const svg = document.getElementById("svg");
+      const tooltip = document.getElementById("tooltip");
+
+      const resources = new Map();     // name -> resource
+      const pos = new Map();           // name -> { x, y, vx, vy, fixed }
+      let edges = [];                  // { from, to }
+      const adj = new Map();           // name -> Set(neighbor names)
+      let view = { x: 0, y: 0, k: 1 };
+      let hovered = null;
+      let settleFrames = 0;
+
+      function center() {
+        return { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+      }
+
+      function rebuild(list) {
+        resources.clear();
+        for (const r of list) {
+          if (!r.isHidden) resources.set(r.name, r);
+        }
+        // Edges from relationships that resolve to a visible resource.
+        edges = [];
+        adj.clear();
+        for (const r of resources.values()) {
+          adj.set(r.name, adj.get(r.name) || new Set());
+          for (const rel of r.relationships || []) {
+            if (resources.has(rel.resourceName) && rel.resourceName !== r.name) {
+              edges.push({ from: r.name, to: rel.resourceName });
+              adj.get(r.name).add(rel.resourceName);
+              if (!adj.has(rel.resourceName)) adj.set(rel.resourceName, new Set());
+              adj.get(rel.resourceName).add(r.name);
+            }
+          }
+        }
+        // Seed positions for new nodes near the center in a loose ring.
+        const c = center();
+        let i = 0;
+        const n = resources.size;
+        for (const name of resources.keys()) {
+          if (!pos.has(name)) {
+            const angle = (i / Math.max(n, 1)) * Math.PI * 2;
+            const radius = 120 + Math.random() * 160;
+            pos.set(name, { x: c.x + Math.cos(angle) * radius, y: c.y + Math.sin(angle) * radius, vx: 0, vy: 0, fixed: false });
+          }
+          i++;
+        }
+        // Drop positions for resources that disappeared.
+        for (const name of [...pos.keys()]) {
+          if (!resources.has(name)) pos.delete(name);
+        }
+        settleFrames = 260; // re-settle the layout on structural change
+      }
+
+      // --- Force-directed layout ------------------------------------------
+      function tick() {
+        const names = [...resources.keys()];
+        const c = center();
+        const K_REPEL = 9000;
+        const K_SPRING = 0.015;
+        const REST = 130;
+        const K_CENTER = 0.005;
+
+        for (const a of names) {
+          const pa = pos.get(a);
+          if (!pa || pa.fixed) continue;
+          let fx = 0, fy = 0;
+          // Repulsion from every other node.
+          for (const b of names) {
+            if (a === b) continue;
+            const pb = pos.get(b);
+            if (!pb) continue;
+            let dx = pa.x - pb.x, dy = pa.y - pb.y;
+            let d2 = dx * dx + dy * dy;
+            if (d2 < 1) { d2 = 1; dx = Math.random() - 0.5; dy = Math.random() - 0.5; }
+            const f = K_REPEL / d2;
+            const d = Math.sqrt(d2);
+            fx += (dx / d) * f;
+            fy += (dy / d) * f;
+          }
+          // Weak pull to center keeps disconnected nodes on screen.
+          fx += (c.x - pa.x) * K_CENTER;
+          fy += (c.y - pa.y) * K_CENTER;
+          pa.vx = (pa.vx + fx) * 0.82;
+          pa.vy = (pa.vy + fy) * 0.82;
+        }
+        // Springs along edges.
+        for (const e of edges) {
+          const pa = pos.get(e.from), pb = pos.get(e.to);
+          if (!pa || !pb) continue;
+          let dx = pb.x - pa.x, dy = pb.y - pa.y;
+          const d = Math.sqrt(dx * dx + dy * dy) || 1;
+          const f = K_SPRING * (d - REST);
+          const ux = dx / d, uy = dy / d;
+          if (!pa.fixed) { pa.vx += ux * f * 60; pa.vy += uy * f * 60; }
+          if (!pb.fixed) { pb.vx -= ux * f * 60; pb.vy -= uy * f * 60; }
+        }
+        // Integrate with clamping.
+        for (const name of names) {
+          const p = pos.get(name);
+          if (!p || p.fixed) continue;
+          p.vx = Math.max(-40, Math.min(40, p.vx));
+          p.vy = Math.max(-40, Math.min(40, p.vy));
+          p.x += p.vx * 0.18;
+          p.y += p.vy * 0.18;
+        }
+      }
+
+      // --- Rendering ------------------------------------------------------
+      function applyView() {
+        viewport.setAttribute("transform", `translate(${view.x},${view.y}) scale(${view.k})`);
+      }
+
+      function render() {
+        const names = [...resources.keys()];
+        document.getElementById("empty").style.display = names.length ? "none" : "flex";
+
+        // Edges.
+        edgesG.replaceChildren();
+        for (const e of edges) {
+          const pa = pos.get(e.from), pb = pos.get(e.to);
+          if (!pa || !pb) continue;
+          const hot = hovered && (e.from === hovered || e.to === hovered);
+          const line = document.createElementNS(SVG_NS, "path");
+          // Curve slightly so bidirectional edges don't overlap.
+          const mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2;
+          const dx = pb.x - pa.x, dy = pb.y - pa.y;
+          const off = 0.12;
+          const cx = mx - dy * off, cy = my + dx * off;
+          line.setAttribute("d", `M${pa.x},${pa.y} Q${cx},${cy} ${pb.x},${pb.y}`);
+          line.setAttribute("class", "edge" + (hot ? " hot" : ""));
+          line.setAttribute("marker-end", hot ? "url(#arrowHot)" : "url(#arrow)");
+          if (hovered && !hot) line.style.opacity = "0.15";
+          edgesG.appendChild(line);
+        }
+
+        // Nodes.
+        nodesG.replaceChildren();
+        for (const name of names) {
+          const r = resources.get(name);
+          const p = pos.get(name);
+          if (!p) continue;
+          const dim = hovered && hovered !== name && !(adj.get(hovered)?.has(name));
+
+          const g = document.createElementNS(SVG_NS, "g");
+          g.setAttribute("class", "node" + (dim ? " dim" : ""));
+          g.setAttribute("transform", `translate(${p.x},${p.y})`);
+          g.dataset.name = name;
+
+          const halo = document.createElementNS(SVG_NS, "circle");
+          halo.setAttribute("class", "halo");
+          halo.setAttribute("r", "21");
+          halo.setAttribute("stroke", colorOf(r));
+          g.appendChild(halo);
+
+          const body = document.createElementNS(SVG_NS, "circle");
+          body.setAttribute("class", "body");
+          body.setAttribute("r", "18");
+          g.appendChild(body);
+
+          const glyph = document.createElementNS(SVG_NS, "text");
+          glyph.setAttribute("class", "glyph");
+          glyph.setAttribute("text-anchor", "middle");
+          glyph.setAttribute("dominant-baseline", "central");
+          glyph.setAttribute("fill", colorOf(r));
+          glyph.textContent = glyphOf(r.resourceType);
+          g.appendChild(glyph);
+
+          const label = document.createElementNS(SVG_NS, "text");
+          label.setAttribute("class", "label");
+          label.setAttribute("y", "36");
+          label.textContent = r.displayName || name;
+          g.appendChild(label);
+
+          nodesG.appendChild(g);
+        }
+      }
+
+      function frame() {
+        if (settleFrames > 0) { tick(); settleFrames--; }
+        render();
+        requestAnimationFrame(frame);
+      }
+
+      // --- Interaction: pan, zoom, node drag, hover -----------------------
+      function clientToWorld(cx, cy) {
+        return { x: (cx - view.x) / view.k, y: (cy - view.y) / view.k };
+      }
+
+      let dragNode = null, panning = false, last = null;
+
+      svg.addEventListener("mousedown", (e) => {
+        const g = e.target.closest(".node");
+        if (g) {
+          dragNode = g.dataset.name;
+          const p = pos.get(dragNode);
+          if (p) p.fixed = true;
+        } else {
+          panning = true;
+          svg.classList.add("panning");
+        }
+        last = { x: e.clientX, y: e.clientY };
+      });
+      window.addEventListener("mousemove", (e) => {
+        if (dragNode) {
+          const w = clientToWorld(e.clientX, e.clientY);
+          const p = pos.get(dragNode);
+          if (p) { p.x = w.x; p.y = w.y; p.vx = 0; p.vy = 0; }
+        } else if (panning && last) {
+          view.x += e.clientX - last.x;
+          view.y += e.clientY - last.y;
+          last = { x: e.clientX, y: e.clientY };
+          applyView();
+        }
+      });
+      window.addEventListener("mouseup", () => {
+        dragNode = null; panning = false; last = null;
+        svg.classList.remove("panning");
+      });
+
+      svg.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        const nk = Math.max(0.25, Math.min(3, view.k * factor));
+        // Zoom toward the cursor.
+        const wx = (e.clientX - view.x) / view.k;
+        const wy = (e.clientY - view.y) / view.k;
+        view.k = nk;
+        view.x = e.clientX - wx * nk;
+        view.y = e.clientY - wy * nk;
+        applyView();
+      }, { passive: false });
+
+      // Hover highlighting + tooltip.
+      svg.addEventListener("mousemove", (e) => {
+        const g = e.target.closest(".node");
+        const name = g ? g.dataset.name : null;
+        if (name !== hovered) hovered = name;
+        if (name) {
+          const r = resources.get(name);
+          tooltip.innerHTML =
+            '<div class="t-name">' + esc(r.displayName || name) + "</div>" +
+            '<div class="t-row">Type: <b>' + esc(r.resourceType) + "</b></div>" +
+            '<div class="t-row">State: <b>' + esc(r.state || "—") + "</b></div>" +
+            (r.health ? '<div class="t-row">Health: <b>' + esc(r.health) + "</b></div>" : "") +
+            ((adj.get(name)?.size) ? '<div class="t-row">Connections: <b>' + adj.get(name).size + "</b></div>" : "");
+          tooltip.style.left = (e.clientX + 14) + "px";
+          tooltip.style.top = (e.clientY + 14) + "px";
+          tooltip.classList.add("show");
+        } else {
+          tooltip.classList.remove("show");
+        }
+      });
+      svg.addEventListener("mouseleave", () => { hovered = null; tooltip.classList.remove("show"); });
+
+      // Double-click a node to release its pinned position back to the layout.
+      svg.addEventListener("dblclick", (e) => {
+        const g = e.target.closest(".node");
+        if (g) {
+          const p = pos.get(g.dataset.name);
+          if (p) p.fixed = false;
+          settleFrames = Math.max(settleFrames, 120);
+        }
+      });
+
+      function esc(s) {
+        return String(s ?? "").replace(/[&<>"]/g, (c) =>
+          ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+      }
+
+      // --- Live data ------------------------------------------------------
+      function setStatus(text, count) {
+        document.getElementById("status").textContent =
+          (text || "connected") + (count != null ? " · " + count + " resources" : "");
+      }
+
+      on("resources", (evt) => {
+        if (evt.type === "snapshot") {
+          rebuild(evt.resources || []);
+        } else {
+          // Apply incremental upserts/deletes, then rebuild edges/positions.
+          const merged = new Map(resources);
+          for (const r of evt.upserts || []) merged.set(r.name, r);
+          for (const name of evt.deletes || []) merged.delete(name);
+          rebuild([...merged.values()]);
+        }
+        setStatus(currentApp, resources.size);
+      });
+
+      let currentApp = "connected";
+      async function start() {
+        try {
+          await request("ready");
+          const cfg = await request("getConfig");
+          currentApp = (cfg && cfg.applicationName) ? cfg.applicationName : "connected";
+          rebuild(await request("listResources"));
+          setStatus(currentApp, resources.size);
+        } catch (err) {
+          setStatus("not connected to a Deck host");
+          document.getElementById("empty").textContent =
+            "This canvas is open outside of Aspire Deck, so no live data is available.";
+        }
+      }
+
+      window.addEventListener("resize", applyView);
+      applyView();
+      requestAnimationFrame(frame);
+      start();
+    </script>
+  </body>
+</html>

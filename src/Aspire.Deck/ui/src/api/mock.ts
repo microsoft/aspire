@@ -259,6 +259,14 @@ const canvases: CanvasManifest[] = [
     // Loaded relative to the app base so it works under file:// in Tauri and http in dev.
     url: "sample-canvas.html",
   },
+  {
+    id: "service-topology",
+    title: "Service Topology",
+    description: "Live node-graph of resources and their relationships, colored by health.",
+    icon: "🕸️",
+    entry: "service-topology.html",
+    url: "service-topology.html",
+  },
 ];
 
 // Two attached AppHosts so the switcher is exercisable in browser/mock mode.

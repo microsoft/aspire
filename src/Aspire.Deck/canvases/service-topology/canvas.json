@@ -1,0 +1,7 @@
+{
+  "id": "service-topology",
+  "title": "Service Topology",
+  "description": "Live node-graph of resources and their relationships, colored by health.",
+  "icon": "🕸️",
+  "entry": "index.html"
+}
