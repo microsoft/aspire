@@ -58,15 +58,16 @@ jobs:
 
       # Compute the selected test subset + non-.NET job booleans. The action reuses this job's checkout
       # (checkout=false) so the BeforeBuildProps.props it may write survives for enumerate-tests below,
-      # and does its own minimal SDK bootstrap (setupDotNet=true). enforce: 'false' keeps this audit-only
-      # (the knob is documented on the action's `enforce` input). No job-level actions/setup-dotnet on
+      # and does its own minimal SDK bootstrap (setupDotNet=true). enforce: 'true' makes the selector gate
+      # the matrix (instead of audit-only run-all); the knob is documented on the action's `enforce` input.
+      # No job-level actions/setup-dotnet on
       # purpose -- global.json declares tools.runtimes, so Arcade always uses repo-local .dotnet.
       - name: Select relevant tests
         id: select_tests
         uses: ./.github/actions/select-tests
         with:
           checkout: 'false'
-          enforce: 'true'
+          enforce: 'true'  # [ignore][experiment] flipped from 'false' for fast validation CI
           commentFile: ${{ env.SELECT_TESTS_COMMENT_FILE }}
           # Kill switch: the 'run-full-ci' PR label forces the full matrix + all jobs. Read from the event
           # payload snapshot, so adding the label takes effect on the next push (or reopen), not on a
