@@ -32,8 +32,8 @@ fn default_entry() -> String {
     "index.html".to_string()
 }
 
-/// A canvas manifest as sent to the UI, with a resolved asset URL the webview can
-/// load in an `<iframe>`.
+/// A canvas manifest as sent to the UI, with a resolved URL the webview can load
+/// in an `<iframe>`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CanvasManifest {
@@ -42,7 +42,9 @@ pub struct CanvasManifest {
     pub description: Option<String>,
     pub icon: Option<String>,
     pub entry: String,
-    /// A `file://` URL pointing at the resolved entry HTML.
+    /// A `canvas://<id>/<entry>` URL served by Deck's custom URI scheme handler.
+    /// A raw `file://` URL cannot be used: webviews (notably WKWebView) refuse to
+    /// load a `file://` iframe from the app's custom origin, leaving it blank.
     pub url: String,
 }
 
@@ -84,9 +86,11 @@ fn load_manifest(dir: &Path) -> Option<CanvasManifest> {
         return None;
     }
 
-    // Canonicalize so the file:// URL is absolute and the webview can resolve it.
-    let canonical = std::fs::canonicalize(&entry_path).unwrap_or(entry_path);
-    let url = format!("file://{}", canonical.to_string_lossy());
+    // Served by the `canvas://` URI scheme handler (see lib.rs). The id is the URL
+    // host so relative asset references inside the canvas resolve within the same
+    // canvas. The entry is normalized to forward slashes for the URL path.
+    let entry_url = file.entry.replace('\\', "/");
+    let url = format!("canvas://{}/{}", file.id, entry_url.trim_start_matches('/'));
 
     Some(CanvasManifest {
         id: file.id,
@@ -96,6 +100,77 @@ fn load_manifest(dir: &Path) -> Option<CanvasManifest> {
         entry: file.entry,
         url,
     })
+}
+
+/// Returns the on-disk directory for the canvas with the given id, if found.
+/// Mirrors the discovery order in [`discover`] so the served files match the
+/// manifest the UI received.
+fn canvas_dir(id: &str) -> Option<PathBuf> {
+    for base in manifest_dirs() {
+        let entries = match std::fs::read_dir(&base) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let manifest_path = path.join("canvas.json");
+            let Ok(contents) = std::fs::read_to_string(&manifest_path) else {
+                continue;
+            };
+            let Ok(file) = serde_json::from_str::<CanvasManifestFile>(&contents) else {
+                continue;
+            };
+            if file.id == id {
+                return std::fs::canonicalize(&path).ok().or(Some(path));
+            }
+        }
+    }
+    None
+}
+
+/// Resolves a request for `rel` within the canvas `id` to a readable file on disk.
+/// Guards against path traversal: the canonicalized result must stay within the
+/// canvas directory. An empty path serves the manifest's entry via `index.html`
+/// fallback resolution by the caller.
+pub fn resolve_asset(id: &str, rel: &str) -> Option<PathBuf> {
+    let root = canvas_dir(id)?;
+    let rel = rel.trim_start_matches('/');
+    let rel = if rel.is_empty() { "index.html" } else { rel };
+
+    let candidate = root.join(rel);
+    let canonical = std::fs::canonicalize(&candidate).ok()?;
+    if !canonical.starts_with(&root) {
+        return None;
+    }
+    if canonical.is_file() {
+        Some(canonical)
+    } else {
+        None
+    }
+}
+
+/// Maps a file extension to a content type for canvas assets.
+pub fn content_type_for(path: &Path) -> &'static str {
+    match path.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+        Some("html" | "htm") => "text/html; charset=utf-8",
+        Some("js" | "mjs") => "text/javascript; charset=utf-8",
+        Some("css") => "text/css; charset=utf-8",
+        Some("json") => "application/json; charset=utf-8",
+        Some("svg") => "image/svg+xml",
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("ico") => "image/x-icon",
+        Some("woff2") => "font/woff2",
+        Some("woff") => "font/woff",
+        Some("wasm") => "application/wasm",
+        Some("map") => "application/json; charset=utf-8",
+        _ => "application/octet-stream",
+    }
 }
 
 /// Discovers all available canvases. Later discoveries do not override earlier

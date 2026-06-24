@@ -42,6 +42,37 @@ pub fn run() {
     let canvases = canvas::discover();
 
     tauri::Builder::default()
+        .register_uri_scheme_protocol("canvas", |_ctx, request| {
+            // Serves canvas files for `canvas://<id>/<relative-path>` iframes. The
+            // canvas id is the URL host; the path is resolved within that canvas's
+            // directory (with traversal protection). See canvas::resolve_asset.
+            use tauri::http::{header::CONTENT_TYPE, Response, StatusCode};
+
+            let uri = request.uri();
+            let id = uri.host().unwrap_or("").to_string();
+            let rel = uri.path().to_string();
+
+            match crate::canvas::resolve_asset(&id, &rel) {
+                Some(file) => match std::fs::read(&file) {
+                    Ok(bytes) => Response::builder()
+                        .status(StatusCode::OK)
+                        .header(CONTENT_TYPE, crate::canvas::content_type_for(&file))
+                        // Allow the sandboxed iframe to message the host and load
+                        // sibling assets from the same canvas origin.
+                        .header("Access-Control-Allow-Origin", "*")
+                        .body(bytes)
+                        .unwrap_or_else(|_| Response::new(Vec::new())),
+                    Err(_) => Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Vec::new())
+                        .unwrap_or_else(|_| Response::new(Vec::new())),
+                },
+                None => Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Vec::new())
+                    .unwrap_or_else(|_| Response::new(Vec::new())),
+            }
+        })
         .setup(move |app| {
             let app_handle = app.handle().clone();
 

@@ -5,8 +5,9 @@ import { attachCanvasBridge } from "../lib/canvasBridge";
 import { EmptyState } from "../components/EmptyState";
 import { BackIcon, CanvasIcon } from "../components/Icons";
 
-// Resolves a canvas url against the app base so it loads under both file://
-// (Tauri) and http (dev/preview). Absolute and data: urls are passed through.
+// Resolves a canvas url against the app base so it loads under both the native
+// `canvas://` scheme (Tauri) and http (dev/preview). Absolute-scheme and
+// protocol-relative urls are passed through unchanged.
 function resolveCanvasUrl(url: string): string {
   if (/^[a-z]+:/i.test(url) || url.startsWith("//")) {
     return url;
