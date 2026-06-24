@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -17,6 +17,7 @@ using Microsoft.Extensions.Time.Testing;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using InvocationConfiguration = System.CommandLine.InvocationConfiguration;
+using Aspire.TestUtilities;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -206,6 +207,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/18476")]
     public async Task LsCommand_JsonFormat_OnlyJsonOnStdout_StatusMessagesOnStderr()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
