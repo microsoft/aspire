@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard improvement: hides parameters from the graph view and resource type filter for cleaner visualization",
+  "mergedAt": "2026-06-23T22:04:54Z",
+  "number": 18313,
+  "runDate": "2026-06-24T00:25:33Z",
+  "status": "included",
+  "title": "Hide parameters from resource graph view and type filter"
+}

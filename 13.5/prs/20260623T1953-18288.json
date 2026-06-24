@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Removes internal CI workflow and script for refreshing TypeScript SDKs - no user-visible effect",
+  "mergedAt": "2026-06-23T19:53:07Z",
+  "number": 18288,
+  "runDate": "2026-06-24T00:25:33Z",
+  "status": "excluded",
+  "title": "Remove refresh-typescript-sdks workflow and script"
+}

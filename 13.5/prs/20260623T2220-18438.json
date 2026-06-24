@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "CI test trigger map update - internal engineering only, no user-visible effect",
+  "mergedAt": "2026-06-23T22:20:21Z",
+  "number": 18438,
+  "runDate": "2026-06-24T00:25:33Z",
+  "status": "excluded",
+  "title": "Trigger polyglot validation on integration ATS baseline changes"
+}

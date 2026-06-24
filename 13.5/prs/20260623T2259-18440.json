@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Removes GitHub Actions badges from npm package README - minor engineering/documentation change, no user-visible product impact",
+  "mergedAt": "2026-06-23T22:59:22Z",
+  "number": 18440,
+  "runDate": "2026-06-24T00:25:33Z",
+  "status": "excluded",
+  "title": "Remove npm README workflow badges"
+}

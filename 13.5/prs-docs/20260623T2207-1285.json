@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "General deployment documentation clarifications about AppHost role in CI/CD pipelines; no specific product PR match found",
+  "mergedAt": "2026-06-23T22:07:39Z",
+  "number": 1285,
+  "runDate": "2026-06-24T00:25:33Z",
+  "status": "excluded",
+  "title": "Clarify AppHost role in deployment pipelines"
+}

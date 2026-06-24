@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Parameters are now hidden from the Dashboard's Graph view and the resource type filter. Parameters have their own dedicated Parameters tab, so excluding them from the graph reduces visual clutter and makes resource dependency relationships easier to read.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-06-23T22:04:54Z",
+  "lastMergedAt": "2026-06-23T22:04:54Z",
+  "name": "Parameters hidden from resource graph view",
+  "owner": "JamesNK",
+  "prs": [
+    18313
+  ]
+}

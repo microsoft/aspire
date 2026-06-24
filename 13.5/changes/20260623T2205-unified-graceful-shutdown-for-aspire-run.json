@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The `aspire run` command now uses a unified graceful shutdown sequence for all AppHost types (C# and TypeScript/JavaScript). On Windows, child processes are launched in an isolated console with proper Ctrl+C propagation to avoid signal inheritance issues with wrapper processes like tsx and npm. This makes shutdown reliable and consistent with `aspire start`/`aspire stop` on all platforms.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🛑",
+  "firstMergedAt": "2026-06-23T22:05:11Z",
+  "lastMergedAt": "2026-06-23T22:05:11Z",
+  "name": "Unified graceful shutdown for aspire run",
+  "owner": "danegsta",
+  "prs": [
+    17814
+  ]
+}

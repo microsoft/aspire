@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Unified graceful shutdown sequence for aspire run across all AppHost types; fixes Windows Ctrl+C propagation issues with TS/JS wrappers",
+  "mergedAt": "2026-06-23T22:05:11Z",
+  "number": 17814,
+  "runDate": "2026-06-24T00:25:33Z",
+  "status": "included",
+  "title": "Fix aspire run graceful shtudown behavior and unify with aspire start/aspire stop."
+}
