@@ -1,5 +1,7 @@
 import * as assert from 'assert';
 import type { TelemetryReporter } from '@vscode/extension-telemetry';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import type { CandidateAppHostDisplayInfo, AppHostDiscoveryService } from '../utils/appHostDiscovery';
@@ -30,6 +32,15 @@ class FakeTelemetryReporter {
 suite('MeaningfulEngagementReporter', () => {
     let fake: FakeTelemetryReporter;
     let restoreReporter: () => void;
+    const tempDirs: string[] = [];
+    const tempParent = join(process.cwd(), '.test-tmp');
+
+    function makeTempDir(): string {
+        mkdirSync(tempParent, { recursive: true });
+        const dir = mkdtempSync(join(tempParent, 'meaningful-engagement-'));
+        tempDirs.push(dir);
+        return dir;
+    }
 
     setup(() => {
         fake = new FakeTelemetryReporter();
@@ -39,21 +50,35 @@ suite('MeaningfulEngagementReporter', () => {
 
     teardown(() => {
         sinon.restore();
+        for (const dir of tempDirs) {
+            if (existsSync(dir)) {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        }
+        tempDirs.length = 0;
         restoreReporter();
         __resetCommonPropertiesForTests();
     });
 
+    suiteTeardown(() => {
+        if (existsSync(tempParent)) {
+            rmSync(tempParent, { recursive: true, force: true });
+        }
+    });
+
     test('includes AppHost target versions with AppHost language telemetry', async () => {
+        const workspacePath = makeTempDir();
+        const appHostPath = join(workspacePath, 'AppHost.csproj');
+        writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk/13.5.0" />');
         const workspaceFolder = {
-            uri: vscode.Uri.file('/workspace'),
+            uri: vscode.Uri.file(workspacePath),
             name: 'workspace',
             index: 0,
         } as vscode.WorkspaceFolder;
         const candidates: CandidateAppHostDisplayInfo[] = [{
-            path: '/workspace/AppHost/AppHost.csproj',
+            path: appHostPath,
             language: 'csharp',
             status: 'buildable',
-            aspireHostingVersion: '13.5.0',
         }];
         const discovery = {
             onDidChangeCandidates: () => ({ dispose: () => { } }),

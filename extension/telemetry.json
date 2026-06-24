@@ -77,16 +77,6 @@
         "purpose": "FeatureInsight",
         "comment": "The AppHost project language detected by the extension."
       },
-      "apphost_target_version": {
-        "classification": "SystemMetaData",
-        "purpose": "FeatureInsight",
-        "comment": "The Aspire version targeted by the AppHost."
-      },
-      "apphost_is_directory": {
-        "classification": "SystemMetaData",
-        "purpose": "FeatureInsight",
-        "comment": "Whether the AppHost launch target was a directory."
-      },
       "command": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",

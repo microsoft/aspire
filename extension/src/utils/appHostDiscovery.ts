@@ -17,7 +17,6 @@ export interface CandidateAppHostDisplayInfo {
     path: string;
     language: string | null;
     status: string | null;
-    aspireHostingVersion?: string | null;
     selected?: boolean;
 }
 
@@ -26,7 +25,6 @@ export interface AppHostCandidate {
     path: string;
     language: string;
     status: string;
-    aspireHostingVersion?: string | null;
 }
 
 export interface AppHostProjectSearchResult {
@@ -632,10 +630,7 @@ function isLsCandidate(obj: unknown): obj is CandidateAppHostDisplayInfo {
         && typeof obj === 'object'
         && typeof (obj as CandidateAppHostDisplayInfo).path === 'string'
         && typeof (obj as CandidateAppHostDisplayInfo).language === 'string'
-        && typeof (obj as CandidateAppHostDisplayInfo).status === 'string'
-        && ((obj as CandidateAppHostDisplayInfo).aspireHostingVersion === undefined
-            || (obj as CandidateAppHostDisplayInfo).aspireHostingVersion === null
-            || typeof (obj as CandidateAppHostDisplayInfo).aspireHostingVersion === 'string');
+        && typeof (obj as CandidateAppHostDisplayInfo).status === 'string';
 }
 
 function toDisplayCandidate(candidate: CandidateAppHostDisplayInfo | AppHostCandidate): CandidateAppHostDisplayInfo {
@@ -644,10 +639,6 @@ function toDisplayCandidate(candidate: CandidateAppHostDisplayInfo | AppHostCand
         language: candidate.language,
         status: candidate.status,
     };
-
-    if (candidate.aspireHostingVersion !== undefined) {
-        displayCandidate.aspireHostingVersion = candidate.aspireHostingVersion;
-    }
 
     return displayCandidate;
 }
@@ -709,10 +700,7 @@ function isAppHostProjectSearchResult(obj: unknown): obj is AppHostProjectSearch
             && typeof candidate.relativePath === 'string'
             && typeof candidate.path === 'string'
             && typeof candidate.language === 'string'
-            && typeof candidate.status === 'string'
-            && (candidate.aspireHostingVersion === undefined
-                || candidate.aspireHostingVersion === null
-                || typeof candidate.aspireHostingVersion === 'string'));
+            && typeof candidate.status === 'string');
 }
 
 function toCandidatesFromLegacySearchResult(parsed: LegacyAppHostProjectSearchResult): CandidateAppHostDisplayInfo[] {

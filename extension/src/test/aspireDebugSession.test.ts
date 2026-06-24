@@ -87,7 +87,7 @@ suite('AspireDebugSession tests', () => {
         ]);
     });
 
-    test('reports unknown AppHost target version in start telemetry before async enrichment', async () => {
+    test('omits AppHost target version in start telemetry before async enrichment', async () => {
         const fake = new FakeTelemetryReporter();
         const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
         const parentDebugSession = {
@@ -123,7 +123,7 @@ suite('AspireDebugSession tests', () => {
             const event = fake.events.find(event => event.name === 'debug/apphost/start');
             assert.ok(event);
             assert.strictEqual(event.properties?.apphost_language, 'csharp');
-            assert.strictEqual(event.properties?.apphost_target_version, 'unknown');
+            assert.strictEqual(Object.prototype.hasOwnProperty.call(event.properties ?? {}, 'apphost_target_version'), false);
             await waitFor(() => spawnStub.calledOnce);
         }
         finally {
@@ -178,7 +178,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             const event = eventsAtSpawn.find(event => event.name === 'debug/apphost/start');
             assert.ok(event, 'Expected debug/apphost/start to be emitted before spawnAspireCommand.');
             assert.strictEqual(event.properties?.apphost_language, 'csharp');
-            assert.strictEqual(event.properties?.apphost_target_version, 'unknown');
+            assert.strictEqual(Object.prototype.hasOwnProperty.call(event.properties ?? {}, 'apphost_target_version'), false);
         }
         finally {
             resolveTargetVersion?.('13.6.0');
@@ -440,7 +440,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             await waitFor(() => spawnStub.calledOnce);
             const startEvent = fake.events.find(event => event.name === 'debug/apphost/start');
             assert.ok(startEvent);
-            assert.strictEqual(startEvent.properties?.apphost_is_directory, 'unknown');
+            assert.strictEqual(Object.prototype.hasOwnProperty.call(startEvent.properties ?? {}, 'apphost_is_directory'), false);
 
             resolveLanguage!('typescript');
             await languagePromise;
@@ -512,7 +512,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             const startEvent = fake.events.find(event => event.name === 'debug/apphost/start');
             assert.ok(startEvent);
             assert.strictEqual(startEvent.properties?.apphost_language, 'unknown');
-            assert.strictEqual(startEvent.properties?.apphost_target_version, 'unknown');
+            assert.strictEqual(Object.prototype.hasOwnProperty.call(startEvent.properties ?? {}, 'apphost_target_version'), false);
 
             const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
             aspireDebugSession.dispose();

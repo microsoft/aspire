@@ -211,8 +211,9 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     // Telemetry: emit `debug/apphost/start` once per AppHost launch. This must
     // happen before any awaited filesystem metadata work because child
     // `debug/runsession/start` events can arrive immediately after CLI spawn.
-    // Values that need async enrichment start as bounded sentinel values here
-    // and are resolved in the background for the matching end event.
+    // Values that need async enrichment are resolved in the background for the
+    // matching end event instead of being reported as permanently-unknown start
+    // dimensions.
     this._appHostStartTimeMs = Date.now();
     this._appHostModeAtLaunch = noDebug ? 'run' : 'debug';
     // Before the filesystem probe below, the file extension is the only language
@@ -232,10 +233,6 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     sendTelemetryEvent('debug/apphost/start', {
       mode: this._appHostModeAtLaunch,
       apphost_language: this._appHostLanguageAtLaunch,
-      apphost_target_version: this._appHostTargetVersionAtLaunch,
-      // The true directory/file answer requires fs.stat; keep start telemetry
-      // ahead of filesystem work so child debug telemetry cannot overtake it.
-      apphost_is_directory: 'unknown',
       command: commandForTelemetry,
     });
 

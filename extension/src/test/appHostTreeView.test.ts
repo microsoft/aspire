@@ -198,13 +198,23 @@ function getPowerShellForShellProof(): string | undefined {
 function makeProofTerminalProvider(sandbox: sinon.SinonSandbox, proof: ShellProof, commandLines: string[]): { terminalProvider: AspireTerminalProvider; dispose: () => void } {
     const subscriptions: vscode.Disposable[] = [];
     const terminalProvider = new AspireTerminalProvider(subscriptions);
+    terminalProvider.rpcServerConnectionInfo = {
+        address: 'http://localhost:1234',
+        token: 'rpc-token',
+        cert: 'rpc-cert',
+    };
+    terminalProvider.dcpServerConnectionInfo = {
+        address: 'http://localhost:5678',
+        token: 'dcp-token',
+        certificate: 'dcp-cert',
+    };
     sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: proof.cliPath, available: true, source: 'configured' });
     sandbox.stub(terminalProvider, 'isCliDebugLoggingEnabled').returns(false);
+    const commandSubscription = terminalProvider.onDidSendAspireCommand(event => commandLines.push(event.commandLine));
     sandbox.stub(terminalProvider, 'getAspireTerminal').returns({
         terminal: {
             shellIntegration: {
-                executeCommand: (commandLine: string) => {
-                    commandLines.push(commandLine);
+                executeCommand: (_commandLine: string) => {
                     return {} as vscode.TerminalShellExecution;
                 }
             },
@@ -217,6 +227,7 @@ function makeProofTerminalProvider(sandbox: sinon.SinonSandbox, proof: ShellProo
     return {
         terminalProvider,
         dispose: () => {
+            commandSubscription.dispose();
             terminalProvider.dispose();
             subscriptions.forEach(subscription => subscription.dispose());
         },

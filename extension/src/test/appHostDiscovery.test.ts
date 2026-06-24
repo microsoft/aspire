@@ -147,7 +147,6 @@ suite('AppHost discovery', () => {
                     path: buildPath('workspace', 'NestedAppHost', 'apphost.ts'),
                     language: 'typescript/nodejs',
                     status: 'buildable',
-                    aspireHostingVersion: '13.5.0',
                 }]));
                 options?.exitCallback?.(0);
                 return { kill: () => { } } as any;

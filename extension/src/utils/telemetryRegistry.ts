@@ -62,7 +62,7 @@ export interface TelemetryEventSchema {
         measurements: 'running_apphosts' | 'total_resources';
     };
     'debug/apphost/start': {
-        properties: 'mode' | 'apphost_language' | 'apphost_target_version' | 'apphost_is_directory' | 'command';
+        properties: 'mode' | 'apphost_language' | 'command';
         measurements: never;
     };
     'debug/apphost/end': {

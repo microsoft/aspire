@@ -21,7 +21,7 @@ export async function summarizeAppHostTargetVersions(candidates: readonly Candid
 
     const versions = new Set<string>();
     const resolvedVersions = await Promise.all(candidates.map(async candidate =>
-        normalizeVersion(candidate.aspireHostingVersion) ?? await getAppHostTargetVersion(candidate.path)));
+        await getAppHostTargetVersion(candidate.path)));
 
     for (const version of resolvedVersions) {
         addCandidateVersion(versions, version);
@@ -262,8 +262,8 @@ function getAspireHostingPackageVersionFromItems(contents: string, itemNames: re
     //   <PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.1" />
     //   <PackageReference Include="Aspire.Hosting"><Version>8.2.1</Version></PackageReference>
     //   <PackageVersion Include="Aspire.Hosting" Version="8.2.2" />
-    // The CLI prefers Aspire.Hosting before Aspire.Hosting.AppHost; keep the fallback aligned so
-    // old CLIs that omit aspireHostingVersion report the same version source as new CLIs.
+    // The CLI prefers Aspire.Hosting before Aspire.Hosting.AppHost; keep extension-side telemetry
+    // aligned with that precedence while parsing project files locally.
     const packageIds = ['Aspire.Hosting', 'Aspire.Hosting.AppHost'];
     let referencesAspireHostingPackage = false;
     let hasInlineVersion = false;
