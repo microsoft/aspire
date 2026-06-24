@@ -7,7 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Seq\Aspire.Hosting.Seq.csproj" />
-    <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
 
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
   </ItemGroup>

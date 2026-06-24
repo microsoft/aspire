@@ -10,7 +10,7 @@
     <ProjectReference Include="..\..\src\Aspire.Hosting.SqlServer\Aspire.Hosting.SqlServer.csproj" />
     <ProjectReference Include="..\..\src\Components\Aspire.Microsoft.Data.SqlClient\Aspire.Microsoft.Data.SqlClient.csproj" />
     <ProjectReference Include="..\..\src\Components\Aspire.Microsoft.EntityFrameworkCore.SqlServer\Aspire.Microsoft.EntityFrameworkCore.SqlServer.csproj" />
-    <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
   </ItemGroup>
 
 </Project>
