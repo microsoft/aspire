@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Diagnostics;
@@ -474,11 +475,11 @@ public sealed class InternalMicrosoftDetectorTests
         TimeSpan? gitHubCandidateTimeout = null)
     {
         var executionContext = Utils.TestExecutionContextHelper.CreateExecutionContext(
-            new DirectoryInfo(Path.GetDirectoryName(cacheFilePath) ?? AppContext.BaseDirectory),
-            environmentVariables: environmentVariables);
+            new DirectoryInfo(Path.GetDirectoryName(cacheFilePath) ?? AppContext.BaseDirectory));
 
         return new InternalMicrosoftDetector(
             executionContext,
+            new TestEnvironment(environmentVariables),
             cacheFilePath,
             new FixedTimeProvider(now),
             NullLogger<InternalMicrosoftDetector>.Instance,

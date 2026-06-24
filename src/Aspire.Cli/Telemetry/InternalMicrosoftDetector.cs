@@ -45,6 +45,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private readonly string _cacheFilePath;
     private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
     private readonly IProcessExecutionFactory _processExecutionFactory;
     private readonly HttpMessageHandler? _gitHubHttpMessageHandler;
     private readonly TimeSpan _gitHubCandidateTimeout;
@@ -52,9 +53,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     private readonly ILogger<InternalMicrosoftDetector> _logger;
     private readonly IReadOnlyList<IReadOnlyList<InternalMicrosoftProbe>> _probeStages;
 
-    public InternalMicrosoftDetector(CliExecutionContext executionContext, TimeProvider timeProvider, ILogger<InternalMicrosoftDetector> logger, IProcessExecutionFactory processExecutionFactory)
+    public InternalMicrosoftDetector(CliExecutionContext executionContext, IEnvironment environment, TimeProvider timeProvider, ILogger<InternalMicrosoftDetector> logger, IProcessExecutionFactory processExecutionFactory)
         : this(
             executionContext,
+            environment,
             Path.Combine(executionContext.CacheDirectory.FullName, CacheSubdirectoryName, CacheFileName),
             timeProvider,
             logger,
@@ -65,6 +67,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     internal InternalMicrosoftDetector(
         CliExecutionContext executionContext,
+        IEnvironment environment,
         string cacheFilePath,
         TimeProvider timeProvider,
         ILogger<InternalMicrosoftDetector> logger,
@@ -75,6 +78,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     {
         _cacheFilePath = cacheFilePath;
         _executionContext = executionContext;
+        _environment = environment;
         _processExecutionFactory = processExecutionFactory;
         _gitHubHttpMessageHandler = gitHubHttpMessageHandler;
         _gitHubCandidateTimeout = gitHubCandidateTimeout ?? s_gitHubCandidateTimeout;
@@ -361,10 +365,10 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     internal Task<InternalMicrosoftProbeResult> CheckWindowsUserDnsDomainAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var userDnsDomain = _executionContext.GetEnvironmentVariable("USERDNSDOMAIN");
+        var userDnsDomain = _environment.GetEnvironmentVariable("USERDNSDOMAIN");
         var domain = ExtractAdDomainNameFromCorpDnsName(userDnsDomain);
         return Task.FromResult(domain is not null
-            ? Detected(_executionContext.GetEnvironmentVariable("USERNAME"), domain)
+            ? Detected(_environment.GetEnvironmentVariable("USERNAME"), domain)
             : InternalMicrosoftProbeResult.NotDetected);
     }
 
@@ -501,8 +505,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
         return result.ExitCode == 0
             ? EvaluateWindowsWorkplaceJoin(
                 result.Stdout,
-                _executionContext.GetEnvironmentVariable("USERNAME"),
-                _executionContext.GetEnvironmentVariable("USERDNSDOMAIN"))
+                _environment.GetEnvironmentVariable("USERNAME"),
+                _environment.GetEnvironmentVariable("USERDNSDOMAIN"))
             : InternalMicrosoftProbeResult.NotDetected;
     }
 
@@ -758,7 +762,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(s_processProbeTimeout);
-        using var execution = _processExecutionFactory.CreateExecution(
+        await using var execution = _processExecutionFactory.CreateExecution(
             fileName,
             arguments,
             env: null,
@@ -1086,7 +1090,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             yield break;
         }
 
-        var xdgConfigHome = _executionContext.GetEnvironmentVariable("XDG_CONFIG_HOME");
+        var xdgConfigHome = _environment.GetEnvironmentVariable("XDG_CONFIG_HOME");
         var configHome = string.IsNullOrWhiteSpace(xdgConfigHome) ? Path.Combine(home, ".config") : xdgConfigHome;
         foreach (var product in GetVsCodeProductNames())
         {
@@ -1112,8 +1116,8 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(_executionContext.GetEnvironmentVariable("WSL_DISTRO_NAME")) ||
-            !string.IsNullOrWhiteSpace(_executionContext.GetEnvironmentVariable("WSL_INTEROP")))
+        if (!string.IsNullOrWhiteSpace(_environment.GetEnvironmentVariable("WSL_DISTRO_NAME")) ||
+            !string.IsNullOrWhiteSpace(_environment.GetEnvironmentVariable("WSL_INTEROP")))
         {
             return true;
         }
@@ -1137,14 +1141,14 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private bool CommandExists(string command)
     {
-        var path = _executionContext.GetEnvironmentVariable("PATH");
+        var path = _environment.GetEnvironmentVariable("PATH");
         if (string.IsNullOrWhiteSpace(path))
         {
             return false;
         }
 
         var extensions = OperatingSystem.IsWindows() && string.IsNullOrEmpty(Path.GetExtension(command))
-            ? (_executionContext.GetEnvironmentVariable("PATHEXT") ?? ".EXE;.CMD;.BAT;.COM").Split(';', StringSplitOptions.RemoveEmptyEntries)
+            ? (_environment.GetEnvironmentVariable("PATHEXT") ?? ".EXE;.CMD;.BAT;.COM").Split(';', StringSplitOptions.RemoveEmptyEntries)
             : [string.Empty];
 
         foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
@@ -1164,20 +1168,13 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private string GetSpecialFolderPath(Environment.SpecialFolder folder, string environmentVariableName)
     {
-        return _executionContext.GetEnvironmentVariable(environmentVariableName) ??
+        return _environment.GetEnvironmentVariable(environmentVariableName) ??
             Environment.GetFolderPath(folder);
     }
 
     private IEnumerable<(string Name, string? Value)> GetEnvironmentVariables()
     {
-        if (_executionContext.EnvironmentVariables is not null)
-        {
-            return _executionContext.EnvironmentVariables.Select(pair => (pair.Key, pair.Value));
-        }
-
-        return Environment.GetEnvironmentVariables()
-            .Cast<System.Collections.DictionaryEntry>()
-            .Select(e => (Name: e.Key?.ToString() ?? string.Empty, Value: e.Value?.ToString()));
+        return _environment.GetEnvironmentVariables();
     }
 
     private static JsonObject? TryParseJsonObject(string text)

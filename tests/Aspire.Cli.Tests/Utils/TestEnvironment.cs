@@ -21,6 +21,11 @@ internal sealed class TestEnvironment : IEnvironment
         return Variables.TryGetValue(variable, out var value) ? value : null;
     }
 
+    public IEnumerable<(string Name, string? Value)> GetEnvironmentVariables()
+    {
+        return Variables.Select(pair => (pair.Key, pair.Value));
+    }
+
     public bool IsWindows { get; init; } = OperatingSystem.IsWindows();
 
     public bool IsLinux { get; init; } = OperatingSystem.IsLinux();
