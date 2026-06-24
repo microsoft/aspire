@@ -20,12 +20,12 @@ mod proto;
 mod resource_client;
 mod state;
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use tauri::Manager;
 
 use crate::config::{DeckConfig, AuthMode};
-use crate::otlp::{OtlpAuth, OtlpShared, TelemetryStore};
+use crate::otlp::{OtlpAuth, OtlpShared};
 use crate::state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -76,13 +76,13 @@ pub fn run() {
         .setup(move |app| {
             let app_handle = app.handle().clone();
 
-            let otlp_shared = Arc::new(OtlpShared {
-                store: Mutex::new(TelemetryStore::new()),
-                app: app_handle.clone(),
-                auth: OtlpAuth::from_config(&config.otlp),
-            });
+            let otlp_shared = Arc::new(OtlpShared::new(
+                app_handle.clone(),
+                OtlpAuth::from_config(&config.otlp),
+            ));
 
-            // Start OTLP ingestion servers (shared across all attached AppHosts).
+            // Start OTLP ingestion servers (shared endpoints; records are attributed
+            // to the owning AppHost session at ingest time).
             otlp::start(app_handle.clone(), &config.otlp, otlp_shared.clone());
 
             let state = Arc::new(AppState::new(
@@ -92,6 +92,10 @@ pub fn run() {
                 app_handle.clone(),
             ));
             app.manage(state.clone());
+
+            // Wire the OTLP store's back-reference so ingestion can attribute
+            // telemetry to AppHost sessions and emit the active one's data.
+            state.otlp.set_state(&state);
 
             // Bootstrap the AppHost provided via the environment (e.g. `aspire deck`
             // or the first `aspire run --deck`). Additional AppHosts attach later

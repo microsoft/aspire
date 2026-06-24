@@ -18,7 +18,7 @@ use tonic::transport::Channel;
 use crate::canvas::CanvasManifest;
 use crate::config::{AuthMode, DeckConfig};
 use crate::model::{AppHostInfo, ConnectionStatus, Resource, ResourcesEvent};
-use crate::otlp::OtlpShared;
+use crate::otlp::{OtlpShared, TelemetryStore};
 
 /// A single attached AppHost: one resource-service connection, its resources, and
 /// any active console-log streams.
@@ -49,6 +49,11 @@ pub struct Session {
     pub pending_interaction: Mutex<Option<crate::proto::aspire::v1::WatchInteractionsResponseUpdate>>,
     /// The interaction-watch loop task.
     pub interaction_handle: Mutex<Option<JoinHandle<()>>>,
+    /// This AppHost's own telemetry (metrics, traces, structured logs). Telemetry
+    /// is partitioned per AppHost — OTLP records are attributed to the session that
+    /// owns the resource by `service.name` — so switching AppHosts shows only the
+    /// active one's telemetry instead of a merged firehose.
+    pub telemetry: Mutex<TelemetryStore>,
 }
 
 impl Session {
@@ -67,6 +72,7 @@ impl Session {
             interaction_tx: Mutex::new(None),
             pending_interaction: Mutex::new(None),
             interaction_handle: Mutex::new(None),
+            telemetry: Mutex::new(TelemetryStore::new()),
         }
     }
 
@@ -245,5 +251,18 @@ impl AppState {
             let _ = self.app.emit("deck://resources", &ResourcesEvent::snapshot(vec![]));
             let _ = self.app.emit("deck://interaction", &crate::model::InteractionEvent::complete());
         }
+        // Telemetry is per-AppHost, so a switch must reset the UI to the active
+        // AppHost's metrics/traces/logs (or clear them when none is attached).
+        self.emit_active_telemetry();
+    }
+
+    /// Emits the active AppHost's telemetry summary (or an empty one when none is
+    /// attached). Called on switch and by the debounced OTLP emitter.
+    pub fn emit_active_telemetry(&self) {
+        let summary = match self.active_session() {
+            Some(session) => session.telemetry.lock().unwrap().summary(),
+            None => crate::otlp::TelemetrySummary::empty(),
+        };
+        let _ = self.app.emit("deck://telemetry", &summary);
     }
 }

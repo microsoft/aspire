@@ -96,6 +96,20 @@ pub struct TelemetrySummary {
     pub metrics: Vec<MetricSummary>,
 }
 
+impl TelemetrySummary {
+    /// An empty summary, emitted when no AppHost is active so the UI clears.
+    pub fn empty() -> Self {
+        TelemetrySummary {
+            log_count: 0,
+            span_count: 0,
+            metric_count: 0,
+            recent_logs: Vec::new(),
+            recent_spans: Vec::new(),
+            metrics: Vec::new(),
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -107,7 +121,6 @@ pub struct TelemetryStore {
     recent_logs: VecDeque<LogRecordSummary>,
     recent_spans: VecDeque<SpanSummary>,
     metrics: metrics::MetricStore,
-    last_emit: Option<Instant>,
 }
 
 impl TelemetryStore {
@@ -119,7 +132,6 @@ impl TelemetryStore {
             recent_logs: VecDeque::with_capacity(RECENT_CAP),
             recent_spans: VecDeque::with_capacity(RECENT_CAP),
             metrics: metrics::MetricStore::default(),
-            last_emit: None,
         }
     }
 
@@ -275,30 +287,89 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 // ---------------------------------------------------------------------------
 
 pub struct OtlpShared {
-    pub store: Mutex<TelemetryStore>,
     pub app: AppHandle,
     pub auth: OtlpAuth,
+    /// Back-reference to the app state, set after construction (AppState owns the
+    /// Arc<OtlpShared>, so this is a Weak to avoid a reference cycle). Used to
+    /// attribute incoming OTLP to the owning AppHost session and to emit the
+    /// active session's telemetry.
+    state: std::sync::OnceLock<std::sync::Weak<crate::state::AppState>>,
+    /// Emit debounce: telemetry is partitioned per session, but UI emits are
+    /// coalesced globally so a busy background AppHost can't spam the event.
+    last_emit: Mutex<Option<Instant>>,
 }
 
 impl OtlpShared {
-    /// Emits a debounced `deck://telemetry` event. We avoid emitting on every
-    /// single export under load by coalescing to at most one event per
-    /// `EMIT_DEBOUNCE` window.
+    pub fn new(app: AppHandle, auth: OtlpAuth) -> Self {
+        OtlpShared {
+            app,
+            auth,
+            state: std::sync::OnceLock::new(),
+            last_emit: Mutex::new(None),
+        }
+    }
+
+    /// Wires the back-reference to the app state. Called once at startup after the
+    /// state is constructed.
+    pub fn set_state(&self, state: &std::sync::Arc<crate::state::AppState>) {
+        let _ = self.state.set(std::sync::Arc::downgrade(state));
+    }
+
+    fn app_state(&self) -> Option<std::sync::Arc<crate::state::AppState>> {
+        self.state.get().and_then(|w| w.upgrade())
+    }
+
+    /// Resolves which AppHost session(s) a telemetry record with the given
+    /// `service.name` belongs to. The OTLP `service.name` matches a resource name
+    /// in exactly the AppHost that produced it (Aspire sets OTEL_SERVICE_NAME to
+    /// the resource name; the dashboard keys OTLP the same way).
+    ///
+    /// - 0 or 1 attached AppHost: that session owns everything (fast path).
+    /// - 2+ AppHosts: route only to the session(s) whose resources include
+    ///   `service_name`. If none match, the record is dropped rather than
+    ///   broadcast to every session.
+    ///
+    /// Dropping is deliberate: broadcasting unattributable telemetry to all
+    /// sessions cross-contaminates their per-AppHost stores, which defeats the
+    /// reset-on-switch guarantee. A record fails to match only when its owning
+    /// AppHost's resource list has not loaded yet (a brief window right after
+    /// attach) or when it carries no `service.name`. Aspire always sets
+    /// `OTEL_SERVICE_NAME` to the resource name, so in practice the only casualty
+    /// is a handful of points that arrive in the first moment after attach, which
+    /// is a fair trade for clean isolation between AppHosts.
+    fn target_sessions(&self, service_name: Option<&str>) -> Vec<std::sync::Arc<crate::state::Session>> {
+        let Some(state) = self.app_state() else {
+            return Vec::new();
+        };
+        let sessions: Vec<_> = state.sessions.lock().unwrap().values().cloned().collect();
+        if sessions.len() <= 1 {
+            return sessions;
+        }
+        let Some(name) = service_name else {
+            return Vec::new();
+        };
+        sessions
+            .into_iter()
+            .filter(|s| s.resources.lock().unwrap().contains_key(name))
+            .collect()
+    }
+
+    /// Emits a debounced `deck://telemetry` event for the *active* AppHost. We
+    /// avoid emitting on every export under load by coalescing to at most one
+    /// event per `EMIT_DEBOUNCE` window.
     fn maybe_emit(&self) {
-        let summary = {
-            let mut store = self.store.lock().unwrap();
+        {
+            let mut last = self.last_emit.lock().unwrap();
             let now = Instant::now();
-            let should_emit = match store.last_emit {
-                None => true,
-                Some(last) => now.duration_since(last) >= EMIT_DEBOUNCE,
-            };
+            let should_emit = last.map_or(true, |l| now.duration_since(l) >= EMIT_DEBOUNCE);
             if !should_emit {
                 return;
             }
-            store.last_emit = Some(now);
-            store.summary()
-        };
-        let _ = self.app.emit("deck://telemetry", &summary);
+            *last = Some(now);
+        }
+        if let Some(state) = self.app_state() {
+            state.emit_active_telemetry();
+        }
     }
 }
 
@@ -383,10 +454,11 @@ fn status_label(status: Option<&crate::proto::opentelemetry::proto::trace::v1::S
 // ---------------------------------------------------------------------------
 
 fn ingest_traces(shared: &OtlpShared, request: ExportTraceServiceRequest) {
-    {
-        let mut store = shared.store.lock().unwrap();
-        for resource_spans in &request.resource_spans {
-            let res_name = resource_name(resource_spans.resource.as_ref());
+    for resource_spans in &request.resource_spans {
+        let res_name = resource_name(resource_spans.resource.as_ref());
+        let targets = shared.target_sessions(res_name.as_deref());
+        for session in &targets {
+            let mut store = session.telemetry.lock().unwrap();
             for scope_spans in &resource_spans.scope_spans {
                 for span in &scope_spans.spans {
                     let duration = span.end_time_unix_nano.saturating_sub(span.start_time_unix_nano);
@@ -413,10 +485,11 @@ fn ingest_traces(shared: &OtlpShared, request: ExportTraceServiceRequest) {
 }
 
 fn ingest_logs(shared: &OtlpShared, request: ExportLogsServiceRequest) {
-    {
-        let mut store = shared.store.lock().unwrap();
-        for resource_logs in &request.resource_logs {
-            let res_name = resource_name(resource_logs.resource.as_ref());
+    for resource_logs in &request.resource_logs {
+        let res_name = resource_name(resource_logs.resource.as_ref());
+        let targets = shared.target_sessions(res_name.as_deref());
+        for session in &targets {
+            let mut store = session.telemetry.lock().unwrap();
             for scope_logs in &resource_logs.scope_logs {
                 for record in &scope_logs.log_records {
                     let body = record
@@ -454,53 +527,56 @@ fn ingest_metrics(shared: &OtlpShared, request: ExportMetricsServiceRequest) {
     use crate::proto::opentelemetry::proto::metrics::v1::AggregationTemporality;
 
     {
-        let mut store = shared.store.lock().unwrap();
         for resource_metrics in &request.resource_metrics {
             let res_name = resource_name(resource_metrics.resource.as_ref());
-            for scope_metrics in &resource_metrics.scope_metrics {
-                for metric in &scope_metrics.metrics {
-                    let unit = if metric.unit.is_empty() {
-                        None
-                    } else {
-                        Some(metric.unit.clone())
-                    };
-                    let res = res_name.as_deref();
+            let targets = shared.target_sessions(res_name.as_deref());
+            for session in &targets {
+                let mut store = session.telemetry.lock().unwrap();
+                for scope_metrics in &resource_metrics.scope_metrics {
+                    for metric in &scope_metrics.metrics {
+                        let unit = if metric.unit.is_empty() {
+                            None
+                        } else {
+                            Some(metric.unit.clone())
+                        };
+                        let res = res_name.as_deref();
 
-                    match &metric.data {
-                        Some(Data::Gauge(g)) => {
-                            for p in &g.data_points {
-                                if let (Some(v), t) = (point_value(p), point_time_ms(p.time_unix_nano)) {
-                                    store.record_number_point(&metric.name, unit.clone(), res, MetricKind::Gauge, t, v, false);
+                        match &metric.data {
+                            Some(Data::Gauge(g)) => {
+                                for p in &g.data_points {
+                                    if let (Some(v), t) = (point_value(p), point_time_ms(p.time_unix_nano)) {
+                                        store.record_number_point(&metric.name, unit.clone(), res, MetricKind::Gauge, t, v, false);
+                                    }
                                 }
                             }
-                        }
-                        Some(Data::Sum(s)) => {
-                            // Monotonic sum is a counter (charted as a rate); a
-                            // non-monotonic sum is an up/down counter (charted raw).
-                            let kind = if s.is_monotonic { MetricKind::Counter } else { MetricKind::UpDownCounter };
-                            let is_delta = s.aggregation_temporality == AggregationTemporality::Delta as i32;
-                            for p in &s.data_points {
-                                if let (Some(v), t) = (point_value(p), point_time_ms(p.time_unix_nano)) {
-                                    store.record_number_point(&metric.name, unit.clone(), res, kind, t, v, is_delta);
+                            Some(Data::Sum(s)) => {
+                                // Monotonic sum is a counter (charted as a rate); a
+                                // non-monotonic sum is an up/down counter (charted raw).
+                                let kind = if s.is_monotonic { MetricKind::Counter } else { MetricKind::UpDownCounter };
+                                let is_delta = s.aggregation_temporality == AggregationTemporality::Delta as i32;
+                                for p in &s.data_points {
+                                    if let (Some(v), t) = (point_value(p), point_time_ms(p.time_unix_nano)) {
+                                        store.record_number_point(&metric.name, unit.clone(), res, kind, t, v, is_delta);
+                                    }
                                 }
                             }
-                        }
-                        Some(Data::Histogram(h)) => {
-                            let is_delta = h.aggregation_temporality == AggregationTemporality::Delta as i32;
-                            for p in &h.data_points {
-                                let t = point_time_ms(p.time_unix_nano);
-                                store.record_histogram_point(
-                                    &metric.name,
-                                    unit.clone(),
-                                    res,
-                                    t,
-                                    &p.explicit_bounds,
-                                    &p.bucket_counts,
-                                    is_delta,
-                                );
+                            Some(Data::Histogram(h)) => {
+                                let is_delta = h.aggregation_temporality == AggregationTemporality::Delta as i32;
+                                for p in &h.data_points {
+                                    let t = point_time_ms(p.time_unix_nano);
+                                    store.record_histogram_point(
+                                        &metric.name,
+                                        unit.clone(),
+                                        res,
+                                        t,
+                                        &p.explicit_bounds,
+                                        &p.bucket_counts,
+                                        is_delta,
+                                    );
+                                }
                             }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
             }

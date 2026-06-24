@@ -68,10 +68,13 @@ export function MetricsPage() {
     [telemetry],
   );
 
-  // Default to the first metric once data arrives.
+  // Default to the first metric, and reset the selection when the current one is
+  // no longer present — e.g. after switching to a different AppHost, whose metric
+  // set is entirely different.
   useEffect(() => {
-    if (selectedKey === null && metrics.length > 0) {
-      setSelectedKey(metricKey(metrics[0]!));
+    const exists = selectedKey !== null && metrics.some((m) => metricKey(m) === selectedKey);
+    if (!exists) {
+      setSelectedKey(metrics.length > 0 ? metricKey(metrics[0]!) : null);
     }
   }, [metrics, selectedKey]);
 

@@ -53,12 +53,17 @@ pub fn deck_list_canvases(state: State<'_, Arc<AppState>>) -> Vec<CanvasManifest
 
 #[tauri::command]
 pub fn deck_get_telemetry_summary(state: State<'_, Arc<AppState>>) -> TelemetrySummary {
-    state.otlp.store.lock().unwrap().summary()
+    // Telemetry is per-AppHost; report the active AppHost's, or empty when none.
+    match state.active_session() {
+        Some(session) => session.telemetry.lock().unwrap().summary(),
+        None => TelemetrySummary::empty(),
+    }
 }
 
 /// Returns the downsampled time series for a metric within the requested window.
 /// `resourceName` disambiguates when several resources emit the same metric name;
-/// when omitted, the first matching series is returned.
+/// when omitted, the first matching series is returned. Reads the active AppHost's
+/// telemetry.
 #[tauri::command]
 pub fn deck_get_metric_series(
     state: State<'_, Arc<AppState>>,
@@ -69,12 +74,13 @@ pub fn deck_get_metric_series(
 ) -> Option<MetricSeriesResponse> {
     let window_ms = window_seconds.unwrap_or(300) as i64 * 1000;
     let max_points = max_points.unwrap_or(400).clamp(2, 4000);
-    state
-        .otlp
-        .store
+    let session = state.active_session()?;
+    let result = session
+        .telemetry
         .lock()
         .unwrap()
-        .query_metric(&name, resource_name.as_deref(), window_ms, max_points)
+        .query_metric(&name, resource_name.as_deref(), window_ms, max_points);
+    result
 }
 
 #[tauri::command]
