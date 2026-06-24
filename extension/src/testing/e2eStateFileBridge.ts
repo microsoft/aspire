@@ -921,19 +921,27 @@ async function stopDebuggingForE2E(
 ): Promise<void> {
   const trackedSessions = aspireContext.aspireDebugSessions;
   if (trackedSessions.length > 0) {
+    const stoppedDebugSessionIds = new Set(trackedSessions.map(debugSession => debugSession.debugSessionId));
     await Promise.all(trackedSessions.map(debugSession => debugSession.stopDebugging()));
-  }
-  else {
-    await vscode.debug.stopDebugging();
+
+    await waitForE2eValue('Aspire debug sessions to stop', 120000, () => {
+      const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
+      const stoppedSessionsAreGone = aspireContext.aspireDebugSessions.every(debugSession => !stoppedDebugSessionIds.has(debugSession.debugSessionId));
+      return stoppedSessionsAreGone && state.launchingPaths.length === 0 && state.stoppingPaths.length === 0
+        ? true
+        : undefined;
+    });
+
+    return;
   }
 
-  await waitForE2eValue('Aspire debug sessions and AppHosts to stop', 120000, () => {
+  await vscode.debug.stopDebugging();
+
+  await waitForE2eValue('VS Code debug sessions to stop', 120000, () => {
     const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
     return state.debugSessions.length === 0
-      && state.appHosts.length === 0
       && state.launchingPaths.length === 0
       && state.stoppingPaths.length === 0
-      && state.workspaceAppHost === undefined
       ? true
       : undefined;
   });
