@@ -491,25 +491,6 @@ impl From<&pb::InteractionInput> for InteractionInputDto {
 }
 
 impl InteractionEvent {
-    /// A synthetic "complete" event used to clear the UI (no active interaction).
-    pub fn complete() -> Self {
-        InteractionEvent {
-            interaction_id: 0,
-            kind: "complete".to_string(),
-            title: String::new(),
-            message: String::new(),
-            primary_button_text: String::new(),
-            secondary_button_text: String::new(),
-            show_secondary_button: false,
-            show_dismiss: false,
-            enable_message_markdown: false,
-            intent: "none".to_string(),
-            inputs: Vec::new(),
-            link_text: String::new(),
-            link_url: String::new(),
-        }
-    }
-
     pub fn from_response(update: &pb::WatchInteractionsResponseUpdate) -> Self {
         use pb::watch_interactions_response_update::Kind;
 

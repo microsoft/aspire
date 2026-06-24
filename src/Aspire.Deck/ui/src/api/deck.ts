@@ -96,23 +96,24 @@ export function onApphosts(cb: (apphosts: AppHostInfo[]) => void): Unsubscribe {
   return mockBackend.onApphosts(cb);
 }
 
-// Subscribes to interaction prompts (command inputs, message boxes, notifications)
-// from the active AppHost. A "complete" kind clears the current interaction.
-export function onInteraction(cb: (interaction: InteractionInfo) => void): Unsubscribe {
+// Subscribes to the active AppHost's open interactions (command inputs, message
+// boxes, notifications). The full list is sent on every change; an empty list means
+// there are no open interactions.
+export function onInteractions(cb: (interactions: InteractionInfo[]) => void): Unsubscribe {
   if (isTauri()) {
-    return bridgeListen<InteractionInfo>("deck://interaction", cb);
+    return bridgeListen<InteractionInfo[]>("deck://interactions", cb);
   }
-  return mockBackend.onInteraction(cb);
+  return mockBackend.onInteractions(cb);
 }
 
-// Replies to the active AppHost's current interaction. `values` maps input names to
+// Replies to one interaction on the active AppHost. `values` maps input names to
 // string values (booleans as "true"/"false", choices as the option value).
-export function respondInteraction(action: string, values: Record<string, string>): void {
+export function respondInteraction(interactionId: number, action: string, values: Record<string, string>): void {
   if (isTauri()) {
-    void invoke("deck_respond_interaction", { action, values });
+    void invoke("deck_respond_interaction", { interactionId, action, values });
     return;
   }
-  mockBackend.respondInteraction(action, values);
+  mockBackend.respondInteraction(interactionId, action, values);
 }
 
 export function getTelemetrySummary(): Promise<TelemetrySummary> {

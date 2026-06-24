@@ -4,7 +4,7 @@ import { getConfig } from "./api/deck";
 import { Sidebar, type PageId } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { NotConnected } from "./components/NotConnected";
-import { useConnection, useResources, useTelemetry, useApphosts, useInteraction } from "./lib/useDeckEvent";
+import { useConnection, useResources, useTelemetry, useApphosts, useInteractions } from "./lib/useDeckEvent";
 import { useTheme } from "./lib/theme";
 import { ResourcesPage } from "./pages/ResourcesPage";
 import { ConsolePage } from "./pages/ConsolePage";
@@ -13,6 +13,7 @@ import { TracesPage } from "./pages/TracesPage";
 import { MetricsPage } from "./pages/MetricsPage";
 import { CanvasesPage } from "./pages/CanvasesPage";
 import { InteractionPane } from "./components/InteractionPane";
+import { NotificationStack } from "./components/NotificationStack";
 
 export function App() {
   const { theme, toggleTheme } = useTheme();
@@ -20,7 +21,7 @@ export function App() {
   const { resources } = useResources();
   const telemetry = useTelemetry();
   const apphosts = useApphosts();
-  const interaction = useInteraction();
+  const interactions = useInteractions();
   const [config, setConfig] = useState<DeckConfig | null>(null);
   const [page, setPage] = useState<PageId>("resources");
 
@@ -52,6 +53,12 @@ export function App() {
     apphosts.length === 0 ||
     ((resourceState === "disconnected" || resourceState === "error") && resources.length === 0);
 
+  // Interactions split by surface: inputs dialogs and message boxes are blocking and
+  // shown one-at-a-time in the side drawer; notifications are non-blocking and stack
+  // as toasts (matching the dashboard, which routes notifications to message bars).
+  const dialog = interactions.find((i) => i.kind === "inputsDialog" || i.kind === "messageBox") ?? null;
+  const notifications = interactions.filter((i) => i.kind === "notification");
+
   return (
     <div className="app">
       <div className="app__sidebar">
@@ -79,7 +86,8 @@ export function App() {
           </>
         )}
       </main>
-      {interaction ? <InteractionPane interaction={interaction} /> : null}
+      {dialog ? <InteractionPane interaction={dialog} /> : null}
+      <NotificationStack notifications={notifications} />
     </div>
   );
 }

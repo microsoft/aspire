@@ -155,10 +155,11 @@ pub fn deck_open_external(url: String) -> Result<(), String> {
 #[tauri::command]
 pub fn deck_respond_interaction(
     state: State<'_, Arc<AppState>>,
+    interaction_id: i32,
     action: String,
     values: std::collections::HashMap<String, String>,
 ) {
     if let Some(session) = state.active_session() {
-        crate::interaction::respond(&session, &action, values);
+        crate::interaction::respond(&session, interaction_id, &action, values);
     }
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   onApphosts,
   onConnection,
-  onInteraction,
+  onInteractions,
   onResources,
   onTelemetry,
 } from "../api/deck";
@@ -96,17 +96,16 @@ export function useApphosts(): AppHostInfo[] {
   return apphosts;
 }
 
-// Tracks the active AppHost's current interaction prompt (command inputs, message
-// box, notification). Null when there is no active interaction.
-export function useInteraction(): InteractionInfo | null {
-  const [interaction, setInteraction] = useState<InteractionInfo | null>(null);
+// Tracks the active AppHost's open interactions (command inputs, message boxes,
+// notifications). Empty when there are none. The backend sends the full list on
+// every change, so the UI can simply replace its state.
+export function useInteractions(): InteractionInfo[] {
+  const [interactions, setInteractions] = useState<InteractionInfo[]>([]);
 
   useEffect(() => {
-    const unsubscribe = onInteraction((i) => {
-      setInteraction(i.kind === "complete" ? null : i);
-    });
+    const unsubscribe = onInteractions(setInteractions);
     return unsubscribe;
   }, []);
 
-  return interaction;
+  return interactions;
 }

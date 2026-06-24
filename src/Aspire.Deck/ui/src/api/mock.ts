@@ -334,8 +334,17 @@ class MockBackend {
   private connectionSubs = new Set<(s: ConnectionStatus) => void>();
   private telemetrySubs = new Set<(t: TelemetrySummary) => void>();
   private apphostSubs = new Set<(a: AppHostInfo[]) => void>();
-  private interactionSubs = new Set<(i: InteractionInfo) => void>();
-  private pendingInteraction: InteractionInfo | null = null;
+  private interactionSubs = new Set<(list: InteractionInfo[]) => void>();
+  private dialog: InteractionInfo | null = null;
+  private notifications: InteractionInfo[] = [
+    {
+      interactionId: 9001, kind: "notification", title: "Unresolved parameters",
+      message: "There are unresolved parameters that need to be set.",
+      primaryButtonText: "Enter values", secondaryButtonText: "No",
+      showSecondaryButton: true, showDismiss: true, enableMessageMarkdown: false,
+      intent: "warning", inputs: [], linkText: "", linkUrl: "",
+    },
+  ];
   private consoleSubs = new Map<string, Set<(e: ConsoleLogEvent) => void>>();
   private consoleLineCounters = new Map<string, number>();
 
@@ -452,7 +461,8 @@ class MockBackend {
         break;
       case "scale":
         // Custom command that prompts for inputs (demonstrates the interaction pane).
-        this.emitInteraction(this.buildScaleDialog([]));
+        this.dialog = this.buildScaleDialog([]);
+        this.emitInteractions();
         return { kind: "succeeded", message: "Awaiting input…" };
       default:
         return { kind: "undefined", message: `Unknown command '${args.commandName}'.` };
@@ -491,20 +501,32 @@ class MockBackend {
     };
   }
 
-  private emitInteraction(i: InteractionInfo): void {
-    this.pendingInteraction = i.kind === "complete" ? null : i;
+  // Notifications stack alongside (and outlive) the one-at-a-time dialog.
+  private interactionList(): InteractionInfo[] {
+    return [...this.notifications, ...(this.dialog ? [this.dialog] : [])];
+  }
+
+  private emitInteractions(): void {
+    const list = this.interactionList();
     for (const cb of this.interactionSubs) {
-      cb(i);
+      cb(list);
     }
   }
 
-  onInteraction(cb: (i: InteractionInfo) => void): Unsubscribe {
+  onInteractions(cb: (list: InteractionInfo[]) => void): Unsubscribe {
     this.interactionSubs.add(cb);
-    cb(this.pendingInteraction ?? this.completeInteraction());
+    cb(this.interactionList());
     return () => this.interactionSubs.delete(cb);
   }
 
-  respondInteraction(action: string, values: Record<string, string>): void {
+  respondInteraction(interactionId: number, action: string, values: Record<string, string>): void {
+    // A reply to a notification just dismisses that toast.
+    if (this.notifications.some((n) => n.interactionId === interactionId)) {
+      this.notifications = this.notifications.filter((n) => n.interactionId !== interactionId);
+      this.emitInteractions();
+      return;
+    }
+
     if (action === "submit" || action === "update") {
       const errors: { name: string; error: string }[] = [];
       const replicas = Number(values.replicas);
@@ -512,22 +534,17 @@ class MockBackend {
         errors.push({ name: "replicas", error: "Replicas must be a whole number between 1 and 10." });
       }
       if (errors.length > 0 || action === "update") {
-        this.emitInteraction(this.buildScaleDialog(errors));
+        this.dialog = this.buildScaleDialog(errors);
+        this.emitInteractions();
         return;
       }
-      this.emitInteraction(this.completeInteraction());
+      this.dialog = null;
+      this.emitInteractions();
       return;
     }
     // cancel / dismiss
-    this.emitInteraction(this.completeInteraction());
-  }
-
-  private completeInteraction(): InteractionInfo {
-    return {
-      interactionId: 0, kind: "complete", title: "", message: "", primaryButtonText: "", secondaryButtonText: "",
-      showSecondaryButton: false, showDismiss: false, enableMessageMarkdown: false, intent: "none",
-      inputs: [], linkText: "", linkUrl: "",
-    };
+    this.dialog = null;
+    this.emitInteractions();
   }
 
   onResources(cb: (e: ResourcesEvent) => void): Unsubscribe {

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { InteractionInfo, InteractionInputInfo } from "../api/types";
-import { respondInteraction, openExternal } from "../api/deck";
+import { respondInteraction } from "../api/deck";
 import { CloseIcon } from "./Icons";
 
-// Side pane (like the resource details drawer) that renders an interaction prompt
-// from the AppHost: a command-input dialog with per-field validation, a message box,
-// or a notification. Inputs marked updateStateOnChange re-validate with the server
-// live; validation errors come back on the same interaction and render under each field.
+// Side pane (like the resource details drawer) that renders a blocking interaction
+// from the AppHost: a command-input dialog with per-field validation, or a message
+// box. Inputs marked updateStateOnChange re-validate with the server live; validation
+// errors come back on the same interaction and render under each field. Notifications
+// are non-blocking and handled separately by NotificationStack.
 export function InteractionPane({ interaction }: { interaction: InteractionInfo }) {
   const [values, setValues] = useState<Record<string, string>>(() => initValues(interaction));
   const idRef = useRef(interaction.interactionId);
@@ -20,20 +21,19 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
     }
   }, [interaction]);
 
-  const close = () => respondInteraction("cancel", {});
+  const close = () => respondInteraction(interaction.interactionId, "cancel", {});
 
   function setValue(name: string, value: string, updateOnChange: boolean) {
     setValues((prev) => {
       const next = { ...prev, [name]: value };
       if (updateOnChange) {
-        respondInteraction("update", next);
+        respondInteraction(interaction.interactionId, "update", next);
       }
       return next;
     });
   }
 
   const isInputs = interaction.kind === "inputsDialog";
-  const isNotification = interaction.kind === "notification";
 
   return (
     <>
@@ -57,7 +57,7 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
               className="interaction-form"
               onSubmit={(e) => {
                 e.preventDefault();
-                respondInteraction("submit", values);
+                respondInteraction(interaction.interactionId, "submit", values);
               }}
             >
               {interaction.inputs.map((input) => (
@@ -82,18 +82,21 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
             </form>
           ) : (
             <div className="interaction-form">
-              {isNotification && interaction.linkUrl ? (
-                <button className="btn btn--sm" onClick={() => void openExternal(interaction.linkUrl)}>
-                  {interaction.linkText || interaction.linkUrl}
-                </button>
-              ) : null}
               <div className="interaction-form__actions">
                 {interaction.showSecondaryButton ? (
-                  <button type="button" className="btn" onClick={() => respondInteraction("secondary", {})}>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => respondInteraction(interaction.interactionId, "secondary", {})}
+                  >
                     {interaction.secondaryButtonText || "No"}
                   </button>
                 ) : null}
-                <button type="button" className="btn btn--primary" onClick={() => respondInteraction("primary", {})}>
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => respondInteraction(interaction.interactionId, "primary", {})}
+                >
                   {interaction.primaryButtonText || "OK"}
                 </button>
               </div>

@@ -21,16 +21,23 @@ The backend exposes **commands** (request/response via `@tauri-apps/api/core` `i
 | `deck_get_metric_series` | `{ name, resourceName?, windowSeconds?, maxPoints? }` | `MetricSeriesResponse \| null` (downsampled time series) |
 | `deck_list_apphosts` | – | `AppHostInfo[]` (attached AppHosts) |
 | `deck_select_apphost` | `{ id: string }` | `void` (switches the active AppHost) |
-| `deck_respond_interaction` | `{ action: string, values: Record<string,string> }` | `void` (replies to the active interaction) |
+| `deck_respond_interaction` | `{ interactionId: number, action: string, values: Record<string,string> }` | `void` (replies to one open interaction) |
 
 Resource/console/command operations target the **active** AppHost. Deck can attach to
 multiple AppHosts at once (one per `aspire run --deck`); `deck_select_apphost` changes which
 one is shown.
 
-`deck_respond_interaction` replies to the active AppHost's pending interaction (raised by a
-resource command that needs inputs, a message box, or a notification). `action` is one of
-`submit`/`update` (inputs dialog — `update` re-validates without completing), `cancel`/`primary`/
-`secondary` (message box / notification buttons); `values` maps input `name` → string value.
+`deck_respond_interaction` replies to one of the active AppHost's open interactions
+(identified by `interactionId`), raised by a resource command that needs inputs, a
+message box, or a notification. `action` is one of `submit`/`update` (inputs dialog —
+`update` re-validates without completing), `cancel`/`primary`/`secondary` (message box /
+notification buttons); `values` maps input `name` → string value.
+
+The active AppHost can have several interactions open at once. The UI splits them by
+surface: **inputs dialogs** and **message boxes** are blocking and shown one-at-a-time in
+the side drawer, while **notifications** (errors, the "parameters required" prompt, status
+messages) are non-blocking and stack as toasts — matching the dashboard, which routes
+notifications to message bars.
 
 ## Events (listen)
 
@@ -41,7 +48,7 @@ resource command that needs inputs, a message box, or a notification). `action` 
 | `deck://console-log` | `ConsoleLogEvent` |
 | `deck://telemetry` | `TelemetrySummary` (debounced push when new OTLP data arrives) |
 | `deck://apphosts` | `AppHostInfo[]` (attached AppHosts changed, or the active one switched) |
-| `deck://interaction` | `InteractionInfo` (active AppHost raised/updated an interaction; `kind: "complete"` clears it) |
+| `deck://interactions` | `InteractionInfo[]` (the active AppHost's open interactions; full list sent on every change, empty array when none) |
 
 ## Types
 

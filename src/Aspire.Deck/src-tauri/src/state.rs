@@ -44,9 +44,12 @@ pub struct Session {
     /// Sender for the bidi WatchInteractions stream, used to reply to interaction
     /// prompts (command inputs, message boxes). Present while the stream is connected.
     pub interaction_tx: Mutex<Option<tokio::sync::mpsc::Sender<crate::proto::aspire::v1::WatchInteractionsRequestUpdate>>>,
-    /// The most recent interaction pushed by the AppHost (the last server message),
-    /// kept so the UI can be re-primed on session switch and responses can be rebuilt.
-    pub pending_interaction: Mutex<Option<crate::proto::aspire::v1::WatchInteractionsResponseUpdate>>,
+    /// The interactions currently open for this AppHost, keyed by interaction id and
+    /// kept in arrival order. An AppHost can have several open at once (e.g. multiple
+    /// notifications plus an inputs dialog), so they are tracked as a map rather than a
+    /// single slot. Kept so the UI can be re-primed on session switch and so responses
+    /// can be rebuilt from the server's last copy of each interaction.
+    pub interactions: Mutex<IndexMap<i32, crate::proto::aspire::v1::WatchInteractionsResponseUpdate>>,
     /// The interaction-watch loop task.
     pub interaction_handle: Mutex<Option<JoinHandle<()>>>,
     /// This AppHost's own telemetry (metrics, traces, structured logs). Telemetry
@@ -70,7 +73,7 @@ impl Session {
             loop_handle: Mutex::new(None),
             connection: Mutex::new(ConnectionStatus::new("resourceService", "connecting", None)),
             interaction_tx: Mutex::new(None),
-            pending_interaction: Mutex::new(None),
+            interactions: Mutex::new(IndexMap::new()),
             interaction_handle: Mutex::new(None),
             telemetry: Mutex::new(TelemetryStore::new()),
         }
@@ -249,7 +252,9 @@ impl AppState {
                 .app
                 .emit("deck://connection", &ConnectionStatus::new("resourceService", "disconnected", None));
             let _ = self.app.emit("deck://resources", &ResourcesEvent::snapshot(vec![]));
-            let _ = self.app.emit("deck://interaction", &crate::model::InteractionEvent::complete());
+            let _ = self
+                .app
+                .emit("deck://interactions", &Vec::<crate::model::InteractionEvent>::new());
         }
         // Telemetry is per-AppHost, so a switch must reset the UI to the active
         // AppHost's metrics/traces/logs (or clear them when none is attached).

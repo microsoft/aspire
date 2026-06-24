@@ -1668,3 +1668,110 @@ table.data tbody tr.selected {
   gap: 8px;
   margin-top: 4px;
 }
+
+/* ---------------------------------------------------------------------------
+   Notification toasts (non-blocking notification-kind interactions)
+   Named `notif*` to avoid colliding with the existing `.toast` (the bottom-center
+   command toast in ResourcesPage), whose fixed/bottom positioning would otherwise
+   leak into these.
+   --------------------------------------------------------------------------- */
+.notif-stack {
+  position: absolute;
+  top: calc(var(--topbar-h) + 14px);
+  right: 18px;
+  z-index: 40; /* above the modal drawer so notifications stay visible/actionable */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(380px, calc(100% - 36px));
+  pointer-events: none; /* let clicks fall through the empty gaps... */
+  transition: right 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* When any right-anchored drawer is open (an interaction dialog or a resource details
+   drawer), slide the stack to the left of it so the two surfaces don't overlap (the
+   drawer is min(560px, 80%) wide). */
+.app:has(.drawer) .notif-stack {
+  right: calc(min(560px, 80%) + 14px);
+}
+.notif {
+  /* Level color drives the tint, border and icon via one accent variable. */
+  --notif-accent: var(--info);
+  pointer-events: auto; /* ...but the toasts themselves are interactive */
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 11px;
+  padding: 13px 14px;
+  background: color-mix(in srgb, var(--notif-accent) 9%, var(--bg-base));
+  border: 1px solid color-mix(in srgb, var(--notif-accent) 32%, transparent);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-pop);
+  animation: notif-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.notif--error { --notif-accent: var(--error); }
+.notif--warning { --notif-accent: var(--warning); }
+.notif--success { --notif-accent: var(--success); }
+.notif--info { --notif-accent: var(--info); }
+
+.notif__icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--notif-accent);
+  background: color-mix(in srgb, var(--notif-accent) 18%, transparent);
+}
+
+.notif__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.notif__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.35;
+}
+.notif__message {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.notif__link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 1px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--notif-accent);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.notif__link:hover { text-decoration: underline; }
+.notif__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.notif__dismiss {
+  align-self: start;
+  margin: -3px -3px 0 0;
+}
+
+@keyframes notif-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notif { animation: fade-in 0.18s ease both; }
+  .notif-stack { transition: none; }
+}
