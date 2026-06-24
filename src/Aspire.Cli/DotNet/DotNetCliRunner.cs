@@ -493,6 +493,11 @@ internal sealed class DotNetCliRunner(
 
     internal static bool ShouldForwardProcessPathAsAspireCliPath(string processPath)
     {
+        if (IsDotNetMuxerPath(processPath))
+        {
+            return false;
+        }
+
         var cliDirectory = Path.GetDirectoryName(processPath);
         if (string.IsNullOrEmpty(cliDirectory))
         {
@@ -500,6 +505,11 @@ internal sealed class DotNetCliRunner(
         }
 
         return !IsUnbundledFrameworkDependentCliPath(cliDirectory);
+    }
+
+    private static bool IsDotNetMuxerPath(string processPath)
+    {
+        return string.Equals(Path.GetFileNameWithoutExtension(processPath), "dotnet", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsUnbundledFrameworkDependentCliPath(string cliDirectory)

@@ -235,6 +235,17 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ShouldForwardProcessPathAsAspireCliPathRejectsDotNetMuxerPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dotnetDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "dotnet"));
+        var dotnetPath = Path.Combine(dotnetDirectory.FullName, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        File.WriteAllText(dotnetPath, string.Empty);
+
+        Assert.False(DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(dotnetPath));
+    }
+
+    [Fact]
     public void ShouldForwardProcessPathAsAspireCliPathAllowsFrameworkDependentCliWithInstallSidecar()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
