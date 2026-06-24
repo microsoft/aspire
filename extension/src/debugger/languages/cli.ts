@@ -19,15 +19,33 @@ export interface SpawnProcessOptions {
     noExtensionVariables?: boolean;
 }
 
-export function getCliSpawnCommand(command: string, args?: string[]): { command: string; args: string[] } {
+export interface CliSpawnCommand {
+    command: string;
+    args: string[];
+    diagnosticArgs?: string[];
+    windowsVerbatimArguments?: boolean;
+}
+
+export function getCliSpawnCommand(command: string, args?: string[]): CliSpawnCommand {
     if (process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command)) {
+        const commandArgs = args ?? [];
         return {
             command: process.env.ComSpec ?? 'cmd.exe',
-            args: ['/d', '/c', 'call', command, ...args ?? []],
+            args: ['/d', '/v:off', '/s', '/c', buildCmdWrapperCommand(command, commandArgs)],
+            diagnosticArgs: ['call', command, ...commandArgs],
+            windowsVerbatimArguments: true,
         };
     }
 
     return { command, args: args ?? [] };
+}
+
+function buildCmdWrapperCommand(command: string, args: string[]): string {
+    return ['call', quoteCmdArgument(command), ...args.map(quoteCmdArgument)].join(' ');
+}
+
+function quoteCmdArgument(value: string): string {
+    return `"${value.replace(/%/g, '%%').replace(/"/g, '""')}"`;
 }
 
 export function getCliSpawnDiagnostics(command: string, args: string[] | undefined, workingDirectory: string, noDebug: boolean | undefined, debugSessionId: string | undefined, env: Record<string, string | undefined>): string {
@@ -61,12 +79,13 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
     Object.assign(env, terminalProvider.createEnvironment(options?.debugSessionId, options?.noDebug, options?.noExtensionVariables));
     mergeCliSpawnEnvironment(env, options?.env);
 
-    extensionLogOutputChannel.info(getCliSpawnDiagnostics(spawnCommand.command, spawnCommand.args, workingDirectory, options?.noDebug, options?.debugSessionId, env));
+    extensionLogOutputChannel.info(getCliSpawnDiagnostics(spawnCommand.command, spawnCommand.diagnosticArgs ?? spawnCommand.args, workingDirectory, options?.noDebug, options?.debugSessionId, env));
 
     const child = spawn(spawnCommand.command, spawnCommand.args, {
         cwd: workingDirectory,
         env: env,
-        shell: false
+        shell: false,
+        windowsVerbatimArguments: spawnCommand.windowsVerbatimArguments,
     });
 
     // Set UTF-8 encoding so Node reassembles multi-byte characters across chunk boundaries instead of yielding broken bytes.

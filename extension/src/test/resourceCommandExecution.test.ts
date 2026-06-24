@@ -66,20 +66,20 @@ suite('executeResourceCommand', () => {
         assert.strictEqual(infoStub.calledOnce, true);
     });
 
-    test('reports CLI command failure using the first line of stderr', async () => {
+    test('reports CLI command failure using stderr details', async () => {
         const { runner } = makeRunner(new AspireCliFailedError('aspire resource restart', 1, '', 'resource is disabled\nmore detail'));
         const rendered: Array<[string, string, string]> = [];
 
-        const outcome = await executeResourceCommand(
-            runner,
-            (resource, command, content) => { rendered.push([resource, command, content]); },
-            { resourceName: 'cache', displayName: 'Cache', commandName: 'restart', appHostPath: '/repo/AppHost.csproj' });
+        await assert.rejects(
+            () => executeResourceCommand(
+                runner,
+                (resource, command, content) => { rendered.push([resource, command, content]); },
+                { resourceName: 'cache', displayName: 'Cache', commandName: 'restart', appHostPath: '/repo/AppHost.csproj' }));
 
-        assert.deepStrictEqual(outcome, { success: false, hadOutput: false });
         assert.strictEqual(errorStub.calledOnce, true);
         const message = String(errorStub.firstCall.args[0]);
         assert.match(message, /resource is disabled/);
-        assert.ok(!message.includes('more detail'), 'Only the first line of stderr should be surfaced');
+        assert.match(message, /more detail/);
         assert.strictEqual(infoStub.called, false);
         assert.deepStrictEqual(rendered, []);
     });
@@ -88,12 +88,12 @@ suite('executeResourceCommand', () => {
         const { runner } = makeRunner(new AspireCliFailedError('aspire resource echo', 2, 'partial output', 'boom'));
         const rendered: Array<[string, string, string]> = [];
 
-        const outcome = await executeResourceCommand(
-            runner,
-            (resource, command, content) => { rendered.push([resource, command, content]); },
-            { resourceName: 'cache', commandName: 'echo', appHostPath: undefined });
+        await assert.rejects(
+            () => executeResourceCommand(
+                runner,
+                (resource, command, content) => { rendered.push([resource, command, content]); },
+                { resourceName: 'cache', commandName: 'echo', appHostPath: undefined }));
 
-        assert.deepStrictEqual(outcome, { success: false, hadOutput: true });
         assert.deepStrictEqual(rendered, [['cache', 'echo', 'partial output']]);
         assert.strictEqual(errorStub.calledOnce, true);
     });
@@ -101,14 +101,91 @@ suite('executeResourceCommand', () => {
     test('reports a CLI-not-installed failure distinctly', async () => {
         const { runner } = makeRunner(new AspireCliNotInstalledError('aspire not found on PATH'));
 
+        await assert.rejects(
+            () => executeResourceCommand(
+                runner,
+                () => { throw new Error('renderer should not be called'); },
+                { resourceName: 'cache', commandName: 'start', appHostPath: undefined }));
+
+        assert.strictEqual(errorStub.calledOnce, true);
+        assert.match(String(errorStub.firstCall.args[0]), /aspire not found on PATH/);
+        assert.strictEqual(infoStub.called, false);
+    });
+
+    test('does not report a command failure when output rendering fails after command success', async () => {
+        const { runner } = makeRunner({ stdout: 'command output', stderr: '' });
+
         const outcome = await executeResourceCommand(
+            runner,
+            () => { throw new Error('editor failed'); },
+            { resourceName: 'cache', commandName: 'describe', appHostPath: undefined });
+
+        assert.deepStrictEqual(outcome, { success: true, hadOutput: false });
+        assert.strictEqual(infoStub.calledOnce, true);
+        assert.strictEqual(errorStub.calledOnce, true);
+        assert.match(String(errorStub.firstCall.args[0]), /editor failed/);
+        assert.ok(!String(errorStub.firstCall.args[0]).includes("Command 'describe' on 'cache' failed"));
+    });
+
+    test('passes the progress cancellation token to the resource command runner', async () => {
+        const token = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => { } }) } as vscode.CancellationToken;
+        (vscode.window.withProgress as sinon.SinonStub).restore();
+        const withProgressStub = sandbox.stub(vscode.window, 'withProgress').callsFake((options: any, task: any) => task({ report: () => { } }, token));
+        let observedToken: vscode.CancellationToken | undefined;
+        const runner: ResourceCommandRunner = {
+            runResourceCommand: async (_resourceName, _appHostPath, _commandName, _additionalArgs, cancellationToken?: vscode.CancellationToken) => {
+                observedToken = cancellationToken;
+                return { stdout: '', stderr: '' };
+            },
+        };
+
+        await executeResourceCommand(
             runner,
             () => { throw new Error('renderer should not be called'); },
             { resourceName: 'cache', commandName: 'start', appHostPath: undefined });
 
-        assert.deepStrictEqual(outcome, { success: false, hadOutput: false });
+        assert.strictEqual(withProgressStub.firstCall.args[0].cancellable, true);
+        assert.strictEqual(observedToken, token);
+    });
+
+    test('failure detail skips progress noise and preserves validation lines', async () => {
+        const { runner } = makeRunner(new AspireCliFailedError(
+            'aspire resource reset',
+            1,
+            '',
+            [
+                "Validating and executing command 'reset' on resource 'cache'...",
+                "Failed to validate command arguments for command 'reset' on resource 'cache':",
+                "--message: Value is required.",
+                "--count: Enter a number."
+            ].join('\n')));
+
+        await assert.rejects(
+            () => executeResourceCommand(
+                runner,
+                () => { throw new Error('renderer should not be called'); },
+                { resourceName: 'cache', commandName: 'reset', appHostPath: undefined }));
+
         assert.strictEqual(errorStub.calledOnce, true);
-        assert.match(String(errorStub.firstCall.args[0]), /aspire not found on PATH/);
-        assert.strictEqual(infoStub.called, false);
+        const message = String(errorStub.firstCall.args[0]);
+        assert.ok(!message.includes('Validating and executing'), message);
+        assert.match(message, /Failed to validate command arguments/);
+        assert.match(message, /--message: Value is required/);
+        assert.match(message, /--count: Enter a number/);
+    });
+
+    test('generic failure notification detail is bounded', async () => {
+        const { runner } = makeRunner(new Error('x'.repeat(3000)));
+
+        await assert.rejects(
+            () => executeResourceCommand(
+                runner,
+                () => { throw new Error('renderer should not be called'); },
+                { resourceName: 'cache', commandName: 'reset', appHostPath: undefined }));
+
+        assert.strictEqual(errorStub.calledOnce, true);
+        const message = String(errorStub.firstCall.args[0]);
+        assert.ok(message.length < 2500, `Expected bounded detail, got ${message.length} characters.`);
+        assert.ok(message.endsWith('...'), message);
     });
 });

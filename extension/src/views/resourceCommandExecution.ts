@@ -3,12 +3,14 @@ import {
     AppHostDataRepository,
     AspireCliFailedError,
     AspireCliNotInstalledError,
+    filterResourceCommandStatusOutput,
 } from './AppHostDataRepository';
 import { extensionLogOutputChannel } from '../utils/logging';
 import {
     resourceCommandCliNotInstalled,
     resourceCommandFailed,
     resourceCommandFailedNoDetail,
+    resourceCommandOutputOpenFailed,
     resourceCommandRunning,
     resourceCommandSucceeded,
 } from '../loc/strings';
@@ -38,6 +40,8 @@ export interface ResourceCommandExecutionOutcome {
     hadOutput: boolean;
 }
 
+const failureDetailDisplayLimit = 2000;
+
 /**
  * Executes a resource command through the hidden `aspire resource ...` backchannel path and reports
  * the result entirely inside VS Code: a progress notification while it runs, a success/failure
@@ -56,22 +60,29 @@ export async function executeResourceCommand(
         {
             location: vscode.ProgressLocation.Notification,
             title: resourceCommandRunning(request.commandName, displayName),
-            cancellable: false,
+            cancellable: true,
         },
-        async () => {
+        async (_progress, token) => {
+            let output;
             try {
-                const output = await runner.runResourceCommand(
+                output = await runner.runResourceCommand(
                     request.resourceName,
                     request.appHostPath,
                     request.commandName,
-                    request.additionalArgs ?? []);
-
-                vscode.window.showInformationMessage(resourceCommandSucceeded(request.commandName, displayName));
-                const hadOutput = await renderCommandOutput(renderOutput, request, output.stdout);
-                return { success: true, hadOutput };
+                    request.additionalArgs ?? [],
+                    token);
             } catch (error) {
-                return await handleFailure(renderOutput, request, displayName, error);
+                if (isCancellationError(error)) {
+                    throw error;
+                }
+
+                await handleFailure(renderOutput, request, displayName, error);
+                throw error;
             }
+
+            vscode.window.showInformationMessage(resourceCommandSucceeded(request.commandName, displayName));
+            const hadOutput = await tryRenderCommandOutput(renderOutput, request, output.stdout);
+            return { success: true, hadOutput };
         });
 }
 
@@ -79,34 +90,30 @@ async function handleFailure(
     renderOutput: ResourceCommandOutputRenderer,
     request: ResourceCommandExecutionRequest,
     displayName: string,
-    error: unknown): Promise<ResourceCommandExecutionOutcome> {
+    error: unknown): Promise<void> {
 
     if (error instanceof AspireCliNotInstalledError) {
         extensionLogOutputChannel.error(`Failed to start the Aspire CLI for '${request.commandName}' on '${request.resourceName}': ${error.message}`);
         vscode.window.showErrorMessage(resourceCommandCliNotInstalled(error.message));
-        return { success: false, hadOutput: false };
+        return;
     }
 
     if (error instanceof AspireCliFailedError) {
-        // The CLI routes human-readable command status/errors to stderr (stdout is reserved for the
-        // structured command value), so prefer stderr for the surfaced message and fall back to
-        // stdout when stderr is empty.
-        const detail = (error.stderr || error.stdout || '').trim();
+        const detail = getFailureDetail(error, request);
         extensionLogOutputChannel.error(`Command '${request.commandName}' on '${request.resourceName}' failed: ${error.message}`);
         vscode.window.showErrorMessage(detail
-            ? resourceCommandFailed(request.commandName, displayName, firstLine(detail))
+            ? resourceCommandFailed(request.commandName, displayName, limitFailureDetailForDisplay(detail))
             : resourceCommandFailedNoDetail(request.commandName, displayName));
-        const hadOutput = await renderCommandOutput(renderOutput, request, error.stdout);
-        return { success: false, hadOutput };
+        await tryRenderCommandOutput(renderOutput, request, error.stdout);
+        return;
     }
 
     const message = getErrorMessage(error);
     extensionLogOutputChannel.error(`Command '${request.commandName}' on '${request.resourceName}' failed: ${message}`);
-    vscode.window.showErrorMessage(resourceCommandFailed(request.commandName, displayName, firstLine(message)));
-    return { success: false, hadOutput: false };
+    vscode.window.showErrorMessage(resourceCommandFailed(request.commandName, displayName, limitFailureDetailForDisplay(message)));
 }
 
-async function renderCommandOutput(
+async function tryRenderCommandOutput(
     renderOutput: ResourceCommandOutputRenderer,
     request: ResourceCommandExecutionRequest,
     stdout: string): Promise<boolean> {
@@ -117,15 +124,39 @@ async function renderCommandOutput(
         return false;
     }
 
-    await renderOutput(request.resourceName, request.commandName, stdout);
-    return true;
-}
-
-function firstLine(value: string): string {
-    const newlineIndex = value.indexOf('\n');
-    return newlineIndex === -1 ? value : value.slice(0, newlineIndex).trimEnd();
+    try {
+        await renderOutput(request.resourceName, request.commandName, stdout);
+        return true;
+    } catch (error) {
+        const message = getErrorMessage(error);
+        extensionLogOutputChannel.error(`Command '${request.commandName}' on '${request.resourceName}' completed, but output rendering failed: ${message}`);
+        vscode.window.showErrorMessage(resourceCommandOutputOpenFailed(message));
+        return false;
+    }
 }
 
 function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+function getFailureDetail(error: AspireCliFailedError, request: ResourceCommandExecutionRequest): string | undefined {
+    const stderr = filterResourceCommandStatusOutput(error.stderr, request.resourceName, request.commandName);
+    const stdout = filterResourceCommandStatusOutput(error.stdout, request.resourceName, request.commandName);
+    const detail = [stderr, stdout]
+        .flatMap(value => value.split(/\r?\n/))
+        .map(line => line.trim())
+        .filter(line => line.length > 0)
+        .join('\n');
+
+    return detail.length > 0 ? detail : undefined;
+}
+
+function limitFailureDetailForDisplay(detail: string): string {
+    return detail.length <= failureDetailDisplayLimit
+        ? detail
+        : `${detail.slice(0, failureDetailDisplayLimit).trimEnd()}\n...`;
+}
+
+function isCancellationError(error: unknown): boolean {
+    return error instanceof vscode.CancellationError;
 }

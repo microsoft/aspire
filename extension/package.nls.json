@@ -224,6 +224,7 @@
   "aspire-vscode.strings.resourceCommandFailed": "Command '{0}' on '{1}' failed: {2}",
   "aspire-vscode.strings.resourceCommandFailedNoDetail": "Command '{0}' on '{1}' failed.",
   "aspire-vscode.strings.resourceCommandCliNotInstalled": "The Aspire CLI could not be started: {0}",
+  "aspire-vscode.strings.resourceCommandOutputOpenFailed": "The command completed, but its output could not be opened: {0}",
   "aspire-vscode.strings.workspaceAppHostLabel": "Workspace AppHost",
   "aspire-vscode.strings.dashboardUrlNotFound": "No Aspire Dashboard URL is available. Start an AppHost and try again.",
   "aspire-vscode.strings.dashboardUrlUnsupported": "The Aspire Dashboard URL must use http or https.",

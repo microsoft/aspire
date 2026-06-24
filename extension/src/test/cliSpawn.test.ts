@@ -13,7 +13,46 @@ suite('spawnCliProcess tests', () => {
             const result = getCliSpawnCommand('C:\\Tools\\Aspire CLI\\aspire.cmd', ['config', 'info']);
 
             assert.strictEqual(result.command, process.env.ComSpec);
-            assert.deepStrictEqual(result.args, ['/d', '/c', 'call', 'C:\\Tools\\Aspire CLI\\aspire.cmd', 'config', 'info']);
+            assert.deepStrictEqual(result.args, ['/d', '/v:off', '/s', '/c', 'call "C:\\Tools\\Aspire CLI\\aspire.cmd" "config" "info"']);
+            assert.strictEqual(result.windowsVerbatimArguments, true);
+        }
+        finally {
+            platformStub.restore();
+
+            if (originalComSpec === undefined) {
+                delete process.env.ComSpec;
+            }
+            else {
+                process.env.ComSpec = originalComSpec;
+            }
+        }
+    });
+
+    test('quotes hostile arguments when running Windows cmd wrappers', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const originalComSpec = process.env.ComSpec;
+        process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+        try {
+            const result = getCliSpawnCommand('C:\\Tools\\Aspire CLI\\aspire.cmd', [
+                'resource',
+                'api&whoami',
+                'echo',
+                '--',
+                '--message=hello & del C:\\important',
+                '--path=%PATH%',
+                '--literal="quoted"',
+            ]);
+
+            assert.strictEqual(result.command, process.env.ComSpec);
+            assert.deepStrictEqual(result.args, [
+                '/d',
+                '/v:off',
+                '/s',
+                '/c',
+                'call "C:\\Tools\\Aspire CLI\\aspire.cmd" "resource" "api&whoami" "echo" "--" "--message=hello & del C:\\important" "--path=%%PATH%%" "--literal=""quoted"""'
+            ]);
+            assert.strictEqual(result.windowsVerbatimArguments, true);
         }
         finally {
             platformStub.restore();

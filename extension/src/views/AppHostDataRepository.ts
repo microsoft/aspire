@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { ChildProcessWithoutNullStreams } from 'child_process';
+import { ChildProcessWithoutNullStreams, spawn as spawnProcess } from 'child_process';
 import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
@@ -170,7 +170,14 @@ interface PostStopRefreshTimer {
  *    mode this backs the full tree; in workspace mode it confirms whether the
  *    selected workspace AppHost is running when the resource stream is empty.
  */
-const oneShotOutputBufferLimit = 4000;
+const oneShotErrorSuffixLimit = 4000;
+const oneShotOutputBufferLimit = 64 * 1024;
+
+interface RunCliCommandOptions {
+    timeoutMs?: number | null;
+    stdoutBufferLimit?: number | null;
+    cancellationToken?: vscode.CancellationToken;
+}
 
 export class AppHostDataRepository {
     private static readonly _processShutdownGracePeriodMs = 5000;
@@ -541,7 +548,7 @@ export class AppHostDataRepository {
      * the `--` delimiter from {@link buildResourceCommandCliArgs}, which keeps them out of the spawn
      * diagnostics log (see redactCliSpawnArgs) so secret values are not persisted.
      */
-    async runResourceCommand(resourceName: string, appHostPath: string | undefined, commandName: string, additionalArgs: readonly string[] = []): Promise<ResourceCommandExecutionOutput> {
+    async runResourceCommand(resourceName: string, appHostPath: string | undefined, commandName: string, additionalArgs: readonly string[] = [], cancellationToken?: vscode.CancellationToken): Promise<ResourceCommandExecutionOutput> {
         const args = ['resource', resourceName, commandName];
         if (appHostPath !== undefined) {
             const trimmedAppHostPath = appHostPath.trim();
@@ -556,7 +563,27 @@ export class AppHostDataRepository {
             args.push(...additionalArgs);
         }
 
-        return await this._runCliCommand(`aspire resource ${commandName}`, args);
+        try {
+            const output = await this._runCliCommand(`aspire resource ${commandName}`, args, {
+                timeoutMs: null,
+                stdoutBufferLimit: AppHostDataRepository._oneShotOutputBufferLimit,
+                cancellationToken,
+            });
+            return {
+                stdout: filterResourceCommandStatusOutput(output.stdout, resourceName, commandName),
+                stderr: output.stderr,
+            };
+        } catch (error) {
+            if (error instanceof AspireCliFailedError) {
+                throw new AspireCliFailedError(
+                    error.command,
+                    error.exitCode,
+                    filterResourceCommandStatusOutput(error.stdout, resourceName, commandName),
+                    filterResourceCommandStatusOutput(error.stderr, resourceName, commandName));
+            }
+
+            throw error;
+        }
     }
 
     dispose(): void {
@@ -1246,10 +1273,14 @@ export class AppHostDataRepository {
         }
     }
 
-    private async _runCliCommand(command: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
+    private async _runCliCommand(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<{ stdout: string; stderr: string }> {
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath().catch(error => {
             throw new AspireCliNotInstalledError(String(error));
         });
+
+        if (options.cancellationToken?.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
 
         return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
             let stdout = '';
@@ -1257,6 +1288,9 @@ export class AppHostDataRepository {
             let settled = false;
             let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
             let cliProcess: ChildProcessWithoutNullStreams | undefined;
+            let cancellationRegistration: vscode.Disposable | undefined;
+            const timeoutMs = options.timeoutMs === undefined ? AppHostDataRepository._oneShotCommandTimeoutMs : options.timeoutMs;
+            const stdoutBufferLimit = options.stdoutBufferLimit === undefined ? null : options.stdoutBufferLimit;
 
             const settle = (callback: () => void) => {
                 if (settled) {
@@ -1268,6 +1302,8 @@ export class AppHostDataRepository {
                     clearTimeout(timeoutTimer);
                     timeoutTimer = undefined;
                 }
+                cancellationRegistration?.dispose();
+                cancellationRegistration = undefined;
                 if (cliProcess) {
                     this._oneShotProcesses.delete(cliProcess);
                     if (cliProcess.exitCode === null && !cliProcess.killed) {
@@ -1277,13 +1313,19 @@ export class AppHostDataRepository {
                 callback();
             };
 
-            timeoutTimer = setTimeout(() => {
-                settle(() => reject(new AspireCliFailedError(command, null, stdout, stderr || aspireCliCommandTimedOut(AppHostDataRepository._oneShotCommandTimeoutMs))));
-            }, AppHostDataRepository._oneShotCommandTimeoutMs);
+            if (timeoutMs !== null) {
+                timeoutTimer = setTimeout(() => {
+                    settle(() => reject(new AspireCliFailedError(command, null, stdout, stderr || aspireCliCommandTimedOut(timeoutMs))));
+                }, timeoutMs);
+            }
+
+            cancellationRegistration = options.cancellationToken?.onCancellationRequested(() => {
+                settle(() => reject(new vscode.CancellationError()));
+            });
 
             cliProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                 noExtensionVariables: true,
-                stdoutCallback: (data) => { stdout += data; },
+                stdoutCallback: (data) => { stdout = stdoutBufferLimit === null ? stdout + data : appendLimitedOutput(stdout, data, stdoutBufferLimit); },
                 stderrCallback: (data) => { stderr = appendLimitedOutput(stderr, data, AppHostDataRepository._oneShotOutputBufferLimit); },
                 exitCallback: (code) => {
                     if (code !== 0) {
@@ -1871,7 +1913,7 @@ export class AppHostDataRepository {
 
         try {
             if (!childProcess.killed) {
-                const signalSent = childProcess.kill();
+                const signalSent = this._terminateProcessTree(childProcess, false);
                 if (!signalSent) {
                     cleanup();
                     return;
@@ -1891,7 +1933,7 @@ export class AppHostDataRepository {
 
                 extensionLogOutputChannel.warn(`${description} did not exit within ${AppHostDataRepository._processShutdownGracePeriodMs}ms; forcing termination.`);
                 try {
-                    const signalSent = childProcess.kill('SIGKILL');
+                    const signalSent = this._terminateProcessTree(childProcess, true);
                     if (!signalSent) {
                         cleanup();
                     }
@@ -1902,6 +1944,29 @@ export class AppHostDataRepository {
             }, AppHostDataRepository._processShutdownGracePeriodMs);
             forceKillTimer.unref();
         }
+    }
+
+    private _terminateProcessTree(childProcess: ChildProcessWithoutNullStreams, force: boolean): boolean {
+        if (process.platform !== 'win32' || childProcess.pid === undefined) {
+            return childProcess.kill(force ? 'SIGKILL' : undefined);
+        }
+
+        const args = ['/pid', String(childProcess.pid), '/t'];
+        if (force) {
+            args.push('/f');
+        }
+
+        const taskkill = spawnProcess('taskkill.exe', args, {
+            stdio: 'ignore',
+            windowsHide: true,
+        });
+        taskkill.on('error', error => {
+            extensionLogOutputChannel.warn(`Failed to stop process tree for PID ${childProcess.pid}: ${error}`);
+            childProcess.kill();
+        });
+        taskkill.unref();
+
+        return true;
     }
 }
 
@@ -2007,9 +2072,9 @@ function getComparisonKey(value: string): string {
 
 function getCommandOutputSuffix(stdout: string, stderr: string): string {
     const output = (stderr || stdout).trim();
-    const limitedOutput = output.length <= oneShotOutputBufferLimit
+    const limitedOutput = output.length <= oneShotErrorSuffixLimit
         ? output
-        : output.slice(output.length - oneShotOutputBufferLimit);
+        : output.slice(output.length - oneShotErrorSuffixLimit);
 
     return limitedOutput ? `: ${limitedOutput}` : '';
 }
@@ -2018,6 +2083,81 @@ function appendLimitedOutput(existing: string, data: string, limit: number): str
     const combined = existing + data;
 
     return combined.length <= limit ? combined : combined.slice(combined.length - limit);
+}
+
+export function filterResourceCommandStatusOutput(output: string, resourceName: string, commandName: string): string {
+    if (!output) {
+        return '';
+    }
+
+    const filteredLines = output
+        .split(/\r?\n/)
+        .filter(line => !isResourceCommandStatusLine(line, resourceName, commandName));
+
+    while (filteredLines.length > 0 && filteredLines[0].trim().length === 0) {
+        filteredLines.shift();
+    }
+
+    while (filteredLines.length > 0 && filteredLines[filteredLines.length - 1].trim().length === 0) {
+        filteredLines.pop();
+    }
+
+    return filteredLines.join('\n');
+}
+
+function isResourceCommandStatusLine(line: string, resourceName: string, commandName: string): boolean {
+    const normalized = normalizeResourceCommandStatusLine(line);
+
+    return getResourceCommandStatusLines(resourceName, commandName).includes(normalized);
+}
+
+function getResourceCommandStatusLines(resourceName: string, commandName: string): string[] {
+    // Older CLIs emitted resource command status to stdout before the command value, for example:
+    //   Restarting resource 'cache'...
+    //   Resource 'cache' restarted successfully.
+    //   Command 'echo-arguments' executed successfully on resource 'cache'.
+    // Keep this compatibility filter narrow so real command output is preserved.
+    const lines = [
+        `Validating and executing command '${commandName}' on resource '${resourceName}'...`,
+        `Command '${commandName}' executed successfully on resource '${resourceName}'.`,
+    ];
+
+    const knownCommand = getKnownResourceCommandStatus(commandName);
+    if (knownCommand) {
+        lines.push(
+            `${knownCommand.progressVerb} resource '${resourceName}'...`,
+            `Resource '${resourceName}' ${knownCommand.pastTenseVerb} successfully.`);
+    }
+
+    return lines;
+}
+
+function getKnownResourceCommandStatus(commandName: string): { progressVerb: string; pastTenseVerb: string } | undefined {
+    switch (commandName) {
+        case 'start':
+            return { progressVerb: 'Starting', pastTenseVerb: 'started' };
+        case 'stop':
+            return { progressVerb: 'Stopping', pastTenseVerb: 'stopped' };
+        case 'restart':
+            return { progressVerb: 'Restarting', pastTenseVerb: 'restarted' };
+        case 'rebuild':
+            return { progressVerb: 'Rebuilding', pastTenseVerb: 'rebuilt' };
+        case 'set-parameter':
+        case 'parameter-set':
+            return { progressVerb: 'Setting parameter for', pastTenseVerb: 'set' };
+        case 'delete-parameter':
+        case 'parameter-delete':
+            return { progressVerb: 'Deleting parameter for', pastTenseVerb: 'deleted' };
+        default:
+            return undefined;
+    }
+}
+
+function normalizeResourceCommandStatusLine(line: string): string {
+    return line
+        .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
+        .trim()
+        .replace(/^[✅✔✓]\s*/, '');
 }
 
 function parseCliJsonOutput<T>(stdout: string): T {

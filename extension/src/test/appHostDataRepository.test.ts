@@ -278,6 +278,30 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('runResourceCommand filters older CLI progress from rejected diagnostics', async () => {
+        const resourceProcess = new TestChildProcess();
+        spawnStub.returns(resourceProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const runPromise = repository.runResourceCommand('cache', '/workspace/AppHost.csproj', 'restart');
+            await waitForMicrotasks();
+
+            spawnStub.firstCall.args[3].stderrCallback("Restarting resource 'cache'...\nport is already in use");
+            resourceProcess.markExited(1);
+            spawnStub.firstCall.args[3].exitCallback(1);
+
+            await assert.rejects(runPromise, (error: unknown) => {
+                assert.ok(error instanceof AspireCliFailedError);
+                assert.ok(!error.message.includes('Restarting resource'), error.message);
+                assert.match(error.message, /port is already in use/);
+                return true;
+            });
+        } finally {
+            repository.dispose();
+        }
+    });
+
     test('runResourceCommand omits --apphost, forwards additional args, and returns captured output', async () => {
         const resourceProcess = new TestChildProcess();
         spawnStub.returns(resourceProcess);
@@ -301,6 +325,91 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(output.stdout, 'rendered command value');
             assert.strictEqual(output.stderr, 'status: ok');
         } finally {
+            repository.dispose();
+        }
+    });
+
+    test('runResourceCommand ignores older CLI progress and success stdout for lifecycle commands', async () => {
+        const resourceProcess = new TestChildProcess();
+        spawnStub.returns(resourceProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const runPromise = repository.runResourceCommand('cache', '/workspace/AppHost.csproj', 'restart');
+            await waitForMicrotasks();
+
+            spawnStub.firstCall.args[3].stdoutCallback("Restarting resource 'cache'...\nResource 'cache' restarted successfully.\n");
+            resourceProcess.markExited(0);
+            spawnStub.firstCall.args[3].exitCallback(0);
+
+            const output = await runPromise;
+            assert.strictEqual(output.stdout, '');
+        } finally {
+            repository.dispose();
+        }
+    });
+
+    test('runResourceCommand preserves real command output after older CLI status stdout', async () => {
+        const resourceProcess = new TestChildProcess();
+        spawnStub.returns(resourceProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const runPromise = repository.runResourceCommand('cache', '/workspace/AppHost.csproj', 'echo-arguments');
+            await waitForMicrotasks();
+
+            spawnStub.firstCall.args[3].stdoutCallback([
+                "Validating and executing command 'echo-arguments' on resource 'cache'...",
+                "Command 'echo-arguments' executed successfully on resource 'cache'.",
+                '{"message":"hello"}'
+            ].join('\n'));
+            resourceProcess.markExited(0);
+            spawnStub.firstCall.args[3].exitCallback(0);
+
+            const output = await runPromise;
+            assert.strictEqual(output.stdout, '{"message":"hello"}');
+        } finally {
+            repository.dispose();
+        }
+    });
+
+    test('runResourceCommand bounds captured stdout', async () => {
+        const resourceProcess = new TestChildProcess();
+        spawnStub.returns(resourceProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const runPromise = repository.runResourceCommand('cache', '/workspace/AppHost.csproj', 'dump');
+            await waitForMicrotasks();
+
+            const largeOutput = `${'x'.repeat(70000)}tail`;
+            spawnStub.firstCall.args[3].stdoutCallback(largeOutput);
+            resourceProcess.markExited(0);
+            spawnStub.firstCall.args[3].exitCallback(0);
+
+            const output = await runPromise;
+            assert.ok(output.stdout.length < largeOutput.length, 'stdout should be capped');
+            assert.ok(output.stdout.endsWith('tail'));
+        } finally {
+            repository.dispose();
+        }
+    });
+
+    test('runResourceCommand cancels the hidden CLI process through the cancellation token', async () => {
+        const resourceProcess = new TestChildProcess(false);
+        spawnStub.returns(resourceProcess);
+        const cancellationSource = new vscode.CancellationTokenSource();
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const runPromise = repository.runResourceCommand('cache', '/workspace/AppHost.csproj', 'restart', [], cancellationSource.token);
+            await waitForMicrotasks();
+
+            cancellationSource.cancel();
+            await assert.rejects(runPromise, (error: unknown) => error instanceof vscode.CancellationError);
+            assert.strictEqual(resourceProcess.killed, true);
+        } finally {
+            cancellationSource.dispose();
             repository.dispose();
         }
     });
