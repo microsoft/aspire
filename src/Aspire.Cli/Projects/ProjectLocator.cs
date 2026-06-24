@@ -146,7 +146,10 @@ internal sealed class ProjectLocator(
     [
         "<IsAspireHost",
         "Aspire.AppHost.Sdk",
-        "Aspire.Hosting"
+        "Include=\"Aspire.Hosting\"",
+        "Include='Aspire.Hosting'",
+        "Include=\"Aspire.Hosting.AppHost\"",
+        "Include='Aspire.Hosting.AppHost'"
     ];
 
     /// <summary>
@@ -344,6 +347,7 @@ internal sealed class ProjectLocator(
 
             logger.LogDebug("Found {CandidateCount} unique candidate files matching AppHost detection patterns", candidateFiles.Length);
 
+            var dotNetBuildFileMarkerCache = new Dictionary<string, bool>(StringComparer.Ordinal);
             foreach (var candidateFile in candidateFiles)
             {
                 logger.LogDebug("Checking candidate file {CandidateFile}", candidateFile.FullName);
@@ -356,7 +360,7 @@ internal sealed class ProjectLocator(
                 }
 
                 if (scope is not AppHostDiscoveryScope.ExplicitDirectory &&
-                    IsOrdinaryDotNetProjectCandidate(candidateFile, handler))
+                    IsOrdinaryDotNetProjectCandidate(candidateFile, handler, dotNetBuildFileMarkerCache))
                 {
                     logger.LogTrace("Skipping ordinary .NET project candidate {CandidateFile}", candidateFile.FullName);
                     continue;
@@ -564,7 +568,7 @@ internal sealed class ProjectLocator(
         return await FindAppHostsAsync();
     }
 
-    private static bool IsOrdinaryDotNetProjectCandidate(FileInfo candidateFile, IAppHostProject handler)
+    private static bool IsOrdinaryDotNetProjectCandidate(FileInfo candidateFile, IAppHostProject handler, Dictionary<string, bool> dotNetBuildFileMarkerCache)
     {
         if (!handler.LanguageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) ||
             !s_dotNetProjectExtensions.Contains(candidateFile.Extension, StringComparer.OrdinalIgnoreCase))
@@ -584,27 +588,101 @@ internal sealed class ProjectLocator(
             return false;
         }
 
-        try
+        var (hasAppHostMarker, hasImport) = ScanDotNetProjectFile(candidateFile);
+        if (hasAppHostMarker || hasImport)
         {
-            using var reader = candidateFile.OpenText();
-            string? line;
-            while ((line = reader.ReadLine()) is not null)
-            {
-                if (s_dotNetAppHostProjectContentMarkers.Any(marker => line.Contains(marker, StringComparison.Ordinal)))
-                {
-                    return false;
-                }
-            }
+            // Explicit imports can hide the Aspire.Hosting/AppHost markers in a separate props/targets
+            // file. Keep those projects on the existing MSBuild validation path instead of trying to
+            // emulate import resolution here.
+            return false;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+
+        if (HasAppHostMarkerInImplicitBuildFiles(candidateFile.Directory, dotNetBuildFileMarkerCache))
         {
-            // If the cheap prefilter cannot read a project file that discovery found, keep the
-            // previous behavior and let the full project validation path report the real failure.
             return false;
         }
 
         return true;
     }
+
+    private static (bool HasAppHostMarker, bool HasImport) ScanDotNetProjectFile(FileInfo candidateFile)
+    {
+        try
+        {
+            using var reader = candidateFile.OpenText();
+            string? line;
+            var hasImport = false;
+            while ((line = reader.ReadLine()) is not null)
+            {
+                hasImport |= line.Contains("<Import", StringComparison.Ordinal);
+                if (ContainsDotNetAppHostProjectContentMarker(line))
+                {
+                    return (true, hasImport);
+                }
+            }
+
+            return (false, hasImport);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // If the cheap prefilter cannot read a project file that discovery found, keep the
+            // previous behavior and let the full project validation path report the real failure.
+            return (true, true);
+        }
+    }
+
+    private static bool HasAppHostMarkerInImplicitBuildFiles(DirectoryInfo? directory, Dictionary<string, bool> dotNetBuildFileMarkerCache)
+    {
+        while (directory is not null)
+        {
+            if (HasAppHostMarkerInBuildFile(Path.Combine(directory.FullName, "Directory.Build.props"), dotNetBuildFileMarkerCache) ||
+                HasAppHostMarkerInBuildFile(Path.Combine(directory.FullName, "Directory.Build.targets"), dotNetBuildFileMarkerCache))
+            {
+                return true;
+            }
+
+            directory = directory.Parent;
+        }
+
+        return false;
+    }
+
+    private static bool HasAppHostMarkerInBuildFile(string buildFilePath, Dictionary<string, bool> dotNetBuildFileMarkerCache)
+    {
+        if (dotNetBuildFileMarkerCache.TryGetValue(buildFilePath, out var hasAppHostMarker))
+        {
+            return hasAppHostMarker;
+        }
+
+        if (!File.Exists(buildFilePath))
+        {
+            dotNetBuildFileMarkerCache[buildFilePath] = false;
+            return false;
+        }
+
+        try
+        {
+            foreach (var line in File.ReadLines(buildFilePath))
+            {
+                if (ContainsDotNetAppHostProjectContentMarker(line))
+                {
+                    dotNetBuildFileMarkerCache[buildFilePath] = true;
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            dotNetBuildFileMarkerCache[buildFilePath] = true;
+            return true;
+        }
+
+        dotNetBuildFileMarkerCache[buildFilePath] = false;
+        return false;
+    }
+
+    private static bool ContainsDotNetAppHostProjectContentMarker(string line)
+        => s_dotNetAppHostProjectContentMarkers.Any(marker => line.Contains(marker, StringComparison.Ordinal));
 
     /// <inheritdoc />
     public async Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default)
