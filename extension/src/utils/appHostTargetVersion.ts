@@ -140,7 +140,7 @@ interface FileTargetVersionInfo {
 
 async function getAppHostTargetVersionInfoFromFile(filePath: string): Promise<FileTargetVersionInfo> {
     const extension = extname(filePath).toLowerCase();
-    if (extension !== '.csproj' && extension !== '.cs') {
+    if (!isDotNetProjectExtension(extension) && extension !== '.cs') {
         return noFileTargetVersionInfo();
     }
 
@@ -205,7 +205,11 @@ function isPolyglotAppHostFile(filePath: string): boolean {
 
 function isSingleFileCSharpAppHostEntry(entry: string, entries: readonly string[]): boolean {
     return entry.toLowerCase() === 'apphost.cs'
-        && !entries.some(entry => extname(entry).toLowerCase() === '.csproj');
+        && !entries.some(entry => isDotNetProjectExtension(extname(entry).toLowerCase()));
+}
+
+function isDotNetProjectExtension(extension: string): boolean {
+    return extension === '.csproj' || extension === '.fsproj' || extension === '.vbproj';
 }
 
 interface ProjectSdkVersionInfo {

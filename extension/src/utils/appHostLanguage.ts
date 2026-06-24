@@ -98,7 +98,7 @@ export function classifyAppHostPath(appHostPath: string | undefined): 'csharp' |
         return 'unknown';
     }
     const lower = appHostPath.toLowerCase();
-    if (lower.endsWith('.csproj') || lower.endsWith('.cs')) {
+    if (lower.endsWith('.csproj') || lower.endsWith('.fsproj') || lower.endsWith('.vbproj') || lower.endsWith('.cs')) {
         return 'csharp';
     }
     if (lower.endsWith('.ts') || lower.endsWith('.mts') || lower.endsWith('.cts') ||

@@ -53,6 +53,8 @@ suite('appHostLanguage.classifyAppHostPath', () => {
 
     test('classifies .csproj and .cs as csharp', () => {
         assert.strictEqual(classifyAppHostPath('/abs/path/AppHost.csproj'), 'csharp');
+        assert.strictEqual(classifyAppHostPath('/abs/path/AppHost.fsproj'), 'csharp');
+        assert.strictEqual(classifyAppHostPath('/abs/path/AppHost.vbproj'), 'csharp');
         assert.strictEqual(classifyAppHostPath('AppHost.cs'), 'csharp');
         assert.strictEqual(classifyAppHostPath('C:\\repos\\My.AppHost.csproj'), 'csharp');
     });

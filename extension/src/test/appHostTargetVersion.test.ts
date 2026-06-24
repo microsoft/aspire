@@ -125,6 +125,17 @@ suite('appHostTargetVersion', () => {
         assert.strictEqual(await getAppHostTargetVersion(appHostPath), '13.5.1');
     });
 
+    test('reads F# and Visual Basic project SDK versions', async () => {
+        const dir = makeTempDir();
+        const fsharpAppHostPath = join(dir, 'AppHost.fsproj');
+        const visualBasicAppHostPath = join(dir, 'AppHost.vbproj');
+        writeFileSync(fsharpAppHostPath, '<Project Sdk="Aspire.AppHost.Sdk/13.5.1" />');
+        writeFileSync(visualBasicAppHostPath, '<Project Sdk="Aspire.AppHost.Sdk/13.5.2" />');
+
+        assert.strictEqual(await getAppHostTargetVersion(fsharpAppHostPath), '13.5.1');
+        assert.strictEqual(await getAppHostTargetVersion(visualBasicAppHostPath), '13.5.2');
+    });
+
     test('ignores commented C# project SDK versions', async () => {
         const dir = makeTempDir();
         const appHostPath = join(dir, 'AppHost.csproj');
