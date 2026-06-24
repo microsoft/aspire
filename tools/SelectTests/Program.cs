@@ -151,6 +151,22 @@ internal static class Selection
         trace.EnterStage("load trigger map and prefilter");
         var changedFileFilter = ChangedFileFilter.Create(options.RepoRoot, TriggerMap.Load(options.MapPath).Prefilter);
 
+        // A PR must select on its OWN changes, not on commits that landed on the base branch after the
+        // branch point. Diff from the merge-base of base..head (the branch point) instead of the base
+        // tip, so base-branch churn the PR never touched is not mis-attributed to it. Rebinding From to
+        // the merge-base here feeds the SAME diff base to BOTH Layer 1 (graph) and Layer 2 (path map),
+        // so they stay consistent. Only meaningful when diffing refs: --force-all has no base, and an
+        // explicit --changed-files list is already the literal change set.
+        // Concretely fixes https://github.com/microsoft/aspire/pull/18377#issuecomment-4782187184, where
+        // a file changed on main after the branch point tripped the run-all fallback because the old
+        // base-tip..head diff surfaced it.
+        if (!options.ForceAll && options.From is not null && options.ChangedFilesPath is null)
+        {
+            trace.EnterStage("resolve merge-base of base..head");
+            var mergeBase = ResolveMergeBase(options.RepoRoot, options.From, options.To);
+            options = options with { From = mergeBase };
+        }
+
         // Under --force-all the selector returns ALL regardless of the diff (see below), so skip
         // resolving changed files and the Layer 1 graph closure entirely. Resolving them is not just
         // wasted work: --force-all is the path taken when there is no usable diff base (or the
@@ -311,6 +327,32 @@ internal static class Selection
 
     // Layer 2 needs the actual changed file paths (it glob-matches them), independent of the
     // project-name closure that Layer 1 produces.
+    // Resolves the merge-base (common ancestor / branch point) of the base ref and the head. The PR diff
+    // is taken FROM this commit so that only the PR's own commits count -- commits that landed on the
+    // base branch after the branch point share this ancestor and so produce no diff. When --to is omitted
+    // (local working-tree run) the head side is HEAD. The CI action deepens the shallow checkout until
+    // this commit is reachable; if git still can't find a common ancestor we FAIL rather than diff
+    // against nothing, because an empty/garbage base would silently under-select and skip real tests.
+    private static string ResolveMergeBase(string repoRoot, string from, string? to)
+    {
+        var head = to ?? "HEAD";
+        var stdout = RunProcess("git", new[] { "merge-base", from, head }, repoRoot, out var exitCode, out var stderr);
+        if (exitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"git merge-base {from} {head} failed ({exitCode}): {stderr}. The base and head histories may not be deep enough locally to share a common ancestor -- the CI checkout must be deepened until they do.");
+        }
+
+        var mergeBase = stdout.Trim();
+        if (mergeBase.Length == 0)
+        {
+            throw new InvalidOperationException(
+                $"git merge-base {from} {head} found no common ancestor; cannot compute the PR diff.");
+        }
+
+        return mergeBase;
+    }
+
     private static IReadOnlyCollection<string> ResolveChangedFiles(RunOptions options)
     {
         if (options.ChangedFilesPath is not null)
@@ -328,6 +370,8 @@ internal static class Selection
 
         // git emits forward-slash, repo-relative paths on every OS, which is exactly what the map
         // globs expect. `<from> <to>` diffs the two refs; omitting <to> diffs against the work tree.
+        // From has already been rebound to the merge-base (see RunCore), so this is a branch-point..head
+        // diff -- the PR's own changes -- not a base-tip..head diff.
         // --no-renames decomposes a rename into a delete (old path) + add (new path) so BOTH sides
         // are glob-matched. Without it, git's default rename detection reports only the destination,
         // so a file moved OUT of a mapped directory (e.g. eng/clipack/foo -> eng/elsewhere) would hide

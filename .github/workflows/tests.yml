@@ -73,7 +73,13 @@ jobs:
           # plain re-run of an existing run. Empty on non-PR events -> the action force-alls anyway.
           forceAll: ${{ contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}
           prBaseSha: ${{ github.event.pull_request.base.sha }}
-          headSha: ${{ github.sha }}
+          # The PR's real head, NOT github.sha (the synthetic refs/pull/N/merge commit). The selector
+          # diffs head against the merge-base of base..head, so it sees only the PR's own commits. Using
+          # the merge commit instead lets base-branch churn leak into the diff whenever GitHub's merge
+          # ref and the event's base.sha disagree (the merge ref is regenerated asynchronously as the
+          # base advances) -- which over-selected an unrelated file in
+          # https://github.com/microsoft/aspire/pull/18377#issuecomment-4782187184.
+          headSha: ${{ github.event.pull_request.head.sha }}
 
       # Hand the selection summary to the separate comment_selection job (below) as an artifact. The
       # comment is posted from THAT job, which holds pull-requests:write but runs no PR code, so this

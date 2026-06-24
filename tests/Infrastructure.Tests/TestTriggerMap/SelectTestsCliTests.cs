@@ -607,14 +607,16 @@ public sealed class SelectTestsCliTests
         });
     }
 
-    // P1-6. --from/--to is an endpoint-to-endpoint (two-dot) diff, NOT a three-dot merge-base diff.
-    // The repo below diverges so the two differ: feature adds trigger.txt off a base commit, then the
-    // base advances by editing other.txt. A two-dot diff(advanced-base, feature) reports BOTH files;
-    // a three-dot diff would report only trigger.txt. Selecting Aspire.Cli.Tests (other.txt's target)
-    // therefore proves two-dot semantics — an accidental switch to '...' would drop it and silently
-    // change which files (and tests) a moved-base PR selects.
+    // P1-6. --from/--to is a merge-base (three-dot) diff: the change set is taken from the common
+    // ancestor of base..head, NOT from the base tip. The repo below diverges so the two differ: feature
+    // adds trigger.txt off a base commit, then the base advances by editing other.txt. A base-tip..head
+    // diff would report BOTH files; the merge-base diff reports only trigger.txt. other.txt was changed
+    // on the advanced base AFTER the branch point, so it is NOT the PR's change and must not be selected.
+    // This is the real-world failure that motivated the merge-base switch: a file changed on main after a
+    // PR branched (tools/ExtractTestPartitions/Program.cs) tripped the run-all fallback under the old
+    // base-tip..head diff -- https://github.com/microsoft/aspire/pull/18377#issuecomment-4782187184.
     [Fact]
-    public void FromToUsesTwoDotDiffSemantics()
+    public void FromToUsesMergeBaseDiffSemantics()
     {
         WithGitRepo((repoRoot, output) =>
         {
@@ -629,7 +631,7 @@ public sealed class SelectTestsCliTests
             GitCommitAll(repoRoot, "feature change");
             var featureSha = RunGit(repoRoot, "rev-parse", "HEAD");
 
-            // Advance the base after the branch point so two-dot and three-dot diverge.
+            // Advance the base after the branch point so base-tip..head and merge-base..head diverge.
             RunGit(repoRoot, "checkout", "-q", "-b", "advanced-base", baseSha);
             WriteFile(repoRoot, "other.txt", "v1");
             GitCommitAll(repoRoot, "base advances");
@@ -639,10 +641,11 @@ public sealed class SelectTestsCliTests
             Selection.Run(Options(repoRoot, propsPath, from: advancedBaseSha, to: featureSha, skipLayer1: true, enforce: true));
 
             var props = File.ReadAllText(propsPath);
-            // trigger.txt (added on feature) -> Aspire.Hosting.Tests; other.txt (differs across the two
-            // endpoints) -> Aspire.Cli.Tests. The latter is present only under two-dot.
+            // trigger.txt (added on feature, the PR's own change) -> Aspire.Hosting.Tests. other.txt was
+            // changed on the advanced base AFTER the branch point, so the merge-base diff excludes it and
+            // Aspire.Cli.Tests (its target) is NOT selected. A regression to base-tip..head would add it.
             Assert.Contains("Aspire.Hosting.Tests", props);
-            Assert.Contains("Aspire.Cli.Tests", props);
+            Assert.DoesNotContain("Aspire.Cli.Tests", props);
         });
     }
 

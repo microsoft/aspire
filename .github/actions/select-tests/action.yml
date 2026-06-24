@@ -124,10 +124,14 @@ runs:
         if [ "$FORCE_ALL" = "true" ]; then
           args+=(--force-all)
         elif [ -n "$PR_BASE_SHA" ]; then
-          # Pull requests diff base..head. This job's checkout is shallow, so fetch the base commit.
-          # If it can't be made available we FAIL rather than fall back to --force-all: base.sha is
-          # always reachable on origin, so a failure here is a real problem (a bad fetch or a
-          # rewritten base), and masking it with run-all would teach the audit nothing.
+          # Pull requests select on the PR's own commits: SelectTests diffs HEAD against the merge-base
+          # of base..head (the branch point), so commits that landed on the base branch after the PR
+          # branched don't get mis-attributed to it. This job's checkout is shallow, so we must make
+          # enough history of BOTH endpoints available locally for git to find their common ancestor.
+          #
+          # Start with the base commit itself. If it can't be fetched we FAIL rather than fall back to
+          # --force-all: base.sha is always reachable on origin, so a failure here is a real problem (a
+          # bad fetch or a rewritten base), and masking it with run-all would teach the audit nothing.
           if ! git fetch --no-tags --depth=1 origin "$PR_BASE_SHA"; then
             echo "::error::Failed to fetch PR base commit $PR_BASE_SHA; cannot compute the changed-file diff." >&2
             exit 1
@@ -136,6 +140,25 @@ runs:
             echo "::error::PR base commit $PR_BASE_SHA is unavailable after fetch; cannot compute the changed-file diff." >&2
             exit 1
           fi
+
+          # Deepen both endpoints until their merge-base is reachable. A shallow checkout truncates
+          # ancestry, so git can't see the branch point yet. Re-fetch both SHAs at a growing depth until
+          # `git merge-base` succeeds. If it never resolves within the bound we FAIL loudly (a missing
+          # merge-base would make SelectTests error, or worse, silently under-select) rather than mask it
+          # with --force-all. The bound also prevents an unbounded fetch on pathological histories.
+          depth=1
+          until git merge-base "$PR_BASE_SHA" "$HEAD_SHA" >/dev/null 2>&1; do
+            if [ "$depth" -ge 4096 ]; then
+              echo "::error::Could not find a merge-base of base $PR_BASE_SHA and head $HEAD_SHA within $depth commits of history; cannot compute the PR diff." >&2
+              exit 1
+            fi
+            depth=$((depth * 4))
+            echo "Merge-base of base..head not yet reachable; deepening history to depth $depth."
+            # Fetch both SHAs in one shot. '|| true' so a deepen that can't make progress (e.g. one side
+            # is already complete) doesn't abort the loop -- the merge-base check above is the real gate,
+            # and the depth bound guarantees termination.
+            git fetch --no-tags --depth="$depth" origin "$PR_BASE_SHA" "$HEAD_SHA" || true
+          done
           args+=(--from "$PR_BASE_SHA" --to "$HEAD_SHA")
         else
           # Non-PR events (e.g. push to main) have no reliable base -> run everything.

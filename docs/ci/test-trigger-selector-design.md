@@ -58,11 +58,24 @@ diff is used only to identify changed paths.
 
 ### Changed paths
 
-When `--from` / `--to` are supplied, Layer 1 reads changed files with:
+When `--from` / `--to` are supplied, the selector first resolves the
+**merge-base** (the branch point) of the two refs and diffs FROM there:
 
 ```text
-git diff --name-status -M <from> <to>
+from := git merge-base <from> <to>      # the base..head branch point
+git diff --name-status -M <from> <to>   # Layer 1
+git diff --name-only   --no-renames <from> <to>   # Layer 2
 ```
+
+This makes a PR select on its **own** commits. A file changed on the base
+branch after the PR branched shares the merge-base, so it produces no diff and
+is not mis-attributed to the PR. (Diffing from the base *tip* instead surfaced
+exactly such a file and tripped the run-all fallback —
+[microsoft/aspire#18377](https://github.com/microsoft/aspire/pull/18377#issuecomment-4782187184).)
+The same rebound `from` feeds both layers, so they see an identical change set.
+When `--to` is omitted (local working-tree run) `HEAD` is used only to resolve the
+merge-base; the diff itself then compares that merge-base against the **working
+tree**, so uncommitted changes are included.
 
 Deletes are included. Renames include both the old path and the new path, so a
 cross-project move marks both the project that lost the file and the project
@@ -232,7 +245,10 @@ Main options:
 - `--map`: curated map path, defaulting to `eng/github-ci/test-trigger-map.yml`.
 - `--slnx`: path to the solution that defines the project universe, defaulting to
   `<repo-root>/Aspire.slnx`.
-- `--from` / `--to`: git refs for the PR diff.
+- `--from` / `--to`: git refs for the PR diff. The diff is taken from the
+  merge-base of the two (the branch point), so only the PR's own commits count.
+  In CI `--to` is the PR's real head (`pull_request.head.sha`), not the
+  synthetic merge commit.
 - `--changed-files`: newline-delimited changed file list, instead of
   `--from` / `--to`.
 - `--skip-layer1`: skip the graph closure for explicit diagnostics.
@@ -340,6 +356,13 @@ e.g. a push to `main`) also force the full set. A PR *with* a base SHA that
 cannot be fetched in the shallow checkout **fails the step** instead of forcing
 run-all: `base.sha` is always reachable on origin, so a fetch failure is a real
 problem, and masking it with run-all would teach the audit nothing.
+
+Because the diff is taken from the merge-base, the shallow PR checkout must be
+deepened until that common ancestor is reachable. The step fetches the base
+commit, then re-fetches both base and head at a growing depth until
+`git merge-base` resolves. If it never resolves within the depth bound the step
+**fails loudly** rather than falling back to run-all — a missing merge-base
+would otherwise crash the selector or, worse, silently under-select.
 
 ## Failure policy
 
