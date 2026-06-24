@@ -22,9 +22,19 @@
     <ItemGroup>
       <_EnvVarsForPlaywrightInstall Include="PLAYWRIGHT_BROWSERS_PATH=$(PlaywrightDependenciesDirectory)" />
       <_EnvVarsForPlaywrightInstall Condition="'$(ContinuousIntegrationBuild)' == 'true'" Include="PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=true" />
+      <!-- Increase the download timeout from the default 30s to 120s to avoid transient CI failures -->
+      <_EnvVarsForPlaywrightInstall Condition="'$(ContinuousIntegrationBuild)' == 'true'" Include="PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT=120000" />
     </ItemGroup>
 
+    <!-- First attempt uses IgnoreExitCode; if it fails, retry once and fail the build on the second failure -->
     <Exec Command="dotnet exec --runtimeconfig $(MSBuildThisFileDirectory)Microsoft.Playwright.runtimeconfig.json $(_MicrosoftPlaywrightDllPath) install @(BrowsersForPlaywrightToInstall, ' ')"
+          EnvironmentVariables="@(_EnvVarsForPlaywrightInstall)"
+          IgnoreExitCode="true">
+      <Output TaskParameter="ExitCode" PropertyName="_PlaywrightInstallExitCode1" />
+    </Exec>
+
+    <Exec Condition="'$(_PlaywrightInstallExitCode1)' != '0'"
+          Command="dotnet exec --runtimeconfig $(MSBuildThisFileDirectory)Microsoft.Playwright.runtimeconfig.json $(_MicrosoftPlaywrightDllPath) install @(BrowsersForPlaywrightToInstall, ' ')"
           EnvironmentVariables="@(_EnvVarsForPlaywrightInstall)" />
   </Target>
 </Project>
