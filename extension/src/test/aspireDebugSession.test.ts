@@ -336,6 +336,65 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         }
     });
 
+    test('reports AppHost end duration before async metadata enrichment completes', async () => {
+        const fake = new FakeTelemetryReporter();
+        const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.cs',
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        const dcpServer = {
+            takeDebugSessionAggregateStats: sinon.stub().returns({
+                anyNonZeroExit: false,
+                distinctResourceTypes: [],
+                totalChildSessions: 0,
+            }),
+        };
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, dcpServer as any, terminalProvider as any, () => { });
+        let resolveTargetVersion: ((value: string) => void) | undefined;
+        const targetVersionPromise = new Promise<string>(resolve => {
+            resolveTargetVersion = resolve;
+        });
+        sinon.stub(aspireDebugSession as any, 'resolveAppHostTargetVersionAtLaunch').returns(targetVersionPromise);
+        sinon.stub(aspireDebugSession, 'spawnAspireCommand').resolves();
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+
+        try {
+            aspireDebugSession.handleMessage({ command: 'launch', seq: 1, arguments: { noDebug: false } });
+            await clock.tickAsync(100);
+            aspireDebugSession.dispose();
+            await clock.tickAsync(500);
+            await clock.tickAsync(10_000);
+            resolveTargetVersion!('13.6.0');
+            await waitForWithFakeClock(clock, () => fake.events.some(event => event.name === 'debug/apphost/end'));
+
+            const event = fake.events.find(event => event.name === 'debug/apphost/end');
+            assert.ok(event);
+            assert.strictEqual(event.properties?.apphost_target_version, '13.6.0');
+            assert.ok(event.measurements?.duration_ms !== undefined);
+            assert.ok(event.measurements.duration_ms < 1_000, `Expected duration to exclude async metadata wait, got ${event.measurements.duration_ms}ms.`);
+        }
+        finally {
+            resolveTargetVersion?.('13.6.0');
+            restoreReporter();
+        }
+    });
+
     test('reports resolved AppHost directory classification in end telemetry', async () => {
         const fake = new FakeTelemetryReporter();
         const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);

@@ -773,6 +773,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     if (startMs !== undefined) {
       setTimeout(() => {
         void (async () => {
+          const durationMs = Date.now() - startMs;
           const resolvedLanguage = await languagePromise ?? language;
           const resolvedTargetVersion = await targetVersionPromise ?? targetVersion;
           const aggregate = dcpServer.takeDebugSessionAggregateStats(debugSessionId);
@@ -784,7 +785,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
             ended_with_error: aggregate?.anyNonZeroExit ? 'true' : 'false',
             distinct_resource_types: aggregate ? aggregate.distinctResourceTypes.join(',') : '',
           }, {
-            duration_ms: Date.now() - startMs,
+            duration_ms: durationMs,
             total_child_sessions: aggregate?.totalChildSessions ?? 0,
             distinct_resource_type_count: aggregate?.distinctResourceTypes.length ?? 0,
           });
