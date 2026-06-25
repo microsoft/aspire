@@ -1903,3 +1903,65 @@ table.data tbody tr.selected {
   flex-direction: column;
   gap: 6px;
 }
+
+/* === Console === */
+/* Console Logs page. The page chrome (header, toolbar, panel border) adopts the Deck design
+   tokens, but the log area itself stays on a dark, terminal-style background in both light and
+   dark themes because it renders raw ANSI color codes that assume a dark terminal. This mirrors
+   the standalone dashboard's long-standing behavior while matching Deck's bordered console panel
+   (src/Aspire.Deck/ui/src/pages/ConsolePage.tsx). */
+
+/* The log surface owns its own scrolling (continuous-scroll), so the page body must not scroll;
+   it just lays out the toolbar overflow and the surface as a flex column. */
+.console-page .page__body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Bordered, rounded terminal panel that fills the remaining height. The background matches
+   --console-theme-black (#0C0C0C) so the rounded corners blend with the log area underneath. */
+.console-surface {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #0c0c0c;
+}
+
+/* The LogViewer root uses height:100% by default; inside the flex surface it should grow/shrink
+   and provide the scroll viewport. */
+.console-surface .log-overflow,
+.console-surface .console-overflow {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+/* Match Deck's monospace console text. Row height is intentionally left at 20px to match the
+   LogViewer's virtualized ItemSize="20"; only the font family/size change here. */
+.console-surface .log-container {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+/* TerminalView fills the same surface chrome. */
+.console-surface > .terminal-container {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Small inline labels used by the resource-command and terminal toolbar groups. */
+.console-toolbar-label {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  margin-left: 4px;
+}
+.console-toolbar-hint {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+/* === end Console === */
