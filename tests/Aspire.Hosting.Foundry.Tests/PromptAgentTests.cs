@@ -3,10 +3,16 @@
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREFOUNDRY001 // Preview tool types
+#pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
+#pragma warning disable ASPIREAZURE001 // Azure types are experimental
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Foundry.Tests;
 
@@ -534,5 +540,49 @@ public class PromptAgentTests
         Assert.Same(project.Resource, ci.Resource.Project);
         Assert.Same(project.Resource, fs.Resource.Project);
         Assert.Same(project.Resource, ws.Resource.Project);
+    }
+
+    [Fact]
+    public async Task AddPromptAgent_RunMode_BeforeStartStepDependsOnPrepareResources()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+
+        var agent = project.AddPromptAgent("my-agent", model, instructions: "Test agent");
+
+        builder.Build();
+
+        var agentResource = builder.Resources.Single(r => r.Name == "my-agent");
+        var annotations = agentResource.Annotations.OfType<PipelineStepAnnotation>().ToList();
+        Assert.NotEmpty(annotations);
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var pipelineContext = new PipelineContext(
+            serviceProvider.GetRequiredService<DistributedApplicationModel>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            serviceProvider,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        var steps = new List<PipelineStep>();
+        foreach (var annotation in annotations)
+        {
+            steps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+            {
+                PipelineContext = pipelineContext,
+                Resource = agentResource
+            }));
+        }
+
+        var beforeStartStep = steps.SingleOrDefault(s => s.Name == "deploy-my-agent-before-start");
+        Assert.NotNull(beforeStartStep);
+
+        // The step must depend on the azure-prepare-resources step (which actually exists in the pipeline).
+        // Previously it depended on 'run-mode-azure-provision' which was never registered,
+        // causing a pipeline validation failure at runtime.
+        Assert.Contains(AzureEnvironmentResource.PrepareResourcesStepName, beforeStartStep.DependsOnSteps);
+        Assert.DoesNotContain("run-mode-azure-provision", beforeStartStep.DependsOnSteps);
     }
 }
