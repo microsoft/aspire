@@ -460,11 +460,11 @@ suite('InteractionService endpoints', () => {
 
 		try {
 			sandbox.stub(extensionLogOutputChannel, 'info');
-			const sentTexts: string[] = [];
+			const sentTexts: { text: string; addNewLine: boolean }[] = [];
 			const mockTerminal = {
 				terminal: {
 					sendText: (text: string, addNewLine: boolean) => {
-						sentTexts.push(text);
+						sentTexts.push({ text, addNewLine });
 					}
 				},
 				dispose: () => {}
@@ -479,8 +479,10 @@ suite('InteractionService endpoints', () => {
 			]);
 
 			assert.strictEqual(sentTexts.length, 2, 'Should send two lines to Aspire terminal');
-			assert.strictEqual(sentTexts[0], 'line1');
-			assert.strictEqual(sentTexts[1], 'line2');
+			assert.deepStrictEqual(sentTexts, [
+				{ text: 'line1', addNewLine: false },
+				{ text: 'line2', addNewLine: false }
+			]);
 		}
 		finally {
 			sandbox.restore();

@@ -432,7 +432,7 @@ export class InteractionService implements IInteractionService {
             if (debugSession) {
                 debugSession.sendMessage(text, true, stream !== 'stderr' ? 'stdout' : 'stderr');
             } else if (aspireTerminal) {
-                aspireTerminal.terminal.sendText(text, true);
+                aspireTerminal.terminal.sendText(text, false);
             }
         }
     }
