@@ -63,12 +63,13 @@
         <div>
             <span class="setting-title">@Loc[nameof(Dialogs.SettingsDialogDashboardLogsAndTelemetry)]</span>
             <div>
-                <FluentButton IconStart="@(new Icons.Regular.Size16.Settings())"
-                              OnClick="LaunchManageDataAsync"
-                              Title="@Loc[nameof(Dialogs.ManageDataManageButtonText)]"
-                              aria-label="@Loc[nameof(Dialogs.ManageDataManageButtonText)]">
+                <button type="button" class="btn"
+                        @onclick="LaunchManageDataAsync"
+                        title="@Loc[nameof(Dialogs.ManageDataManageButtonText)]"
+                        aria-label="@Loc[nameof(Dialogs.ManageDataManageButtonText)]">
+                    <DeckIcon Name="DeckIconName.Settings" Size="16" />
                     @Loc[nameof(Dialogs.ManageDataManageButtonText)]
-                </FluentButton>
+                </button>
             </div>
         </div>
 

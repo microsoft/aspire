@@ -110,19 +110,19 @@
                 {
                     if (Content.Filter.Enabled)
                     {
-                        <FluentButton Appearance="Appearance.Stealth" Title="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" OnClick="Disable"><FluentIcon Value="@(new Icons.Regular.Size16.Pause())" /></FluentButton>
+                        <button type="button" class="icon-btn icon-btn--sm" title="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" @onclick="Disable"><DeckIcon Name="DeckIconName.Pause" Size="16" /></button>
                     }
                     else
                     {
-                        <FluentButton Appearance="Appearance.Stealth" Title="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" OnClick="Enable"><FluentIcon Value="@(new Icons.Regular.Size16.Play())" /></FluentButton>
+                        <button type="button" class="icon-btn icon-btn--sm" title="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogDisableFilterButtonText)]" @onclick="Enable"><DeckIcon Name="DeckIconName.Play" Size="16" /></button>
                     }
-                    <FluentButton Appearance="Appearance.Stealth" Title="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" OnClick="Delete"><FluentIcon Value="@(new Icons.Regular.Size16.Delete())" /></FluentButton>
+                    <button type="button" class="icon-btn icon-btn--sm" title="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" @onclick="Delete"><DeckIcon Name="DeckIconName.Delete" Size="16" /></button>
                 }
             </div>
 
             <div class="deck-stack" style="justify-content: flex-end;">
-                <FluentButton OnClick="Cancel">@Loc[nameof(Dialogs.FilterDialogCancelButtonText)]</FluentButton>
-                <FluentButton Color="Color.Primary" Type="ButtonType.Submit">@Loc[nameof(Dialogs.FilterDialogApplyFilterButtonText)]</FluentButton>
+                <button type="button" class="btn" @onclick="Cancel">@Loc[nameof(Dialogs.FilterDialogCancelButtonText)]</button>
+                <button type="submit" class="btn btn--primary">@Loc[nameof(Dialogs.FilterDialogApplyFilterButtonText)]</button>
             </div>
         </div>
     </div>
