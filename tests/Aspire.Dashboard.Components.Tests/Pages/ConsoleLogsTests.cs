@@ -235,7 +235,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Wait for UI to update
         cut.WaitForAssertion(() =>
         {
-            var selectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
+            selectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
             var updatedOptions = selectElement.QuerySelectorAll("fluent-option");
             // Should now have "All" + all three resources
             Assert.Equal(4, updatedOptions.Length);
@@ -256,7 +256,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Wait for UI to update - hidden resource should be filtered out
         cut.WaitForAssertion(() =>
         {
-            var selectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
+            selectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
             var finalOptions = selectElement.QuerySelectorAll("fluent-option");
             // Should be back to "All" + 2 regular resources only
             Assert.Equal(3, finalOptions.Length);
