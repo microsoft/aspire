@@ -25,26 +25,16 @@
                           slot="end" />
     </FluentToolbar>
     <div class="property-grid-container">
-        <FluentAccordion>
-            <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]" Expanded="true">
-                <div slot="end">
-                    <Badge>
-                        @FilteredResourceProperties.Count()
-                    </Badge>
-                </div>
+        <Accordion>
+            <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]" Expanded="true" Count="@FilteredResourceProperties.Count()">
                 <PropertyGrid TItem="DisplayedResourcePropertyViewModel"
                               Items="@FilteredResourceProperties"
                               IsValueMaskedChanged="@OnValueMaskedChanged"
                               HighlightText="@_filter"
                               GridTemplateColumns="1fr 1.5fr"
                               ValueComponents="_valueComponents" />
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsUrlsHeader)]" Expanded="@_isUrlsExpanded">
-                <div slot="end">
-                    <Badge>
-                        @FilteredUrls.Count()
-                    </Badge>
-                </div>
+            </AccordionItem>
+            <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsUrlsHeader)]" Expanded="@_isUrlsExpanded" Count="@FilteredUrls.Count()">
                 <FluentDataGrid TGridItem="DisplayedUrl"
                                 ItemKey="@(vm => ((IPropertyGridItem)vm).Key)"
                                 Items="@FilteredUrls"
@@ -80,15 +70,10 @@
                                    HighlightText="@_filter" />
                     </AspireTemplateColumn>
                 </FluentDataGrid>
-            </FluentAccordionItem>
+            </AccordionItem>
             @if (Resource.IsContainer())
             {
-                <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]" Expanded="@_isVolumesExpanded">
-                    <div slot="end">
-                        <Badge>
-                            @FilteredVolumes.Count()
-                        </Badge>
-                    </div>
+                <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]" Expanded="@_isVolumesExpanded" Count="@FilteredVolumes.Count()">
 
                     <FluentDataGrid TGridItem="VolumeViewModel"
                                     ItemKey="@(vm => ((IPropertyGridItem)vm).Key)"
@@ -126,14 +111,9 @@
                             </GridValue>
                         </AspireTemplateColumn>
                     </FluentDataGrid>
-                </FluentAccordionItem>
+                </AccordionItem>
             }
-            <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsReferences)]" Expanded="@_isRelationshipsExpanded">
-                <div slot="end">
-                    <Badge>
-                        @FilteredRelationships.Count()
-                    </Badge>
-                </div>
+            <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsReferences)]" Expanded="@_isRelationshipsExpanded" Count="@FilteredRelationships.Count()">
                 <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
                                 ColumnSortLabels="@_sortLabels"
                                 HeaderCellAsButtonWithMenu="true"
@@ -156,13 +136,8 @@
                         <button type="button" class="button-hyperlink-no-icon" @onclick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</button>
                     </TemplateColumn>
                 </FluentDataGrid>
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsBackReferences)]" Expanded="@_isBackRelationshipsExpanded">
-                <div slot="end">
-                    <Badge>
-                        @FilteredBackRelationships.Count()
-                    </Badge>
-                </div>
+            </AccordionItem>
+            <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsBackReferences)]" Expanded="@_isBackRelationshipsExpanded" Count="@FilteredBackRelationships.Count()">
                 <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
                                 ColumnSortLabels="@_sortLabels"
                                 HeaderCellAsButtonWithMenu="true"
@@ -185,13 +160,8 @@
                         <button type="button" class="button-hyperlink-no-icon" @onclick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</button>
                     </TemplateColumn>
                 </FluentDataGrid>
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]" Expanded="@_isHealthChecksExpanded">
-                <div slot="end">
-                    <Badge>
-                        @FilteredHealthReports.Count()
-                    </Badge>
-                </div>
+            </AccordionItem>
+            <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]" Expanded="@_isHealthChecksExpanded" Count="@FilteredHealthReports.Count()">
 
                 <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
                                 ColumnSortLabels="@_sortLabels"
@@ -243,21 +213,16 @@
                         </GridValue>
                     </AspireTemplateColumn>
                 </FluentDataGrid>
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]" Expanded="@_isEnvironmentVariablesExpanded">
-                <div slot="end">
-                    <Badge>
-                        @FilteredEnvironmentVariables.Count()
-                    </Badge>
-                </div>
+            </AccordionItem>
+            <AccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]" Expanded="@_isEnvironmentVariablesExpanded" Count="@FilteredEnvironmentVariables.Count()">
                 <PropertyGrid TItem="EnvironmentVariableViewModel"
                               Items="@FilteredEnvironmentVariables"
                               IsValueMaskedChanged="@OnValueMaskedChanged"
                               HighlightText="@_filter"
                               GridTemplateColumns="1fr 1.5fr"
                               Class="env-var-properties" />
-            </FluentAccordionItem>
-        </FluentAccordion>
+            </AccordionItem>
+        </Accordion>
     </div>
 </div>
 

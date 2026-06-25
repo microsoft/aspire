@@ -36,49 +36,29 @@
         </FluentToolbar>
     }
     <div class="property-grid-container">
-        <FluentAccordion>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsSpanHeader)]" Expanded="true">
-                <div slot="end">
-                    <Badge>
-                        @FilteredItems.Count()
-                    </Badge>
-                </div>
+        <Accordion>
+            <AccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsSpanHeader)]" Expanded="true" Count="@FilteredItems.Count()">
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredItems"
                               GridTemplateColumns="1fr 2fr"
                               HighlightText="@_filter"
                               ValueComponents="_valueComponents" />
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsContextHeader)]" Expanded="true">
-                <div slot="end">
-                    <Badge>
-                        @FilteredContextItems.Count()
-                    </Badge>
-                </div>
+            </AccordionItem>
+            <AccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsContextHeader)]" Expanded="true" Count="@FilteredContextItems.Count()">
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredContextItems"
                               GridTemplateColumns="1fr 2fr"
                               HighlightText="@_filter"
                               ValueComponents="@_valueComponents" />
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsResourceHeader)]" Expanded="true">
-                <div slot="end">
-                    <Badge>
-                        @FilteredResourceItems.Count()
-                    </Badge>
-                </div>
+            </AccordionItem>
+            <AccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsResourceHeader)]" Expanded="true" Count="@FilteredResourceItems.Count()">
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredResourceItems"
                               GridTemplateColumns="1fr 2fr"
                               HighlightText="@_filter"
                               ValueComponents="@_valueComponents" />
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsEventsHeader)]" Expanded="@_isSpanEventsExpanded">
-                <div slot="end">
-                    <Badge>
-                        @FilteredSpanEvents.Count()
-                    </Badge>
-                </div>
+            </AccordionItem>
+            <AccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsEventsHeader)]" Expanded="@_isSpanEventsExpanded" Count="@FilteredSpanEvents.Count()">
                 <PropertyGrid TItem="OtlpSpanEvent"
                               Items="@FilteredSpanEvents"
                               GridTemplateColumns="1fr 2fr"
@@ -100,13 +80,8 @@
                         }
                     </ExtraValueContent>
                 </PropertyGrid>
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsLinksHeader)]" Expanded="@_isSpanLinksExpanded">
-                <div slot="end">
-                    <Badge>
-                        @FilteredSpanLinks.Count()
-                    </Badge>
-                </div>
+            </AccordionItem>
+            <AccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsLinksHeader)]" Expanded="@_isSpanLinksExpanded" Count="@FilteredSpanLinks.Count()">
                 <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
                                 ColumnSortLabels="@_sortLabels"
                                 HeaderCellAsButtonWithMenu="true"
@@ -129,13 +104,8 @@
                             </button>
                     </TemplateColumn>
                 </FluentDataGrid>
-            </FluentAccordionItem>
-            <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsBacklinksHeader)]" Expanded="@_isSpanBacklinksExpanded">
-                <div slot="end">
-                    <Badge>
-                        @FilteredSpanBacklinks.Count()
-                    </Badge>
-                </div>
+            </AccordionItem>
+            <AccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsBacklinksHeader)]" Expanded="@_isSpanBacklinksExpanded" Count="@FilteredSpanBacklinks.Count()">
                 <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
                                 ColumnSortLabels="@_sortLabels"
                                 HeaderCellAsButtonWithMenu="true"
@@ -158,8 +128,8 @@
                             </button>
                     </TemplateColumn>
                 </FluentDataGrid>
-            </FluentAccordionItem>
-        </FluentAccordion>
+            </AccordionItem>
+        </Accordion>
     </div>
 </div>
 

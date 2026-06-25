@@ -2657,6 +2657,58 @@ hr.deck-divider {
 }
 /* === end Search highlight === */
 
+/* === Accordion (FluentAccordion/FluentAccordionItem replacement) ===
+   Collapsible sections built on native <details>/<summary>. The default disclosure marker is
+   replaced with a Deck caret that rotates when the item is open. */
+.deck-accordion {
+  display: flex;
+  flex-direction: column;
+}
+.deck-accordion-item {
+  border-bottom: 1px solid var(--border);
+}
+.deck-accordion-item__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 4px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  list-style: none;
+}
+.deck-accordion-item__header::-webkit-details-marker {
+  display: none;
+}
+.deck-accordion-item__header::before {
+  content: "";
+  flex: none;
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s ease;
+}
+.deck-accordion-item[open] > .deck-accordion-item__header::before {
+  transform: rotate(90deg);
+}
+.deck-accordion-item__heading {
+  flex: 1;
+  min-width: 0;
+}
+.deck-accordion-item__end {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+}
+.deck-accordion-item__body {
+  padding: 4px 4px 12px;
+}
+/* === end Accordion === */
+
 /* === Hyperlink buttons (FluentButton Lightweight link-style replacement) === */
 .button-hyperlink,
 .button-hyperlink-no-icon {

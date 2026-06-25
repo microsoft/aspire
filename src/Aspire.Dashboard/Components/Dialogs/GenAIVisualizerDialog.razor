@@ -128,20 +128,15 @@
                                     else if (itemPart.AdditionalProperties is { } additionalProperties && additionalProperties.Count > 0)
                                     {
                                         <div class="property-grid-container">
-                                            <FluentAccordion>
-                                                <FluentAccordionItem Heading="@(itemPart.MessagePart?.Type ?? "unknown")" Expanded="true">
-                                                    <div slot="end">
-                                                        <Badge>
-                                                            @additionalProperties.Count
-                                                        </Badge>
-                                                    </div>
+                                            <Accordion>
+                                                <AccordionItem Heading="@(itemPart.MessagePart?.Type ?? "unknown")" Expanded="true" Count="@additionalProperties.Count">
                                                     <PropertyGrid TItem="GenAIPartPropertyViewModel"
                                                                   Items="additionalProperties.AsQueryable()"
                                                                   IsNameSortable="false"
                                                                   IsValueSortable="false"
                                                                   GridTemplateColumns="1fr 2fr" />
-                                                </FluentAccordionItem>
-                                            </FluentAccordion>
+                                                </AccordionItem>
+                                            </Accordion>
                                         </div>
                                     }
                                     else if (itemPart.ErrorMessage == itemPart.TextVisualizerViewModel.Text)
@@ -334,10 +329,10 @@
                             <div class="tab-container">
                                 @if (Content.ToolDefinitions.Count > 0)
                                 {
-                                    <FluentAccordion Class="tools-list">
+                                    <Accordion Class="tools-list">
                                         @foreach (var toolVM in Content.ToolDefinitions.Where(t => t.ToolDefinition.Type == "function").OrderBy(t => t.ToolDefinition.Name, StringComparer.OrdinalIgnoreCase))
                                         {
-                                            <FluentAccordionItem Id="@toolVM.ElementId" Class="@(toolVM.Highlighted ? "tool-highlighted" : null)" @bind-Expanded="toolVM.Expanded" HeadingTooltip="@GetToolHeadingTooltip(toolVM)">
+                                            <AccordionItem Id="@toolVM.ElementId" Class="@(toolVM.Highlighted ? "tool-highlighted" : null)" @bind-Expanded="toolVM.Expanded" HeadingTooltip="@GetToolHeadingTooltip(toolVM)">
                                                 <HeadingTemplate>
                                                     <div class="tool-heading">
                                                         <Badge Tone="accent" style="min-width: 80px; text-align: center;">
@@ -420,9 +415,9 @@
                                                         <div class="tool-footer">@Loc[nameof(Dialogs.GenAIToolNoParameters)]</div>
                                                     }
                                                 </ChildContent>
-                                            </FluentAccordionItem>
+                                            </AccordionItem>
                                         }
-                                    </FluentAccordion>
+                                    </Accordion>
                                 }
                                 else
                                 {

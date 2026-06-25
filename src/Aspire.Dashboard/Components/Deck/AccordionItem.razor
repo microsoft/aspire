@@ -1,0 +1,96 @@
+@*
+    A single collapsible disclosure section, replacing FluentAccordionItem during the Fluent-removal
+    phase. Built on a native <details>/<summary>. The expanded state is controlled from C# so it can
+    be two-way bound (@bind-Expanded) and driven externally (e.g. expanding a highlighted item):
+    the summary's default toggle is suppressed and `open` is rendered from the tracked state instead.
+*@
+@namespace Aspire.Dashboard.Components.Deck
+
+<details class="deck-accordion-item @Class" id="@Id" open="@_expanded" @attributes="AdditionalAttributes">
+    @* preventDefault stops the browser's native toggle so `open` stays controlled by _expanded. *@
+    <summary class="deck-accordion-item__header" title="@HeadingTooltip"
+             @onclick="ToggleAsync" @onclick:preventDefault="true">
+        <span class="deck-accordion-item__heading">
+            @if (HeadingTemplate is not null)
+            {
+                @HeadingTemplate
+            }
+            else
+            {
+                @Heading
+            }
+        </span>
+        @if (Count is not null)
+        {
+            <span class="deck-accordion-item__end"><Badge>@Count</Badge></span>
+        }
+    </summary>
+    <div class="deck-accordion-item__body">
+        @ChildContent
+    </div>
+</details>
+
+@code {
+    private bool _expanded;
+    private bool? _lastExpandedParam;
+
+    /// <summary>The heading text shown in the summary. Ignored when <see cref="HeadingTemplate"/> is set.</summary>
+    [Parameter]
+    public string? Heading { get; set; }
+
+    /// <summary>Custom heading content shown in the summary instead of <see cref="Heading"/>.</summary>
+    [Parameter]
+    public RenderFragment? HeadingTemplate { get; set; }
+
+    /// <summary>Tooltip shown on the summary header.</summary>
+    [Parameter]
+    public string? HeadingTooltip { get; set; }
+
+    /// <summary>Trailing header count badge (e.g. the number of items in the section).</summary>
+    [Parameter]
+    public int? Count { get; set; }
+
+    /// <summary>The body content shown when expanded.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Whether the item is expanded (supports <c>@bind-Expanded</c>).</summary>
+    [Parameter]
+    public bool Expanded { get; set; }
+
+    /// <summary>Raised when the expanded state changes.</summary>
+    [Parameter]
+    public EventCallback<bool> ExpandedChanged { get; set; }
+
+    /// <summary>Optional element id.</summary>
+    [Parameter]
+    public string? Id { get; set; }
+
+    /// <summary>Additional CSS classes appended to the <c>.deck-accordion-item</c> class.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        // Adopt the Expanded parameter only when it actually changes. This preserves a user's local
+        // toggle across frequent parent re-renders (which pass the same Expanded value), while still
+        // honouring external changes such as expanding a highlighted item.
+        if (_lastExpandedParam != Expanded)
+        {
+            _lastExpandedParam = Expanded;
+            _expanded = Expanded;
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        _expanded = !_expanded;
+        if (ExpandedChanged.HasDelegate)
+        {
+            await ExpandedChanged.InvokeAsync(_expanded);
+        }
+    }
+}

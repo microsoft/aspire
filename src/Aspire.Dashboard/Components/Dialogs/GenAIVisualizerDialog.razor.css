@@ -261,25 +261,17 @@
     width: 100%;
 }
 
-::deep .tab-container .tools-list fluent-accordion-item {
+::deep .tab-container .tools-list .deck-accordion-item {
     --fill-color: var(--property-grid-genai-dialog-background-color);
 }
 
-::deep .tab-container .tools-list fluent-accordion-item.tool-highlighted {
+::deep .tab-container .tools-list .deck-accordion-item.tool-highlighted {
     border: 2px solid var(--accent-fill-rest);
 }
 
-::deep .tab-container .tools-list fluent-accordion-item,
-::deep .tab-container .tools-list fluent-accordion-item::part(region) {
+::deep .tab-container .tools-list .deck-accordion-item,
+::deep .tab-container .tools-list .deck-accordion-item .deck-accordion-item__body {
     background-color: var(--property-grid-genai-dialog-background-color);
-}
-
-/* This is a hack because we can't do a selector that selects inside of a ::part,
-   which is what we'd need to do to access `::part(heading):not(:hover) .icon`.
-   So instead we just change the color token the non-hovered state uses.
-*/
-::deep .tab-container .tools-list fluent-accordion-item::part(icon) {
-    --neutral-fill-stealth-rest-on-neutral-fill-layer-rest: var(--property-grid-genai-dialog-background-color);
 }
 
 ::deep .tab-container .tool-heading {
