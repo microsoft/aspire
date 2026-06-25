@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -500,6 +501,49 @@ public class ResourceExtensionsTests
         Assert.Collection(resource.Resource.Annotations.OfType<ContainerFilesSourceAnnotation>(),
             a => Assert.Equal("src/override", a.SourcePath),
             a => Assert.Equal("src/override2", a.SourcePath));
+    }
+
+    [Fact]
+    public void WithContainerFilesExport_AcceptsDecimalFormNumericOptions()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var resource = builder.AddContainer("test-container", "nginx")
+            .WithContainerFilesExport("/app", ".", new ContainerFilesOptions
+            {
+                DefaultOwner = 1000.0,
+                DefaultGroup = 18.0,
+                Umask = 18.0
+            });
+
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>());
+        Assert.Equal(1000, annotation.DefaultOwner);
+        Assert.Equal(18, annotation.DefaultGroup);
+        Assert.Equal((UnixFileMode)18, annotation.Umask);
+    }
+
+    [Theory]
+    [InlineData(double.NaN, nameof(ContainerFilesOptions.DefaultOwner))]
+    [InlineData(double.PositiveInfinity, nameof(ContainerFilesOptions.DefaultOwner))]
+    [InlineData(1000.5, nameof(ContainerFilesOptions.DefaultOwner))]
+    [InlineData(-1.0, nameof(ContainerFilesOptions.DefaultOwner))]
+    [InlineData(-1.0, nameof(ContainerFilesOptions.DefaultGroup))]
+    [InlineData(4096.0, nameof(ContainerFilesOptions.Umask))]
+    public void WithContainerFilesExport_RejectsInvalidNumericOptions(double value, string optionName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var options = optionName switch
+        {
+            nameof(ContainerFilesOptions.DefaultOwner) => new ContainerFilesOptions { DefaultOwner = value },
+            nameof(ContainerFilesOptions.DefaultGroup) => new ContainerFilesOptions { DefaultGroup = value },
+            nameof(ContainerFilesOptions.Umask) => new ContainerFilesOptions { Umask = value },
+            _ => throw new InvalidOperationException($"Unexpected option '{optionName}'.")
+        };
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            builder.AddContainer("test-container", "nginx").WithContainerFilesExport("/app", ".", options));
+
+        Assert.Equal(optionName, exception.ParamName);
     }
 
     private sealed class ComputeEnvironmentResource(string name) : Resource(name), IComputeEnvironmentResource

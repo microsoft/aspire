@@ -62,7 +62,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(outputPath), "Export zip file should be created");
 
         using var archive = ZipFile.OpenRead(outputPath);
@@ -133,7 +133,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(outputPath), $"Export zip file should be created at the specified path: {outputPath}");
         Assert.True(Directory.Exists(customDir), "Nested output directory should be created automatically");
     }
@@ -168,7 +168,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         // The command succeeds but displays "not found" because there is no
         // socket file for the specified apphost.
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(File.Exists(outputPath), "No zip should be created when the AppHost is not running");
     }
 
@@ -281,7 +281,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(outputPath), "Export zip file should be created");
 
         using var archive = ZipFile.OpenRead(outputPath);
@@ -343,7 +343,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(outputPath), "Export zip file should be created");
 
         using var archive = ZipFile.OpenRead(outputPath);
@@ -461,7 +461,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(outputPath), "Export zip file should be created");
 
         using var archive = ZipFile.OpenRead(outputPath);
@@ -519,7 +519,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(outputPath), "Export zip file should be created");
 
         using var archive = ZipFile.OpenRead(outputPath);
@@ -579,7 +579,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(outputPath), "Export zip file should be created");
 
         using var archive = ZipFile.OpenRead(outputPath);
@@ -629,7 +629,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(outputPath));
 
         using var archive = ZipFile.OpenRead(outputPath);
@@ -671,7 +671,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(outputPath));
 
         using var archive = ZipFile.OpenRead(outputPath);
@@ -715,7 +715,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(outputPath));
 
         using var archive = ZipFile.OpenRead(outputPath);
@@ -751,7 +751,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.False(File.Exists(outputPath), "No zip should be created when the resource doesn't exist");
     }
 
@@ -790,7 +790,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(outputPath), "Export zip file should be created");
 
         using var archive = ZipFile.OpenRead(outputPath);
@@ -837,7 +837,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(outputPath), "Export zip file should be created even without dashboard");
 
         using var archive = ZipFile.OpenRead(outputPath);

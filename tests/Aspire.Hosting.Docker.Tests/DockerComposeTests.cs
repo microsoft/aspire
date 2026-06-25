@@ -128,6 +128,26 @@ public class DockerComposeTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task ValidateDockerCompose_DoesNotThrowInRunMode()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/16940.
+        // In run mode, AddDockerComposeEnvironment does not add the env resource to the model.
+        // If a compute resource still ends up with a DockerComposeServiceCustomizationAnnotation
+        // (e.g. via WithAnnotation), the validation step should not throw at 'aspire run' time —
+        // PublishAs* customizations are only meaningful at publish/deploy time.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddDockerComposeEnvironment("docker-compose");
+
+        builder.AddContainer("api", "myimage")
+            .WithAnnotation(new DockerComposeServiceCustomizationAnnotation((_, _) => { }));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [Fact]
     public async Task MultipleDockerComposeEnvironmentsSupported()
     {
         using var tempDir = new TestTempDirectory();

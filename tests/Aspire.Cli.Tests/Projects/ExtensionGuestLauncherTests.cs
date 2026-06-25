@@ -31,6 +31,8 @@ public class ExtensionGuestLauncherTests
             ["tsx", "/tmp/apphost.ts"],
             new DirectoryInfo("/tmp"),
             new Dictionary<string, string>(),
+            afterLaunchAsync: null,
+            options: null,
             CancellationToken.None);
 
         Assert.NotNull(capturedArgs);
@@ -51,7 +53,7 @@ public class ExtensionGuestLauncherTests
         var appHostFile = new FileInfo("/home/user/project/apphost.ts");
         var launcher = new ExtensionGuestLauncher(service, appHostFile, debug: true);
 
-        await launcher.LaunchAsync("npx", ["tsx"], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), CancellationToken.None);
+        await launcher.LaunchAsync("npx", ["tsx"], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.Equal(appHostFile.FullName, capturedProjectFile);
     }
@@ -66,7 +68,7 @@ public class ExtensionGuestLauncherTests
         });
 
         var launcher = new ExtensionGuestLauncher(service, new FileInfo("/tmp/apphost.ts"), debug: true);
-        await launcher.LaunchAsync("npx", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), CancellationToken.None);
+        await launcher.LaunchAsync("npx", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.True(capturedDebug);
     }
@@ -87,7 +89,7 @@ public class ExtensionGuestLauncherTests
             ["NODE_ENV"] = "development"
         };
 
-        await launcher.LaunchAsync("npx", ["tsx"], new DirectoryInfo("/tmp"), envVars, CancellationToken.None);
+        await launcher.LaunchAsync("npx", ["tsx"], new DirectoryInfo("/tmp"), envVars, afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.NotNull(capturedEnv);
         Assert.Equal(2, capturedEnv.Count);
@@ -101,7 +103,7 @@ public class ExtensionGuestLauncherTests
         var service = new FakeLaunchExtensionService((_, _, _, _) => { });
         var launcher = new ExtensionGuestLauncher(service, new FileInfo("/tmp/apphost.ts"), debug: false);
 
-        var (exitCode, output) = await launcher.LaunchAsync("cmd", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), CancellationToken.None);
+        var (exitCode, output) = await launcher.LaunchAsync("cmd", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
         Assert.Null(output);
@@ -117,7 +119,7 @@ public class ExtensionGuestLauncherTests
         });
 
         var launcher = new ExtensionGuestLauncher(service, new FileInfo("/tmp/apphost.ts"), debug: false);
-        await launcher.LaunchAsync("python", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), CancellationToken.None);
+        await launcher.LaunchAsync("python", [], new DirectoryInfo("/tmp"), new Dictionary<string, string>(), afterLaunchAsync: null, options: null, CancellationToken.None);
 
         Assert.NotNull(capturedArgs);
         Assert.Single(capturedArgs);
@@ -138,6 +140,8 @@ public class ExtensionGuestLauncherTests
 
         public IExtensionBackchannel Backchannel => throw new NotImplementedException();
 
+        public Task FlushAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
         public Task LaunchAppHostAsync(string projectFile, List<string> arguments, List<EnvVar> environment, bool debug)
         {
             _onLaunch(projectFile, arguments, environment, debug);
@@ -156,18 +160,20 @@ public class ExtensionGuestLauncherTests
         public void ConsoleDisplaySubtleMessage(string message, bool allowMarkup = false) => throw new NotImplementedException();
         public void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false) => throw new NotImplementedException();
         public ConsoleOutput Console { get; set; }
+        public bool SupportsLinks { get; set; }
         public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => throw new NotImplementedException();
+        public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null) => throw new NotImplementedException();
         public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => throw new NotImplementedException();
         public Task<string> PromptForStringAsync(string promptText, Func<string, Spectre.Console.ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<string> PromptForFilePathAsync(string promptText, Func<string, Spectre.Console.ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-        public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull => throw new NotImplementedException();
-        public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull => throw new NotImplementedException();
+        public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull => throw new NotImplementedException();
+        public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull => throw new NotImplementedException();
         public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => throw new NotImplementedException();
-        public void DisplayError(string errorMessage) => throw new NotImplementedException();
-        public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) => throw new NotImplementedException();
+        public void DisplayError(string errorMessage, bool allowMarkup = false) => throw new NotImplementedException();
+        public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) => throw new NotImplementedException();
         public void DisplaySuccess(string message, bool allowMarkup = false) => throw new NotImplementedException();
         public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) => throw new NotImplementedException();
-        public void DisplayCancellationMessage() => throw new NotImplementedException();
+        public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null) => throw new NotImplementedException();
         public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public void DisplaySubtleMessage(string message, bool allowMarkup = false) => throw new NotImplementedException();
         public void DisplayEmptyLine() => throw new NotImplementedException();

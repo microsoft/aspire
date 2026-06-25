@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="ru" original="../DestroyCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Destroy a previously deployed AppHost environment (Preview)</source>
-        <target state="new">Destroy a previously deployed AppHost environment (Preview)</target>
+        <source>Destroy a previously deployed AppHost environment</source>
+        <target state="new">Destroy a previously deployed AppHost environment</target>
         <note />
       </trans-unit>
       <trans-unit id="DestroyCanceled">

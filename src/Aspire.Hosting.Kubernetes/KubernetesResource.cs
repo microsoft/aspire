@@ -75,7 +75,30 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     /// <summary>
     /// Additional resources that are part of this Kubernetes service.
     /// </summary>
+    [AspireExportIgnore(Reason = "Kubernetes manifest resource types are C#-only customization objects and are not part of the polyglot SDK surface.")]
     public List<BaseKubernetesResource> AdditionalResources { get; } = [];
+
+    /// <summary>
+    /// Adds an arbitrary Kubernetes manifest to this service's generated Helm chart for polyglot callers.
+    /// </summary>
+    /// <param name="apiVersion">The Kubernetes API version for the manifest.</param>
+    /// <param name="kind">The Kubernetes resource kind for the manifest.</param>
+    /// <param name="name">The Kubernetes metadata name for the manifest.</param>
+    /// <param name="configure">A callback that configures the manifest fields.</param>
+    /// <returns>The added Kubernetes manifest resource.</returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    internal KubernetesManifestResource AddManifest(string apiVersion, string kind, string name, Action<KubernetesManifestResource>? configure = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(apiVersion);
+        ArgumentException.ThrowIfNullOrWhiteSpace(kind);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var manifest = new KubernetesManifestResource(apiVersion, kind, name);
+        configure?.Invoke(manifest);
+        AdditionalResources.Add(manifest);
+
+        return manifest;
+    }
 
     /// <summary>
     /// Gets the resource that is the target of this Kubernetes service.
@@ -430,7 +453,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     private static void RemoveHttpsServiceDiscoveryVariables(Dictionary<string, object> environmentVariables)
     {
         var keysToRemove = environmentVariables
-            .Where(kvp => kvp.Value is EndpointReference epRef && epRef.Scheme == "https" && kvp.Key.StartsWith("services__"))
+            .Where(kvp => kvp.Value is EndpointReference epRef && epRef.Scheme == "https" && kvp.Key.StartsWith("services__", StringComparison.Ordinal))
             .Select(kvp => kvp.Key)
             .ToList();
 
@@ -449,8 +472,30 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 return s;
             }
 
+            // Handle scalar/primitive types (bool, numerics, DateTimeOffset, TimeSpan, Uri, etc.)
+            // These can appear when third-party integrations set environment variables to non-string values.
+            if (value is bool boolValue)
+            {
+                return boolValue ? "true" : "false";
+            }
+
+            if (value is IFormattable formattable)
+            {
+                return formattable.ToString(null, CultureInfo.InvariantCulture);
+            }
+
             if (value is EndpointReference ep)
             {
+                // The referenced endpoint may belong to a resource deployed to a different compute
+                // environment (for example a Foundry hosted agent). In that case delegate to the owning
+                // compute environment instead of looking it up in this environment's local endpoint map.
+                if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                    ep, [kubernetesEnvironmentResource, kubernetesEnvironmentResource.OwningComputeEnvironment], out var crossExpr))
+                {
+                    value = crossExpr;
+                    continue;
+                }
+
                 var referencedResource = ep.Resource == this
                     ? this
                     : await context.CreateKubernetesResourceAsync(ep.Resource, executionContext, default).ConfigureAwait(false);
@@ -481,6 +526,13 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             if (value is EndpointReferenceExpression epExpr)
             {
+                if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                    epExpr, [kubernetesEnvironmentResource, kubernetesEnvironmentResource.OwningComputeEnvironment], out var crossExpr))
+                {
+                    value = crossExpr;
+                    continue;
+                }
+
                 var referencedResource = epExpr.Endpoint.Resource == this
                     ? this
                     : await context.CreateKubernetesResourceAsync(epExpr.Endpoint.Resource, executionContext, default).ConfigureAwait(false);

@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -23,7 +23,7 @@ func main() {
 	}
 
 	api := builder.AddContainer("api", "redis:latest").
-		WithRoleAssignments(openai, []aspire.AzureOpenAIRole{aspire.AzureOpenAIRoleCognitiveServicesOpenAIUser})
+		WithCognitiveServicesRoleAssignments(openai, []aspire.AzureOpenAIRole{aspire.AzureOpenAIRoleCognitiveServicesOpenAIUser})
 	if api.Err() != nil {
 		log.Fatalf(aspire.FormatError(api.Err()))
 	}
@@ -35,7 +35,7 @@ func main() {
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }

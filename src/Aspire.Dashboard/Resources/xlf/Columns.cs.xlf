@@ -19,30 +19,40 @@
       </trans-unit>
       <trans-unit id="StateColumnResourceContainerRuntimeUnhealthy">
         <source>Container runtime was found but appears to be unhealthy. Ensure that it is running.
-For more information, see https://aka.ms/aspire/container-runtime-unhealthy</source>
+For more information, see https://aka.ms/aspire/container-runtime-unhealthy.</source>
         <target state="needs-review-translation">Modul runtime kontejneru byl nalezen, ale zdá se, že není v pořádku. Ujistěte se, že je spuštěný.
 Další informace najdete na https://aka.ms/dotnet/aspire/container-runtime-unhealthy.</target>
         <note>Contains a new line</note>
       </trans-unit>
       <trans-unit id="StateColumnResourceExited">
-        <source>{0} is no longer running</source>
-        <target state="translated">{0} už neběží.</target>
+        <source>{0} is no longer running.</source>
+        <target state="needs-review-translation">{0} už neběží.</target>
         <note>{0} is a resource type</note>
       </trans-unit>
       <trans-unit id="StateColumnResourceExitedUnexpectedly">
-        <source>{0} exited unexpectedly with exit code {1}</source>
-        <target state="translated">Prostředek {0} byl neočekávaně ukončen s ukončovacím kódem {1}.</target>
+        <source>{0} exited unexpectedly with exit code {1}.</source>
+        <target state="needs-review-translation">Prostředek {0} byl neočekávaně ukončen s ukončovacím kódem {1}.</target>
         <note>{0} is a resource type, {1} is a number</note>
       </trans-unit>
+      <trans-unit id="StateColumnResourceFailedToStart">
+        <source>{0} failed to start.</source>
+        <target state="new">{0} failed to start.</target>
+        <note>{0} is a resource type</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceNotStarted">
-        <source>Resource has not started because it's configured to not automatically start.</source>
-        <target state="translated">Prostředek se nespustil, protože je nakonfigurovaný tak, aby se nespouštěl automaticky.</target>
+        <source>Resource is not configured to start automatically.</source>
+        <target state="needs-review-translation">Prostředek se nespustil, protože je nakonfigurovaný tak, aby se nespouštěl automaticky.</target>
         <note />
       </trans-unit>
       <trans-unit id="StateColumnResourceWaiting">
-        <source>Resource is waiting for other resources to be in a running and healthy state.</source>
-        <target state="translated">Prostředek čeká, až budou ostatní prostředky ve stavu Spuštěno nebo V pořádku.</target>
+        <source>Resource is waiting for dependencies.</source>
+        <target state="needs-review-translation">Prostředek čeká, až budou ostatní prostředky ve stavu Spuštěno nebo V pořádku.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="StateColumnResourceWaitingFor">
+        <source>Waiting for dependencies: {0}</source>
+        <target state="new">Waiting for dependencies: {0}</target>
+        <note>{0} is a comma-separated list of dependency resource names.</note>
       </trans-unit>
       <trans-unit id="UnknownStateLabel">
         <source>Unknown</source>

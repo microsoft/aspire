@@ -275,5 +275,32 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ReconnectRetryButtonText", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Lost connection to the AppHost. Attempting to reconnect....
+        /// </summary>
+        public static string ResourceServiceReconnectDisconnectedText {
+            get {
+                return ResourceManager.GetString("ResourceServiceReconnectDisconnectedText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Retry.
+        /// </summary>
+        public static string ResourceServiceReconnectRetryButtonText {
+            get {
+                return ResourceManager.GetString("ResourceServiceReconnectRetryButtonText", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to AI agents.
+        /// </summary>
+        public static string MainLayoutLaunchAIAgents {
+            get {
+                return ResourceManager.GetString("MainLayoutLaunchAIAgents", resourceCulture);
+            }
+        }
     }
 }

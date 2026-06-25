@@ -1,9 +1,12 @@
 import * as assert from 'assert';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
 
 import { IInteractionService, InteractionService } from '../../server/interactionService';
-import { ICliRpcClient, ValidationResult } from '../../server/rpcClient';
+import { ICliRpcClient, RpcClient, ValidationResult } from '../../server/rpcClient';
 import { extensionLogOutputChannel } from '../../utils/logging';
 import AspireRpcServer, { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
 import { AspireDebugSession } from '../../debugger/AspireDebugSession';
@@ -173,6 +176,70 @@ suite('InteractionService endpoints', () => {
 		showInformationMessageSpy.restore();
 	});
 
+	test("displaySuccess clears active progress notification", async () => {
+		const testInfo = await createTestRpcServer();
+		const showInformationMessageStub = sinon.stub(vscode.window, 'showInformationMessage').resolves();
+
+		try {
+			testInfo.interactionService.showStatus('Executing test command...');
+			assert.strictEqual((testInfo.interactionService as any)._progressNotifier.isActive, true);
+
+			testInfo.interactionService.displaySuccess('Test success message');
+
+			assert.strictEqual((testInfo.interactionService as any)._progressNotifier.isActive, false);
+		}
+		finally {
+			showInformationMessageStub.restore();
+		}
+	});
+
+	test("showStatus ignores E2E delay environment unless the E2E bridge is enabled", async () => {
+		const originalEnableBridge = process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE;
+		const originalStateFile = process.env.ASPIRE_EXTENSION_E2E_STATE_FILE;
+		const originalControlFile = process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE;
+		const originalShowStatusDelayMs = process.env.ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS;
+		const testInfo = await createTestRpcServer();
+		const waitStub = sinon.stub(Atomics, 'wait').returns('timed-out');
+
+		try {
+			delete process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE;
+			delete process.env.ASPIRE_EXTENSION_E2E_STATE_FILE;
+			delete process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE;
+			process.env.ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS = '10000';
+
+			testInfo.interactionService.showStatus('Executing test command...');
+
+			assert.strictEqual(waitStub.called, false);
+		}
+		finally {
+			restoreEnvironmentVariable('ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE', originalEnableBridge);
+			restoreEnvironmentVariable('ASPIRE_EXTENSION_E2E_STATE_FILE', originalStateFile);
+			restoreEnvironmentVariable('ASPIRE_EXTENSION_E2E_CONTROL_FILE', originalControlFile);
+			restoreEnvironmentVariable('ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS', originalShowStatusDelayMs);
+			waitStub.restore();
+		}
+	});
+
+	test("RPC close clears active progress notification", async () => {
+		let closeHandler: (() => void) | undefined;
+		const messageConnection = {
+			onClose: (handler: () => void) => {
+				closeHandler = handler;
+				return { dispose: () => { } };
+			},
+			sendRequest: sinon.stub()
+		} as any;
+
+		const rpcClient = new RpcClient({} as any, messageConnection, null, () => null);
+
+		rpcClient.interactionService.showStatus('Scanning for running AppHosts...');
+		assert.strictEqual((rpcClient.interactionService as any)._progressNotifier.isActive, true);
+
+		closeHandler!();
+
+		assert.strictEqual((rpcClient.interactionService as any)._progressNotifier.isActive, false);
+	});
+
 	test("displaySubtleMessage endpoint", async () => {
 		const testInfo = await createTestRpcServer();
 		const setStatusBarMessageSpy = sinon.spy(vscode.window, 'setStatusBarMessage');
@@ -189,109 +256,235 @@ suite('InteractionService endpoints', () => {
 		stub.restore();
 	});
 
+	test("openEditor adds folder to existing workspace", async () => {
+		const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-open-editor-'));
+		const workspacePath = path.join(tempRoot, 'workspace');
+		const projectPath = path.join(tempRoot, 'MyFirstApp');
+		await fs.mkdir(workspacePath);
+		await fs.mkdir(projectPath);
+
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const testInfo = await createTestRpcServer();
+			const workspaceFolder = {
+				uri: vscode.Uri.file(workspacePath),
+				name: 'workspace',
+				index: 0
+			} as vscode.WorkspaceFolder;
+
+			sandbox.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
+			sandbox.stub(vscode.workspace, 'getWorkspaceFolder').callsFake((uri: vscode.Uri) =>
+				uri.fsPath === workspaceFolder.uri.fsPath ? workspaceFolder : undefined);
+			const updateWorkspaceFoldersStub = sandbox.stub(vscode.workspace, 'updateWorkspaceFolders').returns(true);
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+
+			await testInfo.interactionService.openEditor(projectPath);
+
+			assert.strictEqual(updateWorkspaceFoldersStub.callCount, 1, 'Should update workspace folders once');
+			const updateArgs = updateWorkspaceFoldersStub.getCall(0).args;
+			assert.strictEqual(updateArgs[0], 1, 'Should add after existing workspace folders');
+			assert.strictEqual(updateArgs[1], 0, 'Should not remove existing workspace folders');
+			assertPathEqual(updateArgs[2].uri.fsPath, projectPath, 'Should add the new project folder');
+			assert.strictEqual(executeCommandStub.callCount, 0, 'Should not replace the workspace with vscode.openFolder');
+		}
+		finally {
+			sandbox.restore();
+			await fs.rm(tempRoot, { recursive: true, force: true });
+		}
+	});
+
+	test("openEditor opens folder when there is no workspace", async () => {
+		const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-open-editor-'));
+		const projectPath = path.join(tempRoot, 'MyFirstApp');
+		await fs.mkdir(projectPath);
+
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const testInfo = await createTestRpcServer();
+
+			sandbox.stub(vscode.workspace, 'workspaceFolders').value(undefined);
+			sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
+			const updateWorkspaceFoldersStub = sandbox.stub(vscode.workspace, 'updateWorkspaceFolders').returns(true);
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+
+			await testInfo.interactionService.openEditor(projectPath);
+
+			assert.strictEqual(updateWorkspaceFoldersStub.callCount, 0, 'Should not update workspace folders when no workspace exists');
+			assert.strictEqual(executeCommandStub.callCount, 1, 'Should open the new project folder');
+			const executeArgs = executeCommandStub.getCall(0).args;
+			assert.strictEqual(executeArgs[0], 'vscode.openFolder');
+			assertPathEqual(executeArgs[1].fsPath, projectPath);
+			assert.deepStrictEqual(executeArgs[2], { forceNewWindow: false });
+		}
+		finally {
+			sandbox.restore();
+			await fs.rm(tempRoot, { recursive: true, force: true });
+		}
+	});
+
+	test("openEditor shows warning when folder cannot be added to existing workspace", async () => {
+		const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-open-editor-'));
+		const workspacePath = path.join(tempRoot, 'workspace');
+		const projectPath = path.join(tempRoot, 'MyFirstApp');
+		await fs.mkdir(workspacePath);
+		await fs.mkdir(projectPath);
+
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const testInfo = await createTestRpcServer();
+			const workspaceFolder = {
+				uri: vscode.Uri.file(workspacePath),
+				name: 'workspace',
+				index: 0
+			} as vscode.WorkspaceFolder;
+
+			sandbox.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
+			sandbox.stub(vscode.workspace, 'getWorkspaceFolder').callsFake((uri: vscode.Uri) =>
+				uri.fsPath === workspaceFolder.uri.fsPath ? workspaceFolder : undefined);
+			sandbox.stub(vscode.workspace, 'updateWorkspaceFolders').returns(false);
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+			const showWarningMessageStub = sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+
+			await testInfo.interactionService.openEditor(projectPath);
+
+			assert.strictEqual(executeCommandStub.callCount, 0, 'Should not replace the workspace with vscode.openFolder');
+			assert.strictEqual(showWarningMessageStub.callCount, 1, 'Should warn when the project folder was not added');
+			assert.ok(showWarningMessageStub.getCall(0).args[0].includes(projectPath), 'Warning should include the project folder path');
+		}
+		finally {
+			sandbox.restore();
+			await fs.rm(tempRoot, { recursive: true, force: true });
+		}
+	});
+
 	test("displayDashboardUrls writes URLs to output channel and shows info message when autoLaunch is notification", async () => {
-		const stub = sinon.stub(extensionLogOutputChannel, 'info');
-		const showInformationMessageStub = sinon.stub(vscode.window, 'showInformationMessage').resolves();
-		const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration').returns({
-			get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'notification' : defaultValue
-		} as any);
-		const testInfo = await createTestRpcServer();
+		const sandbox = sinon.createSandbox();
 
-		const baseUrl = 'http://localhost';
-		const codespacesUrl = 'http://codespaces';
+		try {
+			const stub = sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+				get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'notification' : defaultValue
+			} as any);
+			const testInfo = await createTestRpcServer();
 
-		await testInfo.interactionService.displayDashboardUrls({
-			BaseUrlWithLoginToken: baseUrl,
-			CodespacesUrlWithLoginToken: codespacesUrl
-		});
+			const baseUrl = 'http://localhost/login?t=base-secret';
+			const codespacesUrl = 'http://codespaces/login?t=codespaces-secret';
 
-		const outputLines = stub.getCalls().map(call => call.args[0]);
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: baseUrl,
+				CodespacesUrlWithLoginToken: codespacesUrl
+			});
 
-		// wait 2 seconds to ensure we waited for displayDashboardUrls to complete
-		await new Promise(resolve => setTimeout(resolve, 2000));
+			const outputLines = stub.getCalls().map(call => call.args[0]);
 
-		assert.ok(outputLines.some(line => line.includes(baseUrl)), 'Output should contain base URL');
-		assert.ok(outputLines.some(line => line.includes(codespacesUrl)), 'Output should contain codespaces URL');
-		assert.equal(showInformationMessageStub.callCount, 1, 'Should show info message when autoLaunch is notification');
-		stub.restore();
-		showInformationMessageStub.restore();
-		getConfigurationStub.restore();
+			await new Promise(resolve => setTimeout(resolve, 2000));
+
+			assert.ok(outputLines.some(line => line.includes('http://localhost')), 'Output should contain sanitized base URL origin');
+			assert.ok(outputLines.some(line => line.includes('http://codespaces')), 'Output should contain sanitized codespaces URL origin');
+			assert.ok(outputLines.every(line => !line.includes('base-secret')), 'Output should not contain base URL login token');
+			assert.ok(outputLines.every(line => !line.includes('codespaces-secret')), 'Output should not contain codespaces URL login token');
+			assert.equal(showInformationMessageStub.callCount, 1, 'Should show info message when autoLaunch is notification');
+		}
+		finally {
+			sandbox.restore();
+		}
 	});
 
 	test("displayDashboardUrls writes URLs but does not show info message when autoLaunch is launch", async () => {
-		const stub = sinon.stub(extensionLogOutputChannel, 'info');
-		const showInformationMessageStub = sinon.stub(vscode.window, 'showInformationMessage').resolves();
-		const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration').returns({
-			get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'launch' : defaultValue
-		} as any);
-		const testInfo = await createTestRpcServer();
+		const sandbox = sinon.createSandbox();
 
-		const baseUrl = 'http://localhost';
-		const codespacesUrl = 'http://codespaces';
+		try {
+			const stub = sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+				get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'launch' : defaultValue
+			} as any);
+			const testInfo = await createTestRpcServer();
 
-		await testInfo.interactionService.displayDashboardUrls({
-			BaseUrlWithLoginToken: baseUrl,
-			CodespacesUrlWithLoginToken: codespacesUrl
-		});
+			const baseUrl = 'http://localhost/login?t=base-secret';
+			const codespacesUrl = 'http://codespaces/login?t=codespaces-secret';
 
-		const outputLines = stub.getCalls().map(call => call.args[0]);
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: baseUrl,
+				CodespacesUrlWithLoginToken: codespacesUrl
+			});
 
-		// No need to wait since no setTimeout should be called when autoLaunch is enabled
-		assert.ok(outputLines.some(line => line.includes(baseUrl)), 'Output should contain base URL');
-		assert.ok(outputLines.some(line => line.includes(codespacesUrl)), 'Output should contain codespaces URL');
-		assert.equal(showInformationMessageStub.callCount, 0, 'Should not show info message when autoLaunch is launch');
-		stub.restore();
-		showInformationMessageStub.restore();
-		getConfigurationStub.restore();
+			const outputLines = stub.getCalls().map(call => call.args[0]);
+
+			assert.ok(outputLines.some(line => line.includes('http://localhost')), 'Output should contain sanitized base URL origin');
+			assert.ok(outputLines.some(line => line.includes('http://codespaces')), 'Output should contain sanitized codespaces URL origin');
+			assert.ok(outputLines.every(line => !line.includes('base-secret')), 'Output should not contain base URL login token');
+			assert.ok(outputLines.every(line => !line.includes('codespaces-secret')), 'Output should not contain codespaces URL login token');
+			assert.equal(showInformationMessageStub.callCount, 0, 'Should not show info message when autoLaunch is launch');
+		}
+		finally {
+			sandbox.restore();
+		}
 	});
 
 	test("displayLines endpoint", async () => {
-		const stub = sinon.stub(extensionLogOutputChannel, 'info');
-		const sentMessages: { message: string; category: string }[] = [];
-		const mockDebugSession = {
-			sendMessage: (message: string, addNewLine: boolean, category: 'stdout' | 'stderr') => {
-				sentMessages.push({ message, category });
-			}
-		} as unknown as AspireDebugSession;
-		const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+		const sandbox = sinon.createSandbox();
 
-		testInfo.interactionService.displayLines([
-			{ Stream: 'stdout', Line: 'line1' },
-			{ Stream: 'stderr', Line: 'line2' }
-		]);
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const sentMessages: { message: string; category: string }[] = [];
+			const mockDebugSession = {
+				sendMessage: (message: string, addNewLine: boolean, category: 'stdout' | 'stderr') => {
+					sentMessages.push({ message, category });
+				}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
 
-		assert.strictEqual(sentMessages.length, 2, 'Should send two messages to debug session');
-		assert.strictEqual(sentMessages[0].message, 'line1');
-		assert.strictEqual(sentMessages[0].category, 'stdout');
-		assert.strictEqual(sentMessages[1].message, 'line2');
-		assert.strictEqual(sentMessages[1].category, 'stderr');
-		stub.restore();
+			testInfo.interactionService.displayLines([
+				{ Stream: 'stdout', Line: 'line1' },
+				{ Stream: 'stderr', Line: 'line2' }
+			]);
+
+			assert.strictEqual(sentMessages.length, 2, 'Should send two messages to debug session');
+			assert.strictEqual(sentMessages[0].message, 'line1');
+			assert.strictEqual(sentMessages[0].category, 'stdout');
+			assert.strictEqual(sentMessages[1].message, 'line2');
+			assert.strictEqual(sentMessages[1].category, 'stderr');
+		}
+		finally {
+			sandbox.restore();
+		}
 	});
 
 	test("displayLines without debug session falls back to Aspire terminal", async () => {
-		const stub = sinon.stub(extensionLogOutputChannel, 'info');
-		const sentTexts: string[] = [];
-		const mockTerminal = {
-			terminal: {
-				sendText: (text: string, addNewLine: boolean) => {
-					sentTexts.push(text);
-				}
-			},
-			dispose: () => {}
-		};
-		const testInfo = await createTestRpcServer(null, () => null);
-		// Inject a mock terminal provider via the InteractionService constructor
-		(testInfo.interactionService as any)._getAspireTerminal = () => mockTerminal;
+		const sandbox = sinon.createSandbox();
 
-		testInfo.interactionService.displayLines([
-			{ Stream: 'stdout', Line: 'line1' },
-			{ Stream: 'stderr', Line: 'line2' }
-		]);
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const sentTexts: string[] = [];
+			const mockTerminal = {
+				terminal: {
+					sendText: (text: string, addNewLine: boolean) => {
+						sentTexts.push(text);
+					}
+				},
+				dispose: () => {}
+			};
+			const testInfo = await createTestRpcServer(null, () => null);
+			// Inject a mock terminal provider via the InteractionService constructor
+			(testInfo.interactionService as any)._getAspireTerminal = () => mockTerminal;
 
-		assert.strictEqual(sentTexts.length, 2, 'Should send two lines to Aspire terminal');
-		assert.strictEqual(sentTexts[0], 'line1');
-		assert.strictEqual(sentTexts[1], 'line2');
-		stub.restore();
+			testInfo.interactionService.displayLines([
+				{ Stream: 'stdout', Line: 'line1' },
+				{ Stream: 'stderr', Line: 'line2' }
+			]);
+
+			assert.strictEqual(sentTexts.length, 2, 'Should send two lines to Aspire terminal');
+			assert.strictEqual(sentTexts[0], 'line1');
+			assert.strictEqual(sentTexts[1], 'line2');
+		}
+		finally {
+			sandbox.restore();
+		}
 	});
 });
 
@@ -300,6 +493,25 @@ type RpcServerTestInfo = {
 	rpcClient: ICliRpcClient;
 	interactionService: IInteractionService;
 };
+
+function assertPathEqual(actual: string, expected: string, message?: string) {
+	assert.strictEqual(normalizePathForComparison(actual), normalizePathForComparison(expected), message);
+}
+
+function normalizePathForComparison(value: string) {
+	const normalized = path.normalize(value);
+
+	return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function restoreEnvironmentVariable(name: string, value: string | undefined): void {
+	if (value === undefined) {
+		delete process.env[name];
+		return;
+	}
+
+	process.env[name] = value;
+}
 
 class TestCliRpcClient implements ICliRpcClient {
     debugSessionId: string | null;

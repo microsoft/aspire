@@ -61,6 +61,38 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string IntegrationCommandDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationCommandDescription", resourceCulture);
+            }
+        }
+
+        public static string IntegrationListDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationListDescription", resourceCulture);
+            }
+        }
+
+        public static string IntegrationSearchDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationSearchDescription", resourceCulture);
+            }
+        }
+
+        public static string IntegrationSearchQueryArgumentDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationSearchQueryArgumentDescription", resourceCulture);
+            }
+        }
+
         public static string IntegrationArgumentDescription
         {
             get
@@ -77,6 +109,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string IntegrationSearchAppHostOptionDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationSearchAppHostOptionDescription", resourceCulture);
+            }
+        }
+
         public static string VersionArgumentDescription
         {
             get
@@ -90,6 +130,14 @@ namespace Aspire.Cli.Resources {
             get
             {
                 return ResourceManager.GetString("SourceArgumentDescription", resourceCulture);
+            }
+        }
+
+        public static string FormatOptionDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("FormatOptionDescription", resourceCulture);
             }
         }
 
@@ -165,6 +213,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string ErrorOccurredWhileSearchingIntegrations
+        {
+            get
+            {
+                return ResourceManager.GetString("ErrorOccurredWhileSearchingIntegrations", resourceCulture);
+            }
+        }
+
         public static string SelectAVersionOfPackage
         {
             get
@@ -189,6 +245,54 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string NoIntegrationPackagesMatchedSearchTerm
+        {
+            get
+            {
+                return ResourceManager.GetString("NoIntegrationPackagesMatchedSearchTerm", resourceCulture);
+            }
+        }
+
+        public static string FoundIntegrationPackages
+        {
+            get
+            {
+                return ResourceManager.GetString("FoundIntegrationPackages", resourceCulture);
+            }
+        }
+
+        public static string FoundIntegrationPackagesMatchingSearchTerm
+        {
+            get
+            {
+                return ResourceManager.GetString("FoundIntegrationPackagesMatchingSearchTerm", resourceCulture);
+            }
+        }
+
+        public static string HeaderName
+        {
+            get
+            {
+                return ResourceManager.GetString("HeaderName", resourceCulture);
+            }
+        }
+
+        public static string HeaderPackage
+        {
+            get
+            {
+                return ResourceManager.GetString("HeaderPackage", resourceCulture);
+            }
+        }
+
+        public static string HeaderVersion
+        {
+            get
+            {
+                return ResourceManager.GetString("HeaderVersion", resourceCulture);
+            }
+        }
+
         public static string SpecifiedVersionNotFoundForPackage
         {
             get
@@ -202,6 +306,14 @@ namespace Aspire.Cli.Resources {
             get
             {
                 return ResourceManager.GetString("SpecifiedVersionRequiresExactPackageMatch", resourceCulture);
+            }
+        }
+
+        public static string NonInteractiveRequiresExactPackageMatch
+        {
+            get
+            {
+                return ResourceManager.GetString("NonInteractiveRequiresExactPackageMatch", resourceCulture);
             }
         }
 

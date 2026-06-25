@@ -15,17 +15,13 @@ func main() {
 	// A Redis cache the API will use for read-through caching.
 	cache := builder.AddRedis("cache")
 
-	// Bootstrap step: resolve api module dependencies (creates go.sum on first
-	// run). Modeled as its own resource so the dashboard surfaces its logs and
-	// the api waits for it to exit cleanly before launching.
-	apiTidy := builder.AddExecutable("api-tidy", "go", "./api", []string{"mod", "tidy"})
-
-	// The Go HTTP API. Aspire injects:
+	// The Go HTTP API. WithModTidy runs "go mod tidy" before launching so that
+	// go.sum is always up to date. Aspire injects:
 	//   - "ConnectionStrings__cache" so the API can dial Redis.
 	//   - "OTEL_EXPORTER_OTLP_*" env vars (via WithOtlpExporter) so traces,
 	//     metrics, and logs flow to the Aspire dashboard.
-	builder.AddExecutable("api", "go", "./api", []string{"run", "."}).
-		WaitForCompletion(apiTidy).
+	builder.AddGoApp("api", "./api").
+		WithModTidy().
 		WithReference(cache).
 		WaitFor(cache).
 		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Env: aspire.StringPtr("PORT")}).

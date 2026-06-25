@@ -4,6 +4,7 @@
 using System.Collections.Immutable;
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
+using Google.Protobuf.WellKnownTypes;
 
 namespace Aspire.Dashboard.ServiceClient;
 
@@ -22,6 +23,21 @@ public interface IDashboardClient : IAsyncDisposable
     /// any other members of this interface, to avoid exceptions.
     /// </remarks>
     bool IsEnabled { get; }
+
+    /// <summary>
+    /// Gets the current connection state of the client to the resource service.
+    /// </summary>
+    DashboardConnectionState ConnectionState { get; }
+
+    /// <summary>
+    /// An event raised when the connection state changes. Subscribers receive the new state.
+    /// </summary>
+    event Action<DashboardConnectionState>? ConnectionStateChanged;
+
+    /// <summary>
+    /// Explicitly triggers a reconnection attempt to the resource service.
+    /// </summary>
+    Task ReconnectAsync();
 
     /// <summary>
     /// Gets the application name advertised by the server.
@@ -70,7 +86,23 @@ public interface IDashboardClient : IAsyncDisposable
 
     IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken);
 
-    Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, CancellationToken cancellationToken);
+    Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Options for executing a resource command through the dashboard client.
+/// </summary>
+public sealed class ExecuteResourceCommandOptions
+{
+    /// <summary>
+    /// Gets the invocation arguments supplied to the command, keyed by argument name.
+    /// </summary>
+    public IReadOnlyDictionary<string, Value>? Arguments { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether command execution should fail instead of prompting for missing input.
+    /// </summary>
+    public bool NonInteractive { get; init; }
 }
 
 public sealed record ResourceViewModelSubscription(

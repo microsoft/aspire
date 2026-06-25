@@ -1,4 +1,4 @@
-//! aspire.rs - Capability-based Aspire SDK
+﻿//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -195,7 +195,7 @@ impl IDistributedApplicationBuilder {
         &self.client
     }
 
-    /// Adds a test Redis resource
+    /// Adds a test Redis resource from ATS documentation.
     pub fn add_test_redis(&self, name: &str, port: Option<f64>) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -384,7 +384,7 @@ impl TestCallbackContext {
         Ok(TestCallbackContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the CancellationToken property
+    /// CancellationToken is supported by ATS.
     pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -432,12 +432,12 @@ impl TestCollectionContext {
         &self.client
     }
 
-    /// Gets the Items property
+    /// List property - should generate AspireList getter like Dictionary properties.
     pub fn items(&self) -> AspireList<String> {
         AspireList::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.items")
     }
 
-    /// Gets the Metadata property
+    /// Dictionary property - already works with AspireDict getter.
     pub fn metadata(&self) -> AspireDict<String, String> {
         AspireDict::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.metadata")
     }
@@ -1374,7 +1374,7 @@ impl TestResourceContext {
         Ok(TestResourceContext::new(handle, self.client.clone()))
     }
 
-    /// Invokes the GetValueAsync method
+    /// Instance method that should be exposed as async method.
     pub fn get_value_async(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1382,7 +1382,7 @@ impl TestResourceContext {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Invokes the SetValueAsync method
+    /// Instance method with parameter.
     pub fn set_value_async(&self, value: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1391,7 +1391,7 @@ impl TestResourceContext {
         Ok(())
     }
 
-    /// Invokes the ValidateAsync method
+    /// Instance method with return type.
     pub fn validate_async(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1748,8 +1748,17 @@ pub fn create_builder(options: Option<CreateBuilderOptions>) -> Result<IDistribu
         resolved_options.insert("Args".to_string(), serde_json::to_value(args).unwrap_or(Value::Null));
     }
     if !resolved_options.contains_key("ProjectDirectory") {
-        if let Ok(pwd) = std::env::current_dir() {
+        if let Some(project_directory) = std::env::var("ASPIRE_PROJECT_DIRECTORY").ok().filter(|s| !s.is_empty()) {
+            resolved_options.insert("ProjectDirectory".to_string(), Value::String(project_directory));
+        } else if let Ok(pwd) = std::env::current_dir() {
             resolved_options.insert("ProjectDirectory".to_string(), Value::String(pwd.to_string_lossy().to_string()));
+        }
+    }
+    if !resolved_options.contains_key("AppHostFilePath") {
+        if let Ok(app_host_file_path) = std::env::var("ASPIRE_APPHOST_FILEPATH") {
+            if !app_host_file_path.is_empty() {
+                resolved_options.insert("AppHostFilePath".to_string(), Value::String(app_host_file_path));
+            }
         }
     }
     let mut args: HashMap<String, Value> = HashMap::new();

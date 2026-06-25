@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <!-- This project intentionally exercises the deprecated GitHub Models integration (https://github.com/microsoft/aspire/issues/18402). -->
+    <NoWarn>$(NoWarn);CS0618</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,7 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.GitHub.Models\Aspire.Hosting.GitHub.Models.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Testing\Aspire.Hosting.Testing.csproj" />
-    <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
   </ItemGroup>
 
 </Project>

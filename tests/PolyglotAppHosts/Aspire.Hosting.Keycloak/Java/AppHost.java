@@ -18,6 +18,7 @@ void main() throws Exception {
             .withDisabledFeatures(new String[] { "scripts" })
             .withOtlpExporter(OtlpProtocol.HTTP_PROTOBUF);
         var consumer = builder.addContainer("consumer", "nginx");
+        consumer.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         consumer.withReference(keycloak, new WithReferenceOptions());
         consumer.withReference(keycloak2, new WithReferenceOptions());
         var _keycloakName = keycloak.name();

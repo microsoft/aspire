@@ -737,8 +737,23 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
         WriteLine("        resolved_options.insert(\"Args\".to_string(), serde_json::to_value(args).unwrap_or(Value::Null));");
         WriteLine("    }");
         WriteLine("    if !resolved_options.contains_key(\"ProjectDirectory\") {");
-        WriteLine("        if let Ok(pwd) = std::env::current_dir() {");
+        // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
+        // directory (not the cwd) when matching --apphost <directory> requests.
+        WriteLine("        if let Some(project_directory) = std::env::var(\"ASPIRE_PROJECT_DIRECTORY\").ok().filter(|s| !s.is_empty()) {");
+        WriteLine("            resolved_options.insert(\"ProjectDirectory\".to_string(), Value::String(project_directory));");
+        WriteLine("        } else if let Ok(pwd) = std::env::current_dir() {");
         WriteLine("            resolved_options.insert(\"ProjectDirectory\".to_string(), Value::String(pwd.to_string_lossy().to_string()));");
+        WriteLine("        }");
+        WriteLine("    }");
+        // ASPIRE_APPHOST_FILEPATH is set by the CLI so the host reports the original AppHost file
+        // path (e.g. apphost.rs) back through GetAppHostInformationAsync. Without this the host
+        // falls back to the aspire-managed entry assembly name and the CLI cannot match
+        // --apphost <directory> against the running AppHost.
+        WriteLine("    if !resolved_options.contains_key(\"AppHostFilePath\") {");
+        WriteLine("        if let Ok(app_host_file_path) = std::env::var(\"ASPIRE_APPHOST_FILEPATH\") {");
+        WriteLine("            if !app_host_file_path.is_empty() {");
+        WriteLine("                resolved_options.insert(\"AppHostFilePath\".to_string(), Value::String(app_host_file_path));");
+        WriteLine("            }");
         WriteLine("        }");
         WriteLine("    }");
         WriteLine("    let mut args: HashMap<String, Value> = HashMap::new();");
@@ -930,7 +945,16 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             // Use Handle directly for handle types in DTOs since Handle implements Serialize/Deserialize
             AtsTypeCategory.Handle => "Handle",
             AtsTypeCategory.Dto => MapDtoType(typeRef.TypeId),
-            AtsTypeCategory.Callback => "Value", // Callbacks can't be serialized in DTOs
+            // DTO callback properties remain weakly typed (a serde_json::Value) in Rust. Unlike Go, Java,
+            // Python, and TypeScript -- whose generators emit strongly-typed DTO callbacks and whose
+            // runtimes auto-register closures embedded in serialized DTO maps -- Rust DTOs are built on
+            // serde derive, and a Box<dyn Fn> closure is not serde-serializable. Supporting it would
+            // require serde-skipping the field plus a hand-written to_map that registers the closure via
+            // the global register_callback. This matches the existing behavior for all other DTO
+            // callbacks (e.g. HttpCommandExportOptions.PrepareRequest from PR #17950), and there is no
+            // Rust polyglot bench to validate a runtime implementation, so Rust DTO callbacks are left
+            // weakly typed as a known follow-up.
+            AtsTypeCategory.Callback => "Value",
             AtsTypeCategory.Array => $"Vec<{MapTypeRefToRustForDto(typeRef.ElementType, false)}>",
             AtsTypeCategory.List => $"Vec<{MapTypeRefToRustForDto(typeRef.ElementType, false)}>",
             AtsTypeCategory.Dict => $"HashMap<{MapTypeRefToRustForDto(typeRef.KeyType, false)}, {MapTypeRefToRustForDto(typeRef.ValueType, false)}>",

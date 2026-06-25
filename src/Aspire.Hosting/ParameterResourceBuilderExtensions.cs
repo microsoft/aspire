@@ -3,9 +3,10 @@
 
 #pragma warning disable ASPIREUSERSECRETS001
 
-using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting;
@@ -37,7 +38,10 @@ public static class ParameterResourceBuilderExtensions
                 );
     }
 
-    [AspireExport("addParameter", Description = "Adds a parameter resource")]
+    /// <summary>
+    /// Adds a parameter resource
+    /// </summary>
+    [AspireExport("addParameter")]
     internal static IResourceBuilder<ParameterResource> AddParameterForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -126,7 +130,7 @@ public static class ParameterResourceBuilderExtensions
     /// <param name="configurationKey">Configuration key used to get the value of the parameter</param>
     /// <param name="secret">Optional flag indicating whether the parameter should be regarded as secret.</param>
     /// <returns>Resource builder for the parameter.</returns>
-    [AspireExport(Description = "Adds a parameter sourced from configuration")]
+    [AspireExport]
     public static IResourceBuilder<ParameterResource> AddParameterFromConfiguration(this IDistributedApplicationBuilder builder, string name, string configurationKey, bool secret = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -178,7 +182,10 @@ public static class ParameterResourceBuilderExtensions
             });
     }
 
-    [AspireExport("addParameterWithGeneratedValue", Description = "Adds a parameter with a generated default value")]
+    /// <summary>
+    /// Adds a parameter with a generated default value
+    /// </summary>
+    [AspireExport("addParameterWithGeneratedValue")]
     internal static IResourceBuilder<ParameterResource> AddParameterWithGeneratedValueForPolyglot(this IDistributedApplicationBuilder builder, [ResourceName] string name, GenerateParameterDefault value, bool secret = false, bool persist = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -198,7 +205,7 @@ public static class ParameterResourceBuilderExtensions
     /// <c>true</c> allows the description to contain Markdown elements such as links, text decoration and lists.
     /// </param>
     /// <returns>Resource builder for the parameter.</returns>
-    [AspireExport(Description = "Sets a parameter description")]
+    [AspireExport]
     public static IResourceBuilder<ParameterResource> WithDescription(this IResourceBuilder<ParameterResource> builder, string description, bool enableMarkdown = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -231,7 +238,6 @@ public static class ParameterResourceBuilderExtensions
     /// </code>
     /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
-    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Complex Func delegate with InteractionInput — not ATS-compatible.")]
     public static IResourceBuilder<ParameterResource> WithCustomInput(this IResourceBuilder<ParameterResource> builder, Func<ParameterResource, InteractionInput> createInput)
     {
@@ -242,6 +248,38 @@ public static class ParameterResourceBuilderExtensions
 
         return builder;
     }
+
+    /// <summary>
+    /// Sets a custom input for the parameter resource from a polyglot app host.
+    /// </summary>
+    /// <param name="builder">Resource builder for the parameter.</param>
+    /// <param name="options">Options used to customize the input for the parameter.</param>
+    /// <returns>Resource builder for the parameter.</returns>
+    [AspireExport("withCustomInput")]
+    internal static IResourceBuilder<ParameterResource> WithCustomInputForPolyglot(this IResourceBuilder<ParameterResource> builder, Ats.ParameterCustomInputOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(options);
+
+        builder.Resource.Annotations.Add(new InputGeneratorAnnotation(parameter => new InteractionInput
+        {
+            Name = parameter.Name,
+            InputType = options.InputType ?? (parameter.Secret ? InputType.SecretText : InputType.Text),
+            Label = GetOptionalString(options.Label) ?? parameter.Name,
+            Description = GetOptionalString(options.Description) ?? parameter.Description,
+            EnableDescriptionMarkdown = options.EnableDescriptionMarkdown ?? parameter.EnableDescriptionMarkdown,
+            Options = options.Options is { Count: > 0 } optionValues ? optionValues.Select(static option => KeyValuePair.Create(option.Key, option.Value)).ToArray() : null,
+            Value = GetOptionalString(options.Value),
+            Placeholder = GetOptionalString(options.Placeholder) ?? string.Format(CultureInfo.CurrentCulture, InteractionStrings.ParametersInputsParameterPlaceholder, parameter.Name),
+            AllowCustomChoice = options.AllowCustomChoice ?? false,
+            Disabled = options.Disabled ?? false,
+            MaxLength = options.MaxLength
+        }));
+
+        return builder;
+    }
+
+    private static string? GetOptionalString(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
     // Internal to allow ParameterProcessor to check for configured values
     // without triggering default value generation
@@ -295,7 +333,10 @@ public static class ParameterResourceBuilderExtensions
                 );
     }
 
-    [AspireExport("addConnectionString", Description = "Adds a connection string resource")]
+    /// <summary>
+    /// Adds a connection string resource
+    /// </summary>
+    [AspireExport("addConnectionString")]
     internal static IResourceBuilder<IResourceWithConnectionString> AddConnectionStringForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -319,7 +360,12 @@ public static class ParameterResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The configured <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Publishes the resource as a connection string")]
+    /// <remarks>
+    /// This API only changes the manifest representation; it does not change the resource model used by other publishers.
+    /// </remarks>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [Obsolete("PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.")]
+    [AspireExport]
     public static IResourceBuilder<T> PublishAsConnectionString<T>(this IResourceBuilder<T> builder)
         where T : ContainerResource, IResourceWithConnectionString
     {

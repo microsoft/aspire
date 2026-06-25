@@ -11,6 +11,7 @@ namespace Aspire.Hosting.Backchannel;
 
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
@@ -20,7 +21,7 @@ using ModelContextProtocol.Protocol;
 //
 // 1. All methods take a single request object (nullable where sensible)
 // 2. All methods return a response object (or IAsyncEnumerable<T> for streaming)
-// 3. Request/response types are sealed classes with { get; init; } properties
+// 3. Request types derive from BackchannelRequest; request/response types are sealed classes with { get; init; } properties
 // 4. Required properties use 'required' keyword
 // 5. Optional properties are nullable (T?) - can be added without breaking
 // 6. Empty request classes are allowed (for future expansion)
@@ -43,6 +44,33 @@ internal static class AuxiliaryBackchannelCapabilities
     /// Version 2 capabilities (13.2+): Request objects, new methods.
     /// </summary>
     public const string V2 = "aux.v2";
+
+    /// <summary>
+    /// Version 3 capabilities: Batched console log streaming, AppHost startup readiness wait,
+    /// and JSON-valued resource properties when requested by the client.
+    /// </summary>
+    public const string V3 = "aux.v3";
+
+    /// <summary>
+    /// Terminal capability (13.4+): the AppHost exposes per-replica terminal info via
+    /// <see cref="GetTerminalInfoResponse.Replicas"/> AND the per-resource list returned by
+    /// <c>ListTerminalsAsync</c> (with per-replica current grid size and attached-peer counts).
+    /// Together these surfaces back <c>aspire terminal attach</c> and <c>aspire terminal ps</c>.
+    /// The two were split during development as <c>terminals.v1</c> and <c>terminals.ps.v1</c>;
+    /// they were consolidated before ship because they are interconnected and always ship together.
+    /// Older clients ignore the new fields/RPC; new clients gate CLI/UI affordances on this capability.
+    /// </summary>
+    public const string Terminals_V1 = "terminals.v1";
+}
+
+/// <summary>
+/// Constants for resource command visibility values in the auxiliary backchannel contract.
+/// </summary>
+internal static class KnownCommandVisibility
+{
+    public const string UI = "UI";
+    public const string Api = "Api";
+    public const string Default = $"{UI}, {Api}";
 }
 
 #endregion
@@ -50,9 +78,57 @@ internal static class AuxiliaryBackchannelCapabilities
 #region V2 Request/Response Types
 
 /// <summary>
+/// Trace context metadata propagated over the auxiliary backchannel.
+/// </summary>
+internal sealed class BackchannelTraceContext
+{
+    /// <summary>
+    /// Gets the W3C traceparent value associated with the caller span.
+    /// </summary>
+    public string? TraceParent { get; init; }
+
+    /// <summary>
+    /// Gets the W3C tracestate value associated with the caller span.
+    /// </summary>
+    public string? TraceState { get; init; }
+
+    /// <summary>
+    /// Gets the baggage values associated with the trace.
+    /// </summary>
+    public Dictionary<string, string> Baggage { get; init; } = [];
+}
+
+/// <summary>
+/// Base class for auxiliary backchannel request-object RPC parameters.
+/// </summary>
+internal abstract class BackchannelRequest
+{
+    /// <summary>
+    /// Gets trace context metadata propagated by the CLI.
+    /// </summary>
+    public BackchannelTraceContext? TraceContext { get; init; }
+
+    /// <summary>
+    /// Creates a copy of this request with the specified trace context.
+    /// </summary>
+    /// <remarks>
+    /// StreamJsonRpc carries W3C traceparent/tracestate on the JSON-RPC request envelope.
+    /// See https://microsoft.github.io/vs-streamjsonrpc/docs/resiliency.html#activity-tracing.
+    /// The request object only carries extra trace metadata such as baggage values. Each
+    /// request type owns its copy logic so this stays AOT- and trimming-friendly instead of
+    /// relying on reflection to clone arbitrary records/classes.
+    /// </remarks>
+    public abstract BackchannelRequest WithTraceContext(BackchannelTraceContext traceContext);
+}
+
+/// <summary>
 /// Request for getting auxiliary backchannel capabilities.
 /// </summary>
-internal sealed class GetCapabilitiesRequest { }
+internal sealed class GetCapabilitiesRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override GetCapabilitiesRequest WithTraceContext(BackchannelTraceContext traceContext) => new() { TraceContext = traceContext };
+}
 
 /// <summary>
 /// Response containing auxiliary backchannel capabilities.
@@ -68,7 +144,11 @@ internal sealed class GetCapabilitiesResponse
 /// <summary>
 /// Request for getting AppHost information.
 /// </summary>
-internal sealed class GetAppHostInfoRequest { }
+internal sealed class GetAppHostInfoRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override GetAppHostInfoRequest WithTraceContext(BackchannelTraceContext traceContext) => new() { TraceContext = traceContext };
+}
 
 /// <summary>
 /// Response containing AppHost information.
@@ -99,12 +179,21 @@ internal sealed class GetAppHostInfoResponse
     /// Gets when the AppHost process started.
     /// </summary>
     public DateTimeOffset? StartedAt { get; init; }
+
+    /// <summary>
+    /// Gets the log file path of the CLI process that launched the AppHost, if applicable.
+    /// </summary>
+    public string? CliLogFilePath { get; init; }
 }
 
 /// <summary>
 /// Request for getting Dashboard information.
 /// </summary>
-internal sealed class GetDashboardInfoRequest { }
+internal sealed class GetDashboardInfoRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override GetDashboardInfoRequest WithTraceContext(BackchannelTraceContext traceContext) => new() { TraceContext = traceContext };
+}
 
 /// <summary>
 /// Response containing Dashboard information.
@@ -134,14 +223,47 @@ internal sealed class GetDashboardInfoResponse
 }
 
 /// <summary>
+/// Request for waiting until the AppHost reaches its startup readiness point.
+/// </summary>
+internal sealed class WaitForAppHostReadyRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override WaitForAppHostReadyRequest WithTraceContext(BackchannelTraceContext traceContext) => new() { TraceContext = traceContext };
+}
+
+/// <summary>
+/// Response returned once the AppHost reaches its startup readiness point.
+/// </summary>
+internal sealed class WaitForAppHostReadyResponse
+{
+    /// <summary>
+    /// Gets whether the AppHost has reached its startup readiness point.
+    /// </summary>
+    public bool IsReady { get; init; }
+}
+
+/// <summary>
 /// Request for getting resource snapshots.
 /// </summary>
-internal sealed class GetResourcesRequest
+internal sealed class GetResourcesRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets an optional filter pattern for resource names.
     /// </summary>
     public string? Filter { get; init; }
+
+    /// <summary>
+    /// Gets the auxiliary backchannel capabilities supported by the client.
+    /// </summary>
+    public string[] ClientCapabilities { get; init; } = [];
+
+    /// <inheritdoc />
+    public override GetResourcesRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        Filter = Filter,
+        ClientCapabilities = ClientCapabilities
+    };
 }
 
 /// <summary>
@@ -158,34 +280,73 @@ internal sealed class GetResourcesResponse
 /// <summary>
 /// Request for watching resource changes.
 /// </summary>
-internal sealed class WatchResourcesRequest
+internal sealed class WatchResourcesRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets an optional filter pattern for resource names.
     /// </summary>
     public string? Filter { get; init; }
+
+    /// <summary>
+    /// Gets the auxiliary backchannel capabilities supported by the client.
+    /// </summary>
+    public string[] ClientCapabilities { get; init; } = [];
+
+    /// <inheritdoc />
+    public override WatchResourcesRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        Filter = Filter,
+        ClientCapabilities = ClientCapabilities
+    };
 }
 
 /// <summary>
 /// Request for getting console logs.
 /// </summary>
-internal sealed class GetConsoleLogsRequest
+internal sealed class GetConsoleLogsRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets the resource name to get logs for.
     /// </summary>
-    public required string ResourceName { get; init; }
+    public string? ResourceName { get; init; }
 
     /// <summary>
     /// Gets whether to follow (stream) new log entries.
     /// </summary>
     public bool Follow { get; init; }
+
+    /// <summary>
+    /// Gets an optional search string to match against log content or resource name.
+    /// </summary>
+    public string? Search { get; init; }
+
+    /// <summary>
+    /// Gets the maximum number of matching snapshot log entries to return.
+    /// </summary>
+    public int? Tail { get; init; }
+
+    /// <summary>
+    /// Gets whether hidden resources should be included when no resource name is specified.
+    /// </summary>
+    public bool IncludeHidden { get; init; }
+
+    /// <inheritdoc />
+    public override GetConsoleLogsRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        ResourceName = ResourceName,
+        Follow = Follow,
+        Search = Search,
+        Tail = Tail,
+        IncludeHidden = IncludeHidden
+    };
 }
 
 /// <summary>
 /// Request for calling an MCP tool on a resource.
 /// </summary>
-internal sealed class CallMcpToolRequest
+internal sealed class CallMcpToolRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets the resource name.
@@ -201,6 +362,15 @@ internal sealed class CallMcpToolRequest
     /// Gets the tool arguments.
     /// </summary>
     public JsonElement? Arguments { get; init; }
+
+    /// <inheritdoc />
+    public override CallMcpToolRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        ResourceName = ResourceName,
+        ToolName = ToolName,
+        Arguments = Arguments
+    };
 }
 
 /// <summary>
@@ -238,12 +408,19 @@ internal sealed class McpToolContentItem
 /// <summary>
 /// Request for stopping the AppHost.
 /// </summary>
-internal sealed class StopAppHostRequest
+internal sealed class StopAppHostRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets the exit code to use when stopping.
     /// </summary>
     public int? ExitCode { get; init; }
+
+    /// <inheritdoc />
+    public override StopAppHostRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        ExitCode = ExitCode
+    };
 }
 
 /// <summary>
@@ -254,7 +431,7 @@ internal sealed class StopAppHostResponse { }
 /// <summary>
 /// Request for executing a resource command.
 /// </summary>
-internal sealed class ExecuteResourceCommandRequest
+internal sealed class ExecuteResourceCommandRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets the resource name (or resource ID for replicas).
@@ -265,6 +442,66 @@ internal sealed class ExecuteResourceCommandRequest
     /// Gets the command name (e.g., "start", "stop", "restart").
     /// </summary>
     public required string CommandName { get; init; }
+
+    /// <summary>
+    /// Gets optional invocation arguments to pass to the resource command.
+    /// Arrays are matched to declared command arguments by order. Objects are matched by argument name.
+    /// </summary>
+    public JsonNode? Arguments { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the request should validate arguments without executing the command.
+    /// </summary>
+    public bool ValidateOnly { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether command execution should fail instead of prompting for missing input.
+    /// </summary>
+    public bool NonInteractive { get; init; } = true;
+
+    /// <summary>
+    /// Gets a value indicating whether the response should include command argument input metadata after dynamic loading.
+    /// </summary>
+    public bool ReturnArgumentInputs { get; init; }
+
+    /// <inheritdoc />
+    public override ExecuteResourceCommandRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        ResourceName = ResourceName,
+        CommandName = CommandName,
+        Arguments = Arguments,
+        ValidateOnly = ValidateOnly,
+        NonInteractive = NonInteractive,
+        ReturnArgumentInputs = ReturnArgumentInputs
+    };
+}
+
+/// <summary>
+/// Options for executing a resource command through the auxiliary backchannel.
+/// </summary>
+internal sealed class ExecuteResourceCommandOptions
+{
+    /// <summary>
+    /// Gets optional invocation arguments to pass to the resource command.
+    /// Arrays are matched to declared command arguments by order. Objects are matched by argument name.
+    /// </summary>
+    public JsonNode? Arguments { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the request should validate arguments without executing the command.
+    /// </summary>
+    public bool ValidateOnly { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether command execution should fail instead of prompting for missing input.
+    /// </summary>
+    public bool NonInteractive { get; init; } = true;
+
+    /// <summary>
+    /// Gets a value indicating whether the response should include command argument input metadata after dynamic loading.
+    /// </summary>
+    public bool ReturnArgumentInputs { get; init; }
 }
 
 /// <summary>
@@ -297,6 +534,33 @@ internal sealed class ExecuteResourceCommandResponse
     /// Gets the value produced by the command.
     /// </summary>
     public ExecuteResourceCommandResult? Value { get; init; }
+
+    /// <summary>
+    /// Gets validation errors for submitted command arguments.
+    /// </summary>
+    public ResourceCommandArgumentValidationError[] ValidationErrors { get; init; } = [];
+
+    /// <summary>
+    /// Gets command argument input metadata after dynamic loading has run.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResourceSnapshotCommandArgument[]? ArgumentInputs { get; init; }
+}
+
+/// <summary>
+/// Represents a validation error for a submitted resource command argument.
+/// </summary>
+internal sealed class ResourceCommandArgumentValidationError
+{
+    /// <summary>
+    /// Gets the argument name.
+    /// </summary>
+    public required string ArgumentName { get; init; }
+
+    /// <summary>
+    /// Gets the validation error message.
+    /// </summary>
+    public required string ErrorMessage { get; init; }
 }
 
 /// <summary>
@@ -352,7 +616,7 @@ internal enum CommandResultFormat
 /// <summary>
 /// Request to wait for a resource to reach a target status.
 /// </summary>
-internal sealed class WaitForResourceRequest
+internal sealed class WaitForResourceRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets the name of the resource to wait for.
@@ -368,6 +632,15 @@ internal sealed class WaitForResourceRequest
     /// Gets the timeout in seconds.
     /// </summary>
     public int TimeoutSeconds { get; init; } = 120;
+
+    /// <inheritdoc />
+    public override WaitForResourceRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        ResourceName = ResourceName,
+        Status = Status,
+        TimeoutSeconds = TimeoutSeconds
+    };
 }
 
 /// <summary>
@@ -668,20 +941,6 @@ internal class BackchannelLogEntry
     public required string CategoryName { get; set; }
 }
 
-internal class CommandOutput
-{
-    public required string Text { get; init; }
-    public bool IsErrorMessage { get; init; }
-    public int? LineNumber { get; init; }
-    /// <summary>
-    /// Additional info about type of the message.
-    /// Should be used for controlling the display style.
-    /// </summary>
-    public string? Type { get; init; }
-
-    public int? ExitCode { get; init; }
-}
-
 internal class PublishingPromptInputAnswer
 {
     public string? Name { get; set; }
@@ -722,13 +981,20 @@ internal sealed class PipelineStepInfo
 /// <summary>
 /// Request for getting pipeline step metadata.
 /// </summary>
-internal sealed class GetPipelineStepsRequest
+internal sealed class GetPipelineStepsRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets or sets the target step name to filter to (including transitive dependencies).
     /// When null, all steps are returned.
     /// </summary>
     public string? Step { get; init; }
+
+    /// <inheritdoc />
+    public override GetPipelineStepsRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        Step = Step
+    };
 }
 
 /// <summary>
@@ -797,6 +1063,11 @@ internal sealed class ResourceSnapshot
     public string? State { get; init; }
 
     /// <summary>
+    /// Gets the names of resources this resource is waiting for.
+    /// </summary>
+    public string[]? WaitingFor { get; init; }
+
+    /// <summary>
     /// Gets the state style hint (e.g., "success", "error", "warning").
     /// </summary>
     public string? StateStyle { get; init; }
@@ -855,7 +1126,7 @@ internal sealed class ResourceSnapshot
     /// Gets additional properties as key-value pairs.
     /// This allows for extensibility without changing the schema.
     /// </summary>
-    public Dictionary<string, string?> Properties { get; init; } = [];
+    public Dictionary<string, JsonNode?> Properties { get; init; } = [];
 
     /// <summary>
     /// Gets a value indicating whether this resource is hidden.
@@ -895,9 +1166,109 @@ internal sealed class ResourceSnapshotCommand
     public string? Description { get; init; }
 
     /// <summary>
+    /// Gets the ordered inputs that describe the invocation arguments accepted by the command.
+    /// </summary>
+    public ResourceSnapshotCommandArgument[] ArgumentInputs { get; init; } = [];
+
+    /// <summary>
+    /// Gets where the command is visible to users and clients.
+    /// </summary>
+    public string Visibility { get; init; } = KnownCommandVisibility.Default;
+
+    /// <summary>
     /// Gets the state of the command (e.g., "Enabled", "Disabled", "Hidden").
     /// </summary>
     public required string State { get; init; }
+}
+
+/// <summary>
+/// Represents an invocation argument accepted by a resource command.
+/// </summary>
+internal sealed class ResourceSnapshotCommandArgument
+{
+    /// <summary>
+    /// Gets the argument name.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the display label.
+    /// </summary>
+    public string? Label { get; init; }
+
+    /// <summary>
+    /// Gets the argument description.
+    /// </summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the description should be rendered as Markdown.
+    /// </summary>
+    public bool EnableDescriptionMarkdown { get; init; }
+
+    /// <summary>
+    /// Gets the input type.
+    /// </summary>
+    public required string InputType { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the argument is required.
+    /// </summary>
+    public bool Required { get; init; }
+
+    /// <summary>
+    /// Gets the placeholder text.
+    /// </summary>
+    public string? Placeholder { get; init; }
+
+    /// <summary>
+    /// Gets the default or submitted value.
+    /// </summary>
+    public string? Value { get; init; }
+
+    /// <summary>
+    /// Gets choice options keyed by submitted value.
+    /// </summary>
+    public Dictionary<string, string?>? Options { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether custom choices are allowed.
+    /// </summary>
+    public bool AllowCustomChoice { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the argument input is disabled.
+    /// </summary>
+    public bool Disabled { get; init; }
+
+    /// <summary>
+    /// Gets the maximum length for text inputs.
+    /// </summary>
+    public int? MaxLength { get; init; }
+
+    /// <summary>
+    /// Gets metadata describing dynamic input loading behavior.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResourceSnapshotCommandArgumentDynamicLoading? DynamicLoading { get; init; }
+}
+
+/// <summary>
+/// Represents dynamic loading metadata for a resource command argument.
+/// </summary>
+internal sealed class ResourceSnapshotCommandArgumentDynamicLoading
+{
+    /// <summary>
+    /// Gets a value indicating whether the input should always load when prompting starts.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AlwaysLoadOnStart { get; init; }
+
+    /// <summary>
+    /// Gets the input names that trigger reloading when their values change.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? DependsOnInputs { get; init; }
 }
 
 /// <summary>
@@ -1085,6 +1456,12 @@ internal sealed class AppHostInformation
     /// This value is only set when the AppHost is launched via the Aspire CLI.
     /// </summary>
     public DateTimeOffset? CliStartedAt { get; init; }
+
+    /// <summary>
+    /// Gets or sets the log file path of the CLI process that launched the AppHost.
+    /// This value is only set when the AppHost is launched via the Aspire CLI.
+    /// </summary>
+    public string? CliLogFilePath { get; init; }
 }
 
 /// <summary>
@@ -1112,3 +1489,246 @@ internal sealed class ResourceLogLine
     /// </summary>
     public bool IsError { get; init; }
 }
+
+#region Terminal
+
+/// <summary>
+/// Request for getting terminal information for a resource.
+/// </summary>
+internal sealed class GetTerminalInfoRequest : BackchannelRequest
+{
+    /// <summary>
+    /// Gets the resource name.
+    /// </summary>
+    public required string ResourceName { get; init; }
+
+    /// <inheritdoc />
+    public override GetTerminalInfoRequest WithTraceContext(BackchannelTraceContext traceContext)
+        => new() { ResourceName = ResourceName, TraceContext = traceContext };
+}
+
+/// <summary>
+/// Per-replica endpoint information for an interactive terminal session. One entry per
+/// replica of a resource configured with WithTerminal. Returned inside
+/// <see cref="GetTerminalInfoResponse.Replicas"/> when the auxiliary backchannel reports
+/// the <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+/// </summary>
+internal sealed class TerminalReplicaInfo
+{
+    /// <summary>
+    /// Gets the zero-based replica index. Stable across the lifetime of the AppHost run.
+    /// </summary>
+    public required int ReplicaIndex { get; init; }
+
+    /// <summary>
+    /// Gets a short human-readable label for the replica, suitable for selection prompts and logs.
+    /// </summary>
+    public required string Label { get; init; }
+
+    /// <summary>
+    /// Gets the consumer-side Unix domain socket path that viewers (Dashboard, CLI) connect to in
+    /// order to attach to this replica's PTY via Hex1b's HMP v1 protocol.
+    /// </summary>
+    public required string ConsumerUdsPath { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether this replica's upstream producer is currently attached.
+    /// True while the underlying PTY is actively delivering bytes to the host. False transiently
+    /// between automatic recycles (when DCP relaunches the underlying process and rebinds), and
+    /// permanently when the host is shutting down. Identical in meaning to
+    /// <see cref="ProducerConnected"/>; both are populated for backwards compatibility with
+    /// older clients that branched on this name.
+    /// </summary>
+    public required bool IsAlive { get; init; }
+
+    /// <summary>
+    /// Gets the exit code from the most recently-completed producer cycle for this replica,
+    /// or null if no cycle has completed yet. Updates each time the upstream producer
+    /// disconnects.
+    /// </summary>
+    public int? ExitCode { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the upstream producer is currently attached to this
+    /// replica. Synonym for <see cref="IsAlive"/> with clearer naming.
+    /// </summary>
+    public bool ProducerConnected { get; init; }
+
+    /// <summary>
+    /// Gets the number of completed producer cycles for this replica. Increments each time
+    /// the upstream producer disconnects and the host rebinds. Useful as a diagnostic — an
+    /// unexpectedly high count indicates the upstream process is crashing repeatedly.
+    /// </summary>
+    public int RestartCount { get; init; }
+
+    /// <summary>
+    /// Gets the current terminal grid width in columns, as last negotiated by the active HMP1
+    /// primary peer. Falls back to <see cref="GetTerminalInfoResponse.Columns"/> when no peer has
+    /// driven a resize yet. Null when the AppHost predates the
+    /// <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+    /// </summary>
+    public int? CurrentColumns { get; init; }
+
+    /// <summary>
+    /// Gets the current terminal grid height in rows. See <see cref="CurrentColumns"/>.
+    /// </summary>
+    public int? CurrentRows { get; init; }
+
+    /// <summary>
+    /// Gets the count of HMP1 viewer peers currently attached to this replica's consumer UDS
+    /// (Dashboard tabs, CLI <c>aspire terminal attach</c> sessions, etc.). Zero when no viewer
+    /// is attached. Null when the AppHost predates the
+    /// <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+    /// </summary>
+    public int? AttachedPeerCount { get; init; }
+
+    /// <summary>
+    /// Gets per-peer details for currently-attached HMP1 viewers, in connect order. Useful for
+    /// "who's attached?" diagnostics in <c>aspire terminal ps -v</c>. Null when the AppHost
+    /// predates the <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+    /// </summary>
+    public TerminalPeerInfo[]? Peers { get; init; }
+}
+
+/// <summary>
+/// Per-peer identification for an HMP1 client currently attached to a replica's consumer UDS.
+/// Mirrors the host-side peer info reported by the terminal host control protocol.
+/// </summary>
+internal sealed class TerminalPeerInfo
+{
+    /// <summary>
+    /// Gets the HMP1-assigned stable peer identifier for the lifetime of the connection.
+    /// </summary>
+    public required string PeerId { get; init; }
+
+    /// <summary>
+    /// Gets the free-form display label the peer reported in its ClientHello, or null if the
+    /// peer didn't supply one (e.g. <c>aspire-cli:1234</c>, <c>dashboard:abc12345</c>).
+    /// </summary>
+    public string? DisplayName { get; init; }
+}
+
+/// <summary>
+/// Response containing terminal information for a resource.
+/// </summary>
+internal sealed class GetTerminalInfoResponse
+{
+    /// <summary>
+    /// Gets whether terminal access is available for this resource.
+    /// </summary>
+    public required bool IsAvailable { get; init; }
+
+    /// <summary>
+    /// Gets the per-replica endpoint information when <see cref="IsAvailable"/> is true.
+    /// Null for older AppHosts that predate the
+    /// <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+    /// </summary>
+    public TerminalReplicaInfo[]? Replicas { get; init; }
+
+    /// <summary>
+    /// Gets the legacy single-socket UDS path. Always null in 13.4+; preserved on the wire
+    /// so older CLI builds that deserialize this response keep working without crashing on an
+    /// unexpected schema.
+    /// </summary>
+    public string? SocketPath { get; init; }
+
+    /// <summary>
+    /// Gets the AppHost-configured initial terminal width in columns. Hint only; viewers may
+    /// negotiate a different size after attaching.
+    /// </summary>
+    public int Columns { get; init; }
+
+    /// <summary>
+    /// Gets the AppHost-configured initial terminal height in rows. Hint only; viewers may
+    /// negotiate a different size after attaching.
+    /// </summary>
+    public int Rows { get; init; }
+}
+
+/// <summary>
+/// Request for listing every <c>WithTerminal</c>-enabled resource. Empty payload — the AppHost
+/// already knows which resources have a <c>TerminalAnnotation</c>. Gated on the
+/// <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+/// </summary>
+internal sealed class ListTerminalsRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override ListTerminalsRequest WithTraceContext(BackchannelTraceContext traceContext)
+        => new() { TraceContext = traceContext };
+}
+
+/// <summary>
+/// One entry per <c>WithTerminal</c>-enabled resource. Returned inside
+/// <see cref="ListTerminalsResponse.Terminals"/>. Replica details (current size, attached peers)
+/// are only populated when the host process is reachable; otherwise <see cref="IsHostReachable"/>
+/// is false and the per-replica entries are degraded (<see cref="TerminalReplicaInfo.IsAlive"/> =
+/// false, AppHost-known <see cref="TerminalReplicaInfo.ConsumerUdsPath"/>), but the array shape
+/// stays consistent so diagnostics stay legible.
+/// </summary>
+internal sealed class TerminalSummary
+{
+    /// <summary>
+    /// Gets the resource name (matches <c>IResource.Name</c>).
+    /// </summary>
+    public required string ResourceName { get; init; }
+
+    /// <summary>
+    /// Gets a short human-readable display name. Today identical to <see cref="ResourceName"/>;
+    /// kept separate so the AppHost can substitute a friendlier name later (e.g. when a resource
+    /// has a display name annotation).
+    /// </summary>
+    public required string DisplayName { get; init; }
+
+    /// <summary>
+    /// Gets the AppHost-configured initial terminal width. Falls back when no replica has reported
+    /// a resize.
+    /// </summary>
+    public required int ConfiguredColumns { get; init; }
+
+    /// <summary>
+    /// Gets the AppHost-configured initial terminal height.
+    /// </summary>
+    public required int ConfiguredRows { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the terminal host process for this resource was
+    /// reachable when the snapshot was taken. False when the host hasn't started yet, the control
+    /// UDS isn't bound, or the control RPC timed out.
+    /// </summary>
+    public required bool IsHostReachable { get; init; }
+
+    /// <summary>
+    /// Gets the per-replica details. One entry per configured replica, in replica index order.
+    /// Replicas whose host wasn't reachable when the snapshot was taken still appear here with
+    /// <see cref="TerminalReplicaInfo.IsAlive"/> = false and the AppHost-known
+    /// <see cref="TerminalReplicaInfo.ConsumerUdsPath"/> populated, so the diagnostic shape
+    /// stays consistent regardless of host reachability. Null only when the producer didn't
+    /// supply any replica info (older AppHost predating per-replica fan-out).
+    /// </summary>
+    public TerminalReplicaInfo[]? Replicas { get; init; }
+}
+
+/// <summary>
+/// Response from <c>ListTerminalsAsync</c>. Lists every <c>WithTerminal</c>-enabled resource in the
+/// AppHost. Empty array when no resource is configured for terminals.
+/// </summary>
+internal sealed class ListTerminalsResponse
+{
+    /// <summary>
+    /// Gets the per-resource summaries. Empty (not null) when there are no terminal-enabled resources.
+    /// </summary>
+    public required TerminalSummary[] Terminals { get; init; }
+}
+
+#endregion
+/// <summary>
+/// Represents a batch of resource console log lines.
+/// </summary>
+internal sealed class ResourceLogBatch
+{
+    /// <summary>
+    /// Gets the log lines in this batch.
+    /// </summary>
+    public required ResourceLogLine[] Lines { get; init; }
+}
+

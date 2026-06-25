@@ -8,10 +8,17 @@
 @implements IAsyncDisposable
 
 @* Console logs always have a dark background. Set data-theme="dark" so dark theme accent colors are used *@
-<div class="log-overflow console-overflow continuous-scroll-overflow" data-theme="dark">
+<div id="@ScrollContainerId" class="log-overflow console-overflow continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(ConsoleLogs.ConsoleLogsHeader)]" data-theme="dark">
     <div class="@GetLogContainerClass()" id="logContainer">
         @if (LogEntries is { } logEntries)
         {
+            @if (ShowNoLogsMessage && logEntries.EntriesCount == 0)
+            {
+                <div class="console-empty-message" role="status" aria-live="polite">
+                    <FluentIcon Value="@(new Icons.Regular.Size24.SlideText())" aria-hidden="true" />
+                    <span>@Loc[nameof(ConsoleLogs.ConsoleLogsNoLogsFound)]</span>
+                </div>
+            }
             <Virtualize @ref="VirtualizeRef" ItemsProvider="@GetItems" ItemSize="20" OverscanCount="200" TItem="LogEntry">
                 @if (context.Pause is { } pause)
                 {
@@ -35,7 +42,7 @@
                                         {
                                             @s_spaceMarkup
                                         }
-                                        <span class="resource-prefix" style="background: @ColorGenerator.Instance.GetColorVariableByKey(resourcePrefix);">@resourcePrefix</span>
+                                        <span class="resource-prefix" style="@ResourcePrefixStyle.GetStyle(resourcePrefix)">@resourcePrefix</span>
                                     }
                                     @if (DisplayPrefix(ref hasPrefix))
                                     {
@@ -71,7 +78,7 @@
                                         {
                                             @s_spaceMarkup
                                         }
-                                        <span class="resource-prefix" style="background: @ColorGenerator.Instance.GetColorVariableByKey(resourcePrefix);">@resourcePrefix</span>
+                                        <span class="resource-prefix" style="@ResourcePrefixStyle.GetStyle(resourcePrefix)">@resourcePrefix</span>
                                     }
                                     @if (context.Type == LogEntryType.Error)
                                     {

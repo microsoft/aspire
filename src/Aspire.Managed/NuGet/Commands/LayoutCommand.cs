@@ -3,9 +3,6 @@
 
 using System.CommandLine;
 using System.Globalization;
-using System.Runtime.InteropServices;
-using NuGet.Frameworks;
-using NuGet.ProjectModel;
 
 namespace Aspire.Managed.NuGet.Commands;
 
@@ -84,61 +81,43 @@ public static class LayoutCommand
 
         try
         {
-            // Parse the lock file
-            var lockFileFormat = new LockFileFormat();
-            var lockFile = lockFileFormat.Read(assetsPath);
-
-            if (lockFile == null)
-            {
-                Console.Error.WriteLine("Error: Failed to parse project.assets.json");
-                return 1;
-            }
-
-            var effectiveRuntimeIdentifier = string.IsNullOrWhiteSpace(runtimeIdentifier)
-                ? RuntimeInformation.RuntimeIdentifier
-                : runtimeIdentifier;
-            var target = ResolveTarget(lockFile, framework, effectiveRuntimeIdentifier);
-
-            if (target == null)
-            {
-                Console.Error.WriteLine($"Error: Target framework '{framework}' not found in assets file");
-                Console.Error.WriteLine($"Available targets: {string.Join(", ", lockFile.Targets.Select(t => t.TargetFramework.GetShortFolderName()))}");
-                return 1;
-            }
+            var resolution = NuGetPackageAssetResolver.Resolve(
+                assetsPath,
+                framework,
+                runtimeIdentifier,
+                verbose ? Console.WriteLine : null);
 
             // Create output directory
             Directory.CreateDirectory(outputPath);
 
             var copiedCount = 0;
-            var skippedCount = 0;
-
-            var packagesPath = GetPackagesPath(lockFile);
 
             if (verbose)
             {
-                Console.WriteLine($"Using packages path: {packagesPath}");
-                Console.WriteLine($"Target framework: {target.TargetFramework.GetShortFolderName()}");
-                Console.WriteLine($"Runtime identifier: {effectiveRuntimeIdentifier}");
-                Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "Libraries: {0}", target.Libraries.Count));
+                Console.WriteLine($"Using packages path: {resolution.PackagesPath}");
+                Console.WriteLine($"Target framework: {resolution.TargetFramework}");
+                Console.WriteLine($"Runtime identifier: {resolution.RuntimeIdentifier}");
+                Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "Libraries: {0}", resolution.LibraryCount));
             }
 
-            // Process each library in the target
-            foreach (var library in target.Libraries)
+            foreach (var asset in resolution.Assets)
             {
-                var (libraryCopiedCount, librarySkippedCount) = ProcessLibrary(
-                    library,
-                    packagesPath,
-                    outputPath,
-                    verbose);
+                var destPath = Path.Combine(outputPath, asset.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+                if (CopyIfNewer(asset.SourcePath, destPath, createDirectory: asset.RelativePath.Contains('/')))
+                {
+                    copiedCount++;
 
-                copiedCount += libraryCopiedCount;
-                skippedCount += librarySkippedCount;
+                    if (verbose)
+                    {
+                        Console.WriteLine($"  Copy: {asset.SourcePath} -> {destPath}");
+                    }
+                }
             }
 
             Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "Layout created: {0} files copied to {1}", copiedCount, outputPath));
-            if (skippedCount > 0 && verbose)
+            if (resolution.SkippedPackageCount > 0 && verbose)
             {
-                Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "  ({0} packages skipped - not found in cache)", skippedCount));
+                Console.WriteLine(string.Format(CultureInfo.InvariantCulture, "  ({0} packages skipped - not found in cache)", resolution.SkippedPackageCount));
             }
 
             return 0;
@@ -153,257 +132,6 @@ public static class LayoutCommand
 
             return 1;
         }
-    }
-
-    private static LockFileTarget? ResolveTarget(LockFile lockFile, string framework, string runtimeIdentifier)
-    {
-        var nugetFramework = NuGetFramework.ParseFolder(framework);
-        return lockFile.GetTarget(nugetFramework, runtimeIdentifier)
-            ?? lockFile.GetTarget(nugetFramework, runtimeIdentifier: null);
-    }
-
-    private static string GetPackagesPath(LockFile lockFile)
-    {
-        var packagesPath = lockFile.PackageFolders.FirstOrDefault()?.Path;
-        if (!string.IsNullOrEmpty(packagesPath))
-        {
-            return packagesPath;
-        }
-
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".nuget",
-            "packages");
-    }
-
-    private static (int CopiedCount, int SkippedCount) ProcessLibrary(
-        LockFileTargetLibrary library,
-        string packagesPath,
-        string outputPath,
-        bool verbose)
-    {
-        if (library.Type != "package")
-        {
-            return (0, 0);
-        }
-
-        var libraryName = library.Name ?? string.Empty;
-        var libraryVersion = library.Version?.ToString() ?? string.Empty;
-        var packagePath = Path.Combine(packagesPath, libraryName.ToLowerInvariant(), libraryVersion);
-
-        if (!Directory.Exists(packagePath))
-        {
-            if (verbose)
-            {
-                Console.WriteLine($"  Skip (not found): {libraryName}/{libraryVersion} at {packagePath}");
-            }
-
-            return (0, 1);
-        }
-
-        var copiedCount = 0;
-        copiedCount += CopyRuntimeAssemblies(library.RuntimeAssemblies, packagePath, outputPath, verbose);
-        copiedCount += CopyRuntimeTargets(library.RuntimeTargets, packagePath, outputPath, verbose);
-        copiedCount += CopyResourceAssemblies(library.ResourceAssemblies, packagePath, outputPath, verbose);
-        copiedCount += CopyNativeLibraries(library.NativeLibraries, packagePath, outputPath, verbose);
-
-        return (copiedCount, 0);
-    }
-
-    private static int CopyRuntimeAssemblies(
-        IEnumerable<LockFileItem> runtimeAssemblies,
-        string packagePath,
-        string outputPath,
-        bool verbose)
-    {
-        var copiedCount = 0;
-
-        foreach (var runtimeAssembly in runtimeAssemblies)
-        {
-            if (IsPlaceholderPath(runtimeAssembly.Path))
-            {
-                continue;
-            }
-
-            var sourcePath = Path.Combine(packagePath, runtimeAssembly.Path.Replace('/', Path.DirectorySeparatorChar));
-            var fileName = Path.GetFileName(sourcePath);
-            var runtimePathToPreserve = runtimeAssembly.Path.StartsWith("runtimes/", StringComparison.OrdinalIgnoreCase)
-                ? runtimeAssembly.Path
-                : null;
-
-            if (!File.Exists(sourcePath))
-            {
-                continue;
-            }
-
-            var destPath = Path.Combine(outputPath, fileName);
-            if (CopyIfNewer(sourcePath, destPath, createDirectory: false))
-            {
-                copiedCount++;
-
-                if (verbose)
-                {
-                    Console.WriteLine($"  Copy: {sourcePath} -> {destPath}");
-                }
-            }
-
-            if (runtimePathToPreserve is not null)
-            {
-                var structuredDestPath = Path.Combine(outputPath, runtimePathToPreserve.Replace('/', Path.DirectorySeparatorChar));
-                if (CopyIfNewer(sourcePath, structuredDestPath, createDirectory: true))
-                {
-                    copiedCount++;
-
-                    if (verbose)
-                    {
-                        Console.WriteLine($"  Copy (runtime path): {sourcePath} -> {structuredDestPath}");
-                    }
-                }
-            }
-
-            var xmlSourcePath = Path.ChangeExtension(sourcePath, ".xml");
-            var xmlDestPath = Path.ChangeExtension(destPath, ".xml");
-            if (File.Exists(xmlSourcePath) && CopyIfNewer(xmlSourcePath, xmlDestPath, createDirectory: false))
-            {
-                copiedCount++;
-
-                if (verbose)
-                {
-                    Console.WriteLine($"  Copy (xml): {xmlSourcePath} -> {xmlDestPath}");
-                }
-            }
-        }
-
-        return copiedCount;
-    }
-
-    private static int CopyRuntimeTargets(
-        IEnumerable<LockFileRuntimeTarget> runtimeTargets,
-        string packagePath,
-        string outputPath,
-        bool verbose)
-    {
-        var copiedCount = 0;
-
-        foreach (var runtimeTarget in runtimeTargets)
-        {
-            if (IsPlaceholderPath(runtimeTarget.Path))
-            {
-                continue;
-            }
-
-            var sourcePath = Path.Combine(packagePath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(sourcePath))
-            {
-                continue;
-            }
-
-            var destPath = Path.Combine(outputPath, runtimeTarget.Path.Replace('/', Path.DirectorySeparatorChar));
-            if (CopyIfNewer(sourcePath, destPath, createDirectory: true))
-            {
-                copiedCount++;
-
-                if (verbose)
-                {
-                    Console.WriteLine($"  Copy ({runtimeTarget.AssetType} target): {sourcePath} -> {destPath}");
-                }
-            }
-        }
-
-        return copiedCount;
-    }
-
-    private static int CopyResourceAssemblies(
-        IEnumerable<LockFileItem> resourceAssemblies,
-        string packagePath,
-        string outputPath,
-        bool verbose)
-    {
-        var copiedCount = 0;
-
-        foreach (var resourceAssembly in resourceAssemblies)
-        {
-            if (IsPlaceholderPath(resourceAssembly.Path))
-            {
-                continue;
-            }
-
-            var sourcePath = Path.Combine(packagePath, resourceAssembly.Path.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(sourcePath))
-            {
-                continue;
-            }
-
-            var locale = resourceAssembly.Properties.TryGetValue("locale", out var value)
-                ? value
-                : Path.GetFileName(Path.GetDirectoryName(resourceAssembly.Path));
-
-            if (string.IsNullOrEmpty(locale))
-            {
-                continue;
-            }
-
-            var destPath = Path.Combine(outputPath, locale, Path.GetFileName(sourcePath));
-            if (CopyIfNewer(sourcePath, destPath, createDirectory: true))
-            {
-                copiedCount++;
-
-                if (verbose)
-                {
-                    Console.WriteLine($"  Copy (resource): {sourcePath} -> {destPath}");
-                }
-            }
-        }
-
-        return copiedCount;
-    }
-
-    private static int CopyNativeLibraries(
-        IEnumerable<LockFileItem> nativeLibraries,
-        string packagePath,
-        string outputPath,
-        bool verbose)
-    {
-        var copiedCount = 0;
-
-        foreach (var nativeLib in nativeLibraries)
-        {
-            if (IsPlaceholderPath(nativeLib.Path))
-            {
-                continue;
-            }
-
-            var sourcePath = Path.Combine(packagePath, nativeLib.Path.Replace('/', Path.DirectorySeparatorChar));
-            if (!File.Exists(sourcePath))
-            {
-                continue;
-            }
-
-            var fileName = Path.GetFileName(sourcePath);
-            var destPath = Path.Combine(outputPath, fileName);
-            if (CopyIfNewer(sourcePath, destPath, createDirectory: false))
-            {
-                copiedCount++;
-
-                if (verbose)
-                {
-                    Console.WriteLine($"  Copy (native): {sourcePath} -> {destPath}");
-                }
-            }
-
-            var structuredDestPath = Path.Combine(outputPath, nativeLib.Path.Replace('/', Path.DirectorySeparatorChar));
-            if (CopyIfNewer(sourcePath, structuredDestPath, createDirectory: true))
-            {
-                copiedCount++;
-
-                if (verbose)
-                {
-                    Console.WriteLine($"  Copy (native path): {sourcePath} -> {structuredDestPath}");
-                }
-            }
-        }
-
-        return copiedCount;
     }
 
     private static bool CopyIfNewer(string sourcePath, string destPath, bool createDirectory)
@@ -421,11 +149,6 @@ public static class LayoutCommand
 
         File.Copy(sourcePath, destPath, overwrite: true);
         return true;
-    }
-
-    private static bool IsPlaceholderPath(string path)
-    {
-        return string.Equals(Path.GetFileName(path), "_._", StringComparison.OrdinalIgnoreCase);
     }
 
 }

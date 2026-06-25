@@ -19,6 +19,7 @@ namespace Aspire.Hosting.EntityFrameworkCore;
 /// <see cref="EFMigrationResourceBuilderExtensions.PublishAsMigrationBundle(IResourceBuilder{EFMigrationResource}, string?, bool, bool, string?)"/>
 /// is called with <c>publishContainer: true</c>.
 /// </remarks>
+/// <ats-remarks />
 [AspireExport(ExposeProperties = true)]
 public class EFMigrationResource(string name, ProjectResource projectResource, string? dbContextTypeName)
     : ContainerResource(name)
@@ -40,6 +41,7 @@ public class EFMigrationResource(string name, ProjectResource projectResource, s
     /// <summary>
     /// Gets or sets whether a migration script should be generated during publishing.
     /// </summary>
+    [AspireExportIgnore(Reason = "Conflicts with the publishAsMigrationScript builder method export.")]
     public bool PublishAsMigrationScript { get; set; }
 
     /// <summary>
@@ -55,6 +57,7 @@ public class EFMigrationResource(string name, ProjectResource projectResource, s
     /// <summary>
     /// Gets or sets whether a migration bundle should be generated during publishing.
     /// </summary>
+    [AspireExportIgnore(Reason = "Conflicts with the publishAsMigrationBundle builder method export.")]
     public bool PublishAsMigrationBundle { get; set; }
 
     /// <summary>

@@ -1,6 +1,6 @@
-# Aspire.Hosting.OpenAI library
+# OpenAI hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure OpenAI resources and models.
+Use this integration to model, configure, and orchestrate OpenAI resources and models in an Aspire solution.
 
 ## Getting started
 
@@ -9,17 +9,19 @@ Provides extension methods and resource definitions for an Aspire AppHost to con
 - An OpenAI account with access to the OpenAI API
 - OpenAI [API key](https://platform.openai.com/api-keys)
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire OpenAI Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.OpenAI` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.OpenAI
+```bash
+aspire add Aspire.Hosting.OpenAI
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add an OpenAI resource and one or more model resources, and consume connections as needed:
+In the AppHost, add an OpenAI resource and one or more model resources, then reference them from other resources as needed:
+
+**C#**
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
@@ -31,21 +33,18 @@ var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(chat);
 ```
 
-The `WithReference` method passes that connection information into a connection string named `chat` in the `MyService` project. Multiple models can share the same OpenAI API key via the parent `OpenAIResource`.
+**TypeScript**
 
-In the _Program.cs_ file of `MyService`, the connection can be consumed using the client library [Aspire.OpenAI](https://www.nuget.org/packages/Aspire.OpenAI):
+```typescript
+import { createBuilder } from "./.aspire/modules/aspire.mjs";
 
-#### OpenAI client usage
+const builder = await createBuilder();
 
-```csharp
-builder.AddOpenAIClient("chat");
-```
+const openai = await builder.addOpenAI("openai");
+const chat = await openai.addModel("chat", "gpt-4o-mini");
 
-When no model resources are defined, clients can be created with the OpenAI resource only:
-
-```csharp
-builder.AddOpenAIClient("openai")
-       .AddChatClient("gpt-4o-mini");
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(chat);
 ```
 
 ## Configuration
@@ -56,15 +55,10 @@ The OpenAI resources can be configured with the following options:
 
 The API key is configured on the parent OpenAI resource via a parameter named `{resource_name}-openai-apikey` or the `OPENAI_API_KEY` environment variable.
 
-Then in user secrets:
+From your AppHost directory, set the parameter value with `aspire secret set`:
 
-```json
-{
-    "Parameters": 
-    {
-        "openai-openai-apikey": "YOUR_OPENAI_API_KEY_HERE"
-    }
-}
+```bash
+aspire secret set Parameters:openai-openai-apikey "YOUR_OPENAI_API_KEY_HERE"
 ```
 
 You can replace the parent API key with a custom parameter on the parent resource:
@@ -78,16 +72,11 @@ var chat = openai.AddModel("chat", "gpt-4o-mini");
 var embeddings = openai.AddModel("embeddings", "text-embedding-3-small");
 ```
 
-Then in user secrets:
+From your AppHost directory, set the custom parameter values with `aspire secret set`:
 
-```json
-{
-    "Parameters": 
-    {
-        "my-api-key": "YOUR_OPENAI_API_KEY_HERE",
-        "alt-key": "ANOTHER_OPENAI_API_KEY"
-    }
-}
+```bash
+aspire secret set Parameters:my-api-key "YOUR_OPENAI_API_KEY_HERE"
+aspire secret set Parameters:alt-key "ANOTHER_OPENAI_API_KEY"
 ```
 
 ## Available Models
@@ -144,8 +133,9 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/ai/openai/openai-host/
 * https://platform.openai.com/docs/models
-* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
 
 ## Feedback & contributing
 

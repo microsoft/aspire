@@ -12,13 +12,13 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
-using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 
 namespace Aspire.Cli.Commands;
@@ -33,6 +33,8 @@ internal sealed class InitCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly CliExecutionContext _executionContext;
     private readonly ILanguageService _languageService;
     private readonly ISolutionLocator _solutionLocator;
@@ -42,6 +44,7 @@ internal sealed class InitCommand : BaseCommand
     private readonly IScaffoldingService _scaffoldingService;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly TemplateNuGetConfigService _templateNuGetConfigService;
+    private readonly IPackagingService _packagingService;
 
     private static readonly Option<string?> s_sourceOption = new("--source", "-s")
     {
@@ -63,20 +66,17 @@ internal sealed class InitCommand : BaseCommand
     public InitCommand(
         ILanguageService languageService,
         ISolutionLocator solutionLocator,
-        AspireCliTelemetry telemetry,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
         AgentInitCommand agentInitCommand,
         IDotNetCliRunner runner,
         ICertificateService certificateService,
         IScaffoldingService scaffoldingService,
         ILanguageDiscovery languageDiscovery,
-        TemplateNuGetConfigService templateNuGetConfigService)
-        : base("init", InitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        TemplateNuGetConfigService templateNuGetConfigService,
+        IPackagingService packagingService,
+        CommonCommandServices services)
+        : base("init", InitCommandStrings.Description, services)
     {
-        _executionContext = executionContext;
+        _executionContext = services.ExecutionContext;
         _languageService = languageService;
         _solutionLocator = solutionLocator;
         _agentInitCommand = agentInitCommand;
@@ -85,6 +85,7 @@ internal sealed class InitCommand : BaseCommand
         _scaffoldingService = scaffoldingService;
         _languageDiscovery = languageDiscovery;
         _templateNuGetConfigService = templateNuGetConfigService;
+        _packagingService = packagingService;
 
         _channelOption = new Option<string?>("--channel")
         {
@@ -102,9 +103,11 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_channelOption);
         Options.Add(_languageOption);
         Options.Add(NewCommand.s_suppressAgentInitOption);
+        Options.Add(AgentInitCommand.s_skillLocationsOption);
+        Options.Add(AgentInitCommand.s_skillsOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
@@ -130,10 +133,9 @@ internal sealed class InitCommand : BaseCommand
             ? await DropCSharpSkeletonAsync(workingDirectory, solutionFile, cancellationToken)
             : await DropPolyglotSkeletonAsync(selectedProject.LanguageId, workingDirectory, cancellationToken);
 
-        if (dropResult != ExitCodeConstants.Success)
+        if (dropResult != CliExitCodes.Success)
         {
-            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
-            return dropResult;
+            return CommandResult.Failure(dropResult, InteractionServiceStrings.ProjectCouldNotBeCreated);
         }
 
         // Persist the prompted language selection now that the skeleton drop succeeded.
@@ -162,11 +164,23 @@ internal sealed class InitCommand : BaseCommand
         // This prompt lets users choose which skills to install — including aspireify.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
-        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, ExitCodeConstants.Success, workspaceRoot, agentInitBinding, cancellationToken);
+        var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
+        var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
+        // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
+        // (which includes aspireify as the natural follow-up wiring skill).
+        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
+            InteractionService,
+            CliExitCodes.Success,
+            workspaceRoot,
+            agentInitBinding,
+            skillLocationsBinding,
+            skillsBinding,
+            null,
+            cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.
-        if (agentInitResult.ExitCode == ExitCodeConstants.Success &&
-            agentInitResult.SelectedSkills.Contains(SkillDefinition.Aspireify))
+        if (agentInitResult.ExitCode == CliExitCodes.Success &&
+            agentInitResult.SelectedSkills.Any(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName)))
         {
             var commands = GetAspireifyCommands(agentInitResult.SelectedLocations);
             if (commands.Count > 0)
@@ -175,8 +189,8 @@ internal sealed class InitCommand : BaseCommand
                 InteractionService.DisplayMessage(
                     KnownEmojis.Dizzy,
                     commands.Count == 1
-                        ? "Aspire AppHost created! To complete setup, run:"
-                        : "Aspire AppHost created! To complete setup, run one of:");
+                        ? InitCommandStrings.AppHostCreatedRunOne
+                        : InitCommandStrings.AppHostCreatedRunOneOf);
                 InteractionService.DisplayEmptyLine();
 
                 foreach (var command in commands)
@@ -186,7 +200,7 @@ internal sealed class InitCommand : BaseCommand
             }
         }
 
-        return agentInitResult.ExitCode;
+        return CommandResult.FromExitCode(agentInitResult.ExitCode);
     }
 
     private void DisplayDeprecatedOptionWarnings(ParseResult parseResult)
@@ -202,7 +216,7 @@ internal sealed class InitCommand : BaseCommand
         {
             InteractionService.DisplayMessage(
                 KnownEmojis.Warning,
-                $"`aspire init {optionName}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.");
+                string.Format(CultureInfo.CurrentCulture, InitCommandStrings.DeprecatedOptionWarning, optionName));
         }
     }
 
@@ -235,17 +249,42 @@ internal sealed class InitCommand : BaseCommand
 
     private async Task<int> DropCSharpSingleFileSkeletonAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
+        // Ensure the workspace has a NuGet.config that exposes the running CLI binary's
+        // identity-channel package sources (CliExecutionContext.IdentityChannel — stable,
+        // staging, daily, pr-<N>, or local). Run this BEFORE the apphost.cs-already-exists
+        // early return so re-running `aspire init` against a workspace produced by a
+        // previous broken CLI (which left apphost.cs without a workspace NuGet.config)
+        // recovers cleanly. The config is also required so MSBuild can resolve
+        // `#:sdk Aspire.AppHost.Sdk@<version>` from the SDK directive — both for
+        // `aspire add` (`dotnet package add --file apphost.cs`) and for
+        // `dotnet run --file apphost.cs`. Without it, any non-stable channel (PR/run
+        // hives, locally-built `local-*`/`dev-*` hives, the staging channel, etc.) is
+        // invisible and SDK resolution fails. `NuGetConfigMerger` underneath creates a
+        // new file or merges missing sources into an existing one.
+        var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
+            channelName: _executionContext.IdentityChannel,
+            outputPath: workingDirectory.FullName,
+            cancellationToken).ConfigureAwait(false);
+        if (createdNuGetConfig)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
+        }
+
         var appHostPath = Path.Combine(workingDirectory.FullName, "apphost.cs");
         if (File.Exists(appHostPath))
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "apphost.cs already exists — skipping.");
-            return ExitCodeConstants.Success;
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FileAlreadyExistsSkipping, "apphost.cs"));
+            return CliExitCodes.Success;
         }
 
         // Drop bare single-file apphost. Pin the SDK version so later operations
         // (project updating, version parsing in ProjectUpdater/FallbackProjectParser)
         // can locate and update the directive — they expect the @<version> form.
-        var aspireVersion = VersionHelper.GetDefaultTemplateVersion();
+        // Use IdentitySdkVersion (build-metadata stripped) rather than IdentityVersion:
+        // the directive references the published Aspire.AppHost.Sdk NuGet package, whose
+        // version never carries a +<sha> suffix. This also matches the empty-apphost
+        // template path (CliTemplateFactory.EmptyTemplate) so both emit the same form.
+        var aspireVersion = _executionContext.IdentitySdkVersion;
         var appHostContent = $$"""
             #:sdk Aspire.AppHost.Sdk@{{aspireVersion}}
 
@@ -256,29 +295,7 @@ internal sealed class InitCommand : BaseCommand
             builder.Build().Run();
             """;
         File.WriteAllText(appHostPath, appHostContent);
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created apphost.cs");
-
-        // Ensure the workspace has a NuGet.config that exposes the configured channel's
-        // package sources. This is required so MSBuild can resolve
-        // `#:sdk Aspire.AppHost.Sdk@<version>` from the apphost.cs SDK directive — both
-        // for `aspire add` (`dotnet package add --file apphost.cs`) and for
-        // `dotnet run --file apphost.cs`. Without it, any non-stable channel (PR/run
-        // hives, locally-built `local-*`/`dev-*` hives, the staging channel, etc.)
-        // is invisible and SDK resolution fails. Mirrors how `aspire new` handles
-        // template output via the same shared service; `NuGetConfigMerger` underneath
-        // creates a new file or merges missing sources into an existing one, so adding
-        // hives later is handled the same way as for templates.
-        var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
-            channelName: null,
-            outputPath: workingDirectory.FullName,
-            cancellationToken).ConfigureAwait(false);
-        if (createdNuGetConfig)
-        {
-            // Use a confirmation message that does NOT contain the literal substring
-            // "NuGet.config" — the AspireInitAsync E2E helper false-matches that
-            // substring as a Y/n prompt and gets out of sync with the real prompts.
-            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created package sources file");
-        }
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, "apphost.cs"));
 
         // Generate one set of ports so aspire.config.json (used by `aspire run`) and
         // apphost.run.json (used by `dotnet run apphost.cs`) agree on the dashboard /
@@ -289,8 +306,22 @@ internal sealed class InitCommand : BaseCommand
         // in aspire.config.json — newly generated, or pre-existing if the file already
         // had a `profiles` section. Use the SAME ports for apphost.run.json so the two
         // files always agree on dashboard / OTLP / resource service endpoints.
-        var (configResult, effectivePorts) = DropAspireConfig(workingDirectory, "apphost.cs", language: null, ports);
-        if (configResult != ExitCodeConstants.Success)
+        //
+        // Persist the running CLI's identity channel (e.g. `daily`, `staging`, `pr-<N>`)
+        // so subsequent commands like `aspire add` resolve packages against the matching
+        // channel. Resolve through PackagingService and only persist when the identity
+        // matches a registered Explicit channel — mirrors `NewCommand.cs:316-402`.
+        //
+        // `ResolvePersistableChannelNameAsync` filters out identities that aren't
+        // registered as channels on this CLI install (e.g. `local`, `staging` on a CLI
+        // without the staging feature flag, stale `pr-<N>` after the hive is gone),
+        // the Implicit `default` channel that no CLI identity ever has, and `stable`
+        // because the public-feed behavior is already the default. Non-default
+        // Explicit channels are persisted so subsequent commands can match a PSM rule.
+        // See https://github.com/microsoft/aspire/issues/17295.
+        var resolvedChannel = await ResolvePersistableChannelNameAsync(cancellationToken);
+        var (configResult, effectivePorts) = DropAspireConfig(workingDirectory, "apphost.cs", language: null, resolvedChannel, ports);
+        if (configResult != CliExitCodes.Success)
         {
             return configResult;
         }
@@ -303,7 +334,7 @@ internal sealed class InitCommand : BaseCommand
         // `aspire run`, but `dotnet run apphost.cs` does not go through that path).
         DropAppHostRunJson(workingDirectory, effectivePorts);
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> DropCSharpProjectSkeletonAsync(FileInfo solutionFile, CancellationToken cancellationToken)
@@ -313,36 +344,82 @@ internal sealed class InitCommand : BaseCommand
         var appHostDirName = $"{solutionName}.AppHost";
         var appHostDirPath = Path.Combine(solutionDir.FullName, appHostDirName);
 
-        if (Directory.Exists(appHostDirPath))
+        // Drop the solution-directory NuGet.config BEFORE the AppHost-dir-already-exists
+        // early return so re-running `aspire init` against a workspace produced by a
+        // previous broken CLI (which left a `<sln>.AppHost/` without a workspace
+        // NuGet.config) recovers cleanly. Writing here is also required BEFORE
+        // `_runner.NewProjectAsync` so the aspire-apphost template's built-in `restore`
+        // post-action (template.json post-action id "restore", conditioned on
+        // !skipRestore which defaults to false) can resolve the
+        // `Aspire.AppHost.Sdk/<version>` reference from the channel-matched hive. The
+        // post-action currently runs with continueOnError=true so a missing nuget.config
+        // wouldn't fail init, but its restore would still emit confusing errors and waste
+        // work — and a future template change that drops continueOnError would break init
+        // outright.
+        //
+        // Source: CliExecutionContext.IdentityChannel (stable / staging / daily / pr-<N> /
+        // local). NuGetConfigMerger underneath creates a new file or merges missing
+        // sources into an existing one, so adding hives later is handled the same way as
+        // for templates. Mirrors what DropCSharpSingleFileSkeletonAsync already does for
+        // the apphost.cs path on every channel.
+        var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
+            channelName: _executionContext.IdentityChannel,
+            outputPath: solutionDir.FullName,
+            cancellationToken).ConfigureAwait(false);
+        if (createdNuGetConfig)
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostDirName}/ already exists — skipping.");
-            return ExitCodeConstants.Success;
+            InteractionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
         }
 
-        // Resolve the channel-aware template package version + feed mapping. This makes init
-        // honor the global `channel` configuration (matching `aspire new`) and ensures the
-        // staging/daily/PR feed is queried for non-stable CLI builds. PR hives are intentionally
-        // excluded — init should produce the same template on every machine for a given CLI build.
+        if (Directory.Exists(appHostDirPath))
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FileAlreadyExistsSkipping, $"{appHostDirName}/"));
+            return CliExitCodes.Success;
+        }
+
+        // Resolve the channel-aware template package version + feed mapping. The running
+        // CLI binary's identity channel (CliExecutionContext.IdentityChannel — stable, staging,
+        // daily, pr-<N>, or local) drives the selection so a developer scaffolding with a
+        // pr-<N> CLI gets a project wired to the matching pr-<N> hive. PR hives are
+        // intentionally excluded — init should produce the same template on every machine
+        // for a given CLI build.
         TemplatePackageSelection selection;
         try
         {
             var query = new TemplatePackageQuery(
-                ChannelOverride: null,
+                RequestedChannel: _executionContext.IdentityChannel,
                 VersionOverride: null,
                 SourceOverride: null,
                 IncludePrHives: false);
 
             selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
         }
+        catch (ChannelNotFoundException) when
+            (string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+        {
+            // Locally-built CLI (identity=local) on a machine where ~/.aspire/hives/local
+            // isn't installed. The PackagingService produces no "local" channel in that
+            // case, but init's contract is that identity-as-request is implicit — so fall
+            // back to the implicit channel (ambient NuGet) instead of failing. This branch
+            // lives here, NOT in the resolver, so that an explicit `aspire new --channel local`
+            // without the hive correctly errors instead of silently switching feeds.
+            var fallbackQuery = new TemplatePackageQuery(
+                RequestedChannel: null,
+                VersionOverride: null,
+                SourceOverride: null,
+                IncludePrHives: false);
+
+            selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(fallbackQuery, cancellationToken);
+        }
         catch (ChannelNotFoundException ex)
         {
             InteractionService.DisplayError(ex.Message);
-            return ExitCodeConstants.FailedToInstallTemplates;
+            return CliExitCodes.FailedToInstallTemplates;
         }
         catch (EmptyChoicesException ex)
         {
             InteractionService.DisplayError(ex.Message);
-            return ExitCodeConstants.FailedToInstallTemplates;
+            return CliExitCodes.FailedToInstallTemplates;
         }
         catch (NuGetPackageCacheException ex)
         {
@@ -351,7 +428,7 @@ internal sealed class InitCommand : BaseCommand
             // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
             // restores parity with the prior init failure mode for these scenarios.
             InteractionService.DisplayError(ex.Message);
-            return ExitCodeConstants.FailedToInstallTemplates;
+            return CliExitCodes.FailedToInstallTemplates;
         }
 
         // The aspire-apphost template ships in the Aspire.ProjectTemplates package.
@@ -360,21 +437,21 @@ internal sealed class InitCommand : BaseCommand
         var installOutcome = await _templateNuGetConfigService.InstallTemplatePackageAsync(
             selection,
             _runner,
-            "Installing Aspire project templates...",
+            InitCommandStrings.InstallingAspireProjectTemplates,
             statusEmoji: null,
             cancellationToken);
 
         if (installOutcome.ExitCode != 0)
         {
             InteractionService.DisplayLines(installOutcome.OutputLines);
-            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode, _executionContext.LogFilePath));
-            return ExitCodeConstants.FailedToInstallTemplates;
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
+            return CliExitCodes.FailedToInstallTemplates;
         }
 
         // Use the aspire-apphost template to generate a correct AppHost project
         // with proper launchSettings.json, .csproj, and Program.cs.
         var result = await InteractionService.ShowStatusAsync(
-            "Creating AppHost from template...",
+            InitCommandStrings.CreatingAppHostFromTemplate,
             async () =>
             {
                 return await _runner.NewProjectAsync(
@@ -388,13 +465,13 @@ internal sealed class InitCommand : BaseCommand
 
         if (result != 0)
         {
-            InteractionService.DisplayError($"Failed to create AppHost from template (exit code {result}).");
-            return ExitCodeConstants.FailedToCreateNewProject;
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FailedToCreateAppHostFromTemplate, result));
+            return CliExitCodes.FailedToCreateNewProject;
         }
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostDirName}/");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, $"{appHostDirName}/"));
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> DropPolyglotSkeletonAsync(string languageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
@@ -402,28 +479,53 @@ internal sealed class InitCommand : BaseCommand
         var language = _languageDiscovery.GetLanguageById(languageId)
             ?? throw new NotSupportedException($"Polyglot skeleton not yet supported for language: {languageId}");
 
-        var appHostFileName = language.AppHostFileName
-            ?? throw new NotSupportedException($"Polyglot skeleton not yet supported for language: {language.LanguageId}");
-
-        var appHostPath = Path.Combine(workingDirectory.FullName, appHostFileName);
-        if (File.Exists(appHostPath))
+        var existingAppHostFileName = language.DetectionPatterns
+            .Where(pattern => !pattern.Contains('*', StringComparison.Ordinal))
+            .FirstOrDefault(pattern => File.Exists(Path.Combine(workingDirectory.FullName, pattern)));
+        if (existingAppHostFileName is not null)
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostFileName} already exists — skipping.");
-            return ExitCodeConstants.Success;
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FileAlreadyExistsSkipping, existingAppHostFileName));
+            return CliExitCodes.Success;
         }
 
-        var context = new ScaffoldContext(language, workingDirectory, workingDirectory.Name);
+        var appHostPath = ScaffoldingService.GetAppHostPath(workingDirectory, language);
+        var displayPath = PathNormalizer.NormalizePathForStorage(Path.GetRelativePath(workingDirectory.FullName, appHostPath));
+        if (File.Exists(appHostPath))
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FileAlreadyExistsSkipping, displayPath));
+            return CliExitCodes.Success;
+        }
+
+        // Resolve and pass the running CLI's identity channel through to the scaffolder
+        // so it lands in aspire.config.json#channel. Only persist when the identity
+        // resolves to a persistable registered Explicit channel — see
+        // `ResolvePersistableChannelNameAsync` for the full rationale. Additionally,
+        // if aspire.config.json already carries a channel value, suppress the pass-through:
+        // `ScaffoldingService.cs:93-95` writes
+        // `config.Channel = context.Channel` unconditionally when non-empty, so without
+        // this guard a user-edited channel would be silently overwritten.
+        var resolvedChannel = await ResolvePersistableChannelNameAsync(cancellationToken);
+        if (!string.IsNullOrEmpty(resolvedChannel))
+        {
+            var existing = TryLoadExistingChannel(workingDirectory);
+            if (!string.IsNullOrEmpty(existing))
+            {
+                resolvedChannel = null;
+            }
+        }
+
+        var context = new ScaffoldContext(language, workingDirectory, workingDirectory.Name, Channel: resolvedChannel);
         var scaffolded = await _scaffoldingService.ScaffoldAsync(context, cancellationToken);
         if (!scaffolded)
         {
-            return ExitCodeConstants.FailedToCreateNewProject;
+            return CliExitCodes.FailedToCreateNewProject;
         }
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostFileName}");
-        return ExitCodeConstants.Success;
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, displayPath));
+        return CliExitCodes.Success;
     }
 
-    private (int ExitCode, AppHostProfilePorts EffectivePorts) DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language, AppHostProfilePorts? ports = null)
+    private (int ExitCode, AppHostProfilePorts EffectivePorts) DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language, string? channel, AppHostProfilePorts? ports = null)
     {
         var configPath = Path.Combine(directory.FullName, AspireConfigFile.FileName);
 
@@ -445,9 +547,9 @@ internal sealed class InitCommand : BaseCommand
                 }
                 catch (JsonException ex)
                 {
-                    InteractionService.DisplayError($"Failed to parse existing {AspireConfigFile.FileName} at '{configPath}': {ex.Message}");
-                    InteractionService.DisplayMessage(KnownEmojis.Warning, $"Fix or remove {AspireConfigFile.FileName} and re-run `aspire init`.");
-                    return (ExitCodeConstants.FailedToCreateNewProject, default);
+                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FailedToParseExistingConfig, AspireConfigFile.FileName, configPath, ex.Message));
+                    InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FixOrRemoveConfigAndRerun, AspireConfigFile.FileName));
+                    return (CliExitCodes.FailedToCreateNewProject, default);
                 }
             }
         }
@@ -470,6 +572,16 @@ internal sealed class InitCommand : BaseCommand
         if (language is not null && appHost["language"] is null)
         {
             appHost["language"] = language;
+        }
+
+        // Persist the channel at the top level so `aspire add` / `integration list` /
+        // `integration search` resolve packages against the channel the CLI scaffolded
+        // for. Only write when not already present so a user-edited value wins. Leaving
+        // the channel unset on a non-stable CLI causes downstream commands to fall back
+        // to implicit nuget.org versions that don't line up with the CLI build.
+        if (!string.IsNullOrEmpty(channel) && settings["channel"] is null)
+        {
+            settings["channel"] = channel;
         }
 
         // Resolve the effective ports. Three cases:
@@ -530,8 +642,74 @@ internal sealed class InitCommand : BaseCommand
 
         File.WriteAllText(configPath, JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject));
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {AspireConfigFile.FileName}");
-        return (ExitCodeConstants.Success, effectivePorts);
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, AspireConfigFile.FileName));
+        return (CliExitCodes.Success, effectivePorts);
+    }
+
+    /// <summary>
+    /// Resolves the <see cref="CliExecutionContext.IdentityChannel"/> into a channel name
+    /// safe to persist into <c>aspire.config.json#channel</c>. Returns <c>null</c> when:
+    /// <list type="bullet">
+    /// <item><description>The identity is empty (no channel context).</description></item>
+    /// <item><description>The identity doesn't match any registered channel (e.g. <c>local</c>,
+    /// <c>staging</c> on a CLI without the staging feature flag, or a stale <c>pr-{N}</c> on a
+    /// machine without the matching hive). Persisting these would pin a name no PSM rule can
+    /// satisfy and zero out polyglot <c>aspire add</c> discovery via
+    /// <c>IntegrationPackageSearchService.cs</c> line 28-30.</description></item>
+    /// <item><description>The matched channel is <see cref="PackageChannelType.Implicit"/>.
+    /// In production the only Implicit channel created by <c>PackagingService.GetChannelsAsync</c>
+    /// is <c>default</c> (the unscoped nuget.org aggregator), which no CLI identity ever
+    /// resolves to — this branch exists defensively in case a future <c>PackagingService</c>
+    /// adds another Implicit channel whose name happens to collide with a CLI identity.</description></item>
+    /// <item><description>The matched channel is <see cref="PackageChannelNames.Stable"/>.
+    /// Stable uses the same public-feed package set users get by default, but pinning it
+    /// per-project makes package discovery use only the synthetic NuGet.org config and
+    /// hides packages from ambient private feeds.</description></item>
+    /// </list>
+    /// Mirrors the resolution logic in <c>NewCommand.cs:316-402</c> and the warning in
+    /// <c>ScaffoldingService.cs:84-92</c> against falling back to <c>IdentityChannel</c> blindly.
+    /// </summary>
+    private async Task<string?> ResolvePersistableChannelNameAsync(CancellationToken cancellationToken)
+    {
+        var identityChannel = _executionContext.IdentityChannel;
+        if (string.IsNullOrWhiteSpace(identityChannel))
+        {
+            return null;
+        }
+
+        IEnumerable<PackageChannel> channels;
+        try
+        {
+            channels = await _packagingService.GetChannelsAsync(cancellationToken, identityChannel);
+        }
+        catch (Exception)
+        {
+            // Channel discovery is best-effort here — failing to resolve must not break
+            // `aspire init`. Skip persistence and let downstream commands re-resolve.
+            return null;
+        }
+
+        var match = channels.FirstOrDefault(c => string.Equals(c.Name, identityChannel, StringComparisons.ChannelName));
+        return match?.ShouldPersistChannelName() is true ? match.Name : null;
+    }
+
+    /// <summary>
+    /// Best-effort read of the persisted channel from <c>aspire.config.json</c> in
+    /// <paramref name="directory"/>. Used by the polyglot path to avoid overwriting a
+    /// user-edited value via <c>ScaffoldingService</c>, which writes the context channel
+    /// unconditionally. Returns <c>null</c> if the file is absent, unparseable, or has
+    /// no <c>channel</c> key — those cases all mean "no user-set value to preserve".
+    /// </summary>
+    private static string? TryLoadExistingChannel(DirectoryInfo directory)
+    {
+        try
+        {
+            return AspireConfigFile.Load(directory.FullName)?.Channel;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     // Best-effort extraction of the dashboard / OTLP / resource service ports from an
@@ -658,7 +836,7 @@ internal sealed class InitCommand : BaseCommand
 
         File.WriteAllText(path, JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject));
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {fileName}");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, fileName));
     }
 
 }

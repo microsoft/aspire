@@ -24,7 +24,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
 
         // Missing required argument should fail
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait myresource --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait myresource --apphost /path/to/project.csproj --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -81,7 +81,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait myresource --status up --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -95,7 +95,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait myresource --timeout 60 --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -112,7 +112,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse($"wait myresource --status {status} --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -129,7 +129,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse($"wait myresource --status {status} --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -159,7 +159,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait nonexistent --timeout 5");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.WaitResourceFailed, exitCode);
+        Assert.Equal(CliExitCodes.WaitResourceFailed, exitCode);
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait myapp --status up --timeout 5");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -209,7 +209,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait mydb --status healthy --timeout 5");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -239,7 +239,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait mydb --status healthy --timeout 2");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.WaitTimeout, exitCode);
+        Assert.Equal(CliExitCodes.WaitTimeout, exitCode);
     }
 
     [Fact]
@@ -264,7 +264,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait worker --status down --timeout 5");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -294,6 +294,6 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("wait myapp --status up --timeout 5");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.WaitResourceFailed, exitCode);
+        Assert.Equal(CliExitCodes.WaitResourceFailed, exitCode);
     }
 }

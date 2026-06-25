@@ -22,7 +22,7 @@
 <div class="page-content-container">
     <AspirePageContentLayout @ref="@_contentLayout"
                              AddNewlineOnToolbar="true"
-                             IsSummaryDetailsViewOpen="@(SelectedLogEntry is not null)">
+                             IsSummaryDetailsViewOpen="@(PageViewModel.SelectedLogEntry is not null)">
         <PageTitleSection>
             <h1 class="page-header">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsHeader)]</h1>
         </PageTitleSection>
@@ -93,10 +93,10 @@
 
         <MainSection>
             <SummaryDetailsView
-                ShowDetails="@(SelectedLogEntry is not null)"
+                ShowDetails="@(PageViewModel.SelectedLogEntry is not null)"
                 OnDismiss="@(() => ClearSelectedLogEntryAsync(causedByUserAction: true))"
                 ViewKey="StructuredLogsList"
-                SelectedValue="@SelectedLogEntry"
+                SelectedValue="@PageViewModel.SelectedLogEntry"
                 OnResize="@(r => _manager.SetWidthFraction(r.Orientation == Orientation.Horizontal ? r.Panel1Fraction : 1))">
                 <DetailsTitleTemplate>
                     @{
@@ -110,7 +110,7 @@
                 </DetailsTitleTemplate>
                 <Summary>
                     <div class="logs-summary-layout">
-                        <div class="logs-grid-container continuous-scroll-overflow">
+                        <div id="@ScrollContainerId" class="logs-grid-container continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsHeader)]">
                             <GridColumnManager @ref="_manager" Columns="@_gridColumns">
                                 <FluentDataGrid @ref="_dataGrid"
                                                 ColumnResizeLabels="@_resizeLabels"
@@ -129,7 +129,7 @@
                                                 GridTemplateColumns="@_manager.GetGridTemplateColumns()"
                                                 ShowHover="true"
                                                 ItemKey="@(r => r.InternalId)"
-                                                OnRowClick="@(r => r.ExecuteOnDefault(d => OnShowPropertiesAsync(d, buttonId: null)))"
+                                                OnRowClick="@(r => r.ExecuteOnDefault(d => OnShowPropertiesAsync(d, focusElementId: ScrollContainerId)))"
                                                 Class="main-grid enable-row-click">
                                     <ChildContent>
                                         <AspireTemplateColumn ColumnId="@ResourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsResourceColumnHeader)]" Tooltip="true" TooltipText="@(e => GetResourceName(e.ResourceView))">
@@ -165,7 +165,7 @@
                                             }
                                             <div class="grid-action-container" @onclick:stopPropagation="true">
                                                 <StructuredLogActions LogEntry="@context"
-                                                                      OnViewDetails="@((buttonId) => OnShowPropertiesAsync(context, buttonId))" />
+                                                                      OnViewDetails="@((focusElementId) => OnShowPropertiesAsync(context, focusElementId))" />
                                             </div>
                                         </AspireTemplateColumn>
                                     </ChildContent>

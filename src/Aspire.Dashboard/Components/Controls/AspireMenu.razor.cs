@@ -22,7 +22,7 @@ public partial class AspireMenu : FluentComponentBase
     public bool Anchored { get; set; } = true;
 
     [Parameter]
-    public int VerticalThreshold { get; set; } = 200;
+    public int? VerticalThreshold { get; set; }
 
     /// <summary>
     /// Raised when the <see cref="Open"/> property changed.
@@ -32,6 +32,12 @@ public partial class AspireMenu : FluentComponentBase
 
     [Parameter]
     public required IReadOnlyList<MenuButtonItem> Items { get; set; }
+
+    // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
+    private const int EstimatedItemHeight = 32;
+    private const int MenuVerticalPadding = 16;
+
+    private int CalculatedVerticalThreshold => VerticalThreshold ?? (Items.Count * EstimatedItemHeight + MenuVerticalPadding);
 
     public async Task CloseAsync()
     {
@@ -62,7 +68,7 @@ public partial class AspireMenu : FluentComponentBase
                 left = clientX;
             }
 
-            if (clientY + menu.VerticalThreshold > screenHeight)
+            if (clientY + CalculatedVerticalThreshold > screenHeight)
             {
                 bottom = screenHeight - clientY;
             }

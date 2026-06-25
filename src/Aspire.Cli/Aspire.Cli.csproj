@@ -8,6 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>$(MSBuildThisFileDirectory)..\Shared\Aspire.ico</ApplicationIcon>
     <EnablePackageValidation>false</EnablePackageValidation>
     <AssemblyName>aspire</AssemblyName>
     <RootNamespace>Aspire.Cli</RootNamespace>
@@ -25,7 +26,21 @@
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <!-- AspireCliChannel identifies the acquisition channel the CLI binary was built for.
+         For non-PR builds the value is one of: stable | staging | daily | local. For PR
+         builds CI emits the per-PR hive label directly as `pr-<PR_NUMBER>` (no separate
+         PrNumber parse / join at runtime). Local devs and ./build.sh default to 'local'
+         so a locally-built CLI does not impersonate the real 'daily' channel (which would
+         cause PSM guards keyed on identity==channel to short-circuit silently). CI overrides
+         via /p:AspireCliChannel=$(aspireCliChannel). The value is baked into the assembly via
+         AssemblyMetadata below so the runtime IdentityChannelReader can read it without
+         reflection-unsafe lookups. -->
+    <AspireCliChannel Condition="'$(AspireCliChannel)' == ''">local</AspireCliChannel>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="AspireCliChannel" Value="$(AspireCliChannel)" />
+  </ItemGroup>
 
   <!-- Set the nuget properties when building as a global tool. -->
   <PropertyGroup Condition="'$(IsCliToolProject)' == 'true'">
@@ -57,6 +72,22 @@
     <RemoveDir Directories="$(PublishDir)" />
     <MakeDir Directories="$(PublishDir)" />
     <Copy SourceFiles="$(PreBuiltCliBinaryPath)" DestinationFolder="$(PublishDir)" />
+
+    <!-- Copy the canonical .aspire-install.json sidecar into RID-specific dotnet-tool packs
+         (clipack passes a RuntimeIdentifier), but NOT into the cross-platform pointer pack
+         (no RuntimeIdentifier) — the pointer nupkg is a routing stub and ships without a
+         sidecar.
+
+         The dotnet-tool source's source-of-truth sidecar lives next to this csproj as
+         dotnet-tool.aspire-install.json. It is copied into the RID-specific tool nupkg
+         under the canonical name .aspire-install.json — the name BundleService and every
+         consumer (winget, brew, scripts, verify-cli-tool-nupkg.ps1) reads. The
+         disambiguated source filename keeps the dotnet-tool variant distinguishable from
+         the other source sidecars (script/winget/brew) that ship through other packaging
+         layers. -->
+    <Copy Condition="'$(IsCliToolProject)' == 'true' and '$(RuntimeIdentifier)' != ''"
+          SourceFiles="$(MSBuildThisFileDirectory)dotnet-tool.aspire-install.json"
+          DestinationFiles="$([MSBuild]::EnsureTrailingSlash('$(PublishDir)')).aspire-install.json" />
   </Target>
 
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
@@ -65,10 +96,12 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" />
+    <PackageReference Include="Hex1b" />
     <PackageReference Include="Markdig" />
     <PackageReference Include="Spectre.Console" />
     <PackageReference Include="System.CommandLine" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+    <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="StreamJsonRpc" VersionOverride="$(StreamJsonRpcPackageVersionForCli)" />
@@ -93,11 +126,20 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)CliExitCodes.cs" Link="CliExitCodes.cs" />
     <Compile Include="$(SharedDir)AppHostProfilePortGenerator.cs" Link="Utils\AppHostProfilePortGenerator.cs" />
+    <Compile Include="$(SharedDir)AspireCliIdentityEnvVars.cs" Link="Acquisition\AspireCliIdentityEnvVars.cs" />
+    <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="Utils\AssemblyVersionHelper.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
+    <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Bundles\BundleVersionLease.cs" />
+    <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="Utils\ChannelExtensions.cs" />
+    <Compile Include="$(SharedDir)CommandLineArgsParser.cs" Link="Utils\CommandLineArgsParser.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)LaunchProfiles\LaunchSettingsReader.cs" Link="LaunchProfiles\LaunchSettingsReader.cs" />
+    <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="Utils\IntegrationPackageProbeManifest.cs" />
     <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="Utils\DashboardConfigNames.cs" />
+    <Compile Include="$(SharedDir)KnownContainerRuntimes.cs" Link="Utils\KnownContainerRuntimes.cs" />
     <Compile Include="$(SharedDir)ContainerRuntimeDetector.cs" Link="Utils\ContainerRuntimeDetector.cs" />
     <Compile Include="$(SharedDir)DashboardExitCodes.cs" Link="Utils\DashboardExitCodes.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
@@ -107,6 +149,7 @@
     <Compile Include="$(SharedDir)CircularBuffer.cs" Link="Utils\CircularBuffer.cs" />
     <Compile Include="$(SharedDir)ColorGenerator.cs" Link="Utils\ColorGenerator.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
+    <Compile Include="$(SharedDir)SearchTextParser.cs" Link="Utils\SearchTextParser.cs" />
     <Compile Include="$(SharedDir)KnownUnsupportedUrlSchemes.cs" Link="Utils\KnownUnsupportedUrlSchemes.cs" />
     <Compile Include="$(SharedDir)LocaleHelpers.cs" Link="Utils\LocaleHelpers.cs" />
     <Compile Include="$(SharedDir)DurationFormatter.cs" Link="Utils\DurationFormatter.cs" />
@@ -129,6 +172,7 @@
     <Compile Include="$(SharedDir)UserSecrets\UserSecretsPathHelper.cs" Link="Utils\UserSecretsPathHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\IsolatedUserSecretsHelper.cs" Link="Utils\IsolatedUserSecretsHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\SecretsStore.cs" Link="Secrets\SecretsStore.cs" />
+    <Compile Include="$(SharedDir)UserSecrets\UserSecretsJsonOptions.cs" Link="Secrets\UserSecretsJsonOptions.cs" />
     <Compile Include="$(SharedDir)Json\AtsJsonCodeWriter.cs" Link="Utils\AtsJsonCodeWriter.cs" />
     <Compile Include="$(SharedDir)Json\JsonFlattener.cs" Link="Utils\JsonFlattener.cs" />
     <Compile Include="$(SharedDir)Otlp\OtlpHelpers.cs" Link="Otlp\OtlpHelpers.cs" />
@@ -158,14 +202,10 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Cli.Tests" />
+    <InternalsVisibleTo Include="Aspire.Cli.Benchmarks" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="Resources\ExecCommandStrings.Designer.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>ExecCommandStrings.resx</DependentUpon>
-    </Compile>
     <Compile Update="Resources\InteractionServiceStrings.Designer.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
@@ -247,12 +287,6 @@
     <EmbeddedResource Include="Templating\Templates\go-starter\**\*" LogicalName="go-starter.%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
-    <EmbeddedResource Include="..\..\.agents\skills\aspire\**\*" LogicalName="skills.aspire/%(RecursiveDir)%(Filename)%(Extension)">
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
-    <EmbeddedResource Include="..\..\.agents\skills\aspireify\**\*" LogicalName="skills.aspireify/%(RecursiveDir)%(Filename)%(Extension)">
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">
@@ -267,14 +301,16 @@
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-32.png" Link="Mcp\Resources\aspire-32.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-48.png" Link="Mcp\Resources\aspire-48.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-64.png" Link="Mcp\Resources\aspire-64.png" />
+    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills-v0.0.1.tgz" LogicalName="aspire-skills.bundle.tgz">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills.metadata.json" LogicalName="aspire-skills.metadata.json">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
   </ItemGroup>
 
 
   <ItemGroup>
-    <EmbeddedResource Update="Resources\ExecCommandStrings.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>ExecCommandStrings.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
     <EmbeddedResource Update="Resources\InteractionServiceStrings.resx">
       <XlfSourceFormat>Resx</XlfSourceFormat>
       <XlfOutputItem>EmbeddedResource</XlfOutputItem>

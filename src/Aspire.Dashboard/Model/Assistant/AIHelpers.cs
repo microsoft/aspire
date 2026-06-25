@@ -106,7 +106,7 @@ internal static class AIHelpers
                 ["resourceName"] = resourceName,
                 ["type"] = resource.ResourceType,
                 ["state"] = resource.State,
-                ["stateDescription"] = ResourceStateViewModel.GetResourceStateTooltip(resource, s_columnsLoc),
+                ["stateDescription"] = ResourceStateViewModel.GetResourceStateTooltip(resource, s_columnsLoc, resources),
                 ["relationships"] = GetResourceRelationshipsJson(resources, resource, getResourceName),
                 ["endpointUrls"] = endpointUrlsArray,
                 ["health"] = healthObj,

@@ -1,11 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Scaffolding;
@@ -18,22 +23,45 @@ internal sealed class ScaffoldingService : IScaffoldingService
 {
     private const string PackageJsonFileName = "package.json";
     private const string JavaScriptHostingPackageName = "Aspire.Hosting.JavaScript";
+    internal const string BrownfieldTypeScriptAppHostDirectoryName = "aspire-apphost";
+
+    private static readonly JsonSerializerOptions s_packageJsonSerializerOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        IndentSize = 2
+    };
+
+    private static readonly JsonDocumentOptions s_packageJsonDocumentOptions = new()
+    {
+        CommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
+    };
 
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
+    private readonly IAppHostServerSessionFactory _serverSessionFactory;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IInteractionService _interactionService;
     private readonly ILogger<ScaffoldingService> _logger;
+    private readonly CliExecutionContext _executionContext;
+    private readonly ProfilingTelemetry _profilingTelemetry;
 
     public ScaffoldingService(
         IAppHostServerProjectFactory appHostServerProjectFactory,
+        IAppHostServerSessionFactory serverSessionFactory,
         ILanguageDiscovery languageDiscovery,
         IInteractionService interactionService,
-        ILogger<ScaffoldingService> logger)
+        ILogger<ScaffoldingService> logger,
+        CliExecutionContext executionContext,
+        ProfilingTelemetry profilingTelemetry)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
+        _serverSessionFactory = serverSessionFactory;
         _languageDiscovery = languageDiscovery;
         _interactionService = interactionService;
         _logger = logger;
+        _executionContext = executionContext;
+        _profilingTelemetry = profilingTelemetry;
     }
 
     /// <inheritdoc />
@@ -51,24 +79,40 @@ internal sealed class ScaffoldingService : IScaffoldingService
     {
         var directory = context.TargetDirectory;
         var language = context.Language;
+        var scaffoldDirectory = GetScaffoldDirectory(directory, language);
 
         // Step 1: Resolve SDK and package strategy
         var sdkVersion = string.IsNullOrWhiteSpace(context.SdkVersion)
-            ? VersionHelper.GetDefaultSdkVersion()
+            ? _executionContext.IdentitySdkVersion
             : context.SdkVersion;
         var config = AspireConfigFile.LoadOrCreate(directory.FullName, sdkVersion);
         if (!string.IsNullOrWhiteSpace(context.SdkVersion))
         {
             config.SdkVersion = context.SdkVersion;
         }
-        if (!string.IsNullOrWhiteSpace(context.Channel))
+
+        // Persist the channel only when the caller explicitly resolved one. Callers must validate
+        // the channel against the registered `IPackagingService` channels and only pass an Explicit
+        // channel name. Today that means either:
+        //   - an explicit `--channel` flag,
+        //   - NewCommand's identity-match against a registered Explicit channel (see
+        //     `CliTemplateFactory.EmptyTemplate.cs` for how `ScaffoldContext.Channel` is sourced),
+        //   - InitCommand's polyglot path resolving `CliExecutionContext.IdentityChannel` through
+        //     `IPackagingService.GetChannelsAsync` (see `InitCommand.ResolvePersistableChannelNameAsync`).
+        // Do NOT fall back to a raw `CliExecutionContext.IdentityChannel`: an identity that isn't a
+        // registered channel (e.g. `staging` on a CLI without the staging feature flag, or `pr-<N>`
+        // on a machine without the matching hive) would otherwise pin a channel name that no
+        // PSM rule can satisfy. When unset, `PrebuiltAppHostServer` aggregates sources from
+        // every registered channel so `aspire add` / `aspire restore` still find the right
+        // packages without a per-project pin.
+        if (!string.IsNullOrEmpty(context.Channel))
         {
             config.Channel = context.Channel;
         }
 
         PreAddJavaScriptHostingForBrownfieldTypeScript(config, directory, language, sdkVersion);
         if (!string.IsNullOrWhiteSpace(context.SdkVersion) ||
-            !string.IsNullOrWhiteSpace(context.Channel))
+            !string.IsNullOrEmpty(context.Channel))
         {
             config.Save(directory.FullName);
         }
@@ -82,12 +126,14 @@ internal sealed class ScaffoldingService : IScaffoldingService
             integrations.Add(IntegrationReference.FromPackage(codeGenPackage, codeGenVersion));
         }
 
-        var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
+        Directory.CreateDirectory(scaffoldDirectory.FullName);
+
+        var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(scaffoldDirectory.FullName, cancellationToken);
         var prepareSdkVersion = config.GetEffectiveSdkVersion(sdkVersion);
 
         var prepareResult = await _interactionService.ShowStatusAsync(
             "Preparing Aspire server...",
-            () => appHostServerProject.PrepareAsync(prepareSdkVersion, integrations, cancellationToken),
+            () => appHostServerProject.PrepareAsync(prepareSdkVersion, integrations, requestedChannel: context.Channel, packageSourceOverride: context.PackageSourceOverride, cancellationToken: cancellationToken),
             emoji: KnownEmojis.Gear);
         if (!prepareResult.Success)
         {
@@ -100,27 +146,28 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         // Step 2: Start the server temporarily for scaffolding and code generation
-        await using var serverSession = AppHostServerSession.Start(
-            appHostServerProject,
-            environmentVariables: null,
-            debug: false,
-            _logger);
+        await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+        // Short-lived RPC session: StartAsync() spawns the server. We never observe the
+        // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
+        // activity scope and the only failure mode we care about surfaces via the RPC call below.
+        await serverSession.StartAsync();
 
         // Step 3: Connect to server and get scaffold templates via RPC
         var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
 
         var scaffoldFiles = await rpcClient.ScaffoldAppHostAsync(
             language.LanguageId,
-            directory.FullName,
+            scaffoldDirectory.FullName,
             context.ProjectName,
             cancellationToken);
+        var appHostRelativePath = GetScaffoldedAppHostRelativePath(directory, scaffoldDirectory, language, scaffoldFiles.Keys);
 
-        var conflictingFiles = GetConflictingScaffoldFiles(directory.FullName, scaffoldFiles.Keys);
+        var conflictingFiles = GetConflictingScaffoldFiles(scaffoldDirectory.FullName, scaffoldFiles.Keys);
         if (conflictingFiles.Count > 0)
         {
             _logger.LogWarning(
                 "Scaffolding in '{Directory}' would overwrite existing files: {Files}",
-                directory.FullName,
+                scaffoldDirectory.FullName,
                 string.Join(", ", conflictingFiles));
             _interactionService.DisplayError(TemplatingStrings.ProjectAlreadyExists);
             return false;
@@ -129,7 +176,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         // Step 4: Write scaffold files to disk, merging package.json and .gitignore when they already exist.
         foreach (var (fileName, content) in scaffoldFiles)
         {
-            var filePath = Path.Combine(directory.FullName, fileName);
+            var filePath = Path.Combine(scaffoldDirectory.FullName, fileName);
             var fileDirectory = Path.GetDirectoryName(filePath);
             if (!string.IsNullOrEmpty(fileDirectory))
             {
@@ -144,7 +191,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
                     existingContent,
                     content,
                     _logger,
-                    toolchainCommand: GetPackageManagerCommand(directory, language));
+                    toolchainCommand: GetPackageManagerCommand(scaffoldDirectory, language));
             }
             else if (IsGitIgnoreFile(fileName) && File.Exists(filePath))
             {
@@ -157,10 +204,15 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         _logger.LogDebug("Wrote {Count} scaffold files", scaffoldFiles.Count);
 
+        if (IsNestedBrownfieldTypeScriptAppHost(directory, scaffoldDirectory, language))
+        {
+            await AddRootTypeScriptAppHostScriptsAsync(directory, scaffoldDirectory, cancellationToken);
+        }
+
         // Step 5: Generate SDK code via RPC (must happen before dependency installation
         // because pylock.toml/requirements.txt reference the generated code directory)
         await GenerateCodeViaRpcAsync(
-            directory.FullName,
+            scaffoldDirectory.FullName,
             rpcClient,
             language,
             cancellationToken);
@@ -168,7 +220,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         // Step 6: Install dependencies using GuestRuntime
         var installResult = await _interactionService.ShowStatusAsync(
             $"Installing {language.DisplayName} dependencies...",
-            () => InstallDependenciesAsync(directory, language, rpcClient, cancellationToken),
+            () => InstallDependenciesAsync(scaffoldDirectory, language, rpcClient, cancellationToken),
             emoji: KnownEmojis.Package);
         if (installResult != 0)
         {
@@ -177,7 +229,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         // Save channel and language to aspire.config.json (new format)
         // Read profiles from apphost.run.json (created by codegen) and merge into aspire.config.json
-        var appHostRunPath = Path.Combine(directory.FullName, "apphost.run.json");
+        var appHostRunPath = Path.Combine(scaffoldDirectory.FullName, "apphost.run.json");
         var profiles = AspireConfigFile.ReadApphostRunProfiles(appHostRunPath, _logger);
 
         if (profiles is not null && File.Exists(appHostRunPath))
@@ -194,15 +246,161 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         config.Profiles = profiles;
-        if (prepareResult.ChannelName is not null)
-        {
-            config.Channel = prepareResult.ChannelName;
-        }
         config.AppHost ??= new AspireConfigAppHost();
-        config.AppHost.Path ??= language.AppHostFileName;
+        config.AppHost.Path ??= appHostRelativePath;
         config.AppHost.Language = language.LanguageId;
         config.Save(directory.FullName);
         return true;
+    }
+
+    internal static DirectoryInfo GetScaffoldDirectory(DirectoryInfo directory, LanguageInfo language)
+    {
+        if (IsTypeScriptLanguage(language) && File.Exists(Path.Combine(directory.FullName, PackageJsonFileName)))
+        {
+            // Brownfield JS/TS apps already have package-level module, script, lint, and engine semantics.
+            // Keep the Aspire AppHost in its own package boundary so scaffolding cannot change how the app runs.
+            return new DirectoryInfo(Path.Combine(directory.FullName, BrownfieldTypeScriptAppHostDirectoryName));
+        }
+
+        return directory;
+    }
+
+    internal static string GetAppHostPath(DirectoryInfo directory, LanguageInfo language)
+    {
+        var scaffoldDirectory = GetScaffoldDirectory(directory, language);
+        var appHostFileName = language.AppHostFileName ?? throw new NotSupportedException($"AppHost file not defined for language: {language.LanguageId}");
+        return Path.Combine(scaffoldDirectory.FullName, appHostFileName);
+    }
+
+    private static bool IsNestedBrownfieldTypeScriptAppHost(DirectoryInfo rootDirectory, DirectoryInfo scaffoldDirectory, LanguageInfo language)
+        => IsTypeScriptLanguage(language) &&
+           !string.Equals(
+               rootDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+               scaffoldDirectory.FullName.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+               StringComparison.Ordinal);
+
+    private async Task AddRootTypeScriptAppHostScriptsAsync(DirectoryInfo rootDirectory, DirectoryInfo appHostDirectory, CancellationToken cancellationToken)
+    {
+        var packageJsonPath = Path.Combine(rootDirectory.FullName, PackageJsonFileName);
+        var existingContent = await File.ReadAllTextAsync(packageJsonPath, cancellationToken);
+
+        JsonObject packageJson;
+        try
+        {
+            packageJson = JsonNode.Parse(existingContent, documentOptions: s_packageJsonDocumentOptions) as JsonObject
+                ?? throw new JsonException("The root package.json is not a JSON object.");
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse root package.json at '{PackageJsonPath}'.", packageJsonPath);
+            _interactionService.DisplayError($"Failed to parse root package.json: {ex.Message}");
+            throw;
+        }
+
+        var scripts = EnsureJsonObject(packageJson, "scripts");
+        var relativeAppHostDirectory = PathNormalizer.NormalizePathForStorage(Path.GetRelativePath(rootDirectory.FullName, appHostDirectory.FullName));
+        var preservedScriptNames = AddRootTypeScriptAppHostDelegateScripts(scripts, appHostDirectory, relativeAppHostDirectory, _logger);
+
+        if (preservedScriptNames.Count > 0)
+        {
+            _interactionService.DisplayMessage(
+                KnownEmojis.Warning,
+                $"Preserved existing package.json script(s) {string.Join(", ", preservedScriptNames)}. Run the AppHost directly from {relativeAppHostDirectory} or remove the existing script(s) and rerun 'aspire init' to regenerate the root delegates.");
+        }
+
+        var serializedPackageJson = SerializePackageJson(packageJson, existingContent);
+        await File.WriteAllTextAsync(packageJsonPath, serializedPackageJson, cancellationToken);
+    }
+
+    internal static IReadOnlyList<string> AddRootTypeScriptAppHostDelegateScripts(JsonObject scripts, TypeScriptAppHostToolchain toolchain, string relativeAppHostDirectory)
+    {
+        List<string>? preservedScriptNames = null;
+
+        AddRootTypeScriptAppHostDelegateScript(scripts, toolchain, relativeAppHostDirectory, "aspire:start", ref preservedScriptNames);
+        AddRootTypeScriptAppHostDelegateScript(scripts, toolchain, relativeAppHostDirectory, "aspire:build", ref preservedScriptNames);
+        AddRootTypeScriptAppHostDelegateScript(scripts, toolchain, relativeAppHostDirectory, "aspire:dev", ref preservedScriptNames);
+
+        return preservedScriptNames ?? [];
+    }
+
+    internal static IReadOnlyList<string> AddRootTypeScriptAppHostDelegateScripts(JsonObject scripts, DirectoryInfo appHostDirectory, string relativeAppHostDirectory, ILogger? logger)
+    {
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, logger);
+        return AddRootTypeScriptAppHostDelegateScripts(scripts, toolchain, relativeAppHostDirectory);
+    }
+
+    internal static string SerializePackageJson(JsonObject packageJson, string existingContent)
+    {
+        var serializedPackageJson = packageJson.ToJsonString(s_packageJsonSerializerOptions);
+        var trailingNewLine = existingContent.EndsWith("\r\n", StringComparison.Ordinal)
+            ? "\r\n"
+            : existingContent.EndsWith('\n') ? "\n" : null;
+
+        if (trailingNewLine is not null)
+        {
+            serializedPackageJson += trailingNewLine;
+        }
+
+        return serializedPackageJson;
+    }
+
+    internal static string GetScaffoldedAppHostRelativePath(
+        DirectoryInfo rootDirectory,
+        DirectoryInfo scaffoldDirectory,
+        LanguageInfo language,
+        IEnumerable<string> scaffoldFileNames)
+    {
+        var appHostFileName = scaffoldFileNames.FirstOrDefault(fileName =>
+            language.MatchesFile(Path.GetFileName(fileName)));
+
+        appHostFileName ??= language.AppHostFileName ?? throw new NotSupportedException($"AppHost file not defined for language: {language.LanguageId}");
+
+        return PathNormalizer.NormalizePathForStorage(
+            Path.GetRelativePath(rootDirectory.FullName, Path.Combine(scaffoldDirectory.FullName, appHostFileName)));
+    }
+
+    private static JsonObject EnsureJsonObject(JsonObject parent, string propertyName)
+    {
+        if (parent[propertyName] is JsonObject obj)
+        {
+            return obj;
+        }
+
+        obj = new JsonObject();
+        parent[propertyName] = obj;
+        return obj;
+    }
+
+    private static string CreateRootDelegateScript(TypeScriptAppHostToolchain toolchain, string relativeAppHostDirectory, string scriptName)
+    {
+        return toolchain switch
+        {
+            TypeScriptAppHostToolchain.Npm => $"npm --prefix {relativeAppHostDirectory} run {scriptName}",
+            TypeScriptAppHostToolchain.Pnpm => $"pnpm --dir {relativeAppHostDirectory} run {scriptName}",
+            TypeScriptAppHostToolchain.Yarn => $"yarn --cwd {relativeAppHostDirectory} run {scriptName}",
+            TypeScriptAppHostToolchain.Bun => $"bun --cwd {relativeAppHostDirectory} run {scriptName}",
+            _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
+        };
+    }
+
+    private static void AddRootTypeScriptAppHostDelegateScript(JsonObject scripts, TypeScriptAppHostToolchain toolchain, string relativeAppHostDirectory, string scriptName, ref List<string>? preservedScriptNames)
+    {
+        var delegateScript = CreateRootDelegateScript(toolchain, relativeAppHostDirectory, scriptName);
+        if (scripts[scriptName] is JsonValue existingScriptValue &&
+            existingScriptValue.TryGetValue<string>(out var existingScript) &&
+            string.Equals(existingScript, delegateScript, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (scripts[scriptName] is not null)
+        {
+            preservedScriptNames ??= [];
+            preservedScriptNames.Add(scriptName);
+            return;
+        }
+
+        scripts[scriptName] = delegateScript;
     }
 
     private async Task<int> InstallDependenciesAsync(
@@ -218,7 +416,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
         }
 
-        var runtime = new GuestRuntime(runtimeSpec, _logger);
+        var runtime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _profilingTelemetry);
 
         var (initResult, initOutput) = await runtime.InitializeAsync(directory, cancellationToken);
         if (initResult != 0)

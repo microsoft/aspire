@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Resources;
@@ -94,6 +95,14 @@ internal static class TelemetryCommandHelpers
     };
 
     /// <summary>
+    /// Full-text search option for filtering across all telemetry fields.
+    /// </summary>
+    internal static Option<string?> CreateSearchOption() => new("--search")
+    {
+        Description = TelemetryCommandStrings.SearchOptionDescription
+    };
+
+    /// <summary>
     /// Dashboard URL option for connecting directly to a standalone dashboard.
     /// </summary>
     internal static Option<string?> CreateDashboardUrlOption() => new("--dashboard-url")
@@ -176,7 +185,6 @@ internal static class TelemetryCommandHelpers
     /// When <c>true</c>, a missing Dashboard API is a hard error.
     /// When <c>false</c>, a missing Dashboard API is non-fatal and the method returns success with <c>null</c> base URL and token.
     /// </param>
-    /// <param name="logFilePath">The path to the current session's log file, displayed alongside errors.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A <see cref="DashboardApiResult"/> with the resolved connection and dashboard API info.</returns>
     public static async Task<DashboardApiResult> GetDashboardApiAsync(
@@ -188,14 +196,13 @@ internal static class TelemetryCommandHelpers
         string? dashboardUrl,
         string? apiKey,
         bool requireDashboard,
-        string logFilePath,
         CancellationToken cancellationToken)
     {
         // Validate mutual exclusivity of --apphost and --dashboard-url
         if (projectFile is not null && dashboardUrl is not null)
         {
             interactionService.DisplayError(TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
-            return DashboardApiResult.Failure(ExitCodeConstants.InvalidCommand);
+            return DashboardApiResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         // Direct dashboard URL mode — bypass AppHost discovery
@@ -205,7 +212,8 @@ internal static class TelemetryCommandHelpers
             var loginToken = McpToolHelpers.ExtractLoginToken(dashboardUrl);
 
             // Normalize login URLs (e.g., http://localhost:18888/login?t=abc) to base URL
-            dashboardUrl = McpToolHelpers.StripLoginPath(dashboardUrl) ?? dashboardUrl;
+            var displayDashboardUrl = McpToolHelpers.StripLoginPath(dashboardUrl) ?? dashboardUrl;
+            dashboardUrl = McpToolHelpers.NormalizeDashboardUrl(displayDashboardUrl);
 
             if (!UrlHelper.IsHttpUrl(dashboardUrl))
             {
@@ -213,9 +221,8 @@ internal static class TelemetryCommandHelpers
                     interactionService,
                     new TelemetryErrorInfo(
                         string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl),
-                        TelemetryCommandStrings.DashboardUrlInvalidHint),
-                    logFilePath);
-                return DashboardApiResult.Failure(ExitCodeConstants.InvalidCommand);
+                        TelemetryCommandStrings.DashboardUrlInvalidHint));
+                return DashboardApiResult.Failure(CliExitCodes.InvalidCommand);
             }
 
             // If no explicit --api-key was provided but a login token was found in the URL,
@@ -229,25 +236,25 @@ internal static class TelemetryCommandHelpers
                     var errorInfo = exchangeResult.FailureKind switch
                     {
                         TokenExchangeFailureKind.ConnectionError => new TelemetryErrorInfo(
-                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, dashboardUrl),
+                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, displayDashboardUrl),
                             TelemetryCommandStrings.DashboardConnectionFailedHint),
                         TokenExchangeFailureKind.ApiNotEnabled => new TelemetryErrorInfo(
-                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, dashboardUrl),
+                            string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, displayDashboardUrl),
                             TelemetryCommandStrings.DashboardApiNotEnabledHint),
                         _ => new TelemetryErrorInfo(
                             TelemetryCommandStrings.DashboardLoginTokenFailed,
                             TelemetryCommandStrings.DashboardLoginTokenFailedHint,
                             TelemetryCommandStrings.DashboardLoginTokenFailedAnonymousHint),
                     };
-                    DisplayTelemetryError(interactionService, errorInfo, logFilePath);
-                    return DashboardApiResult.Failure(ExitCodeConstants.DashboardFailure);
+                    DisplayTelemetryError(interactionService, errorInfo);
+                    return DashboardApiResult.Failure(CliExitCodes.DashboardFailure);
                 }
 
                 apiKey = exchangeResult.ApiKey;
             }
 
             var token = apiKey ?? string.Empty;
-            return new DashboardApiResult(true, null, dashboardUrl, token, dashboardUrl, 0);
+            return new DashboardApiResult(true, null, dashboardUrl, token, displayDashboardUrl, 0);
         }
 
         var result = await connectionResolver.ResolveConnectionAsync(
@@ -273,19 +280,21 @@ internal static class TelemetryCommandHelpers
                     interactionService,
                     new TelemetryErrorInfo(
                         TelemetryCommandStrings.DashboardNotAvailable,
-                        TelemetryCommandStrings.DashboardNotAvailableHint),
-                    logFilePath);
-                return DashboardApiResult.Failure(ExitCodeConstants.DashboardFailure);
+                        TelemetryCommandStrings.DashboardNotAvailableHint));
+                return DashboardApiResult.Failure(CliExitCodes.DashboardFailure);
             }
 
             // Dashboard is optional — return success with null API info
             return new DashboardApiResult(true, connection, null, null, null, 0);
         }
 
-        // Extract dashboard base URL (without /login path) for hyperlinks
+        var apiBaseUrl = McpToolHelpers.NormalizeDashboardUrl(dashboardInfo.ApiBaseUrl);
+
+        // Extract dashboard base URL (without /login path) for hyperlinks.
+        // Preserve the original hostname (e.g. *.dev.localhost) for display URLs.
         var extractedDashboardUrl = ExtractDashboardBaseUrl(dashboardInfo.DashboardUrls?.FirstOrDefault());
 
-        return new DashboardApiResult(true, connection, dashboardInfo.ApiBaseUrl, dashboardInfo.ApiToken, extractedDashboardUrl, 0);
+        return new DashboardApiResult(true, connection, apiBaseUrl, dashboardInfo.ApiToken, extractedDashboardUrl, 0);
     }
 
     /// <summary>
@@ -310,12 +319,12 @@ internal static class TelemetryCommandHelpers
     }
 
     /// <summary>
-    /// Displays a telemetry error with a structured format: error message, optional hint, and log file path.
+    /// Displays a telemetry error with a structured format: error message and optional hints.
+    /// The CLI log file path is displayed centrally by BaseCommand on non-zero exit.
     /// </summary>
     public static void DisplayTelemetryError(
         IInteractionService interactionService,
-        TelemetryErrorInfo errorInfo,
-        string logFilePath)
+        TelemetryErrorInfo errorInfo)
     {
         interactionService.DisplayError(errorInfo.Error);
 
@@ -323,8 +332,6 @@ internal static class TelemetryCommandHelpers
         {
             interactionService.DisplayMessage(KnownEmojis.Information, hint);
         }
-
-        interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, logFilePath));
     }
 
     /// <summary>
@@ -533,22 +540,26 @@ internal static class TelemetryCommandHelpers
     /// <summary>
     /// Creates a Spectre Console hyperlink markup for a trace detail in the Dashboard.
     /// </summary>
+    /// <param name="interactionService">The interaction service to determine link support.</param>
     /// <param name="dashboardUrl">The base dashboard URL.</param>
     /// <param name="traceId">The trace ID.</param>
     /// <param name="displayText">The text to display (defaults to shortened trace ID).</param>
     /// <param name="spanId">Optional span ID to highlight in the trace detail view.</param>
-    /// <returns>A Spectre markup string with hyperlink, or plain text if dashboardUrl is null.</returns>
-    public static string FormatTraceLink(string? dashboardUrl, string traceId, string? displayText = null, string? spanId = null)
+    /// <returns>
+    /// A Spectre markup string with hyperlink when the console supports links and dashboardUrl is non-null;
+    /// or just the display text if links are unsupported, dashboardUrl is null, or traceId is empty.
+    /// </returns>
+    public static string FormatTraceLink(IInteractionService interactionService, string? dashboardUrl, string traceId, string? displayText = null, string? spanId = null)
     {
         var text = displayText ?? OtlpHelpers.ToShortenedId(traceId);
         if (string.IsNullOrEmpty(dashboardUrl) || string.IsNullOrEmpty(traceId))
         {
-            return text;
+            return text.EscapeMarkup();
         }
 
         // Dashboard trace detail URL: /traces/detail/{traceId}
         var url = DashboardUrls.CombineUrl(dashboardUrl, DashboardUrls.TraceDetailUrl(traceId, spanId));
-        return $"[link={url}]{text}[/]";
+        return MarkupHelpers.SafeLink(interactionService, url, text);
     }
 
     /// <summary>
@@ -567,12 +578,12 @@ internal static class TelemetryCommandHelpers
     {
         return severityNumber switch
         {
-            >= 21 => "CRIT",
-            >= 17 => "FAIL",
-            >= 13 => "WARN",
-            >= 9 => "INFO",
-            >= 5 => "DBUG",
-            >= 1 => "TRCE",
+            >= 21 => CliLogFormat.FileLevelTokens.Critical,
+            >= 17 => CliLogFormat.FileLevelTokens.Error,
+            >= 13 => CliLogFormat.FileLevelTokens.Warning,
+            >= 9 => CliLogFormat.FileLevelTokens.Information,
+            >= 5 => CliLogFormat.FileLevelTokens.Debug,
+            >= 1 => CliLogFormat.FileLevelTokens.Trace,
             _ => "-"
         };
     }

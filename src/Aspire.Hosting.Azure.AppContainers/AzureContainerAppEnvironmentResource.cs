@@ -57,18 +57,23 @@ public class AzureContainerAppEnvironmentResource :
 
             steps.Add(prepareStep);
 
-            // Add print-dashboard-url step
-            var printDashboardUrlStep = new PipelineStep
+            if (EnableDashboard)
             {
-                Name = $"print-dashboard-url-{name}",
-                Description = $"Prints the deployment summary and dashboard URL for {name}.",
-                Action = ctx => PrintDashboardUrlAsync(ctx),
-                Tags = ["print-summary"],
-                DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
-                RequiredBySteps = [WellKnownPipelineSteps.Deploy]
-            };
+                // The dashboard URL is only meaningful when the dashboard is provisioned.
+                // Avoid registering the summary step when WithDashboard(false) is used, otherwise
+                // we would emit a link to a dashboard that does not exist in the environment.
+                var printDashboardUrlStep = new PipelineStep
+                {
+                    Name = $"print-dashboard-url-{name}",
+                    Description = $"Prints the deployment summary and dashboard URL for {name}.",
+                    Action = ctx => PrintDashboardUrlAsync(ctx),
+                    Tags = ["print-summary"],
+                    DependsOnSteps = [AzureEnvironmentResource.ProvisionInfrastructureStepName],
+                    RequiredBySteps = [WellKnownPipelineSteps.Deploy]
+                };
 
-            steps.Add(printDashboardUrlStep);
+                steps.Add(printDashboardUrlStep);
+            }
 
             // Expand deployment target steps for all compute resources
             // This ensures the push/provision steps from deployment targets are included in the pipeline

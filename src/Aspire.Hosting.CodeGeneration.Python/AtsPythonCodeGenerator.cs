@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Shared.Json;
 using Aspire.TypeSystem;
@@ -124,6 +125,10 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     private sealed record MergedCapabilityDispatch(string AlternateCapabilityId, string DiscriminatingParamName);
     private readonly Dictionary<string, MergedCapabilityDispatch> _mergedCapabilityDispatches = new(StringComparer.Ordinal);
 
+    // Type ID of InteractionInputCollection. The by-name accessors below are hand-authored on top of the
+    // generated to_array capability so Python matches the .NET indexer and TypeScript get/value helpers.
+    private const string InteractionInputCollectionTypeId = "Aspire.Hosting/Aspire.Hosting.InteractionInputCollection";
+
     private PythonModuleBuilder _moduleBuilder = null!;
 
     // Mapping of typeId -> wrapper class name for all generated wrapper types
@@ -197,7 +202,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     /// </summary>
     private string MapTypeRefToPython(AtsTypeRef? typeRef)
     {
-        if (typeRef == null)
+        if (typeRef is null)
         {
             return "typing.Any";
         }
@@ -208,7 +213,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             return wrapperClassName;
         }
 
-        return typeRef.Category switch
+        var mappedType = typeRef.Category switch
         {
             AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId),
             AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
@@ -224,6 +229,19 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             AtsTypeCategory.Unknown => "typing.Any",  // Unknown types use 'Any' since they're not in the ATS universe
             _ => "typing.Any"  // Fallback for any unhandled categories
         };
+        return ApplyNullableType(typeRef, mappedType);
+    }
+
+    private static string ApplyNullableType(AtsTypeRef typeRef, string mappedType)
+    {
+        if (typeRef.IsNullable != true || typeRef.Category is not (AtsTypeCategory.Primitive or AtsTypeCategory.Enum))
+        {
+            return mappedType;
+        }
+
+        return typeRef.TypeId is AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken
+            ? mappedType
+            : $"{mappedType} | None";
     }
 
     /// <summary>
@@ -320,8 +338,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             var capWithExtra = items.First(c => c.Parameters.Any(p => string.Equals(p.Name, extraParamName, StringComparison.Ordinal)));
             var extraParam = capWithExtra.Parameters.First(p => string.Equals(p.Name, extraParamName, StringComparison.Ordinal));
 
-            // Only merge if the extra param is required (not already optional)
-            if (extraParam.IsOptional || extraParam.IsNullable)
+            // Only merge if the extra param is required (not already optional).
+            // Never merge when the differing parameter is a callback: a callback cannot be represented as a
+            // positional tuple element, so merging would (a) change the option shape from the published
+            // `str | tuple[...]` shorthand to a TypedDict (a breaking change for the non-callback overload)
+            // and (b) require conditional capability dispatch that always registers the callback argument even
+            // when routing to the non-callback capability. Keeping the callback overload as its own separate
+            // option avoids both problems.
+            if (extraParam.IsOptional || extraParam.IsNullable || extraParam.IsCallback)
             {
                 result.AddRange(items);
                 continue;
@@ -346,6 +370,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                         IsCallback = p.IsCallback,
                         CallbackParameters = p.CallbackParameters,
                         CallbackReturnType = p.CallbackReturnType,
+                        Documentation = p.Documentation,
                         DefaultValue = p.DefaultValue
                     });
                 }
@@ -368,6 +393,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 MethodName = shortest.MethodName,
                 OwningTypeName = shortest.OwningTypeName,
                 Description = shortest.Description ?? items.FirstOrDefault(c => c.Description is not null)?.Description,
+                Documentation = shortest.Documentation ?? items.FirstOrDefault(c => c.Documentation is not null)?.Documentation,
                 Parameters = mergedParams,
                 ReturnType = shortest.ReturnType,
                 TargetTypeId = shortest.TargetTypeId,
@@ -494,13 +520,43 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     /// </summary>
     private string MapUnionTypeToPython(AtsTypeRef typeRef)
     {
-        if (typeRef.UnionTypes == null || typeRef.UnionTypes.Count == 0)
+        if (typeRef.UnionTypes is null || typeRef.UnionTypes.Count == 0)
         {
             return "typing.Any";
         }
 
         var memberTypes = typeRef.UnionTypes
             .Select(MapTypeRefToPython)
+            .Distinct();
+
+        return string.Join(" | ", memberTypes);
+    }
+
+    private string MapDtoPropertyTypeToPython(AtsTypeRef? typeRef)
+    {
+        if (typeRef is null)
+        {
+            return "typing.Any";
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Array or AtsTypeCategory.List => $"typing.Iterable[{MapDtoPropertyTypeToPython(typeRef.ElementType)}]",
+            AtsTypeCategory.Dict => $"typing.Mapping[{MapDtoPropertyTypeToPython(typeRef.KeyType)}, {MapDtoPropertyTypeToPython(typeRef.ValueType)}]",
+            AtsTypeCategory.Union => MapDtoUnionTypeToPython(typeRef),
+            _ => MapTypeRefToPython(typeRef)
+        };
+    }
+
+    private string MapDtoUnionTypeToPython(AtsTypeRef typeRef)
+    {
+        if (typeRef.UnionTypes is null || typeRef.UnionTypes.Count == 0)
+        {
+            return "typing.Any";
+        }
+
+        var memberTypes = typeRef.UnionTypes
+            .Select(MapDtoPropertyTypeToPython)
             .Distinct();
 
         return string.Join(" | ", memberTypes);
@@ -609,7 +665,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
 
         // Convert camelCase to snake_case
         var snakeName = ToSnakeCase(methodName);
-        if (snakeName.EndsWith("_async"))
+        if (snakeName.EndsWith("_async", StringComparison.Ordinal))
         {
             snakeName = snakeName[..^6];
         }
@@ -618,7 +674,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
 
     private static string GetMethodAsOptionName(string methodName)
     {
-        if (methodName.StartsWith("with_"))
+        if (methodName.StartsWith("with_", StringComparison.Ordinal))
         {
             return methodName[5..];
         }
@@ -628,7 +684,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     private static string GetMethodParametersName(string methodName)
     {
         methodName = char.ToUpper(methodName[0]) + methodName.Substring(1);
-        if (methodName.StartsWith("With"))
+        if (methodName.StartsWith("With", StringComparison.Ordinal))
         {
             methodName = methodName[4..];
         }
@@ -786,7 +842,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             sb.AppendLine(CultureInfo.InvariantCulture, $"class {className}(typing.TypedDict, total=False):");
             foreach (var prop in dtoType.Properties)
             {
-                var propType = MapTypeRefToPython(prop.Type);
+                // Callback-typed DTO properties carry the same CallbackParameters/CallbackReturnType
+                // metadata as method parameters, so render the strongly-typed Callable signature
+                // (e.g. typing.Callable[[InputsDialogValidationContext], None]) instead of a bare
+                // typing.Callable. The runtime marshaller already registers callables embedded in
+                // DTO dicts, so no serialization change is needed.
+                var propType = prop.IsCallback
+                    ? GenerateCallbackTypeSignature(prop.CallbackParameters, prop.CallbackReturnType)
+                    : MapDtoPropertyTypeToPython(prop.Type);
                 sb.AppendLine(CultureInfo.InvariantCulture, $"    {prop.Name}: {propType}");
             }
             sb.AppendLine();
@@ -934,23 +997,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             return name;
         }
 
-        var result = new System.Text.StringBuilder();
-        result.Append(char.ToLowerInvariant(name[0]));
-
-        for (int i = 1; i < name.Length; i++)
-        {
-            var c = name[i];
-            if (char.IsUpper(c))
-            {
-                result.Append('_');
-                result.Append(char.ToLowerInvariant(c));
-            }
-            else
-            {
-                result.Append(c);
-            }
-        }
-        var resultStr = result.ToString();
+        var resultStr = JsonNamingPolicy.SnakeCaseLower.ConvertName(name);
         resultStr = resultStr.Replace("environment", "env");
         resultStr = resultStr.Replace("configuration", "config");
         resultStr = resultStr.Replace("application", "app");
@@ -1024,6 +1071,45 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         {
             GenerateTypeClassMethod(sb, method);
         }
+
+        if (string.Equals(model.TypeId, InteractionInputCollectionTypeId, StringComparison.Ordinal))
+        {
+            EmitInteractionInputCollectionAccessors(sb);
+        }
+    }
+
+    private static void EmitInteractionInputCollectionAccessors(System.Text.StringBuilder sb)
+    {
+        sb.AppendLine("    def get(self, name: str) -> InteractionInput | None:");
+        sb.AppendLine("        \"\"\"Get the input with the specified name, or None if no input matches.\"\"\"");
+        sb.AppendLine("        lookup_name = name.lower()");
+        sb.AppendLine("        for interaction_input in self.to_array():");
+        sb.AppendLine("            input_name = interaction_input.get(\"Name\")");
+        sb.AppendLine("            if input_name is not None and input_name.lower() == lookup_name:");
+        sb.AppendLine("                return interaction_input");
+        sb.AppendLine("        return None");
+        sb.AppendLine();
+
+        sb.AppendLine("    def required(self, name: str) -> InteractionInput:");
+        sb.AppendLine("        \"\"\"Get the input with the specified name, or raise ValueError if no input matches.\"\"\"");
+        sb.AppendLine("        interaction_input = self.get(name)");
+        sb.AppendLine("        if interaction_input is None:");
+        sb.AppendLine("            raise ValueError(f\"no input with name '{name}' was found\")");
+        sb.AppendLine("        return interaction_input");
+        sb.AppendLine();
+
+        sb.AppendLine("    def value(self, name: str) -> str:");
+        sb.AppendLine("        \"\"\"Get the input value with the specified name, or an empty string if no input matches.\"\"\"");
+        sb.AppendLine("        interaction_input = self.get(name)");
+        sb.AppendLine("        if interaction_input is None:");
+        sb.AppendLine("            return \"\"");
+        sb.AppendLine("        return interaction_input.get(\"Value\") or \"\"");
+        sb.AppendLine();
+
+        sb.AppendLine("    def required_value(self, name: str) -> str:");
+        sb.AppendLine("        \"\"\"Get the input value with the specified name, or raise ValueError if no input matches.\"\"\"");
+        sb.AppendLine("        return self.required(name).get(\"Value\") or \"\"");
+        sb.AppendLine();
     }
 
     /// <summary>
@@ -2384,14 +2470,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         }
 
         // Dict/Parameters format includes all params (required + optional)
-        if (optionType.EndsWith("Parameters"))
+        if (optionType.EndsWith("Parameters", StringComparison.Ordinal))
         {
             return optionalParams.Any(p => string.Equals(p.Name, paramName, StringComparison.Ordinal));
         }
 
         // Tuple format includes optional params only when there's exactly 1 optional
         // and the tuple has an extra slot for it
-        if (optionType.StartsWith("("))
+        if (optionType.StartsWith("(", StringComparison.Ordinal))
         {
             var tupleSlots = SplitTupleTypes(optionType.Trim('(', ')'));
             if (tupleSlots.Count == requiredParams.Count + 1 && optionalParams.Count == 1)
@@ -2447,7 +2533,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             builder.AppendLine(CultureInfo.InvariantCulture, $"                rpc_args: dict[str, typing.Any] = {{\"{targetParamName}\": handle}}");
             builder.AppendLine(CultureInfo.InvariantCulture, $"                handle = self._wrap_builder(client.invoke_capability('{variationCapabilityId}', rpc_args))");
         }
-        else if (currentOption.EndsWith("Parameters"))
+        else if (currentOption.EndsWith("Parameters", StringComparison.Ordinal))
         {
             builder.AppendLine(CultureInfo.InvariantCulture, $"            {clause} _validate_dict_types(_{optionName}, {currentOption}):");
             builder.AppendLine(CultureInfo.InvariantCulture, $"                rpc_args: dict[str, typing.Any] = {{\"{targetParamName}\": handle}}");
@@ -2474,7 +2560,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 builder.AppendLine(CultureInfo.InvariantCulture, $"                handle = self._wrap_builder(client.invoke_capability('{variationCapabilityId}', rpc_args))");
             }
         }
-        else if (currentOption.StartsWith("(")) // Tuple of parameters
+        else if (currentOption.StartsWith("(", StringComparison.Ordinal)) // Tuple of parameters
         {
             var paramTypes = SplitTupleTypes(currentOption.Trim('(', ')'));
             builder.AppendLine(CultureInfo.InvariantCulture, $"            {clause} _validate_tuple_types(_{optionName}, {currentOption}):");

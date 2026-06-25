@@ -200,6 +200,27 @@ public class TestingPublicApiTests
     }
 
     [Fact]
+    public async Task DefaultEndpointSelectionPrefersHttpsOverHttp()
+    {
+        var builder = DistributedApplicationTestingBuilder.Create();
+        var resource = new TestResource("service");
+        resource.Annotations.Add(CreateAllocatedEndpoint("http", 5000));
+        resource.Annotations.Add(CreateAllocatedEndpoint("https", 5001));
+        builder.AddResource(resource);
+
+        await using var app = builder.Build();
+        await app.StartAsync();
+
+        var endpoint = app.GetEndpoint("service");
+        using var client = app.CreateHttpClient("service");
+
+        Assert.Equal("https", endpoint.Scheme);
+        Assert.Equal(5001, endpoint.Port);
+        Assert.Equal("https", client.BaseAddress?.Scheme);
+        Assert.Equal(5001, client.BaseAddress?.Port);
+    }
+
+    [Fact]
     public async Task CreateAsyncWithEntryPointThrowsWhenEntryPointIsNull()
     {
         Type entryPoint = null!;
@@ -461,4 +482,14 @@ public class TestingPublicApiTests
             : "Array params contains empty item: [arg, , arg2] (Parameter 'args')",
             exception.Message);
     }
+
+    private static EndpointAnnotation CreateAllocatedEndpoint(string endpointName, int port)
+    {
+        var endpoint = new EndpointAnnotation(System.Net.Sockets.ProtocolType.Tcp, uriScheme: endpointName, name: endpointName);
+        endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", port);
+
+        return endpoint;
+    }
+
+    private sealed class TestResource(string name) : Resource(name), IResourceWithEndpoints;
 }

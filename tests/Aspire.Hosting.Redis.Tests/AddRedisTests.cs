@@ -13,6 +13,7 @@ using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 
 #pragma warning disable ASPIRECERTIFICATES001
+#pragma warning disable ASPIREPERSISTENCE001
 
 namespace Aspire.Hosting.Redis.Tests;
 
@@ -278,17 +279,17 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         redis1.WithEndpoint("tcp", e =>
         {
             e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5001);
-            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis1.dev.internal", 5001, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis1.dev.internal", 5001, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
         });
         redis2.WithEndpoint("tcp", e =>
         {
             e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5002);
-            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis2.dev.internal", 5002, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis2.dev.internal", 5002, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
         });
         redis3.WithEndpoint("tcp", e =>
         {
             e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5003);
-            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis3.dev.internal", 5003, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis3.dev.internal", 5003, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
         });
 
         var redisInsight = Assert.Single(builder.Resources.OfType<RedisInsightResource>());
@@ -655,6 +656,57 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         Assert.DoesNotContain("--save", args.Substring(saveIndex + 1));
     }
 
+    [Fact]
+    public async Task WithModuleAddsCommandLineArgsForWellKnownModule()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule(RedisModules.Json);
+
+        var args = await GetCommandLineArgs(redis);
+
+        Assert.Contains("--loadmodule /usr/local/lib/redis/modules/rejson.so", args);
+    }
+
+    [Fact]
+    public async Task WithModuleAddsCommandLineArgsForModulePath()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule("/opt/redis/custom-module");
+
+        var args = await GetCommandLineArgs(redis);
+
+        Assert.Contains("--loadmodule /opt/redis/custom-module", args);
+    }
+
+    [Fact]
+    public async Task WithModuleAddsCommandLineArgsForMultipleModules()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule(RedisModules.Search)
+            .WithModule("/opt/redis/custom-module.so");
+
+        var args = await GetCommandLineArgs(redis);
+
+        Assert.Contains("--loadmodule /usr/local/lib/redis/modules/redisearch.so --loadmodule /opt/redis/custom-module.so", args);
+    }
+
+    [Fact]
+    public async Task WithModuleDeduplicatesCommandLineArgsForSameModule()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        var redis = builder.AddRedis("myRedis")
+            .WithModule(RedisModules.Json)
+            .WithModule("/usr/local/lib/redis/modules/rejson.so");
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(redis.Resource);
+
+        Assert.Equal(1, args.Count(arg => arg == "--loadmodule"));
+        Assert.Equal(1, args.Count(arg => arg == "/usr/local/lib/redis/modules/rejson.so"));
+    }
+
     private static async Task<string> GetCommandLineArgs(IResourceBuilder<RedisResource> builder)
     {
         var args = await ArgumentEvaluator.GetArgumentListAsync(builder.Resource);
@@ -706,7 +758,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
             .WithEndpoint("tcp", e =>
             {
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6379);
-                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "redis.dev.internal", 6379, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "redis.dev.internal", 6379, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             })
             .WithRedisInsight();
 
@@ -832,6 +884,27 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         // Verify the URI expression uses the endpoint scheme
         var uriExpression = redis.Resource.UriExpression;
         Assert.Contains("{myredis.bindings.tcp.scheme}", uriExpression.ValueExpression);
+    }
+
+    [Fact]
+    public async Task RedisWithCertificateUsesTargetPortsForCommandLineArgs()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+        using var cert = CreateTestCertificate();
+
+        var redis = builder.AddRedis("myredis", port: 12345)
+            .WithLifetime(ContainerLifetime.Persistent)
+            .WithHttpsCertificate(cert);
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, appModel));
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(redis.Resource, app.Services).AsTask().WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.Equal("6379", args[args.IndexOf("--tls-port") + 1]);
+        Assert.Equal("6380", args[args.IndexOf("--port") + 1]);
     }
 
     [Fact]

@@ -87,4 +87,94 @@ public class BackchannelJsonSerializerContextTests
         Assert.Null(activity.Data.CompletionMessage);
         Assert.Equal(CompletionStates.InProgress, activity.Data.CompletionState);
     }
+
+    [Fact]
+    public void TerminalReplicaInfo_OldPayloadWithoutNewFields_DeserializesWithNulls()
+    {
+        // Back-compat: an older AppHost (pre-terminals.v1) that only knows about the original
+        // TerminalReplicaInfo shape will not emit CurrentColumns/CurrentRows/AttachedPeerCount/Peers.
+        // The CLI must accept that payload and treat the new fields as null. See
+        // docs/specs/cli-backchannel.md §3 for the per-feature capability strategy.
+        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+        var json =
+            """
+            {
+              "ReplicaIndex": 0,
+              "Label": "myresource-0",
+              "ConsumerUdsPath": "/tmp/r0.sock",
+              "IsAlive": true,
+              "ProducerConnected": true,
+              "RestartCount": 0
+            }
+            """;
+
+        var replica = JsonSerializer.Deserialize<TerminalReplicaInfo>(json, options);
+
+        Assert.NotNull(replica);
+        Assert.Equal(0, replica.ReplicaIndex);
+        Assert.Equal("myresource-0", replica.Label);
+        Assert.True(replica.IsAlive);
+        Assert.Null(replica.CurrentColumns);
+        Assert.Null(replica.CurrentRows);
+        Assert.Null(replica.AttachedPeerCount);
+        Assert.Null(replica.Peers);
+    }
+
+    [Fact]
+    public void ListTerminalsResponse_RoundTripsThroughSerializer()
+    {
+        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+        var response = new ListTerminalsResponse
+        {
+            Terminals =
+            [
+                new TerminalSummary
+                {
+                    ResourceName = "myresource",
+                    DisplayName = "myresource",
+                    ConfiguredColumns = 120,
+                    ConfiguredRows = 30,
+                    IsHostReachable = true,
+                    Replicas =
+                    [
+                        new TerminalReplicaInfo
+                        {
+                            ReplicaIndex = 0,
+                            Label = "myresource-0",
+                            ConsumerUdsPath = "/tmp/r0.sock",
+                            IsAlive = true,
+                            CurrentColumns = 130,
+                            CurrentRows = 32,
+                            AttachedPeerCount = 1,
+                            Peers =
+                            [
+                                new TerminalPeerInfo { PeerId = "peer-1", DisplayName = "viewer-1" }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var json = JsonSerializer.Serialize(response, options);
+        var roundTripped = JsonSerializer.Deserialize<ListTerminalsResponse>(json, options);
+
+        Assert.NotNull(roundTripped);
+        Assert.Single(roundTripped.Terminals);
+
+        var terminal = roundTripped.Terminals[0];
+        Assert.Equal("myresource", terminal.ResourceName);
+        Assert.True(terminal.IsHostReachable);
+        Assert.NotNull(terminal.Replicas);
+        Assert.Single(terminal.Replicas);
+
+        var replica = terminal.Replicas[0];
+        Assert.Equal(130, replica.CurrentColumns);
+        Assert.Equal(32, replica.CurrentRows);
+        Assert.Equal(1, replica.AttachedPeerCount);
+        Assert.NotNull(replica.Peers);
+        Assert.Single(replica.Peers);
+        Assert.Equal("peer-1", replica.Peers[0].PeerId);
+        Assert.Equal("viewer-1", replica.Peers[0].DisplayName);
+    }
 }

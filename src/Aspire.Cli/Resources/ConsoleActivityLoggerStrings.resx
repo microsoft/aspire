@@ -142,7 +142,7 @@
     <value>Total time: {0}</value>
   </data>
   <data name="SummaryLogLevelHelp" xml:space="preserve">
-    <value>For more details, add --log-level debug/trace to the command.</value>
+    <value>For more details, add --pipeline-log-level debug/trace to the command.</value>
   </data>
   <data name="PipelineSucceeded" xml:space="preserve">
     <value>Pipeline succeeded</value>

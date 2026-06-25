@@ -140,9 +140,15 @@ jobs:
     if: ${{ github.repository_owner == 'microsoft' && (needs.generate_tests_matrix.outputs.requiresNugets == 'true' || needs.generate_tests_matrix.outputs.requiresCliArchive == 'true') }}
     uses: ./.github/workflows/build-cli-native-archives.yml
 
+  build_cli_e2e_image:
+    name: Build CLI E2E Docker image
+    needs: [generate_tests_matrix]
+    if: ${{ github.repository_owner == 'microsoft' && needs.generate_tests_matrix.outputs.requiresCliArchive == 'true' }}
+    uses: ./.github/workflows/build-cli-e2e-image.yml
+
   run_tests:
     name: ${{ matrix.tests.project }}
-    needs: [generate_tests_matrix, build_packages, build_cli_archives]
+    needs: [generate_tests_matrix, build_packages, build_cli_archives, build_cli_e2e_image]
     strategy:
       fail-fast: false
       matrix:
@@ -156,7 +162,8 @@ jobs:
         github.repository_owner == 'microsoft' &&
         !cancelled() &&
         needs.generate_tests_matrix.result == 'success' &&
-        (needs.build_packages.result == 'success' || needs.build_packages.result == 'skipped')
+        (needs.build_packages.result == 'success' || needs.build_packages.result == 'skipped') &&
+        (needs.build_cli_e2e_image.result == 'success' || needs.build_cli_e2e_image.result == 'skipped')
       }}
     uses: ./.github/workflows/run-tests.yml
     with:
@@ -172,7 +179,7 @@ jobs:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
     name: Final Results
-    needs: [generate_tests_matrix, build_packages, build_cli_archives, run_tests]
+    needs: [generate_tests_matrix, build_packages, build_cli_archives, build_cli_e2e_image, run_tests]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -244,6 +251,8 @@ jobs:
               needs.run_tests.result == 'failure' ||
               needs.run_tests.result == 'cancelled' ||
               needs.run_tests.result == 'skipped' ||
+              (needs.build_cli_e2e_image.result == 'failure') ||
+              (needs.build_cli_e2e_image.result == 'cancelled') ||
               (needs.build_packages.result == 'failure') ||
               (needs.build_packages.result == 'cancelled')
             )

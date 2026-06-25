@@ -15,11 +15,13 @@ namespace Aspire.Hosting.Kubernetes;
 /// <see cref="KubernetesEnvironmentExtensions.WithHelm(IResourceBuilder{KubernetesEnvironmentResource}, Action{HelmChartOptions})"/>.
 /// Each method adds a corresponding annotation to the environment resource.
 /// </remarks>
+/// <ats-remarks />
+/// <ats-summary>Provides options for configuring Helm chart deployment settings on a <ats-see cref="!:type:KubernetesEnvironmentResource" />.</ats-summary>
 [AspireExport(ExposeMethods = true)]
 public sealed partial class HelmChartOptions
 {
-    private const int KubernetesNamespaceMaxLength = 63;
-    private const int HelmReleaseNameMaxLength = 53;
+    internal const int KubernetesNamespaceMaxLength = 63;
+    internal const int HelmReleaseNameMaxLength = 53;
     private const int HelmChartNameMaxLength = 250;
     private const int HelmChartDescriptionMaxLength = 1024;
 
@@ -39,7 +41,7 @@ public sealed partial class HelmChartOptions
     public HelmChartOptions WithNamespace(string @namespace)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(@namespace);
-        ValidateDnsLabel(@namespace, "Kubernetes namespace", KubernetesNamespaceMaxLength, nameof(@namespace));
+        ValidateNamespace(@namespace, nameof(@namespace));
 
         var expression = ReferenceExpression.Create($"{@namespace}");
         EnvironmentBuilder.WithAnnotation(new KubernetesNamespaceAnnotation(expression), ResourceAnnotationMutationBehavior.Replace);
@@ -61,7 +63,10 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withNamespace", Description = "Sets the target Kubernetes namespace for deployment.")]
+    /// <summary>
+    /// Sets the target Kubernetes namespace for deployment.
+    /// </summary>
+    [AspireExport(MethodName = "withNamespace")]
     internal HelmChartOptions WithNamespace([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object @namespace)
     {
         ArgumentNullException.ThrowIfNull(@namespace);
@@ -83,7 +88,7 @@ public sealed partial class HelmChartOptions
     public HelmChartOptions WithReleaseName(string releaseName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(releaseName);
-        ValidateDnsLabel(releaseName, "Helm release name", HelmReleaseNameMaxLength, nameof(releaseName));
+        ValidateReleaseName(releaseName, nameof(releaseName));
 
         var expression = ReferenceExpression.Create($"{releaseName}");
         EnvironmentBuilder.WithAnnotation(new HelmReleaseNameAnnotation(expression), ResourceAnnotationMutationBehavior.Replace);
@@ -105,7 +110,10 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withReleaseName", Description = "Sets the Helm release name for deployment.")]
+    /// <summary>
+    /// Sets the Helm release name for deployment.
+    /// </summary>
+    [AspireExport(MethodName = "withReleaseName")]
     internal HelmChartOptions WithReleaseName([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object releaseName)
     {
         ArgumentNullException.ThrowIfNull(releaseName);
@@ -154,7 +162,10 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withChartVersion", Description = "Sets the Helm chart version for deployment.")]
+    /// <summary>
+    /// Sets the Helm chart version for deployment.
+    /// </summary>
+    [AspireExport(MethodName = "withChartVersion")]
     internal HelmChartOptions WithChartVersion([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object version)
     {
         ArgumentNullException.ThrowIfNull(version);
@@ -198,7 +209,10 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withChartName", Description = "Sets the Helm chart name written to the generated Chart.yaml.")]
+    /// <summary>
+    /// Sets the Helm chart name written to the generated Chart.yaml.
+    /// </summary>
+    [AspireExport(MethodName = "withChartName")]
     internal HelmChartOptions WithChartName([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object name)
     {
         ArgumentNullException.ThrowIfNull(name);
@@ -242,7 +256,10 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withChartDescription", Description = "Sets the Helm chart description written to the generated Chart.yaml.")]
+    /// <summary>
+    /// Sets the Helm chart description written to the generated Chart.yaml.
+    /// </summary>
+    [AspireExport(MethodName = "withChartDescription")]
     internal HelmChartOptions WithChartDescription([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object description)
     {
         ArgumentNullException.ThrowIfNull(description);
@@ -255,7 +272,7 @@ public sealed partial class HelmChartOptions
         };
     }
 
-    private static void ValidateDnsLabel(string value, string target, int maxLength, string paramName)
+    internal static void ValidateDnsLabel(string value, string target, int maxLength, string paramName)
     {
         if (value.Length > maxLength)
         {
@@ -267,6 +284,12 @@ public sealed partial class HelmChartOptions
             throw new ArgumentException($"{target} '{value}' is invalid. Use lowercase letters, numbers, and hyphens, and start and end with an alphanumeric character.", paramName);
         }
     }
+
+    internal static void ValidateNamespace(string @namespace, string paramName)
+        => ValidateDnsLabel(@namespace, "Kubernetes namespace", KubernetesNamespaceMaxLength, paramName);
+
+    internal static void ValidateReleaseName(string releaseName, string paramName)
+        => ValidateDnsLabel(releaseName, "Helm release name", HelmReleaseNameMaxLength, paramName);
 
     // Matches Helm's own chart-version validation, which uses the lenient SemVer parser
     // (Masterminds/semver/v3 NewVersion) — see helm/helm pkg/chart/v2/metadata.go isValidSemver.

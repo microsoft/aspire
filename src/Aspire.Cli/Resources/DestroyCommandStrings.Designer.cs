@@ -70,7 +70,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Destroy a previously deployed AppHost environment (Preview).
+        ///   Looks up a localized string similar to Destroy a previously deployed AppHost environment.
         /// </summary>
         public static string Description {
             get {

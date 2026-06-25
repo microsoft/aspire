@@ -9,8 +9,8 @@ using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Foundry.Hosting;
 using Microsoft.Extensions.AI;
 
-string projectConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__proj-myproject")
-    ?? throw new InvalidOperationException("ConnectionStrings__proj-myproject is not set.");
+string projectConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__projmyproject")
+    ?? throw new InvalidOperationException("ConnectionStrings__projmyproject is not set.");
 
 string chatConnectionString = Environment.GetEnvironmentVariable("ConnectionStrings__chat")
     ?? throw new InvalidOperationException("ConnectionStrings__chat is not set.");
@@ -23,7 +23,7 @@ string deploymentName = GetRequiredConnectionValue(chatConnectionBuilder, "Deplo
 
 if (!Uri.TryCreate(projectEndpoint, UriKind.Absolute, out Uri? projectUri) || projectUri is null)
 {
-    throw new InvalidOperationException("ConnectionStrings__proj-myproject contains an invalid Endpoint value.");
+    throw new InvalidOperationException("ConnectionStrings__projmyproject contains an invalid Endpoint value.");
 }
 
 Console.WriteLine($"Project Endpoint: {projectUri}");

@@ -273,7 +273,7 @@ public class AddViteAppTests
     }
 
     [Fact]
-    public async Task VerifyDockerfileWhenNpmScriptUsesPnpm()
+    public async Task VerifyDockerfileWhenPackageScriptUsesPnpm()
     {
         using var tempDir = new TestTempDirectory();
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
@@ -284,7 +284,27 @@ public class AddViteAppTests
 
         var nodeApp = builder.AddViteApp("nuxt", appDir)
             .WithPnpm(install: true)
-            .PublishAsNpmScript("start");
+            .PublishAsPackageScript("start");
+
+        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfilePath = Path.Combine(tempDir.Path, "nuxt.Dockerfile");
+        await Verify(File.ReadAllText(dockerfilePath));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfileWhenPackageScriptUsesBun()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "nuxt");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "bun.lock"), "");
+
+        var nodeApp = builder.AddViteApp("nuxt", appDir)
+            .WithBun(install: true)
+            .PublishAsPackageScript("start");
 
         await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
 
@@ -557,6 +577,7 @@ public class AddViteAppTests
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
@@ -617,6 +638,7 @@ public class AddViteAppTests
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
@@ -668,6 +690,7 @@ public class AddViteAppTests
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
@@ -724,6 +747,7 @@ public class AddViteAppTests
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = password,
             CancellationToken = CancellationToken.None
@@ -780,6 +804,7 @@ public class AddViteAppTests
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
@@ -855,6 +880,7 @@ public class AddViteAppTests
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None

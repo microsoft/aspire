@@ -34,7 +34,6 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
 
         files[".gitignore"] = """
             .java-build/
-            .modules/
             .aspire/
             """;
 
@@ -111,8 +110,8 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
                 // On Windows, use cmd /c; on Unix, use sh -c
                 Command = OperatingSystem.IsWindows() ? "cmd" : "sh",
                 Args = OperatingSystem.IsWindows()
-                    ? ["/c", "if not exist .java-build mkdir .java-build && javac --enable-preview --source 25 -d .java-build @.modules\\sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
-                    : ["-c", "mkdir -p .java-build && javac --enable-preview --source 25 -d .java-build @.modules/sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
+                    ? ["/c", "if not exist .java-build mkdir .java-build && javac --enable-preview --source 25 -d .java-build @.aspire\\modules\\sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
+                    : ["-c", "mkdir -p .java-build && javac --enable-preview --source 25 -d .java-build @.aspire/modules/sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
             }
         };
     }

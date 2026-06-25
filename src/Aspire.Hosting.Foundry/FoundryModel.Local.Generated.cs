@@ -199,6 +199,62 @@ public partial class FoundryModel
         public static readonly FoundryModel GptOss20b = new() { Name = "gpt-oss-20b", Version = "1", Format = "Microsoft" };
 
         /// <summary>
+        ///   <para>This model is an optimized version of Ministral-3-3B-Instruct-2512 for local inference. This optimized model is published here in ONNX format to run on CUDA-capable GPU devices, with the precision best suited to this target.</para>
+        ///   <para>
+        ///     <b>ONNX Models</b>
+        ///   </para>
+        ///   <para>Here are some of the optimized configurations we have added:</para>
+        ///   <list type="number">
+        ///     <item>
+        ///       <description>
+        ///         <para>ONNX model for CUDA GPU using RTN quantization.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is a conversion of Ministral-3-3B-Instruct-2512 for local inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512">Ministral-3-3B-Instruct-2512</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Ministral33bInstruct2512 = new() { Name = "ministral-3-3b-instruct-2512", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
         ///   <para>This model is an optimized version of Mistral-7B-Instruct-v0.2 to enable local inference on Intel GPUs.</para>
         ///   <para>
         ///     <b>Model Description</b>
@@ -244,6 +300,96 @@ public partial class FoundryModel
         public static readonly FoundryModel Mistral7bV02 = new() { Name = "mistral-7b-v0.2", Version = "2", Format = "Microsoft" };
 
         /// <summary>
+        ///   <para>This model is an optimized version of Mistral-Nemo-Instruct-2407 to enable local inference. This model uses GPTQ quantization.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is a conversion of the Mistral-Nemo-Instruct-2407 for local inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/mistralai/Mistral-Nemo-Instruct-2407">Mistral-Nemo-Instruct-2407</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MistralNemo12bInstruct = new() { Name = "mistral-nemo-12b-instruct", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>This model is an optimized version of nemotron-3.5-asr-streaming-0.6b to enable local inference. This model uses RTN quantization.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> MIT</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is an optimized version of the nemotron-3.5-asr-streaming-0.6b model for local inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b">nemotron-3.5-asr-streaming-0.6b</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Nemotron35AsrStreaming06b = new() { Name = "nemotron-3.5-asr-streaming-0.6b", Version = "2", Format = "Microsoft" };
+
+        /// <summary>
         ///   <para>This model is an optimized version of nemotron-speech-streaming-en-0.6b to enable local inference. This model uses RTN quantization.</para>
         ///   <para>
         ///     <b>Model Description</b>
@@ -286,7 +432,142 @@ public partial class FoundryModel
         ///   <para>See Hugging Face model <see href="https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b">nemotron-speech-streaming-en-0.6b</see> for details.</para>
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel NemotronSpeechStreamingEn06b = new() { Name = "nemotron-speech-streaming-en-0.6b", Version = "2", Format = "Microsoft" };
+        public static readonly FoundryModel NemotronSpeechStreamingEn06b = new() { Name = "nemotron-speech-streaming-en-0.6b", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>This model is a fine-tuned and optimized derivative of nemotron-speech-streaming-en-0.6b, adapted for Spanish speech recognition. The model is optimized for local inference.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> MIT</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This model is derived from nemotron-speech-streaming-en-0.6b and has been fine-tuned for Spanish speech recognition. It has been converted and optimized for efficient local inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> This model is a fine-tuned and optimized derivative of the base model, adapted for Spanish speech recognition. Due to this adaptation, its capabilities differ substantially from the original English model and are specialized for Spanish-language use cases. The model may not perform as expected on other languages or tasks. Users are responsible for evaluating the model in their specific application context.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b">https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel NemotronSpeechStreamingEs06b = new() { Name = "nemotron-speech-streaming-es-0.6b", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>This model is an optimized version of Olmo-3-7B-Instruct to enable local inference. This model uses GPTQ quantization.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is a conversion of the Olmo-3-7B-Instruct for local inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/allenai/Olmo-3-7B-Instruct">Olmo-3-7B-Instruct</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Olmo37bInstruct = new() { Name = "olmo-3-7b-instruct", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>This model is an optimized version of parakeet-tdt-0.6b-v2 for local inference. This optimized model is published here in ONNX format to run on CUDA-capable GPU devices, with the precision best suited to this target.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> MIT</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is a conversion of the parakeet-tdt-0.6b-v2 for local inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2">parakeet-tdt-0.6b-v2</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ParakeetTdt06bV2 = new() { Name = "parakeet-tdt-0.6b-v2", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of Phi-3-Mini-128K-Instruct to enable local inference. This model uses RTN quantization.</para>
@@ -1589,6 +1870,51 @@ public partial class FoundryModel
         public static readonly FoundryModel Qwen352b = new() { Name = "qwen3.5-2b", Version = "2", Format = "Microsoft" };
 
         /// <summary>
+        ///   <para>This model is an optimized text-only version of Qwen3.5-2B to enable local inference with CUDA. This model uses RTN quantization.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is a conversion of the Qwen3.5-2B text model for local inference with CUDA.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/Qwen/Qwen3.5-2B">Qwen3.5-2B</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Qwen352bText = new() { Name = "qwen3.5-2b-text", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
         ///   <para>This model is an optimized version of Qwen3.5-4B to enable local inference. This model uses RTN quantization.</para>
         ///   <para>
         ///     <b>Model Description</b>
@@ -1677,5 +2003,50 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel Qwen359b = new() { Name = "qwen3.5-9b", Version = "2", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>This model is an optimized version of SmolLM3-3B to enable local inference. This model uses GPTQ quantization.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is a conversion of the SmolLM3-3B for local inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/HuggingFaceTB/SmolLM3-3B">SmolLM3-3B</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Smollm33b = new() { Name = "smollm3-3b", Version = "1", Format = "Microsoft" };
     }
 }

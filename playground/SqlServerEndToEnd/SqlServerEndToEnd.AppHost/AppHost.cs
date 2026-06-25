@@ -11,19 +11,28 @@ var db1 = sql1.AddDatabase("db1");
 var sql2 = builder.AddAzureSqlServer("sql2");
 var db2 = sql2.AddDatabase("db2");
 
-var dbsetup = builder.AddProject<Projects.SqlServerEndToEnd_DbSetup>("dbsetup")
-                     .WithReference(db1).WaitFor(sql1)
-                     .WithReference(db2).WaitFor(sql2);
+var api = builder.AddProject<Projects.SqlServerEndToEnd_ApiService>("api")
+       .WithExternalHttpEndpoints();
 
-// Add EF migrations resource for the dbsetup project
+// Add EF migrations resource for the api project
 // This adds dashboard commands for managing EF migrations
-var dbMigrations = dbsetup.AddEFMigrations("db-migrations");
+var db1Migrations = api.AddEFMigrations("db1-migrations", "MyDb1Context")
+    .WithMigrationsProject<Projects.SqlServerEndToEnd_Common>()
+    .WithMigrationOutputDirectory("Db1Migrations")
+    .RunDatabaseUpdateOnStart()                        // Note that this only works during local development. The migrations resource is not deployed.
+    .PublishAsMigrationBundle(publishContainer: true)
+    .WithReference(db1).WaitFor(db1);
 
-builder.AddProject<Projects.SqlServerEndToEnd_ApiService>("api")
-       .WithExternalHttpEndpoints()
-       .WithReference(db1).WaitFor(db1)
-       .WithReference(db2).WaitFor(db2)
-       .WaitForCompletion(dbsetup);
+var db2Migrations = api.AddEFMigrations("db2-migrations", "MyDb2Context")
+    .WithMigrationsProject<Projects.SqlServerEndToEnd_Common>()
+    .WithMigrationOutputDirectory("Db2Migrations")
+    .RunDatabaseUpdateOnStart()                        // Note that this only works during local development. The migrations resource is not deployed.
+    .PublishAsMigrationBundle(publishContainer: true)
+    .WithReference(db2).WaitFor(db2);
+
+api
+    .WaitForCompletion(db1Migrations)
+    .WaitForCompletion(db2Migrations);
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging

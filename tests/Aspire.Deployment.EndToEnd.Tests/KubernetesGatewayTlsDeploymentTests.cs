@@ -291,6 +291,10 @@ var k8s = builder.AddKubernetesEnvironment("k8s")
         helm.WithChartVersion(builder.AddParameter("chartversion"));
     });
 
+// The Gateway route validation requires the routed endpoint to be marked
+// external. The starter template's `webfrontend` does not opt in by default.
+webfrontend.WithExternalHttpEndpoints();
+
 var gateway = k8s.AddGateway("ingress")
     .WithGatewayClass("azure-alb-external")
     .WithGatewayAnnotation("alb.networking.azure.io/alb-name", "alb-aspire")

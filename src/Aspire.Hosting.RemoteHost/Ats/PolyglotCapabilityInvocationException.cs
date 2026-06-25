@@ -514,6 +514,8 @@ internal static partial class PolyglotCapabilityErrorFormatter
             return message;
         }
 
+        message = RewritePolyglotUnfriendlyGuidance(message);
+
         if (!string.IsNullOrEmpty(polyglotMethodName) && !string.IsNullOrEmpty(clrMemberName))
         {
             message = Regex.Replace(
@@ -541,6 +543,49 @@ internal static partial class PolyglotCapabilityErrorFormatter
         message = ControlCharacterRegex().Replace(message, " ");
 
         return message.Trim();
+    }
+
+    // Rewrites guidance baked into framework exception messages so it makes sense for
+    // polyglot (non-.NET) app hosts that flow through this formatter. Native .NET app
+    // hosts never go through PolyglotCapabilityErrorFormatter, so their messages are
+    // unchanged.
+    //
+    // ASP.NET Core Kestrel surfaces the missing/untrusted HTTPS dev-cert state by
+    // throwing a plain InvalidOperationException with no HResult and no specific
+    // exception type, so the message is the only signal available. The text is
+    // sourced from the resx entry `NoCertSpecifiedNoDevelopmentCertificateFound` and
+    // is thrown unconditionally from `TlsConfigurationLoader.UseHttpsWithDefaults`:
+    //   https://github.com/dotnet/aspnetcore/blob/main/src/Servers/Kestrel/Core/src/CoreStrings.resx
+    //   https://github.com/dotnet/aspnetcore/blob/main/src/Servers/Kestrel/Core/src/TlsConfigurationLoader.cs
+    //
+    // The fwlink identifier `848054` has been the unique sentinel for this exact
+    // error since .NET Core 2.1 (it was added when the dev-cert tooling shipped) and
+    // does not appear in any other Kestrel error, so we use it as a single detection
+    // anchor and replace the entire message with our own polyglot-friendly text. This
+    // is more robust than search/replacing pieces of the original message because it
+    // doesn't depend on the exact wording of any sentence other than the fwlink itself.
+    //
+    // If a future framework release reworks the message such that the fwlink is no
+    // longer present, the rewrite degrades gracefully: detection misses, the original
+    // (less friendly) text propagates unchanged, and no incorrect substitution occurs.
+    //
+    // See https://github.com/microsoft/aspire/issues/17273.
+    private const string KestrelHttpsFwlinkSentinel = "https://go.microsoft.com/fwlink/?linkid=848054";
+
+    private const string AspirePolyglotDevCertMessage =
+        "Unable to configure HTTPS endpoint. No server certificate was specified, and the default " +
+        "developer certificate could not be found or is out of date. To generate and trust a developer " +
+        "certificate run 'aspire certs trust'. For more information on configuring HTTPS see " +
+        "https://aspire.dev/docs/.";
+
+    private static string RewritePolyglotUnfriendlyGuidance(string message)
+    {
+        if (message.Contains(KestrelHttpsFwlinkSentinel, StringComparison.Ordinal))
+        {
+            return AspirePolyglotDevCertMessage;
+        }
+
+        return message;
     }
 
     [GeneratedRegex(@"\s{2,}")]

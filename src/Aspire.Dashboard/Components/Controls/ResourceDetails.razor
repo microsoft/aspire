@@ -6,7 +6,7 @@
 @using Microsoft.Extensions.Diagnostics.HealthChecks
 
 @inject IStringLocalizer<ControlsStrings> ControlStringsLoc
-@inject IStringLocalizer<Resources> Loc
+@inject IStringLocalizer<Aspire.Dashboard.Resources.Resources> Loc
 @inject IStringLocalizer<Columns> ColumnsLoc
 
 <div class="resource-details-layout">
@@ -23,7 +23,7 @@
                           ButtonClass="resource-details-actions"
                           Icon="@(new Icons.Regular.Size20.Options())"
                           Items="@_resourceActionsMenuItems"
-                          Title="@Loc[nameof(Resources.ResourcesChangeViewOptions)]"
+                          Title="@Loc[nameof(Aspire.Dashboard.Resources.Resources.ResourcesChangeViewOptions)]"
                           slot="end" />
     </FluentToolbar>
     <div class="property-grid-container">
@@ -235,7 +235,7 @@
                     </AspireTemplateColumn>
                     <AspireTemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.DetailsColumnHeader)]" Class="detailsColumn">
                         <GridValue ValueDescription="@ControlStringsLoc[nameof(ControlsStrings.DetailsColumnHeader)]"
-                                   Value="@(context.HealthStatus is null ? Loc[nameof(Resources.WaitingForHealthDataMessage)] : context.DisplayedDescription)"
+                                   Value="@(context.HealthStatus is null ? Loc[nameof(Aspire.Dashboard.Resources.Resources.WaitingForHealthDataMessage)] : context.DisplayedDescription)"
                                    EnableHighlighting="@(!string.IsNullOrEmpty(_filter))"
                                    HighlightText="@_filter"
                                    TextVisualizerTitle="@context.Name">

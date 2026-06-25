@@ -28,6 +28,33 @@ public sealed class DcpLogParserTests
     }
 
     [Fact]
+    public void TryParseDcpLog_WithUtcTimestamp_ParsesTimestamp()
+    {
+        var logLine = "2024-08-19T06:10:01.000Z\tinfo\tdcp.ServiceReconciler\tservice /apigateway is now in state Ready";
+        var bytes = Encoding.UTF8.GetBytes(logLine);
+
+        var result = DcpLogParser.TryParseDcpLog(bytes.AsSpan(), out var message, out var logLevel, out var category, out var timestamp);
+
+        Assert.True(result);
+        Assert.Equal("service /apigateway is now in state Ready", message);
+        Assert.Equal(LogLevel.Information, logLevel);
+        Assert.Equal("dcp.ServiceReconciler", category);
+        Assert.Equal(new DateTimeOffset(2024, 8, 19, 6, 10, 1, TimeSpan.Zero), timestamp);
+    }
+
+    [Fact]
+    public void TryParseDcpLog_WithOffsetTimestamp_ParsesTimestamp()
+    {
+        var logLine = "2023-09-19T20:40:50.509-0700\tinfo\tdcp.ServiceReconciler\tservice /apigateway is now in state Ready";
+        var bytes = Encoding.UTF8.GetBytes(logLine);
+
+        var result = DcpLogParser.TryParseDcpLog(bytes.AsSpan(), out _, out _, out _, out var timestamp);
+
+        Assert.True(result);
+        Assert.Equal(new DateTimeOffset(2023, 9, 19, 20, 40, 50, 509, TimeSpan.FromHours(-7)), timestamp);
+    }
+
+    [Fact]
     public void TryParseDcpLog_ValidErrorLog_ParsesSuccessfully()
     {
         // Arrange

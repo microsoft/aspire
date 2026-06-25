@@ -6,7 +6,7 @@ This specification describes a new `aspire docs api` command group for browsing,
 
 The new command group lives under `aspire docs`, but it uses a different ingestion pipeline than the existing prose docs commands:
 
-- `aspire docs` indexes `llms-small.txt`
+- `aspire docs` indexes `llms-full.txt`
 - `aspire docs api` indexes `sitemap-0.xml` and uses direct API page routes as addressable items
 
 ## Goals

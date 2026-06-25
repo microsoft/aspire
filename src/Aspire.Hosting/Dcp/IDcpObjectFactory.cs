@@ -30,6 +30,12 @@ internal interface IDcpObjectFactory
         where TDcpResource : CustomResource, IKubernetesStaticMetadata;
 
     /// <summary>
+    /// Patches a DCP custom resource object via the Kubernetes API.
+    /// </summary>
+    Task<TDcpResource> PatchDcpObjectAsync<TDcpResource>(TDcpResource obj, Action<TDcpResource> change, CancellationToken cancellationToken)
+        where TDcpResource : CustomResource, IKubernetesStaticMetadata;
+
+    /// <summary>
     /// Waits until the provided set of Services have their addresses allocated by the orchestrator
     /// and updates them with the allocated address information.
     /// </summary>

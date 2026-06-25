@@ -124,11 +124,27 @@ internal sealed class PlaywrightCliInstaller(
 
         // Step 1: Resolve the target version and integrity hash from the npm registry.
         var versionOverride = configuration[VersionOverrideKey];
-        var effectiveRange = !string.IsNullOrEmpty(versionOverride) ? versionOverride : VersionRange;
+        string effectiveRange;
 
         if (!string.IsNullOrEmpty(versionOverride))
         {
+            // The override is forwarded directly to npm as an exact version specifier, so reject
+            // anything that is not a strict SemVer 2.0 version (e.g. ranges like ">=1.0.0", npm
+            // dist-tags like "latest", or arbitrary strings). This prevents a malformed config
+            // value from being interpreted by npm in unexpected ways and gives the user a clear
+            // error rather than a generic resolve failure.
+            // See https://semver.org/spec/v2.0.0.html for the accepted shape.
+            if (!SemVersion.TryParse(versionOverride, SemVersionStyles.Strict, out _))
+            {
+                return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_InvalidVersionOverride, VersionOverrideKey, versionOverride));
+            }
+
+            effectiveRange = versionOverride;
             logger.LogDebug("Using version override from '{ConfigKey}': {Version}", VersionOverrideKey, versionOverride);
+        }
+        else
+        {
+            effectiveRange = VersionRange;
         }
 
         logger.LogDebug("Resolving {Package}@{Range} from npm registry.", PackageName, effectiveRange);
@@ -189,8 +205,8 @@ internal sealed class PlaywrightCliInstaller(
                 refInfo => string.Equals(refInfo.Kind, "tags", StringComparison.Ordinal) &&
                            (string.Equals(refInfo.Name, $"{packageInfo.Version}", StringComparison.Ordinal) ||
                             string.Equals(refInfo.Name, $"v{packageInfo.Version}", StringComparison.Ordinal)),
-                cancellationToken,
-                sriIntegrity: packageInfo.Integrity);
+                packageInfo.Integrity,
+                cancellationToken);
 
             if (!provenanceResult.IsVerified)
             {

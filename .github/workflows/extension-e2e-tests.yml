@@ -1,0 +1,515 @@
+name: VS Code extension E2E tests
+
+on:
+  workflow_call:
+
+jobs:
+  verify_extester_feed:
+    name: Verify ExTester internal feed availability
+    runs-on: ubuntu-latest
+    env:
+      NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '20.x'
+
+      - name: Install Corepack
+        working-directory: extension
+        run: |
+          CorepackHome="$RUNNER_TEMP/corepack"
+          export COREPACK_HOME="$CorepackHome"
+          echo "COREPACK_HOME=$CorepackHome" >> "$GITHUB_ENV"
+
+          CorepackVersion="$(cat scripts/corepack-version.txt)"
+          npm install --global --force --registry "$NPM_REGISTRY" "corepack@$CorepackVersion"
+
+          npmGlobalBin="$(npm prefix --global)/bin"
+          export PATH="$npmGlobalBin:$PATH"
+          echo "$npmGlobalBin" >> "$GITHUB_PATH"
+
+          installed="$(corepack --version)"
+          if [ "$installed" != "$CorepackVersion" ]; then
+            echo "::error::corepack version mismatch: expected $CorepackVersion, got '$installed'."
+            exit 1
+          fi
+
+          corepack enable
+          node ./scripts/prepareCorepackYarn.mjs
+          corepack yarn --version
+
+      - name: Validate lockfile registries
+        working-directory: extension
+        run: node scripts/validate-lockfile-registry.cjs
+
+      - name: Install extension dependencies
+        working-directory: extension
+        run: |
+          for attempt in 1 2 3; do
+            if corepack yarn install --frozen-lockfile --non-interactive; then
+              exit 0
+            else
+              exitCode=$?
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::corepack yarn install failed after $attempt attempts."
+              exit "$exitCode"
+            fi
+
+            delay=$((attempt * 30))
+            echo "corepack yarn install failed with exit code $exitCode. Retrying in ${delay}s (attempt $((attempt + 1)) of 3)."
+            sleep "$delay"
+          done
+
+      - name: Verify locked ExTester
+        working-directory: extension
+        run: node scripts/run-e2e.js --verify-extester-feed
+
+  extension_e2e:
+    name: VS Code extension E2E (${{ matrix.name }}, ${{ matrix.shardName }})
+    needs: verify_extester_feed
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 75
+    env:
+      NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            shardName: command-palette
+            spec: out/test-e2e/test-e2e/commandPalette.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: command-palette
+            spec: out/test-e2e/test-e2e/commandPalette.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: settings-files
+            spec: out/test-e2e/test-e2e/settingsFiles.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: settings-files
+            spec: out/test-e2e/test-e2e/settingsFiles.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: discovery-configuration
+            spec: out/test-e2e/test-e2e/discoveryConfiguration.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: discovery-configuration
+            spec: out/test-e2e/test-e2e/discoveryConfiguration.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: apphost-tree
+            spec: out/test-e2e/test-e2e/appHostTree.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: apphost-tree
+            spec: out/test-e2e/test-e2e/appHostTree.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: tree-actions
+            spec: out/test-e2e/test-e2e/treeActions.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: tree-actions
+            spec: out/test-e2e/test-e2e/treeActions.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: debug-dashboard
+            spec: out/test-e2e/test-e2e/debugDashboard.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: debug-dashboard
+            spec: out/test-e2e/test-e2e/debugDashboard.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: debug-startup-timeout
+            spec: out/test-e2e/test-e2e/debugStartupTimeout.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            unsetCliStartTimeout: true
+          - name: Windows
+            shardName: debug-startup-timeout
+            spec: out/test-e2e/test-e2e/debugStartupTimeout.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            unsetCliStartTimeout: true
+          - name: Linux
+            shardName: zero-to-running
+            spec: out/test-e2e/test-e2e/zeroToRunning.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: zero-to-running
+            spec: out/test-e2e/test-e2e/zeroToRunning.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: package-surface
+            spec: out/test-e2e/test-e2e/packageSurface.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: package-surface
+            spec: out/test-e2e/test-e2e/packageSurface.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: edge-cases
+            spec: out/test-e2e/test-e2e/edgeCases.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: edge-cases
+            spec: out/test-e2e/test-e2e/edgeCases.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '20.x'
+
+      - name: Install Corepack
+        working-directory: extension
+        run: |
+          # Scope Corepack's cache to this job so prepareCorepackYarn.mjs cannot
+          # collide with any other build sharing the runner's user profile.
+          # Cannot be set at job-level env: the `runner` context is unavailable
+          # in job env evaluation, so we forward it through $GITHUB_ENV instead.
+          $CorepackHome = Join-Path $env:RUNNER_TEMP 'corepack'
+          $env:COREPACK_HOME = $CorepackHome
+          "COREPACK_HOME=$CorepackHome" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          $CorepackVersion = (Get-Content -Raw -Path 'scripts/corepack-version.txt').Trim()
+          # The hosted Windows image already has a yarn shim in npm's global
+          # prefix. The npm Corepack package owns that shim too, so force only
+          # in CI where the tool install is isolated to this ephemeral job.
+          npm install --global --force --registry "$env:NPM_REGISTRY" "corepack@$CorepackVersion"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $npmGlobalBin = (npm prefix --global).Trim()
+          $env:PATH = "$npmGlobalBin$([IO.Path]::PathSeparator)$env:PATH"
+          $npmGlobalBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          $installed = (corepack --version).Trim()
+          if ($installed -ne $CorepackVersion) {
+            Write-Error "corepack version mismatch: expected $CorepackVersion, got '$installed'. The bundled Corepack on PATH may be taking precedence over the npm-global install."
+            exit 1
+          }
+
+          corepack enable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # Seed Corepack's cache from the internal dnceng npm feed. Corepack's
+          # built-in prepare path can bypass the configured internal feed, so use
+          # the shared cache seeding script before any `corepack yarn` invocation.
+          node ./scripts/prepareCorepackYarn.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          corepack yarn --version
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          global-json-file: global.json
+
+      - name: Download VSIX
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: aspire-extension
+          path: extension/out
+
+      - name: Download CLI archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cli-native-archives-${{ matrix.rid }}
+          path: artifacts/cli-archive
+
+      - name: Download NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: built-nugets
+          path: artifacts/nugets
+
+      - name: Download RID-specific NuGet packages
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: built-nugets-for-${{ matrix.rid }}
+          path: artifacts/nugets-rid
+
+      - name: Validate lockfile registries
+        working-directory: extension
+        run: node scripts/validate-lockfile-registry.cjs
+
+      - name: Install extension dependencies
+        working-directory: extension
+        run: |
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            corepack yarn install --frozen-lockfile --non-interactive
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+
+            $exitCode = $LASTEXITCODE
+            if ($attempt -eq 3) {
+              Write-Error "corepack yarn install failed after $attempt attempts."
+              exit $exitCode
+            }
+
+            $delay = $attempt * 30
+            Write-Host "corepack yarn install failed with exit code $exitCode. Retrying in ${delay}s (attempt $($attempt + 1) of 3)."
+            Start-Sleep -Seconds $delay
+          }
+
+      - name: Prepare Aspire CLI and package hive
+        id: prepare_cli
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+
+          $archive = Get-ChildItem -Path '${{ github.workspace }}/artifacts/cli-archive' -Recurse -File -Filter '${{ matrix.archivePattern }}' | Select-Object -First 1
+          if ($null -eq $archive) {
+            Get-ChildItem -Path '${{ github.workspace }}/artifacts/cli-archive' -Recurse -File | Format-Table -AutoSize
+            throw "Unable to find CLI archive matching ${{ matrix.archivePattern }}."
+          }
+
+          $bundleDir = Join-Path '${{ github.workspace }}' 'artifacts/bundle/${{ matrix.rid }}'
+          New-Item -ItemType Directory -Path $bundleDir -Force | Out-Null
+          if ('${{ runner.os }}' -eq 'Windows') {
+            Expand-Archive -Path $archive.FullName -DestinationPath $bundleDir -Force
+          } else {
+            tar -xzf $archive.FullName -C $bundleDir
+          }
+
+          $cli = Get-ChildItem -Path $bundleDir -Recurse -File -Filter '${{ matrix.cliBinary }}' | Select-Object -First 1
+          if ($null -eq $cli) {
+            Get-ChildItem -Path $bundleDir -Recurse -File | Format-Table -AutoSize
+            throw "Unable to find ${{ matrix.cliBinary }} in extracted CLI archive."
+          }
+
+          if ('${{ runner.os }}' -ne 'Windows') {
+            chmod +x $cli.FullName
+          }
+
+          & $cli.FullName setup
+
+          $shippingDir = Join-Path '${{ github.workspace }}' 'artifacts/nugets/Debug/Shipping'
+          if (-not (Test-Path $shippingDir)) {
+            $shippingDir = Join-Path '${{ github.workspace }}' 'artifacts/nugets'
+          }
+
+          $samplePackage = Get-ChildItem -Path $shippingDir -Recurse -File -Filter 'Aspire.Hosting.AppHost.*.nupkg' | Select-Object -First 1
+          if ($null -eq $samplePackage) {
+            throw "Unable to find Aspire.Hosting.AppHost.*.nupkg under $shippingDir."
+          }
+
+          $hiveLabel = $null
+          if ($samplePackage.Name -match '-pr\.([0-9]+)\.') {
+            $hiveLabel = "pr-$($Matches[1])"
+          } elseif ('${{ startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/internal/release/') }}' -eq 'true') {
+            $hiveLabel = 'staging'
+          } else {
+            $hiveLabel = 'daily'
+          }
+
+          $hiveDir = Join-Path $HOME ".aspire/hives/$hiveLabel/packages"
+          New-Item -ItemType Directory -Path $hiveDir -Force | Out-Null
+          Get-ChildItem -Path $shippingDir -Recurse -File -Filter '*.nupkg' | Copy-Item -Destination $hiveDir -Force
+          $ridNugets = Join-Path '${{ github.workspace }}' 'artifacts/nugets-rid'
+          if (Test-Path $ridNugets) {
+            Get-ChildItem -Path $ridNugets -Recurse -File -Filter '*.nupkg' | Copy-Item -Destination $hiveDir -Force
+          }
+
+          "ASPIRE_EXTENSION_E2E_CLI_PATH=$($cli.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION=$(($samplePackage.Name -replace '^Aspire\.Hosting\.AppHost\.', '') -replace '\.nupkg$', '')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          & $cli.FullName --version
+
+      - name: Compile extension E2E tests
+        working-directory: extension
+        run: |
+          corepack yarn compile
+          corepack yarn compile-e2e
+          if (-not (Test-Path '${{ matrix.spec }}')) {
+            throw "Compiled E2E shard spec was not found: ${{ matrix.spec }}"
+          }
+
+      - name: Install E2E recorder
+        if: ${{ matrix.useXvfb }}
+        run: |
+          if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
+            ffmpeg -version | Select-Object -First 1
+          } else {
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          }
+
+      - name: Run extension E2E tests
+        working-directory: extension
+        env:
+          ASPIRE_EXTENSION_E2E_VSIX: ${{ github.workspace }}/extension/out/aspire-extension.vsix
+          ASPIRE_EXTENSION_E2E_SHARD: ${{ matrix.shardName }}
+          ASPIRE_EXTENSION_E2E_SPEC: ${{ matrix.spec }}
+          ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT: ${{ matrix.unsetCliStartTimeout }}
+          # Linux E2E jobs run under Xvfb, where ffmpeg recordings are compact
+          # and useful for diagnosing timing-sensitive flakes after the fact.
+          ASPIRE_EXTENSION_E2E_RECORDING_MODE: ${{ matrix.useXvfb && 'always' || 'off' }}
+        run: |
+          if ('${{ matrix.useXvfb }}' -eq 'true') {
+            xvfb-run -a node scripts/run-e2e.js
+          } else {
+            node scripts/run-e2e.js
+          }
+
+      - name: Upload E2E diagnostics
+        id: upload_e2e_diagnostics
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: extension-e2e-diagnostics-${{ matrix.rid }}-${{ matrix.shardName }}-attempt${{ github.run_attempt }}
+          path: |
+            extension/.test-results/**
+            extension/.test-storage/**/settings/User/**
+            extension/.test-storage/**/settings/logs/**
+            extension/.test-storage/**/screenshots/**
+            extension/.test-storage/**/aspire-home/logs/**
+            extension/.test-storage/**/aspire-home/cache/apphost-info/**
+            extension/.test-workspaces/**/.aspire/**
+            extension/.test-workspaces/**/*.log
+            extension/.test-recordings/**
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+      - name: Print E2E diagnostics links
+        if: always()
+        working-directory: extension
+        run: |
+          $artifactName = "extension-e2e-diagnostics-${{ matrix.rid }}-${{ matrix.shardName }}-attempt${{ github.run_attempt }}"
+          $artifactUrl = "${{ steps.upload_e2e_diagnostics.outputs.artifact-url }}"
+          $uploadOutcome = "${{ steps.upload_e2e_diagnostics.outcome }}"
+          if ([string]::IsNullOrWhiteSpace($artifactUrl)) {
+            $artifactUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts"
+          }
+          $hasResults = Test-Path ".test-results"
+          $hasStorage = Test-Path ".test-storage"
+          $recordings = Get-ChildItem -Path ".test-recordings" -Recurse -File -Filter "*.mp4" -ErrorAction SilentlyContinue
+          $recordingLogs = Get-ChildItem -Path ".test-recordings" -Recurse -File -Filter "*.ffmpeg.log" -ErrorAction SilentlyContinue
+          $screenshots = Get-ChildItem -Path ".test-storage" -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "[/\\]screenshots[/\\]" }
+
+          Write-Host "Extension E2E diagnostics artifact: $artifactName"
+          Write-Host "Diagnostics upload outcome: $uploadOutcome"
+          if ($uploadOutcome -ne 'success') {
+            Write-Warning "Diagnostics upload did not complete successfully. Keeping the shard result based on the test step."
+          }
+          Write-Host "Artifacts page: $artifactUrl"
+          if ($hasResults) {
+            Write-Host "Mocha/state files are under .test-results inside the artifact."
+          }
+          if ($hasStorage) {
+            Write-Host "VS Code logs and Aspire home diagnostics are under .test-storage inside the artifact."
+          }
+          if ($screenshots) {
+            Write-Host "Failure screenshots:"
+            $screenshots | ForEach-Object { Write-Host "  $($_.FullName.Replace((Get-Location).Path + [IO.Path]::DirectorySeparatorChar, ''))" }
+          } else {
+            Write-Host "No failure screenshots were found for this shard."
+          }
+          if ($recordings) {
+            Write-Host "E2E recordings:"
+            $recordings | ForEach-Object { Write-Host "  $($_.FullName.Replace((Get-Location).Path + [IO.Path]::DirectorySeparatorChar, ''))" }
+          } else {
+            Write-Host "No E2E recordings were kept for this shard. Linux CI keeps recordings by default; Windows shards upload screenshots and logs only."
+          }
+          if ($recordingLogs) {
+            Write-Host "Recorder logs:"
+            $recordingLogs | ForEach-Object { Write-Host "  $($_.FullName.Replace((Get-Location).Path + [IO.Path]::DirectorySeparatorChar, ''))" }
+          }

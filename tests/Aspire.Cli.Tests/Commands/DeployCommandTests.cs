@@ -59,7 +59,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode); // Ensure the command fails
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.AppHostIncompatible, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode); // Ensure the command fails
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode); // Ensure the command fails
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode); // Ensure the command fails
     }
 
     [Fact]
@@ -395,7 +395,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode); // Ensure the command returns a non-zero exit code
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode); // Ensure the command returns a non-zero exit code
 
         static async IAsyncEnumerable<PublishingActivity> GetFailedDeploymentActivities([EnumeratorCancellation] CancellationToken cancellationToken)
         {

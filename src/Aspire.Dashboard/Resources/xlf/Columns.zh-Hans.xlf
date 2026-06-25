@@ -19,30 +19,40 @@
       </trans-unit>
       <trans-unit id="StateColumnResourceContainerRuntimeUnhealthy">
         <source>Container runtime was found but appears to be unhealthy. Ensure that it is running.
-For more information, see https://aka.ms/aspire/container-runtime-unhealthy</source>
+For more information, see https://aka.ms/aspire/container-runtime-unhealthy.</source>
         <target state="needs-review-translation">已找到容器运行时，但它似乎运行不正常。请确保它正在运行。
 有关详细信息，请参阅 https://aka.ms/dotnet/aspire/container-runtime-unhealthy</target>
         <note>Contains a new line</note>
       </trans-unit>
       <trans-unit id="StateColumnResourceExited">
-        <source>{0} is no longer running</source>
-        <target state="translated">{0} 已不再运行</target>
+        <source>{0} is no longer running.</source>
+        <target state="needs-review-translation">{0} 已不再运行</target>
         <note>{0} is a resource type</note>
       </trans-unit>
       <trans-unit id="StateColumnResourceExitedUnexpectedly">
-        <source>{0} exited unexpectedly with exit code {1}</source>
-        <target state="translated">{0} 已意外退出，退出代码为 {1}</target>
+        <source>{0} exited unexpectedly with exit code {1}.</source>
+        <target state="needs-review-translation">{0} 已意外退出，退出代码为 {1}</target>
         <note>{0} is a resource type, {1} is a number</note>
       </trans-unit>
+      <trans-unit id="StateColumnResourceFailedToStart">
+        <source>{0} failed to start.</source>
+        <target state="new">{0} failed to start.</target>
+        <note>{0} is a resource type</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceNotStarted">
-        <source>Resource has not started because it's configured to not automatically start.</source>
-        <target state="translated">资源尚未启动，因为它配置为不自动启动。</target>
+        <source>Resource is not configured to start automatically.</source>
+        <target state="needs-review-translation">资源尚未启动，因为它配置为不自动启动。</target>
         <note />
       </trans-unit>
       <trans-unit id="StateColumnResourceWaiting">
-        <source>Resource is waiting for other resources to be in a running and healthy state.</source>
-        <target state="translated">资源正在等待其他资源处于运行正常状态。</target>
+        <source>Resource is waiting for dependencies.</source>
+        <target state="needs-review-translation">资源正在等待其他资源处于运行正常状态。</target>
         <note />
+      </trans-unit>
+      <trans-unit id="StateColumnResourceWaitingFor">
+        <source>Waiting for dependencies: {0}</source>
+        <target state="new">Waiting for dependencies: {0}</target>
+        <note>{0} is a comma-separated list of dependency resource names.</note>
       </trans-unit>
       <trans-unit id="UnknownStateLabel">
         <source>Unknown</source>

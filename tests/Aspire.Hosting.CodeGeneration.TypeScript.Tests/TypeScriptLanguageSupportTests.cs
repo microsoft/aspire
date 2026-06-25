@@ -22,7 +22,7 @@ public sealed class TypeScriptLanguageSupportTests
             ProjectName = "BrownfieldApp"
         });
 
-        Assert.Contains("apphost.ts", files.Keys);
+        Assert.Contains("apphost.mts", files.Keys);
         Assert.Contains("package.json", files.Keys);
         Assert.Contains("tsconfig.apphost.json", files.Keys);
         Assert.DoesNotContain("tsconfig.json", files.Keys);
@@ -38,7 +38,7 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
-        Assert.Equal("eslint apphost.ts", scripts["aspire:lint"]?.GetValue<string>());
+        Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
         Assert.Equal("npm run aspire:lint", scripts["lint"]?.GetValue<string>());
         Assert.Equal("npm run aspire:lint", scripts["predev"]?.GetValue<string>());
         Assert.Equal("npm run aspire:start", scripts["dev"]?.GetValue<string>());
@@ -72,6 +72,7 @@ public sealed class TypeScriptLanguageSupportTests
             {
               "name": "vite-brownfield",
               "version": "2.0.0",
+              "type": "commonjs",
               "scripts": {
                 "dev": "vite",
                 "build": "vite build",
@@ -110,7 +111,7 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
-        Assert.Equal("eslint apphost.ts", scripts["aspire:lint"]?.GetValue<string>());
+        Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
         Assert.False(scripts.ContainsKey("dev"));
         Assert.False(scripts.ContainsKey("build"));
         Assert.False(scripts.ContainsKey("preview"));
@@ -126,6 +127,27 @@ public sealed class TypeScriptLanguageSupportTests
         // engines.node is always set
         var engines = packageJson["engines"]!.AsObject();
         Assert.Equal("^20.19.0 || ^22.13.0 || >=24", engines["node"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void Scaffold_NestedBrownfieldPackage_UsesStableAppHostPackageName()
+    {
+        using var testDir = new TestTempDirectory();
+        File.WriteAllText(Path.Combine(testDir.Path, "package.json"), """{ "name": "existing-app" }""");
+        var appHostDirectory = Directory.CreateDirectory(Path.Combine(testDir.Path, "aspire-apphost"));
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = appHostDirectory.FullName,
+            ProjectName = "ExistingApp"
+        });
+
+        var packageJson = ParseJson(files["package.json"]);
+
+        Assert.Equal("aspire-apphost", packageJson["name"]?.GetValue<string>());
+        Assert.Equal("1.0.0", packageJson["version"]?.GetValue<string>());
+        Assert.True(packageJson["private"]?.GetValue<bool>());
+        Assert.Equal("module", packageJson["type"]?.GetValue<string>());
     }
 
     [Fact]
@@ -238,6 +260,44 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal(new[] { "--no-install", "tsc", "--noEmit", "-p", "tsconfig.apphost.json" }, preExecute.Args);
         Assert.Equal(new[] { "--no-install", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}" }, runtimeSpec.Execute.Args);
         Assert.Contains("npx --no-install tsc --noEmit -p tsconfig.apphost.json && npx --no-install tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", watchExecute.Args);
+    }
+
+    [Fact]
+    public void Scaffold_EmitsScaffoldedEslintConfigVerbatim()
+    {
+        using var testDir = new TestTempDirectory();
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "SnapshotApp"
+        });
+
+        Assert.Contains("eslint.config.mjs", files.Keys);
+
+        // The scaffold emits the embedded eslint.config.mjs verbatim. Asserting
+        // equality against the embedded resource keeps a single source of truth
+        // (the ts-starter template file linked into this project) so no
+        // separate .verified.mjs snapshot can drift from it.
+        Assert.Equal(EmbeddedResources.Read("eslint.config.mjs"), files["eslint.config.mjs"]);
+    }
+
+    [Fact]
+    public void Scaffold_EmitsScaffoldedAppHostTsConfigVerbatim()
+    {
+        using var testDir = new TestTempDirectory();
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "SnapshotApp"
+        });
+
+        Assert.Contains("tsconfig.apphost.json", files.Keys);
+
+        // The scaffold emits the embedded tsconfig.apphost.json verbatim. See
+        // Scaffold_EmitsScaffoldedEslintConfigVerbatim for the rationale.
+        Assert.Equal(EmbeddedResources.Read("tsconfig.apphost.json"), files["tsconfig.apphost.json"]);
     }
 
     private static JsonObject ParseJson(string content) => JsonNode.Parse(content)!.AsObject();

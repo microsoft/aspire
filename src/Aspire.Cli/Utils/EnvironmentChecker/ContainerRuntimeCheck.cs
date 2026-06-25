@@ -9,8 +9,9 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// <summary>
 /// Checks if a container runtime (Docker or Podman) is available and running.
 /// </summary>
-internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logger) : IEnvironmentCheck
+internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logger, IEnvironment environment) : IEnvironmentCheck
 {
+    internal const string CheckName = "container-runtime";
 
     /// <summary>
     /// Minimum Docker version required for Aspire.
@@ -29,12 +30,12 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
         try
         {
             // Probe all runtimes in parallel
-            var dockerTask = ContainerRuntimeDetector.CheckRuntimeAsync("docker", "Docker", isDefault: true, logger, cancellationToken);
-            var podmanTask = ContainerRuntimeDetector.CheckRuntimeAsync("podman", "Podman", isDefault: false, logger, cancellationToken);
+            var dockerTask = ContainerRuntimeDetector.CheckRuntimeAsync(KnownContainerRuntimes.Docker, "Docker", isDefault: true, logger, cancellationToken);
+            var podmanTask = ContainerRuntimeDetector.CheckRuntimeAsync(KnownContainerRuntimes.Podman, "Podman", isDefault: false, logger, cancellationToken);
             var runtimes = await Task.WhenAll(dockerTask, podmanTask);
 
-            var configuredRuntime = Environment.GetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME")
-                ?? Environment.GetEnvironmentVariable("DOTNET_ASPIRE_CONTAINER_RUNTIME");
+            var configuredRuntime = environment.GetEnvironmentVariable("ASPIRE_CONTAINER_RUNTIME")
+                ?? environment.GetEnvironmentVariable("DOTNET_ASPIRE_CONTAINER_RUNTIME");
 
             // Select best from already-probed results (no re-probing)
             ContainerRuntimeInfo? selected;
@@ -70,8 +71,8 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
             {
                 results.Add(new EnvironmentCheckResult
                 {
-                    Category = "container",
-                    Name = "container-runtime",
+                    Category = EnvironmentCheckCategories.Container,
+                    Name = CheckName,
                     Status = EnvironmentCheckStatus.Fail,
                     Message = "No container runtime detected",
                     Fix = "Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation",
@@ -86,8 +87,8 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
             logger.LogDebug(ex, "Error checking container runtime");
             return [new EnvironmentCheckResult
             {
-                Category = "container",
-                Name = "container-runtime",
+                Category = EnvironmentCheckCategories.Container,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Fail,
                 Message = "Failed to check container runtime",
                 Details = ex.Message
@@ -125,8 +126,8 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
             var runtimeName = info.IsDockerDesktop ? "Docker Desktop" : "Docker";
             return new EnvironmentCheckResult
             {
-                Category = "container",
-                Name = "container-runtime",
+                Category = EnvironmentCheckCategories.Container,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Fail,
                 Message = $"{runtimeName} is running in Windows container mode",
                 Details = "Aspire requires Linux containers. Windows containers are not supported.",
@@ -140,8 +141,8 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
 
     private static EnvironmentCheckResult WarningResult(string message, string fix) => new()
     {
-        Category = "container",
-        Name = "container-runtime",
+        Category = EnvironmentCheckCategories.Container,
+        Name = CheckName,
         Status = EnvironmentCheckStatus.Warning,
         Message = message,
         Fix = fix,
@@ -161,7 +162,7 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
             // Only reached for explicitly configured runtimes
             return new EnvironmentCheckResult
             {
-                Category = "container",
+                Category = EnvironmentCheckCategories.Container,
                 Name = info.Executable,
                 Status = EnvironmentCheckStatus.Fail,
                 Message = $"{info.Name}: not found (configured via ASPIRE_CONTAINER_RUNTIME={configuredRuntime})",
@@ -173,7 +174,7 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
         {
             return new EnvironmentCheckResult
             {
-                Category = "container",
+                Category = EnvironmentCheckCategories.Container,
                 Name = info.Executable,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = $"{info.Name}: installed but not running{selectedSuffix}",
@@ -209,7 +210,7 @@ internal sealed class ContainerRuntimeCheck(ILogger<ContainerRuntimeCheck> logge
 
         return new EnvironmentCheckResult
         {
-            Category = "container",
+            Category = EnvironmentCheckCategories.Container,
             Name = info.Executable,
             Status = EnvironmentCheckStatus.Pass,
             Message = $"{info.Name}{versionSuffix}: running ({reason}){selectedSuffix}"

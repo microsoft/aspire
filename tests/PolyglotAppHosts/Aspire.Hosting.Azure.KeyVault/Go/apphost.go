@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -25,8 +25,8 @@ func main() {
 	exprSecretValue := aspire.RefExpr("secret-value-%v", secretParam)
 	namedExprSecretValue := aspire.RefExpr("named-secret-value-%v", namedSecretParam)
 
-	// ── 2. WithRoleAssignments ────────────────────────────────────────────────
-	vault.WithRoleAssignments(vault, []aspire.AzureKeyVaultRole{
+	// ── 2. WithKeyVaultRoleAssignments ────────────────────────────────────────
+	vault.WithKeyVaultRoleAssignments(vault, []aspire.AzureKeyVaultRole{
 		aspire.AzureKeyVaultRoleKeyVaultReader,
 		aspire.AzureKeyVaultRoleKeyVaultSecretsUser,
 	})
@@ -49,20 +49,20 @@ func main() {
 	_ = vault.GetSecret("param-secret")
 
 	// Apply role assignments to created secret resources to validate generic coverage.
-	secretFromParameter.WithRoleAssignments(vault,
+	secretFromParameter.WithKeyVaultRoleAssignments(vault,
 		[]aspire.AzureKeyVaultRole{aspire.AzureKeyVaultRoleKeyVaultSecretsUser})
-	secretFromExpression.WithRoleAssignments(vault,
+	secretFromExpression.WithKeyVaultRoleAssignments(vault,
 		[]aspire.AzureKeyVaultRole{aspire.AzureKeyVaultRoleKeyVaultReader})
-	namedSecretFromParameter.WithRoleAssignments(vault,
+	namedSecretFromParameter.WithKeyVaultRoleAssignments(vault,
 		[]aspire.AzureKeyVaultRole{aspire.AzureKeyVaultRoleKeyVaultSecretsOfficer})
-	namedSecretFromExpression.WithRoleAssignments(vault,
+	namedSecretFromExpression.WithKeyVaultRoleAssignments(vault,
 		[]aspire.AzureKeyVaultRole{aspire.AzureKeyVaultRoleKeyVaultReader})
 
 	app, err := builder.Build()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }

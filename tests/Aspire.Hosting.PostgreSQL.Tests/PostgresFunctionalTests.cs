@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using System.Data;
 using System.Net;
 using Aspire.TestUtilities;
@@ -559,9 +561,9 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
 
             var passwordParameter = builder.AddParameter("pwd", "p@ssword1", secret: true);
             builder
-                .AddPostgres("resource", password: passwordParameter).WithLifetime(ContainerLifetime.Persistent)
-                .WithPgWeb(c => c.WithLifetime(ContainerLifetime.Persistent))
-                .WithPgAdmin(c => c.WithLifetime(ContainerLifetime.Persistent))
+                .AddPostgres("resource", password: passwordParameter).WithPersistentLifetime()
+                .WithPgWeb(c => c.WithPersistentLifetime())
+                .WithPgAdmin(c => c.WithPersistentLifetime())
                 .AddDatabase("mydb");
 
             var app = builder.Build();
@@ -626,6 +628,13 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
         await host.StartAsync();
 
         await app.ResourceNotifications.WaitForResourceHealthyAsync(newDb.Resource.Name, cts.Token);
+
+        // Verify that the resource logger emitted feedback about the custom creation script.
+        // Logs are attributed to the parent server resource, not the database resource.
+        await app.WaitForAllTextAsync(
+            ["Executing custom creation script for database", "Completed custom creation script for database"],
+            resourceName: postgres.Resource.Name,
+            cts.Token);
 
         var conn = host.Services.GetRequiredService<NpgsqlConnection>();
 
@@ -811,4 +820,15 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
             Assert.Equal(ConnectionState.Open, conn.State);
         }
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Postgres_WithPersistentLifetime_ReusesContainerWithDefaults()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddPostgres("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
 }

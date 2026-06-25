@@ -1,7 +1,7 @@
 #!/bin/bash
 # Polyglot SDK Validation - Python validation AppHosts
 # Iterates all Python validation AppHosts under tests/PolyglotAppHosts/*/Python,
-# runs 'aspire restore --apphost' to regenerate the per-integration .modules/ SDK, and
+# runs 'aspire restore --apphost' to regenerate the per-integration .aspire/modules/ SDK, and
 # compiles each AppHost with the generated Python modules to verify syntax.
 set -euo pipefail
 
@@ -68,9 +68,9 @@ for app_dir in "${APP_DIRS[@]}"; do
         continue
     fi
 
-    if [ ! -f ".modules/aspire_app.py" ]; then
-        echo "  ERROR: generated .modules/aspire_app.py missing for $integration_name"
-        FAILED+=("$integration_name (missing .modules/aspire_app.py)")
+    if [ ! -f ".aspire/modules/aspire_app.py" ]; then
+        echo "  ERROR: generated .aspire/modules/aspire_app.py missing for $integration_name"
+        FAILED+=("$integration_name (missing .aspire/modules/aspire_app.py)")
         echo ""
         continue
     fi
@@ -80,7 +80,7 @@ for app_dir in "${APP_DIRS[@]}"; do
 from pathlib import Path
 
 files = [Path('apphost.py')]
-files.extend(sorted(Path('.modules').rglob('*.py')))
+files.extend(sorted(Path('.aspire/modules').rglob('*.py')))
 for file in files:
     compile(file.read_text(encoding='utf-8'), str(file), 'exec')
 INNERPY

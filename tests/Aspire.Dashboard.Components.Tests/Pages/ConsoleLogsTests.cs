@@ -590,7 +590,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var testResource = ModelTestHelpers.CreateResource(
             resourceName: "test-resource",
             state: KnownResourceState.Running,
-            commands: [new CommandViewModel("test-name", CommandViewModelState.Enabled, "test-displayname", "test-displaydescription", confirmationMessage: "", parameter: null, isHighlighted: true, iconName: string.Empty, iconVariant: IconVariant.Regular)]);
+            commands: [new CommandViewModel("test-name", CommandViewModelState.Enabled, "test-displayname", "test-displaydescription", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: string.Empty, iconVariant: IconVariant.Regular)]);
         var subscribedResourceNameTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -654,7 +654,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         var testResource = ModelTestHelpers.CreateResource(
             resourceName: "test-resource",
             state: KnownResourceState.Running,
-            commands: [new CommandViewModel("test-name", CommandViewModelState.Enabled, "test-displayname", "test-displaydescription", confirmationMessage: "", parameter: null, isHighlighted: true, iconName: string.Empty, iconVariant: IconVariant.Regular)]);
+            commands: [new CommandViewModel("test-name", CommandViewModelState.Enabled, "test-displayname", "test-displaydescription", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: string.Empty, iconVariant: IconVariant.Regular)]);
         var subscribedResourceNameTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -842,8 +842,9 @@ public partial class ConsoleLogsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentToolbar(this);
 
-        JSInterop.SetupVoid("initializeContinuousScroll");
-        JSInterop.SetupVoid("resetContinuousScrollPosition");
+        JSInterop.SetupVoid("initializeContinuousScroll").SetVoidResult();
+        JSInterop.SetupVoid("resetContinuousScrollPosition").SetVoidResult();
+        JSInterop.SetupVoid("focusElement", _ => true);
 
         FluentUISetupHelpers.AddCommonDashboardServices(this, browserTimeProvider: timeProvider);
 

@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -17,7 +17,7 @@ func main() {
 		log.Fatalf(aspire.FormatError(eventHubs.Err()))
 	}
 
-	eventHubs.WithRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
+	eventHubs.WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
 		aspire.AzureEventHubsRoleAzureEventHubsDataOwner,
 	})
 
@@ -38,7 +38,7 @@ func main() {
 
 	consumerGroup := hub.AddConsumerGroup("processors", &aspire.AddConsumerGroupOptions{
 		GroupName: aspire.StringPtr("processor-group"),
-	}).WithRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
+	}).WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
 		aspire.AzureEventHubsRoleAzureEventHubsDataReceiver,
 	})
 	if consumerGroup.Err() != nil {
@@ -50,7 +50,7 @@ func main() {
 			emulator.
 				WithHostPort(5673).
 				WithConfigurationFile("./eventhubs.config.json").
-				WithRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
+				WithEventHubsRoleAssignments(eventHubs, []aspire.AzureEventHubsRole{
 					aspire.AzureEventHubsRoleAzureEventHubsDataSender,
 				})
 		},
@@ -60,7 +60,7 @@ func main() {
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }
