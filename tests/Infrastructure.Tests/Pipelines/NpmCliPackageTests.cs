@@ -173,22 +173,70 @@ public sealed class NpmCliPackageTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task LauncherPostinstallCheckExplainsDisabledOptionalDependencies()
+    public async Task LauncherPostinstallCheckExplainsDisabledOptionalDependenciesOnSupportedPlatform()
     {
         var pointerPackageRoot = await CreateFakeNpmInstallAsync(includeRidPackages: false);
+        var testScriptPath = Path.Combine(_tempDirectory.Path, $"{Path.GetRandomFileName()}.js");
+        await File.WriteAllTextAsync(
+            testScriptPath,
+            """
+            const launcher = require(process.argv[2]);
+
+            try {
+              launcher.__testing.runNpmPostinstallCheck(
+                { name: process.argv[3], version: process.argv[4] },
+                () => process.argv[5]);
+              console.error('Expected postinstall check to fail.');
+              process.exit(1);
+            } catch (error) {
+              console.log(error.message);
+            }
+            """);
 
         using var cmd = new NodeCommand(_output)
             .WithTimeout(TimeSpan.FromSeconds(30));
 
         var result = await cmd.ExecuteScriptAsync(
+            testScriptPath,
             Path.Combine(pointerPackageRoot, "bin", "aspire.js"),
-            "--npm-postinstall-check");
+            PackageName,
+            PackageVersion,
+            "linux-x64");
 
-        Assert.Equal(1, result.ExitCode);
+        result.EnsureSuccessful();
+
         Assert.Contains("without disabling npm optional dependencies", result.Output);
         Assert.Contains("--omit=optional", result.Output);
         Assert.Contains("--no-optional", result.Output);
         Assert.Contains("npm_config_optional=false", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task LauncherPostinstallCheckSkipsUnsupportedPlatform()
+    {
+        var pointerPackageRoot = await CreateFakeNpmInstallAsync(includeRidPackages: false);
+        var testScriptPath = Path.Combine(_tempDirectory.Path, $"{Path.GetRandomFileName()}.js");
+        await File.WriteAllTextAsync(
+            testScriptPath,
+            """
+            const launcher = require(process.argv[2]);
+
+            launcher.__testing.runNpmPostinstallCheck(
+              { name: process.argv[3], version: process.argv[4] },
+              () => launcher.__testing.detectRid('linux', 'arm64', true));
+            """);
+
+        using var cmd = new NodeCommand(_output)
+            .WithTimeout(TimeSpan.FromSeconds(30));
+
+        var result = await cmd.ExecuteScriptAsync(
+            testScriptPath,
+            Path.Combine(pointerPackageRoot, "bin", "aspire.js"),
+            PackageName,
+            PackageVersion);
+
+        result.EnsureSuccessful();
     }
 
     [Fact]
@@ -232,6 +280,9 @@ public sealed class NpmCliPackageTests : IDisposable
         Assert.Contains("Optional dependencies disabled", readme);
         Assert.Contains("If installation fails or the launcher says the native package was not installed", readme);
         Assert.Contains("the `npm_config_optional=false` environment variable", readme);
+        Assert.Contains("New app:", readme);
+        Assert.Contains("Existing repo:", readme);
+        Assert.Contains("Dashboard only:", readme);
         Assert.Contains("PATH cannot find `aspire`", readme);
         Assert.Contains("Supported platforms and architectures", readme);
         Assert.Contains("## Useful commands", readme);
@@ -240,6 +291,7 @@ public sealed class NpmCliPackageTests : IDisposable
         Assert.Contains("TypeScript AppHost (`apphost.mts`)", readme);
         Assert.Contains("import { createBuilder } from './.aspire/modules/aspire.mjs';", readme);
         Assert.Contains("aspire dashboard run", readme);
+        Assert.Contains("Browse Aspire samples", readme);
         Assert.DoesNotContain("apphost.ts", readme);
         Assert.DoesNotContain("./.aspire/modules/aspire.js", readme);
         Assert.DoesNotContain("__PACKAGE_NAME__", readme);

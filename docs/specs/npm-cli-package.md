@@ -106,7 +106,7 @@ The launcher:
 5. Copies the native binary to an Aspire-owned writable cache.
 6. Spawns the cached binary with inherited stdio and forwards all command-line arguments.
 
-During npm `postinstall`, the same launcher runs in `--npm-postinstall-check` mode. That mode stops after RID detection and native package resolution, so `npm install -g @microsoft/aspire-cli --omit=optional` fails immediately on supported platforms instead of leaving an installed `aspire` shim that can only fail later at first launch. Package managers can still skip lifecycle scripts with `--ignore-scripts`, so the normal runtime launcher keeps the same missing-native-package diagnostic.
+During npm `postinstall`, the same launcher runs in `--npm-postinstall-check` mode. That mode stops after RID detection and native package resolution, so `npm install -g @microsoft/aspire-cli --omit=optional` fails immediately on supported platforms instead of leaving an installed `aspire` shim that can only fail later at first launch. Unsupported platforms continue to install the shim successfully and report the unsupported-platform diagnostic at first `aspire` launch, preserving the optional-dependency package behavior for transitive and exploratory installs. Package managers can still skip lifecycle scripts with `--ignore-scripts`, so the normal runtime launcher keeps the same missing-native-package diagnostic.
 
 The default cache path is:
 

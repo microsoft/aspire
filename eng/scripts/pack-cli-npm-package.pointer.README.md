@@ -27,7 +27,11 @@ The npm package installs a small JavaScript `aspire` launcher. The native platfo
 
 ## Quick start
 
-Start from a repo with one or more app projects:
+- New app: run `aspire new` to create an Aspire app from a template.
+- Existing repo: run `aspire init`, then `aspire run`.
+- Dashboard only: run `aspire dashboard run` to start the standalone dashboard.
+
+For an existing repo with one or more app projects:
 
 ```bash
 aspire init
@@ -162,6 +166,7 @@ npm install -g __PACKAGE_NAME__
 - [Aspire documentation](https://aspire.dev/docs/)
 - [Aspire CLI command reference](https://aspire.dev/reference/cli/commands/aspire/)
 - [Build your first app](https://aspire.dev/get-started/first-app/)
+- [Browse Aspire samples](https://aspire.dev/reference/samples/)
 - [Standalone dashboard](https://aspire.dev/dashboard/standalone/)
 - [Aspire repository](https://github.com/microsoft/aspire)
 - [Aspire samples repository](https://github.com/microsoft/aspire-samples)
