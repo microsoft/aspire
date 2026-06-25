@@ -3,10 +3,10 @@
 @if (_resourceIconName is { } iconName)
 {
     @* Only display a button if dashboard client is enabled and a matching resource can be found. *@
-    <FluentButton OnClick="OnClickAsync" Appearance="Appearance.Lightweight" Class="button-hyperlink">
-        <DeckIcon Name="iconName" Size="16" Class="resource-icon" Style="margin-inline-end: 6px;" />
+    <button type="button" class="button-hyperlink" @onclick="OnClickAsync">
+        <DeckIcon Name="iconName" Size="16" Class="resource-icon" />
         <FluentHighlighter HighlightedText="@HighlightText" Text="@Value" />
-    </FluentButton>
+    </button>
 }
 else
 {

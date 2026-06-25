@@ -153,7 +153,7 @@
                         @string.Join(", ", context.Types)
                     </TemplateColumn>
                     <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
-                        <FluentButton Appearance="Appearance.Lightweight" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
+                        <button type="button" class="button-hyperlink-no-icon" @onclick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</button>
                     </TemplateColumn>
                 </FluentDataGrid>
             </FluentAccordionItem>
@@ -182,7 +182,7 @@
                         @string.Join(", ", context.Types)
                     </TemplateColumn>
                     <TemplateColumn Title="@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]" Class="no-ellipsis">
-                        <FluentButton Appearance="Appearance.Lightweight" Class="button-hyperlink-no-icon" OnClick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</FluentButton>
+                        <button type="button" class="button-hyperlink-no-icon" @onclick="@(() => OnViewRelationshipAsync(context))">@ControlStringsLoc[nameof(ControlsStrings.ViewAction)]</button>
                     </TemplateColumn>
                 </FluentDataGrid>
             </FluentAccordionItem>

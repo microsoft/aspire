@@ -2645,3 +2645,28 @@ hr.deck-divider {
   cursor: not-allowed;
 }
 /* === end Checkbox === */
+
+/* === Hyperlink buttons (FluentButton Lightweight link-style replacement) === */
+.button-hyperlink,
+.button-hyperlink-no-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.button-hyperlink:hover:not(:disabled),
+.button-hyperlink-no-icon:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.button-hyperlink:disabled,
+.button-hyperlink-no-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+/* === end Hyperlink buttons === */

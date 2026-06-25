@@ -123,9 +123,10 @@
                         @WriteSpanLink(context)
                     </TemplateColumn>
                     <TemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsDetailsColumnHeader)]">
-                        <FluentButton OnClick="@(() => OnViewDetailsAsync(context))" Appearance="Appearance.Lightweight" Class="button-hyperlink" IconStart="new Icons.Regular.Size16.GanttChart()">
+                        <button type="button" class="button-hyperlink" @onclick="@(() => OnViewDetailsAsync(context))">
+                            <DeckIcon Name="DeckIconName.GanttChart" Size="16" />
                             @OtlpHelpers.ToShortenedId(context.SpanId)
-                        </FluentButton>
+                            </button>
                     </TemplateColumn>
                 </FluentDataGrid>
             </FluentAccordionItem>
@@ -151,9 +152,10 @@
                         @WriteSpanLink(context)
                     </TemplateColumn>
                     <TemplateColumn Title="@Loc[nameof(ControlsStrings.SpanDetailsDetailsColumnHeader)]">
-                        <FluentButton OnClick="@(() => OnViewDetailsAsync(context))" Appearance="Appearance.Lightweight" Class="button-hyperlink" IconStart="new Icons.Regular.Size16.GanttChart()">
+                        <button type="button" class="button-hyperlink" @onclick="@(() => OnViewDetailsAsync(context))">
+                            <DeckIcon Name="DeckIconName.GanttChart" Size="16" />
                             @OtlpHelpers.ToShortenedId(context.SpanId)
-                        </FluentButton>
+                            </button>
                     </TemplateColumn>
                 </FluentDataGrid>
             </FluentAccordionItem>

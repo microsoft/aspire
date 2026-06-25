@@ -417,14 +417,6 @@ td .long-inner-content {
     margin-top: auto;
 }
 
-.button-hyperlink::part(control), .button-hyperlink-no-icon::part(control) {
-    padding: 0;
-}
-
-.button-hyperlink::part(start) {
-    margin-inline-end: var(--inline-icon-margin);
-}
-
 .ellipsis-overflow {
     overflow: hidden;
     text-overflow: ellipsis;
