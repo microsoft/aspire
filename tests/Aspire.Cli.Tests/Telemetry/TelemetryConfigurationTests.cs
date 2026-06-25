@@ -7,13 +7,11 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
-#if DEBUG
-using Microsoft.AspNetCore.InternalTesting;
-#endif
 
 namespace Aspire.Cli.Tests.Telemetry;
 
