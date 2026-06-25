@@ -16,18 +16,17 @@
         @if (!HasFixedFormat)
         {
             <div Style="grid-area: dialog-format;">
-                <FluentSelect TOption="SelectViewModel<string>"
-                              Id="@_selectFormatId"
-                              Items="@_options"
-                              Position="SelectPosition.Below"
-                              OptionText="@(option => option.Name)"
-                              OptionValue="@(option => option.Id)"
-                              OptionDisabled="@(option => !EnabledOptions.Contains(option.Id))"
-                              OptionTitle="@(option => option.Name)"
-                              @bind-SelectedOption="@_selectedFormat"
-                              @bind-SelectedOption:after="OnSelectedFormatChanged"
-                              AriaLabel="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
-                              Style="min-width: 12rem; width: max-content; max-width: 100%;" />
+                <Select TOption="SelectViewModel<string>"
+                        Id="@_selectFormatId"
+                        Items="@_options"
+                        OptionText="@(option => option.Name)"
+                        OptionValue="@(option => option.Id)"
+                        OptionDisabled="@(option => !EnabledOptions.Contains(option.Id))"
+                        OptionTitle="@(option => option.Name)"
+                        @bind-SelectedOption="@_selectedFormat"
+                        @bind-SelectedOption:after="OnSelectedFormatChanged"
+                        AriaLabel="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
+                        Style="min-width: 12rem; width: max-content; max-width: 100%;" />
             </div>
         }
     </div>

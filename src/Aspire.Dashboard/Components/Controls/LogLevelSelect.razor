@@ -10,32 +10,30 @@
                       ForId="@logLevelSelectId"
                       Orientation="Orientation.Horizontal" />
 
-    <FluentSelect TOption="SelectViewModel<LogLevel?>"
-                  Id="@logLevelSelectId"
-                  Items="@LogLevels"
-                  Position="SelectPosition.Below"
-                  OptionText="@(c => c.Name)"
-                  @bind-SelectedOption="@LogLevel"
-                  @bind-SelectedOption:after="@HandleSelectedLogLevelChangedInternalAsync"
-                  Width="120px"
-                  Style="min-width: auto;"
-                  AriaLabel="@Loc[nameof(Resources.StructuredLogs.StructuredLogsSelectMinimumLogLevel)]"
-                  @attributes="@AdditionalAttributes" />
+    <Select TOption="SelectViewModel<LogLevel?>"
+            Id="@logLevelSelectId"
+            Items="@LogLevels"
+            OptionText="@(c => c.Name)"
+            @bind-SelectedOption="@LogLevel"
+            @bind-SelectedOption:after="@HandleSelectedLogLevelChangedInternalAsync"
+            Width="120px"
+            Style="min-width: auto;"
+            AriaLabel="@Loc[nameof(Resources.StructuredLogs.StructuredLogsSelectMinimumLogLevel)]"
+            @attributes="@AdditionalAttributes" />
 }
 else
 {
     <div>
-        <FluentSelect TOption="SelectViewModel<LogLevel?>"
-                      Id="@logLevelSelectId"
-                      Items="@LogLevels"
-                      Position="SelectPosition.Below"
-                      OptionText="@(c => c.Name)"
-                      Label="@Loc[nameof(Resources.StructuredLogs.StructuredLogsLevels)]"
-                      @bind-SelectedOption="@LogLevel"
-                      @bind-SelectedOption:after="@HandleSelectedLogLevelChangedInternalAsync"
-                      Width="120px"
-                      Style="min-width: auto;"
-                      AriaLabel="@Loc[nameof(Resources.StructuredLogs.StructuredLogsSelectMinimumLogLevel)]"
-                      @attributes="@AdditionalAttributes" />
+        <Select TOption="SelectViewModel<LogLevel?>"
+                Id="@logLevelSelectId"
+                Items="@LogLevels"
+                OptionText="@(c => c.Name)"
+                Label="@Loc[nameof(Resources.StructuredLogs.StructuredLogsLevels)]"
+                @bind-SelectedOption="@LogLevel"
+                @bind-SelectedOption:after="@HandleSelectedLogLevelChangedInternalAsync"
+                Width="120px"
+                Style="min-width: auto;"
+                AriaLabel="@Loc[nameof(Resources.StructuredLogs.StructuredLogsSelectMinimumLogLevel)]"
+                @attributes="@AdditionalAttributes" />
     </div>
 }

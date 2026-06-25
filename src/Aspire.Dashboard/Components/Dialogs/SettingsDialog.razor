@@ -29,10 +29,8 @@
         </div>
 
         <div class="input-container">
-            <FluentSelect
+            <Select
                 TOption="CultureInfo"
-                ChangeOnEnterOnly="true"
-                Position="SelectPosition.Below"
                 Label="@Loc[nameof(Dialogs.SettingsDialogLanguage)]"
                 Items="@_languageOptions"
                 OptionValue="@(c => c!.Name)"

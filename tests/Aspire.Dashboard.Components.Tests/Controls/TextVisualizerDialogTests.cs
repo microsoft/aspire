@@ -79,7 +79,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Render_TextVisualizerDialog_FormatPicker_UsesFluentSelectAndPreservesSelectionAfterParentRerenderAsync()
+    public async Task Render_TextVisualizerDialog_FormatPicker_UsesSelectAndPreservesSelectionAfterParentRerenderAsync()
     {
         const string rawXml = """<parent><child>text<!-- comment --></child></parent>""";
 
@@ -88,8 +88,8 @@ public class TextVisualizerDialogTests : DashboardTestContext
         await dialogService.ShowDialogAsync<TextVisualizerDialog>(content, []);
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
-        var formatSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<string>>>());
-        Assert.NotNull(formatSelect.Find("fluent-select"));
+        var formatSelect = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.Deck.Select<SelectViewModel<string>>>());
+        Assert.NotNull(formatSelect.Find("select"));
 
         Assert.Equal(Aspire.Dashboard.Resources.Dialogs.TextVisualizerSelectFormatType, formatSelect.Instance.AriaLabel);
         Assert.Equal(DashboardUIHelpers.XmlFormat, formatSelect.Instance.SelectedOption?.Id);
@@ -103,7 +103,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
             var dialog = cut.FindComponent<TextVisualizerDialog>().Instance;
             Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.TextVisualizerViewModel.FormatKind);
             Assert.Equal(rawXml, dialog.TextVisualizerViewModel.FormattedText);
-            Assert.Equal(DashboardUIHelpers.PlaintextFormat, cut.FindComponent<FluentSelect<SelectViewModel<string>>>().Instance.SelectedOption?.Id);
+            Assert.Equal(DashboardUIHelpers.PlaintextFormat, cut.FindComponent<Aspire.Dashboard.Components.Deck.Select<SelectViewModel<string>>>().Instance.SelectedOption?.Id);
         });
 
         cut.FindComponent<TextVisualizerDialog>().SetParametersAndRender(parameters => parameters.Add(p => p.Content, content));
@@ -113,7 +113,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
             var dialog = cut.FindComponent<TextVisualizerDialog>().Instance;
             Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.TextVisualizerViewModel.FormatKind);
             Assert.Equal(rawXml, dialog.TextVisualizerViewModel.FormattedText);
-            Assert.Equal(DashboardUIHelpers.PlaintextFormat, cut.FindComponent<FluentSelect<SelectViewModel<string>>>().Instance.SelectedOption?.Id);
+            Assert.Equal(DashboardUIHelpers.PlaintextFormat, cut.FindComponent<Aspire.Dashboard.Components.Deck.Select<SelectViewModel<string>>>().Instance.SelectedOption?.Id);
         });
     }
 
@@ -260,7 +260,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Assert.True(instance.HasFixedFormat);
 
         // Verify the format dropdown is not rendered
-        Assert.Empty(cut.FindComponents<FluentSelect<SelectViewModel<string>>>());
+        Assert.Empty(cut.FindComponents<Aspire.Dashboard.Components.Deck.Select<SelectViewModel<string>>>());
     }
 
     [Fact]

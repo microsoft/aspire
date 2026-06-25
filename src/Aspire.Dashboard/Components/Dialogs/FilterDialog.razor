@@ -11,27 +11,26 @@
 
     <div class="deck-stack deck-stack--vertical" style="row-gap: 12px;">
         <div class="filter-input-container input-container">
-            <FluentSelect TOption="SelectViewModel<string>"
-                          Placeholder="@Loc[nameof(Dialogs.FilterDialogFieldPlaceholder)]"
-                          Label="@Loc[nameof(Dialogs.FilterDialogParameterInputLabel)]"
-                          Items="@_parameters"
-                          @bind-SelectedOption="@_formModel.Parameter"
-                          @bind-SelectedOption:after="ParameterChangedAsync"
-                          Width="100%"
-                          Height="400px"
-                          OptionText="@(c => c.Name)"
-                          OptionDisabled="@(c => c.Id is null)"
-                          OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c.Name))">
-            </FluentSelect>
+            <Select TOption="SelectViewModel<string>"
+                    Placeholder="@Loc[nameof(Dialogs.FilterDialogFieldPlaceholder)]"
+                    Label="@Loc[nameof(Dialogs.FilterDialogParameterInputLabel)]"
+                    Items="@_parameters"
+                    @bind-SelectedOption="@_formModel.Parameter"
+                    @bind-SelectedOption:after="ParameterChangedAsync"
+                    Width="100%"
+                    OptionText="@(c => c.Name)"
+                    OptionDisabled="@(c => c.Id is null)"
+                    OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c.Name))">
+            </Select>
         </div>
 
         <div class="filter-input-container input-container">
-            <FluentSelect TOption="SelectViewModel<FilterCondition>"
-                          Items="@_filterConditions"
-                          @bind-SelectedOption="@_formModel.Condition"
-                          Label="@Loc[nameof(Dialogs.FilterDialogConditionInputLabel)]"
-                          OptionText="@(i => i.Name)"
-                          Width="100%" />
+            <Select TOption="SelectViewModel<FilterCondition>"
+                    Items="@_filterConditions"
+                    @bind-SelectedOption="@_formModel.Condition"
+                    Label="@Loc[nameof(Dialogs.FilterDialogConditionInputLabel)]"
+                    OptionText="@(i => i.Name)"
+                    Width="100%" />
         </div>
 
         @if (_formModel.ValueIsNumeric)

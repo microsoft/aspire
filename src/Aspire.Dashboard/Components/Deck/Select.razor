@@ -1,0 +1,190 @@
+@*
+    Deck-styled native <select> replacing FluentSelect during the Fluent-removal phase. Supports the
+    two binding modes FluentSelect offered: @bind-Value (the string option value) and
+    @bind-SelectedOption (the option object). Option text/value/disabled/title are derived from the
+    optional Option* delegates, mirroring FluentSelect's API so call sites change as little as
+    possible. Rich per-option templates are intentionally not supported; controls that need them
+    (e.g. ResourceSelect) keep their own markup.
+*@
+@namespace Aspire.Dashboard.Components.Deck
+@typeparam TOption
+@using System.Globalization
+
+@if (!string.IsNullOrEmpty(Label))
+{
+    <label for="@Id" class="deck-select-label">@Label</label>
+}
+<select class="select @Class"
+        id="@Id"
+        style="@GetStyle()"
+        disabled="@Disabled"
+        aria-label="@AriaLabel"
+        value="@_selectedKey"
+        @onchange="OnChangeAsync"
+        @attributes="AdditionalAttributes">
+    @if (!string.IsNullOrEmpty(Placeholder))
+    {
+        <option value="" disabled hidden>@Placeholder</option>
+    }
+    @{
+        var index = 0;
+    }
+    @foreach (var option in Items ?? Enumerable.Empty<TOption>())
+    {
+        <option value="@GetOptionKey(option, index)"
+                disabled="@(OptionDisabled?.Invoke(option) ?? false)"
+                title="@OptionTitle?.Invoke(option)">@GetOptionText(option)</option>
+        index++;
+    }
+</select>
+
+@code {
+    /// <summary>The options to display.</summary>
+    [Parameter]
+    public IEnumerable<TOption>? Items { get; set; }
+
+    /// <summary>Maps an option to the string value used as its &lt;option&gt; value. Defaults to the option index.</summary>
+    [Parameter]
+    public Func<TOption, string?>? OptionValue { get; set; }
+
+    /// <summary>Maps an option to its display text. Defaults to <c>ToString()</c>.</summary>
+    [Parameter]
+    public Func<TOption, string?>? OptionText { get; set; }
+
+    /// <summary>Maps an option to whether it is disabled.</summary>
+    [Parameter]
+    public Func<TOption, bool>? OptionDisabled { get; set; }
+
+    /// <summary>Maps an option to its tooltip title.</summary>
+    [Parameter]
+    public Func<TOption, string?>? OptionTitle { get; set; }
+
+    /// <summary>The selected option value (enables <c>@bind-Value</c>).</summary>
+    [Parameter]
+    public string? Value { get; set; }
+
+    /// <summary>Raised when the selected value changes.</summary>
+    [Parameter]
+    public EventCallback<string?> ValueChanged { get; set; }
+
+    /// <summary>The selected option (enables <c>@bind-SelectedOption</c>).</summary>
+    [Parameter]
+    public TOption? SelectedOption { get; set; }
+
+    /// <summary>Raised when the selected option changes.</summary>
+    [Parameter]
+    public EventCallback<TOption?> SelectedOptionChanged { get; set; }
+
+    /// <summary>Placeholder shown when nothing is selected.</summary>
+    [Parameter]
+    public string? Placeholder { get; set; }
+
+    /// <summary>Optional label rendered before the select.</summary>
+    [Parameter]
+    public string? Label { get; set; }
+
+    /// <summary>Accessible name for the select.</summary>
+    [Parameter]
+    public string? AriaLabel { get; set; }
+
+    /// <summary>The element id (also used for the label association).</summary>
+    [Parameter]
+    public string? Id { get; set; }
+
+    /// <summary>Additional CSS classes appended to the <c>.select</c> class.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Inline style applied to the select.</summary>
+    [Parameter]
+    public string? Style { get; set; }
+
+    /// <summary>Optional width, merged into the inline style.</summary>
+    [Parameter]
+    public string? Width { get; set; }
+
+    /// <summary>Whether the select is disabled.</summary>
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string? _selectedKey;
+
+    protected override void OnParametersSet()
+    {
+        // Prefer SelectedOption when present (the @bind-SelectedOption mode); otherwise fall back to
+        // the Value string (the @bind-Value mode).
+        _selectedKey = SelectedOption is not null
+            ? GetOptionKey(SelectedOption, IndexOfSelected())
+            : Value;
+    }
+
+    private int IndexOfSelected()
+    {
+        if (Items is null || SelectedOption is null)
+        {
+            return -1;
+        }
+
+        var i = 0;
+        foreach (var item in Items)
+        {
+            if (EqualityComparer<TOption>.Default.Equals(item, SelectedOption))
+            {
+                return i;
+            }
+
+            i++;
+        }
+
+        return -1;
+    }
+
+    private string GetOptionKey(TOption option, int index)
+    {
+        return OptionValue?.Invoke(option) ?? index.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private string? GetOptionText(TOption option)
+    {
+        return OptionText is not null ? OptionText(option) : option?.ToString();
+    }
+
+    private string? GetStyle()
+    {
+        return string.IsNullOrEmpty(Width) ? Style : $"width: {Width};{Style}";
+    }
+
+    private async Task OnChangeAsync(ChangeEventArgs e)
+    {
+        var key = e.Value?.ToString();
+
+        TOption? matched = default;
+        if (Items is not null)
+        {
+            var i = 0;
+            foreach (var item in Items)
+            {
+                if (GetOptionKey(item, i) == key)
+                {
+                    matched = item;
+                    break;
+                }
+
+                i++;
+            }
+        }
+
+        if (ValueChanged.HasDelegate)
+        {
+            await ValueChanged.InvokeAsync(key);
+        }
+
+        if (SelectedOptionChanged.HasDelegate)
+        {
+            await SelectedOptionChanged.InvokeAsync(matched);
+        }
+    }
+}

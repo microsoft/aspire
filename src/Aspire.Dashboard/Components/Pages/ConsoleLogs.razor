@@ -114,16 +114,16 @@
 
             @if (_terminalSizePresets.Count > 0)
             {
-                <FluentSelect TOption="Controls.TerminalSizePreset"
-                              Items="@_terminalSizePresets"
-                              OptionValue="@(p => p.Value)"
-                              OptionText="@(p => p.Label)"
-                              Value="@terminalState.SizeKey"
-                              ValueChanged="TerminalSizeChangedAsync"
-                              Disabled="@(!terminalState.SizeSelectEnabled)"
-                              Width="100px"
-                              Style="min-width: auto;"
-                              AriaLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)]" />
+                <Select TOption="Controls.TerminalSizePreset"
+                        Items="@_terminalSizePresets"
+                        OptionValue="@(p => p.Value)"
+                        OptionText="@(p => p.Label)"
+                        Value="@terminalState.SizeKey"
+                        ValueChanged="TerminalSizeChangedAsync"
+                        Disabled="@(!terminalState.SizeSelectEnabled)"
+                        Width="100px"
+                        Style="min-width: auto;"
+                        AriaLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)]" />
             }
 
             @if (terminalState.Cols > 0 && terminalState.Rows > 0)
