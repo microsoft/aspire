@@ -8,8 +8,12 @@
 @namespace Aspire.Dashboard.Components.Interactions
 
 <Drawer Class="interaction-pane" Title="@(string.IsNullOrEmpty(Title) ? FallbackTitle : Title)"
-        Subtitle="@MessageText" ShowClose="ShowDismiss" OnClose="OnCancel">
+        ShowClose="ShowDismiss" OnClose="OnCancel">
     <ChildContent>
+        @if (MessageHtml.Value is { Length: > 0 })
+        {
+            <div class="interaction-message">@MessageHtml</div>
+        }
         @if (IsInputs)
         {
             <form class="interaction-form" @onsubmit="HandleSubmit" @onsubmit:preventDefault="true">
@@ -124,9 +128,9 @@
     [Parameter]
     public string FallbackTitle { get; set; } = "Input required";
 
-    /// <summary>The pane message (shown as the subtitle).</summary>
+    /// <summary>The pane message rendered as HTML (already HTML-encoded or sanitized Markdown).</summary>
     [Parameter]
-    public string? MessageText { get; set; }
+    public MarkupString MessageHtml { get; set; }
 
     /// <summary>Input fields (for inputs dialogs).</summary>
     [Parameter]

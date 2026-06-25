@@ -1903,3 +1903,19 @@ table.data tbody tr.selected {
   flex-direction: column;
   gap: 6px;
 }
+
+/* Interaction pane message (instructional text above an inputs form / message-box body).
+   Supports sanitized Markdown HTML from the AppHost. */
+.interaction-pane .interaction-message {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+.interaction-pane .interaction-message p {
+  margin: 0 0 8px;
+}
+.interaction-pane .interaction-message p:last-child {
+  margin-bottom: 0;
+}

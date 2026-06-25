@@ -52,6 +52,7 @@ public partial class InteractionsProvider : ComponentBase, IAsyncDisposable
     // Internal for testing.
     internal bool? _enabled;
     internal WatchInteractionsResponseUpdate? CurrentDialog => _currentDialog;
+    internal string? CurrentDialogMessage => _currentDialogMessage;
     internal IReadOnlyList<DeckNotification> OpenNotifications => _notifications;
     internal async Task<int> GetMessagesProcessedAsync()
     {
@@ -197,7 +198,7 @@ public partial class InteractionsProvider : ComponentBase, IAsyncDisposable
     private void SetCurrentDialog(WatchInteractionsResponseUpdate item)
     {
         _currentDialog = item;
-        _currentDialogMessage = item.Message;
+        _currentDialogMessage = GetMessageHtml(item);
         _currentDialogInputs = item.InputsDialog is { } inputs
             ? inputs.InputItems.Select(MapInput).ToList()
             : new List<DeckInteractionInput>();
@@ -306,7 +307,8 @@ public partial class InteractionsProvider : ComponentBase, IAsyncDisposable
     // Inputs-dialog submit: write the user's values back into the proto and send with
     // ResponseUpdate=false. Don't close locally — the server completes the interaction on success
     // (which closes the dialog) or sends an update with validation errors (which keeps it open).
-    private Task OnDialogSubmitAsync(IReadOnlyDictionary<string, string> values)
+    // Internal for testing.
+    internal Task OnDialogSubmitAsync(IReadOnlyDictionary<string, string> values)
         => SendInputsResponseAsync(values, responseUpdate: false);
 
     // Live validation: a field with UpdateStateOnChange changed. Send with ResponseUpdate=true so the
@@ -340,7 +342,8 @@ public partial class InteractionsProvider : ComponentBase, IAsyncDisposable
     }
 
     // Cancel/dismiss of a dialog (inputs dialog or message box dismiss): report completion and close.
-    private async Task OnDialogCancelAsync()
+    // Internal for testing.
+    internal async Task OnDialogCancelAsync()
     {
         if (_currentDialog is not { } interaction)
         {
@@ -357,7 +360,8 @@ public partial class InteractionsProvider : ComponentBase, IAsyncDisposable
         _dialogClosedTcs?.TrySetResult();
     }
 
-    private Task OnMessageBoxPrimaryAsync() => SendMessageBoxResultAsync(result: true);
+    // Internal for testing.
+    internal Task OnMessageBoxPrimaryAsync() => SendMessageBoxResultAsync(result: true);
 
     private Task OnMessageBoxSecondaryAsync() => SendMessageBoxResultAsync(result: false);
 

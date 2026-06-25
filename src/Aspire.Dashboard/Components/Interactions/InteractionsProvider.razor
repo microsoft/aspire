@@ -15,7 +15,7 @@
                          IsInputs="@(dialog.KindCase == WatchInteractionsResponseUpdate.KindOneofCase.InputsDialog)"
                          Title="@dialog.Title"
                          FallbackTitle="@Loc[nameof(Resources.Dialogs.InteractionButtonOk)]"
-                         MessageText="@_currentDialogMessage"
+                         MessageHtml="@(new MarkupString(_currentDialogMessage ?? string.Empty))"
                          Inputs="_currentDialogInputs"
                          PrimaryButtonText="@ResolvedPrimaryButtonText(dialog, GetDialogIntent(dialog))"
                          SecondaryButtonText="@ResolvedSecondaryButtonText(dialog)"
