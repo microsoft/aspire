@@ -129,9 +129,9 @@
                                             <FluentAccordion>
                                                 <FluentAccordionItem Heading="@(itemPart.MessagePart?.Type ?? "unknown")" Expanded="true">
                                                     <div slot="end">
-                                                        <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                                                        <Badge>
                                                             @additionalProperties.Count
-                                                        </FluentBadge>
+                                                        </Badge>
                                                     </div>
                                                     <PropertyGrid TItem="GenAIPartPropertyViewModel"
                                                                   Items="additionalProperties.AsQueryable()"
@@ -275,7 +275,7 @@
                                                Icon="@(new Icons.Regular.Size24.Wrench())">
                                         <Header>
                                             <span class="tab-text">@Loc[nameof(Dialogs.GenAIToolsTabText)]</span>
-                                            <FluentBadge Appearance="Appearance.Neutral" Circular="true">@Content.ToolDefinitions.Count</FluentBadge>
+                                            <Badge>@Content.ToolDefinitions.Count</Badge>
                                         </Header>
                                     </FluentTab>
                                 }
@@ -286,7 +286,7 @@
                                                Icon="@(new Icons.Regular.Size24.Scales())">
                                         <Header>
                                             <span class="tab-text">@Loc[nameof(Dialogs.GenAIEvaluationsTabText)]</span>
-                                            <FluentBadge Appearance="Appearance.Neutral" Circular="true">@Content.Evaluations.Count</FluentBadge>
+                                            <Badge>@Content.Evaluations.Count</Badge>
                                         </Header>
                                     </FluentTab>
                                 }
@@ -343,9 +343,9 @@
                                             <FluentAccordionItem Id="@toolVM.ElementId" Class="@(toolVM.Highlighted ? "tool-highlighted" : null)" @bind-Expanded="toolVM.Expanded" HeadingTooltip="@GetToolHeadingTooltip(toolVM)">
                                                 <HeadingTemplate>
                                                     <div class="tool-heading">
-                                                        <FluentBadge Appearance="Appearance.Accent" Style="min-width: 80px; text-align: center;">
+                                                        <Badge Tone="accent" style="min-width: 80px; text-align: center;">
                                                             @toolVM.ToolDefinition.Type
-                                                        </FluentBadge>
+                                                        </Badge>
                                                         <span class="tool-name">@toolVM.ToolDefinition.Name</span>
                                                     </div>
                                                 </HeadingTemplate>

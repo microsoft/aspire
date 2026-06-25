@@ -91,12 +91,12 @@
                                 ImmediateDelay="@FluentUIExtensions.InputDelay"
                                 Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]">
                     <OptionTemplate Context="optionContext">
-                        <FluentBadge Circular=true Appearance="Appearance.Neutral" Slot="end">
+                        <Badge slot="end">
                             @* There is FluentUI bug that causes bad data if there is additional text in an option. *@
                             @* https://github.com/microsoft/fluentui-blazor/issues/2695 *@
                             @* Workaround this issue by inserting extra text using CSS. *@
                             <span data-filtercount="@optionContext.Id!.Count"></span>
-                        </FluentBadge>
+                        </Badge>
                         <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
                     </OptionTemplate>
                 </FluentCombobox>

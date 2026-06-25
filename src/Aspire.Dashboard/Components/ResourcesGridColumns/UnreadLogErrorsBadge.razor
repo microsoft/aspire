@@ -11,12 +11,8 @@
                   Appearance="Appearance.Stealth"
                   Class="unread-logs-errors-link"
                   @onclick:stopPropagation="true">
-        <FluentBadge
-            Appearance="Appearance.Accent"
-            Circular="true"
-            Fill="error"
-            Color="var(--unread-logs-badge-color)">
+        <Badge Tone="error">
             @(_unviewedCount > 9 ? "9+" : _unviewedCount.ToString())
-        </FluentBadge>
+        </Badge>
     </FluentAnchor>
 }

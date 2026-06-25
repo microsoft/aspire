@@ -41,9 +41,9 @@
         <FluentAccordion>
             <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsSpanHeader)]" Expanded="true">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredItems.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredItems"
@@ -53,9 +53,9 @@
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsContextHeader)]" Expanded="true">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredContextItems.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredContextItems"
@@ -65,9 +65,9 @@
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsResourceHeader)]" Expanded="true">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredResourceItems.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredResourceItems"
@@ -77,9 +77,9 @@
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsEventsHeader)]" Expanded="@_isSpanEventsExpanded">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredSpanEvents.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <PropertyGrid TItem="OtlpSpanEvent"
                               Items="@FilteredSpanEvents"
@@ -105,9 +105,9 @@
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsLinksHeader)]" Expanded="@_isSpanLinksExpanded">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredSpanLinks.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
                                 ColumnSortLabels="@_sortLabels"
@@ -133,9 +133,9 @@
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.SpanDetailsBacklinksHeader)]" Expanded="@_isSpanBacklinksExpanded">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredSpanBacklinks.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
                                 ColumnSortLabels="@_sortLabels"

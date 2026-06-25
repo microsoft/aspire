@@ -1,8 +1,10 @@
 @*
     Pill badge, ported from src/Aspire.Deck/ui/src/components/Badge.tsx.
     Tone is one of: success, info, warning, error, accent, neutral (default).
+    Unmatched attributes (e.g. slot, style) flow through so it can still be slotted
+    into Fluent hosts that remain during the Fluent-removal phase.
 *@
-<span class="badge @Tone">
+<span class="badge @Tone" @attributes="AdditionalAttributes">
     @ChildContent
 </span>
 
@@ -14,4 +16,8 @@
     /// <summary>The badge content.</summary>
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Unmatched attributes (e.g. <c>slot</c>, <c>style</c>) splatted onto the badge element.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IDictionary<string, object>? AdditionalAttributes { get; set; }
 }

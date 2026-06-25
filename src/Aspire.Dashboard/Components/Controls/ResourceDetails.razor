@@ -30,9 +30,9 @@
         <FluentAccordion>
             <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsResourceHeader)]" Expanded="true">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredResourceProperties.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <PropertyGrid TItem="DisplayedResourcePropertyViewModel"
                               Items="@FilteredResourceProperties"
@@ -43,9 +43,9 @@
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsUrlsHeader)]" Expanded="@_isUrlsExpanded">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredUrls.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <FluentDataGrid TGridItem="DisplayedUrl"
                                 ItemKey="@(vm => ((IPropertyGridItem)vm).Key)"
@@ -87,9 +87,9 @@
             {
                 <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsVolumesHeader)]" Expanded="@_isVolumesExpanded">
                     <div slot="end">
-                        <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                        <Badge>
                             @FilteredVolumes.Count()
-                        </FluentBadge>
+                        </Badge>
                     </div>
 
                     <FluentDataGrid TGridItem="VolumeViewModel"
@@ -132,9 +132,9 @@
             }
             <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsReferences)]" Expanded="@_isRelationshipsExpanded">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredRelationships.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
                                 ColumnSortLabels="@_sortLabels"
@@ -161,9 +161,9 @@
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsBackReferences)]" Expanded="@_isBackRelationshipsExpanded">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredBackRelationships.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
                                 ColumnSortLabels="@_sortLabels"
@@ -190,9 +190,9 @@
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]" Expanded="@_isHealthChecksExpanded">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredHealthReports.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
 
                 <FluentDataGrid ColumnResizeLabels="@_resizeLabels"
@@ -248,9 +248,9 @@
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@ControlStringsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]" Expanded="@_isEnvironmentVariablesExpanded">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredEnvironmentVariables.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <PropertyGrid TItem="EnvironmentVariableViewModel"
                               Items="@FilteredEnvironmentVariables"

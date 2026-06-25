@@ -30,9 +30,9 @@
         <FluentAccordion>
             <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsLogEntryHeader)]" Expanded="true">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredItems.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredItems"
@@ -42,9 +42,9 @@
             </FluentAccordionItem>
             <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsContextHeader)]" Expanded="true">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredContextItems.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredContextItems"
@@ -56,9 +56,9 @@
             {
                 <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsExceptionHeader)]" Expanded="true">
                     <div slot="end">
-                        <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                        <Badge>
                             @FilteredExceptionItems.Count()
-                        </FluentBadge>
+                        </Badge>
                     </div>
                     <PropertyGrid TItem="TelemetryPropertyViewModel"
                                   Items="@FilteredExceptionItems"
@@ -68,9 +68,9 @@
             }
             <FluentAccordionItem Heading="@Loc[nameof(ControlsStrings.StructuredLogsDetailsResourceHeader)]" Expanded="true">
                 <div slot="end">
-                    <FluentBadge Appearance="Appearance.Neutral" Circular="true">
+                    <Badge>
                         @FilteredResourceItems.Count()
-                    </FluentBadge>
+                    </Badge>
                 </div>
                 <PropertyGrid TItem="TelemetryPropertyViewModel"
                               Items="@FilteredResourceItems"
