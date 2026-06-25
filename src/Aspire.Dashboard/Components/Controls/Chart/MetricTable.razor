@@ -102,8 +102,7 @@
 </div>
 
 <div class="deck-stack deck-stack--vertical">
-    <FluentSwitch Class="table-switch"
-                  @bind-Value="@OnlyShowValueChangesInTable"
-                  @bind-Value:after="SettingsChangedAsync"
-                  Label="@Loc[nameof(ControlsStrings.MetricTableShowOnlyValueChanges)]" />
+    <Checkbox @bind-Checked="@OnlyShowValueChangesInTable"
+              @bind-Checked:after="SettingsChangedAsync"
+              Label="@Loc[nameof(ControlsStrings.MetricTableShowOnlyValueChanges)]" />
 </div>

@@ -88,10 +88,9 @@
         <div class="metrics-filters-section">
             <h5>@Loc[nameof(ControlsStrings.ChartContainerOptionsHeader)]</h5>
             <div>
-                <FluentSwitch Class="table-switch"
-                              Label="@Loc[nameof(ControlsStrings.ChartContainerShowCountLabel)]"
-                              @bind-Value="@ShowCounts"
-                              @bind-Value:after="ShowCountChanged"/>
+                <Checkbox Label="@Loc[nameof(ControlsStrings.ChartContainerShowCountLabel)]"
+                          @bind-Checked="@ShowCounts"
+                          @bind-Checked:after="ShowCountChanged"/>
             </div>
         </div>
     }
