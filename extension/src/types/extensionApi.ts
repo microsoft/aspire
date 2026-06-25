@@ -104,6 +104,7 @@ export interface AspireExtensionE2EStateFile {
     terminalCommands: readonly AspireExtensionE2ETerminalCommand[];
     debugLaunches: readonly AspireExtensionE2EDebugLaunch[];
     debugConsoleOutputs: readonly AspireExtensionE2EDebugConsoleOutput[];
+    stoppingPathEvents: readonly AspireExtensionE2EStoppingPathEvent[];
     control?: AspireExtensionE2EControlStatus;
 }
 
@@ -119,6 +120,11 @@ export type AspireExtensionE2EDebugLaunch = AppHostLaunchRequestedEvent & Aspire
 
 export type AspireExtensionE2EDebugConsoleOutput = AspireDebugConsoleOutputEvent & AspireExtensionE2ESequence;
 
+export interface AspireExtensionE2EStoppingPathEvent extends AspireExtensionE2ESequence {
+    appHostPath: string;
+    state: 'entered' | 'left';
+}
+
 export interface AspireDebugConsoleOutputEvent {
     debugSessionId: string;
     appHostPath: string | undefined;
@@ -129,6 +135,7 @@ export interface AspireDebugConsoleOutputEvent {
 export interface AspireExtensionE2EControlStatus {
     revision: number;
     status: 'started' | 'applied' | 'error';
+    startedObserved?: boolean;
     errorMessage?: string;
     result?: unknown;
 }

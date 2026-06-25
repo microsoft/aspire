@@ -11,6 +11,13 @@ public sealed class HostEnvironment : IEnvironment
 {
     public string? GetEnvironmentVariable(string variable) => Environment.GetEnvironmentVariable(variable);
 
+    public IEnumerable<(string Name, string? Value)> GetEnvironmentVariables()
+    {
+        return Environment.GetEnvironmentVariables()
+            .Cast<System.Collections.DictionaryEntry>()
+            .Select(e => (Name: e.Key?.ToString() ?? string.Empty, Value: e.Value?.ToString()));
+    }
+
     public bool IsWindows => OperatingSystem.IsWindows();
 
     public bool IsLinux => OperatingSystem.IsLinux();

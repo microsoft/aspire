@@ -121,6 +121,12 @@ public partial class FoundryModel
         public static readonly FoundryModel CohereCommandA = new() { Name = "cohere-command-a", Version = "4", Format = "Cohere" };
 
         /// <summary>
+        /// Command A is a highly efficient generative model that excels at agentic and multilingual use cases.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel CohereCommandAPlus052026 = new() { Name = "Cohere-command-a-plus-05-2026", Version = "1", Format = "Cohere" };
+
+        /// <summary>
         /// Cohere Embed English is the market's leading text representation model used for semantic search, retrieval-augmented generation (RAG), classification, and clustering.
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -1882,6 +1888,18 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel MistralMedium2505 = new() { Name = "mistral-medium-2505", Version = "1", Format = "Mistral AI" };
+
+        /// <summary>
+        /// Mistral Medium 3.5 is our first "fully merged" model with enhanced code and agentic capabilities. It demonstrates strong tool dexterity, making it suitable for both VIP (Vibe Code Scaffold) and agentic research tasks.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MistralMedium35 = new() { Name = "mistral-medium-3-5", Version = "1", Format = "Mistral AI" };
+
+        /// <summary>
+        /// Document conversion to markdown with interleaved images and text
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MistralOcr40 = new() { Name = "mistral-ocr-4-0", Version = "1", Format = "Mistral AI" };
 
         /// <summary>
         /// Enhanced Mistral Small 3 with multimodal capabilities and a 128k context length.

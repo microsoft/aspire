@@ -99,6 +99,27 @@ internal static class TelemetryConstants
         public const string CodingAgent = "process.coding_agent";
 
         /// <summary>
+        /// Tag indicating whether the current user or machine appears to be Microsoft internal.
+        /// </summary>
+        public const string InternalMicrosoft = "aspire.cli.is_microsoft_internal";
+
+        /// <summary>
+        /// Source that populates the <see cref="InternalMicrosoft"/> tag, used to differentiate between
+        /// different heuristics or signals used to determine if the user/machine is Microsoft internal.
+        /// </summary>
+        public const string InternalMicrosoftSource = "aspire.cli.microsoft_internal_source";
+
+        /// <summary>
+        /// Alias extracted by the probe that populates the <see cref="InternalMicrosoft"/> tag.
+        /// </summary>
+        public const string InternalMicrosoftAlias = "aspire.cli.microsoft_internal_alias";
+
+        /// <summary>
+        /// Active Directory domain extracted by the probe that populates the <see cref="InternalMicrosoft"/> tag.
+        /// </summary>
+        public const string InternalMicrosoftDomain = "aspire.cli.microsoft_internal_domain";
+
+        /// <summary>
         /// Tag for the deployment environment name ("ci" or "local").
         /// </summary>
         public const string DeploymentEnvironmentName = "deployment.environment.name";
