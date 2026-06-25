@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Dashboard.Components.Deck;
-using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.Markdown;
 using Aspire.Dashboard.Resources;
@@ -37,7 +37,14 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     private EditContext _editContext = default!;
     private ValidationMessageStore _validationMessages = default!;
     private List<InputViewModel> _inputDialogInputViewModels = default!;
-    private Dictionary<InputViewModel, FluentComponentBase?> _elementRefs = default!;
+
+    // Stable DOM id per input field. The native <input>/<select> controls (and the FluentCombobox)
+    // need an explicit id so the <label for> association, the secret-text type toggle, and the
+    // initial-focus logic can address the correct element from C#/JS. The id is generated once per
+    // input and kept stable across renders so focus/validation targets don't change underneath us.
+    private Dictionary<InputViewModel, string> _fieldIds = default!;
+    private readonly string _fieldIdPrefix = $"interaction-input-{Guid.NewGuid():N}";
+
     private MarkdownProcessor _markdownProcessor = default!;
     private IJSObjectReference? _jsModule;
 
@@ -49,7 +56,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         _editContext.OnValidationRequested += (s, e) => ValidateModel();
         _editContext.OnFieldChanged += (s, e) => InputValueChanged(e.FieldIdentifier);
 
-        _elementRefs = new();
+        _fieldIds = new();
         _markdownProcessor = InteractionMarkdownHelper.CreateProcessor(ControlsStringsLoc);
     }
 
@@ -60,13 +67,11 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             _content = Content;
             _inputDialogInputViewModels = Content.Inputs.Select(input => new InputViewModel(input)).ToList();
 
-            // Initialize keys for @ref binding.
-            // Do this in case Blazor tries to get the element from the dictionary.
-            // If the input view model isn't in the dictionary then it will throw a KeyNotFoundException.
-            _elementRefs.Clear();
-            foreach (var inputVM in _inputDialogInputViewModels)
+            // Assign a stable DOM id to each input so the label/secret-toggle/focus logic can address it.
+            _fieldIds.Clear();
+            for (var i = 0; i < _inputDialogInputViewModels.Count; i++)
             {
-                _elementRefs[inputVM] = null;
+                _fieldIds[_inputDialogInputViewModels[i]] = $"{_fieldIdPrefix}-{i}";
             }
 
             AddValidationErrorsFromModel();
@@ -86,25 +91,11 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         {
             _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Dialogs/InteractionsInputDialog.razor.js");
 
-            // Focus the first input when the dialog loads.
-            if (_inputDialogInputViewModels.Count > 0 && _elementRefs.TryGetValue(_inputDialogInputViewModels[0], out var firstInputElement))
+            // Focus the first input when the dialog loads. Focus is driven from JS by element id
+            // because the inputs are a mix of native controls and a web component (combobox).
+            if (_inputDialogInputViewModels.Count > 0 && _fieldIds.TryGetValue(_inputDialogInputViewModels[0], out var firstInputId))
             {
-                if (firstInputElement is FluentInputBase<string> textInput)
-                {
-                    textInput.FocusAsync();
-                }
-                else if (firstInputElement is FluentInputBase<bool> boolInput)
-                {
-                    boolInput.FocusAsync();
-                }
-                else if (firstInputElement is FluentInputBase<int?> numberInput)
-                {
-                    numberInput.FocusAsync();
-                }
-                else if (firstInputElement is FluentInputBase<SelectViewModel<string>> selectInput)
-                {
-                    selectInput.FocusAsync();
-                }
+                await _jsModule.InvokeVoidAsync("focusElement", firstInputId);
             }
         }
     }
@@ -162,6 +153,28 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         _editContext.NotifyValidationStateChanged();
     }
 
+    // The native <input>/<select> controls don't integrate with EditContext the way the previous
+    // Fluent input components did, so the change handlers below update the bound value and explicitly
+    // notify EditContext. That keeps live validation and InteractionInput.UpdateStateOnChange working.
+    private void OnStringValueChanged(InputViewModel inputModel, ChangeEventArgs e)
+    {
+        inputModel.Value = e.Value?.ToString();
+        _editContext.NotifyFieldChanged(GetFieldIdentifier(inputModel));
+    }
+
+    private void OnNumberValueChanged(InputViewModel inputModel, ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString();
+        inputModel.NumberValue = int.TryParse(text, CultureInfo.InvariantCulture, out var result) ? result : null;
+        _editContext.NotifyFieldChanged(GetFieldIdentifier(inputModel));
+    }
+
+    private void OnCheckedChanged(InputViewModel inputModel, bool isChecked)
+    {
+        inputModel.IsChecked = isChecked;
+        _editContext.NotifyFieldChanged(GetFieldIdentifier(inputModel));
+    }
+
     private static FieldIdentifier GetFieldIdentifier(InputViewModel inputModel)
     {
         var fieldName = inputModel.Input.InputType switch
@@ -202,9 +215,9 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     {
         inputModel.IsSecretTextVisible = !inputModel.IsSecretTextVisible;
 
-        if (_jsModule != null && _elementRefs.TryGetValue(inputModel, out var element) && element != null)
+        if (_jsModule != null && _fieldIds.TryGetValue(inputModel, out var elementId))
         {
-            await _jsModule.InvokeVoidAsync("togglePasswordVisibility", element.Id);
+            await _jsModule.InvokeVoidAsync("togglePasswordVisibility", elementId);
         }
     }
 

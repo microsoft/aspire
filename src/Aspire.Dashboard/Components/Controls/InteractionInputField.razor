@@ -17,7 +17,7 @@
     @ChildContent(new InteractionInputFieldContext { ViewModel = InputViewModel, DescriptionId = descriptionId })
     @if (InputViewModel.Input.Loading)
     {
-        <FluentProgressRing Width="20px" Class="input-progress" />
+        <div class="spinner input-progress" role="progressbar" aria-label="Loading"></div>
     }
 </div>
 @GetDescriptionContent(InputViewModel.Input, descriptionId)

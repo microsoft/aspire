@@ -6,8 +6,9 @@
     width: 100%;
 }
 
-.interaction-input-dialog .interaction-input ::deep fluent-text-field,
-.interaction-input-dialog .interaction-input ::deep fluent-select,
+.interaction-input-dialog .interaction-input ::deep .input,
+.interaction-input-dialog .interaction-input ::deep .select,
+.interaction-input-dialog .interaction-input ::deep .input-with-button,
 .interaction-input-dialog .interaction-input ::deep fluent-combobox,
 .interaction-input-dialog .interaction-input ::deep label {
     width: 75%;
@@ -37,15 +38,26 @@
     align-items: center;
 }
 
+/* The secret-text field pairs a native password input with a show/hide toggle. The container owns
+   the field width so the input fills it, and the toggle is positioned over the trailing edge. */
+.interaction-input-dialog .interaction-input ::deep .input-with-button {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.interaction-input-dialog .interaction-input ::deep .input-with-button .input {
+    width: 100%;
+    padding-inline-end: 36px;
+}
+
 .interaction-input-dialog .interaction-input ::deep .secret-text-toggle-button {
+    position: absolute;
+    inset-inline-end: 4px;
     background-color: transparent;
     border-color: transparent;
 }
 
-.interaction-input-dialog .interaction-input ::deep fluent-checkbox {
+.interaction-input-dialog .interaction-input ::deep .deck-checkbox {
     margin-top: 4px;
-}
-
-.interaction-input-dialog .interaction-input ::deep fluent-text-field::part(end) {
-    margin-inline-end: 0;
 }
