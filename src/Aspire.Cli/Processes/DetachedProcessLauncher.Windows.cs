@@ -18,7 +18,7 @@ internal static partial class DetachedProcessLauncher
     /// that the AppHost outlives the launching CLI.
     /// </summary>
     [SupportedOSPlatform("windows")]
-    private static Process StartWindows(string fileName, IReadOnlyList<string> arguments, string workingDirectory, Func<string, bool>? shouldRemoveEnvironmentVariable, IReadOnlyDictionary<string, string>? additionalEnvironmentVariables)
+    private static IDetachedProcess StartWindows(string fileName, IReadOnlyList<string> arguments, string workingDirectory, Func<string, bool>? shouldRemoveEnvironmentVariable, IReadOnlyDictionary<string, string>? additionalEnvironmentVariables)
     {
         // Open NUL for the child's stdout/stderr — child writes go nowhere. The handle must be
         // inheritable (PROC_THREAD_ATTRIBUTE_HANDLE_LIST whitelists but does NOT promote
@@ -98,6 +98,6 @@ internal static partial class DetachedProcessLauncher
             WindowsProcessInterop.CloseHandle(pi.hThread);
         }
 
-        return detachedProcess;
+        return new ProcessBackedDetachedProcess(detachedProcess);
     }
 }

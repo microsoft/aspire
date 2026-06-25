@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
@@ -451,7 +450,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class TestDetachedProcessLauncher(Action onStart) : IDetachedProcessLauncher
     {
-        public Process Start(
+        public IDetachedProcess Start(
             string fileName,
             IReadOnlyList<string> arguments,
             string workingDirectory,
@@ -459,7 +458,28 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null)
         {
             onStart();
-            return new Process { StartInfo = new ProcessStartInfo(fileName) };
+            return new TestDetachedProcess();
+        }
+    }
+
+    private sealed class TestDetachedProcess : IDetachedProcess
+    {
+        public int Id => int.MaxValue;
+
+        public bool HasExited => true;
+
+        public int ExitCode => 1;
+
+        public DateTime StartTime => DateTime.UnixEpoch;
+
+        public Task WaitForExitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public void Kill(bool entireProcessTree)
+        {
+        }
+
+        public void Dispose()
+        {
         }
     }
 
