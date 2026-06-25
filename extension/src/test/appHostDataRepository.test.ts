@@ -2163,9 +2163,8 @@ suite('AppHostDataRepository', () => {
 
             // Stream one idle candidate so the candidate-path list is non-empty while discovery is
             // still pending. The ps union must still surface a different in-workspace running AppHost
-            // that `aspire ls` has not yet reported — otherwise running AppHosts would vanish from the
-            // panel until idle discovery completes (the pre-streaming union only kept running AppHosts
-            // while the candidate list was empty).
+            // that `aspire ls` has not yet reported, otherwise running AppHosts would vanish until
+            // idle discovery completes.
             capturedOnCandidate!({
                 path: '/workspace/apps/Store/AppHost.csproj',
                 language: 'csharp',

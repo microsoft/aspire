@@ -2048,11 +2048,9 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
     });
 
     test('workspace mode unions running AppHost not reported by aspire ls', () => {
-        // The union in _getWorkspaceChildren appends in-workspace running AppHosts (from
-        // aspire ps) that are NOT among the aspire ls candidate paths and do not share a
-        // directory with any candidate. Such a running AppHost (e.g. discovered by ps before
-        // ls reports it) must still appear in the tree; without the union-append it would be
-        // dropped, leaving only the idle ls candidate.
+        // The union in _getWorkspaceChildren appends in-workspace running AppHosts (from aspire ps)
+        // that are not among the aspire ls candidate paths. Such a running AppHost (e.g. discovered
+        // by ps before ls reports it) must still appear in the tree rather than being dropped.
         const idleCandidate = '/repo/apps/Store/AppHost.csproj';
         const runningOnly = '/repo/apps/Web/AppHost.csproj';
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });

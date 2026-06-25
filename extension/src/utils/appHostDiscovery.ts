@@ -85,16 +85,8 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             resultPromise = cachedPromise;
             this._cache.set(key, resultPromise);
 
-            // Apply the configured-AppHost selection (from aspire.config.json / .aspire/settings.json)
-            // OFF the critical discovery path. That lookup uses vscode.workspace.findFiles, which can
-            // take tens of seconds on a large or cold workspace right after activation (the VS Code
-            // file-search service is contended by the activation findFiles storm). Awaiting it inside
-            // discover() would delay the panel's first authoritative paint — and the dependent ps /
-            // describe streams — by that entire duration even though the candidate list is already
-            // known. Instead, resolve discover() with the freshly discovered candidates immediately,
-            // then enrich the cached result in the background and fire onDidChangeCandidates so the
-            // panel re-reads (and applies) the selection once it lands. Consumers that don't need the
-            // selection (editor command provider, engagement counting) are unaffected.
+            // Enrich with the configured-AppHost selection in the background so the findFiles
+            // lookup it performs does not delay discover()'s first resolve.
             this._scheduleConfiguredAppHostSelection(workspaceFolder, key, cachedPromise);
         }
 
@@ -186,14 +178,6 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         const configInfo = await this._configInfoProvider.getConfigInfo({ suppressErrors: true });
         const streamSupported = configInfo?.capabilities?.includes(lsStreamCapability) ?? false;
 
-        // `_discoverWithLs` runs on every cache-miss/forced refresh, so log the capability once per
-        // service instance (mirrors the describe `--include-disabled-commands` capability log in
-        // AppHostDataRepository._resolveDescribeCapability). Only latch the log when the `config info`
-        // probe actually succeeded (`configInfo` is non-null): `suppressErrors: true` collapses a
-        // genuinely-absent capability and a transient probe failure into the same `false`, and
-        // `getConfigInfo` does NOT cache failures. Guarding on `configInfo` keeps a one-off probe
-        // hiccup from permanently logging "not advertised" while a later successful discovery silently
-        // streams — the next successful probe logs the true `aspire ls` mode instead.
         if (configInfo && !this._streamCapabilityLogged) {
             this._streamCapabilityLogged = true;
             extensionLogOutputChannel.info(`CLI capability '${lsStreamCapability}' ${streamSupported ? 'advertised' : 'not advertised'}; aspire ls --stream ${streamSupported ? 'enabled' : 'disabled'}.`);
@@ -277,10 +261,9 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     }
 
     private _scheduleConfiguredAppHostSelection(workspaceFolder: vscode.WorkspaceFolder, key: string, basePromise: Promise<CandidateAppHostDisplayInfo[]>): void {
-        // Runs the configured-AppHost enrichment after discover() has already resolved with the raw
-        // candidate list (see the comment in discover()). On completion, swap the cached promise to
-        // the enriched list and notify subscribers so the panel applies the selection. The result is
-        // never awaited by discover(), so failures here must not surface as unhandled rejections.
+        // Enrichment runs after discover() has already resolved; on completion, swap the cached
+        // promise to the enriched list and notify subscribers. Never awaited, so failures must not
+        // surface as unhandled rejections.
         void basePromise.then(async candidates => {
             if (this._disposed || this._cache.get(key) !== basePromise) {
                 return;
@@ -358,9 +341,8 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         return new Promise<T>((resolve, reject) => {
             this._throwIfDisposed();
 
-            // Honor ASPIRE_CLI_STOP_ON_ENTRY for every discovery spawn here, alongside the other
-            // universal spawn properties (noExtensionVariables, the discovery timeout, etc.), so
-            // individual call sites pass only their command args.
+            // Apply ASPIRE_CLI_STOP_ON_ENTRY here so every discovery spawn shares it alongside the
+            // other universal spawn properties, leaving call sites to pass only their command args.
             const cliArgs = process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true'
                 ? [...args, '--cli-wait-for-debugger']
                 : args;
@@ -403,12 +385,6 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 complete();
             };
 
-            // Callers pick the timeout policy. Buffered discovery (`aspire ls --format json`, legacy
-            // `extension get-apphosts`) leaves `resetTimeoutOnOutput` false for a total-duration cap.
-            // Streaming discovery (`aspire ls --format json --stream`) sets it true so each chunk of
-            // output re-arms the timer (via `onActivity` below), turning it into an inactivity
-            // watchdog: a large workspace can stream candidates for far longer than the interval, so
-            // only a genuine silence (a hang) should abort it.
             const timeoutMs = getAppHostDiscoveryTimeoutMs();
             const startTimeout = () => {
                 if (settled) {
@@ -463,11 +439,10 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         });
     }
 
-    // Runs a CLI command that streams newline-delimited JSON (NDJSON) candidates — one JSON
-    // object per line, e.g.:
-    //   {"path":"/repo/AppHost/AppHost.csproj","language":"csharp","status":"buildable"}
-    // Candidates are accumulated and `onCandidate` fires per parsed line so callers can render
-    // incrementally. Resolves the accumulated candidates on exit code 0 and rejects otherwise.
+    // Runs a CLI command that streams newline-delimited JSON (NDJSON) candidates — one JSON object
+    // per line, e.g. {"path":"/repo/AppHost/AppHost.csproj","language":"csharp","status":"buildable"}.
+    // `onCandidate` fires per parsed line so callers can render incrementally; resolves the
+    // accumulated candidates on exit code 0 and rejects otherwise.
     private _runCliForStream(cliPath: string, args: string[], workingDirectory: string, onCandidate?: (candidate: CandidateAppHostDisplayInfo) => void): Promise<CandidateAppHostDisplayInfo[]> {
         const candidates: CandidateAppHostDisplayInfo[] = [];
         const handleLine = (line: string) => {
