@@ -257,7 +257,7 @@ export function DetailsDrawer({
             {visibleCommands.map((command) => (
               <button
                 key={command.name}
-                className={`btn btn--sm ${command.isHighlighted ? "btn--primary" : ""} ${command.name.includes("stop") ? "btn--danger" : ""}`}
+                className={`btn btn--sm ${command.name.includes("stop") ? "btn--danger" : command.isHighlighted ? "btn--primary" : ""}`}
                 disabled={command.state === "disabled"}
                 title={command.displayDescription ?? command.displayName}
                 onClick={() => handleCommand(command)}
