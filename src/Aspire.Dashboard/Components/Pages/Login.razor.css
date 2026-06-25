@@ -1,89 +1,12 @@
-.token-backdrop {
-    background-color: var(--neutral-layer-4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    width: 100vw;
-}
-
-[data-theme="dark"] .token-backdrop {
-    background-color: var(--neutral-layer-3);
-}
-
-.token-form-container {
-    --error: #FF8181;
-    background-color: var(--neutral-layer-1);
-    padding: calc((var(--design-unit) * 5px));
-    border-radius: calc(var(--design-unit) * 2.5px);
-    display: grid;
-    grid-column-gap: calc(var(--design-unit) * 5px);
-    grid-template-columns: auto 25em;
-    grid-template-rows: auto;
-    grid-template-areas:
-        "logo entry";
-    box-shadow: 0px 0px 15px 0px rgba(0,0,0,0.75);
-}
-
-.token-logo {
-    grid-area: logo;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.token-entry-container {
-    grid-area: entry;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: calc(var(--design-unit) * 1px);
-
-}
-
-.token-entry-header {
-    color: var(--accent-foreground-rest);
-}
-
-.token-entry-header h1 {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    text-wrap: nowrap;
-    margin-bottom: 1rem;
-}
-
-.token-entry {
-    grid-area: entry;
-}
-
-::deep .token-entry-text {
-    width: 100%;
-}
-
-.token-entry-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.token-validation {
-    min-height: var(--type-ramp-base-line-height);
-}
-
-/* For the validation failed message that is not inside the FluentValidationMessage component */
-.token-validation > .validation-message {
-    color: var(--error);
-    font-size: var(--type-ramp-minus-1-font-size);
-    display: flex;
-    align-items: center;
-    column-gap: 4px;
-}
+/* Login-specific styles. The card, brand, input, button and validation styling live in the
+   shared "Auth/Error" block in wwwroot/css/deck.css so Login, Error and NotFound stay visually
+   consistent. Only the token-help tooltip content (Login-only) is styled here. */
 
 .token-help-container {
     display: flex;
     flex-direction: column;
-    gap: calc(var(--design-unit) * 2px);
-    margin: calc(var(--design-unit) * 2px);
+    gap: 8px;
+    margin: 4px;
 }
 
 .token-help-container fluent-anchor {
@@ -93,10 +16,4 @@
 .token-help-container img {
     width: auto;
     max-width: 100%;
-}
-
-.version-info {
-    position: fixed;
-    right: calc(var(--design-unit) * 4px);
-    bottom: calc(var(--design-unit) * 3px);
 }

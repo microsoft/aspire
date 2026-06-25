@@ -1972,3 +1972,147 @@ table.data tbody tr.selected {
   flex-direction: column;
   gap: 4px;
 }
+/* === Auth/Error ===
+   Shared styling for the chrome-less full-page surfaces (Login and Error, both under
+   EmptyLayout). They use the Deck splash/empty-state visual language: a centered surface
+   card on the app background, the Aspire brand mark, Deck typography and a Deck input/button.
+   NotFound is styled separately in its scoped CSS because it renders inside the main shell. */
+.auth-backdrop {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 32px;
+  background: var(--bg-app);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  padding: 36px 32px 30px;
+}
+
+.auth-brand {
+  display: inline-flex;
+  margin-bottom: 18px;
+}
+
+.auth-title {
+  font-size: 19px;
+  font-weight: 650;
+  margin: 0;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.auth-subtitle {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 8px 0 0;
+}
+
+.auth-field {
+  width: 100%;
+  margin-top: 22px;
+}
+
+.auth-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.auth-input::placeholder {
+  color: var(--text-muted);
+}
+
+.auth-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Reserve a line of space so the card doesn't jump when a validation message appears. */
+.auth-validation {
+  width: 100%;
+  min-height: 18px;
+  margin-top: 6px;
+  text-align: left;
+}
+
+.auth-validation .validation-message {
+  color: var(--error);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.auth-actions {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.auth-submit {
+  width: 100%;
+  justify-content: center;
+  padding: 9px 13px;
+}
+
+.auth-help-link {
+  margin-top: 18px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.auth-help-link:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.auth-meta {
+  margin-top: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.auth-meta-label {
+  color: var(--text-muted);
+}
+
+.auth-meta-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px 7px;
+}
+
+.auth-version {
+  position: fixed;
+  right: 16px;
+  bottom: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+/* === end Auth/Error === */

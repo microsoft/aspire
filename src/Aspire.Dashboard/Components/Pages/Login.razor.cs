@@ -7,7 +7,6 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Forms;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Pages;
@@ -15,7 +14,7 @@ namespace Aspire.Dashboard.Components.Pages;
 public partial class Login : IAsyncDisposable, IComponentWithTelemetry
 {
     private IJSObjectReference? _jsModule;
-    private FluentTextField? _tokenTextField;
+    private ElementReference _tokenElement;
     private ValidationMessageStore? _messageStore;
 
     private TokenFormModel _formModel = default!;
@@ -71,8 +70,17 @@ public partial class Login : IAsyncDisposable, IComponentWithTelemetry
         {
             _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/Components/Pages/Login.razor.js");
 
-            _tokenTextField?.FocusAsync();
+            await _tokenElement.FocusAsync();
         }
+    }
+
+    // Mirrors the previous FluentTextField Immediate="true" behaviour: update the bound token on
+    // every key press and notify the EditContext so the field's validation message clears as the
+    // user edits (the message store subscribes to OnFieldChanged in OnInitializedAsync).
+    private void OnTokenInput(ChangeEventArgs e)
+    {
+        _formModel.Token = e.Value?.ToString();
+        EditContext.NotifyFieldChanged(FieldIdentifier.Create(() => _formModel.Token));
     }
 
     private async Task SubmitAsync()
