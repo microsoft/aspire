@@ -2670,3 +2670,17 @@ hr.deck-divider {
   cursor: not-allowed;
 }
 /* === end Hyperlink buttons === */
+
+/* === Deck clipboard-copy button === */
+/* The copy/checkmark glyphs are wrapped in <div>s so a click on the inner SVG still resolves to
+   the host <button> via app.js's parentElement.parentElement lookup. app.js toggles their inline
+   display between '' (visible -> falls back to this rule) and 'none' (hidden). */
+.btn > .copy-icon,
+.btn > .checkmark-icon,
+.icon-btn > .copy-icon,
+.icon-btn > .checkmark-icon {
+  display: flex;
+  align-items: center;
+  line-height: 0;
+}
+/* === end Deck clipboard-copy button === */

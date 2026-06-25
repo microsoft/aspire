@@ -84,14 +84,11 @@
                     </button>
                 }
 
-                <FluentButton Id="@_copyButtonId"
-                              AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
-                    <span slot="start">
-                        <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
-                        <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" />
-                    </span>
+                <DeckClipboardCopyButton Id="@_copyButtonId"
+                                         Class="btn"
+                                         AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(TextVisualizerViewModel.FormattedText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
                     @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
-                </FluentButton>
+                </DeckClipboardCopyButton>
             </div>
         </div>
     </div>

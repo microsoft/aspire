@@ -80,14 +80,11 @@
                                 @{
                                     var attributes = FluentUIExtensions.GetClipboardCopyAdditionalAttributes(chatMessage.PromptText, ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)]);
                                     attributes["aria-label"] = Loc[nameof(AIAssistant.CopyMessageButtonText)];
+                                    attributes["title"] = Loc[nameof(AIAssistant.CopyMessageButtonText)];
                                 }
-                                <FluentButton Id="@($"{chatMessage.ElementId}-copy")"
-                                              Appearance="Appearance.Stealth"
-                                              Title="@Loc[nameof(AIAssistant.CopyMessageButtonText)]"
-                                              AdditionalAttributes="attributes">
-                                    <FluentIcon Class="copy-icon" Style="display:inline" Value="@(new Icons.Regular.Size16.Copy())" Color="Color.Neutral" />
-                                    <FluentIcon Class="checkmark-icon" Style="display:none" Value="@(new Icons.Regular.Size16.Checkmark())" Color="Color.Neutral" />
-                                </FluentButton>
+                                <DeckClipboardCopyButton Id="@($"{chatMessage.ElementId}-copy")"
+                                                         Class="icon-btn icon-btn--sm"
+                                                         AdditionalAttributes="attributes" />
                             </span>
                             <span>
                                 <button type="button"
