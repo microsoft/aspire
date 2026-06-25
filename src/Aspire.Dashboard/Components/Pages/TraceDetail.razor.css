@@ -1,18 +1,3 @@
-.empty-content {
-    width: 100%;
-    height: 100px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-weight: 600;
-}
-
-::deep .trace-details-mobile {
-    padding-left: var(--layout-left-padding);
-    padding-right: var(--layout-right-padding);
-    padding-bottom: 4px;
-}
-
 ::deep .trace-id {
     color: var(--foreground-subtext-rest);
     padding-left: 0.5rem;
@@ -22,6 +7,7 @@
 }
 
 ::deep .trace-view-grid {
+    background: var(--bg-surface);
 }
 
 ::deep .trace-view-grid .fluent-data-grid-row:not([row-type='header']):hover .span-bar-label-detail {
@@ -29,8 +15,19 @@
 }
 
 ::deep .trace-view-grid .fluent-data-grid-row:not([row-type='header']) {
-    background: var(--fill-color);
-    border-bottom: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+    background: transparent;
+    border-bottom: 1px solid var(--border);
+}
+
+/* Sticky header / tick axis uses the Deck base surface so it doesn't render as a washed-out
+   light bar in the Deck dark theme (Fluent's default header layer doesn't follow data-theme here). */
+::deep .trace-view-grid .fluent-data-grid-row[row-type='sticky-header'],
+::deep .trace-view-grid .fluent-data-grid-row[row-type='sticky-header'] th {
+    background: var(--bg-base);
+}
+
+::deep .trace-view-grid .tick-label {
+    color: var(--text-muted);
 }
 
 ::deep .fluent-data-grid-row[row-type='sticky-header'] th:first-child {
@@ -72,7 +69,7 @@
 ::deep .ticks .tick {
     width: 1px;
     height: 32px;
-    background: #d8d8d8;
+    background: var(--border);
     grid-row: 1;
 }
 
@@ -157,12 +154,6 @@
     color: var(--neutral-foreground-rest);
 }
 
-::deep .pane-details-title {
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    overflow: hidden;
-}
-
 ::deep .span-overview-container {
     display: grid;
     align-items: center;
@@ -175,37 +166,6 @@
     text-overflow: ellipsis;
     overflow: hidden;
     white-space: nowrap;
-}
-
-::deep .trace-header {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-areas: "details filters";
-    width: 100%;
-}
-
-::deep .trace-header-details {
-    grid-area: details;
-}
-
-::deep .trace-header-details .fluent-overflow-item {
-    align-content: center;
-    padding-right: 8px;
-    white-space: nowrap;
-}
-
-::deep .trace-header-details .fluent-overflow-more {
-    align-content: center;
-}
-
-::deep .trace-header-tooltip {
-    min-width: 300px;
-}
-
-::deep .trace-header-filters {
-    grid-area: filters;
-    display: flex;
-    align-items: center;
 }
 
 ::deep .span-button-container {

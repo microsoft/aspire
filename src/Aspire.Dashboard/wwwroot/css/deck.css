@@ -1903,3 +1903,136 @@ table.data tbody tr.selected {
   flex-direction: column;
   gap: 6px;
 }
+
+/* === Traces === */
+/* Styling for the Deck-converted Traces list and Trace detail pages. The single-trace
+   waterfall reuses the FluentDataGrid (see TraceDetail.razor.css) restyled toward the Deck
+   `wf` look; these rules cover the page chrome, the traces list table, and span tags. */
+
+/* Toolbar shared by the Traces list and Trace detail headers. Wraps so the many controls
+   (resource/span-type selects, search, filters, actions) reflow on narrow viewports. */
+.traces-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.icon-btn--sm {
+  width: 26px;
+  height: 26px;
+}
+
+/* ---------- Traces list table ---------- */
+.trace-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.trace-name-text {
+  padding-left: 7px;
+  /* Left accent encodes the root resource, matching the Deck waterfall swatch colors. */
+  border-left: 4px solid transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.trace-id {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.trace-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.trace-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px 1px 6px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border);
+  /* Thicker left border tinted to the resource color (set inline). */
+  border-left-width: 4px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.trace-tag-icon {
+  flex-shrink: 0;
+}
+.trace-duration {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.trace-duration-bar {
+  position: relative;
+  flex-shrink: 0;
+  width: 70px;
+  height: 5px;
+  background: var(--bg-surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.trace-duration-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--accent);
+  border-radius: 3px;
+}
+.trace-duration-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.traces-table .grid-action-container {
+  display: flex;
+  justify-content: flex-end;
+}
+/* Error traces get a left accent rather than a full-row tint to stay subtle in the Deck theme. */
+.traces-table tbody tr.trace-row-error td:first-child {
+  box-shadow: inset 3px 0 0 var(--error);
+}
+
+/* ---------- Trace detail header ---------- */
+.trace-detail-heading {
+  min-width: 0;
+}
+.trace-detail-heading .page__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.trace-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.trace-detail-meta strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.trace-detail-meta-sep {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+/* Waterfall grid fills the scrollable page body. */
+.trace-waterfall {
+  height: 100%;
+}
+/* === end Traces === */
