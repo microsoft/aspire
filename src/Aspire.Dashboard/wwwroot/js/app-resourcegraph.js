@@ -35,6 +35,7 @@ class ResourceGraph {
 
         this.nodes = [];
         this.links = [];
+        this.initialFitDone = false;
 
         this.svg = d3.select('.resource-graph');
         this.baseGroup = this.svg.append("g");
@@ -144,6 +145,56 @@ class ResourceGraph {
 
     resetZoomAndPan() {
         this.svg.transition().call(this.zoom.transform, d3.zoomIdentity);
+    }
+
+    // Fit the whole graph within the viewport and center it. The viewBox is centered
+    // on the origin ([-w/2,-h/2,w,h]), so fitting means scaling the node bounding box
+    // (plus padding) to fit the viewport, then translating its center to the origin.
+    // Returns false (without changing the view) when the viewport or layout isn't
+    // measurable yet, so the caller can retry on a later render.
+    zoomToFit(padding = 60) {
+        if (!this.nodes || this.nodes.length === 0) {
+            return false;
+        }
+
+        var container = document.querySelector(".resources-summary-layout");
+        if (!container) {
+            return false;
+        }
+
+        var width = container.clientWidth;
+        var height = Math.max(container.clientHeight - 50, 0);
+        if (width === 0 || height === 0) {
+            return false;
+        }
+
+        // Nodes are drawn as circles around their (x,y); pad by an approximate node
+        // radius so the outermost nodes and their labels aren't clipped at the edge.
+        var nodeRadius = 48;
+        var minX = d3.min(this.nodes, d => d.x) - nodeRadius;
+        var maxX = d3.max(this.nodes, d => d.x) + nodeRadius;
+        var minY = d3.min(this.nodes, d => d.y) - nodeRadius;
+        var maxY = d3.max(this.nodes, d => d.y) + nodeRadius;
+
+        var boxWidth = maxX - minX;
+        var boxHeight = maxY - minY;
+        if (boxWidth === 0 || boxHeight === 0) {
+            return false;
+        }
+
+        var midX = (minX + maxX) / 2;
+        var midY = (minY + maxY) / 2;
+
+        // Clamp to the zoom scaleExtent ([0.2, 4]) and avoid magnifying a tiny graph
+        // past 1:1, which would look unnaturally zoomed-in on first display.
+        var scale = Math.min((width - padding * 2) / boxWidth, (height - padding * 2) / boxHeight);
+        scale = Math.max(0.2, Math.min(scale, 1));
+
+        // d3.zoomIdentity.scale(s).translate(-midX,-midY) maps the box center to (0,0),
+        // which is the viewport center given the origin-centered viewBox.
+        var transform = d3.zoomIdentity.scale(scale).translate(-midX, -midY);
+        this.svg.call(this.zoom.transform, transform);
+        return true;
     }
 
     zoomIn() {
@@ -492,6 +543,15 @@ class ResourceGraph {
         }
 
         this.simulation.restart();
+
+        // On first display, fit the whole graph within the viewport and center it,
+        // rather than showing it at 1:1 scale where larger graphs overflow or sit
+        // off-center until the user manually zooms/pans. Only auto-fit once so we
+        // don't fight the user's own zoom/pan on later updates; zoomToFit reports
+        // whether it could measure the viewport so we retry on a subsequent render.
+        if (!this.initialFitDone && this.zoomToFit()) {
+            this.initialFitDone = true;
+        }
 
         function trimText(text, maxLength) {
             if (!text) {
