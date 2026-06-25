@@ -22,6 +22,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     // Internal for testing: whether the desktop Deck settings pane is open.
     internal bool _showSettingsPane;
     internal bool _showHelpPane;
+    internal bool _showManageDataPane;
 
     private IDisposable? _themeChangedSubscription;
     private IDisposable? _locationChangingRegistration;
@@ -381,6 +382,22 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private void CloseHelpPane()
     {
         _showHelpPane = false;
+        StateHasChanged();
+    }
+
+    // Desktop renders "Manage data" as a Deck right-side pane (ManageDataPane) instead of the Fluent
+    // dialog. Opened from the settings pane's "Manage data" action, which closes settings first to
+    // avoid stacking two panes / competing focus traps.
+    private void OpenManageDataPane()
+    {
+        _showSettingsPane = false;
+        _showManageDataPane = true;
+        StateHasChanged();
+    }
+
+    private void CloseManageDataPane()
+    {
+        _showManageDataPane = false;
         StateHasChanged();
     }
 

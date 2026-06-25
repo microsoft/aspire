@@ -31,11 +31,15 @@
             @Body
             @if (_showSettingsPane)
             {
-                <Aspire.Dashboard.Components.Dialogs.SettingsPane OnClose="@CloseSettingsPane" />
+                <Aspire.Dashboard.Components.Dialogs.SettingsPane OnClose="@CloseSettingsPane" OnManageData="@OpenManageDataPane" />
             }
             @if (_showHelpPane)
             {
                 <Aspire.Dashboard.Components.Dialogs.HelpPane OnClose="@CloseHelpPane" />
+            }
+            @if (_showManageDataPane)
+            {
+                <Aspire.Dashboard.Components.Dialogs.ManageDataPane OnClose="@CloseManageDataPane" />
             }
             @* Inside .app so interaction panes/toasts sit alongside the Deck drawers and the
                `:has(.drawer) .notif-stack` toast-shift applies. *@

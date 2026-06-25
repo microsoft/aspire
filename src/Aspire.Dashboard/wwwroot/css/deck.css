@@ -2365,3 +2365,26 @@ table.data.deck-logs-table tbody td.deck-logs-actions-col {
   border-radius: 5px;
 }
 /* === end Help === */
+
+/* === ManageData === */
+/* Deck restyle for Components/Dialogs/ManageDataPane.razor (right-side pane replacing the Fluent
+   ManageDataDialog). Only the surrounding Drawer chrome is Deck here; the inner telemetry grid is
+   still Fluent (FluentDataGrid + action buttons) and is converted in the later Fluent-removal pass.
+   The pane is widened beyond the default drawer width so the two-column grid is usable, and the
+   action buttons get Deck spacing. */
+.manage-data-pane {
+  width: min(760px, 92%);
+}
+.manage-data-pane .button-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.manage-data-pane .error-message {
+  margin-top: 10px;
+  color: var(--error);
+  font-size: 12.5px;
+}
+/* === end ManageData === */

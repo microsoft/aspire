@@ -1,0 +1,22 @@
+@*
+    Deck-style "Manage data" surface shown as a right-side pane (replaces the Fluent ManageDataDialog
+    modal). Hosts the existing ManageDataDialog content (telemetry export / remove / import grid)
+    inside the shared Deck Drawer chrome. This is a surface conversion only: the internal data grid
+    is still Fluent and is restyled to Deck in the later Fluent-removal pass. All of ManageDataDialog's
+    logic is reused unchanged.
+*@
+@namespace Aspire.Dashboard.Components.Dialogs
+@using Aspire.Dashboard.Resources
+@inject IStringLocalizer<Dialogs> Loc
+
+<Drawer Class="manage-data-pane" Title="@Loc[nameof(Dialogs.ManageDataDialogTitle)]" OnClose="OnClose">
+    <ChildContent>
+        <ManageDataDialog />
+    </ChildContent>
+</Drawer>
+
+@code {
+    /// <summary>Invoked when the pane is dismissed.</summary>
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+}

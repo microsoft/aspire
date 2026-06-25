@@ -28,6 +28,13 @@ public partial class SettingsPane : IDisposable
     [Parameter]
     public EventCallback OnClose { get; set; }
 
+    /// <summary>
+    /// Invoked when the user activates "Manage data". When set, the host opens the Deck
+    /// ManageDataPane; otherwise the pane falls back to the Fluent ManageDataDialog.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnManageData { get; set; }
+
     [Inject]
     public required ThemeManager ThemeManager { get; init; }
 
@@ -121,6 +128,15 @@ public partial class SettingsPane : IDisposable
 
     private async Task LaunchManageDataAsync()
     {
+        // On desktop the settings pane delegates "Manage data" to the host (MainLayout), which closes
+        // this pane and opens the Deck ManageDataPane. Fall back to the Fluent dialog if no host
+        // handler is wired (keeps the surface usable in isolation).
+        if (OnManageData.HasDelegate)
+        {
+            await OnManageData.InvokeAsync();
+            return;
+        }
+
         // Close the settings pane first to avoid concurrent focus traps.
         if (OnClose.HasDelegate)
         {
