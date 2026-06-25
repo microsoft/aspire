@@ -156,7 +156,7 @@
                                         {
                                             <DeckIcon Name="DeckIconName.ErrorCircle" Size="12" Class="trace-tag-icon icon-error" />
                                         }
-                                        <FluentHighlighter HighlightedText="@PageViewModel.Filter" Text="@context.Span.GetDisplaySummary()" />
+                                        <Highlighter HighlightedText="@PageViewModel.Filter" Text="@context.Span.GetDisplaySummary()" />
                                         @if (context.HasUninstrumentedPeer)
                                         {
                                             <span class="uninstrumented-peer">
@@ -180,7 +180,7 @@
                                                     Size="16"
                                                     Style="@($"color: {TraceColorPalette.GetColorVariable(context.UninstrumentedPeer)};")"
                                                     Class="uninstrumented-peer-icon" />
-                                                <FluentHighlighter HighlightedText="@PageViewModel.Filter" Text="@context.UninstrumentedPeer" />
+                                                <Highlighter HighlightedText="@PageViewModel.Filter" Text="@context.UninstrumentedPeer" />
                                             </span>
                                         }
                                     </span>
@@ -198,7 +198,7 @@
                             </AspireTemplateColumn>
                             <AspireTemplateColumn ColumnId="@ResourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourceHeader)]" Tooltip="true" TooltipText="@(c => GetResourceName(c.Span.Source))" Class="expand-col">
                                 <div class="resource-name">
-                                    <FluentHighlighter HighlightedText="@PageViewModel.Filter" Text="@GetResourceName(context.Span.Source)" />
+                                    <Highlighter HighlightedText="@PageViewModel.Filter" Text="@GetResourceName(context.Span.Source)" />
                                 </div>
                             </AspireTemplateColumn>
                             <AspireTemplateColumn ColumnId="@TicksColumn" ColumnManager="@_manager">

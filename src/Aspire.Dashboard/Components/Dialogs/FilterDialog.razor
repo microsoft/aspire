@@ -97,7 +97,7 @@
                             @* Workaround this issue by inserting extra text using CSS. *@
                             <span data-filtercount="@optionContext.Id!.Count"></span>
                         </Badge>
-                        <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
+                        <Highlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
                     </OptionTemplate>
                 </FluentCombobox>
                 <ValidationMessage For="() => _formModel.Value" />

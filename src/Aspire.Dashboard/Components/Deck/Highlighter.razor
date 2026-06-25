@@ -1,0 +1,64 @@
+@*
+    Highlights occurrences of a search term within a piece of text, replacing FluentHighlighter
+    during the Fluent-removal phase. Matched substrings are wrapped in a <mark> styled by the Deck
+    `.deck-mark` rule. Matching is case-insensitive and reproduces FluentHighlighter's default
+    behaviour (single search term, no delimiter splitting, no word-boundary expansion).
+*@
+@namespace Aspire.Dashboard.Components.Deck
+
+@foreach (var fragment in GetFragments())
+{
+    if (fragment.IsMatch)
+    {
+        <mark class="deck-mark">@fragment.Text</mark>
+    }
+    else
+    {
+        @fragment.Text
+    }
+}
+
+@code {
+    /// <summary>The full text in which a fragment will be highlighted.</summary>
+    [Parameter]
+    public string? Text { get; set; }
+
+    /// <summary>The fragment of text to highlight (the active search term).</summary>
+    [Parameter]
+    public string? HighlightedText { get; set; }
+
+    private IEnumerable<(string Text, bool IsMatch)> GetFragments()
+    {
+        var text = Text ?? string.Empty;
+        var term = HighlightedText;
+
+        if (text.Length == 0)
+        {
+            yield break;
+        }
+
+        if (string.IsNullOrEmpty(term))
+        {
+            yield return (text, false);
+            yield break;
+        }
+
+        var start = 0;
+        int index;
+        while ((index = text.IndexOf(term, start, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            if (index > start)
+            {
+                yield return (text[start..index], false);
+            }
+
+            yield return (text.Substring(index, term.Length), true);
+            start = index + term.Length;
+        }
+
+        if (start < text.Length)
+        {
+            yield return (text[start..], false);
+        }
+    }
+}

@@ -5,10 +5,10 @@
     @* Only display a button if dashboard client is enabled and a matching resource can be found. *@
     <button type="button" class="button-hyperlink" @onclick="OnClickAsync">
         <DeckIcon Name="iconName" Size="16" Class="resource-icon" />
-        <FluentHighlighter HighlightedText="@HighlightText" Text="@Value" />
+        <Highlighter HighlightedText="@HighlightText" Text="@Value" />
     </button>
 }
 else
 {
-    <FluentHighlighter HighlightedText="@HighlightText" Text="@Value" />
+    <Highlighter HighlightedText="@HighlightText" Text="@Value" />
 }

@@ -271,7 +271,7 @@
         {
             if (highlighting)
             {
-                return @<FluentHighlighter HighlightedText="@filter" Text="@vm.Text" />;
+                return @<Highlighter HighlightedText="@filter" Text="@vm.Text" />;
             }
             return @<span>@vm.Text</span>;
         }
@@ -283,7 +283,7 @@
 
             if (highlighting)
             {
-                return @<a href="@vm.Url" target="_blank"><FluentHighlighter HighlightedText="@filter" Text="@displayUrl" /></a>;
+                return @<a href="@vm.Url" target="_blank"><Highlighter HighlightedText="@filter" Text="@displayUrl" /></a>;
             }
             return @<a href="@vm.Url" target="_blank">@displayUrl</a>;
         }
@@ -303,7 +303,7 @@
         {
             if (highlighting)
             {
-                return @<a href="@vm.Url" title="@vm.Url" target="_blank"><FluentHighlighter HighlightedText="@filter" Text="@vm.DisplayName" /></a>;
+                return @<a href="@vm.Url" title="@vm.Url" target="_blank"><Highlighter HighlightedText="@filter" Text="@vm.DisplayName" /></a>;
             }
             return @<a href="@vm.Url" title="@vm.Url" target="_blank">@vm.DisplayName</a>;
         }

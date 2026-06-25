@@ -112,7 +112,7 @@
                                 <td title="@GetNameTooltip(trace)">
                                     <span class="trace-name-cell">
                                         <span class="trace-name-text" style="border-left-color: @(TraceColorPalette.GetColorVariable(GetResourceName(trace.RootOrFirstSpan.Source)));">
-                                            <FluentHighlighter HighlightedText="@(TracesViewModel.FilterText)" Text="@(trace.FullName)" />
+                                            <Highlighter HighlightedText="@(TracesViewModel.FilterText)" Text="@(trace.FullName)" />
                                         </span>
                                         <span class="trace-id">@OtlpHelpers.ToShortenedId(trace.TraceId)</span>
                                         @if (HasGenAISpans(trace))

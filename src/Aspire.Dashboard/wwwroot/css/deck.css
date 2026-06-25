@@ -2646,6 +2646,17 @@ hr.deck-divider {
 }
 /* === end Checkbox === */
 
+/* === Search highlight (FluentHighlighter replacement) ===
+   Wraps the matched search substring rendered by the Deck Highlighter component. Uses a soft
+   accent background so matches read as a Deck highlight rather than the browser-default yellow. */
+.deck-mark {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+/* === end Search highlight === */
+
 /* === Hyperlink buttons (FluentButton Lightweight link-style replacement) === */
 .button-hyperlink,
 .button-hyperlink-no-icon {

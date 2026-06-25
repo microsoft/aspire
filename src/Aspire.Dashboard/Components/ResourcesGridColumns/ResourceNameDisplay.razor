@@ -13,7 +13,7 @@
                   Style="@($"color: {ColorGenerator.Instance.GetColorVariableByKey(FormatName(Resource))};")" />
     }
     @{
-        <span class="resource-name-text"><FluentHighlighter HighlightedText="@FilterText" Text="@FormatName(Resource)" /></span>
+        <span class="resource-name-text"><Highlighter HighlightedText="@FilterText" Text="@FormatName(Resource)" /></span>
     }
     @if (Resource.Properties.TryGetValue(KnownProperties.Container.Lifetime, out var value) &&
         value.Value.HasStringValue &&
