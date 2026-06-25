@@ -148,10 +148,10 @@
                                     <span class="span-name-container" style="@spanNameContainerStyle">
                                         @if (isServerOrConsumer)
                                         {
-                                            <FluentIcon Class="span-kind-icon"
-                                                        Color="Color.Custom"
-                                                        CustomColor="@TraceColorPalette.GetColorVariable(GetResourceName(context.Span.Source))"
-                                                        Value="@TraceHelpers.TryGetSpanIcon(context.Span, IconVariant.Filled)"/>
+                                            <DeckIcon Class="span-kind-icon"
+                                                      Style="@($"color: {TraceColorPalette.GetColorVariable(GetResourceName(context.Span.Source))};")"
+                                                      Name="@(TraceHelpers.TryGetSpanIcon(context.Span) ?? DeckIconName.Settings)"
+                                                      Size="16" />
                                         }
 
                                         @if (context.IsError)

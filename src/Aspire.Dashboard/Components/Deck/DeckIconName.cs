@@ -91,6 +91,10 @@ public enum DeckIconName
     ArrowTurnDownRight,
     /// <summary>List of items/apps.</summary>
     AppsList,
+    /// <summary>Server racks.</summary>
+    Server,
+    /// <summary>Envelope (mail/messaging).</summary>
+    Mail,
     /// <summary>
     /// Special value: resolves to a project/container/executable icon based on the
     /// <see cref="DeckIcon.ResourceType"/> string.

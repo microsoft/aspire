@@ -1,8 +1,8 @@
 ﻿@using Aspire.Dashboard.Utils
 
-@if (_icon != null)
+@if (_icon is { } icon)
 {
-    <FluentIcon Value="@_icon" Color="Color.Neutral" Class="severity-icon" />
+    <DeckIcon Name="@icon" Size="16" Class="severity-icon" />
 }
 
 <FluentHighlighter HighlightedText="@HighlightText" Text="@Value" />

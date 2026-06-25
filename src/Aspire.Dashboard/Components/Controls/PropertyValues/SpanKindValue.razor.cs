@@ -1,16 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components.Controls.PropertyValues;
 
 public partial class SpanKindValue
 {
-    private Icon? _icon;
+    private DeckIconName? _icon;
 
     [Parameter, EditorRequired]
     public required string Value { get; set; }
@@ -23,6 +23,6 @@ public partial class SpanKindValue
 
     protected override void OnParametersSet()
     {
-        _icon = TraceHelpers.TryGetSpanIcon(Span, IconVariant.Regular);
+        _icon = TraceHelpers.TryGetSpanIcon(Span);
     }
 }
