@@ -180,7 +180,13 @@ export class AppHostLaunchService implements vscode.Disposable {
         }
 
         try {
-            const started = await vscode.debug.startDebugging(undefined, config);
+            const started: boolean | undefined = await vscode.debug.startDebugging(undefined, config);
+            if (started === undefined) {
+                // The Aspire debug provider returns undefined when CLI gating has already handled
+                // the missing-CLI UX. Treat that as user-visible cancellation so tree/editor
+                // commands don't show a second generic launch failure.
+                throw new vscode.CancellationError();
+            }
             if (!started) {
                 // A false result means VS Code declined the launch before the
                 // debug session started (for example, no provider matched or

@@ -178,6 +178,27 @@ suite('AppHostLaunchService', () => {
         }
     });
 
+    test('launch treats undefined startDebugging result as cancellation', async () => {
+        startDebuggingStub.resolves(undefined);
+        const fake = new FakeTelemetryReporter();
+        const restore = __setReporterForTests(fake as unknown as Parameters<typeof __setReporterForTests>[0]);
+        try {
+            await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), vscode.CancellationError);
+
+            assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), false);
+            assert.strictEqual(fake.events.length, 1);
+            const event = fake.events[0];
+            assert.strictEqual(event.name, 'apphost/launch/result');
+            assert.strictEqual(event.properties?.outcome, 'canceled');
+            assert.strictEqual(event.properties?.error_kind, undefined);
+            assert.ok(typeof event.measurements?.duration_ms === 'number');
+        }
+        finally {
+            restore();
+            __resetCommonPropertiesForTests();
+        }
+    });
+
     test('launch clears launching state and rethrows when startDebugging throws', async () => {
         startDebuggingStub.rejects(new Error('boom'));
 
