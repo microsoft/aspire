@@ -903,7 +903,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             if (profileElement.Value.TryGetProperty("applicationUrl", out var appUrl) &&
                 appUrl.ValueKind == JsonValueKind.String)
             {
-                result["ASPNETCORE_URLS"] = appUrl.GetString()!;
+                result[KnownAspNetCoreConfigNames.Urls] = appUrl.GetString()!;
             }
 
             // Read environment variables
@@ -956,7 +956,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         if (!string.IsNullOrEmpty(profile.ApplicationUrl))
         {
-            result["ASPNETCORE_URLS"] = profile.ApplicationUrl;
+            result[KnownAspNetCoreConfigNames.Urls] = profile.ApplicationUrl;
         }
 
         if (profile.EnvironmentVariables is not null)

@@ -505,7 +505,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         // Dev mode uses debug builds which require Development environment
         // for the dashboard to resolve static web assets correctly
-        startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+        startInfo.Environment[KnownAspNetCoreConfigNames.Environment] = "Development";
 
         // Wire WithTerminal() for guest/polyglot AppHosts running from the repo. The
         // generated AppHostServer references Aspire.Hosting from the repo and DCP resolves

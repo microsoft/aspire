@@ -23,10 +23,6 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class ProjectResourceBuilderExtensions
 {
-    private const string AspNetCoreForwardedHeadersEnabledVariableName = "ASPNETCORE_FORWARDEDHEADERS_ENABLED";
-    private const string KestrelCertificatesDefaultPathVariableName = "Kestrel__Certificates__Default__Path";
-    private const string KestrelCertificatesDefaultPasswordVariableName = "Kestrel__Certificates__Default__Password";
-
     /// <summary>
     /// Adds a .NET project to the application model.
     /// </summary>
@@ -514,14 +510,14 @@ public static class ProjectResourceBuilderExtensions
 
             // Kestrel's default certificate configuration accepts PFX paths directly. This avoids
             // PEM key-pair path handling differences in local development environments.
-            ctx.EnvironmentVariables[KestrelCertificatesDefaultPathVariableName] = ctx.PfxPath;
+            ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath] = ctx.PfxPath;
             if (ctx.Password is not null)
             {
-                ctx.EnvironmentVariables[KestrelCertificatesDefaultPasswordVariableName] = ctx.Password;
+                ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword] = ctx.Password;
             }
             else
             {
-                ctx.EnvironmentVariables.Remove(KestrelCertificatesDefaultPasswordVariableName);
+                ctx.EnvironmentVariables.Remove(KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword);
             }
 
             return Task.CompletedTask;
@@ -542,7 +538,7 @@ public static class ProjectResourceBuilderExtensions
                 // If we have any endpoints & the forwarded headers wasn't disabled then add it
                 if (projectResource.GetEndpoints().Any() && !projectResource.Annotations.OfType<DisableForwardedHeadersAnnotation>().Any())
                 {
-                    context.EnvironmentVariables[AspNetCoreForwardedHeadersEnabledVariableName] = "true";
+                    context.EnvironmentVariables[KnownAspNetCoreConfigNames.ForwardedHeadersEnabled] = "true";
                 }
             });
         }
@@ -970,7 +966,7 @@ public static class ProjectResourceBuilderExtensions
         }
 
         var projectDirectoryPath = Path.GetDirectoryName(projectMetadata.ProjectPath)!;
-        var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+        var env = Environment.GetEnvironmentVariable(KnownAspNetCoreConfigNames.Environment) ?? Environment.GetEnvironmentVariable(KnownAspNetCoreConfigNames.DotNetEnvironment);
         var appSettingsPath = Path.Combine(projectDirectoryPath, "appsettings.json");
         var appSettingsEnvironmentPath = Path.Combine(projectDirectoryPath, $"appsettings.{env}.json");
         // .NET 10 introduced support for application-specific settings files: https://github.com/dotnet/runtime/pull/116987
@@ -1021,7 +1017,7 @@ public static class ProjectResourceBuilderExtensions
     {
         builder.WithEnvironment(context =>
         {
-            if (context.EnvironmentVariables.ContainsKey("ASPNETCORE_URLS"))
+            if (context.EnvironmentVariables.ContainsKey(KnownAspNetCoreConfigNames.Urls))
             {
                 // If the user has already set ASPNETCORE_URLS, we don't want to override it.
                 return;
@@ -1044,7 +1040,7 @@ public static class ProjectResourceBuilderExtensions
                 {
                     // Add the environment variable for the HTTPS port if we have an HTTPS service. This will make sure the
                     // HTTPS redirection middleware avoids redirecting to the internal port.
-                    context.EnvironmentVariables["ASPNETCORE_HTTPS_PORT"] = e.Property(EndpointProperty.Port);
+                    context.EnvironmentVariables[KnownAspNetCoreConfigNames.HttpsPort] = e.Property(EndpointProperty.Port);
 
                     processedHttpsPort = true;
                 }
@@ -1056,7 +1052,7 @@ public static class ProjectResourceBuilderExtensions
             if (!aspnetCoreUrls.IsEmpty)
             {
                 // Combine into a single expression
-                context.EnvironmentVariables["ASPNETCORE_URLS"] = aspnetCoreUrls.Build();
+                context.EnvironmentVariables[KnownAspNetCoreConfigNames.Urls] = aspnetCoreUrls.Build();
             }
         });
     }

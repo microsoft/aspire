@@ -45,9 +45,9 @@ public class ProjectResourceBuilderExtensionTests
         await new HttpsCertificateExecutionConfigurationGatherer(CreateHttpsCertificateConfigurationContextFactory())
             .GatherAsync(context, resource, NullLogger.Instance, builder.ExecutionContext);
 
-        var certificatePath = Assert.IsAssignableFrom<IValueProvider>(context.EnvironmentVariables["Kestrel__Certificates__Default__Path"]);
+        var certificatePath = Assert.IsAssignableFrom<IValueProvider>(context.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath]);
         Assert.Equal("/etc/ssl/certs/server.pfx", await certificatePath.GetValueAsync());
-        Assert.Same(password.Resource, context.EnvironmentVariables["Kestrel__Certificates__Default__Password"]);
+        Assert.Same(password.Resource, context.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword]);
 
         var metadata = context.AdditionalConfigurationData.OfType<HttpsCertificateExecutionConfigurationData>().Single();
         Assert.False(metadata.IsKeyPathReferenced);
@@ -63,7 +63,7 @@ public class ProjectResourceBuilderExtensionTests
 
         var resource = builder.AddProject<TestProject>("test", options => options.ExcludeLaunchProfile = true)
             .WithHttpsEndpoint()
-            .WithEnvironment("Kestrel__Certificates__Default__Password", "stale-password")
+            .WithEnvironment(KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword, "stale-password")
             .WithHttpsCertificate(cert)
             .Resource;
 
@@ -75,9 +75,9 @@ public class ProjectResourceBuilderExtensionTests
         await new HttpsCertificateExecutionConfigurationGatherer(CreateHttpsCertificateConfigurationContextFactory())
             .GatherAsync(context, resource, NullLogger.Instance, builder.ExecutionContext);
 
-        var certificatePath = Assert.IsAssignableFrom<IValueProvider>(context.EnvironmentVariables["Kestrel__Certificates__Default__Path"]);
+        var certificatePath = Assert.IsAssignableFrom<IValueProvider>(context.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath]);
         Assert.Equal("/etc/ssl/certs/server.pfx", await certificatePath.GetValueAsync());
-        Assert.DoesNotContain("Kestrel__Certificates__Default__Password", context.EnvironmentVariables.Keys);
+        Assert.DoesNotContain(KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword, context.EnvironmentVariables.Keys);
     }
 
     [Fact]
