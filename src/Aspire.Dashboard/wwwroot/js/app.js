@@ -347,9 +347,10 @@ window.initializeMobileNavMenuKeyboardNavigation = function (menuId, dotnetHelpe
         }
     };
 
-    // Keep Escape-to-close available while focus is inside the mobile navigation.
+    // Keep Escape-to-close available as soon as the menu opens, including while
+    // focus is still on the navigation button that opened this inline menu.
     // Do not trap Tab: this menu is inline page navigation, not a modal dialog.
-    menu.addEventListener("keydown", keydownListener, true);
+    document.addEventListener("keydown", keydownListener, true);
 
     return {
         menu,
@@ -358,7 +359,7 @@ window.initializeMobileNavMenuKeyboardNavigation = function (menuId, dotnetHelpe
 };
 
 window.disposeMobileNavMenuKeyboardNavigation = function (obj) {
-    obj?.menu?.removeEventListener("keydown", obj.keydownListener, true);
+    document.removeEventListener("keydown", obj?.keydownListener, true);
 };
 
 window.getWindowDimensions = function() {

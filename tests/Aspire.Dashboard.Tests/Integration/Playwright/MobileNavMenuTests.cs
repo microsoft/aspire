@@ -38,6 +38,14 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
         var menu = page.Locator("fluent-menu.mobile-nav-menu");
         await Assertions.Expect(menu).ToBeVisibleAsync();
 
+        await page.Keyboard.PressAsync("Escape");
+        await Assertions.Expect(menu).ToBeHiddenAsync();
+        var activeElementId = await page.EvaluateAsync<string?>("() => document.activeElement?.id");
+        Assert.Equal("dashboard-navigation-button", activeElementId);
+
+        await page.Locator(".navigation-button").ClickAsync();
+        await Assertions.Expect(menu).ToBeVisibleAsync();
+
         await page.Keyboard.PressAsync("Tab");
 
         var focusHistory = new List<string?>();
@@ -74,6 +82,8 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
                     viewportHeight: innerHeight,
                     paddingTop: style.paddingTop,
                     paddingBottom: style.paddingBottom,
+                    paddingTopValue: Number.parseFloat(style.paddingTop),
+                    paddingBottomValue: Number.parseFloat(style.paddingBottom),
                     scrollPaddingTop: style.scrollPaddingTop,
                     scrollPaddingBottom: style.scrollPaddingBottom
                 };
@@ -103,8 +113,8 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
         Assert.True(metrics.ActiveTitle == SettingsMenuItemTitle, $"Focus did not reach the Settings menu item. History: {string.Join(" -> ", focusHistory)}");
         Assert.True(metrics.MenuTop >= 0, $"Menu starts above viewport: {metrics}");
         Assert.True(metrics.MenuBottom <= metrics.ViewportHeight, $"Menu extends below viewport: {metrics}");
-        Assert.True(metrics.FocusedTop >= metrics.MenuTop, $"Focused item starts above menu scrollport: {metrics}");
-        Assert.True(metrics.FocusedBottom <= metrics.MenuBottom, $"Focused item extends below menu scrollport: {metrics}");
+        Assert.True(metrics.FocusedTop >= metrics.MenuTop + metrics.PaddingTopValue - 0.5, $"Focused item starts inside the menu focus padding: {metrics}");
+        Assert.True(metrics.FocusedBottom <= metrics.MenuBottom - metrics.PaddingBottomValue + 0.5, $"Focused item ends inside the menu focus padding: {metrics}");
         Assert.Equal("4px", metrics.PaddingTop);
         Assert.Equal("4px", metrics.PaddingBottom);
         Assert.Equal("4px", metrics.ScrollPaddingTop);
@@ -113,7 +123,7 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
         await page.Keyboard.PressAsync("Escape");
         await Assertions.Expect(menu).ToBeHiddenAsync();
 
-        var activeElementId = await page.EvaluateAsync<string?>("() => document.activeElement?.id");
+        activeElementId = await page.EvaluateAsync<string?>("() => document.activeElement?.id");
         Assert.Equal("dashboard-navigation-button", activeElementId);
     }
 
@@ -156,6 +166,10 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
         public string PaddingTop { get; set; } = null!;
 
         public string PaddingBottom { get; set; } = null!;
+
+        public double PaddingTopValue { get; set; }
+
+        public double PaddingBottomValue { get; set; }
 
         public string ScrollPaddingTop { get; set; } = null!;
 
