@@ -1036,9 +1036,12 @@ internal sealed class RunCommand : BaseCommand
             // Swallow the exception if the operation was cancelled.
             return;
         }
-        catch (ConnectionLostException) when (cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
         {
-            // Just swallow this exception because this is an orderly shutdown of the backchannel.
+            // The AppHost process exited and the backchannel connection was lost. This is
+            // expected during orderly shutdown — the connection drops before the cancellation
+            // token fires because logCaptureCancellationSource.Cancel() runs in the finally
+            // block after the AppHost process has already exited.
             return;
         }
     }
