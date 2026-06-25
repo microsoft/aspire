@@ -1,6 +1,6 @@
 ::deep .unread-logs-errors-link {
     vertical-align: super;
-    --unread-logs-badge-color: #ffffff;
+    margin-left: 5px;
 }
 
 ::deep .value-not-set-link {
@@ -16,13 +16,6 @@
 
 ::deep .value-not-set-link:hover {
     color: var(--accent-fill-hover);
-}
-
-::deep .unread-logs-errors-link::part(control) {
-    margin-left: 5px;
-    padding: 0;
-    flex-grow: 0;
-    color: #ffffff;
 }
 
 ::deep .error-counter-badge {

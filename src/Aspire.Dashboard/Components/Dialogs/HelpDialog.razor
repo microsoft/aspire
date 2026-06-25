@@ -2,9 +2,9 @@
 @implements IDialogContentComponent
 @inject IStringLocalizer<Dialogs> Loc
 
-<FluentAnchor Style="margin-bottom: 5px;" Appearance="Appearance.Lightweight" Class="anchor-no-padding" Href="https://aka.ms/aspire/dashboard" Target="_blank">
+<a style="display: inline-block; margin-bottom: 5px;" href="https://aka.ms/aspire/dashboard" target="_blank" rel="noopener noreferrer">
     @Loc[nameof(Dialogs.HelpDialogGetHelpLinkText)]
-</FluentAnchor>
+</a>
 
 <h5>@Loc[nameof(Dialogs.HelpDialogKeyboardShortcutsTitle)]</h5>
 

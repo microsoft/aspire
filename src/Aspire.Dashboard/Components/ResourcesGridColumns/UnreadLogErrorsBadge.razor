@@ -5,14 +5,13 @@
 @if (_unviewedCount > 0)
 {
     var tooltip = _unviewedCount == 1 ? Loc[nameof(Columns.UnreadLogErrorsBadgeOneErrorLog)] : string.Format(Loc[nameof(Columns.UnreadLogErrorsBadgeErrorLogs)], _unviewedCount);
-    <FluentAnchor aria-label="@tooltip"
-                  title="@tooltip"
-                  Href="@GetResourceErrorStructuredLogsUrl()"
-                  Appearance="Appearance.Stealth"
-                  Class="unread-logs-errors-link"
-                  @onclick:stopPropagation="true">
+    <a aria-label="@tooltip"
+       title="@tooltip"
+       href="@GetResourceErrorStructuredLogsUrl()"
+       class="unread-logs-errors-link"
+       @onclick:stopPropagation="true">
         <Badge Tone="error">
             @(_unviewedCount > 9 ? "9+" : _unviewedCount.ToString())
         </Badge>
-    </FluentAnchor>
+    </a>
 }

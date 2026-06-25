@@ -417,11 +417,6 @@ td .long-inner-content {
     margin-top: auto;
 }
 
-.anchor-no-padding::part(control) {
-    padding: 0;
-    flex-grow: 0;
-}
-
 .button-hyperlink::part(control), .button-hyperlink-no-icon::part(control) {
     padding: 0;
 }
