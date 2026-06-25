@@ -230,7 +230,7 @@ suite('InteractionService endpoints', () => {
 			sendRequest: sinon.stub()
 		} as any;
 
-		const rpcClient = new RpcClient({} as any, messageConnection, null, () => null);
+		const rpcClient = new RpcClient(messageConnection, null, () => null);
 
 		rpcClient.interactionService.showStatus('Scanning for running AppHosts...');
 		assert.strictEqual((rpcClient.interactionService as any)._progressNotifier.isActive, true);
@@ -461,14 +461,7 @@ suite('InteractionService endpoints', () => {
 		try {
 			const infoStub = sandbox.stub(extensionLogOutputChannel, 'info');
 			const showStub = sandbox.stub(extensionLogOutputChannel, 'show');
-			const mockTerminal = {
-				terminal: {
-					sendText: () => assert.fail('display-only lines must not be written to shell stdin')
-				},
-				dispose: () => {}
-			};
 			const testInfo = await createTestRpcServer(null, () => null);
-			(testInfo.interactionService as any)._getAspireTerminal = () => mockTerminal;
 
 			testInfo.interactionService.displayLines([
 				{ Stream: 'stdout', Line: 'line1' },
@@ -476,7 +469,27 @@ suite('InteractionService endpoints', () => {
 			]);
 
 			assert.deepStrictEqual(infoStub.args.map(args => args[0]).slice(-2), ['line1', 'line2']);
-			assert.strictEqual(showStub.calledOnceWithExactly(undefined, true), true);
+			assert.strictEqual(showStub.calledOnce, true);
+			assert.deepStrictEqual(showStub.firstCall.args, [true]);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayLines without debug session does not show output channel for empty lines", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const infoStub = sandbox.stub(extensionLogOutputChannel, 'info');
+			const showStub = sandbox.stub(extensionLogOutputChannel, 'show');
+			const testInfo = await createTestRpcServer(null, () => null);
+			const infoCallCount = infoStub.callCount;
+
+			testInfo.interactionService.displayLines([]);
+
+			assert.strictEqual(infoStub.callCount, infoCallCount);
+			assert.strictEqual(showStub.called, false);
 		}
 		finally {
 			sandbox.restore();
