@@ -1,9 +1,10 @@
 ﻿@using Aspire.Dashboard.Utils
 
-@if (_resourceIcon != null)
+@if (_resourceIconName is { } iconName)
 {
     @* Only display a button if dashboard client is enabled and a matching resource can be found. *@
-    <FluentButton OnClick="OnClickAsync" Appearance="Appearance.Lightweight" Class="button-hyperlink" IconStart="_resourceIcon">
+    <FluentButton OnClick="OnClickAsync" Appearance="Appearance.Lightweight" Class="button-hyperlink">
+        <DeckIcon Name="iconName" Size="16" Class="resource-icon" Style="margin-inline-end: 6px;" />
         <FluentHighlighter HighlightedText="@HighlightText" Text="@Value" />
     </FluentButton>
 }

@@ -70,8 +70,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
     [Inject]
-    public required IconResolver IconResolver { get; init; }
-    [Inject]
     public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
 
     public string BasePath => DashboardUrls.ResourcesBasePath;
@@ -377,7 +375,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
 
         var activeResources = _resourceByName.Values.Where(Filter).OrderBy(e => e.ResourceType).ThenBy(e => e.Name).ToList();
-        var resources = activeResources.Select(r => ResourceGraphMapper.MapResource(r, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver)).ToList();
+        var resources = activeResources.Select(r => ResourceGraphMapper.MapResource(r, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources)).ToList();
         await _jsModule.InvokeVoidAsync("updateResourcesGraph", resources);
     }
 

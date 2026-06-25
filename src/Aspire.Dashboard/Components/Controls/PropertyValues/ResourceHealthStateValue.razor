@@ -1,9 +1,3 @@
-﻿@if (_icon != null)
-{
-    <FluentIcon Width="16px"
-                Class="severity-icon"
-                Color="@_color"
-                Value="@_icon" />
-}
+﻿<DeckIcon Name="_iconName" Size="16" Class="@($"severity-icon {_toneClass}")" />
 
 <FluentHighlighter HighlightedText="@HighlightText" Text="@Value" />

@@ -95,6 +95,14 @@ public enum DeckIconName
     Server,
     /// <summary>Envelope (mail/messaging).</summary>
     Mail,
+    /// <summary>Database cylinder; represents a database resource.</summary>
+    Database,
+    /// <summary>Heart; a healthy health status.</summary>
+    Heart,
+    /// <summary>Heart with a crack; a degraded/unhealthy health status.</summary>
+    HeartBroken,
+    /// <summary>Hollow circle; an unknown/indeterminate health status.</summary>
+    CircleHint,
     /// <summary>
     /// Special value: resolves to a project/container/executable icon based on the
     /// <see cref="DeckIcon.ResourceType"/> string.

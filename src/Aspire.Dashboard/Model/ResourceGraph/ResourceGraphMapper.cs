@@ -3,6 +3,7 @@
 
 using System.Collections.Immutable;
 using System.Xml.Linq;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Resources;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -12,7 +13,7 @@ namespace Aspire.Dashboard.Model.ResourceGraph;
 
 public static class ResourceGraphMapper
 {
-    public static ResourceDto MapResource(ResourceViewModel r, IDictionary<string, ResourceViewModel> resourcesByName, IStringLocalizer<Columns> columnsLoc, bool showHiddenResources, IconResolver iconResolver)
+    public static ResourceDto MapResource(ResourceViewModel r, IDictionary<string, ResourceViewModel> resourcesByName, IStringLocalizer<Columns> columnsLoc, bool showHiddenResources)
     {
         var resolvedNames = new List<string>();
 
@@ -38,7 +39,7 @@ public static class ResourceGraphMapper
         var resourceName = ResourceViewModel.GetResourceName(r, resourcesByName);
         var color = ColorGenerator.Instance.GetColorVariableByKey(resourceName);
 
-        var icon = GetIconPathData(ResourceIconHelpers.GetIconForResource(iconResolver, r, IconSize.Size24));
+        var icon = DeckIconData.GetInnerMarkup(ResourceIconHelpers.GetDeckIconForResource(r));
 
         var stateIcon = ResourceStateViewModel.GetStateViewModel(r, columnsLoc);
 
@@ -50,7 +51,7 @@ public static class ResourceGraphMapper
             Uid = r.Uid,
             ResourceIcon = new IconDto
             {
-                Path = icon,
+                Svg = icon,
                 Color = color,
                 Tooltip = r.ResourceType
             },

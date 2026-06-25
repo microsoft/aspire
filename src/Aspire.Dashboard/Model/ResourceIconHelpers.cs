@@ -3,73 +3,114 @@
 
 namespace Aspire.Dashboard.Model;
 
+using Aspire.Dashboard.Components.Deck;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 internal static class ResourceIconHelpers
 {
     /// <summary>
-    /// Maps a resource to an icon, checking for custom icons first, then falling back to default icons.
+    /// Maps a resource to a Deck icon, checking for a custom icon first, then falling back to a
+    /// default icon based on the resource type.
     /// </summary>
-    public static Icon GetIconForResource(IconResolver iconResolver, ResourceViewModel resource, IconSize desiredSize, IconVariant desiredVariant = IconVariant.Filled)
+    public static DeckIconName GetDeckIconForResource(ResourceViewModel resource)
     {
-        // Check if the resource has a custom icon specified
-        if (!string.IsNullOrWhiteSpace(resource.IconName))
+        // A custom icon set by the AppHost via WithIconName. These are Fluent system-icon names
+        // (https://aka.ms/fluentui-system-icons); map the ones Aspire integrations commonly use to the
+        // nearest Deck glyph. Unknown names fall through to the resource-type icon below: Deck ships a
+        // fixed, single-stroke glyph set rather than the full Fluent icon library, so arbitrary names
+        // can't be resolved — and we intentionally don't reach back to Fluent for them.
+        if (!string.IsNullOrWhiteSpace(resource.IconName) && TryMapCustomIcon(resource.IconName, out var custom))
         {
-            var customIcon = iconResolver.ResolveIconName(resource.IconName, desiredSize, resource.IconVariant ?? IconVariant.Filled);
-            if (customIcon != null)
-            {
-                return customIcon;
-            }
+            return custom;
         }
 
-        // Fall back to default icons based on resource type
-        var icon = resource.ResourceType switch
+        return resource.ResourceType switch
         {
-            KnownResourceTypes.Executable => iconResolver.ResolveIconName("Apps", desiredSize, desiredVariant),
-            KnownResourceTypes.Project => ResolveProjectIcon(iconResolver, resource, desiredSize, desiredVariant),
-            KnownResourceTypes.Container => iconResolver.ResolveIconName("Box", desiredSize, desiredVariant),
-            KnownResourceTypes.Parameter => iconResolver.ResolveIconName("Key", desiredSize, desiredVariant),
-            KnownResourceTypes.ConnectionString => iconResolver.ResolveIconName("PlugConnectedSettings", desiredSize, desiredVariant),
-            KnownResourceTypes.ExternalService => iconResolver.ResolveIconName("GlobeArrowForward", desiredSize, desiredVariant),
-            string t when t.Contains("database", StringComparison.OrdinalIgnoreCase) => iconResolver.ResolveIconName("Database", desiredSize, desiredVariant),
-            _ => iconResolver.ResolveIconName("SettingsCogMultiple", desiredSize, desiredVariant),
+            KnownResourceTypes.Executable => DeckIconName.Executable,
+            KnownResourceTypes.Project => DeckIconName.Project,
+            KnownResourceTypes.Container => DeckIconName.Container,
+            KnownResourceTypes.Parameter => DeckIconName.Parameters,
+            KnownResourceTypes.ConnectionString => DeckIconName.Link,
+            KnownResourceTypes.ExternalService => DeckIconName.External,
+            string t when t.Contains("database", StringComparison.OrdinalIgnoreCase) => DeckIconName.Database,
+            _ => DeckIconName.Resources,
         };
-
-        if (icon == null)
-        {
-            throw new InvalidOperationException($"Couldn't resolve resource icon for {resource.Name}.");
-        }
-
-        return icon;
-
-        static Icon? ResolveProjectIcon(IconResolver iconResolver, ResourceViewModel resource, IconSize desiredSize, IconVariant desiredVariant = IconVariant.Filled)
-        {
-            if (resource.TryGetProjectPath(out var projectPath) && !string.IsNullOrEmpty(projectPath))
-            {
-                var extension = Path.GetExtension(projectPath);
-                return extension?.ToLowerInvariant() switch
-                {
-                    ".csproj" or ".cs" => iconResolver.ResolveIconName("CodeCsRectangle", desiredSize, desiredVariant),
-                    ".fsproj" => iconResolver.ResolveIconName("CodeFsRectangle", desiredSize, desiredVariant),
-                    ".vbproj" => iconResolver.ResolveIconName("CodeVbRectangle", desiredSize, desiredVariant),
-                    _ => iconResolver.ResolveIconName("CodeCircle", desiredSize, desiredVariant)
-                };
-            }
-
-            return iconResolver.ResolveIconName("CodeCircle", desiredSize, desiredVariant);
-        }
     }
 
-    public static (Icon? icon, Color color) GetHealthStatusIcon(HealthStatus? healthStatus)
+    /// <summary>
+    /// Maps a health status to a Deck icon plus the Deck <c>icon-*</c> tone class that colors it.
+    /// Mirrors the legacy Fluent heart/heart-broken treatment.
+    /// </summary>
+    public static (DeckIconName icon, string toneClass) GetHealthStatusDeckIcon(HealthStatus? healthStatus)
     {
         return healthStatus switch
         {
-            HealthStatus.Healthy => (new Icons.Filled.Size16.Heart(), Color.Success),
-            HealthStatus.Degraded => (new Icons.Filled.Size16.HeartBroken(), Color.Warning),
-            HealthStatus.Unhealthy => (new Icons.Filled.Size16.HeartBroken(), Color.Error),
-            _ => (new Icons.Regular.Size16.CircleHint(), Color.Info)
+            HealthStatus.Healthy => (DeckIconName.Heart, "icon-success"),
+            HealthStatus.Degraded => (DeckIconName.HeartBroken, "icon-warning"),
+            HealthStatus.Unhealthy => (DeckIconName.HeartBroken, "icon-error"),
+            _ => (DeckIconName.CircleHint, "icon-muted")
         };
+    }
+
+    // Maps a Fluent system-icon name (passed to WithIconName by Aspire integrations) to the nearest
+    // Deck glyph. Comparison is case-insensitive. Returns false for names with no Deck equivalent so the
+    // caller falls back to the resource-type icon.
+    private static bool TryMapCustomIcon(string iconName, out DeckIconName icon)
+    {
+        switch (iconName.ToLowerInvariant())
+        {
+            case "database":
+            case "databasemultiple":
+            case "windowdatabase":
+                icon = DeckIconName.Database;
+                return true;
+            case "box":
+            case "boxmultiple":
+                icon = DeckIconName.Container;
+                return true;
+            case "apps":
+                icon = DeckIconName.AppsList;
+                return true;
+            case "key":
+                icon = DeckIconName.Parameters;
+                return true;
+            case "plugconnectedsettings":
+                icon = DeckIconName.Link;
+                return true;
+            case "settingscogmultiple":
+                icon = DeckIconName.Settings;
+                return true;
+            case "server":
+                icon = DeckIconName.Server;
+                return true;
+            case "mail":
+                icon = DeckIconName.Mail;
+                return true;
+            case "braincircuit":
+            case "agents":
+            case "agentsadd":
+                // AI-flavored resources (MCP servers, Foundry agents) -> the Deck sparkle affordance.
+                icon = DeckIconName.Sparkle;
+                return true;
+            case "globedesktop":
+            case "globearrowforward":
+            case "cloudbidirectional":
+            case "cloudarrowup":
+            case "virtualnetwork":
+                icon = DeckIconName.External;
+                return true;
+            case "codecsrectangle":
+            case "codefsrectangle":
+            case "codevbrectangle":
+            case "codejsrectangle":
+            case "codepyrectangle":
+            case "codecircle":
+                // Language "code rectangle" glyphs -> the Deck executable/code glyph (angle brackets).
+                icon = DeckIconName.Executable;
+                return true;
+            default:
+                icon = default;
+                return false;
+        }
     }
 }

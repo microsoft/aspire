@@ -209,6 +209,9 @@ class ResourceGraph {
         if (i1.path !== i2.path) {
             return false;
         }
+        if (i1.svg !== i2.svg) {
+            return false;
+        }
         if (i1.color !== i2.color) {
             return false;
         }
@@ -285,6 +288,7 @@ class ResourceGraph {
         function createIcon(resourceIcon) {
             return {
                 path: resourceIcon.path,
+                svg: resourceIcon.svg,
                 color: resourceIcon.color,
                 tooltip: resourceIcon.tooltip
             };
@@ -359,20 +363,27 @@ class ResourceGraph {
         var iconTransform = newNodesContainer
             .append("g")
             .attr("transform", n => n.endpointText ? "translate(-24,-37)" : "translate(-24,-24)")
-        var iconPath = iconTransform
-            .append("path");
-        iconPath
-            .attr("fill", n => n.resourceIcon.color)
-            .attr("d", n => n.resourceIcon.path)
+        // Deck resource-type icons are multi-element, stroke-based SVGs (unlike the single filled path
+        // used for the state icon), so render their inner markup into a group via innerHTML and stroke it.
+        var iconGroup = iconTransform
+            .append("g")
+            .attr("fill", "none")
+            .attr("stroke-linecap", "round")
+            .attr("stroke-linejoin", "round");
+        iconGroup
+            .html(n => n.resourceIcon.svg)
+            .attr("stroke", n => n.resourceIcon.color);
+        iconGroup
             .append("title")
             .text(n => n.resourceIcon.tooltip);
 
-        // Icon paths could be mixed size. We need to transform icons to always be displayed at a consistent size.
-        iconPath.each(function (d) {
+        // Icon viewBoxes could be mixed size. Scale each icon to a consistent display size, and divide
+        // the stroke width back out by the scale so every icon keeps a uniform ~2px stroke weight.
+        iconGroup.each(function (d) {
             const iconSize = 48;
 
-            const path = d3.select(this);
-            const node = path.node();
+            const group = d3.select(this);
+            const node = group.node();
             const bbox = node.getBBox();
 
             const available = Math.max(1, iconSize - 2);
@@ -382,8 +393,9 @@ class ResourceGraph {
             const cy = bbox.y + bbox.height / 2;
 
             // apply scaling & centering inside this group
-            path.attr("transform",
+            group.attr("transform",
                 `translate(${iconSize / 2},${iconSize / 2}) scale(${scale}) translate(${-cx},${-cy})`);
+            group.attr("stroke-width", 2 / scale);
         });
 
         var endpointGroup = newNodesContainer
