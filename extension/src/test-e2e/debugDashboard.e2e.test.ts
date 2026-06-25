@@ -4,26 +4,47 @@ import * as path from 'path';
 import { getCommandInvocationCount, getDebugLaunchCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceSetting } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { openAspireView, waitForEditorTitle, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
 suite('Aspire debug dashboard E2E', function () {
     this.timeout(240000);
-
-    setup(() => {
-        writeWorkspaceSetting('aspire.dashboardBrowser', 'none');
-    });
 
     teardown(async () => {
         await runE2eTeardown([
             () => setCliUnavailableForE2E(false),
             () => setShowStatusDelayForE2E(undefined),
             () => writeWorkspaceSetting('aspire.dashboardBrowser', undefined),
+            () => writeWorkspaceSetting('aspire.enableAspireDashboardAutoLaunch', undefined),
             () => restoreWorkspaceCliPath(),
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => stopPrimaryAppHostIfRunning(),
             () => waitForNoDebugSessions().catch(() => undefined),
             () => waitForNoRunningAppHost().catch(() => undefined),
         ], 'Debug dashboard E2E teardown failed.');
+    });
+
+    test('debugs the AppHost with unconfigured dashboard launch defaults', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+
+        const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
+        await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, before);
+
+        await waitForDebugSessionStartup();
+        await waitForDebugConsoleOutput('Dashboard:', appHostPath, 120000);
+        const dashboardUrl = await waitForDashboardLoginUrl(appHostPath);
+        // Probing the origin proves the dashboard endpoint is available without trying to
+        // authenticate through the one-time login URL. A 200 from the dashboard host is enough
+        // for this regression: the unconfigured default must not auto-open, but the dashboard
+        // URL must still be emitted for the panel/debug console path.
+        await waitForHttpText(new URL(dashboardUrl).origin, 'Aspire', 120000);
+        await waitForNotificationMessage('The Aspire Dashboard does not open automatically', 60000);
+
+        await executeE2eControlCommand({ name: 'stopDebugging' });
+        await waitForNoDebugSessions();
     });
 
     test('debugs the AppHost and opens the dashboard in the integrated browser', async () => {
@@ -182,3 +203,11 @@ suite('Aspire debug dashboard E2E', function () {
         }
     });
 });
+
+async function waitForDashboardLoginUrl(appHostPath: string): Promise<string> {
+    const loginOutput = await waitForDebugConsoleOutput('/login?t=', appHostPath, 120000);
+    const match = loginOutput.output.match(/https?:\/\/\S*\/login\?t=[^\s\u001b]+/);
+    assert.ok(match, `Expected dashboard login URL in output: ${loginOutput.output}`);
+
+    return match[0];
+}
