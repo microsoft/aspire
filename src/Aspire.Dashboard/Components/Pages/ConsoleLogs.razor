@@ -89,7 +89,7 @@
 
         @if (_selectedResourceHasTerminal && _terminalToolbarState is { } terminalState)
         {
-            <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
+            <Divider />
 
             <FluentButton Appearance="@TerminalPrimaryButtonAppearance(terminalState.Status)"
                           Disabled="@(!terminalState.CanTakeControl)"

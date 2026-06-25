@@ -1,0 +1,28 @@
+@*
+    Thin separator line, replacing FluentDivider during the Fluent-removal phase.
+    Defaults to a vertical divider (toolbar / detail-header use); pass
+    Orientation="horizontal" for menu / list separators. Extra attributes (e.g. slot)
+    flow through, so it can still be slotted into Fluent hosts that remain.
+*@
+@if (string.Equals(Orientation, "horizontal", StringComparison.OrdinalIgnoreCase))
+{
+    <hr class="deck-divider @Class" @attributes="AdditionalAttributes" />
+}
+else
+{
+    <div class="deck-divider deck-divider--vertical @Class" @attributes="AdditionalAttributes"></div>
+}
+
+@code {
+    /// <summary>Divider orientation: <c>vertical</c> (default) or <c>horizontal</c>.</summary>
+    [Parameter]
+    public string Orientation { get; set; } = "vertical";
+
+    /// <summary>Additional CSS classes appended to the divider element.</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Unmatched attributes (e.g. <c>slot</c>) splatted onto the divider element.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IDictionary<string, object>? AdditionalAttributes { get; set; }
+}

@@ -9,7 +9,7 @@
         <div>
             @Loc[nameof(ControlsStrings.StructuredLogsDetailsResourceLabel)] <strong>@ViewModel.LogEntry.ResourceView.Resource.ResourceName</strong>
         </div>
-        <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
+        <Divider />
         <div title="@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Full)">
             @Loc[nameof(ControlsStrings.StructuredLogsDetailsTimestampLabel)] <strong>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Truncated)</strong>
         </div>
@@ -19,7 +19,7 @@
                       AutoComplete="off"
                       @bind-Value="_filter"
                       slot="end" />
-        <FluentDivider slot="end" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
+        <Divider slot="end" />
         <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
                           Icon="DeckIconName.Options"
                           Items="@_logActionsMenuItems"

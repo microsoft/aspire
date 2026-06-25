@@ -2536,3 +2536,24 @@ table.data.deck-logs-table tbody td.deck-logs-actions-col {
 .icon-muted { color: var(--text-muted); }
 .icon-accent { color: var(--accent); }
 /* === end Icon utilities === */
+
+/* === Dividers === */
+/* Replaces FluentDivider during Fluent removal. Vertical is the toolbar/detail-header default;
+   horizontal (an <hr>) is used for menu/list separators. */
+.deck-divider {
+  border: none;
+  background: var(--border);
+  margin: 0;
+  flex: none;
+}
+hr.deck-divider {
+  height: 1px;
+  width: 100%;
+  align-self: stretch;
+}
+.deck-divider--vertical {
+  width: 1px;
+  height: 20px;
+  align-self: center;
+}
+/* === end Dividers === */

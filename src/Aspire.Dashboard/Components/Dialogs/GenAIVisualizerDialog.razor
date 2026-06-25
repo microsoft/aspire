@@ -442,9 +442,9 @@
                                     <div class="evaluation-container">
                                         <div class="evaluation-header">
                                             @evaluation.Name
-                                            <FluentDivider Orientation="Orientation.Vertical" Class="evaluation-divider" />
+                                            <Divider Class="evaluation-divider" />
                                             @(evaluation.ScoreValue is { } value ? FormatHelpers.FormatNumberWithOptionalDecimalPlaces(value, maxDecimalPlaces: 3) : Loc[nameof(Dialogs.GenAINAText)])
-                                            <FluentDivider Orientation="Orientation.Vertical" Class="evaluation-divider" />
+                                            <Divider Class="evaluation-divider" />
                                             @(evaluation.ScoreLabel is { Length: > 0 } label ? label : Loc[nameof(Dialogs.GenAINAText)])
                                         </div>
                                         @if (evaluation.Explanation is { Length: > 0 } explanation)
