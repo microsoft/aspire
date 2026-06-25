@@ -41,12 +41,10 @@
             <div class="traces-toolbar">
                 @if (AIContextProvider.Enabled)
                 {
-                    <FluentButton Title="@AIAssistantLoc[nameof(AIAssistant.ExplainTraceButtonText)]" aria-label="@AIAssistantLoc[nameof(AIAssistant.ExplainTraceButtonText)]" OnClick="ExplainTraceAsync">
-                        <span slot="start">
-                            <DeckIcon Name="DeckIconName.Sparkle" Size="16" Style="vertical-align: sub;" />
-                        </span>
+                    <button type="button" class="btn btn--ghost" title="@AIAssistantLoc[nameof(AIAssistant.ExplainTraceButtonText)]" aria-label="@AIAssistantLoc[nameof(AIAssistant.ExplainTraceButtonText)]" @onclick="ExplainTraceAsync">
+                        <DeckIcon Name="DeckIconName.Sparkle" Size="16" />
                         @AIAssistantLoc[nameof(AIAssistant.ExplainTraceButtonText)]
-                    </FluentButton>
+                    </button>
                 }
 
                 <SearchBox Value="@PageViewModel.Filter" ValueChanged="OnFilterChangedAsync"
@@ -140,9 +138,9 @@
                                     <span @onclick:stopPropagation="true" style="margin-left: @(marginLeft)px;" class="main-grid-expand-container @(context.IsCollapsed ? "main-grid-collapsed" : "main-grid-expanded")">
                                         @if (context.Children.Count > 0)
                                         {
-                                            <FluentButton aria-label="@ControlStringsLoc[nameof(ControlsStrings.ToggleNesting)]" Appearance="Appearance.Lightweight" Class="main-grid-expand-button" OnClick="@(() => OnToggleCollapse(context))">
+                                            <button type="button" aria-label="@ControlStringsLoc[nameof(ControlsStrings.ToggleNesting)]" class="icon-btn icon-btn--sm main-grid-expand-button" @onclick="@(() => OnToggleCollapse(context))">
                                                 <DeckIcon Name="DeckIconName.Chevron" Size="12" />
-                                            </FluentButton>
+                                            </button>
                                         }
                                     </span>
                                     <span class="span-name-container" style="@spanNameContainerStyle">
@@ -189,12 +187,11 @@
                                     <span @onclick:stopPropagation="true">
                                         @if (IsGenAISpan(context))
                                         {
-                                            <FluentButton Appearance="Appearance.Lightweight"
-                                                          Title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
-                                                          Class="genai-details-button"
-                                                          OnClick="() => OnGenAIClickedAsync(context.Span)">
+                                            <button type="button" class="icon-btn icon-btn--sm genai-details-button"
+                                                    title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
+                                                    @onclick="() => OnGenAIClickedAsync(context.Span)">
                                                 <DeckIcon Name="DeckIconName.Sparkle" Size="20" Class="icon-accent" />
-                                            </FluentButton>
+                                            </button>
                                         }
                                     </span>
                                 </div>

@@ -66,21 +66,22 @@
         <div class="button-container">
             @if (ShowSecretsWarning is true)
             {
-                <FluentButton Class="text-visualizer-unmask-content"
-                              OnClick="@UnmaskContentAsync">
+                <button type="button" class="btn text-visualizer-unmask-content"
+                        @onclick="@UnmaskContentAsync">
                     @Loc[nameof(Dialogs.TextVisualizerSecretWarningAcknowledge)]
-                </FluentButton>
+                </button>
             }
 
             <div class="button-container-right">
                 @if (Content.DownloadFileName is not null)
                 {
-                    <FluentButton OnClick="@DownloadAsync"
-                                  Title="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
-                                  aria-label="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
-                                  IconStart="new Icons.Regular.Size16.ArrowDownload()">
+                    <button type="button" class="btn"
+                            @onclick="@DownloadAsync"
+                            title="@ControlsStringsLoc[nameof(ControlsStrings.Download)]"
+                            aria-label="@ControlsStringsLoc[nameof(ControlsStrings.Download)]">
+                        <DeckIcon Name="DeckIconName.Download" Size="16" />
                         @ControlsStringsLoc[nameof(ControlsStrings.Download)]
-                    </FluentButton>
+                    </button>
                 }
 
                 <FluentButton Id="@_copyButtonId"
