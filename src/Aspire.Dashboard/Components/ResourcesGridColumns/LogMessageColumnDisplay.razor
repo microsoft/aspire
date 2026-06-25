@@ -16,11 +16,9 @@
     <ContentInButtonArea>
         @if (IsGenAILogCallback(LogEntry))
         {
-            <FluentButton Appearance="Appearance.Lightweight"
-                          Title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
-                          OnClick="OnLaunchGenAIVisualizerAsync">
+            <button type="button" class="icon-btn icon-btn--sm" title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]" @onclick="OnLaunchGenAIVisualizerAsync">
                 <DeckIcon Name="DeckIconName.Sparkle" Size="20" Class="icon-accent" />
-            </FluentButton>
+            </button>
         }
         <ExceptionDetails ExceptionText="@_exceptionText" />
     </ContentInButtonArea>

@@ -82,10 +82,11 @@
                     @if (context.Exemplars.Count > 0)
                     {
                         @* min-width ensures a consistent button width up to 999 metrics *@
-                        <FluentButton Appearance="Appearance.Accent"
-                                      aria-label="@Loc[nameof(ControlsStrings.MetricTableViewExemplarsLabel)]"
-                                      @onclick="() => OpenExemplarsDialogAsync(context)"
-                                      Style="min-width: 45px">@context.Exemplars.Count</FluentButton>
+                        <button type="button"
+                                class="btn btn--primary btn--sm"
+                                aria-label="@Loc[nameof(ControlsStrings.MetricTableViewExemplarsLabel)]"
+                                @onclick="() => OpenExemplarsDialogAsync(context)"
+                                style="min-width: 45px">@context.Exemplars.Count</button>
                     }
                     else
                     {
