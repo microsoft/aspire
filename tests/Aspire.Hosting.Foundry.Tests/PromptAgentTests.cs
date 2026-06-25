@@ -554,8 +554,7 @@ public class PromptAgentTests
 
         builder.Build();
 
-        var agentResource = builder.Resources.Single(r => r.Name == "my-agent");
-        var annotations = agentResource.Annotations.OfType<PipelineStepAnnotation>().ToList();
+        var annotations = agent.Resource.Annotations.OfType<PipelineStepAnnotation>().ToList();
         Assert.NotEmpty(annotations);
 
         using var serviceProvider = builder.Services.BuildServiceProvider();
@@ -572,7 +571,7 @@ public class PromptAgentTests
             steps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
             {
                 PipelineContext = pipelineContext,
-                Resource = agentResource
+                Resource = agent.Resource
             }));
         }
 
@@ -582,7 +581,6 @@ public class PromptAgentTests
         // The step must depend on the azure-prepare-resources step (which actually exists in the pipeline).
         // Previously it depended on 'run-mode-azure-provision' which was never registered,
         // causing a pipeline validation failure at runtime.
-        Assert.Contains(AzureEnvironmentResource.PrepareResourcesStepName, beforeStartStep.DependsOnSteps);
-        Assert.DoesNotContain("run-mode-azure-provision", beforeStartStep.DependsOnSteps);
+        Assert.Equal(new[] { AzureEnvironmentResource.PrepareResourcesStepName }, beforeStartStep.DependsOnSteps);
     }
 }
