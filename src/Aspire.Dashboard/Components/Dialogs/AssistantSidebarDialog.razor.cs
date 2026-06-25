@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Model.Assistant;
 using Microsoft.AspNetCore.Components;
@@ -11,8 +10,6 @@ namespace Aspire.Dashboard.Components.Dialogs;
 
 public partial class AssistantSidebarDialog : IAsyncDisposable
 {
-    private static readonly Icon s_gitHubCopilotIcon = new AspireIcons.Size16.GitHubCopilot();
-
     [Parameter]
     public AssistantDialogViewModel Content { get; set; } = default!;
 

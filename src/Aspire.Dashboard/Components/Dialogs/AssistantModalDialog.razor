@@ -1,4 +1,3 @@
-﻿@using Aspire.Dashboard.Components.CustomIcons
 @using Aspire.Dashboard.Model.Assistant
 @using Aspire.Dashboard.Resources
 
@@ -12,7 +11,7 @@
              Class="fluent-dialog-header">
     <div style="width: 100%;">
         <div class="dialog-title-grid">
-            <FluentIcon Value="@(new AspireIcons.Size24.GitHubCopilot())" Style="grid-area: dialog-icon; align-self: center;" />
+            <DeckIcon Name="DeckIconName.Sparkle" Size="24" Style="grid-area: dialog-icon; align-self: center;" />
             <FluentLabel Typo="Typography.PaneHeader" Class="col-long-content" Style="grid-area: dialog-title;">
                 @Loc[nameof(AIAssistant.DialogTitle)]
             </FluentLabel>
