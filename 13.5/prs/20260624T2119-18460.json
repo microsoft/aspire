@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Internal Microsoft telemetry detector to distinguish MS-internal users; not a user-visible behavior change",
+  "mergedAt": "2026-06-24T21:14:11Z",
+  "number": 18251,
+  "runDate": "2026-06-25T00:28:08Z",
+  "status": "excluded",
+  "title": "Add internal Microsoft telemetry detector"
+}

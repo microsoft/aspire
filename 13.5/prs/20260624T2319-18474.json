@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Internal test project refactoring to decouple test projects from Aspire.Hosting.Tests; no user-visible effect",
+  "mergedAt": "2026-06-24T23:19:07Z",
+  "number": 18474,
+  "runDate": "2026-06-25T00:28:08Z",
+  "status": "excluded",
+  "title": "test: Decouple test projects from Aspire.Hosting.Tests"
+}

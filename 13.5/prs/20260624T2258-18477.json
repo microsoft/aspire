@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Test-only: quarantining flaky LsCommand JSON-format test; no user-visible effect",
+  "mergedAt": "2026-06-24T22:58:53Z",
+  "number": 18477,
+  "runDate": "2026-06-25T00:28:08Z",
+  "status": "excluded",
+  "title": "Quarantine flaky LsCommand JSON-format test"
+}

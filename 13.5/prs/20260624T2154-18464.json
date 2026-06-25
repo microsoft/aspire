@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "CI test infrastructure: re-enabling VS Code extension E2E tests after fixing test races; no user-visible product change",
+  "mergedAt": "2026-06-24T21:54:00Z",
+  "number": 18464,
+  "runDate": "2026-06-25T00:28:08Z",
+  "status": "excluded",
+  "title": "[automated] Re-enable VS Code extension E2E tests"
+}

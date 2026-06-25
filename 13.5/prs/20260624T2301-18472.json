@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI automation: auto-rerun failed scheduled Outerloop Tests; no user-visible product change",
+  "mergedAt": "2026-06-24T23:01:15Z",
+  "number": 18472,
+  "runDate": "2026-06-25T00:28:08Z",
+  "status": "excluded",
+  "title": "ci: auto-rerun failed scheduled Outerloop Tests runs (up to 3x)"
+}

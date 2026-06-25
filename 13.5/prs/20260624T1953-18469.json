@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CI automation: added transient network error pattern for test retry infrastructure, no user-visible effect",
+  "mergedAt": "2026-06-24T19:53:37Z",
+  "number": 18469,
+  "runDate": "2026-06-25T00:28:08Z",
+  "status": "excluded",
+  "title": "Add Connection reset by peer to transient CI failure retry patterns"
+}
