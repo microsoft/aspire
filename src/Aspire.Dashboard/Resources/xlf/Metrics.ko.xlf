@@ -7,6 +7,11 @@
         <target state="translated">메트릭</target>
         <note />
       </trans-unit>
+      <trans-unit id="MetricsInstrumentsCount">
+        <source>{0} instruments</source>
+        <target state="new">{0} instruments</target>
+        <note>{0} is the number of metric instruments available for the selected resource.</note>
+      </trans-unit>
       <trans-unit id="MetricsInsturementDescriptionGridNameColumnHeader">
         <source>Description</source>
         <target state="translated">설명</target>

@@ -3,7 +3,6 @@
 
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
-using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
@@ -21,9 +20,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     private SelectViewModel<ResourceTypeDetails> _selectResource = null!;
     private List<SelectViewModel<TimeSpan>> _durations = null!;
     private static readonly TimeSpan s_defaultDuration = TimeSpan.FromMinutes(5);
-    private AspirePageContentLayout? _contentLayout;
     private TreeMetricSelector? _treeMetricSelector;
-    private readonly string _selectDurationId = $"select-duration-{Guid.NewGuid():N}";
 
     private List<OtlpResource> _resources = default!;
     private List<SelectViewModel<ResourceTypeDetails>> _resourceViewModels = default!;
@@ -144,7 +141,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
             // If there is no resource selected and there is only one resource available, select it.
             PageViewModel.SelectedResource = r;
             ResourceName = r.Name;
-            return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
+            return this.AfterViewModelChangedAsync(null, waitToApplyMobileChange: false);
         }
 
         viewModel.SelectedDuration = _durations.SingleOrDefault(d => (int)d.Id.TotalMinutes == DurationMinutes) ?? _durations.Single(d => d.Id == s_defaultDuration);
@@ -212,7 +209,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
             }
         }
 
-        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
+        await this.AfterViewModelChangedAsync(null, waitToApplyMobileChange: true);
 
         // The mobile view doesn't update the URL when the resource changes.
         // Because of this, the page doesn't autoamtically use updated instruments.
@@ -242,7 +239,35 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
 
     private Task HandleSelectedDurationChangedAsync()
     {
-        return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
+        return this.AfterViewModelChangedAsync(null, waitToApplyMobileChange: true);
+    }
+
+    private async Task HandleDurationClickedAsync(SelectViewModel<TimeSpan> duration)
+    {
+        if (PageViewModel.SelectedDuration.Id == duration.Id)
+        {
+            return;
+        }
+
+        PageViewModel.SelectedDuration = duration;
+        await HandleSelectedDurationChangedAsync();
+    }
+
+    private void TogglePause()
+    {
+        PauseManager.SetMetricsPaused(!PauseManager.AreMetricsPaused(out _));
+        StateHasChanged();
+    }
+
+    // Short, unit-style label for the time-range segmented control, e.g. "5m" or "1h".
+    // These are minute/hour abbreviations shown in the Deck-style segmented control and
+    // intentionally match the compact labels used in the Aspire Deck UI rather than the
+    // longer localized duration names (which remain available as each button's tooltip).
+    private static string GetShortDurationLabel(TimeSpan duration)
+    {
+        return duration.TotalHours >= 1
+            ? string.Create(CultureInfo.InvariantCulture, $"{(int)duration.TotalHours}h")
+            : string.Create(CultureInfo.InvariantCulture, $"{(int)duration.TotalMinutes}m");
     }
 
     private string? PauseText => PauseManager.AreMetricsPaused(out var startTime)
@@ -296,7 +321,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
             PageViewModel.SelectedInstrument = null;
         }
 
-        return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
+        return this.AfterViewModelChangedAsync(null, waitToApplyMobileChange: false);
     }
 
     public string GetUrlFromSerializableViewModel(MetricsPageState serializable)
@@ -314,7 +339,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     private async Task OnViewChangedAsync(MetricViewKind newView)
     {
         PageViewModel.SelectedViewKind = newView;
-        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
+        await this.AfterViewModelChangedAsync(null, waitToApplyMobileChange: false);
     }
 
     private void UpdateSubscription()

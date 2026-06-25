@@ -124,6 +124,10 @@
   <data name="MetricsHeader" xml:space="preserve">
     <value>Metrics</value>
   </data>
+  <data name="MetricsInstrumentsCount" xml:space="preserve">
+    <value>{0} instruments</value>
+    <comment>{0} is the number of metric instruments available for the selected resource.</comment>
+  </data>
   <data name="MetricsSelectInstrument" xml:space="preserve">
     <value>Select instrument.</value>
   </data>
