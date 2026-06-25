@@ -1,7 +1,9 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
-import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment } from '../debugger/languages/cli';
+import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment, spawnCliProcess } from '../debugger/languages/cli';
+import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { EnvironmentVariables } from '../utils/environment';
+import { extensionLogOutputChannel } from '../utils/logging';
 
 suite('spawnCliProcess tests', () => {
     test('uses direct execution for unresolved bare Windows command', () => {
@@ -131,6 +133,43 @@ suite('spawnCliProcess tests', () => {
             message,
             'Spawning Aspire CLI process: /usr/local/bin/aspire resource database reset-password --load-arguments -- <redacted>; cwd=/workspace; noDebug=undefined; debugSessionId=undefined; ASPIRE_CLI_START_TIMEOUT=undefined');
         assert.strictEqual(message.includes('s3cr3t'), false);
+    });
+
+    test('redacts original command arguments from Windows cmd wrapper spawn diagnostics', () => {
+        const actualPlatform = process.platform;
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const originalComSpec = process.env.ComSpec;
+        process.env.ComSpec = actualPlatform === 'win32' ? originalComSpec ?? 'C:\\Windows\\System32\\cmd.exe' : '/bin/echo';
+
+        const infoStub = sinon.stub(extensionLogOutputChannel, 'info');
+        const terminalProvider = {
+            createEnvironment: () => ({}),
+        } as AspireTerminalProvider;
+
+        try {
+            spawnCliProcess(
+                terminalProvider,
+                'C:\\Tools\\aspire.cmd',
+                ['resource', 'database', 'reset-password', '--load-arguments', '--', '--password=s3cr3t'],
+                { workingDirectory: 'C:\\workspace' });
+
+            const message = infoStub.firstCall.args[0];
+            assert.strictEqual(
+                message,
+                'Spawning Aspire CLI process: C:\\Tools\\aspire.cmd resource database reset-password --load-arguments -- <redacted>; cwd=C:\\workspace; noDebug=undefined; debugSessionId=undefined; ASPIRE_CLI_START_TIMEOUT=undefined');
+            assert.strictEqual(message.includes('s3cr3t'), false);
+        }
+        finally {
+            infoStub.restore();
+            platformStub.restore();
+
+            if (originalComSpec === undefined) {
+                delete process.env.ComSpec;
+            }
+            else {
+                process.env.ComSpec = originalComSpec;
+            }
+        }
     });
 
     test('merges caller env case-insensitively on Windows', () => {
