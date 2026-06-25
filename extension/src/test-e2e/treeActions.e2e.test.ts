@@ -230,9 +230,10 @@ suite('Aspire tree action command E2E', function () {
         terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.codeLensResourceAction');
         await executeE2eControlCommand({
-            name: 'executeAspireCommand',
-            commandId: 'aspire-vscode.codeLensResourceAction',
-            args: [workerResourceName, 'echo-arguments', appHostPath, commands['echo-arguments']],
+            name: 'executeCodeLensResourceAction',
+            resourceName: workerResourceName,
+            commandName: 'echo-arguments',
+            appHostPath,
         }, { waitFor: 'started' });
         await chooseActiveQuickPick('Continue');
         await answerActiveInput('hello from codelens', 'Message');

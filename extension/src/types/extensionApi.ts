@@ -169,6 +169,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'restartResource'; appHostPath?: string; resourceName: string }
     | { name: 'executeResourceCommand'; appHostPath?: string; resourceName: string }
     | { name: 'executeResourceCommandItem'; appHostPath?: string; resourceName: string; commandName: string }
+    | { name: 'executeCodeLensResourceAction'; appHostPath?: string; resourceName: string; commandName: string }
     | { name: 'executeAspireCommand'; commandId: string; args?: readonly unknown[] }
     | { name: 'setSourceBreakpoint'; filePath: string; line: number; clearExisting?: boolean }
     | { name: 'clearBreakpoints' }
