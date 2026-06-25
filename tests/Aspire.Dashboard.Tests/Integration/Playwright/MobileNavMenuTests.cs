@@ -38,17 +38,33 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
         var menu = page.Locator("fluent-menu.mobile-nav-menu");
         await Assertions.Expect(menu).ToBeVisibleAsync();
 
-        var settingsItem = page.Locator($"fluent-menu.mobile-nav-menu fluent-menu-item[title='{SettingsMenuItemTitle}']");
-        await settingsItem.FocusAsync();
+        var focusHistory = new List<string?>();
+        for (var i = 0; i < 15; i++)
+        {
+            await page.Keyboard.PressAsync("Tab");
 
-        var metrics = await settingsItem.EvaluateAsync<MobileNavFocusMetrics>("""
-            element => {
+            var activeTitle = await page.EvaluateAsync<string?>(GetActiveMenuItemTitleScript);
+            focusHistory.Add(activeTitle ?? await page.EvaluateAsync<string>("""
+                () => {
+                    const element = document.activeElement;
+                    return `${element?.tagName ?? '<null>'}:${element?.className ?? ''}:${element?.getAttribute?.('title') ?? ''}`;
+                }
+                """));
+            if (activeTitle == SettingsMenuItemTitle)
+            {
+                break;
+            }
+        }
+
+        var metrics = await page.EvaluateAsync<MobileNavFocusMetrics>("""
+            () => {
                 const menu = document.querySelector('fluent-menu.mobile-nav-menu');
+                const focusedMenuItem = getActiveMenuItem();
                 const menuRect = menu.getBoundingClientRect();
-                const focusedRect = element.getBoundingClientRect();
+                const focusedRect = focusedMenuItem?.getBoundingClientRect() ?? new DOMRect();
                 const style = getComputedStyle(menu);
                 return {
-                    activeTitle: element.getAttribute('title'),
+                    activeTitle: focusedMenuItem?.getAttribute('title'),
                     menuTop: menuRect.top,
                     menuBottom: menuRect.bottom,
                     focusedTop: focusedRect.top,
@@ -59,10 +75,30 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
                     scrollPaddingTop: style.scrollPaddingTop,
                     scrollPaddingBottom: style.scrollPaddingBottom
                 };
+
+                function getActiveMenuItem() {
+                    const visited = new Set();
+                    let element = document.activeElement;
+                    while (element && !visited.has(element)) {
+                        visited.add(element);
+                        if (element.matches?.('fluent-menu-item')) {
+                            return element;
+                        }
+
+                        if (element.shadowRoot?.activeElement) {
+                            element = element.shadowRoot.activeElement;
+                            continue;
+                        }
+
+                        element = element.getRootNode?.().host ?? null;
+                    }
+
+                    return null;
+                }
             }
             """);
 
-        Assert.Equal(SettingsMenuItemTitle, metrics.ActiveTitle);
+        Assert.True(metrics.ActiveTitle == SettingsMenuItemTitle, $"Focus did not reach the Settings menu item. History: {string.Join(" -> ", focusHistory)}");
         Assert.True(metrics.MenuTop >= 0, $"Menu starts above viewport: {metrics}");
         Assert.True(metrics.MenuBottom <= metrics.ViewportHeight, $"Menu extends below viewport: {metrics}");
         Assert.True(metrics.FocusedTop >= metrics.MenuTop, $"Focused item starts above menu scrollport: {metrics}");
@@ -71,7 +107,35 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
         Assert.Equal("4px", metrics.PaddingBottom);
         Assert.Equal("4px", metrics.ScrollPaddingTop);
         Assert.Equal("4px", metrics.ScrollPaddingBottom);
+
+        await page.Keyboard.PressAsync("Escape");
+        await Assertions.Expect(menu).ToBeHiddenAsync();
+
+        var activeElementId = await page.EvaluateAsync<string?>("() => document.activeElement?.id");
+        Assert.Equal("dashboard-navigation-button", activeElementId);
     }
+
+    private const string GetActiveMenuItemTitleScript = """
+        () => {
+            const visited = new Set();
+            let element = document.activeElement;
+            while (element && !visited.has(element)) {
+                visited.add(element);
+                if (element.matches?.('fluent-menu-item')) {
+                    return element.getAttribute('title');
+                }
+
+                if (element.shadowRoot?.activeElement) {
+                    element = element.shadowRoot.activeElement;
+                    continue;
+                }
+
+                element = element.getRootNode?.().host ?? null;
+            }
+
+            return null;
+        }
+        """;
 
     private sealed class MobileNavFocusMetrics
     {
