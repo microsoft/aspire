@@ -1,8 +1,10 @@
 ﻿@page "/structuredlogs"
 @page "/structuredlogs/resource/{resourceName}"
 
+@using System.Globalization
 @using Aspire.Dashboard.Resources
-@using Aspire.Dashboard.Components.Controls.Grid
+@using Aspire.Dashboard.Components.Controls
+@using Microsoft.AspNetCore.Components.Web.Virtualization
 @inject IJSRuntime JS
 @implements IDisposable
 
@@ -19,175 +21,148 @@
         Loc="@Loc"/>
 </PageTitle>
 
-<div class="page-content-container">
-    <AspirePageContentLayout @ref="@_contentLayout"
-                             AddNewlineOnToolbar="true"
-                             IsSummaryDetailsViewOpen="@(PageViewModel.SelectedLogEntry is not null)">
-        <PageTitleSection>
-            <h1 class="page-header">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsHeader)]</h1>
-        </PageTitleSection>
-        <ToolbarSection>
-            <ResourceSelect Resources="_resourceViewModels"
-                            AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.SelectAResource)]"
-                            @bind-SelectedResource="PageViewModel.SelectedResource"
-                            @bind-SelectedResource:after="HandleSelectedResourceChangedAsync"
-                            CanSelectGrouping="true"
-                            LabelClass="toolbar-left" />
+<div class="page">
+    <div class="page__header">
+        <div>
+            <div class="page__title">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsHeader)]</div>
+            <div class="page__subtitle">@((MarkupString)GetSubtitle())</div>
+        </div>
+        <div class="page__header-spacer"></div>
 
-            <SignalsActionsDisplay HandleClearSignal="@ClearStructureLogs"
-                                  IsPaused="@PauseManager.AreStructuredLogsPaused(out _)"
-                                  OnPausedChanged="@PauseManager.SetStructuredLogsPaused"
-                                  SelectedResource="@PageViewModel.SelectedResource" />
+        <SearchBox Value="@_filter" ValueChanged="OnFilterChangedAsync"
+                   Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]" />
 
-            <ExplainErrorsButton @ref="_explainErrorsButton" OnClick="ExplainErrorsAsync" HasErrors="@ViewModel.HasErrors()" />
-            <FluentSearch @bind-Value="_filter"
-                          @bind-Value:after="HandleAfterFilterBindAsync"
-                          Name="structured-logs-search"
-                          Immediate="true"
-                          ImmediateDelay="@FluentUIExtensions.InputDelay"
-                          Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                          title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageFilter)]"
-                          slot="end" />
+        <button id="structuredLogsFilterButton" type="button"
+                class="icon-btn @(ViewModel.Filters.Count == 0 ? string.Empty : "icon-btn--active")"
+                @onclick="() => OpenFilterAsync(null)"
+                title="@FilterLoc[nameof(StructuredFiltering.AddFilter)]"
+                aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]">
+            <DeckIcon Name="DeckIconName.Filter" Size="17" />
+        </button>
+    </div>
 
-            <DesktopToolbarDivider />
+    <div class="page__toolbar deck-structured-toolbar">
+        <ResourceSelect Resources="_resourceViewModels"
+                        AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.SelectAResource)]"
+                        @bind-SelectedResource="PageViewModel.SelectedResource"
+                        @bind-SelectedResource:after="HandleSelectedResourceChangedAsync"
+                        CanSelectGrouping="true"
+                        LabelClass="toolbar-left" />
 
-            <LogLevelSelect slot="end"
-                            @bind-LogLevel="@PageViewModel.SelectedLogLevel"
-                            LogLevels="@_logLevels"
-                            HandleSelectedLogLevelChangedAsync="@HandleSelectedLogLevelChangedAsync" />
+        <LogLevelSelect @bind-LogLevel="@PageViewModel.SelectedLogLevel"
+                        LogLevels="@_logLevels"
+                        HandleSelectedLogLevelChangedAsync="@HandleSelectedLogLevelChangedAsync" />
 
-            <DesktopToolbarDivider />
+        @if (ViewModel.Filters.Count > 0)
+        {
+            <FluentCounterBadge Count="@(ViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
+                <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
+            </FluentCounterBadge>
+        }
 
-            @if (ViewModel.Filters.Count == 0)
-            {
-                if (ViewportInformation.IsDesktop)
-                {
-                    <span slot="end">@FilterLoc[nameof(StructuredFiltering.NoFilters)]</span>
-                }
-            }
-            else
-            {
-                <div slot="end">
-                    <FluentCounterBadge HorizontalPosition="70" Count="@(ViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
-                        <AspireMenuButton HideIcon="true" Text="@FilterLoc[nameof(StructuredFiltering.Filters)]" Items="@GetFilterMenuItems()" />
-                    </FluentCounterBadge>
-                </div>
-            }
+        <div class="page__header-spacer"></div>
 
-            <DesktopToolbarDivider />
+        <ExplainErrorsButton @ref="_explainErrorsButton" OnClick="ExplainErrorsAsync" HasErrors="@ViewModel.HasErrors()" />
 
-            <FluentButton slot="end" Appearance="Appearance.Stealth"
-                          aria-label="@FilterLoc[nameof(StructuredFiltering.AddFilter)]"
-                          OnClick="() => OpenFilterAsync(null)">
-                @if (ViewportInformation.IsDesktop)
-                {
-                    <FluentIcon Value="@(new Icons.Regular.Size20.Filter())"/>
-                }
-                else
-                {
-                    <FluentIcon Class="align-text-bottom" Value="@(new Icons.Regular.Size20.Filter())"/>
-                    @FilterLoc[nameof(StructuredFiltering.AddFilter)]
-                }
-            </FluentButton>
-        </ToolbarSection>
+        <SignalsActionsDisplay HandleClearSignal="@ClearStructureLogs"
+                              IsPaused="@PauseManager.AreStructuredLogsPaused(out _)"
+                              OnPausedChanged="@PauseManager.SetStructuredLogsPaused"
+                              SelectedResource="@PageViewModel.SelectedResource" />
+    </div>
 
-        <MainSection>
-            <SummaryDetailsView
-                ShowDetails="@(PageViewModel.SelectedLogEntry is not null)"
-                OnDismiss="@(() => ClearSelectedLogEntryAsync(causedByUserAction: true))"
-                ViewKey="StructuredLogsList"
-                SelectedValue="@PageViewModel.SelectedLogEntry"
-                OnResize="@(r => _manager.SetWidthFraction(r.Orientation == Orientation.Horizontal ? r.Panel1Fraction : 1))">
-                <DetailsTitleTemplate>
-                    @{
-                        var eventName = StructureLogsDetailsViewModel.GetEventName(context!.LogEntry, Loc);
-                    }
-
-                    <div class="pane-details-title" title="@($"{eventName} ({context!.LogEntry.Scope.Name})")">
-                        @eventName
-                        <span class="pane-details-subtext">@context!.LogEntry.Scope.Name</span>
-                    </div>
-                </DetailsTitleTemplate>
-                <Summary>
-                    <div class="logs-summary-layout">
-                        <div class="logs-grid-container continuous-scroll-overflow">
-                            <GridColumnManager @ref="_manager" Columns="@_gridColumns">
-                                <FluentDataGrid @ref="_dataGrid"
-                                                ColumnResizeLabels="@_resizeLabels"
-                                                ColumnSortLabels="@_sortLabels"
-                                                HeaderCellAsButtonWithMenu="true"
-                                                ResizeType="DataGridResizeType.Discrete"
-                                                Virtualize="true"
-                                                RowClass="@GetRowClass"
-                                                GenerateHeader="GenerateHeaderOption.Sticky"
-                                                ItemSize="46"
-                                                OverscanCount="100"
-                                                ResizableColumns="true"
-                                                ResizeColumnOnAllRows="false"
-                                                ItemsProvider="@GetData"
-                                                TGridItem="OtlpLogEntry"
-                                                GridTemplateColumns="@_manager.GetGridTemplateColumns()"
-                                                ShowHover="true"
-                                                ItemKey="@(r => r.InternalId)"
-                                                OnRowClick="@(r => r.ExecuteOnDefault(d => OnShowPropertiesAsync(d, buttonId: null)))"
-                                                Class="main-grid enable-row-click">
-                                    <ChildContent>
-                                        <AspireTemplateColumn ColumnId="@ResourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsResourceColumnHeader)]" Tooltip="true" TooltipText="@(e => GetResourceName(e.ResourceView))">
-                                            <span style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(context.ResourceView)));">
-                                                @GetResourceName(context.ResourceView)
-                                            </span>
-                                        </AspireTemplateColumn>
-                                        <AspireTemplateColumn ColumnId="@LogLevelColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevelColumnHeader)]">
-                                            <LogLevelColumnDisplay LogEntry="@context" />
-                                        </AspireTemplateColumn>
-                                        <AspireTemplateColumn ColumnId="@TimestampColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTimestampColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, context.TimeStamp, MillisecondsDisplay.Full, CultureInfo.CurrentCulture))" Tooltip="true">
-                                            @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, context.TimeStamp, MillisecondsDisplay.Truncated)
-                                        </AspireTemplateColumn>
-                                        <AspireTemplateColumn ColumnId="@MessageColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageColumnHeader)]">
-                                            @* Tooltip is displayed by the message GridValue instance *@
-                                            <LogMessageColumnDisplay FilterText="@(ViewModel.FilterText)" LogEntry="@context" IsGenAILogCallback="@IsGenAILogEntry" LaunchGenAIVisualizerCallback="@LaunchGenAIVisualizerAsync" />
-                                        </AspireTemplateColumn>
-                                        <AspireTemplateColumn ColumnId="@TraceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTraceColumnHeader)]">
-                                            @if (!string.IsNullOrEmpty(context.TraceId))
-                                            {
-                                                <a href="@DashboardUrls.TraceDetailUrl(context.TraceId, context.SpanId)" class="long-inner-content" @onclick:stopPropagation="true">
-                                                    @OtlpHelpers.ToShortenedId(context.TraceId)
-                                                </a>
-                                            }
-                                            else
-                                            {
-                                                <span class="empty-data"></span>
-                                            }
-                                        </AspireTemplateColumn>
-                                        <AspireTemplateColumn ColumnId="@ActionsColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.ActionsColumnHeader)]" Class="no-ellipsis">
-                                            @{
-                                                var id = $"details-button-{context.InternalId}";
-                                            }
-                                            <div class="grid-action-container" @onclick:stopPropagation="true">
-                                                <StructuredLogActions LogEntry="@context"
-                                                                      OnViewDetails="@((buttonId) => OnShowPropertiesAsync(context, buttonId))" />
-                                            </div>
-                                        </AspireTemplateColumn>
-                                    </ChildContent>
-                                    <EmptyContent>
-                                        <FluentIcon Icon="Icons.Regular.Size24.SlideTextSparkle" />&nbsp;@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsNoLogsFound)]
-                                    </EmptyContent>
-                                </FluentDataGrid>
-                            </GridColumnManager>
-                        </div>
-                    </div>
-                </Summary>
-                <Details>
-                    <StructuredLogDetails ViewModel="context" />
-                </Details>
-            </SummaryDetailsView>
-        </MainSection>
-        <FooterSection>
-            <TotalItemsFooter @ref="_totalItemsFooter"
-                              TotalItemCount="@_totalItemsCount"
-                              SingularText="@Loc[nameof(Dashboard.Resources.StructuredLogs.TotalItemsFooterSingularText)]"
-                              PluralText="@Loc[nameof(Dashboard.Resources.StructuredLogs.TotalItemsFooterPluralText)]"
-                              PauseText="@PauseText"/>
-        </FooterSection>
-    </AspirePageContentLayout>
+    <div class="page__body" id="structured-logs-page-body-id">
+        <div class="table-wrap deck-logs-table-wrap">
+            <table class="data deck-logs-table">
+                <thead>
+                    <tr>
+                        <th style="width: 200px;">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsResourceColumnHeader)]</th>
+                        <th style="width: 120px;">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevelColumnHeader)]</th>
+                        <th style="width: 140px;">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTimestampColumnHeader)]</th>
+                        <th>@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageColumnHeader)]</th>
+                        <th style="width: 90px;">@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTraceColumnHeader)]</th>
+                        <th style="width: 56px;" class="deck-logs-actions-col">@ControlsStringsLoc[nameof(ControlsStrings.ActionsColumnHeader)]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @* Virtualize keeps the page responsive for large log volumes; the paged
+                       ItemsProvider reuses the existing TelemetryRepository query. SpacerElement="tr"
+                       keeps the virtualization spacers valid table rows. The scroll container is
+                       the .page__body. *@
+                    <Virtualize @ref="_logsGrid" ItemsProvider="@GetLogsAsync" ItemSize="46"
+                                OverscanCount="20" SpacerElement="tr" Context="entry" TItem="OtlpLogEntry">
+                        <ItemContent>
+                            @{
+                                var isSelected = entry.InternalId == PageViewModel.SelectedLogEntry?.LogEntry.InternalId;
+                            }
+                            <tr class="clickable @(isSelected ? "selected" : "") @GetSeverityRowClass(entry)" @key="entry.InternalId"
+                                @onclick="() => OnShowPropertiesAsync(entry, buttonId: null)">
+                                <td>
+                                    <span class="deck-log-resource" title="@GetResourceName(entry.ResourceView)"
+                                          style="border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(entry.ResourceView)));">
+                                        @GetResourceName(entry.ResourceView)
+                                    </span>
+                                </td>
+                                <td><span class="deck-log-level"><LogLevelColumnDisplay LogEntry="@entry" /></span></td>
+                                <td>
+                                    <span class="cell-mono cell-muted" title="@FormatHelpers.FormatDateTime(TimeProvider, entry.TimeStamp, MillisecondsDisplay.Full, CultureInfo.CurrentCulture)">
+                                        @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, entry.TimeStamp, MillisecondsDisplay.Truncated)
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="deck-log-message">
+                                        <LogMessageColumnDisplay FilterText="@(ViewModel.FilterText)" LogEntry="@entry" IsGenAILogCallback="@IsGenAILogEntry" LaunchGenAIVisualizerCallback="@LaunchGenAIVisualizerAsync" />
+                                    </div>
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(entry.TraceId))
+                                    {
+                                        <a href="@DashboardUrls.TraceDetailUrl(entry.TraceId, entry.SpanId)" class="cell-mono" @onclick:stopPropagation="true">
+                                            @OtlpHelpers.ToShortenedId(entry.TraceId)
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="cell-muted">—</span>
+                                    }
+                                </td>
+                                <td class="deck-logs-actions-col">
+                                    <div class="grid-action-container" @onclick:stopPropagation="true">
+                                        <StructuredLogActions LogEntry="@entry"
+                                                              OnViewDetails="@((buttonId) => OnShowPropertiesAsync(entry, buttonId))" />
+                                    </div>
+                                </td>
+                            </tr>
+                        </ItemContent>
+                        <EmptyContent>
+                            <tr>
+                                <td colspan="6">
+                                    <EmptyState Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsNoLogsFound)]">
+                                        <IconContent>
+                                            <DeckIcon Name="DeckIconName.Logs" Size="22" />
+                                        </IconContent>
+                                    </EmptyState>
+                                </td>
+                            </tr>
+                        </EmptyContent>
+                    </Virtualize>
+                </tbody>
+            </table>
+        </div>
+    </div>
 </div>
+
+@* Log details open in a Deck-style right-side drawer overlay. *@
+@if (PageViewModel.SelectedLogEntry is { } selectedLogEntry)
+{
+    <Drawer OnClose="@(() => ClearSelectedLogEntryAsync(causedByUserAction: true))">
+        <TitleContent>
+            @StructureLogsDetailsViewModel.GetEventName(selectedLogEntry.LogEntry, Loc)
+        </TitleContent>
+        <SubtitleContent>
+            @selectedLogEntry.LogEntry.Scope.Name
+        </SubtitleContent>
+        <ChildContent>
+            <StructuredLogDetails ViewModel="selectedLogEntry" />
+        </ChildContent>
+    </Drawer>
+}

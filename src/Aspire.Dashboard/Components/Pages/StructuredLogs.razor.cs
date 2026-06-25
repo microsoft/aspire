@@ -4,7 +4,6 @@
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
@@ -18,6 +17,7 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -26,16 +26,8 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionAndUrlState<StructuredLogs.StructuredLogsPageViewModel, StructuredLogs.StructuredLogsPageState>
 {
-    private const string ResourceColumn = nameof(ResourceColumn);
-    private const string LogLevelColumn = nameof(LogLevelColumn);
-    private const string TimestampColumn = nameof(TimestampColumn);
-    private const string MessageColumn = nameof(MessageColumn);
-    private const string TraceColumn = nameof(TraceColumn);
-    private const string ActionsColumn = nameof(ActionsColumn);
-
     private SelectViewModel<ResourceTypeDetails> _allResource = default!;
 
-    private TotalItemsFooter _totalItemsFooter = default!;
     private ExplainErrorsButton? _explainErrorsButton;
     private int _totalItemsCount;
     private List<OtlpResource> _resources = default!;
@@ -44,16 +36,9 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private readonly CancellationTokenSource _cts = new();
     private Subscription? _resourcesSubscription;
     private Subscription? _logsSubscription;
-    private bool _resourceChanged;
     private string? _elementIdBeforeDetailsViewOpened;
-    private AspirePageContentLayout? _contentLayout;
     private string _filter = string.Empty;
-    private FluentDataGrid<OtlpLogEntry>? _dataGrid;
-    private GridColumnManager _manager = null!;
-    private IList<GridColumn> _gridColumns = null!;
-
-    private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
-    private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
+    private Virtualize<OtlpLogEntry>? _logsGrid;
     private AIContext? _aiContext;
 
     public string BasePath => DashboardUrls.StructuredLogsBasePath;
@@ -83,9 +68,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     [Inject]
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
-
-    [Inject]
-    public required DimensionManager DimensionManager { get; set; }
 
     [Inject]
     public required IOptions<DashboardOptions> DashboardOptions { get; init; }
@@ -128,10 +110,10 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     [SupplyParameterFromQuery]
     public long? LogEntryId { get; set; }
 
-    private async ValueTask<GridItemsProviderResult<OtlpLogEntry>> GetData(GridItemsProviderRequest<OtlpLogEntry> request)
+    private async ValueTask<ItemsProviderResult<OtlpLogEntry>> GetLogsAsync(ItemsProviderRequest request)
     {
         ViewModel.StartIndex = request.StartIndex;
-        ViewModel.Count = request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount;
+        ViewModel.Count = request.Count;
 
         var logs = ViewModel.GetLogs();
 
@@ -151,34 +133,51 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             message.Close();
         }
 
-        // Updating the total item count as a field doesn't work because it isn't updated with the grid.
-        // The workaround is to explicitly update and refresh the control.
-        _totalItemsCount = logs.TotalItemCount;
-        _totalItemsFooter?.UpdateDisplayedCount(_totalItemsCount);
+        // The subtitle displays the total item count, so refresh it whenever data is fetched.
+        if (_totalItemsCount != logs.TotalItemCount)
+        {
+            _totalItemsCount = logs.TotalItemCount;
+            StateHasChanged();
+        }
 
         _explainErrorsButton?.UpdateHasErrors(ViewModel.HasErrors());
         _aiContext?.ContextHasChanged();
 
         TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
 
-        return GridItemsProviderResult.From(logs.Items, logs.TotalItemCount);
+        // Virtualize caps the rendered window itself; the total count drives the scroll height.
+        return new ItemsProviderResult<OtlpLogEntry>(logs.Items, logs.TotalItemCount);
     }
+
+    private Task RefreshLogsAsync() => InvokeAsync(async () =>
+    {
+        if (_logsGrid is { } grid)
+        {
+            await grid.RefreshDataAsync();
+        }
+
+        StateHasChanged();
+    });
+
+    private string GetSubtitle()
+    {
+        var pauseText = PauseText;
+        var countText = string.Format(
+            CultureInfo.CurrentCulture,
+            _totalItemsCount == 1
+                ? Loc[nameof(Dashboard.Resources.StructuredLogs.TotalItemsFooterSingularText)]
+                : Loc[nameof(Dashboard.Resources.StructuredLogs.TotalItemsFooterPluralText)],
+            _totalItemsCount);
+
+        return pauseText is null ? countText : $"{countText} · {pauseText}";
+    }
+
+    private static string GetSeverityRowClass(OtlpLogEntry entry) => $"log-row-{entry.Severity.ToString().ToLowerInvariant()}";
 
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
         _aiContext = CreateAIContext();
-
-        (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(ControlsStringsLoc);
-
-        _gridColumns = [
-            new GridColumn(Name: ResourceColumn, DesktopWidth: "2fr", MobileWidth: "1fr"),
-            new GridColumn(Name: LogLevelColumn, DesktopWidth: "1fr"),
-            new GridColumn(Name: TimestampColumn, DesktopWidth: "1.5fr"),
-            new GridColumn(Name: MessageColumn, DesktopWidth: "5fr", "2.5fr"),
-            new GridColumn(Name: TraceColumn, DesktopWidth: "1fr"),
-            new GridColumn(Name: ActionsColumn, DesktopWidth: "1fr", MobileWidth: "0.8fr")
-        ];
 
         if (!string.IsNullOrEmpty(TraceId))
         {
@@ -281,21 +280,17 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private Task HandleSelectedResourceChangedAsync()
     {
-        _resourceChanged = true;
-
-        return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
+        return this.AfterViewModelChangedAsync(layout: null, waitToApplyMobileChange: true);
     }
 
     private async Task HandleSelectedLogLevelChangedAsync()
     {
-        _resourceChanged = true;
-
         if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
         {
             await ClearSelectedLogEntryAsync();
         }
 
-        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
+        await this.AfterViewModelChangedAsync(layout: null, waitToApplyMobileChange: true);
     }
 
     private void UpdateSubscription()
@@ -307,7 +302,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             _logsSubscription = TelemetryRepository.OnNewLogs(PageViewModel.SelectedResource.Id?.GetResourceKey(), SubscriptionType.Read, async () =>
             {
                 ViewModel.ClearData();
-                await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+                await RefreshLogsAsync();
             });
         }
     }
@@ -354,11 +349,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private async Task OpenFilterAsync(FieldTelemetryFilter? entry)
     {
-        if (_contentLayout is not null)
-        {
-            await _contentLayout.CloseMobileToolbarAsync();
-        }
-
         await FilterHelpers.OpenFilterAsync(
             entry,
             DialogService,
@@ -396,13 +386,14 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             await ClearSelectedLogEntryAsync();
         }
 
-        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
+        await this.AfterViewModelChangedAsync(layout: null, waitToApplyMobileChange: false);
     }
 
-    private async Task HandleAfterFilterBindAsync()
+    private async Task OnFilterChangedAsync(string value)
     {
+        _filter = value;
         ViewModel.FilterText = _filter;
-        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+        await RefreshLogsAsync();
 
         if (PageViewModel.IsSelectedLogEntryExcludedByFilters(_filter, ViewModel.Filters))
         {
@@ -412,57 +403,15 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private string GetResourceName(OtlpResourceView app) => OtlpHelpers.GetResourceName(app.Resource, _resources);
 
-    private string GetRowClass(OtlpLogEntry entry)
-    {
-        if (entry.InternalId == PageViewModel.SelectedLogEntry?.LogEntry.InternalId)
-        {
-            return "selected-row";
-        }
-        else
-        {
-            return $"log-row-{entry.Severity.ToString().ToLowerInvariant()}";
-        }
-    }
-
     private List<MenuButtonItem> GetFilterMenuItems()
     {
         return FilterHelpers.GetFilterMenuItems(
             ViewModel.Filters,
             ViewModel.ClearFilters,
             OpenFilterAsync,
-            afterChangeAsync: () => this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false),
+            afterChangeAsync: () => this.AfterViewModelChangedAsync(layout: null, waitToApplyMobileChange: false),
             FilterLoc,
             DialogsLoc);
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        // Check to see whether max item count should be set on every render.
-        // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<OtlpLogEntry>.TrySetMaxItemCount(_dataGrid, 10_000))
-        {
-            StateHasChanged();
-        }
-
-        if (_resourceChanged)
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            _resourceChanged = false;
-        }
-        if (firstRender)
-        {
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
-            DimensionManager.OnViewportInformationChanged += OnBrowserResize;
-        }
-    }
-
-    private void OnBrowserResize(object? o, EventArgs args)
-    {
-        InvokeAsync(async () =>
-        {
-            await JS.InvokeVoidAsync("resetContinuousScrollPosition");
-            await JS.InvokeVoidAsync("initializeContinuousScroll");
-        });
     }
 
     private string? PauseText => PauseManager.AreStructuredLogsPaused(out var startTime)
@@ -478,7 +427,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _aiContext?.Dispose();
         _resourcesSubscription?.Dispose();
         _logsSubscription?.Dispose();
-        DimensionManager.OnViewportInformationChanged -= OnBrowserResize;
         TelemetryContext.Dispose();
     }
 
@@ -534,7 +482,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             }
         }
 
-        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+        await RefreshLogsAsync();
     }
 
     private bool IsGenAILogEntry(OtlpLogEntry logEntry)

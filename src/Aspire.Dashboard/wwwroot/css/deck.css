@@ -2205,3 +2205,82 @@ table.data tbody tr.selected {
   }
 }
 /* === end Metrics === */
+/* === StructuredLogs === */
+/* Deck restyle for Components/Pages/StructuredLogs.razor. The page reuses the shared Deck
+   `.page` / `.table-wrap` / `table.data` primitives; the rules below cover the log-specific
+   bits: the toolbar row, the resource color bar, the level cell, severity row tinting and the
+   message/actions columns. Scoped to `.deck-logs-table` so it can't affect the Resources table. */
+
+/* Toolbar row hosts the (still-Fluent) resource + log-level selects, filter menu, explain-errors
+   and pause/clear actions. Keep them vertically centered and wrapping on narrow viewports. */
+.deck-structured-toolbar {
+  row-gap: 8px;
+}
+
+/* The table uses a fixed layout so the wide message column truncates instead of pushing the
+   trace/actions columns off-screen, matching the Deck DataTable feel. */
+table.data.deck-logs-table {
+  table-layout: fixed;
+}
+table.data.deck-logs-table tbody td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Resource cell: a colored left bar keyed off the resource name (mirrors the dashboard's
+   per-resource color), with the name truncating when space is tight. */
+.deck-log-resource {
+  display: inline-block;
+  max-width: 100%;
+  padding-left: 8px;
+  border-left: 4px solid var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* Level cell: keep the severity icon and text on one line. */
+.deck-log-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.deck-log-level .severity-icon {
+  flex-shrink: 0;
+}
+
+/* Severity row tinting. Lowest specificity of the row states so hover/selected still win
+   (see `table.data tbody tr.clickable:hover` / `tr.selected`). Uses the Deck severity-soft
+   tokens, which are alpha-based and read correctly in both light and dark themes. */
+.deck-logs-table tbody tr.log-row-warning {
+  background: var(--warning-soft);
+}
+.deck-logs-table tbody tr.log-row-error,
+.deck-logs-table tbody tr.log-row-critical {
+  background: var(--error-soft);
+}
+
+/* Actions column stays compact and right-aligned, and must not ellipsize its menu button.
+   Specificity must beat `table.data.deck-logs-table tbody td`, hence the td qualifier. */
+table.data.deck-logs-table tbody td.deck-logs-actions-col {
+  text-align: right;
+  overflow: visible;
+  text-overflow: clip;
+}
+.deck-logs-table .grid-action-container {
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+/* The empty-state row spans the whole table without table-cell padding fighting the centered
+   `.empty` block. */
+.deck-logs-table tbody tr:has(> td > .empty) td {
+  padding: 0;
+}
+.deck-logs-table tbody tr:has(> td > .empty):hover {
+  background: none;
+}
+/* === end StructuredLogs === */
