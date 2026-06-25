@@ -36,6 +36,10 @@ internal static class FeedbackIssueUrlBuilder
     // keep the URL under GitHub's limit. The full output is still available from `aspire doctor`.
     private const string TruncationMarker = "\n\n[Truncated to keep the issue URL within GitHub's length limit. Run `aspire doctor` for the full output.]";
 
+    private const string TemplateKey = "template";
+    private const string TitleKey = "title";
+    private const string DescriptionKey = "description";
+    private const string SolutionKey = "solution";
     private const string AspireDoctorOutputKey = "aspire-doctor-output";
     private const string AdditionalContextKey = "additional-context";
     private const string BodyKey = "body";
@@ -59,40 +63,46 @@ internal static class FeedbackIssueUrlBuilder
     {
         var query = new Dictionary<string, string?>
         {
-            ["template"] = BugReportTemplate,
-            ["title"] = context.Title ?? "Aspire bug report",
-            ["description"] = context.MainText,
+            [TemplateKey] = BugReportTemplate,
+            [TitleKey] = context.Title ?? "Aspire bug report",
+            [DescriptionKey] = context.MainText,
             [AspireDoctorOutputKey] = context.AspireDoctorOutput,
             [AdditionalContextKey] = context.AdditionalContext
         };
 
-        // Trim the doctor output first (largest and most reproducible from the CLI) and only then the
-        // additional-context block, so the human-entered title/description are preserved.
-        return BuildUrl(query, AspireDoctorOutputKey, AdditionalContextKey);
+        // Trim the doctor output first (largest and most reproducible from the CLI), then the
+        // additional-context block, then the human-entered description, and finally the title.
+        // Description and title are last-resort targets: a user can type an arbitrarily large
+        // description, so including them in the trim order guarantees the URL stays under GitHub's
+        // limit instead of silently producing an over-long link that drops the entire prefill.
+        return BuildUrl(query, AspireDoctorOutputKey, AdditionalContextKey, DescriptionKey, TitleKey);
     }
 
     private static string BuildFeatureRequestUrl(FeedbackIssueContext context)
     {
         var query = new Dictionary<string, string?>
         {
-            ["template"] = FeatureRequestTemplate,
-            ["title"] = context.Title ?? "Aspire feature request",
-            ["solution"] = context.MainText,
+            [TemplateKey] = FeatureRequestTemplate,
+            [TitleKey] = context.Title ?? "Aspire feature request",
+            [SolutionKey] = context.MainText,
             [AdditionalContextKey] = context.AdditionalContext
         };
 
-        return BuildUrl(query, AdditionalContextKey);
+        // Trim the additional-context block first, then the human-entered solution, and finally the
+        // title, so an over-long solution still yields a valid URL rather than dropping the prefill.
+        return BuildUrl(query, AdditionalContextKey, SolutionKey, TitleKey);
     }
 
     private static string BuildBlankIssueUrl(FeedbackIssueContext context)
     {
         var query = new Dictionary<string, string?>
         {
-            ["title"] = context.Title ?? "Aspire feedback",
+            [TitleKey] = context.Title ?? "Aspire feedback",
             [BodyKey] = BuildBlankIssueBody(context.MainText, context.AdditionalContext)
         };
 
-        return BuildUrl(query, BodyKey);
+        // Trim the body first and the title only as a last resort.
+        return BuildUrl(query, BodyKey, TitleKey);
     }
 
     private static string? BuildBlankIssueBody(string? mainText, string? additionalContext)

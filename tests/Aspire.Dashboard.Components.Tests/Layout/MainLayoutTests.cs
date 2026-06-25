@@ -304,11 +304,17 @@ public partial class MainLayoutTests : DashboardTestContext
         {
             Assert.True(cut.HasComponent<FeedbackDialog>());
             Assert.Contains("sdk", cut.Markup, StringComparison.Ordinal);
-            Assert.Contains("Issues created are public on the microsoft/aspire GitHub repo.", cut.Markup, StringComparison.Ordinal);
+            Assert.Contains("Issues created are public on the", cut.Markup, StringComparison.Ordinal);
+            Assert.Contains("GitHub repo.", cut.Markup, StringComparison.Ordinal);
         });
         Assert.True(cut.Find($"#{FeedbackDialog.MainTextInputId}").HasAttribute("required"));
         var publicIssueMessage = cut.Find(".feedback-dialog-public-message");
         Assert.Equal("note", publicIssueMessage.GetAttribute("role"));
+        var publicIssueLink = publicIssueMessage.QuerySelector("fluent-anchor");
+        Assert.NotNull(publicIssueLink);
+        Assert.Equal("https://github.com/microsoft/aspire", publicIssueLink.GetAttribute("href"));
+        Assert.Equal("_blank", publicIssueLink.GetAttribute("target"));
+        Assert.Contains("microsoft/aspire", publicIssueLink.TextContent, StringComparison.Ordinal);
         var footerButtons = cut.FindAll("fluent-button")
             .Where(button => button.TextContent.Contains("Open issue", StringComparison.OrdinalIgnoreCase) || button.TextContent.Contains("Cancel", StringComparison.OrdinalIgnoreCase))
             .ToList();

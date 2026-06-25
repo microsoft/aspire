@@ -26,7 +26,6 @@ public partial class FeedbackDialog : IDisposable
     private string? _additionalContext;
     private bool _isCapturingBugContext;
     private bool _isOpeningIssue;
-    private FluentTextField? _titleTextField;
 
     [Parameter, EditorRequired]
     public required FeedbackDialogViewModel Content { get; set; }
@@ -112,15 +111,6 @@ public partial class FeedbackDialog : IDisposable
         }
         catch (OperationCanceledException) when (_captureCts.IsCancellationRequested)
         {
-        }
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            await Task.Yield();
-            _titleTextField?.FocusAsync();
         }
     }
 

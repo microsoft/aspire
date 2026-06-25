@@ -178,7 +178,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Issues created are public on the microsoft/aspire GitHub repo..
+        ///   Looks up a localized string similar to Issues created are public on the {0} GitHub repo..
         /// </summary>
         public static string MainLayoutProvideFeedbackPublicIssueMessage {
             get {

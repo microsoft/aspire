@@ -8,12 +8,12 @@
 <FluentDialogBody Class="feedback-dialog-body">
     <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
         <div class="feedback-input input-container">
-            <FluentTextField @ref="_titleTextField"
-                             Id="@TitleInputId"
+            <FluentTextField Id="@TitleInputId"
                              Label="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackIssueTitleLabel)]"
                              @bind-Value="_title"
                              Immediate="true"
                              Required="true"
+                             Autofocus="true"
                              AutoComplete="off" />
         </div>
 
@@ -72,7 +72,16 @@
 
 <FluentDialogFooter>
     <div class="feedback-dialog-footer-content">
-        <span class="feedback-dialog-public-message" role="note">@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackPublicIssueMessage)]</span>
+        <span class="feedback-dialog-public-message" role="note">
+            @{
+                // The localized message embeds the repo link via a {0} placeholder so the
+                // "microsoft/aspire" anchor renders inline; split around it to keep the surrounding
+                // text localizable while the repo identifier and URL stay fixed. Translations that
+                // predate the placeholder simply render their full text followed by the link.
+                var publicMessageParts = Loc[nameof(LayoutResources.MainLayoutProvideFeedbackPublicIssueMessage)].Value.Split("{0}", 2, StringSplitOptions.None);
+            }
+            @publicMessageParts[0]<FluentAnchor Href="https://github.com/microsoft/aspire" Target="_blank" Rel="noreferrer noopener" Appearance="Appearance.Hypertext">microsoft/aspire</FluentAnchor>@(publicMessageParts.Length > 1 ? publicMessageParts[1] : string.Empty)
+        </span>
         <FluentButton Appearance="Appearance.Accent" Disabled="@(!CanOpenIssue)" OnClick="@OpenIssueAsync">
             @Loc[nameof(LayoutResources.MainLayoutProvideFeedbackOpenIssueButton)]
         </FluentButton>

@@ -157,7 +157,7 @@
     <value>Additional context</value>
   </data>
   <data name="MainLayoutProvideFeedbackPublicIssueMessage" xml:space="preserve">
-    <value>Issues created are public on the microsoft/aspire GitHub repo.</value>
+    <value>Issues created are public on the {0} GitHub repo.</value>
   </data>
   <data name="MainLayoutProvideFeedbackOpenIssueButton" xml:space="preserve">
     <value>Open issue</value>

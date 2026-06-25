@@ -89,4 +89,82 @@ public sealed class FeedbackIssueUrlBuilderTests
         Assert.Contains("title=General%20feedback", url, StringComparison.Ordinal);
         Assert.Contains("Truncated", url, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void BuildUrl_BugReport_UsesBugTemplateAndExpectedQueryKeys()
+    {
+        var url = FeedbackIssueUrlBuilder.BuildUrl(new FeedbackIssueContext(
+            Kind: FeedbackIssueKind.Bug,
+            Title: "Crash",
+            MainText: "Repro",
+            AspireDoctorOutput: "OK",
+            AdditionalContext: "ctx"));
+
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/issues/new?template=10_bug_report.yml&title=Crash&description=Repro&aspire-doctor-output=OK&additional-context=ctx",
+            url);
+    }
+
+    [Fact]
+    public void BuildUrl_FeatureRequest_UsesFeatureTemplateAndExpectedQueryKeys()
+    {
+        var url = FeedbackIssueUrlBuilder.BuildUrl(new FeedbackIssueContext(
+            Kind: FeedbackIssueKind.Idea,
+            Title: "Idea",
+            MainText: "Soln",
+            AdditionalContext: "ctx"));
+
+        // Feature requests carry no doctor output; the main text maps to the `solution` field.
+        Assert.Equal(
+            "https://github.com/microsoft/aspire/issues/new?template=20_feature-request.yml&title=Idea&solution=Soln&additional-context=ctx",
+            url);
+    }
+
+    [Fact]
+    public void BuildUrl_GeneralFeedback_UsesBlankIssueWithTitleAndBody()
+    {
+        var url = FeedbackIssueUrlBuilder.BuildUrl(new FeedbackIssueContext(
+            Kind: FeedbackIssueKind.General,
+            Title: "Hello",
+            MainText: "World"));
+
+        // General feedback opens a blank issue (no template) with the main text in the body. The body
+        // is built with AppendLine, so a platform-specific trailing newline follows "World"; assert the
+        // stable prefix to stay OS-agnostic while still proving there is no template key and the order.
+        Assert.StartsWith(
+            "https://github.com/microsoft/aspire/issues/new?title=Hello&body=World",
+            url,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildUrl_LargeBugDescription_TruncatesDescriptionButKeepsTitle()
+    {
+        // A user can paste an arbitrarily large description. With no doctor output or additional context
+        // to trim first, the description itself must be truncated so the URL stays valid.
+        var url = FeedbackIssueUrlBuilder.BuildUrl(new FeedbackIssueContext(
+            Kind: FeedbackIssueKind.Bug,
+            Title: "Keep me",
+            MainText: new string('B', 40_000)));
+
+        Assert.True(url.Length <= MaxUrlLength, $"URL length {url.Length} exceeded {MaxUrlLength}.");
+        Assert.Contains("Truncated", url, StringComparison.Ordinal);
+        // The title is the last-resort trim target, so it is preserved in full.
+        Assert.Contains("title=Keep%20me", url, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildUrl_LargeFeatureSolution_TruncatesSolutionButKeepsTitle()
+    {
+        // The feature-request solution is the largest free-text field once additional context is absent,
+        // so it must be truncatable to keep the URL under GitHub's limit.
+        var url = FeedbackIssueUrlBuilder.BuildUrl(new FeedbackIssueContext(
+            Kind: FeedbackIssueKind.Idea,
+            Title: "Keep me",
+            MainText: new string('S', 40_000)));
+
+        Assert.True(url.Length <= MaxUrlLength, $"URL length {url.Length} exceeded {MaxUrlLength}.");
+        Assert.Contains("Truncated", url, StringComparison.Ordinal);
+        Assert.Contains("title=Keep%20me", url, StringComparison.Ordinal);
+    }
 }

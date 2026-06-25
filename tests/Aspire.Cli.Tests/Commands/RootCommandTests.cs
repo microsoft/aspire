@@ -1,11 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
@@ -258,16 +256,16 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
-        var processOutputCapture = new TestFeedbackProcessOutputCapture("""
-
-            {"overallStatus":"Healthy"}
-
-            """);
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            // The feedback command spawns `aspire doctor --format json` and reads its stdout.
+            AttemptCallback = (_, _) => (0, """{"overallStatus":"Healthy"}""")
+        };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
+            options.DotNetCliExecutionFactoryFactory = _ => executionFactory;
         });
-        services.AddSingleton<IFeedbackProcessOutputCapture>(processOutputCapture);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -276,9 +274,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
-        var capture = Assert.Single(processOutputCapture.Captures);
-        Assert.Equal(["doctor", "--format", "json"], capture.Arguments);
-        Assert.Equal(TimeSpan.FromSeconds(30), capture.Timeout);
+        Assert.Equal(["doctor", "--format", "json"], executionFactory.LastArguments!);
 
         var message = Assert.Single(interactionService.DisplayedMessages).Message;
         Assert.Contains("template=10_bug_report.yml", message, StringComparison.Ordinal);
@@ -811,22 +807,5 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
 
         Assert.DoesNotContain(command.Subcommands, subcommand => subcommand.Name == "exec");
-    }
-
-    private sealed class TestFeedbackProcessOutputCapture(string output) : IFeedbackProcessOutputCapture
-    {
-        public List<(string FileName, string[] Arguments, TimeSpan Timeout)> Captures { get; } = [];
-
-        public Task<ProcessCaptureResult<string>> CaptureAsync(ProcessStartInfo startInfo, TimeSpan timeout, CancellationToken cancellationToken)
-        {
-            Captures.Add((startInfo.FileName, [.. startInfo.ArgumentList], timeout));
-
-            return Task.FromResult(new ProcessCaptureResult<string>(
-                ExitCode: 0,
-                Capture: output,
-                FailureKind: null,
-                FailureMessage: null,
-                Cancelled: false));
-        }
     }
 }

@@ -98,8 +98,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutProvideFeedbackPublicIssueMessage">
-        <source>Issues created are public on the microsoft/aspire GitHub repo.</source>
-        <target state="new">Issues created are public on the microsoft/aspire GitHub repo.</target>
+        <source>Issues created are public on the {0} GitHub repo.</source>
+        <target state="new">Issues created are public on the {0} GitHub repo.</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutSettingsDialogClose">

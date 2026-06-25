@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -22,7 +21,7 @@ internal sealed class FeedbackCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
-    private static readonly Argument<string> s_kindArgument = new("kind")
+    private static readonly Argument<FeedbackIssueKind?> s_kindArgument = new("kind")
     {
         Description = SharedCommandStrings.FeedbackKindArgumentDescription,
         Arity = ArgumentArity.ZeroOrOne
@@ -44,12 +43,7 @@ internal sealed class FeedbackCommand : BaseCommand
     private readonly IDotNetSdkInstaller _dotNetSdkInstaller;
     private readonly ILogger<FeedbackCommand> _logger;
     private readonly ICliHostEnvironment _hostEnvironment;
-    private readonly IFeedbackProcessOutputCapture _processOutputCapture;
-
-    static FeedbackCommand()
-    {
-        s_kindArgument.AcceptOnlyFromAmong("bug", "idea", "general");
-    }
+    private readonly IProcessExecutionFactory _processExecutionFactory;
 
     public FeedbackCommand(
         IAppHostProjectFactory projectFactory,
@@ -57,7 +51,7 @@ internal sealed class FeedbackCommand : BaseCommand
         IAppHostInfoResolver appHostInfoResolver,
         IDotNetSdkInstaller dotNetSdkInstaller,
         ILogger<FeedbackCommand> logger,
-        IFeedbackProcessOutputCapture processOutputCapture,
+        IProcessExecutionFactory processExecutionFactory,
         CommonCommandServices services)
         : base("feedback", SharedCommandStrings.FeedbackCommandDescription, services)
     {
@@ -66,7 +60,7 @@ internal sealed class FeedbackCommand : BaseCommand
         _appHostInfoResolver = appHostInfoResolver;
         _dotNetSdkInstaller = dotNetSdkInstaller;
         _logger = logger;
-        _processOutputCapture = processOutputCapture;
+        _processExecutionFactory = processExecutionFactory;
         _hostEnvironment = services.HostEnvironment;
 
         Arguments.Add(s_kindArgument);
@@ -112,11 +106,11 @@ internal sealed class FeedbackCommand : BaseCommand
             allowMarkup: true);
     }
 
-    private async Task<FeedbackIssueKind?> ResolveKindAsync(string? kind, CancellationToken cancellationToken)
+    private async Task<FeedbackIssueKind?> ResolveKindAsync(FeedbackIssueKind? kind, CancellationToken cancellationToken)
     {
-        if (!string.IsNullOrWhiteSpace(kind))
+        if (kind is not null)
         {
-            return ParseKind(kind);
+            return kind;
         }
 
         if (!_hostEnvironment.SupportsInteractiveInput)
@@ -138,17 +132,6 @@ internal sealed class FeedbackCommand : BaseCommand
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
         return selected.Kind;
-    }
-
-    private static FeedbackIssueKind ParseKind(string kind)
-    {
-        return kind.ToLowerInvariant() switch
-        {
-            "bug" => FeedbackIssueKind.Bug,
-            "idea" => FeedbackIssueKind.Idea,
-            "general" => FeedbackIssueKind.General,
-            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
-        };
     }
 
     private async Task<string> ResolveTitleAsync(FeedbackIssueKind kind, ParseResult parseResult, CancellationToken cancellationToken)
@@ -289,53 +272,70 @@ internal sealed class FeedbackCommand : BaseCommand
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
-        var startInfo = new ProcessStartInfo(fileName)
+        var outputBuilder = new StringBuilder();
+
+        var options = new ProcessInvocationOptions
         {
-            WorkingDirectory = ExecutionContext.WorkingDirectory.FullName,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
+            // Diagnostics-capture spawns are noisy and best-effort, so don't surface them in the CLI log.
+            SuppressLogging = true,
+            // Capture stdout only. The execution still consumes stderr on its internal pump (so a child
+            // that floods stderr can't deadlock on a full pipe buffer), but we discard it here so callers
+            // such as `aspire doctor --format json` and `<tool> --version` get a clean stdout payload.
+            StandardOutputCallback = line => outputBuilder.AppendLine(line)
         };
 
-        foreach (var argument in arguments)
+        IProcessExecution execution;
+        try
         {
-            startInfo.ArgumentList.Add(argument);
+            execution = _processExecutionFactory.CreateExecution(
+                fileName,
+                arguments,
+                env: null,
+                ExecutionContext.WorkingDirectory,
+                options);
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            _logger.LogDebug(ex, "Could not create process execution for '{FileName}'.", fileName);
+            return (-1, string.Empty, ex.Message, false);
         }
 
-        var result = await _processOutputCapture.CaptureAsync(startInfo, timeout, cancellationToken).ConfigureAwait(false);
+        await using (execution.ConfigureAwait(false))
+        {
+            try
+            {
+                // Start() spawns the child and throws (rather than returning false) when the executable is
+                // missing or cannot be launched, so a graceful "tool not installed" result lives here.
+                execution.Start();
+            }
+            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+            {
+                _logger.LogDebug(ex, "Could not start process '{FileName}'.", fileName);
+                return (-1, string.Empty, ex.Message, false);
+            }
 
-        return (result.ExitCode, result.Capture, result.FailureMessage, result.Cancelled);
+            // IProcessExecution.WaitForExitAsync has no built-in timeout, so impose one with a linked CTS.
+            // Distinguishing a timeout from caller cancellation matters: CaptureDoctorOutputAsync rethrows
+            // on caller cancellation but surfaces a failure string on timeout. WaitForExitAsync already
+            // kills the child and drains its output before propagating the OperationCanceledException.
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(timeout);
+
+            try
+            {
+                var exitCode = await execution.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+                return (exitCode, outputBuilder.ToString().Trim(), null, false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return (-1, outputBuilder.ToString().Trim(), null, Cancelled: true);
+            }
+            catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+            {
+                return (-1, outputBuilder.ToString().Trim(), $"Process timed out after {timeout.TotalSeconds:F1}s.", false);
+            }
+        }
     }
 
     private sealed record FeedbackKindChoice(FeedbackIssueKind Kind, string Text);
-}
-
-internal interface IFeedbackProcessOutputCapture
-{
-    Task<ProcessCaptureResult<string>> CaptureAsync(ProcessStartInfo startInfo, TimeSpan timeout, CancellationToken cancellationToken);
-}
-
-internal sealed class FeedbackProcessOutputCapture(ILogger<FeedbackProcessOutputCapture> logger) : IFeedbackProcessOutputCapture
-{
-    public async Task<ProcessCaptureResult<string>> CaptureAsync(ProcessStartInfo startInfo, TimeSpan timeout, CancellationToken cancellationToken)
-    {
-        return await ProcessCaptureRunner.RunAsync(
-            startInfo,
-            timeout,
-            async (process, token) =>
-            {
-                var outputTask = process.StandardOutput.ReadToEndAsync(token);
-                var drainErrorTask = process.StandardError.ReadToEndAsync(token);
-                await Task.WhenAll(outputTask, drainErrorTask).ConfigureAwait(false);
-
-                // Only stdout is returned. stderr is still drained concurrently (required to avoid a
-                // pipe-buffer deadlock) but discarded, so callers such as `aspire doctor --format
-                // json` and `<tool> --version` get a clean stdout payload free of progress text.
-                return outputTask.Result;
-            },
-            static () => string.Empty,
-            logger,
-            cancellationToken).ConfigureAwait(false);
-    }
 }
