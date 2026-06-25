@@ -203,7 +203,8 @@ suite('AppHostDataRepository', () => {
 
             await assert.rejects(fetchPromise, (error: unknown) => {
                 assert.ok(error instanceof AspireCliFailedError);
-                assert.match(error.message, /Unrecognized command or argument --resources/);
+                assert.doesNotMatch(error.message, /Unrecognized command or argument --resources/);
+                assert.match(error.stderr, /Unrecognized command or argument --resources/);
                 return true;
             });
         } finally {
@@ -225,7 +226,8 @@ suite('AppHostDataRepository', () => {
 
             await assert.rejects(fetchPromise, (error: unknown) => {
                 assert.ok(error instanceof AspireCliFailedError);
-                assert.match(error.message, /timed out after 30000ms/);
+                assert.doesNotMatch(error.message, /timed out after 30000ms/);
+                assert.match(error.stderr, /timed out after 30000ms/);
                 return true;
             });
             assert.strictEqual(psProcess.killed, true);
@@ -244,8 +246,9 @@ suite('AppHostDataRepository', () => {
             const runPromise = repository.runResourceCommand('api', ' /workspace/AppHost.csproj ', 'stop');
             await waitForMicrotasks();
 
-            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['resource', 'api', 'stop', '--apphost', '/workspace/AppHost.csproj']);
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['resource', 'api', 'stop', '--non-interactive', '--apphost', '/workspace/AppHost.csproj']);
             assert.strictEqual(spawnStub.firstCall.args[3].noExtensionVariables, true);
+            assert.deepStrictEqual(spawnStub.firstCall.args[3].env, [{ name: 'ASPIRE_NON_INTERACTIVE', value: 'true' }]);
 
             resourceProcess.markExited(0);
             spawnStub.firstCall.args[3].exitCallback(0);
@@ -271,7 +274,8 @@ suite('AppHostDataRepository', () => {
 
             await assert.rejects(runPromise, (error: unknown) => {
                 assert.ok(error instanceof AspireCliFailedError);
-                assert.match(error.message, /resource is disabled/);
+                assert.doesNotMatch(error.message, /resource is disabled/);
+                assert.match(error.stderr, /resource is disabled/);
                 return true;
             });
         } finally {
@@ -294,8 +298,9 @@ suite('AppHostDataRepository', () => {
 
             await assert.rejects(runPromise, (error: unknown) => {
                 assert.ok(error instanceof AspireCliFailedError);
-                assert.ok(!error.message.includes('Restarting resource'), error.message);
-                assert.match(error.message, /port is already in use/);
+                assert.ok(!error.stderr.includes('Restarting resource'), error.stderr);
+                assert.doesNotMatch(error.message, /port is already in use/);
+                assert.match(error.stderr, /port is already in use/);
                 return true;
             });
         } finally {
@@ -315,7 +320,7 @@ suite('AppHostDataRepository', () => {
             const runPromise = repository.runResourceCommand('cache', undefined, 'echo-arguments', ['--', '--message=hello']);
             await waitForMicrotasks();
 
-            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['resource', 'cache', 'echo-arguments', '--', '--message=hello']);
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['resource', 'cache', 'echo-arguments', '--non-interactive', '--', '--message=hello']);
 
             spawnStub.firstCall.args[3].stdoutCallback('rendered command value');
             spawnStub.firstCall.args[3].stderrCallback('status: ok');

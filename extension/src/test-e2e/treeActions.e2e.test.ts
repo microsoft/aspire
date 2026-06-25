@@ -226,6 +226,24 @@ suite('Aspire tree action command E2E', function () {
         assert.strictEqual(getTerminalCommandCount(), terminalBefore);
         const commandPaletteEditor = await waitForResourceCommandOutputEditor(workerResourceName, 'echo-arguments', 'hello from e2e');
         assert.notStrictEqual(commandPaletteEditor.text, commandItemEditor.text);
+
+        terminalBefore = getTerminalCommandCount();
+        before = getCommandInvocationCount('aspire-vscode.codeLensResourceAction');
+        await executeE2eControlCommand({
+            name: 'executeAspireCommand',
+            commandId: 'aspire-vscode.codeLensResourceAction',
+            args: [workerResourceName, 'echo-arguments', appHostPath, commands['echo-arguments']],
+        }, { waitFor: 'started' });
+        await chooseActiveQuickPick('Continue');
+        await answerActiveInput('hello from codelens', 'Message');
+        await chooseActiveQuickPick('Alpha');
+        await chooseActiveQuickPick('No');
+        await answerActiveInput('7', 'Threshold');
+        await answerActiveInput('secret-from-codelens', 'Token');
+        await waitForCommandOutcome('aspire-vscode.codeLensResourceAction', 'success', 60000, before);
+        assert.strictEqual(getTerminalCommandCount(), terminalBefore);
+        const codeLensEditor = await waitForResourceCommandOutputEditor(workerResourceName, 'echo-arguments', 'hello from codelens');
+        assert.notStrictEqual(codeLensEditor.text, commandPaletteEditor.text);
     });
 });
 

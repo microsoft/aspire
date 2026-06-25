@@ -3,6 +3,7 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { executeResourceCommand, ResourceCommandRunner } from '../views/resourceCommandExecution';
 import { AspireCliFailedError, AspireCliNotInstalledError, ResourceCommandExecutionOutput } from '../views/AppHostDataRepository';
+import { extensionLogOutputChannel } from '../utils/logging';
 
 suite('executeResourceCommand', () => {
     let sandbox: sinon.SinonSandbox;
@@ -82,6 +83,25 @@ suite('executeResourceCommand', () => {
         assert.match(message, /more detail/);
         assert.strictEqual(infoStub.called, false);
         assert.deepStrictEqual(rendered, []);
+    });
+
+    test('reports CLI command output to the user without writing it to extension logs', async () => {
+        const logErrorStub = sandbox.stub(extensionLogOutputChannel, 'error');
+        const { runner } = makeRunner(new AspireCliFailedError('aspire resource restart', 1, 'stdout secret-token-123', 'stderr visible diagnostic'));
+
+        const outcome = await executeResourceCommand(
+            runner,
+            () => { },
+            { resourceName: 'cache', displayName: 'Cache', commandName: 'restart', appHostPath: '/repo/AppHost.csproj' });
+
+        assert.deepStrictEqual(outcome, { success: false, hadOutput: true });
+        assert.strictEqual(errorStub.calledOnce, true);
+        assert.match(String(errorStub.firstCall.args[0]), /stderr visible diagnostic/);
+
+        const logMessages = logErrorStub.getCalls().map(call => String(call.args[0])).join('\n');
+        assert.match(logMessages, /Command 'restart' on 'cache' failed/);
+        assert.doesNotMatch(logMessages, /stdout secret-token-123/);
+        assert.doesNotMatch(logMessages, /stderr visible diagnostic/);
     });
 
     test('renders captured stdout even when the CLI command fails', async () => {

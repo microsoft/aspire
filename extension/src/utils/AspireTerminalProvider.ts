@@ -331,7 +331,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         // debug console, which is not an interactive terminal. Keep prompts routed
         // through the extension backchannel while disabling Spectre live output
         // such as the first-run banner and spinners.
-        env.ASPIRE_NON_INTERACTIVE = 'true';
+        env[EnvironmentVariables.ASPIRE_NON_INTERACTIVE] = 'true';
 
         // While debugging, the developer can pause on a breakpoint (e.g. before builder.Build())
         // for an arbitrarily long time. Use a very long startup timeout (86400s = 24h) so the parent

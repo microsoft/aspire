@@ -8,6 +8,7 @@ import { appHostDescribeMayNotBeSupported, appHostPathMustBeNonEmptyAbsolute, as
 import { AppHostCandidate, AppHostDiscoveryService, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
+import { nonInteractiveCliEnvironment } from '../utils/environment';
 
 export interface ResourceUrlJson {
     name: string | null;
@@ -109,7 +110,7 @@ export class AspireCliFailedError extends Error {
         public readonly exitCode: number | null,
         public readonly stdout: string,
         public readonly stderr: string) {
-        super(aspireCliCommandFailed(command, String(exitCode), getCommandOutputSuffix(stdout, stderr)));
+        super(aspireCliCommandFailed(command, String(exitCode), ''));
         this.name = 'AspireCliFailedError';
     }
 }
@@ -170,13 +171,13 @@ interface PostStopRefreshTimer {
  *    mode this backs the full tree; in workspace mode it confirms whether the
  *    selected workspace AppHost is running when the resource stream is empty.
  */
-const oneShotErrorSuffixLimit = 4000;
 const oneShotOutputBufferLimit = 64 * 1024;
 
 interface RunCliCommandOptions {
     timeoutMs?: number | null;
     stdoutBufferLimit?: number | null;
     cancellationToken?: vscode.CancellationToken;
+    env?: { name: string; value: string }[];
 }
 
 export class AppHostDataRepository {
@@ -549,7 +550,7 @@ export class AppHostDataRepository {
      * diagnostics log (see redactCliSpawnArgs) so secret values are not persisted.
      */
     async runResourceCommand(resourceName: string, appHostPath: string | undefined, commandName: string, additionalArgs: readonly string[] = [], cancellationToken?: vscode.CancellationToken): Promise<ResourceCommandExecutionOutput> {
-        const args = ['resource', resourceName, commandName];
+        const args = ['resource', resourceName, commandName, '--non-interactive'];
         if (appHostPath !== undefined) {
             const trimmedAppHostPath = appHostPath.trim();
             if (!trimmedAppHostPath || !path.isAbsolute(trimmedAppHostPath)) {
@@ -568,6 +569,7 @@ export class AppHostDataRepository {
                 timeoutMs: null,
                 stdoutBufferLimit: AppHostDataRepository._oneShotOutputBufferLimit,
                 cancellationToken,
+                env: nonInteractiveCliEnvironment,
             });
             return {
                 stdout: filterResourceCommandStatusOutput(output.stdout, resourceName, commandName),
@@ -1325,6 +1327,7 @@ export class AppHostDataRepository {
 
             cliProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                 noExtensionVariables: true,
+                env: options.env,
                 stdoutCallback: (data) => { stdout.append(data); },
                 stderrCallback: (data) => { stderr.append(data); },
                 exitCallback: (code) => {
@@ -2068,15 +2071,6 @@ function isWindowsDriveSegment(segment: string): boolean {
 
 function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
-}
-
-function getCommandOutputSuffix(stdout: string, stderr: string): string {
-    const output = (stderr || stdout).trim();
-    const limitedOutput = output.length <= oneShotErrorSuffixLimit
-        ? output
-        : truncateOutputWithMarker(output, oneShotErrorSuffixLimit);
-
-    return limitedOutput ? `: ${limitedOutput}` : '';
 }
 
 class LimitedOutputBuffer {

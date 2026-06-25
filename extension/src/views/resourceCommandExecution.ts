@@ -100,7 +100,7 @@ async function handleFailure(
 
     if (error instanceof AspireCliFailedError) {
         const detail = getFailureDetail(error, request);
-        extensionLogOutputChannel.error(`Command '${request.commandName}' on '${request.resourceName}' failed: ${error.message}`);
+        extensionLogOutputChannel.error(`Command '${request.commandName}' on '${request.resourceName}' failed: ${error.command} exited with code ${error.exitCode}.`);
         vscode.window.showErrorMessage(detail
             ? resourceCommandFailed(request.commandName, displayName, limitFailureDetailForDisplay(detail))
             : resourceCommandFailedNoDetail(request.commandName, displayName));
