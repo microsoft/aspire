@@ -86,7 +86,7 @@
             </FluentPopover>
 
             <SummaryDetailsView DetailsTitle="@(PageViewModel.SelectedResource != null ? $"{PageViewModel.SelectedResource.ResourceType}: {GetResourceName(PageViewModel.SelectedResource)}" : null)"
-                                ShowDetails="@showDetailsView"
+                                ShowDetails="@(showDetailsView && !ViewportInformation.IsDesktop)"
                                 OnDismiss="@(() => ClearSelectedResourceAsync(causedByUserAction: true))"
                                 SelectedValue="@PageViewModel.SelectedResource"
                                 ViewKey="ResourcesList"
@@ -274,3 +274,12 @@
         </FooterSection>
     </AspirePageContentLayout>
 </div>
+
+@* On desktop, resource details open in a Deck-style right-side drawer overlay instead of the
+   built-in split pane (which is still used on mobile via SummaryDetailsView above). *@
+@if (ViewportInformation.IsDesktop && PageViewModel.SelectedResource is { } selectedResource)
+{
+    <ResourceDetailsDrawer Resource="selectedResource"
+                           OnClose="@(() => ClearSelectedResourceAsync(causedByUserAction: true))"
+                           OnExecuteCommand="@(args => ExecuteResourceCommandAsync(args.Resource, args.Command))" />
+}

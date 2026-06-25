@@ -817,6 +817,60 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Overview.
+        /// </summary>
+        public static string ResourceDetailsOverviewHeader {
+            get {
+                return ResourceManager.GetString("ResourceDetailsOverviewHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Health.
+        /// </summary>
+        public static string ResourceDetailsHealthHeader {
+            get {
+                return ResourceManager.GetString("ResourceDetailsHealthHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Stopped.
+        /// </summary>
+        public static string ResourceDetailsStoppedHeader {
+            get {
+                return ResourceManager.GetString("ResourceDetailsStoppedHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to UID.
+        /// </summary>
+        public static string ResourceDetailsUidHeader {
+            get {
+                return ResourceManager.GetString("ResourceDetailsUidHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Properties.
+        /// </summary>
+        public static string ResourceDetailsPropertiesHeader {
+            get {
+                return ResourceManager.GetString("ResourceDetailsPropertiesHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Relationships.
+        /// </summary>
+        public static string ResourceDetailsRelationshipsHeader {
+            get {
+                return ResourceManager.GetString("ResourceDetailsRelationshipsHeader", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Environment variables.
         /// </summary>
         public static string ResourceDetailsEnvironmentVariablesHeader {

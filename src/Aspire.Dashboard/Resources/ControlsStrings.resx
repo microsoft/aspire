@@ -431,6 +431,24 @@
   <data name="ResourceDetailsBackReferences" xml:space="preserve">
     <value>Back references</value>
   </data>
+  <data name="ResourceDetailsOverviewHeader" xml:space="preserve">
+    <value>Overview</value>
+  </data>
+  <data name="ResourceDetailsHealthHeader" xml:space="preserve">
+    <value>Health</value>
+  </data>
+  <data name="ResourceDetailsStoppedHeader" xml:space="preserve">
+    <value>Stopped</value>
+  </data>
+  <data name="ResourceDetailsUidHeader" xml:space="preserve">
+    <value>UID</value>
+  </data>
+  <data name="ResourceDetailsPropertiesHeader" xml:space="preserve">
+    <value>Properties</value>
+  </data>
+  <data name="ResourceDetailsRelationshipsHeader" xml:space="preserve">
+    <value>Relationships</value>
+  </data>
   <data name="VolumePathColumnHeader" xml:space="preserve">
     <value>Path</value>
   </data>

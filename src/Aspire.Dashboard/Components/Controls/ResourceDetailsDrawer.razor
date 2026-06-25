@@ -1,0 +1,244 @@
+@*
+    Deck-style right-side resource details pane, ported from
+    src/Aspire.Deck/ui/src/components/DetailsDrawer.tsx and adapted to the dashboard's
+    ResourceViewModel. Renders overview, endpoints, properties, environment variables, health
+    reports and relationships sections, plus a command bar in the footer. Commands are executed
+    through the page's callback, which routes to DashboardCommandExecutor (confirmation and
+    argument prompts are handled there).
+*@
+@namespace Aspire.Dashboard.Components.Controls
+@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Resources
+@using Humanizer
+@inject IStringLocalizer<ControlsStrings> ControlsLoc
+@inject IStringLocalizer<Dashboard.Resources.Resources> Loc
+@inject IStringLocalizer<Columns> ColumnsLoc
+
+<Drawer OnClose="OnClose">
+    <TitleContent>
+        <DeckIcon Name="DeckIconName.ResourceType" ResourceType="@Resource.ResourceType" Size="18" />
+        @Resource.DisplayName
+    </TitleContent>
+    <SubtitleContent>
+        <StateDot Tone="@ResourceStateTone.Get(Resource)" Text="@GetStateText()" Health="@Resource.HealthStatus?.Humanize()" />
+    </SubtitleContent>
+
+    <ChildContent>
+        <section class="drawer__section">
+            <div class="drawer__section-title">@ControlsLoc[nameof(ControlsStrings.ResourceDetailsOverviewHeader)]</div>
+            <div class="kv">
+                <div class="kv__key">@ControlsLoc[nameof(ControlsStrings.ResourceDetailsTypeHeader)]</div>
+                <div class="kv__val">@Resource.ResourceType</div>
+                <div class="kv__key">@ControlsLoc[nameof(ControlsStrings.StateColumnHeader)]</div>
+                <div class="kv__val">@(Resource.State ?? "—")</div>
+                <div class="kv__key">@ControlsLoc[nameof(ControlsStrings.ResourceDetailsHealthHeader)]</div>
+                <div class="kv__val">@(Resource.HealthStatus?.Humanize() ?? "—")</div>
+                <div class="kv__key">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]</div>
+                <div class="kv__val">@FormatTime(Resource.StartTimeStamp)</div>
+                @if (Resource.StopTimeStamp is not null)
+                {
+                    <div class="kv__key">@ControlsLoc[nameof(ControlsStrings.ResourceDetailsStoppedHeader)]</div>
+                    <div class="kv__val">@FormatTime(Resource.StopTimeStamp)</div>
+                }
+                <div class="kv__key">@ControlsLoc[nameof(ControlsStrings.ResourceDetailsUidHeader)]</div>
+                <div class="kv__val">@Resource.Uid</div>
+            </div>
+        </section>
+
+        @{
+            var urls = Resource.Urls.Where(u => !u.IsInactive).OrderBy(u => u.DisplayProperties.SortOrder).ToList();
+        }
+        @if (urls.Count > 0)
+        {
+            <section class="drawer__section">
+                <div class="drawer__section-title">@ControlsLoc[nameof(ControlsStrings.ResourceDetailsUrlsHeader)]</div>
+                <div class="url-list">
+                    @foreach (var url in urls)
+                    {
+                        <a class="url-chip" href="@url.Url.ToString()" target="_blank" rel="noreferrer noopener" title="@url.Url.ToString()">
+                            <DeckIcon Name="DeckIconName.External" Size="12" />
+                            @(string.IsNullOrEmpty(url.DisplayProperties.DisplayName) ? url.EndpointName ?? url.Url.ToString() : url.DisplayProperties.DisplayName)
+                        </a>
+                    }
+                </div>
+            </section>
+        }
+
+        @{
+            var properties = Resource.Properties.Values.OrderBy(p => p.SortOrder).ToList();
+        }
+        @if (properties.Count > 0)
+        {
+            <section class="drawer__section">
+                <div class="drawer__section-title">@ControlsLoc[nameof(ControlsStrings.ResourceDetailsPropertiesHeader)]</div>
+                <div class="kv">
+                    @foreach (var prop in properties)
+                    {
+                        <div class="kv__key">@(prop.DisplayName ?? prop.Name)</div>
+                        <div class="kv__val @(prop.IsHighlighted ? "highlight" : "")">
+                            @if (prop.IsValueSensitive)
+                            {
+                                <SecretValue Value="@FormatPropertyValue(prop)"
+                                             Reveal="@ControlsLoc[nameof(ControlsStrings.GridValueMaskShowValue)]"
+                                             Hide="@ControlsLoc[nameof(ControlsStrings.GridValueMaskHideValue)]" />
+                            }
+                            else
+                            {
+                                <span class="secret">@FormatPropertyValue(prop)</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
+        @if (Resource.Environment.Length > 0)
+        {
+            <section class="drawer__section">
+                <div class="drawer__section-title">@ControlsLoc[nameof(ControlsStrings.ResourceDetailsEnvironmentVariablesHeader)]</div>
+                <div class="kv">
+                    @foreach (var env in Resource.Environment)
+                    {
+                        <div class="kv__key">@env.Name</div>
+                        <div class="kv__val">
+                            @if (!string.IsNullOrEmpty(env.Value))
+                            {
+                                <SecretValue Value="@env.Value"
+                                             Reveal="@ControlsLoc[nameof(ControlsStrings.GridValueMaskShowValue)]"
+                                             Hide="@ControlsLoc[nameof(ControlsStrings.GridValueMaskHideValue)]" />
+                            }
+                            else
+                            {
+                                <span class="secret">—</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
+        @if (Resource.HealthReports.Length > 0)
+        {
+            <section class="drawer__section">
+                <div class="drawer__section-title">@ControlsLoc[nameof(ControlsStrings.ResourceHealthChecksHeader)]</div>
+                @foreach (var report in Resource.HealthReports)
+                {
+                    <div class="health-report">
+                        <Badge Tone="@HealthTone(report.HealthStatus)">@(report.HealthStatus?.Humanize() ?? "—")</Badge>
+                        <div class="health-report__body">
+                            <div class="health-report__key">@report.Name</div>
+                            @if (!string.IsNullOrEmpty(report.DisplayedDescription))
+                            {
+                                <div class="health-report__desc">@report.DisplayedDescription</div>
+                            }
+                        </div>
+                    </div>
+                }
+            </section>
+        }
+
+        @if (Resource.Relationships.Length > 0)
+        {
+            <section class="drawer__section">
+                <div class="drawer__section-title">@ControlsLoc[nameof(ControlsStrings.ResourceDetailsRelationshipsHeader)]</div>
+                <div class="rel-list">
+                    @foreach (var rel in Resource.Relationships)
+                    {
+                        <div class="rel-item">
+                            <DeckIcon Name="DeckIconName.Link" Size="14" />
+                            <span>@rel.ResourceName</span>
+                            <Badge Tone="accent">@rel.Type</Badge>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+    </ChildContent>
+
+    <FooterContent>
+        @{
+            var commands = Resource.Commands.Where(c => c.State != CommandViewModelState.Hidden).ToList();
+        }
+        @if (commands.Count > 0)
+        {
+            @foreach (var command in commands)
+            {
+                <button class="btn btn--sm @(command.IsHighlighted ? "btn--primary" : "") @(command.Name.Contains("stop", StringComparison.OrdinalIgnoreCase) ? "btn--danger" : "")"
+                        disabled="@(command.State == CommandViewModelState.Disabled)"
+                        title="@(command.GetDisplayDescription() ?? command.GetDisplayName())"
+                        @onclick="() => OnExecuteCommand.InvokeAsync((Resource, command))">
+                    @if (CommandIcon(command.Name) is { } icon)
+                    {
+                        <DeckIcon Name="icon" Size="15" />
+                    }
+                    @command.GetDisplayName()
+                </button>
+            }
+        }
+    </FooterContent>
+</Drawer>
+
+@code {
+    /// <summary>The resource whose details are shown.</summary>
+    [Parameter, EditorRequired]
+    public required ResourceViewModel Resource { get; set; }
+
+    /// <summary>Invoked when the drawer is dismissed.</summary>
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    /// <summary>Invoked to execute a command against the resource.</summary>
+    [Parameter]
+    public EventCallback<(ResourceViewModel Resource, CommandViewModel Command)> OnExecuteCommand { get; set; }
+
+    private string GetStateText() => ResourceStateViewModel.GetStateViewModel(Resource, ColumnsLoc).Text;
+
+    private string FormatTime(DateTime? time)
+        => time is { } value ? FormatHelpers.FormatDateTime(TimeProviderInstance, value, MillisecondsDisplay.None, System.Globalization.CultureInfo.CurrentCulture) : "—";
+
+    [Inject]
+    public required BrowserTimeProvider TimeProviderInstance { get; init; }
+
+    // Property values arrive as protobuf Value; format by kind. An unset oneof (KindCase.None)
+    // or NullValue must be treated as empty — calling ToString()/the JSON formatter on an unset
+    // Value throws "Value message must contain a value for the oneof".
+    private static string FormatPropertyValue(ResourcePropertyViewModel prop)
+    {
+        var value = prop.Value;
+        return value.KindCase switch
+        {
+            Google.Protobuf.WellKnownTypes.Value.KindOneofCase.StringValue => value.StringValue,
+            Google.Protobuf.WellKnownTypes.Value.KindOneofCase.NumberValue => value.NumberValue.ToString(System.Globalization.CultureInfo.CurrentCulture),
+            Google.Protobuf.WellKnownTypes.Value.KindOneofCase.BoolValue => value.BoolValue ? "true" : "false",
+            Google.Protobuf.WellKnownTypes.Value.KindOneofCase.NullValue => string.Empty,
+            Google.Protobuf.WellKnownTypes.Value.KindOneofCase.None => string.Empty,
+            _ => value.ToString()
+        };
+    }
+
+    private static string HealthTone(Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus? status)
+        => status switch
+        {
+            Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Healthy => "success",
+            Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Degraded => "warning",
+            Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy => "error",
+            _ => "neutral"
+        };
+
+    private static DeckIconName? CommandIcon(string name)
+    {
+        if (name.Contains("start", StringComparison.OrdinalIgnoreCase))
+        {
+            return DeckIconName.Play;
+        }
+        if (name.Contains("stop", StringComparison.OrdinalIgnoreCase))
+        {
+            return DeckIconName.Stop;
+        }
+        if (name.Contains("restart", StringComparison.OrdinalIgnoreCase))
+        {
+            return DeckIconName.Restart;
+        }
+        return null;
+    }
+}
