@@ -1919,3 +1919,56 @@ table.data tbody tr.selected {
 .interaction-pane .interaction-message p:last-child {
   margin-bottom: 0;
 }
+
+/* === Settings === */
+.settings-pane {
+  width: 380px;
+}
+.settings-section {
+  margin-bottom: 22px;
+}
+.settings-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+  margin-bottom: 9px;
+}
+.settings-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.deck-radio {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.deck-radio input[type="radio"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+.settings-select {
+  width: 100%;
+}
+.settings-subtext {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 8px;
+}
+.settings-version {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

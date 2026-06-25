@@ -19,6 +19,7 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
+    private bool _showSettingsPane;
 
     private IDisposable? _themeChangedSubscription;
     private IDisposable? _locationChangingRegistration;
@@ -345,6 +346,26 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     }
 
     public Task LaunchSettingsAsync() => LaunchSettingsAsync(GetDefaultReturnFocusElementId(SettingsButtonId));
+
+    // Desktop renders settings as a Deck right-side pane (SettingsPane) instead of the Fluent panel.
+    // Toggled from the top bar; mobile still uses LaunchSettingsAsync (Fluent dialog).
+    private async Task ToggleSettingsPaneAsync()
+    {
+        if (!_showSettingsPane)
+        {
+            // Ensure the current theme is available before the pane renders its theme options.
+            await ThemeManager.EnsureInitializedAsync();
+        }
+
+        _showSettingsPane = !_showSettingsPane;
+        StateHasChanged();
+    }
+
+    private void CloseSettingsPane()
+    {
+        _showSettingsPane = false;
+        StateHasChanged();
+    }
 
     private async Task LaunchSettingsAsync(string? returnFocusElementId)
     {

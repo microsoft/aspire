@@ -21,7 +21,7 @@
                         OnAIAgents="@LaunchAIAgentsAsync"
                         OnAssistant="@(() => LaunchAssistantAsync())"
                         OnNotifications="@LaunchNotificationsAsync"
-                        OnSettings="@(() => LaunchSettingsAsync())" />
+                        OnSettings="@ToggleSettingsPaneAsync" />
         </div>
         <main class="app__content">
             @if (AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog)
@@ -29,6 +29,10 @@
                 <Aspire.Dashboard.Components.Dialogs.AssistantSidebarDialog Content="@(new AssistantDialogViewModel { Chat = vm, ReturnFocusElementId = _assistantReturnFocusElementId })" />
             }
             @Body
+            @if (_showSettingsPane)
+            {
+                <Aspire.Dashboard.Components.Dialogs.SettingsPane OnClose="@CloseSettingsPane" />
+            }
             @* Inside .app so interaction panes/toasts sit alongside the Deck drawers and the
                `:has(.drawer) .notif-stack` toast-shift applies. *@
             <InteractionsProvider />
