@@ -10,9 +10,10 @@ using Semver;
 namespace Aspire.Cli.DotNet;
 
 /// <summary>
-/// Default implementation of <see cref="IDotNetSdkInstaller"/> that checks for dotnet on the system PATH.
+/// Default implementation of <see cref="IDotNetSdkInstaller"/> that checks for dotnet on the system PATH
+/// or via the runtime selector's chosen dotnet executable.
 /// </summary>
-internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration configuration) : IDotNetSdkInstaller
+internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration configuration, Lazy<IDotNetRuntimeSelector> runtimeSelector) : IDotNetSdkInstaller
 {
     /// <summary>
     /// The minimum .NET SDK version required for Aspire.
@@ -25,7 +26,7 @@ internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration conf
         // Check for configuration override first
         var overrideVersion = configuration["overrideMinimumSdkVersion"];
         var minimumVersion = !string.IsNullOrEmpty(overrideVersion) ? overrideVersion : MinimumSdkVersion;
-        
+
         return CheckAsync(minimumVersion, cancellationToken);
     }
 
@@ -40,6 +41,10 @@ internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration conf
 
         try
         {
+            // Use the runtime selector's dotnet executable if it has been initialized with a private/custom SDK.
+            // If not yet initialized (e.g. during runtime selector initialization itself), fall back to "dotnet".
+            var dotnetPath = runtimeSelector.Value.DotNetExecutablePath;
+
             // Add --arch flag to ensure we only get SDKs that match the current architecture
             var currentArch = GetCurrentArchitecture();
             var arguments = $"--list-sdks --arch {currentArch}";
@@ -48,7 +53,7 @@ internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration conf
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName = "dotnet",
+                    FileName = dotnetPath,
                     Arguments = arguments,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
