@@ -247,6 +247,14 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
     private static bool ContainsAppHostMarker(XElement root)
     {
+        // Only MSBuild project files declare Aspire markers, so ignore any other well-formed XML whose root
+        // is not <Project>. Compare on Name.LocalName so projects using the legacy MSBuild XML namespace
+        // (xmlns="http://schemas.microsoft.com/developer/msbuild/2003") are still recognized.
+        if (!root.Name.LocalName.Equals("Project", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
         // 1) SDK-style reference declared via the Sdk attribute on <Project>, which may list multiple
         //    SDKs with optional versions, e.g.:
         //      <Project Sdk="Microsoft.NET.Sdk;Aspire.AppHost.Sdk/9.0.0">
