@@ -190,7 +190,7 @@
                             <ContentBeforeValue>
                                 @if (context.HealthStatus is null)
                                 {
-                                    <FluentProgressRing Width="16px" Style="display: inline-block;" Class="severity-icon" />
+                                    <div class="spinner severity-icon" style="display: inline-block;" role="progressbar" aria-label="Loading"></div>
                                 }
                                 else
                                 {

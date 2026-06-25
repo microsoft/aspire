@@ -129,7 +129,14 @@
                 disabled="@(AreNoneSelected() || _isExporting)"
                 title="@Loc[nameof(Dialogs.ManageDataExportButtonText)]"
                 aria-label="@Loc[nameof(Dialogs.ManageDataExportButtonText)]">
-            <DeckIcon Name="DeckIconName.Download" Size="16" />
+            @if (_isExporting)
+            {
+                <div class="spinner" role="progressbar" aria-label="Loading"></div>
+            }
+            else
+            {
+                <DeckIcon Name="DeckIconName.Download" Size="16" />
+            }
             @Loc[nameof(Dialogs.ManageDataExportButtonText)]
         </button>
         <button type="button" class="btn"
@@ -137,7 +144,14 @@
                 disabled="@(AreNoneSelected() || _isRemoving)"
                 title="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]"
                 aria-label="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]">
-            <DeckIcon Name="DeckIconName.Delete" Size="16" />
+            @if (_isRemoving)
+            {
+                <div class="spinner" role="progressbar" aria-label="Loading"></div>
+            }
+            else
+            {
+                <DeckIcon Name="DeckIconName.Delete" Size="16" />
+            }
             @Loc[nameof(Dialogs.ManageDataRemoveButtonText)]
         </button>
     </div>
@@ -156,7 +170,14 @@
                     disabled="@_isImporting"
                     title="@Loc[nameof(Dialogs.SettingsImportButtonText)]"
                     aria-label="@Loc[nameof(Dialogs.SettingsImportButtonText)]">
-                <DeckIcon Name="DeckIconName.ArrowUpload" Size="16" />
+                @if (_isImporting)
+                {
+                    <div class="spinner" role="progressbar" aria-label="Loading"></div>
+                }
+                else
+                {
+                    <DeckIcon Name="DeckIconName.ArrowUpload" Size="16" />
+                }
                 @Loc[nameof(Dialogs.SettingsImportButtonText)]
             </button>
         </div>
