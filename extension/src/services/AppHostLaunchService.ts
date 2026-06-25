@@ -2,9 +2,11 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
+import { startDebuggingDeclined } from '../loc/strings';
 import { classifyAppHostDirectory, classifyAppHostPath } from '../utils/appHostLanguage';
 import { classifyError, isCommandCancellation, sendTelemetryEvent, type EventProperties } from '../utils/telemetry';
 import { bucketAspireCommand } from '../utils/telemetryBuckets';
+import { checkCliAvailableOrRedirect } from '../utils/workspace';
 
 function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
@@ -140,14 +142,6 @@ export class AppHostLaunchService implements vscode.Disposable {
         const executionSuppressed = isE2eDebugLaunchSuppressed();
         const telemetryProperties = getLaunchTelemetryProperties(appHostPath, command, noDebug, executionSuppressed);
 
-        // Track launching state before awaiting startDebugging so the tree shows "Starting..."
-        // immediately. We must clear this state if startDebugging returns false (debug adapter
-        // rejected, no provider matched, user cancelled) or throws — otherwise no terminate
-        // event will fire and the tree item stays stuck on the spinner indefinitely.
-        // See https://code.visualstudio.com/api/references/vscode-api#debug.startDebugging
-        this._launchingPaths.add(getComparisonKey(path.resolve(appHostPath)));
-        this._onDidChangeLaunchingState.fire();
-
         const config: AspireExtendedDebugConfiguration = {
             type: 'aspire',
             name: `Aspire ${command}: ${vscode.workspace.asRelativePath(appHostPath)}`,
@@ -180,20 +174,27 @@ export class AppHostLaunchService implements vscode.Disposable {
         }
 
         try {
-            const started: boolean | undefined = await vscode.debug.startDebugging(undefined, config);
-            if (started === undefined) {
-                // The Aspire debug provider returns undefined when CLI gating has already handled
-                // the missing-CLI UX. Treat that as user-visible cancellation so tree/editor
-                // commands don't show a second generic launch failure.
+            // Track launching state before awaiting the CLI/debug checks so the tree shows
+            // "Starting..." immediately after the user invokes the command. Every pre-start
+            // failure path below clears it because VS Code will not emit a terminate event.
+            // See https://code.visualstudio.com/api/references/vscode-api#debug.startDebugging
+            this._launchingPaths.add(getComparisonKey(path.resolve(appHostPath)));
+            this._onDidChangeLaunchingState.fire();
+
+            const cliAvailability = await checkCliAvailableOrRedirect('debug_gate');
+            if (!cliAvailability.available) {
                 throw new vscode.CancellationError();
             }
+            config.skipCliAvailabilityCheck = true;
+
+            const started = await vscode.debug.startDebugging(undefined, config);
             if (!started) {
                 // A false result means VS Code declined the launch before the
                 // debug session started (for example, no provider matched or
                 // an adapter gate rejected it). Surface it as an error so the
                 // tree command path does not silently swallow a real launch
                 // failure while still clearing the temporary "Starting..." state.
-                const error = new Error(`VS Code did not start the Aspire ${command} session for ${vscode.workspace.asRelativePath(appHostPath)}.`);
+                const error = new Error(startDebuggingDeclined(command, vscode.workspace.asRelativePath(appHostPath)));
                 error.name = 'StartDebuggingDeclined';
                 throw error;
             }

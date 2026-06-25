@@ -7,6 +7,8 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugConfigurationProvider } from '../debugger/AspireDebugConfigurationProvider';
+import type { AspireExtendedDebugConfiguration } from '../dcp/types';
+import * as cliPathModule from '../utils/cliPath';
 import { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 
 suite('AspireDebugConfigurationProvider', () => {
@@ -152,6 +154,46 @@ suite('AspireDebugConfigurationProvider', () => {
         });
 
         assert.strictEqual(config?.program, programPath);
+    });
+
+    test('resolveDebugConfiguration keeps skip flag through repeated resolver calls after launch service already checked CLI', async () => {
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'));
+        const resolveCliPathStub = sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: false, source: 'not-found' });
+        const showErrorMessageStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+
+        const initialConfig = {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: '/repo/AppHost.csproj',
+            skipCliAvailabilityCheck: true,
+        } as AspireExtendedDebugConfiguration;
+
+        const firstConfig = await provider.resolveDebugConfiguration(undefined, initialConfig) as AspireExtendedDebugConfiguration | undefined;
+        const config = firstConfig
+            ? await provider.resolveDebugConfiguration(undefined, firstConfig) as AspireExtendedDebugConfiguration | undefined
+            : undefined;
+
+        assert.ok(config);
+        assert.strictEqual(config.program, '/repo/AppHost.csproj');
+        assert.strictEqual(config.skipCliAvailabilityCheck, true);
+        assert.strictEqual(resolveCliPathStub.called, false);
+        assert.strictEqual(showErrorMessageStub.called, false);
+    });
+
+    test('resolveDebugConfigurationWithSubstitutedVariables removes internal skip flag before launch', async () => {
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService('/repo/AppHost.csproj'));
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: '/repo/AppHost.csproj',
+            skipCliAvailabilityCheck: true,
+        } as AspireExtendedDebugConfiguration) as AspireExtendedDebugConfiguration | undefined;
+
+        assert.ok(config);
+        assert.strictEqual(config.skipCliAvailabilityCheck, undefined);
     });
 
     function setActiveEditor(filePath: string, folder: vscode.WorkspaceFolder): void {

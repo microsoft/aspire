@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { defaultConfigurationName } from '../loc/strings';
+import type { AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostDiscoveryService, getDebugTargetForCandidate } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
@@ -38,10 +39,12 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
     }
 
     async resolveDebugConfiguration(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
-         // Check if CLI is available before starting debug session
-        const result = await checkCliAvailableOrRedirect('debug_gate');
-        if (!result.available) {
-            return undefined; // Cancel the debug session
+        const aspireConfig = config as AspireExtendedDebugConfiguration;
+        if (!aspireConfig.skipCliAvailabilityCheck) {
+            const result = await checkCliAvailableOrRedirect('debug_gate');
+            if (!result.available) {
+                return undefined; // Cancel the debug session
+            }
         }
 
         if (!config.type) {
@@ -64,6 +67,9 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
     }
 
     async resolveDebugConfigurationWithSubstitutedVariables(folder: vscode.WorkspaceFolder | undefined, config: vscode.DebugConfiguration, token?: vscode.CancellationToken): Promise<vscode.DebugConfiguration | null | undefined> {
+        const aspireConfig = config as AspireExtendedDebugConfiguration;
+        delete aspireConfig.skipCliAvailabilityCheck;
+
         if (typeof config.program === 'string') {
             config.program = await this.resolveDebugTarget(config.program, folder);
         }

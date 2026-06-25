@@ -631,6 +631,9 @@
     <trans-unit id="configuration.aspire.dashboardBrowser.openExternalBrowser">
       <source xml:lang="en">Use the system default browser (cannot auto-close).</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.startDebuggingDeclined">
+      <source xml:lang="en">VS Code did not start the Aspire {0} session for {1}.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.parameterValueMissing">
       <source xml:lang="en">Value missing</source>
     </trans-unit>

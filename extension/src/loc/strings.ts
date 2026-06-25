@@ -160,6 +160,7 @@ export const appHostSourceOpenFailed = (path: string) => vscode.l10n.t('Failed t
 export const logFilePathInvalid = vscode.l10n.t('Could not determine the AppHost log file to open.');
 export const logFileOpenFailed = (path: string, error: string) => vscode.l10n.t('Failed to open AppHost log file {0}: {1}', path, error);
 export const logFileLabel = vscode.l10n.t('AppHost logs');
+export const startDebuggingDeclined = (command: string, appHostPath: string) => vscode.l10n.t('VS Code did not start the Aspire {0} session for {1}.', command, appHostPath);
 
 // CodeLens strings.
 // The "\u200A" between the codicon and the label is U+200A HAIR SPACE; it adds

@@ -1931,15 +1931,20 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
-    test('workspace mode renders launching AppHost with spinner and no context menu', () => {
+    test('workspace mode renders launching AppHost with spinner and no context menu', async () => {
         const appHostPath = '/repo/AppHost/AppHost.csproj';
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const launchService = makeLaunchService();
 
-        // Simulate the path being in launching state by calling launch (stub startDebugging)
+        const resolveCliPathStub = sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: true, source: 'path' });
         const stub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
-        launchService.launch(appHostPath, 'run', true);
-        stub.restore();
+        try {
+            await launchService.launch(appHostPath, 'run', true);
+        }
+        finally {
+            stub.restore();
+            resolveCliPathStub.restore();
+        }
 
         const repository = {
             viewMode: 'workspace' as ViewMode,
