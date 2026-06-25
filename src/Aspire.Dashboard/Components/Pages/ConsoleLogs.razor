@@ -66,9 +66,9 @@
                               Disabled="@(command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
                               OnClick="@(() => ExecuteResourceCommandAsync(command))"
                               Class="highlighted-command">
-                    @if (!string.IsNullOrEmpty(command.IconName) && IconResolver.ResolveIconName(command.IconName, IconSize.Size16, command.IconVariant) is { } icon)
+                    @if (!string.IsNullOrEmpty(command.IconName) && ResourceIconHelpers.TryGetDeckIcon(command.IconName, out var commandIcon))
                     {
-                        <FluentIcon Value="@icon" Width="16px" />
+                        <DeckIcon Name="commandIcon" Size="16" />
                     }
                     else
                     {

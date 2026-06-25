@@ -12,9 +12,9 @@
             var highlightedCommand = _highlightedCommands[i];
 
             <FluentButton Appearance="Appearance.Lightweight" Title="@(!string.IsNullOrEmpty(highlightedCommand.GetDisplayDescription()) ? highlightedCommand.GetDisplayDescription() : highlightedCommand.GetDisplayName())" OnClick="@(() => CommandSelected.InvokeAsync(highlightedCommand))" Disabled="@(highlightedCommand.State == CommandViewModelState.Disabled || IsCommandExecuting(Resource, highlightedCommand))">
-                @if (!string.IsNullOrEmpty(highlightedCommand.IconName) && IconResolver.ResolveIconName(highlightedCommand.IconName, IconSize.Size16, highlightedCommand.IconVariant) is { } icon)
+                @if (!string.IsNullOrEmpty(highlightedCommand.IconName) && ResourceIconHelpers.TryGetDeckIcon(highlightedCommand.IconName, out var commandIcon))
                 {
-                    <FluentIcon Value="@icon" Width="16px" />
+                    <DeckIcon Name="commandIcon" Size="16" />
                 }
                 else
                 {
@@ -29,7 +29,7 @@
     }
 
     <FluentButton Appearance="Appearance.Lightweight" Title="@Loc[nameof(Resources.ResourceActionConsoleLogsText)]" OnClick="@(() => NavigationManager.NavigateTo(Aspire.Dashboard.Utils.DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(Resource, ResourceByName))))">
-        <FluentIcon Value="@s_consoleLogsIcon" />
+        <DeckIcon Name="ConsoleLogsIcon" Size="16" />
     </FluentButton>
 
     <FluentDivider Class="action-divider" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />

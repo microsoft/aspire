@@ -152,7 +152,6 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         Services.AddOptions<DashboardOptions>().Configure(options => options.UI.DisableImport = true);
         Services.AddSingleton<IDashboardClient>(dashboardClient);
-        Services.AddSingleton<IconResolver>();
         Services.AddSingleton<ConsoleLogsManager>();
         Services.AddSingleton<ConsoleLogsFetcher>();
         Services.AddSingleton<TelemetryExportService>();

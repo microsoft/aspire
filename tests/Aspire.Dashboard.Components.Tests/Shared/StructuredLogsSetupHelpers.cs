@@ -20,7 +20,6 @@ internal static class StructuredLogsSetupHelpers
     {
         FluentUISetupHelpers.AddCommonDashboardServices(context);
         context.Services.AddSingleton<IInstrumentUnitResolver, TestInstrumentUnitResolver>();
-        context.Services.AddSingleton<IconResolver>();
         context.Services.AddSingleton<IDashboardClient>(new TestDashboardClient());
 
         FluentUISetupHelpers.SetupFluentDivider(context);

@@ -128,9 +128,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
 
     [Inject]
-    public required IconResolver IconResolver { get; init; }
-
-    [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
     [Inject]
