@@ -5,7 +5,7 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Microsoft.Extensions.Localization;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
+using Aspire.Dashboard.Components.Deck;
 
 namespace Aspire.Dashboard.Model.Assistant.Prompts;
 
@@ -18,7 +18,7 @@ public sealed class IceBreakersBuilder
     {
         _loc = loc;
         _recentActivity = new InitialPrompt(
-            new Icons.Regular.Size20.Clock(),
+            DeckIconName.Clock,
             _loc[nameof(AIPrompts.TitleRecentActivity)],
             _loc[nameof(AIPrompts.PromptTracesAndStructuredLogs)],
             _loc[nameof(AIPrompts.PromptTracesAndStructuredLogs)],
@@ -30,14 +30,14 @@ public sealed class IceBreakersBuilder
         context.Prompts.Add(CreateAnalyzeResource(resource));
 
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.Gauge(),
+            DeckIconName.Gauge,
             _loc[nameof(AIPrompts.TitlePerformance)],
             _loc.GetString(nameof(AIPrompts.PromptAnalyzeResourcePerformance), resource.Name),
             _loc.GetString(nameof(AIPrompts.PromptAnalyzeResourcePerformance), resource.Name),
             KnownChatMessages.Traces.CreateResourceTracesPerformanceMessage(resource.Name)));
 
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.Clock(),
+            DeckIconName.Clock,
             _loc[nameof(AIPrompts.TitleRecentActivity)],
             _loc.GetString(nameof(AIPrompts.PromptResourceTracesAndStructuredLogs), resource.Name),
             _loc.GetString(nameof(AIPrompts.PromptResourceTracesAndStructuredLogs), resource.Name),
@@ -47,7 +47,7 @@ public sealed class IceBreakersBuilder
     private InitialPrompt CreateAnalyzeResource(ResourceViewModel resource)
     {
         return new InitialPrompt(
-            new Icons.Regular.Size20.Beaker(),
+            DeckIconName.Beaker,
             _loc[nameof(AIPrompts.TitleInvestigate)],
             _loc.GetString(nameof(AIPrompts.PromptAnalyzeResource), resource.Name),
             _loc.GetString(nameof(AIPrompts.PromptAnalyzeResource), resource.Name),
@@ -57,7 +57,7 @@ public sealed class IceBreakersBuilder
     public void ConsoleLogs(BuildIceBreakersContext context)
     {
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.Clock(),
+            DeckIconName.Clock,
             _loc[nameof(AIPrompts.TitleRecentConsoleLogs)],
             _loc[nameof(AIPrompts.PromptConsoleLogs)],
             _loc[nameof(AIPrompts.PromptConsoleLogs)],
@@ -66,7 +66,7 @@ public sealed class IceBreakersBuilder
         if (context.Prompts.Count < 3)
         {
             context.Prompts.Add(new InitialPrompt(
-                new Icons.Regular.Size20.QuestionCircle(),
+                DeckIconName.Help,
                 _loc[nameof(AIPrompts.TitleHelp)],
                 _loc[nameof(AIPrompts.PromptHelpConsoleLogs)],
                 _loc[nameof(AIPrompts.PromptHelpConsoleLogs)],
@@ -77,7 +77,7 @@ public sealed class IceBreakersBuilder
     public void ConsoleLogs(BuildIceBreakersContext context, ResourceViewModel resource)
     {
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.Clock(),
+            DeckIconName.Clock,
             _loc[nameof(AIPrompts.TitleRecentConsoleLogs)],
             _loc.GetString(nameof(AIPrompts.PromptResourceConsoleLogs), resource.Name),
             _loc.GetString(nameof(AIPrompts.PromptResourceConsoleLogs), resource.Name),
@@ -88,7 +88,7 @@ public sealed class IceBreakersBuilder
         if (context.Prompts.Count < 3)
         {
             context.Prompts.Add(new InitialPrompt(
-                new Icons.Regular.Size20.QuestionCircle(),
+                DeckIconName.Help,
                 _loc[nameof(AIPrompts.TitleHelp)],
                 _loc[nameof(AIPrompts.PromptHelpConsoleLogs)],
                 _loc[nameof(AIPrompts.PromptHelpConsoleLogs)],
@@ -104,7 +104,7 @@ public sealed class IceBreakersBuilder
     public void Resources(BuildIceBreakersContext context, bool hasUnhealthyResources)
     {
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.DocumentError(),
+            DeckIconName.DocumentError,
             _loc[nameof(AIPrompts.TitleSummarizeResources)],
             _loc[nameof(AIPrompts.PromptAnalyzeResources)],
             _loc[nameof(AIPrompts.PromptAnalyzeResources)],
@@ -113,7 +113,7 @@ public sealed class IceBreakersBuilder
         if (hasUnhealthyResources)
         {
             context.Prompts.Add(new InitialPrompt(
-                new Icons.Regular.Size20.BriefcaseMedical(),
+                DeckIconName.BriefcaseMedical,
                 _loc[nameof(AIPrompts.TitleInvestigateUnhealthyResources)],
                 _loc[nameof(AIPrompts.PromptUnhealthyResources)],
                 _loc[nameof(AIPrompts.PromptUnhealthyResources)],
@@ -125,7 +125,7 @@ public sealed class IceBreakersBuilder
         if (context.Prompts.Count < 3)
         {
             context.Prompts.Add(new InitialPrompt(
-                new Icons.Regular.Size20.QuestionCircle(),
+                DeckIconName.Help,
                 _loc[nameof(AIPrompts.TitleHelp)],
                 _loc[nameof(AIPrompts.PromptHelpResources)],
                 _loc[nameof(AIPrompts.PromptHelpResources)],
@@ -136,7 +136,7 @@ public sealed class IceBreakersBuilder
     public void StructuredLogs(BuildIceBreakersContext context, Func<PagedResult<OtlpLogEntry>> getCurrentLogs, bool hasErrors, Func<PagedResult<OtlpLogEntry>> getErrorLogs)
     {
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.Clock(),
+            DeckIconName.Clock,
             _loc[nameof(AIPrompts.TitleRecentActivity)],
             _loc[nameof(AIPrompts.PromptAnalyzeStructuredLogs)],
             _loc[nameof(AIPrompts.PromptAnalyzeStructuredLogs)],
@@ -145,7 +145,7 @@ public sealed class IceBreakersBuilder
         if (hasErrors)
         {
             context.Prompts.Add(new InitialPrompt(
-                new Icons.Regular.Size20.BriefcaseMedical(),
+                DeckIconName.BriefcaseMedical,
                 _loc[nameof(AIPrompts.TitleExplainErrors)],
                 _loc[nameof(AIPrompts.PromptErrorsStructuredLogs)],
                 promptContext => PromptContextsBuilder.ErrorStructuredLogs(
@@ -157,7 +157,7 @@ public sealed class IceBreakersBuilder
         if (context.Prompts.Count < 3)
         {
             context.Prompts.Add(new InitialPrompt(
-                new Icons.Regular.Size20.QuestionCircle(),
+                DeckIconName.Help,
                 _loc[nameof(AIPrompts.TitleHelp)],
                 _loc[nameof(AIPrompts.PromptHelpStructuredLogs)],
                 _loc[nameof(AIPrompts.PromptHelpStructuredLogs)],
@@ -168,7 +168,7 @@ public sealed class IceBreakersBuilder
     public void StructuredLogs(BuildIceBreakersContext context, OtlpResource resource, Func<PagedResult<OtlpLogEntry>> getCurrentLogs, bool hasErrors, Func<PagedResult<OtlpLogEntry>> getErrorLogs)
     {
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.Clock(),
+            DeckIconName.Clock,
             _loc[nameof(AIPrompts.TitleRecentActivity)],
             _loc.GetString(nameof(AIPrompts.PromptResourceStructuredLogs), resource.ResourceKey.GetCompositeName()),
             _loc.GetString(nameof(AIPrompts.PromptResourceStructuredLogs), resource.ResourceKey.GetCompositeName()),
@@ -177,7 +177,7 @@ public sealed class IceBreakersBuilder
         if (hasErrors)
         {
             context.Prompts.Add(new InitialPrompt(
-                new Icons.Regular.Size20.BriefcaseMedical(),
+                DeckIconName.BriefcaseMedical,
                 _loc[nameof(AIPrompts.TitleExplainErrors)],
                 _loc[nameof(AIPrompts.PromptErrorsStructuredLogs)],
                 promptContext => PromptContextsBuilder.ErrorStructuredLogs(
@@ -189,7 +189,7 @@ public sealed class IceBreakersBuilder
         if (context.Prompts.Count < 3)
         {
             context.Prompts.Add(new InitialPrompt(
-                new Icons.Regular.Size20.QuestionCircle(),
+                DeckIconName.Help,
                 _loc[nameof(AIPrompts.TitleHelp)],
                 _loc[nameof(AIPrompts.PromptHelpStructuredLogs)],
                 _loc[nameof(AIPrompts.PromptHelpStructuredLogs)],
@@ -200,7 +200,7 @@ public sealed class IceBreakersBuilder
     public void StructuredLogs(BuildIceBreakersContext context, OtlpLogEntry logEntry)
     {
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.Beaker(),
+            DeckIconName.Beaker,
             _loc[nameof(AIPrompts.TitleInvestigate)],
             _loc.GetString(nameof(AIPrompts.PromptAnalyzeLogEntry), logEntry.InternalId),
             promptContext => PromptContextsBuilder.AnalyzeLogEntry(
@@ -212,7 +212,7 @@ public sealed class IceBreakersBuilder
     public void Traces(BuildIceBreakersContext context, Func<PagedResult<OtlpTrace>> getCurrentTraces, bool hasErrors, Func<PagedResult<OtlpTrace>> getErrorTraces)
     {
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.Clock(),
+            DeckIconName.Clock,
             _loc[nameof(AIPrompts.TitleRecentActivity)],
             _loc[nameof(AIPrompts.PromptTraces)],
             _loc[nameof(AIPrompts.PromptTraces)],
@@ -224,7 +224,7 @@ public sealed class IceBreakersBuilder
         }
 
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.Gauge(),
+            DeckIconName.Gauge,
             _loc[nameof(AIPrompts.TitlePerformance)],
             _loc[nameof(AIPrompts.PromptAnalyzePerformance)],
             _loc[nameof(AIPrompts.PromptAnalyzePerformance)],
@@ -233,7 +233,7 @@ public sealed class IceBreakersBuilder
         if (context.Prompts.Count < 3)
         {
             context.Prompts.Add(new InitialPrompt(
-                new Icons.Regular.Size20.QuestionCircle(),
+                DeckIconName.Help,
                 _loc[nameof(AIPrompts.TitleHelp)],
                 _loc[nameof(AIPrompts.PromptHelpTraces)],
                 _loc[nameof(AIPrompts.PromptHelpTraces)],
@@ -244,7 +244,7 @@ public sealed class IceBreakersBuilder
     private InitialPrompt CreateErrorTracesPrompt(Func<PagedResult<OtlpTrace>> getErrorTraces)
     {
         return new InitialPrompt(
-            new Icons.Regular.Size20.BriefcaseMedical(),
+            DeckIconName.BriefcaseMedical,
             _loc[nameof(AIPrompts.TitleExplainErrors)],
             _loc[nameof(AIPrompts.PromptErrorTraces)],
             promptContext => PromptContextsBuilder.ErrorTraces(
@@ -258,7 +258,7 @@ public sealed class IceBreakersBuilder
         var resourceName = resource.ResourceKey.GetCompositeName();
 
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.Clock(),
+            DeckIconName.Clock,
             _loc[nameof(AIPrompts.TitleRecentActivity)],
             _loc.GetString(nameof(AIPrompts.PromptResourceTraces), resourceName),
             _loc.GetString(nameof(AIPrompts.PromptResourceTraces), resourceName),
@@ -270,7 +270,7 @@ public sealed class IceBreakersBuilder
         }
 
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.Gauge(),
+            DeckIconName.Gauge,
             _loc[nameof(AIPrompts.TitlePerformance)],
             _loc.GetString(nameof(AIPrompts.PromptAnalyzeResourcePerformance), resourceName),
             _loc.GetString(nameof(AIPrompts.PromptAnalyzeResourcePerformance), resourceName),
@@ -279,7 +279,7 @@ public sealed class IceBreakersBuilder
         if (context.Prompts.Count < 3)
         {
             context.Prompts.Add(new InitialPrompt(
-                new Icons.Regular.Size20.QuestionCircle(),
+                DeckIconName.Help,
                 _loc[nameof(AIPrompts.TitleHelp)],
                 _loc[nameof(AIPrompts.PromptHelpTraces)],
                 _loc[nameof(AIPrompts.PromptHelpTraces)],
@@ -290,7 +290,7 @@ public sealed class IceBreakersBuilder
     public void Trace(BuildIceBreakersContext context, OtlpTrace trace)
     {
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.Beaker(),
+            DeckIconName.Beaker,
             _loc[nameof(AIPrompts.TitleInvestigate)],
             _loc.GetString(nameof(AIPrompts.PromptAnalyzeTrace), OtlpHelpers.ToShortenedId(trace.TraceId)),
             context =>
@@ -305,7 +305,7 @@ public sealed class IceBreakersBuilder
     public void Span(BuildIceBreakersContext context, OtlpSpan span)
     {
         context.Prompts.Add(new InitialPrompt(
-            new Icons.Regular.Size20.Beaker(),
+            DeckIconName.Beaker,
             _loc[nameof(AIPrompts.TitleInvestigate)],
             _loc.GetString(nameof(AIPrompts.PromptAnalyzeSpan), OtlpHelpers.ToShortenedId(span.SpanId)),
             context =>

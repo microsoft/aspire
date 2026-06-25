@@ -23,9 +23,7 @@
                         <FluentButton Class="initial-prompt-button" OnClick="@(() => OnInitialPromptAsync(initialPrompt))">
                             <div>
                                 <div class="initial-prompt-title">
-                                    <FluentIcon Value="@initialPrompt.Icon"
-                                                Color="Color.Accent"
-                                                Class="initial-prompt-icon" />
+                                    <DeckIcon Name="initialPrompt.Icon" Size="20" Class="initial-prompt-icon icon-accent" />
                                     <span>@((MarkupString)ChatViewModel.MarkdownProcessor.ToHtml(initialPrompt.ButtonTitle, suppressSurroundingParagraph: true))</span>
                                 </div>
                                 <div class="initial-prompt-description">@((MarkupString)ChatViewModel.MarkdownProcessor.ToHtml(initialPrompt.ButtonDescription, suppressSurroundingParagraph: true))</div>
@@ -164,7 +162,7 @@
                                           ButtonClass="model-button" />
                     }
                     <FluentButton Appearance="Appearance.Stealth" Type="ButtonType.Submit" id="chat-form-submit" class="send-button" Disabled="@(!IsSubmitEnabled())" aria-label="@Loc[nameof(AIAssistant.SidebarSendMessage)]" Title="@Loc[nameof(AIAssistant.SidebarSendMessage)]">
-                        <FluentIcon Value="@GetSubmitIcon()" />
+                        <DeckIcon Name="GetSubmitIcon()" Size="20" />
                     </FluentButton>
                 </div>
             </div>

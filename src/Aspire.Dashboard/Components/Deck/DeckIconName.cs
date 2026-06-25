@@ -151,6 +151,14 @@ public enum DeckIconName
     ArrowCircleDown,
     /// <summary>Right arrow inside a circle; value unchanged.</summary>
     ArrowCircleRight,
+    /// <summary>Paper plane; send a message.</summary>
+    Send,
+    /// <summary>Lab flask/beaker.</summary>
+    Beaker,
+    /// <summary>Medical briefcase; health check.</summary>
+    BriefcaseMedical,
+    /// <summary>Gauge/speedometer.</summary>
+    Gauge,
     /// <summary>
     /// Special value: resolves to a project/container/executable icon based on the
     /// <see cref="DeckIcon.ResourceType"/> string.

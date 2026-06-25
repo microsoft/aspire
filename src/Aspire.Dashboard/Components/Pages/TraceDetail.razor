@@ -163,25 +163,25 @@
                                         {
                                             <span class="uninstrumented-peer">
                                                 @{
-                                                    Icon icon;
+                                                    DeckIconName icon;
                                                     if (context.Span.Attributes.HasKey("db.system"))
                                                     {
-                                                        icon = new Icons.Filled.Size16.Database();
+                                                        icon = DeckIconName.Database;
                                                     }
                                                     else if (context.Span.Attributes.HasKey("messaging.system"))
                                                     {
-                                                        icon = new Icons.Filled.Size16.Mail();
+                                                        icon = DeckIconName.Mail;
                                                     }
                                                     else
                                                     {
                                                         // Everything else.
-                                                        icon = new Icons.Filled.Size16.ArrowCircleRight();
+                                                        icon = DeckIconName.ArrowCircleRight;
                                                     }
                                                 }
-                                                <FluentIcon
-                                                    Style="@($"fill: {TraceColorPalette.GetColorVariable(context.UninstrumentedPeer)};")"
-                                                    Value="icon"
-                                                    Class="uninstrumented-peer-icon"/>
+                                                <DeckIcon Name="icon"
+                                                    Size="16"
+                                                    Style="@($"color: {TraceColorPalette.GetColorVariable(context.UninstrumentedPeer)};")"
+                                                    Class="uninstrumented-peer-icon" />
                                                 <FluentHighlighter HighlightedText="@PageViewModel.Filter" Text="@context.UninstrumentedPeer" />
                                             </span>
                                         }

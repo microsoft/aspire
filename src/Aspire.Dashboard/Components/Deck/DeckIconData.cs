@@ -459,6 +459,33 @@ internal static class DeckIconData
             <path d="m12 8 4 4-4 4" />
             <path d="M8 12h8" />
             """,
+        // paper plane (lucide "send").
+        [DeckIconName.Send] =
+            """
+            <path d="M22 2 11 13" />
+            <path d="M22 2 15 22l-4-9-9-4z" />
+            """,
+        // lab flask (lucide "flask-conical", simplified).
+        [DeckIconName.Beaker] =
+            """
+            <path d="M9 3h6" />
+            <path d="M10 3v6l-5 9a1 1 0 0 0 1 1.5h12a1 1 0 0 0 1-1.5l-5-9V3" />
+            <path d="M7 15h10" />
+            """,
+        // medical briefcase (lucide "briefcase-medical").
+        [DeckIconName.BriefcaseMedical] =
+            """
+            <path d="M12 11v4" />
+            <path d="M14 13h-4" />
+            <path d="M16 6V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+            <rect width="20" height="14" x="2" y="6" rx="2" />
+            """,
+        // gauge/speedometer (lucide "gauge").
+        [DeckIconName.Gauge] =
+            """
+            <path d="m12 14 4-4" />
+            <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+            """,
     }.ToFrozenDictionary();
 
     /// <summary>

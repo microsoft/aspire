@@ -5,22 +5,21 @@ using System.Diagnostics;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Resources;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
+using Aspire.Dashboard.Components.Deck;
 
 namespace Aspire.Dashboard.Model.GenAI;
 
 [DebuggerDisplay("Index = {Index}, Type = {Type}, ResourceName = {ResourceName}")]
 public class GenAIItemViewModel
 {
-    private static readonly Icon s_toolCallsIcon = new Icons.Regular.Size16.Code();
-    private static readonly Icon s_messageIcon = new Icons.Regular.Size16.Mail();
-    private static readonly Icon s_errorIcon = new Icons.Regular.Size16.ErrorCircle();
-
-    private static readonly Icon s_personIcon = new Icons.Filled.Size16.Person();
-    private static readonly Icon s_systemIcon = new Icons.Filled.Size16.Laptop();
-    private static readonly Icon s_toolIcon = new Icons.Filled.Size20.CodeCircle(); // used in 16px size
-    private static readonly Icon s_cloudErrorIcon = new Icons.Filled.Size16.CloudError();
+    private const DeckIconName ToolCallsIcon = DeckIconName.Executable;
+    private const DeckIconName MessageIcon = DeckIconName.Mail;
+    private const DeckIconName ErrorIcon = DeckIconName.ErrorCircle;
+    private const DeckIconName PersonIcon = DeckIconName.Person;
+    private const DeckIconName SystemIcon = DeckIconName.AppGeneric;
+    // Tool/code messages reuse the executable (angle-brackets) glyph.
+    private const DeckIconName ToolIcon = DeckIconName.Executable;
+    private const DeckIconName CloudErrorIcon = DeckIconName.ErrorCircle;
 
     public required int Index { get; set; }
     public required long? InternalId { get; init; }
@@ -33,40 +32,40 @@ public class GenAIItemViewModel
     {
         if (Type == GenAIItemType.Error)
         {
-            return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryStatus)], "output", s_errorIcon);
+            return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryStatus)], "output", ErrorIcon);
         }
         if (Type == GenAIItemType.OutputMessage)
         {
             if (ItemParts.Any(p => p.MessagePart?.Type is MessagePart.ToolCallType or MessagePart.ServerToolCallType))
             {
-                return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryToolCalls)], "output", s_toolCallsIcon);
+                return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryToolCalls)], "output", ToolCallsIcon);
             }
             else
             {
-                return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryOutput)], "output", s_messageIcon);
+                return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryOutput)], "output", MessageIcon);
             }
         }
         if (ItemParts.Any(p => p.MessagePart?.Type is MessagePart.ToolCallType or MessagePart.ServerToolCallType))
         {
-            return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryToolCalls)], "tool-calls", s_toolCallsIcon);
+            return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryToolCalls)], "tool-calls", ToolCallsIcon);
         }
         if (ItemParts.Any(p => p.MessagePart?.Type is MessagePart.ToolCallResponseType or MessagePart.ServerToolCallResponseType))
         {
-            return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryToolResponse)], "tool-response", s_messageIcon);
+            return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryToolResponse)], "tool-response", MessageIcon);
         }
 
-        return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryMessage)], "message", s_messageIcon);
+        return new BadgeDetail(loc[nameof(Dialogs.GenAIMessageCategoryMessage)], "message", MessageIcon);
     }
 
     public BadgeDetail GetTitleBadge(IStringLocalizer<Dialogs> loc)
     {
         return Type switch
         {
-            GenAIItemType.SystemMessage => new BadgeDetail(loc[nameof(Dialogs.GenAIMessageTitleSystem)], "system", s_systemIcon),
-            GenAIItemType.UserMessage => new BadgeDetail(loc[nameof(Dialogs.GenAIMessageTitleUser)], "user", s_personIcon),
-            GenAIItemType.AssistantMessage or GenAIItemType.OutputMessage => new BadgeDetail(loc[nameof(Dialogs.GenAIMessageTitleAssistant)], "assistant", s_personIcon),
-            GenAIItemType.ToolMessage => new BadgeDetail(loc[nameof(Dialogs.GenAIMessageTitleTool)], "tool", s_toolIcon),
-            GenAIItemType.Error => new BadgeDetail(loc[nameof(Dialogs.GenAIMessageTitleError)], "error", s_cloudErrorIcon),
+            GenAIItemType.SystemMessage => new BadgeDetail(loc[nameof(Dialogs.GenAIMessageTitleSystem)], "system", SystemIcon),
+            GenAIItemType.UserMessage => new BadgeDetail(loc[nameof(Dialogs.GenAIMessageTitleUser)], "user", PersonIcon),
+            GenAIItemType.AssistantMessage or GenAIItemType.OutputMessage => new BadgeDetail(loc[nameof(Dialogs.GenAIMessageTitleAssistant)], "assistant", PersonIcon),
+            GenAIItemType.ToolMessage => new BadgeDetail(loc[nameof(Dialogs.GenAIMessageTitleTool)], "tool", ToolIcon),
+            GenAIItemType.Error => new BadgeDetail(loc[nameof(Dialogs.GenAIMessageTitleError)], "error", CloudErrorIcon),
             _ => throw new InvalidOperationException("Unexpected type: " + Type)
         };
     }

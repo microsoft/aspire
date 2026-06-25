@@ -8,9 +8,7 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components;
 
@@ -201,17 +199,15 @@ public sealed partial class AssistantChat : ComponentBase, IAsyncDisposable
         }
     }
 
-    private Icon GetSubmitIcon()
+    private DeckIconName GetSubmitIcon()
     {
         if (ChatViewModel.ResponseInProgress)
         {
-            return new Icons.Filled.Size20.RecordStop();
+            return DeckIconName.Stop;
         }
         else
         {
-            return IsSubmitEnabled()
-                ? new Icons.Filled.Size20.Send()
-                : new Icons.Regular.Size20.Send();
+            return DeckIconName.Send;
         }
     }
 
