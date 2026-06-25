@@ -1,12 +1,18 @@
 @*
     Deck-style left navigation sidebar. Replaces the Fluent DesktopNavMenu (FluentAppBar).
-    Visual design ported from src/Aspire.Deck/ui/src/components/Sidebar.tsx. Nav entries link
-    to the existing dashboard routes; the resource-service-only entries (Resources, Console)
-    are hidden when the dashboard has no resource service, mirroring the old nav.
+    Visual design ported from src/Aspire.Deck/ui/src/components/Sidebar.tsx.
+
+    Active state is computed manually (not via NavLink) because Resources (the table view) and
+    Graph share the same path ("/") and differ only by the "view" query parameter, which NavLink
+    cannot distinguish. The resource-service-only entries are hidden when the dashboard has no
+    resource service, mirroring the old nav.
 *@
 @namespace Aspire.Dashboard.Components.Layout
+@implements IDisposable
 @inject IStringLocalizer<Resources.Layout> Loc
+@inject IStringLocalizer<Resources.ControlsStrings> ControlsStringsLoc
 @inject IDashboardClient DashboardClient
+@inject NavigationManager NavigationManager
 
 <nav class="sidebar">
     <div class="sidebar__brand">
@@ -21,28 +27,90 @@
 
     @if (DashboardClient.IsEnabled)
     {
-        <NavLink class="nav-item" href="@DashboardUrls.ResourcesUrl()" Match="NavLinkMatch.Prefix" ActiveClass="active">
+        <a class="nav-item @(_isResources ? "active" : "")" href="@DashboardUrls.ResourcesUrl()">
             <DeckIcon Name="DeckIconName.Resources" Size="18" Class="nav-item__icon" />
             <span class="nav-item__label">@Loc[nameof(Resources.Layout.NavMenuResourcesTab)]</span>
-        </NavLink>
-        <NavLink class="nav-item" href="@DashboardUrls.ConsoleLogsUrl()" Match="NavLinkMatch.Prefix" ActiveClass="active">
+        </a>
+        <a class="nav-item @(_isParameters ? "active" : "")" href="/parameters">
+            <DeckIcon Name="DeckIconName.Parameters" Size="18" Class="nav-item__icon" />
+            <span class="nav-item__label">@ControlsStringsLoc[nameof(Resources.ControlsStrings.ResourcesContainerParametersTab)]</span>
+        </a>
+        <a class="nav-item @(_isGraph ? "active" : "")" href="@DashboardUrls.ResourcesUrl(view: "Graph")">
+            <DeckIcon Name="DeckIconName.Graph" Size="18" Class="nav-item__icon" />
+            <span class="nav-item__label">@ControlsStringsLoc[nameof(Resources.ControlsStrings.ResourcesContainerGraphTab)]</span>
+        </a>
+        <a class="nav-item @(_isConsole ? "active" : "")" href="@DashboardUrls.ConsoleLogsUrl()">
             <DeckIcon Name="DeckIconName.Console" Size="18" Class="nav-item__icon" />
             <span class="nav-item__label">@Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)]</span>
-        </NavLink>
+        </a>
     }
-    <NavLink class="nav-item" href="@DashboardUrls.StructuredLogsUrl()" Match="NavLinkMatch.Prefix" ActiveClass="active">
+    <a class="nav-item @(_isStructuredLogs ? "active" : "")" href="@DashboardUrls.StructuredLogsUrl()">
         <DeckIcon Name="DeckIconName.Logs" Size="18" Class="nav-item__icon" />
         <span class="nav-item__label">@Loc[nameof(Resources.Layout.NavMenuStructuredLogsTab)]</span>
-    </NavLink>
-    <NavLink class="nav-item" href="@DashboardUrls.TracesUrl()" Match="NavLinkMatch.Prefix" ActiveClass="active">
+    </a>
+    <a class="nav-item @(_isTraces ? "active" : "")" href="@DashboardUrls.TracesUrl()">
         <DeckIcon Name="DeckIconName.Traces" Size="18" Class="nav-item__icon" />
         <span class="nav-item__label">@Loc[nameof(Resources.Layout.NavMenuTracesTab)]</span>
-    </NavLink>
-    <NavLink class="nav-item" href="@DashboardUrls.MetricsUrl()" Match="NavLinkMatch.Prefix" ActiveClass="active">
+    </a>
+    <a class="nav-item @(_isMetrics ? "active" : "")" href="@DashboardUrls.MetricsUrl()">
         <DeckIcon Name="DeckIconName.Metrics" Size="18" Class="nav-item__icon" />
         <span class="nav-item__label">@Loc[nameof(Resources.Layout.NavMenuMetricsTab)]</span>
-    </NavLink>
+    </a>
 
     <div class="sidebar__spacer"></div>
     <div class="sidebar__foot">Aspire @VersionHelpers.DashboardDisplayVersion</div>
 </nav>
+
+@code {
+    private bool _isResources;
+    private bool _isParameters;
+    private bool _isGraph;
+    private bool _isConsole;
+    private bool _isStructuredLogs;
+    private bool _isTraces;
+    private bool _isMetrics;
+
+    protected override void OnInitialized()
+    {
+        NavigationManager.LocationChanged += OnLocationChanged;
+        UpdateActiveStates();
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        UpdateActiveStates();
+        StateHasChanged();
+    }
+
+    private void UpdateActiveStates()
+    {
+        var relative = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        var pathAndQuery = relative.Split('#', 2)[0];
+        var parts = pathAndQuery.Split('?', 2);
+        var path = parts[0].Trim('/');
+        var query = parts.Length > 1 ? parts[1] : string.Empty;
+
+        // Resources lives at the app root (""), so the root path serves both the table view and
+        // the graph view; they are distinguished by the "view=Graph" query parameter.
+        var isRoot = path.Length == 0;
+        var isGraphView = query.Contains("view=Graph", StringComparison.OrdinalIgnoreCase);
+
+        _isGraph = isRoot && isGraphView;
+        _isResources = isRoot && !isGraphView;
+        _isParameters = SegmentMatches(path, "parameters");
+        _isConsole = SegmentMatches(path, DashboardUrls.ConsoleLogBasePath);
+        _isStructuredLogs = SegmentMatches(path, DashboardUrls.StructuredLogsBasePath);
+        _isTraces = SegmentMatches(path, DashboardUrls.TracesBasePath);
+        _isMetrics = SegmentMatches(path, DashboardUrls.MetricsBasePath);
+
+        // A path "matches" a base when it equals it or is nested under it (e.g. consolelogs/api).
+        static bool SegmentMatches(string path, string basePath)
+            => path.Equals(basePath, StringComparison.OrdinalIgnoreCase)
+               || path.StartsWith(basePath + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void Dispose()
+    {
+        NavigationManager.LocationChanged -= OnLocationChanged;
+    }
+}
