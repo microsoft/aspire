@@ -2526,3 +2526,12 @@ table.data.deck-logs-table tbody td.deck-logs-actions-col {
   margin-left: 0;
 }
 /* === end Traces === */
+
+/* === Icon utilities === */
+/* Semantic color helpers for DeckIcon (stroke uses currentColor), used while replacing Fluent's
+   `Color="Color.X"` icon coloring during the Fluent-removal phase. */
+.icon-warning { color: var(--warning); }
+.icon-error { color: var(--error); }
+.icon-success { color: var(--success); }
+.icon-muted { color: var(--text-muted); }
+/* === end Icon utilities === */
