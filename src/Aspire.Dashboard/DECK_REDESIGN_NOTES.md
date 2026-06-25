@@ -59,6 +59,23 @@ ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL=http://localhost:$OTLP_HTTP \
 
 Then drive it: `playwright-cli open http://localhost:$FRONTEND/`.
 
+### Auth-ENABLED variant (for the Login page session)
+
+`AuthMode=Unsecured` skips login entirely, so to render/validate the **login page** use
+`BrowserToken` instead. Swap the frontend auth env vars in step 2 above:
+
+```bash
+# replace  Dashboard__Frontend__AuthMode=Unsecured  with:
+Dashboard__Frontend__AuthMode=BrowserToken \
+Dashboard__Frontend__BrowserToken=devtoken12345 \
+```
+
+- Navigate to `http://localhost:$FRONTEND/` → it redirects to `/login`, which renders the Deck/login
+  page (this is what the Login session restyles).
+- To actually authenticate and reach the app, hit `http://localhost:$FRONTEND/login?t=devtoken12345`
+  (the token query param is `t`), or paste the token into the login form.
+- The resource-service/OTLP env vars are unchanged; only the frontend auth mode differs.
+
 ### Demo control endpoint (interactions)
 
 The demo opens a `WatchInteractions` stream and can inject interactions on demand:
