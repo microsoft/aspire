@@ -69,6 +69,8 @@ public enum DeckIconName
     GitHub,
     /// <summary>Triangle with exclamation (warning).</summary>
     Warning,
+    /// <summary>Circle with exclamation (error).</summary>
+    ErrorCircle,
     /// <summary>
     /// Special value: resolves to a project/container/executable icon based on the
     /// <see cref="DeckIcon.ResourceType"/> string.
