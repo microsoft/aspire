@@ -19,7 +19,7 @@ import { AspireTerminalProvider } from "../utils/AspireTerminalProvider";
 import { ICliRpcClient } from "../server/rpcClient";
 import path from "path";
 import os from "os";
-import { EnvironmentVariables, withAspireCliPathForMSBuild, withoutAspireCliPathForMSBuild } from "../utils/environment";
+import { aspireCliPathEnvironmentVariableName, EnvironmentVariables, withAspireCliPathForMSBuild, withoutAspireCliPathForMSBuild } from "../utils/environment";
 import { sendTelemetryEvent } from "../utils/telemetry";
 import { classifyAppHostPath, classifyAppHostDirectory } from "../utils/appHostLanguage";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
@@ -437,9 +437,10 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       extensionLogOutputChannel.info(`Starting AppHost for project: ${projectFile} with args: ${appHostArgs.join(' ')}`);
 
       const appHostEnvironment = withoutAspireCliPathForMSBuild(environment);
+      const launchedAspireCliPath = getAspireCliPathFromEnvironment(environment) ?? await this._terminalProvider.getAspireCliExecutablePath();
       const appHostMsBuildEnvironment = withAspireCliPathForMSBuild(
         [],
-        await this._terminalProvider.getAspireCliExecutablePath(),
+        launchedAspireCliPath,
         path.dirname(projectFile));
 
       const appHostDebugSessionConfiguration = await createDebugSessionConfiguration(
@@ -817,6 +818,11 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getAspireCliPathFromEnvironment(environment: EnvVar[]): string | undefined {
+  const aspireCliPathKey = aspireCliPathEnvironmentVariableName.toLowerCase();
+  return environment.find(variable => variable.name.toLowerCase() === aspireCliPathKey)?.value;
 }
 
 export function buildAspireCommandArgs(command: string, commandArgs: string[], extensionArgs: string[]): string[] {

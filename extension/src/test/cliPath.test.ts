@@ -13,6 +13,7 @@ function createMockDeps(overrides: Partial<CliPathDependencies> = {}): CliPathDe
     return {
         getConfiguredPath: () => '',
         getDefaultPaths: () => defaultPaths,
+        getWorkspaceFolders: () => [],
         isOnPath: async () => false,
         findAtDefaultPath: async () => undefined,
         tryExecute: async () => false,
@@ -197,34 +198,44 @@ suite('utils/cliPath tests', () => {
             assert.strictEqual(result.cliPath, customPath);
         });
 
-        test('falls through to PATH check when custom configured path is invalid', async () => {
+        test('reports custom configured path as unavailable when it is invalid', async () => {
+            const isOnPath = sinon.stub().resolves(true);
             const deps = createMockDeps({
                 getConfiguredPath: () => '/bad/path/aspire',
                 tryExecute: async () => false,
-                isOnPath: async () => true,
+                isOnPath,
             });
 
             const result = await resolveCliPath(deps);
 
-            assert.strictEqual(result.source, 'path');
-            assert.strictEqual(result.available, true);
+            assert.strictEqual(result.source, 'configured');
+            assert.strictEqual(result.available, false);
+            assert.strictEqual(result.cliPath, '/bad/path/aspire');
+            assert.ok(isOnPath.notCalled, 'should not silently fall back to PATH when the configured path is invalid');
         });
 
-        test('falls through to PATH check when custom configured path is relative', async () => {
+        test('resolves relative custom configured path against the first workspace folder', async () => {
+            const workspaceFolder = '/repo';
+            const relativeCliPath = path.join('artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net10.0', 'aspire');
+            const resolvedCliPath = path.join(workspaceFolder, relativeCliPath);
+            const isOnPath = sinon.stub().resolves(true);
+            const getWorkspaceFolders = () => [workspaceFolder];
             const deps = createMockDeps({
-                getConfiguredPath: () => path.join('artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net10.0', 'aspire'),
-                tryExecute: async () => true,
-                isOnPath: async () => true,
+                getConfiguredPath: () => relativeCliPath,
+                tryExecute: async (candidatePath) => candidatePath === resolvedCliPath,
+                isOnPath,
+                getWorkspaceFolders,
             });
 
             const result = await resolveCliPath(deps);
 
-            assert.strictEqual(result.source, 'path');
+            assert.strictEqual(result.source, 'configured');
             assert.strictEqual(result.available, true);
-            assert.strictEqual(result.cliPath, 'aspire');
+            assert.strictEqual(result.cliPath, resolvedCliPath);
+            assert.ok(isOnPath.notCalled, 'should not use PATH when a relative configured path resolves successfully');
         });
 
-        test('falls through to default path when custom configured path is invalid and not on PATH', async () => {
+        test('reports custom configured path as unavailable instead of falling through to default path', async () => {
             const setConfiguredPath = sinon.stub().resolves();
 
             const deps = createMockDeps({
@@ -237,9 +248,10 @@ suite('utils/cliPath tests', () => {
 
             const result = await resolveCliPath(deps);
 
-            assert.strictEqual(result.source, 'default-install');
-            assert.strictEqual(result.cliPath, bundlePath);
-            assert.ok(setConfiguredPath.calledOnceWith(bundlePath));
+            assert.strictEqual(result.source, 'configured');
+            assert.strictEqual(result.available, false);
+            assert.strictEqual(result.cliPath, '/bad/path/aspire');
+            assert.ok(setConfiguredPath.notCalled, 'should not rewrite settings while a configured path is invalid');
         });
 
         test('does not update setting when already set to the found default path', async () => {

@@ -124,6 +124,7 @@ export interface CliPathResolutionResult {
 export interface CliPathDependencies {
     getConfiguredPath: () => string;
     getDefaultPaths: () => string[];
+    getWorkspaceFolders: () => string[];
     isOnPath: () => Promise<boolean>;
     findAtDefaultPath: () => Promise<string | undefined>;
     tryExecute: (cliPath: string) => Promise<boolean>;
@@ -133,6 +134,7 @@ export interface CliPathDependencies {
 const defaultDependencies: CliPathDependencies = {
     getConfiguredPath: getConfiguredCliPath,
     getDefaultPaths: getDefaultCliInstallPaths,
+    getWorkspaceFolders: () => vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath) ?? [],
     isOnPath: isCliOnPath,
     findAtDefaultPath: findCliAtDefaultPath,
     tryExecute: tryExecuteCli,
@@ -168,18 +170,17 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
 
     // Check if user has configured a custom path (not one of the defaults)
     if (configuredPath && !defaultPaths.includes(configuredPath)) {
-        if (path.isAbsolute(configuredPath)) {
-            const isValid = await deps.tryExecute(configuredPath);
+        const candidateConfiguredPaths = getConfiguredPathCandidates(configuredPath, deps.getWorkspaceFolders());
+        for (const candidatePath of candidateConfiguredPaths) {
+            const isValid = await deps.tryExecute(candidatePath);
             if (isValid) {
-                return { cliPath: configuredPath, available: true, source: 'configured' };
+                return { cliPath: candidatePath, available: true, source: 'configured' };
             }
+        }
 
-            extensionLogOutputChannel.warn(`Configured CLI path is invalid: ${configuredPath}`);
-            // Continue to check other locations
-        }
-        else {
-            extensionLogOutputChannel.warn(`Configured CLI path must be absolute: ${configuredPath}`);
-        }
+        const attemptedPaths = candidateConfiguredPaths.join(', ');
+        extensionLogOutputChannel.warn(`Configured CLI path is invalid: ${configuredPath}${attemptedPaths !== configuredPath ? ` (tried: ${attemptedPaths})` : ''}`);
+        return { cliPath: candidateConfiguredPaths[0], available: false, source: 'configured' };
     }
 
     // 2. Check if CLI is on PATH
@@ -209,4 +210,17 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
 
     // 4. CLI not found anywhere
     return { cliPath: 'aspire', available: false, source: 'not-found' };
+}
+
+function getConfiguredPathCandidates(configuredPath: string, workspaceFolders: string[]): string[] {
+    if (path.isAbsolute(configuredPath)) {
+        return [configuredPath];
+    }
+
+    const candidatePaths = workspaceFolders.map(folder => path.resolve(folder, configuredPath));
+    if (candidatePaths.length > 0) {
+        return candidatePaths;
+    }
+
+    return [configuredPath];
 }
