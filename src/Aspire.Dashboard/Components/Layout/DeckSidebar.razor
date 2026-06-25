@@ -1,0 +1,48 @@
+@*
+    Deck-style left navigation sidebar. Replaces the Fluent DesktopNavMenu (FluentAppBar).
+    Visual design ported from src/Aspire.Deck/ui/src/components/Sidebar.tsx. Nav entries link
+    to the existing dashboard routes; the resource-service-only entries (Resources, Console)
+    are hidden when the dashboard has no resource service, mirroring the old nav.
+*@
+@namespace Aspire.Dashboard.Components.Layout
+@inject IStringLocalizer<Resources.Layout> Loc
+@inject IDashboardClient DashboardClient
+
+<nav class="sidebar">
+    <div class="sidebar__brand">
+        <div class="sidebar__logo">A</div>
+        <div class="sidebar__brand-text">
+            <span class="sidebar__brand-title">Aspire</span>
+            <span class="sidebar__brand-sub">@Loc[nameof(Resources.Layout.MainLayoutAspireDashboard)]</span>
+        </div>
+    </div>
+
+    <div class="sidebar__section">@Loc[nameof(Resources.Layout.NavMenuObserveHeader)]</div>
+
+    @if (DashboardClient.IsEnabled)
+    {
+        <NavLink class="nav-item" href="@DashboardUrls.ResourcesUrl()" Match="NavLinkMatch.Prefix" ActiveClass="active">
+            <DeckIcon Name="DeckIconName.Resources" Size="18" Class="nav-item__icon" />
+            <span class="nav-item__label">@Loc[nameof(Resources.Layout.NavMenuResourcesTab)]</span>
+        </NavLink>
+        <NavLink class="nav-item" href="@DashboardUrls.ConsoleLogsUrl()" Match="NavLinkMatch.Prefix" ActiveClass="active">
+            <DeckIcon Name="DeckIconName.Console" Size="18" Class="nav-item__icon" />
+            <span class="nav-item__label">@Loc[nameof(Resources.Layout.NavMenuConsoleLogsTab)]</span>
+        </NavLink>
+    }
+    <NavLink class="nav-item" href="@DashboardUrls.StructuredLogsUrl()" Match="NavLinkMatch.Prefix" ActiveClass="active">
+        <DeckIcon Name="DeckIconName.Logs" Size="18" Class="nav-item__icon" />
+        <span class="nav-item__label">@Loc[nameof(Resources.Layout.NavMenuStructuredLogsTab)]</span>
+    </NavLink>
+    <NavLink class="nav-item" href="@DashboardUrls.TracesUrl()" Match="NavLinkMatch.Prefix" ActiveClass="active">
+        <DeckIcon Name="DeckIconName.Traces" Size="18" Class="nav-item__icon" />
+        <span class="nav-item__label">@Loc[nameof(Resources.Layout.NavMenuTracesTab)]</span>
+    </NavLink>
+    <NavLink class="nav-item" href="@DashboardUrls.MetricsUrl()" Match="NavLinkMatch.Prefix" ActiveClass="active">
+        <DeckIcon Name="DeckIconName.Metrics" Size="18" Class="nav-item__icon" />
+        <span class="nav-item__label">@Loc[nameof(Resources.Layout.NavMenuMetricsTab)]</span>
+    </NavLink>
+
+    <div class="sidebar__spacer"></div>
+    <div class="sidebar__foot">Aspire @VersionHelpers.DashboardDisplayVersion</div>
+</nav>

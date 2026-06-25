@@ -6,69 +6,44 @@
 @inject IStringLocalizer<Dialogs> DialogsLoc
 @inherits LayoutComponentBase
 
-<div class="layout" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
-    <div class="aspire-icon">
-        <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo"
-                      title="@Loc[nameof(Layout.MainLayoutAspire)]"
-                      aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
-            <FluentIcon Value="@(new AspireIcons.Size24.Logo())"/>
-        </FluentAnchor>
+@if (ViewportInformation.IsDesktop)
+{
+    @* Deck-style desktop shell: left sidebar + top bar + content grid. *@
+    <div class="app">
+        <div class="app__sidebar">
+            <DeckSidebar />
+        </div>
+        <div class="app__topbar">
+            <DeckTopBar IsAiAssistantEnabled="AIContextProvider.Enabled"
+                        IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
+                        IsAssistantActive="@(AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)"
+                        OnHelp="@(() => LaunchHelpAsync())"
+                        OnAIAgents="@LaunchAIAgentsAsync"
+                        OnAssistant="@(() => LaunchAssistantAsync())"
+                        OnNotifications="@LaunchNotificationsAsync"
+                        OnSettings="@(() => LaunchSettingsAsync())" />
+        </div>
+        <main class="app__content">
+            @if (AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog)
+            {
+                <Aspire.Dashboard.Components.Dialogs.AssistantSidebarDialog Content="@(new AssistantDialogViewModel { Chat = vm, ReturnFocusElementId = _assistantReturnFocusElementId })" />
+            }
+            @Body
+        </main>
     </div>
-
-    @if (ViewportInformation.IsDesktop)
-    {
-        <FluentHeader>
-            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
-                <ApplicationName/>
+}
+else
+{
+    @* Mobile keeps the existing Fluent layout for now; it is restyled in a later phase. *@
+    <div class="layout" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
+        <div class="aspire-icon">
+            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo"
+                          title="@Loc[nameof(Layout.MainLayoutAspire)]"
+                          aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
+                <FluentIcon Value="@(new AspireIcons.Size24.Logo())"/>
             </FluentAnchor>
-            <div class="flex-filler"></div>
-            <FluentAnchor Class="header-button"
-                          Appearance="Appearance.Stealth"
-                          Href="https://aka.ms/aspire/repo" Target="_blank" Rel="noreferrer noopener"
-                          Title="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireRepoLink)]">
-                <FluentIcon Value="@(new AspireIcons.Size24.GitHub())" Color="Color.Neutral"/>
-            </FluentAnchor>
-            <FluentButton Class="header-button"
-                          Id="@HelpButtonId"
-                          Appearance="Appearance.Stealth" OnClick="@(() => LaunchHelpAsync(HelpButtonId))"
-                          Title="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]">
-                <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Neutral"/>
-            </FluentButton>
-            @if (Options.CurrentValue.UI.DisableAgentHelp != true)
-            {
-                <FluentButton Class="header-button"
-                              Appearance="Appearance.Stealth" OnClick="@LaunchAIAgentsAsync"
-                              Title="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchAIAgents)]">
-                    <FluentIcon Value="@(new Icons.Regular.Size24.BotSparkle())" Color="Color.Neutral"/>
-                </FluentButton>
-            }
-            @if (AIContextProvider.Enabled)
-            {
-                <FluentButton Class="@("header-button" + ((AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog) ? " header-button-selected" : ""))"
-                              Id="@AssistantButtonId"
-                              Appearance="Appearance.Stealth" OnClick="@(() => LaunchAssistantAsync(AssistantButtonId))"
-                              Title="@AIAssistantLoc[nameof(AIAssistant.AIAssistantLaunchButtonText)]" aria-label="@AIAssistantLoc[nameof(AIAssistant.AIAssistantLaunchButtonText)]">
-                    <FluentIcon Value="@(new AspireIcons.Size24.GitHubCopilot())" Color="Color.Neutral" />
-                </FluentButton>
-            }
-            <NotificationsHeaderButton OnClick="@LaunchNotificationsAsync" />
-            <FluentButton Class="header-button"
-                          Id="@SettingsButtonId"
-                          Appearance="Appearance.Stealth" OnClick="@(() => LaunchSettingsAsync(SettingsButtonId))"
-                          Title="@Loc[nameof(Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchSettings)]">
-                <FluentIcon Value="@(new Icons.Regular.Size24.Settings())" Color="Color.Neutral"/>
-            </FluentButton>
-            <UserProfile/>
-        </FluentHeader>
+        </div>
 
-        @if (AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            <Aspire.Dashboard.Components.Dialogs.AssistantSidebarDialog Content="@(new AssistantDialogViewModel { Chat = vm, ReturnFocusElementId = _assistantReturnFocusElementId })" />
-        }
-        <DesktopNavMenu/>
-    }
-    else
-    {
         <FluentHeader>
             <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
                 <ApplicationName/>
@@ -96,34 +71,23 @@
             LaunchAIAssistantAsync="@LaunchAssistantAsync"
             LaunchNotificationsAsync="@LaunchNotificationsAsync"
             LaunchSettingsAsync="@LaunchSettingsAsync" />
-    }
+    </div>
+}
 
-    <div class="messagebar-container">
-        <FluentMessageBarProvider Section="@DashboardUIHelpers.MessageBarSection" Class="top-messagebar" MaxMessageCount="null" NewestOnTop="true" />
-        @if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            <div class="layout-sidebar-spacer"></div>
-        }
-    </div>
-    <div class="layout-body-container">
-        <FluentBodyContent Class="custom-body-content body-content">
-            <FluentToastProvider MaxToastCount="3" Timeout="5000" />
-            @Body
-        </FluentBodyContent>
-        @if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            <div class="layout-sidebar-spacer"></div>
-        }
-    </div>
+@* Shared overlay providers. These are message/dialog/toast hosts positioned over the shell;
+   they keep working while individual surfaces are migrated to Deck panes/toasts. *@
+<div class="messagebar-container">
+    <FluentMessageBarProvider Section="@DashboardUIHelpers.MessageBarSection" Class="top-messagebar" MaxMessageCount="null" NewestOnTop="true" />
+</div>
 
-    <FluentDialogProvider/>
-    <FluentTooltipProvider />
-    <FluentMenuProvider />
-    <InteractionsProvider />
-    <ResourceServiceConnectionProvider />
-    <div id="blazor-error-ui">
-        @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]
-        <a href="" class="reload">@Loc[nameof(Layout.MainLayoutUnhandledErrorReload)]</a>
-        <a class="dismiss">🗙</a>
-    </div>
+<FluentToastProvider MaxToastCount="3" Timeout="5000" />
+<FluentDialogProvider/>
+<FluentTooltipProvider />
+<FluentMenuProvider />
+<InteractionsProvider />
+<ResourceServiceConnectionProvider />
+<div id="blazor-error-ui">
+    @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]
+    <a href="" class="reload">@Loc[nameof(Layout.MainLayoutUnhandledErrorReload)]</a>
+    <a class="dismiss">🗙</a>
 </div>

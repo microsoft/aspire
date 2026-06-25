@@ -147,6 +147,12 @@
   <data name="NavMenuResourcesTab" xml:space="preserve">
     <value>Resources</value>
   </data>
+  <data name="NavMenuObserveHeader" xml:space="preserve">
+    <value>Observe</value>
+  </data>
+  <data name="MainLayoutAspireDashboard" xml:space="preserve">
+    <value>Distributed app dashboard</value>
+  </data>
   <data name="NavMenuConsoleLogsTab" xml:space="preserve">
     <value>Console</value>
   </data>

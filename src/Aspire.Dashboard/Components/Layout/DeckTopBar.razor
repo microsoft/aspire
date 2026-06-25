@@ -1,0 +1,88 @@
+@*
+    Deck-style top bar. Replaces the Fluent FluentHeader. Shows the application name and the
+    dashboard's header actions (repo link, help, AI agents, assistant, notifications, settings,
+    user profile), styled as Deck icon-buttons. Action callbacks are wired to MainLayout, which
+    still opens the (Fluent) dialogs until later phases convert them to panes.
+*@
+@namespace Aspire.Dashboard.Components.Layout
+@inject IStringLocalizer<Resources.Layout> Loc
+@inject IStringLocalizer<Resources.AIAssistant> AIAssistantLoc
+
+<header class="topbar">
+    <a class="topbar__title-link" href="/" title="@Loc[nameof(Resources.Layout.MainLayoutAspire)]">
+        <span class="topbar__app"><ApplicationName /></span>
+    </a>
+    <div class="topbar__spacer"></div>
+
+    <a class="icon-btn" href="https://aka.ms/aspire/repo" target="_blank" rel="noreferrer noopener"
+       title="@Loc[nameof(Resources.Layout.MainLayoutAspireRepoLink)]" aria-label="@Loc[nameof(Resources.Layout.MainLayoutAspireRepoLink)]">
+        <DeckIcon Name="DeckIconName.GitHub" Size="18" />
+    </a>
+
+    <button class="icon-btn" id="@MainLayout.HelpButtonId" @onclick="OnHelp"
+            title="@Loc[nameof(Resources.Layout.MainLayoutAspireDashboardHelpLink)]" aria-label="@Loc[nameof(Resources.Layout.MainLayoutAspireDashboardHelpLink)]">
+        <DeckIcon Name="DeckIconName.Help" Size="18" />
+    </button>
+
+    @if (IsAgentHelpEnabled)
+    {
+        <button class="icon-btn" @onclick="OnAIAgents"
+                title="@Loc[nameof(Resources.Layout.MainLayoutLaunchAIAgents)]" aria-label="@Loc[nameof(Resources.Layout.MainLayoutLaunchAIAgents)]">
+            @* Reuse the bot glyph via the help icon set is not ideal; use a distinct gear-free glyph. *@
+            <DeckIcon Name="DeckIconName.Help" Size="18" />
+        </button>
+    }
+
+    @if (IsAiAssistantEnabled)
+    {
+        <button class="icon-btn @(IsAssistantActive ? "icon-btn--active" : "")" id="@MainLayout.AssistantButtonId" @onclick="OnAssistant"
+                title="@AIAssistantLoc[nameof(Resources.AIAssistant.AIAssistantLaunchButtonText)]" aria-label="@AIAssistantLoc[nameof(Resources.AIAssistant.AIAssistantLaunchButtonText)]">
+            <DeckIcon Name="DeckIconName.Chevron" Size="18" />
+        </button>
+    }
+
+    <DeckNotificationsButton OnClick="OnNotificationsAsync" />
+
+    <button class="icon-btn" id="@MainLayout.SettingsButtonId" @onclick="OnSettings"
+            title="@Loc[nameof(Resources.Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Resources.Layout.MainLayoutLaunchSettings)]">
+        <DeckIcon Name="DeckIconName.Settings" Size="18" />
+    </button>
+
+    <UserProfile />
+</header>
+
+@code {
+    /// <summary>Whether the GitHub Copilot assistant is enabled.</summary>
+    [Parameter]
+    public bool IsAiAssistantEnabled { get; set; }
+
+    /// <summary>Whether the AI agents (bot) help button is enabled.</summary>
+    [Parameter]
+    public bool IsAgentHelpEnabled { get; set; }
+
+    /// <summary>Whether the assistant sidebar is currently open (button shows an active state).</summary>
+    [Parameter]
+    public bool IsAssistantActive { get; set; }
+
+    /// <summary>Opens the help dialog.</summary>
+    [Parameter]
+    public EventCallback OnHelp { get; set; }
+
+    /// <summary>Opens the AI agents dialog.</summary>
+    [Parameter]
+    public EventCallback OnAIAgents { get; set; }
+
+    /// <summary>Toggles the assistant.</summary>
+    [Parameter]
+    public EventCallback OnAssistant { get; set; }
+
+    /// <summary>Opens the notifications center.</summary>
+    [Parameter]
+    public EventCallback OnNotifications { get; set; }
+
+    /// <summary>Opens the settings pane.</summary>
+    [Parameter]
+    public EventCallback OnSettings { get; set; }
+
+    private Task OnNotificationsAsync() => OnNotifications.InvokeAsync();
+}

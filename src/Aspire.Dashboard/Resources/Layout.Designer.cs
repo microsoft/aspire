@@ -70,6 +70,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Distributed app dashboard.
+        /// </summary>
+        public static string MainLayoutAspireDashboard {
+            get {
+                return ResourceManager.GetString("MainLayoutAspireDashboard", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Help.
         /// </summary>
         public static string MainLayoutAspireDashboardHelpLink {
@@ -201,6 +210,15 @@ namespace Aspire.Dashboard.Resources {
         public static string NavMenuMetricsTab {
             get {
                 return ResourceManager.GetString("NavMenuMetricsTab", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Observe.
+        /// </summary>
+        public static string NavMenuObserveHeader {
+            get {
+                return ResourceManager.GetString("NavMenuObserveHeader", resourceCulture);
             }
         }
         

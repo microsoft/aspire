@@ -7,6 +7,11 @@
         <target state="translated">Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutAspireDashboard">
+        <source>Distributed app dashboard</source>
+        <target state="new">Distributed app dashboard</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutAspireDashboardHelpLink">
         <source>Help</source>
         <target state="translated">ヘルプ</target>
@@ -85,6 +90,11 @@
       <trans-unit id="NavMenuMetricsTab">
         <source>Metrics</source>
         <target state="translated">メトリック</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuObserveHeader">
+        <source>Observe</source>
+        <target state="new">Observe</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuResourcesTab">

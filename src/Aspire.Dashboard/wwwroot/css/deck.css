@@ -1793,3 +1793,60 @@ table.data tbody tr.selected {
   .notif { animation: fade-in 0.18s ease both; }
   .notif-stack { transition: none; }
 }
+
+/* ===========================================================================
+   Dashboard adaptations
+   Tweaks layered on top of the Deck design system for the Blazor dashboard host.
+   Keep this section separate from the Deck-derived rules above so the two stay easy
+   to diff against src/Aspire.Deck/ui/src/styles/global.css.
+   =========================================================================== */
+
+/* Nav items are rendered as Blazor <NavLink> anchors here (Deck uses <button>), so
+   neutralize the global anchor underline/color on hover and active. NavLink adds the
+   "active" class, matching the Deck .nav-item.active styling above. */
+.nav-item {
+  text-decoration: none;
+}
+.nav-item:hover,
+.nav-item.active {
+  text-decoration: none;
+}
+
+/* Top bar application-name link. */
+.topbar__title-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text);
+  text-decoration: none;
+}
+.topbar__title-link:hover {
+  text-decoration: none;
+}
+
+/* Active state for an icon button (e.g. the assistant toggle when its pane is open). */
+.icon-btn--active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+/* Notifications button unread-count badge. */
+.topbar__notif {
+  position: relative;
+}
+.topbar__notif-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--accent-strong);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+  pointer-events: none;
+}
