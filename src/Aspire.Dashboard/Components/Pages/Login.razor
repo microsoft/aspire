@@ -5,55 +5,52 @@
 
 <PageTitle><ApplicationName ResourceName="@nameof(Dashboard.Resources.Login.PageTitle)" Loc="@Loc" /></PageTitle>
 
-<div class="token-backdrop">
-    <EditForm EditContext="@EditContext" OnValidSubmit="@SubmitAsync" FormName="token_validation">
+<div class="auth-backdrop">
+    <EditForm class="auth-card" EditContext="@EditContext" OnValidSubmit="@SubmitAsync" FormName="token_validation">
         <DataAnnotationsValidator />
-        <div class="token-form-container">
-            <div class="token-logo">
-                <AspireLogo Height="128" Width="128" />
-            </div>
-            <div class="token-entry-container">
-                <div class="token-entry-header">
-                    <h1><ApplicationName ResourceName="@nameof(Dashboard.Resources.Login.Header)" Loc="@Loc" /></h1>
-                </div>
-                <div class="token-entry">
-                    @*
-                    * AutoComplete value of one-time-code prevents the browser asking to save the value.
-                    * Immediate value of true ensures the value is set to the server token with every key press in textbox.
-                    *@
-                    <FluentTextField @ref="_tokenTextField" Id="token-text-field" @bind-Value="_formModel.Token"
-                                     Placeholder="@Loc[nameof(Dashboard.Resources.Login.TextFieldPlaceholder)]"
-                                     TextFieldType="TextFieldType.Password" AutoComplete="one-time-code" Class="token-entry-text" Immediate="true" />
-                </div>
-                <div class="token-validation">
-                    <FluentValidationMessage For="() => _formModel.Token" />
-                </div>
-                <div class="token-entry-footer">
-                    <a href="@NavigationManager.Uri" id="helpLink">@Loc[nameof(Dashboard.Resources.Login.WhereIsMyTokenLinkText)]</a>
-                    <FluentButton Appearance="Appearance.Accent" Name="submit-token" Type="ButtonType.Submit">@Loc[nameof(Dashboard.Resources.Login.LogInButtonText)]</FluentButton>
-                    <FluentTooltip Anchor="helpLink" MaxWidth="650px" aria-label="https://go.microsoft.com/fwlink/?linkid=2265718">
-                        <div class="token-help-container">
-                            <div>
-                                <a href="/img/TokenExample.png" target="_blank">
-                                    <img class="token-help-image" src="/img/TokenExample.png"
-                                         alt="@Loc[nameof(Dashboard.Resources.Login.HelpScreenshotAltText)]" />
-                                </a>
-                            </div>
-                            <div>
-                                <p>@Loc[nameof(Dashboard.Resources.Login.TokenHelpTextLine1)]</p>
-                                <p>@Loc[nameof(Dashboard.Resources.Login.TokenHelpTextLine2)]</p>
-                            </div>
-                            <FluentAnchor Href="https://go.microsoft.com/fwlink/?linkid=2265718" Target="_blank"
-                                          Appearance="Appearance.Hypertext">
-                                @Loc[nameof(Dashboard.Resources.Login.MoreInfoLinkText)]
-                            </FluentAnchor>
-                        </div>
-                    </FluentTooltip>
-                </div>
-            </div>
+        <div class="auth-brand">
+            <AspireLogo Height="64" Width="64" />
         </div>
+        <h1 class="auth-title"><ApplicationName ResourceName="@nameof(Dashboard.Resources.Login.Header)" Loc="@Loc" /></h1>
+        <div class="auth-field">
+            @*
+            * AutoComplete value of one-time-code prevents the browser asking to save the value.
+            * The oninput handler updates the bound token on every key press (matching the previous
+            * Immediate="true" behaviour) and notifies the EditContext so stale validation messages
+            * clear as the user types.
+            *@
+            <input id="token-text-field" @ref="_tokenElement" type="password" name="token"
+                   class="auth-input" autocomplete="one-time-code" spellcheck="false"
+                   placeholder="@Loc[nameof(Dashboard.Resources.Login.TextFieldPlaceholder)]"
+                   value="@_formModel.Token" @oninput="OnTokenInput" />
+        </div>
+        <div class="auth-validation">
+            <FluentValidationMessage For="() => _formModel.Token" />
+        </div>
+        <div class="auth-actions">
+            <button class="btn btn--primary auth-submit" name="submit-token" type="submit">@Loc[nameof(Dashboard.Resources.Login.LogInButtonText)]</button>
+        </div>
+        <a href="@NavigationManager.Uri" id="helpLink" class="auth-help-link">@Loc[nameof(Dashboard.Resources.Login.WhereIsMyTokenLinkText)]</a>
+        <FluentTooltip Anchor="helpLink" MaxWidth="650px" aria-label="https://go.microsoft.com/fwlink/?linkid=2265718">
+            <div class="token-help-container">
+                <div>
+                    <a href="/img/TokenExample.png" target="_blank">
+                        <img class="token-help-image" src="/img/TokenExample.png"
+                             alt="@Loc[nameof(Dashboard.Resources.Login.HelpScreenshotAltText)]" />
+                    </a>
+                </div>
+                <div>
+                    <p>@Loc[nameof(Dashboard.Resources.Login.TokenHelpTextLine1)]</p>
+                    <p>@Loc[nameof(Dashboard.Resources.Login.TokenHelpTextLine2)]</p>
+                </div>
+                <FluentAnchor Href="https://go.microsoft.com/fwlink/?linkid=2265718" Target="_blank"
+                              Appearance="Appearance.Hypertext">
+                    @Loc[nameof(Dashboard.Resources.Login.MoreInfoLinkText)]
+                </FluentAnchor>
+            </div>
+        </FluentTooltip>
     </EditForm>
-    <div class="version-info">
+    <div class="auth-version">
         @VersionHelpers.DashboardDisplayVersion
     </div>
 </div>
