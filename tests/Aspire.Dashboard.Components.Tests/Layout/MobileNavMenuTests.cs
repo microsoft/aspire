@@ -50,6 +50,9 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.DoesNotContain("height: 100vh", style);
         Assert.Contains("margin-top: var(--mobile-nav-menu-offset)", style);
         Assert.Contains("overflow-y: auto", style);
+        Assert.Contains("padding-block: var(--mobile-nav-menu-focus-padding)", style);
+        Assert.Contains("scroll-padding-block: var(--mobile-nav-menu-focus-padding)", style);
+        Assert.Contains("mobile-nav-menu", cut.Find("fluent-menu").ClassList);
     }
 
     private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl)
