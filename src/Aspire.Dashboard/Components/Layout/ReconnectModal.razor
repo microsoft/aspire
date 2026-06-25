@@ -18,18 +18,18 @@
             @((MarkupString)Loc[nameof(Layout.ReconnectFailedText)].Value)
         </p>
         <div class="components-reconnect-failed-visible">
-            <FluentButton Id="components-reconnect-button" Appearance="Appearance.Accent">
+            <button type="button" id="components-reconnect-button" class="btn btn--primary">
                 @Loc[nameof(Layout.ReconnectRetryButtonText)]
-            </FluentButton>
+            </button>
         </div>
         @* Resource service connection messages *@
         <p class="components-reconnect-resource-service-disconnected-visible">
             @Loc[nameof(Layout.ResourceServiceReconnectDisconnectedText)]
         </p>
         <div class="components-reconnect-resource-service-retry-visible">
-            <FluentButton Id="components-reconnect-resource-service-button" Appearance="Appearance.Accent">
+            <button type="button" id="components-reconnect-resource-service-button" class="btn btn--primary">
                 @Loc[nameof(Layout.ResourceServiceReconnectRetryButtonText)]
-            </FluentButton>
+            </button>
         </div>
     </div>
 </dialog>

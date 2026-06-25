@@ -7,16 +7,16 @@
         @if (_notifications.Count == 0)
         {
             <div class="notification-center-empty">
-                <FluentIcon Value="@(new Icons.Regular.Size24.Alert())" Color="Color.Neutral" />
+                <DeckIcon Name="DeckIconName.Bell" Size="24" />
                 <p>@Loc[nameof(Dialogs.NotificationCenterEmpty)]</p>
             </div>
         }
         else
         {
             <div class="notifications-dismiss">
-                <FluentButton Appearance="Appearance.Lightweight" OnClick="@DismissAll">
+                <button type="button" class="btn btn--ghost" @onclick="@DismissAll">
                     @Loc[nameof(Dialogs.NotificationCenterDismissAll)]
-                </FluentButton>
+                </button>
             </div>
             <div class="notifications-scroll">
                 @foreach (var notification in _notifications)

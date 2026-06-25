@@ -14,11 +14,11 @@
         @Entry.Title
     </div>
     <div class="notification-entry-close">
-        <FluentButton Appearance="Appearance.Stealth"
-                      aria-label="@Loc[nameof(Dialogs.NotificationEntryDismiss)]"
-                      OnClick="@HandleDismiss">
+        <button type="button" class="icon-btn icon-btn--sm"
+                aria-label="@Loc[nameof(Dialogs.NotificationEntryDismiss)]"
+                @onclick="@HandleDismiss">
             <DeckIcon Name="DeckIconName.Close" Size="16" Class="icon-muted" />
-        </FluentButton>
+        </button>
     </div>
 
     @* Detailed content *@
@@ -29,11 +29,11 @@
         }
         @if (Entry.PrimaryAction is { } primaryAction)
         {
-            <FluentButton Appearance="Appearance.Neutral"
-                          OnClick="@HandlePrimaryAction"
-                          Class="notification-entry-action">
+            <button type="button"
+                    class="btn notification-entry-action"
+                    @onclick="@HandlePrimaryAction">
                 @primaryAction.Text
-            </FluentButton>
+            </button>
         }
     </div>
 
