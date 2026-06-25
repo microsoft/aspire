@@ -111,7 +111,7 @@
                                 </td>
                                 <td title="@GetNameTooltip(trace)">
                                     <span class="trace-name-cell">
-                                        <span class="trace-name-text" style="border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(trace.RootOrFirstSpan.Source)));">
+                                        <span class="trace-name-text" style="border-left-color: @(TraceColorPalette.GetColorVariable(GetResourceName(trace.RootOrFirstSpan.Source)));">
                                             <FluentHighlighter HighlightedText="@(TracesViewModel.FilterText)" Text="@(trace.FullName)" />
                                         </span>
                                         <span class="trace-id">@OtlpHelpers.ToShortenedId(trace.TraceId)</span>
@@ -131,7 +131,7 @@
                                         @foreach (var item in TraceHelpers.GetOrderedResources(trace))
                                         {
                                             <span class="trace-tag" title="@(GetSpansTooltip(item))"
-                                                  style="border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(item.Resource)));">
+                                                  style="border-left-color: @(TraceColorPalette.GetColorVariable(GetResourceName(item.Resource)));">
                                                 @if (item.ErroredSpans > 0)
                                                 {
                                                     <FluentIcon Icon="Icons.Filled.Size12.ErrorCircle" Color="Color.Error" Class="trace-tag-icon" />

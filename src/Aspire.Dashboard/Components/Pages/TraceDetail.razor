@@ -114,7 +114,7 @@
                                             // - 5px extra margin-left
                                             // - 5px border
                                             // - 9px padding-left
-                                            spanNameContainerStyle = $"margin-left: 5px; border-left-color: {ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(context.Span.Source))}; border-left-width: 5px; border-left-style: solid; padding-left: 9px;";
+                                            spanNameContainerStyle = $"margin-left: 5px; border-left-color: {TraceColorPalette.GetColorVariable(GetResourceName(context.Span.Source))}; border-left-width: 5px; border-left-style: solid; padding-left: 9px;";
                                         }
                                     else
                                     {
@@ -139,7 +139,7 @@
                                         {
                                             <FluentIcon Class="span-kind-icon"
                                                         Color="Color.Custom"
-                                                        CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(context.Span.Source))"
+                                                        CustomColor="@TraceColorPalette.GetColorVariable(GetResourceName(context.Span.Source))"
                                                         Value="@TraceHelpers.TryGetSpanIcon(context.Span, IconVariant.Filled)"/>
                                         }
 
@@ -168,7 +168,7 @@
                                                     }
                                                 }
                                                 <FluentIcon
-                                                    Style="@($"fill: {ColorGenerator.Instance.GetColorVariableByKey(context.UninstrumentedPeer)};")"
+                                                    Style="@($"fill: {TraceColorPalette.GetColorVariable(context.UninstrumentedPeer)};")"
                                                     Value="icon"
                                                     Class="uninstrumented-peer-icon"/>
                                                 <FluentHighlighter HighlightedText="@PageViewModel.Filter" Text="@context.UninstrumentedPeer" />
@@ -220,7 +220,7 @@
                                 </HeaderCellItemTemplate>
                                 <ChildContent>
                                     @{
-                                        var spanColor = @ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(context.Span.Source));
+                                        var spanColor = @TraceColorPalette.GetColorVariable(GetResourceName(context.Span.Source));
                                     }
                                     <div class="ticks">
                                         <div class="span-container" style="position: relative; grid-template-columns: @context.LeftOffset.ToString("F2", CultureInfo.InvariantCulture)% @context.Width.ToString("F2", CultureInfo.InvariantCulture)% min-content;">
