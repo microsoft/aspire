@@ -22,12 +22,12 @@
                 <FluentInputLabel ForId="@MainTextInputId" Label="@MainTextLabel" AriaLabel="@MainTextLabel" Required="true" />
             </div>
             <div class="feedback-input-line">
-                <textarea id="@MainTextInputId"
-                          class="feedback-dialog-textarea"
-                          rows="6"
-                          required
-                          @bind="_mainText"
-                          @bind:event="oninput"></textarea>
+                <FluentTextArea Id="@MainTextInputId"
+                                @bind-Value="_mainText"
+                                Immediate="true"
+                                Required="true"
+                                Rows="6"
+                                Resize="TextAreaResize.Vertical" />
             </div>
         </div>
 
@@ -38,14 +38,15 @@
                     <FluentInputLabel ForId="@DoctorOutputInputId" Label="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAspireDoctorOutputLabel)]" AriaLabel="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAspireDoctorOutputLabel)]" />
                 </div>
                 <div class="feedback-input-line">
-                    <textarea id="@DoctorOutputInputId"
-                              class="feedback-dialog-textarea feedback-dialog-monospace"
-                              rows="8"
-                              readonly="@_isCapturingBugContext"
-                              aria-busy="@_isCapturingBugContext.ToString().ToLowerInvariant()"
-                              spellcheck="false"
-                              @bind="_aspireDoctorOutput"
-                              @bind:event="oninput"></textarea>
+                    <FluentTextArea Id="@DoctorOutputInputId"
+                                    Class="feedback-dialog-monospace"
+                                    @bind-Value="_aspireDoctorOutput"
+                                    Immediate="true"
+                                    ReadOnly="@_isCapturingBugContext"
+                                    Rows="8"
+                                    Resize="TextAreaResize.Vertical"
+                                    Spellcheck="false"
+                                    aria-busy="@(_isCapturingBugContext ? "true" : "false")" />
                     @if (_isCapturingBugContext)
                     {
                         <FluentProgressRing Width="20px" Class="feedback-input-progress" Title="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackDoctorLoadingMessage)]" />
@@ -59,12 +60,13 @@
                 <FluentInputLabel ForId="@AdditionalContextInputId" Label="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAdditionalContextLabel)]" AriaLabel="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAdditionalContextLabel)]" />
             </div>
             <div class="feedback-input-line">
-                <textarea id="@AdditionalContextInputId"
-                          class="feedback-dialog-textarea feedback-dialog-monospace"
-                          rows="5"
-                          spellcheck="false"
-                          @bind="_additionalContext"
-                          @bind:event="oninput"></textarea>
+                <FluentTextArea Id="@AdditionalContextInputId"
+                                Class="feedback-dialog-monospace"
+                                @bind-Value="_additionalContext"
+                                Immediate="true"
+                                Rows="5"
+                                Resize="TextAreaResize.Vertical"
+                                Spellcheck="false" />
             </div>
         </div>
     </FluentStack>

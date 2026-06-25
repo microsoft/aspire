@@ -8,7 +8,7 @@
 
 .feedback-input ::deep fluent-text-field,
 .feedback-textarea-label,
-.feedback-dialog-textarea {
+.feedback-input-line ::deep fluent-text-area {
     width: 75%;
     max-width: 680px;
 }
@@ -29,49 +29,16 @@
     width: 100%;
 }
 
-.feedback-dialog-textarea {
-    box-sizing: border-box;
-    min-height: 5rem;
-    padding: 6px 8px;
-    border: 1px solid var(--neutral-stroke-rest, #8a8886);
-    border-radius: calc(var(--control-corner-radius) * 1px);
-    background: var(--neutral-fill-input-rest, #ffffff);
-    color: var(--neutral-foreground-rest, #1a1a1a);
-    font-family: var(--body-font, inherit);
-    font-size: var(--type-ramp-base-font-size);
-    line-height: var(--type-ramp-base-line-height);
-    resize: vertical;
-}
-
-.feedback-dialog-textarea:hover:not(:disabled):not(:focus) {
-    border-color: var(--neutral-stroke-rest, #8a8886);
-    background: var(--neutral-fill-input-hover, var(--neutral-fill-input-rest, #ffffff));
-}
-
-.feedback-dialog-textarea:focus {
-    border-color: var(--neutral-stroke-rest, #8a8886);
-    background: linear-gradient(var(--neutral-fill-input-focus, var(--neutral-fill-input-rest, #ffffff)) calc(100% - 2px), var(--accent-fill-rest, #5b5fc7) calc(100% - 2px), var(--accent-fill-rest, #5b5fc7));
-    outline: none;
-}
-
-.feedback-dialog-textarea:disabled,
-.feedback-dialog-textarea:read-only {
-    border-color: var(--neutral-stroke-rest, #8a8886);
-    background: var(--neutral-fill-input-rest, #ffffff);
-    color: var(--neutral-foreground-rest, #1a1a1a);
-}
-
-.feedback-dialog-textarea:disabled {
-    background: var(--neutral-fill-disabled, #f3f2f1);
-    color: var(--neutral-foreground-disabled, #a19f9d);
-}
-
 .feedback-input-progress {
     align-self: flex-start;
     flex: 0 0 auto;
 }
 
-.feedback-dialog-monospace {
+/* FluentTextArea renders its editable <textarea> inside a shadow root, so the
+   monospace font must be applied through the exposed ::part(control) rather than
+   the host element. The doctor output and additional-context fields contain
+   diagnostic text (JSON, environment lines) that reads better fixed-width. */
+.feedback-input-line ::deep fluent-text-area.feedback-dialog-monospace::part(control) {
     font-family: var(--font-family-monospace);
     font-size: var(--type-ramp-minus-1-font-size);
 }
@@ -93,7 +60,7 @@
 @media (max-width: 600px) {
     .feedback-input ::deep fluent-text-field,
     .feedback-textarea-label,
-    .feedback-dialog-textarea {
+    .feedback-input-line ::deep fluent-text-area {
         width: 100%;
         max-width: unset;
     }
