@@ -47,8 +47,13 @@ inputs:
     description: 'The PR base SHA. When set, selection diffs base..head; the base commit is fetched first. Empty (non-PR events) selects everything.'
   headSha:
     required: false
-    default: ${{ github.sha }}
-    description: 'The head SHA to diff to.'
+    # The PR's REAL head, NOT github.sha (the synthetic refs/pull/N/merge commit, regenerated as the base
+    # advances -- feeding it lets base-branch churn leak into the diff and over-select). Only consumed when
+    # prBaseSha is set (PR events), where pull_request.head.sha is populated; empty on non-PR events, where
+    # headSha is unused because prBaseSha is empty too. Default kept correct so a caller can't reintroduce
+    # the github.sha bug by omitting it.
+    default: ${{ github.event.pull_request.head.sha }}
+    description: 'The PR head SHA to diff to (the PR''s real head, not the synthetic merge ref).'
 
 outputs:
   project_override_props:

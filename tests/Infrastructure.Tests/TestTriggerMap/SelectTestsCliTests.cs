@@ -690,7 +690,7 @@ public sealed class SelectTestsCliTests
         });
     }
 
-    // P1-6c. The CI action's OWN merge-base fallback enters the tool with --force-all already set (the
+    // P1-6d. The CI action's OWN merge-base fallback enters the tool with --force-all already set (the
     // shell deepen loop gave up), so RunCore's merge-base block is skipped and the reason can't be derived
     // here -- the action passes it via --force-all-reason. The summary must render THAT reason ("fail-safe
     // run-all because ...") so the weekly audit, which reads the summary and not the raw logs, can tell a

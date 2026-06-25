@@ -73,7 +73,9 @@ public sealed class SelectTestsWorkflowTests
     // The selector diffs head against the merge-base of base..head, so it must be handed the PR's REAL
     // head (pull_request.head.sha). github.sha is the synthetic refs/pull/N/merge commit, regenerated
     // asynchronously as the base advances; feeding it lets base-branch churn leak into the diff and
-    // over-select (microsoft/aspire#18377). Pin the real-head wiring and forbid a revert to github.sha.
+    // over-select (microsoft/aspire#18377). Pin the real-head wiring -- the caller's explicit input AND the
+    // action's own default -- and forbid a revert to github.sha in either, so a future caller relying on
+    // the default can't silently reintroduce the bug.
     [Fact]
     public void TestsWorkflowPassesPrHeadShaNotMergeRefToSelector()
     {
@@ -81,6 +83,11 @@ public sealed class SelectTestsWorkflowTests
 
         Assert.Contains("headSha: ${{ github.event.pull_request.head.sha }}", testsYml);
         Assert.DoesNotContain("headSha: ${{ github.sha }}", testsYml);
+
+        // The action's headSha default must also be the real head, not the synthetic merge ref.
+        var action = File.ReadAllText(SelectTestsActionPath);
+        Assert.Contains("default: ${{ github.event.pull_request.head.sha }}", action);
+        Assert.DoesNotContain("default: ${{ github.sha }}", action);
     }
 
     // On a PR the action diffs from the merge-base of base..head, which the shallow CI checkout can't
