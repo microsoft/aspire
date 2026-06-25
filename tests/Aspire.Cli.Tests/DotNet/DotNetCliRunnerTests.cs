@@ -235,6 +235,23 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.")]
+    public void ShouldForwardProcessPathAsAspireCliPathRejectsSymlinkToUnbundledFrameworkDependentCliBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "artifacts", "bin", "Aspire.Cli", "Debug", "net10.0"));
+        var cliPath = Path.Combine(cliDirectory.FullName, "aspire");
+        File.WriteAllText(cliPath, string.Empty);
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, "aspire.dll"), string.Empty);
+
+        var linkDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "bin"));
+        var linkPath = Path.Combine(linkDirectory.FullName, "aspire");
+        File.CreateSymbolicLink(linkPath, cliPath);
+
+        Assert.False(DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(linkPath));
+    }
+
+    [Fact]
     public void ShouldForwardProcessPathAsAspireCliPathRejectsDotNetMuxerPath()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

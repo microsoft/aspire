@@ -17,6 +17,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -504,7 +505,26 @@ internal sealed class DotNetCliRunner(
             return false;
         }
 
-        return !IsUnbundledFrameworkDependentCliPath(cliDirectory);
+        if (IsUnbundledFrameworkDependentCliPath(cliDirectory))
+        {
+            return false;
+        }
+
+        // Users often invoke the dogfood CLI through a symlink such as
+        // ~/bin/aspire -> artifacts/bin/Aspire.Cli/Debug/net10.0/aspire. Resolve the
+        // link before forwarding so a symlinked raw build cannot stamp stale
+        // bundle metadata through ResolveAspireCliBundle's AspireCliPath path.
+        var resolvedProcessPath = PathNormalizer.ResolveSymlinks(processPath);
+        if (!string.Equals(resolvedProcessPath, processPath, StringComparison.Ordinal))
+        {
+            var resolvedCliDirectory = Path.GetDirectoryName(resolvedProcessPath);
+            if (!string.IsNullOrEmpty(resolvedCliDirectory) && IsUnbundledFrameworkDependentCliPath(resolvedCliDirectory))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static bool IsDotNetMuxerPath(string processPath)
