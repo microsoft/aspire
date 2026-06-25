@@ -142,6 +142,33 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Min duration.
+        /// </summary>
+        public static string TraceDetailMinDurationLabel {
+            get {
+                return ResourceManager.GetString("TraceDetailMinDurationLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to All durations.
+        /// </summary>
+        public static string TraceDetailMinDurationAll {
+            get {
+                return ResourceManager.GetString("TraceDetailMinDurationAll", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to ≥ {0}.
+        /// </summary>
+        public static string TraceDetailMinDurationOptionFormat {
+            get {
+                return ResourceManager.GetString("TraceDetailMinDurationOptionFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Trace &quot;{0}&quot; not found.
         /// </summary>
         public static string TraceDetailTraceNotFound {
