@@ -1904,6 +1904,7 @@ table.data tbody tr.selected {
   gap: 6px;
 }
 
+/* === Interactions === */
 /* Interaction pane message (instructional text above an inputs form / message-box body).
    Supports sanitized Markdown HTML from the AppHost. */
 .interaction-pane .interaction-message {
@@ -1919,6 +1920,7 @@ table.data tbody tr.selected {
 .interaction-pane .interaction-message p:last-child {
   margin-bottom: 0;
 }
+/* === end Interactions === */
 
 /* === Settings === */
 .settings-pane {
@@ -1972,6 +1974,8 @@ table.data tbody tr.selected {
   flex-direction: column;
   gap: 4px;
 }
+/* === end Settings === */
+
 /* === Auth/Error ===
    Shared styling for the chrome-less full-page surfaces (Login and Error, both under
    EmptyLayout). They use the Deck splash/empty-state visual language: a centered surface
