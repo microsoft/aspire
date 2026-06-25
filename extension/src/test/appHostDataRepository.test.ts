@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import nodeChildProcess = require('child_process');
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -3159,6 +3160,62 @@ suite('AppHostDataRepository', () => {
         } finally {
             repository.dispose();
             clock.restore();
+        }
+    });
+
+    test('Windows describe watch termination uses taskkill for the process tree', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const spawnProcessStub = sinon.stub(nodeChildProcess, 'spawn');
+        const clock = sinon.useFakeTimers();
+        const childProcess = new TestChildProcess(false);
+        Object.defineProperty(childProcess, 'pid', { value: 4242 });
+        spawnStub.returns(childProcess);
+        const taskkillCalls: Array<{ command: string; args: string[]; windowsHide: boolean | undefined }> = [];
+        spawnProcessStub.callsFake((command: string, args?: readonly string[], options?: nodeChildProcess.SpawnOptions) => {
+            taskkillCalls.push({
+                command,
+                args: [...(args ?? [])],
+                windowsHide: options?.windowsHide,
+            });
+
+            return Object.assign(new EventEmitter(), {
+                unref: () => { },
+            }) as nodeChildProcess.ChildProcess;
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            repository.setPanelVisible(false);
+            assert.deepStrictEqual(taskkillCalls, [{
+                command: 'taskkill.exe',
+                args: ['/pid', '4242', '/t'],
+                windowsHide: true,
+            }]);
+            assert.deepStrictEqual(childProcess.killSignals, []);
+
+            await clock.tickAsync(5000);
+
+            assert.deepStrictEqual(taskkillCalls, [
+                {
+                    command: 'taskkill.exe',
+                    args: ['/pid', '4242', '/t'],
+                    windowsHide: true,
+                },
+                {
+                    command: 'taskkill.exe',
+                    args: ['/pid', '4242', '/t', '/f'],
+                    windowsHide: true,
+                },
+            ]);
+        } finally {
+            repository.dispose();
+            clock.restore();
+            spawnProcessStub.restore();
+            platformStub.restore();
         }
     });
 

@@ -444,7 +444,7 @@ function isE2eTerminalCommandExecutionSuppressed(): boolean {
         process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_TERMINAL_COMMAND_EXECUTION === 'true';
 }
 
-function assertNoTerminalControlCharacters(value: string): void {
+export function assertNoTerminalControlCharacters(value: string): void {
     // Shell quoting protects shell metacharacters after the command reaches the
     // shell. C0 controls are terminal input first: in sendText fallback, ETX can
     // abort the current line and CR/LF can submit following text as another

@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
 import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment } from '../debugger/languages/cli';
+import { terminalCommandArgumentControlCharacters } from '../loc/strings';
 import { EnvironmentVariables } from '../utils/environment';
 
 suite('spawnCliProcess tests', () => {
@@ -53,6 +54,54 @@ suite('spawnCliProcess tests', () => {
                 'call "C:\\Tools\\Aspire CLI\\aspire.cmd" "resource" "api&whoami" "echo" "--" "--message=hello & del C:\\important" "--path=%%PATH%%" "--literal=""quoted"""'
             ]);
             assert.strictEqual(result.windowsVerbatimArguments, true);
+        }
+        finally {
+            platformStub.restore();
+
+            if (originalComSpec === undefined) {
+                delete process.env.ComSpec;
+            }
+            else {
+                process.env.ComSpec = originalComSpec;
+            }
+        }
+    });
+
+    test('rejects control characters when running Windows cmd wrappers', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const originalComSpec = process.env.ComSpec;
+        process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+        try {
+            const cases = [
+                {
+                    name: 'command path',
+                    command: 'C:\\Tools\\Aspire\nCLI\\aspire.cmd',
+                    args: ['resource', 'api', 'restart'],
+                },
+                {
+                    name: 'resource name',
+                    command: 'C:\\Tools\\Aspire CLI\\aspire.cmd',
+                    args: ['resource', 'api\r\nwhoami', 'restart'],
+                },
+                {
+                    name: 'command name',
+                    command: 'C:\\Tools\\Aspire CLI\\aspire.bat',
+                    args: ['resource', 'api', 'restart\x1b[31m'],
+                },
+                {
+                    name: 'resource command argument',
+                    command: 'C:\\Tools\\Aspire CLI\\aspire.cmd',
+                    args: ['resource', 'api', 'echo-arguments', '--', '--message=hello\x03world'],
+                },
+            ];
+
+            for (const { name, command, args } of cases) {
+                assert.throws(
+                    () => getCliSpawnCommand(command, args),
+                    { message: terminalCommandArgumentControlCharacters },
+                    name);
+            }
         }
         finally {
             platformStub.restore();

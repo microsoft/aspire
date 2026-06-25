@@ -1,7 +1,7 @@
 import { ChildProcessWithoutNullStreams, spawn } from "child_process";
 import { EnvVar } from "../../dcp/types";
 import { extensionLogOutputChannel } from "../../utils/logging";
-import { AspireTerminalProvider } from "../../utils/AspireTerminalProvider";
+import { AspireTerminalProvider, assertNoTerminalControlCharacters } from "../../utils/AspireTerminalProvider";
 import * as readline from 'readline';
 import * as vscode from 'vscode';
 import { EnvironmentVariables } from "../../utils/environment";
@@ -29,6 +29,11 @@ export interface CliSpawnCommand {
 export function getCliSpawnCommand(command: string, args?: string[]): CliSpawnCommand {
     if (process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command)) {
         const commandArgs = args ?? [];
+        // cmd.exe receives this path as one `/c` command string, not an argv array.
+        // Reject terminal controls before quoting so CR/LF and ETX cannot split the wrapper
+        // invocation or cancel the command before cmd parsing reaches the quotes.
+        assertNoCmdWrapperControlCharacters([command, ...commandArgs]);
+
         return {
             command: process.env.ComSpec ?? 'cmd.exe',
             args: ['/d', '/v:off', '/s', '/c', buildCmdWrapperCommand(command, commandArgs)],
@@ -38,6 +43,12 @@ export function getCliSpawnCommand(command: string, args?: string[]): CliSpawnCo
     }
 
     return { command, args: args ?? [] };
+}
+
+function assertNoCmdWrapperControlCharacters(values: readonly string[]): void {
+    for (const value of values) {
+        assertNoTerminalControlCharacters(value);
+    }
 }
 
 function buildCmdWrapperCommand(command: string, args: string[]): string {
