@@ -17,18 +17,18 @@
     </div>
 
     <div class="deck-stack" style="width: auto;">
-        <FluentButton Appearance="Appearance.Stealth" OnClick="@(() => StartNewChatAsync())" aria-label="@Loc[nameof(AIAssistant.SidebarNewChat)]" Title="@Loc[nameof(AIAssistant.SidebarNewChat)]">
-            <FluentIcon Value="@(new Icons.Regular.Size20.ChatAdd())" Width="20px" Color="Color.Neutral" />
-        </FluentButton>
+        <button type="button" class="icon-btn" @onclick="@(() => StartNewChatAsync())" aria-label="@Loc[nameof(AIAssistant.SidebarNewChat)]" title="@Loc[nameof(AIAssistant.SidebarNewChat)]">
+            <DeckIcon Name="DeckIconName.ChatAdd" Size="20" />
+        </button>
         @if (ViewportInformation.IsDesktop)
         {
-            <FluentButton Id="dialog_minimize" Appearance="Appearance.Stealth" OnClick="@(() => CloseAndDisplaySidebarAsync())" aria-label="@Loc[nameof(AIAssistant.SidebarExpandDialog)]" Title="@Loc[nameof(AIAssistant.SidebarExpandDialog)]">
-                <FluentIcon Value="@(new Icons.Regular.Size20.PanelRightContract())" Width="20px" Color="Color.Neutral" />
-            </FluentButton>
+            <button type="button" id="dialog_minimize" class="icon-btn" @onclick="@(() => CloseAndDisplaySidebarAsync())" aria-label="@Loc[nameof(AIAssistant.SidebarExpandDialog)]" title="@Loc[nameof(AIAssistant.SidebarExpandDialog)]">
+                <DeckIcon Name="DeckIconName.Panel" Size="20" />
+            </button>
         }
-        <FluentButton Id="dialog_close" Appearance="Appearance.Stealth" OnClick="@(() => Dialog.CancelAsync())" aria-label="@Dialog.Instance?.Parameters?.DismissTitle" Title="@Dialog.Instance?.Parameters?.DismissTitle">
-            <FluentIcon Value="@(new Icons.Regular.Size20.Dismiss())" Width="20px" Color="Color.Neutral" />
-        </FluentButton>
+        <button type="button" id="dialog_close" class="icon-btn" @onclick="@(() => Dialog.CancelAsync())" aria-label="@Dialog.Instance?.Parameters?.DismissTitle" title="@Dialog.Instance?.Parameters?.DismissTitle">
+            <DeckIcon Name="DeckIconName.Close" Size="20" />
+        </button>
     </div>
 </div>
 

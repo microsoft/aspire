@@ -169,6 +169,12 @@ public enum DeckIconName
     SplitHorizontal,
     /// <summary>Two panels stacked (split vertically).</summary>
     SplitVertical,
+    /// <summary>Chat bubble with a plus; start a new chat.</summary>
+    ChatAdd,
+    /// <summary>Rectangle with a right-hand panel divider; show as a side panel.</summary>
+    Panel,
+    /// <summary>Diagonal arrows pointing outward; expand/maximize.</summary>
+    ArrowExpand,
     /// <summary>Thumbs up; positive feedback.</summary>
     ThumbLike,
     /// <summary>Thumbs down; negative feedback.</summary>

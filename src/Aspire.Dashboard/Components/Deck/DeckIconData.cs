@@ -516,6 +516,27 @@ internal static class DeckIconData
             <rect x="4" y="3" width="16" height="18" rx="2" />
             <line x1="4" y1="12" x2="20" y2="12" />
             """,
+        // chat bubble with a plus (lucide "message-square-plus").
+        [DeckIconName.ChatAdd] =
+            """
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            <line x1="9" y1="10" x2="15" y2="10" />
+            <line x1="12" y1="7" x2="12" y2="13" />
+            """,
+        // panel on the right (lucide "panel-right").
+        [DeckIconName.Panel] =
+            """
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <line x1="15" y1="3" x2="15" y2="21" />
+            """,
+        // outward diagonal arrows (lucide "expand").
+        [DeckIconName.ArrowExpand] =
+            """
+            <path d="m21 21-6-6m6 6v-4.8m0 4.8h-4.8" />
+            <path d="M3 16.2V21m0 0h4.8M3 21l6-6" />
+            <path d="M21 7.8V3m0 0h-4.8M21 3l-6 6" />
+            <path d="M3 7.8V3m0 0h4.8M3 3l6 6" />
+            """,
         // thumbs up (lucide "thumbs-up").
         [DeckIconName.ThumbLike] =
             """
