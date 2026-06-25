@@ -223,3 +223,6 @@ local.settings.json
 diagnostics.log
 .squad/
 tags
+
+# Local design-quality hook cache
+.impeccable/
