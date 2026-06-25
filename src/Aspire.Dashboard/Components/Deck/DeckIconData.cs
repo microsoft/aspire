@@ -432,6 +432,33 @@ internal static class DeckIconData
             <circle cx="12" cy="8" r="4" />
             <path d="M4 21a8 8 0 0 1 16 0" />
             """,
+        // checkmark inside a circle (lucide "circle-check") — success.
+        [DeckIconName.CheckmarkCircle] =
+            """
+            <circle cx="12" cy="12" r="10" />
+            <path d="m8 12 3 3 5-6" />
+            """,
+        // up arrow inside a circle (lucide "circle-arrow-up").
+        [DeckIconName.ArrowCircleUp] =
+            """
+            <circle cx="12" cy="12" r="10" />
+            <path d="m8 12 4-4 4 4" />
+            <path d="M12 16V8" />
+            """,
+        // down arrow inside a circle (lucide "circle-arrow-down").
+        [DeckIconName.ArrowCircleDown] =
+            """
+            <circle cx="12" cy="12" r="10" />
+            <path d="m8 12 4 4 4-4" />
+            <path d="M12 8v8" />
+            """,
+        // right arrow inside a circle (lucide "circle-arrow-right").
+        [DeckIconName.ArrowCircleRight] =
+            """
+            <circle cx="12" cy="12" r="10" />
+            <path d="m12 8 4 4-4 4" />
+            <path d="M8 12h8" />
+            """,
     }.ToFrozenDictionary();
 
     /// <summary>

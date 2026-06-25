@@ -8,7 +8,7 @@
 <div class="notification-entry @IntentClass">
     @* Header *@
     <div class="notification-entry-icon">
-        <FluentIcon Value="@Icon" Color="@IconColor" />
+        <DeckIcon Name="IconName" Size="20" Class="@IconTone" />
     </div>
     <div class="notification-entry-message">
         @Entry.Title
@@ -17,7 +17,7 @@
         <FluentButton Appearance="Appearance.Stealth"
                       aria-label="@Loc[nameof(Dialogs.NotificationEntryDismiss)]"
                       OnClick="@HandleDismiss">
-            <FluentIcon Value="@(new Icons.Regular.Size16.Dismiss())" Color="@Color.Neutral" />
+            <DeckIcon Name="DeckIconName.Close" Size="16" Class="icon-muted" />
         </FluentButton>
     </div>
 

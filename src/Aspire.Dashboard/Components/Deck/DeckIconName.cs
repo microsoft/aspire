@@ -143,6 +143,14 @@ public enum DeckIconName
     Stack,
     /// <summary>Person silhouette.</summary>
     Person,
+    /// <summary>Checkmark inside a circle; success.</summary>
+    CheckmarkCircle,
+    /// <summary>Up arrow inside a circle; value increased.</summary>
+    ArrowCircleUp,
+    /// <summary>Down arrow inside a circle; value decreased.</summary>
+    ArrowCircleDown,
+    /// <summary>Right arrow inside a circle; value unchanged.</summary>
+    ArrowCircleRight,
     /// <summary>
     /// Special value: resolves to a project/container/executable icon based on the
     /// <see cref="DeckIcon.ResourceType"/> string.

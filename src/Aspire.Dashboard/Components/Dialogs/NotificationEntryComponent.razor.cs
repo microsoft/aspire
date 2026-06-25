@@ -1,10 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
@@ -30,20 +30,20 @@ public partial class NotificationEntryComponent : ComponentBase
         _ => "intent-info"
     };
 
-    private Icon Icon => Entry.Intent switch
+    private DeckIconName IconName => Entry.Intent switch
     {
-        MessageIntent.Success => new Icons.Filled.Size20.CheckmarkCircle(),
-        MessageIntent.Error => new Icons.Filled.Size20.DismissCircle(),
-        MessageIntent.Warning => new Icons.Filled.Size20.Warning(),
-        _ => new Icons.Filled.Size20.Info()
+        MessageIntent.Success => DeckIconName.CheckmarkCircle,
+        MessageIntent.Error => DeckIconName.ErrorCircle,
+        MessageIntent.Warning => DeckIconName.Warning,
+        _ => DeckIconName.Info
     };
 
-    private Color IconColor => Entry.Intent switch
+    private string IconTone => Entry.Intent switch
     {
-        MessageIntent.Success => Color.Success,
-        MessageIntent.Error => Color.Error,
-        MessageIntent.Warning => Color.Warning,
-        _ => Color.Info
+        MessageIntent.Success => "icon-success",
+        MessageIntent.Error => "icon-error",
+        MessageIntent.Warning => "icon-warning",
+        _ => "icon-muted"
     };
 
     private async Task HandleDismiss()

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.Markdown;
@@ -12,7 +13,6 @@ using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
@@ -208,11 +208,11 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         }
     }
 
-    private static Icon GetSecretTextIcon(InputViewModel inputModel)
+    private static DeckIconName GetSecretTextIcon(InputViewModel inputModel)
     {
         return inputModel.IsSecretTextVisible
-            ? new Icons.Regular.Size16.EyeOff()
-            : new Icons.Regular.Size16.Eye();
+            ? DeckIconName.EyeOff
+            : DeckIconName.Eye;
     }
 
     public async ValueTask DisposeAsync()

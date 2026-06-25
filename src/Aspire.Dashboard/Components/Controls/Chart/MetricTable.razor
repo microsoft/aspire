@@ -42,9 +42,9 @@
                                 @percentileData.Value
                             </span>
 
-                            if (GetIconAndTitleForDirection(percentileData.Direction) is var (icon, title))
+                            if (GetIconAndTitleForDirection(percentileData.Direction) is var (icon, tone, title))
                             {
-                                <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title"/>
+                                <DeckIcon Name="icon" Size="16" Class="@tone" Title="@title" Style="vertical-align: text-bottom" />
                             }
                         }
                     </TemplateColumn>
@@ -69,9 +69,9 @@
                     else
                     {
                         <span style="margin-right: 4px;">@metricValueView.Value</span>
-                        if (GetIconAndTitleForDirection(metricValueView.ValueChange) is var (icon, title))
+                        if (GetIconAndTitleForDirection(metricValueView.ValueChange) is var (icon, tone, title))
                         {
-                            <FluentIcon Style="vertical-align: text-bottom" Value="@icon" Title="@title"/>
+                            <DeckIcon Name="icon" Size="16" Class="@tone" Title="@title" Style="vertical-align: text-bottom" />
                         }
                     }
                 </TemplateColumn>
