@@ -29,7 +29,7 @@ import { checkCliAvailableOrRedirect, checkForExistingAppHostPathInWorkspace } f
 import { AspireEditorCommandProvider } from './editor/AspireEditorCommandProvider';
 import { AspirePackageRestoreProvider } from './utils/AspirePackageRestoreProvider';
 import { AspireAppHostTreeProvider, isEnabledCommand } from './views/AspireAppHostTreeProvider';
-import { AppHostDataRepository } from './views/AppHostDataRepository';
+import { AppHostDataRepository, isMatchingAppHostPath } from './views/AppHostDataRepository';
 import { installCliStableCommand, installCliDailyCommand, verifyCliInstalledCommand } from './commands/walkthroughCommands';
 import { AspireMcpServerDefinitionProvider } from './mcp/AspireMcpServerDefinitionProvider';
 import { AspireCodeLensProvider } from './editor/AspireCodeLensProvider';
@@ -256,12 +256,13 @@ export async function activate(context: vscode.ExtensionContext) {
   const codeLensRegistration = vscode.languages.registerCodeLensProvider(languageFilters, codeLensProvider);
   const codeLensDebugPipelineStepRegistration = registerInstrumentedCommand('aspire-vscode.codeLensDebugPipelineStep', 'codelens', (stepName: string) => editorCommandProvider.tryExecuteDoAppHost(false, stepName));
   const codeLensResourceActionRegistration = registerInstrumentedCommand('aspire-vscode.codeLensResourceAction', 'codelens', async (resourceName: string, action: string, appHostPath: string, resourceCommand?: ResourceCommandJson) => {
-    if (resourceCommand !== undefined && !isEnabledCommand(resourceCommand)) {
+    const effectiveResourceCommand = getCurrentResourceCommand(dataRepository, resourceName, action, appHostPath) ?? resourceCommand;
+    if (effectiveResourceCommand !== undefined && !isEnabledCommand(effectiveResourceCommand)) {
       extensionLogOutputChannel.warn(`Ignoring disabled CodeLens resource command '${action}' for resource '${resourceName}'.`);
       return;
     }
 
-    const commandArguments = await collectResourceCommandArguments(action, resourceCommand, {
+    const commandArguments = await collectResourceCommandArguments(action, effectiveResourceCommand, {
       secretWarningState: context.globalState,
       loadDynamicArguments: createResourceCommandArgumentLoader({
         cliExecutionProvider: terminalProvider,
@@ -401,6 +402,16 @@ export async function activate(context: vscode.ExtensionContext) {
 
 export function deactivate() {
   aspireExtensionContext.dispose();
+}
+
+function getCurrentResourceCommand(dataRepository: AppHostDataRepository, resourceName: string, commandName: string, appHostPath: string | undefined): ResourceCommandJson | undefined {
+  const resources = dataRepository.viewMode === 'workspace'
+    && (!appHostPath || isMatchingAppHostPath(dataRepository.workspaceAppHostPath, appHostPath))
+    ? dataRepository.workspaceResources
+    : dataRepository.appHosts.find(appHost => isMatchingAppHostPath(appHost.appHostPath, appHostPath))?.resources ?? [];
+  const resource = resources.find(candidate => candidate.name === resourceName || candidate.displayName === resourceName);
+
+  return resource?.commands?.[commandName] ?? undefined;
 }
 
 async function tryExecuteCommand(commandName: string, terminalProvider: AspireTerminalProvider, command: (terminalProvider: AspireTerminalProvider) => Promise<void>): Promise<void> {
