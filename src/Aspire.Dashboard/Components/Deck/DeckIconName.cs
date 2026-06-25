@@ -87,6 +87,8 @@ public enum DeckIconName
     Pin,
     /// <summary>Down arrow.</summary>
     ArrowDown,
+    /// <summary>Up arrow.</summary>
+    ArrowUp,
     /// <summary>Arrow turning down then right (nested item).</summary>
     ArrowTurnDownRight,
     /// <summary>List of items/apps.</summary>

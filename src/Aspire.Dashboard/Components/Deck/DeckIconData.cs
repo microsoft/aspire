@@ -244,6 +244,11 @@ internal static class DeckIconData
             <path d="M12 5v14" />
             <path d="m19 12-7 7-7-7" />
             """,
+        [DeckIconName.ArrowUp] =
+            """
+            <path d="M12 19V5" />
+            <path d="m5 12 7-7 7 7" />
+            """,
         [DeckIconName.ArrowTurnDownRight] =
             """
             <path d="m15 10 5 5-5 5" />

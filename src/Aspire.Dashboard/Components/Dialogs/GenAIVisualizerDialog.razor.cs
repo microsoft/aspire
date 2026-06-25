@@ -16,15 +16,11 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
 public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTelemetry, IDisposable
 {
-    private static readonly Icon s_wrenchIcon = new Icons.Regular.Size16.Wrench();
-    private static readonly Icon s_toolIcon = new Icons.Regular.Size16.Code();
-
     private readonly string _copyButtonId = $"copy-{Guid.NewGuid():N}";
 
     private MarkdownProcessor _markdownProcess = default!;

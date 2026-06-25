@@ -15,14 +15,18 @@
         @if (_contextSpans.Count > 1)
         {
             <div Style="grid-area: dialog-format;">
-                <FluentButton IconStart="new Icons.Regular.Size16.ArrowUp()"
-                              Appearance="Appearance.Stealth"
-                              Disabled="@NoPreviousGenAISpan"
-                              OnClick="OnPreviousGenAISpan">@Loc[nameof(Dialogs.GenAIPreviousButtonText)]</FluentButton>
-                <FluentButton IconStart="new Icons.Regular.Size16.ArrowDown()"
-                              Appearance="Appearance.Stealth"
-                              Disabled="@NoNextGenAISpan"
-                              OnClick="OnNextGenAISpan">@Loc[nameof(Dialogs.GenAINextButtonText)]</FluentButton>
+                <button type="button" class="btn btn--ghost"
+                        disabled="@NoPreviousGenAISpan"
+                        @onclick="OnPreviousGenAISpan">
+                    <DeckIcon Name="DeckIconName.ArrowUp" Size="16" />
+                    @Loc[nameof(Dialogs.GenAIPreviousButtonText)]
+                </button>
+                <button type="button" class="btn btn--ghost"
+                        disabled="@NoNextGenAISpan"
+                        @onclick="OnNextGenAISpan">
+                    <DeckIcon Name="DeckIconName.ArrowDown" Size="16" />
+                    @Loc[nameof(Dialogs.GenAINextButtonText)]
+                </button>
             </div>
         }
     </div>
@@ -53,11 +57,9 @@
                         <div>
                             <div class="message-header">
                                 <GenAIItemTitle Item="@selectedItem" ResourceName="@selectedItem.ResourceName" />
-                                <FluentButton Class="back-button"
-                                              Appearance="Appearance.Stealth"
-                                              OnClick="@GoBackAsync">
-                                    <FluentIcon Value="@(new Icons.Regular.Size16.ArrowHookUpLeft())" />
-                                </FluentButton>
+                                <button type="button" class="icon-btn back-button" @onclick="@GoBackAsync">
+                                    <DeckIcon Name="DeckIconName.Back" Size="16" />
+                                </button>
                             </div>
                             @*
                                 Tab content isn't nested inside DeckTab elements. The tab control is just used to display the tabs.
@@ -166,10 +168,10 @@
                                             if (Content.ToolDefinitions.FirstOrDefault(d => d.ToolDefinition.Name == toolCallPart.Name) is { } toolVM)
                                             {
                                                 <div class="tool-button-container">
-                                                    <FluentButton OnClick="@(() => ViewToolDefinitionAsync(toolVM))">
-                                                        <FluentIcon Value="@s_wrenchIcon" Style="vertical-align: sub;" slot="start" />
+                                                    <button type="button" class="btn" @onclick="@(() => ViewToolDefinitionAsync(toolVM))">
+                                                        <DeckIcon Name="DeckIconName.Toolbox" Size="16" />
                                                         @Loc[nameof(Dialogs.GenAIToolDefinitionButtonText)]
-                                                    </FluentButton>
+                                                    </button>
                                                 </div>
                                             }
                                         }
@@ -178,10 +180,10 @@
                                             if (Content.ToolDefinitions.FirstOrDefault(d => d.ToolDefinition.Name == serverToolCallPart.Name) is { } toolVM)
                                             {
                                                 <div class="tool-button-container">
-                                                    <FluentButton OnClick="@(() => ViewToolDefinitionAsync(toolVM))">
-                                                        <FluentIcon Value="@s_wrenchIcon" Style="vertical-align: sub;" slot="start" />
+                                                    <button type="button" class="btn" @onclick="@(() => ViewToolDefinitionAsync(toolVM))">
+                                                        <DeckIcon Name="DeckIconName.Toolbox" Size="16" />
                                                         @Loc[nameof(Dialogs.GenAIToolDefinitionButtonText)]
-                                                    </FluentButton>
+                                                    </button>
                                                 </div>
                                             }
                                         }
@@ -190,17 +192,17 @@
                                             if (TryGetToolCall(toolCallResponsePart.Id, out var itemVM, out var toolCallRequestPart))
                                             {
                                                 <div class="tool-button-container">
-                                                    <FluentButton OnClick="@(() => OnViewItem(itemVM))">
-                                                        <FluentIcon Value="@s_toolIcon" Style="vertical-align: sub;" slot="start" />
+                                                    <button type="button" class="btn" @onclick="@(() => OnViewItem(itemVM))">
+                                                        <DeckIcon Name="DeckIconName.Braces" Size="16" />
                                                         @Loc[nameof(Dialogs.GenAIToolCallButtonText)]
-                                                    </FluentButton>
+                                                    </button>
 
                                                     @if (Content.ToolDefinitions.FirstOrDefault(d => d.ToolDefinition.Name == toolCallRequestPart.Name) is { } toolVM)
                                                     {
-                                                        <FluentButton OnClick="@(() => ViewToolDefinitionAsync(toolVM))">
-                                                            <FluentIcon Value="@s_wrenchIcon" Style="vertical-align: sub;" slot="start" />
+                                                        <button type="button" class="btn" @onclick="@(() => ViewToolDefinitionAsync(toolVM))">
+                                                            <DeckIcon Name="DeckIconName.Toolbox" Size="16" />
                                                             @Loc[nameof(Dialogs.GenAIToolDefinitionButtonText)]
-                                                        </FluentButton>
+                                                        </button>
                                                     }
                                                 </div>
                                             }
@@ -218,16 +220,11 @@
                                 }
                             </div>
                         }
-                        <FluentButton Id="@_copyButtonId"
-                                      Class="message-copy-button"
-                                      Appearance="Appearance.Stealth"
-                                      AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(string.Join(Environment.NewLine + Environment.NewLine, selectedItem.ItemParts.Select(p => p.TextVisualizerViewModel?.FormattedText ?? string.Empty)), ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
-                            <span slot="start">
-                                <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
-                                <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" />
-                            </span>
+                        <DeckClipboardCopyButton Id="@_copyButtonId"
+                                                 Class="btn message-copy-button"
+                                                 AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(string.Join(Environment.NewLine + Environment.NewLine, selectedItem.ItemParts.Select(p => p.TextVisualizerViewModel?.FormattedText ?? string.Empty)), ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
                             @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
-                        </FluentButton>
+                        </DeckClipboardCopyButton>
                     }
                     else
                     {
@@ -491,9 +488,9 @@
                             </div>
                         }
                         <span class="defaultHidden">
-                            <FluentButton Appearance="Appearance.Lightweight" OnClick="@(() => OnViewItem(item))">
+                            <button type="button" class="icon-btn" @onclick="@(() => OnViewItem(item))">
                                 <DeckIcon Name="DeckIconName.SlideSearch" Size="16" />
-                            </FluentButton>
+                            </button>
                         </span>
                         @if (itemParts.Count > 0)
                         {

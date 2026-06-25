@@ -9,11 +9,11 @@
     grid-template-rows: auto 1fr auto;
 }
 
-::deep .span-messages-container fluent-button.message-copy-button::part(control):not(:hover) {
+::deep .span-messages-container .message-copy-button:not(:hover) {
     background: var(--main-container-background-color);
 }
 
-::deep .span-messages-container fluent-button.back-button::part(control):not(:hover) {
+::deep .span-messages-container .back-button:not(:hover) {
     background: var(--main-container-background-color);
 }
 
