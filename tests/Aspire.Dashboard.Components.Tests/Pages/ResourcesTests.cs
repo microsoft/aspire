@@ -175,6 +175,43 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
+    public void FilterPopup_ViewportChangesToMobile_RemovesDesktopPopupNavigation()
+    {
+        var desktopViewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var mobileViewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource(
+                "Resource1",
+                "Type1",
+                "Running",
+                ImmutableArray.Create(new HealthReportViewModel("Null", null, "Description1", null))),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(
+            this,
+            desktopViewport,
+            dashboardClient);
+
+        var cut = RenderComponent<CascadingValue<ViewportInformation>>(builder =>
+        {
+            builder.Add(p => p.Value, desktopViewport);
+            builder.AddChildContent<Components.Pages.Resources>();
+        });
+
+        cut.Find("#resourceFilterButton").Click();
+        Assert.NotEmpty(cut.FindComponents<AspirePopupFocusNavigation>());
+
+        cut.SetParametersAndRender(builder =>
+        {
+            builder.Add(p => p.Value, mobileViewport);
+            builder.AddChildContent<Components.Pages.Resources>();
+        });
+
+        Assert.Empty(cut.FindComponents<AspirePopupFocusNavigation>());
+    }
+
+    [Fact]
     public void ResourceGraph_MultipleRenders_InitializeOnce()
     {
         // Arrange

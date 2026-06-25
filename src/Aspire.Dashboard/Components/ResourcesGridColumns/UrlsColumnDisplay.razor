@@ -32,7 +32,7 @@ else if (DisplayedUrls.Count > 1)
         </ChildContent>
         <MoreButtonTemplate Context="overflow">
             <div @onclick:stopPropagation="true" style="display:inherit;">
-                <FluentButton Appearance="Appearance.Accent" OnClick="() => _popoverVisible = !_popoverVisible" Class="url-button">
+                <FluentButton Id="@_moreButtonId" Appearance="Appearance.Accent" OnClick="() => _popoverVisible = !_popoverVisible" Class="url-button">
                     @($"+{overflow.ItemsOverflow.Count() + preOverflowedCount}")
                 </FluentButton>
             </div>
@@ -43,12 +43,12 @@ else if (DisplayedUrls.Count > 1)
             }
             <div @onclick:stopPropagation="true">
                 @* Each item is approximately 36px tall, plus 48px for the header and container padding. The popover body has a CSS max-height of 300px. *@
-                <FluentPopover AnchorId="@overflow.IdMoreButton" @bind-Open="_popoverVisible" VerticalThreshold="@(Math.Min(items.Count * 36 + 48, 300))" AutoFocus="false">
+                <FluentPopover AnchorId="@_moreButtonId" @bind-Open="_popoverVisible" VerticalThreshold="@(Math.Min(items.Count * 36 + 48, 300))" AutoFocus="false">
                     <Header>
                         @Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]
                     </Header>
                     <Body>
-                        <AspirePopupFocusNavigation AnchorId="@overflow.IdMoreButton" @bind-Open="_popoverVisible">
+                        <AspirePopupFocusNavigation AnchorId="@_moreButtonId" @bind-Open="_popoverVisible">
                             <div class="url-popup">
                                 @foreach (var item in items)
                                 {
@@ -71,6 +71,8 @@ else if (DisplayedUrls.Count > 1)
 }
 
 @code {
+    private readonly string _moreButtonId = $"url-overflow-more-{Guid.NewGuid():N}";
+
     RenderFragment WriteUrl(DisplayedUrl displayedUrl)
     {
         if (displayedUrl.Url != null)

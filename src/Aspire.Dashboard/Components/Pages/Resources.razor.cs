@@ -587,6 +587,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             return;
         }
 
+        if (!ViewportInformation.IsDesktop)
+        {
+            _isFilterPopupVisible = false;
+        }
+
         UpdateMaxHighlightedCount();
 
         // Wait until the initial data is loaded. This is required so there isn't a race between data loading and using resources here.

@@ -57,6 +57,7 @@ internal static class FluentUISetupHelpers
         var module = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/AnchoredRegion/FluentAnchoredRegion.razor.js"));
         module.SetupVoid("goToNextFocusableElement", _ => true);
         module.SetupVoid("initializeKeyboardNavigation", _ => true);
+        module.SetupVoid("disposeKeyboardNavigation", _ => true);
         module.SetupVoid("removeKeyboardNavigation", _ => true);
     }
 
