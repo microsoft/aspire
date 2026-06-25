@@ -432,6 +432,8 @@ export class InteractionService implements IInteractionService {
             if (debugSession) {
                 debugSession.sendMessage(text, true, stream !== 'stderr' ? 'stdout' : 'stderr');
             } else if (aspireTerminal) {
+                // This is display-only output from the CLI. Passing true submits the text to the
+                // shell, which would execute it instead of only showing it to the user.
                 aspireTerminal.terminal.sendText(text, false);
             }
         }
