@@ -2,7 +2,7 @@
 
 @inject IStringLocalizer<ControlsStrings> Loc
 
-<FluentStack Orientation="Orientation.Horizontal" HorizontalGap="3">
+<div class="deck-stack" style="column-gap: 3px;">
     @if (ViewModel.Id?.Type is OtlpResourceType.ResourceGrouping)
     {
         <DeckIcon Name="DeckIconName.AppsList" Size="20"
@@ -21,7 +21,7 @@
     {
         @ViewModel.Name
     }
-</FluentStack>
+</div>
 
 @code {
     [Parameter, EditorRequired]

@@ -59,7 +59,7 @@
                         <FluentPopover AnchorId="@id" @bind-Open="context.PopupVisible" VerticalThreshold="@(Math.Min((context.Values.Count + 1) * 36 + 48, 300))" AutoFocus="false">
                             <Header>@context.Name</Header>
                             <Body>
-                            <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
+                            <div class="deck-stack deck-stack--vertical dimension-popup">
                                 <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
                                                 ThreeState="true"
                                                 ShowIndeterminate="false"
@@ -75,7 +75,7 @@
                                                     @bind-Value:get="isChecked"
                                                     @bind-Value:set="c => OnTagSelectionChangedAsync(context, tag, c)"/>
                                 }
-                            </FluentStack>
+                            </div>
                             </Body>
                         </FluentPopover>
                     </AspireTemplateColumn>

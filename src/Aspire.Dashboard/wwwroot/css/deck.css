@@ -2557,3 +2557,21 @@ hr.deck-divider {
   align-self: center;
 }
 /* === end Dividers === */
+
+/* === Stacks (FluentStack replacement) === */
+/* Flex containers replacing FluentStack. Defaults mirror FluentStack: row direction,
+   10px gaps, start alignment, full width. Per-instance gap/alignment/width overrides go
+   inline on the element. */
+.deck-stack {
+  display: flex;
+  flex-direction: row;
+  column-gap: 10px;
+  row-gap: 10px;
+  justify-content: flex-start;
+  align-items: flex-start;
+  width: 100%;
+}
+.deck-stack--vertical {
+  flex-direction: column;
+}
+/* === end Stacks === */

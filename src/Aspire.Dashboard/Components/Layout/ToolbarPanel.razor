@@ -1,9 +1,9 @@
 ﻿@implements IDialogContentComponent<AspirePageContentLayout.MobileToolbar>
 
 <FluentDialogBody>
-    <FluentStack Orientation="@Orientation.Vertical">
+    <div class="deck-stack deck-stack--vertical">
         @Content.ToolbarSection
-    </FluentStack>
+    </div>
 
     <FluentButton Class="mobile-absolute-toolbar mobile-toolbar"
                   Appearance="@Appearance.Accent"

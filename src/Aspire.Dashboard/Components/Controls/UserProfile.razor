@@ -9,22 +9,22 @@
                                    ButtonSize="@ButtonSize"
                                    FooterLink="">
                     <HeaderTemplate>
-                        <FluentStack VerticalAlignment="VerticalAlignment.Center">
+                        <div class="deck-stack" style="align-items: center;">
                             <FluentLabel>@Loc[nameof(Resources.Login.LoggedInAs)]</FluentLabel>
                             <FluentSpacer />
                             <form @formname="sign-out-form" class="sign-out-form" action="authentication/logout" method="post">
                                 <AntiforgeryToken />
                                 <FluentButton Appearance="Appearance.Stealth" Type="ButtonType.Submit">Sign out</FluentButton>
                             </form>
-                        </FluentStack>
+                        </div>
                     </HeaderTemplate>
                     <ChildContent>
-                        <FluentStack class="inner-persona-container">
+                        <div class="deck-stack inner-persona-container">
                             <FluentPersona Initials="@_initials" ImageSize="@ImageSize" Class="inner-persona">
                                 <div class="full-name">@_name</div>
                                 <div class="user-id">@_username</div>
                             </FluentPersona>
-                        </FluentStack>
+                        </div>
                     </ChildContent>
                 </FluentProfileMenu>
             </div>

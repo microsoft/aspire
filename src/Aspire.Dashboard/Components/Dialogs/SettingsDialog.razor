@@ -3,7 +3,7 @@
 @inject IStringLocalizer<Dialogs> Loc
 
 <FluentDialogBody>
-    <FluentStack Orientation="Orientation.Vertical" Style="display: flex; height: 100%; overflow-y: auto;" VerticalGap="12">
+    <div class="deck-stack deck-stack--vertical" style="height: 100%; overflow-y: auto; row-gap: 12px;">
         <div class="input-container">
             <FluentRadioGroup TValue="string"
                               Label="@Loc[nameof(Dialogs.SettingsDialogTheme)]"
@@ -75,5 +75,5 @@
                 @string.Format(Loc[nameof(Dialogs.SettingsDialogDotNetRuntimeVersion)], System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription)
             </div>
         </div>
-    </FluentStack>
+    </div>
 </FluentDialogBody>

@@ -9,7 +9,7 @@
 <EditForm EditContext="@EditContext" OnValidSubmit="@Apply">
     <DataAnnotationsValidator />
 
-    <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
+    <div class="deck-stack deck-stack--vertical" style="row-gap: 12px;">
         <div class="filter-input-container input-container">
             <FluentSelect TOption="SelectViewModel<string>"
                           Placeholder="@Loc[nameof(Dialogs.FilterDialogFieldPlaceholder)]"
@@ -105,7 +105,7 @@
         }
 
         <div class="filter-input-container filter-button-container input-container">
-            <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.Left">
+            <div class="deck-stack">
                 @if (Content.Filter is not null)
                 {
                     if (Content.Filter.Enabled)
@@ -118,13 +118,13 @@
                     }
                     <FluentButton Appearance="Appearance.Stealth" Title="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" aria-label="@Loc[nameof(Dialogs.FilterDialogRemoveFilterButtonText)]" OnClick="Delete"><FluentIcon Value="@(new Icons.Regular.Size16.Delete())" /></FluentButton>
                 }
-            </FluentStack>
+            </div>
 
-            <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.Right">
+            <div class="deck-stack" style="justify-content: flex-end;">
                 <FluentButton OnClick="Cancel">@Loc[nameof(Dialogs.FilterDialogCancelButtonText)]</FluentButton>
                 <FluentButton Color="Color.Primary" Type="ButtonType.Submit">@Loc[nameof(Dialogs.FilterDialogApplyFilterButtonText)]</FluentButton>
-            </FluentStack>
+            </div>
         </div>
-    </FluentStack>
+    </div>
 
 </EditForm>

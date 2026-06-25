@@ -8,7 +8,7 @@
 
 @typeparam TValue where TValue : notnull
 
-<FluentStack Orientation="Orientation.Vertical" Id="@Id">
+<div class="deck-stack deck-stack--vertical" id="@Id">
     <FluentCheckbox Label="@ControlsStringsLoc[nameof(ControlsStrings.LabelAll)]"
                     ThreeState="true"
                     ShowIndeterminate="false"
@@ -25,4 +25,4 @@
                         @bind-Value:get="@isChecked"
                         @bind-Value:set="@(c => OnValueVisibilityChangedInternalAsync(key, c))" />
     }
-</FluentStack>
+</div>

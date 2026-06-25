@@ -5,10 +5,8 @@
 
 @inject IStringLocalizer<AIAssistant> Loc
 
-<FluentStack Orientation="Orientation.Horizontal"
-             VerticalAlignment="VerticalAlignment.Top"
-             Style="justify-content: start; align-items: start; column-gap: 10px; row-gap: 10px; width: 100%;"
-             Class="fluent-dialog-header">
+<div class="deck-stack fluent-dialog-header"
+     style="justify-content: start; align-items: start; column-gap: 10px; row-gap: 10px; width: 100%;">
     <div style="width: 100%;">
         <div class="dialog-title-grid">
             <DeckIcon Name="DeckIconName.Sparkle" Size="24" Style="grid-area: dialog-icon; align-self: center;" />
@@ -18,7 +16,7 @@
         </div>
     </div>
 
-    <FluentStack Orientation="Orientation.Horizontal" Style="width: auto;">
+    <div class="deck-stack" style="width: auto;">
         <FluentButton Appearance="Appearance.Stealth" OnClick="@(() => StartNewChatAsync())" aria-label="@Loc[nameof(AIAssistant.SidebarNewChat)]" Title="@Loc[nameof(AIAssistant.SidebarNewChat)]">
             <FluentIcon Value="@(new Icons.Regular.Size20.ChatAdd())" Width="20px" Color="Color.Neutral" />
         </FluentButton>
@@ -31,8 +29,8 @@
         <FluentButton Id="dialog_close" Appearance="Appearance.Stealth" OnClick="@(() => Dialog.CancelAsync())" aria-label="@Dialog.Instance?.Parameters?.DismissTitle" Title="@Dialog.Instance?.Parameters?.DismissTitle">
             <FluentIcon Value="@(new Icons.Regular.Size20.Dismiss())" Width="20px" Color="Color.Neutral" />
         </FluentButton>
-    </FluentStack>
-</FluentStack>
+    </div>
+</div>
 
 @* The default header is hidden because a custom header, with new buttons, is displayed *@
 <FluentDialogHeader Visible="false" />

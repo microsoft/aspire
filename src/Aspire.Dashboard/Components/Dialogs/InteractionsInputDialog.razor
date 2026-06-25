@@ -8,11 +8,11 @@
 @implements IDialogContentComponent<InteractionsInputsDialogViewModel>
 
 <FluentDialogHeader ShowDismiss="@Dialog.Instance.Parameters.ShowDismiss">
-    <FluentStack VerticalAlignment="VerticalAlignment.Center">
+    <div class="deck-stack" style="align-items: center;">
         <FluentLabel Typo="Typography.PaneHeader">
             @Dialog.Instance.Parameters.Title
         </FluentLabel>
-    </FluentStack>
+    </div>
 </FluentDialogHeader>
 
 <FluentDialogBody Class="interaction-input-dialog">
@@ -24,7 +24,7 @@
     }
 
     <EditForm EditContext="@_editContext" OnValidSubmit="@SubmitAsync">
-        <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
+        <div class="deck-stack deck-stack--vertical" style="row-gap: 12px;">
             @foreach (var vm in _inputDialogInputViewModels)
             {
                 var localItem = vm;
@@ -167,7 +167,7 @@
                     }
                 </div>
             }
-        </FluentStack>
+        </div>
 
         @* Hidden submit is so the form is submitted when the user presses enter. *@
         <button type="submit" style="display:none"></button>
