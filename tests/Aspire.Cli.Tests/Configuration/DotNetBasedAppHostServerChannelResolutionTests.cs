@@ -115,6 +115,7 @@ public class DotNetBasedAppHostServerChannelResolutionTests(ITestOutputHelper ou
             new TestDotNetCliRunner(),
             packagingService,
             NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            new TestEnvironment(),
             projectModelPath);
     }
 

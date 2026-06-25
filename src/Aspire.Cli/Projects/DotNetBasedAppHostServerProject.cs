@@ -47,12 +47,13 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         IDotNetCliRunner dotNetCliRunner,
         IPackagingService packagingService,
         ILogger<DotNetBasedAppHostServerProject> logger,
+        IEnvironment environment,
         string? projectModelPath = null,
         string? logFilePath = null)
     {
         _appPath = Path.GetFullPath(appPath);
         _appPath = new Uri(_appPath).LocalPath;
-        _appPath = OperatingSystem.IsWindows() ? _appPath.ToLowerInvariant() : _appPath;
+        _appPath = CliPathHelper.NormalizePathCasing(_appPath, environment);
         _socketPath = socketPath;
         _repoRoot = Path.GetFullPath(repoRoot) + Path.DirectorySeparatorChar;
         _dotNetCliRunner = dotNetCliRunner;

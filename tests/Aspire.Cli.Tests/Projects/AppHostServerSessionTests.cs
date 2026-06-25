@@ -233,6 +233,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             nugetService,
             new TestDotNetSdkInstaller(),
             executionContext,
+            new TestEnvironment(),
             NullLoggerFactory.Instance);
     }
 

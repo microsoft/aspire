@@ -40,7 +40,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         // Use workspace root as repo root for testing
         var repoRoot = _workspace.WorkspaceRoot.FullName;
 
-        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, logger);
+        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, logger, new TestEnvironment());
     }
 
     [Fact]
@@ -312,7 +312,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         // Use a workspace-local ProjectModelPath for test isolation
         var projectModelPath = Path.Combine(appPath, ".aspire_server");
-        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, logger, projectModelPath);
+        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, logger, new TestEnvironment(), projectModelPath);
 
         var packages = new List<IntegrationReference>
         {
@@ -393,6 +393,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
             new TestDotNetCliRunner(),
             packagingService,
             NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            new TestEnvironment(),
             projectModelPath);
 
         var packages = new List<IntegrationReference>
@@ -445,6 +446,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
             new TestDotNetCliRunner(),
             packagingService,
             NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            new TestEnvironment(),
             projectModelPath);
 
         var packages = new List<IntegrationReference>

@@ -30,6 +30,7 @@ internal sealed class AppHostServerProjectFactory(
     BundleNuGetService bundleNuGetService,
     IDotNetSdkInstaller sdkInstaller,
     CliExecutionContext executionContext,
+    IEnvironment environment,
     ILoggerFactory loggerFactory) : IAppHostServerProjectFactory
 {
     public async Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
@@ -47,6 +48,7 @@ internal sealed class AppHostServerProjectFactory(
                 dotNetCliRunner,
                 packagingService,
                 loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>(),
+                environment: environment,
                 logFilePath: executionContext.LogFilePath);
         }
 
