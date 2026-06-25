@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREEXTENSION001
+#pragma warning disable ASPIRECERTIFICATES001
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
@@ -23,6 +24,8 @@ namespace Aspire.Hosting;
 public static class ProjectResourceBuilderExtensions
 {
     private const string AspNetCoreForwardedHeadersEnabledVariableName = "ASPNETCORE_FORWARDEDHEADERS_ENABLED";
+    private const string KestrelCertificatesDefaultPathVariableName = "Kestrel__Certificates__Default__Path";
+    private const string KestrelCertificatesDefaultPasswordVariableName = "Kestrel__Certificates__Default__Password";
 
     /// <summary>
     /// Adds a .NET project to the application model.
@@ -497,6 +500,28 @@ public static class ProjectResourceBuilderExtensions
                 var logger = resourceLogger.GetLogger(builder.Resource);
                 logger.LogWarning("Certificate trust scope is set to '{Scope}', but the feature is not supported for .NET projects on Windows. No certificate trust customization will be applied. Set the certificate trust scope to 'None' to disable this warning.", Enum.GetName(ctx.Scope));
                 return Task.CompletedTask;
+            }
+
+            return Task.CompletedTask;
+        });
+
+        builder.WithHttpsCertificateConfiguration(ctx =>
+        {
+            if (!ctx.Resource.Annotations.OfType<EndpointAnnotation>().Any(e => e.TlsEnabled))
+            {
+                return Task.CompletedTask;
+            }
+
+            // Kestrel's default certificate configuration accepts PFX paths directly. This avoids
+            // PEM key-pair path handling differences in local development environments.
+            ctx.EnvironmentVariables[KestrelCertificatesDefaultPathVariableName] = ctx.PfxPath;
+            if (ctx.Password is not null)
+            {
+                ctx.EnvironmentVariables[KestrelCertificatesDefaultPasswordVariableName] = ctx.Password;
+            }
+            else
+            {
+                ctx.EnvironmentVariables.Remove(KestrelCertificatesDefaultPasswordVariableName);
             }
 
             return Task.CompletedTask;
