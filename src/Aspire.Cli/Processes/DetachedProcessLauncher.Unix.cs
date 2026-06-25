@@ -18,9 +18,10 @@ internal static partial class DetachedProcessLauncher
         const string shellPath = "/bin/sh";
         const string nullDevice = "/dev/null";
 
+        using var fileNameString = new NativeUtf8String(fileName);
         using var shellPathString = new NativeUtf8String(shellPath);
         using var nullDeviceString = new NativeUtf8String(nullDevice);
-        using var argv = NativeStringArray.Create(CreateShellArguments(fileName, arguments, workingDirectory));
+        using var workingDirectoryString = new NativeUtf8String(workingDirectory);
         using var environment = NativeStringArray.CreateEnvironment(shouldRemoveEnvironmentVariable, additionalEnvironmentVariables);
         using var fileActions = new PosixSpawnFileActions();
         using var attributes = new PosixSpawnAttributes();
@@ -30,13 +31,30 @@ internal static partial class DetachedProcessLauncher
         fileActions.AddOpen(StandardErrorFileDescriptor, nullDeviceString.Pointer, OpenWriteOnly);
         attributes.SetNewProcessGroup();
 
-        var spawnResult = posix_spawn(
-            out var processId,
-            shellPathString.Pointer,
-            fileActions.Pointer,
-            attributes.Pointer,
-            argv.Pointer,
-            environment.Pointer);
+        // Prefer spawning the requested executable directly. The cwd file action is a non-portable
+        // libc extension (available on macOS and newer glibc), so keep the shell exec handoff as a
+        // fallback for older glibc/musl systems without mutating this process's global cwd.
+        var canSetWorkingDirectory = fileActions.TryAddChangeDirectory(workingDirectoryString.Pointer);
+        using var argv = NativeStringArray.Create(canSetWorkingDirectory
+            ? CreateDirectArguments(fileName, arguments)
+            : CreateShellArguments(fileName, arguments, workingDirectory));
+
+        int processId;
+        var spawnResult = canSetWorkingDirectory
+            ? posix_spawnp(
+                out processId,
+                fileNameString.Pointer,
+                fileActions.Pointer,
+                attributes.Pointer,
+                argv.Pointer,
+                environment.Pointer)
+            : posix_spawn(
+                out processId,
+                shellPathString.Pointer,
+                fileActions.Pointer,
+                attributes.Pointer,
+                argv.Pointer,
+                environment.Pointer);
         if (spawnResult != 0)
         {
             throw CreatePosixSpawnException("posix_spawn", spawnResult);
@@ -51,6 +69,17 @@ internal static partial class DetachedProcessLauncher
         {
             throw new InvalidOperationException("The detached process exited before it could be observed.", ex);
         }
+    }
+
+    private static IReadOnlyList<string> CreateDirectArguments(string fileName, IReadOnlyList<string> arguments)
+    {
+        var directArguments = new List<string>(arguments.Count + 1)
+        {
+            fileName
+        };
+
+        directArguments.AddRange(arguments);
+        return directArguments;
     }
 
     private static IReadOnlyList<string> CreateShellArguments(string fileName, IReadOnlyList<string> arguments, string workingDirectory)
@@ -101,6 +130,22 @@ internal static partial class DetachedProcessLauncher
             {
                 throw CreatePosixSpawnException("posix_spawn_file_actions_addopen", result);
             }
+        }
+
+        public bool TryAddChangeDirectory(IntPtr path)
+        {
+            if (s_posixSpawnFileActionsAddChangeDirectory is not { } addChangeDirectory)
+            {
+                return false;
+            }
+
+            var result = addChangeDirectory(Pointer, path);
+            if (result != 0)
+            {
+                throw CreatePosixSpawnException("posix_spawn_file_actions_addchdir_np", result);
+            }
+
+            return true;
         }
 
         public void Dispose()
@@ -324,11 +369,32 @@ internal static partial class DetachedProcessLauncher
     private const int OpenWriteOnly = 1;
     private const int SigKill = 9;
     private const short PosixSpawnSetProcessGroup = 0x02;
+    private static readonly PosixSpawnFileActionsAddChangeDirectoryDelegate? s_posixSpawnFileActionsAddChangeDirectory = ResolvePosixSpawnFileActionsAddChangeDirectory();
+
+    private static PosixSpawnFileActionsAddChangeDirectoryDelegate? ResolvePosixSpawnFileActionsAddChangeDirectory()
+    {
+        return NativeLibrary.TryLoad("libc", out var libcHandle)
+            && NativeLibrary.TryGetExport(libcHandle, "posix_spawn_file_actions_addchdir_np", out var export)
+            ? Marshal.GetDelegateForFunctionPointer<PosixSpawnFileActionsAddChangeDirectoryDelegate>(export)
+            : null;
+    }
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int PosixSpawnFileActionsAddChangeDirectoryDelegate(IntPtr fileActions, IntPtr path);
 
     [LibraryImport("libc")]
     private static partial int posix_spawn(
         out int pid,
         IntPtr path,
+        IntPtr fileActions,
+        IntPtr attrp,
+        IntPtr argv,
+        IntPtr envp);
+
+    [LibraryImport("libc")]
+    private static partial int posix_spawnp(
+        out int pid,
+        IntPtr file,
         IntPtr fileActions,
         IntPtr attrp,
         IntPtr argv,
