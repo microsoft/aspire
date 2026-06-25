@@ -781,6 +781,183 @@ internal static class InteractionCommands
                 Description = "Simulates the Azure provisioning interaction inputs prompt with pretend data.",
                 IconName = "CloudArrowUp",
                 IconVariant = IconVariant.Filled
+            })
+            .WithCommand("progress-with-work", "Progress with work callback", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                var result = await interactionService.PromptProgressAsync(
+                    "Please wait while resources are being downloaded...",
+                    "Downloading resources",
+                    new ProgressInteractionOptions
+                    {
+                        PrimaryButtonText = "Cancel",
+                        Work = async ctx =>
+                        {
+                            await Task.Delay(10000, ctx.CancellationToken);
+                        }
+                    },
+                    commandContext.CancellationToken);
+
+                if (result.Canceled)
+                {
+                    return CommandResults.Failure("User canceled the operation.");
+                }
+
+                return CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Shows a progress dialog with a work callback that completes after 10 seconds. Can be canceled.",
+                IconName = "ArrowSync",
+                IconVariant = IconVariant.Regular
+            })
+            .WithCommand("progress-minimal", "Progress with only message", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                var result = await interactionService.PromptProgressAsync(
+                    "Please wait while resources are being downloaded...",
+                    title: null,
+                    options: new ProgressInteractionOptions
+                    {
+                        Work = async ctx =>
+                        {
+                            await Task.Delay(10000, ctx.CancellationToken);
+                        }
+                    },
+                    cancellationToken: commandContext.CancellationToken);
+
+                if (result.Canceled)
+                {
+                    return CommandResults.Failure("User canceled the operation.");
+                }
+
+                return CommandResults.Success();
+            }, new CommandOptions
+            {
+                IconName = "ArrowSync",
+                IconVariant = IconVariant.Regular
+            })
+            .WithCommand("progress-no-cancel", "Progress without cancel button", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                // Use a CTS to close the dialog after the work is done.
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(commandContext.CancellationToken);
+
+                var progressTask = interactionService.PromptProgressAsync(
+                    "This dialog has no cancel button. It will close automatically.",
+                    "Processing",
+                    cancellationToken: cts.Token);
+
+                // Simulate background work, then close the dialog.
+                await Task.Delay(10000, commandContext.CancellationToken);
+                cts.Cancel();
+
+                await progressTask;
+
+                return CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Shows a progress dialog without a cancel button that closes after 10 seconds.",
+                IconName = "ArrowSync",
+                IconVariant = IconVariant.Regular
+            })
+            .WithCommand("progress-with-title", "Progress with title", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                var result = await interactionService.PromptProgressAsync(
+                    "Please wait while data is being loaded...",
+                    "Loading",
+                    new ProgressInteractionOptions
+                    {
+                        Work = async ctx =>
+                        {
+                            await Task.Delay(10000, ctx.CancellationToken);
+                        }
+                    },
+                    commandContext.CancellationToken);
+
+                return result.Canceled ? CommandResults.Failure("Canceled") : CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Shows a progress dialog with a title and message.",
+                IconName = "ArrowSync",
+                IconVariant = IconVariant.Regular
+            })
+            .WithCommand("progress-no-title", "Progress without title", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                var result = await interactionService.PromptProgressAsync(
+                    "Please wait...",
+                    options: new ProgressInteractionOptions
+                    {
+                        PrimaryButtonText = "Cancel",
+                        Work = async ctx =>
+                        {
+                            await Task.Delay(10000, ctx.CancellationToken);
+                        }
+                    },
+                    cancellationToken: commandContext.CancellationToken);
+
+                return result.Canceled ? CommandResults.Failure("Canceled") : CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Shows a progress dialog with only a message (no title).",
+                IconName = "ArrowSync",
+                IconVariant = IconVariant.Regular
+            })
+            .WithCommand("progress-markdown-message", "Progress with markdown", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                var result = await interactionService.PromptProgressAsync(
+                    "Provisioning resources for **MyApp**.\n\nThis may take several minutes.",
+                    "Deploying to Azure",
+                    new ProgressInteractionOptions
+                    {
+                        PrimaryButtonText = "Abort deployment",
+                        EnableMessageMarkdown = true,
+                        Work = async ctx =>
+                        {
+                            await Task.Delay(10000, ctx.CancellationToken);
+                        }
+                    },
+                    commandContext.CancellationToken);
+
+                return result.Canceled ? CommandResults.Failure("Deployment aborted") : CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Shows a progress dialog with Markdown-formatted message and a cancel button.",
+                IconName = "CloudArrowUp",
+                IconVariant = IconVariant.Filled
+            })
+            .WithCommand("progress-run-forever", "Progress run forever", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                var result = await interactionService.PromptProgressAsync(
+                    "Building and pushing container images to registry. This will take approximately 30 seconds.",
+                    "Building container images",
+                    new ProgressInteractionOptions
+                    {
+                        PrimaryButtonText = "Cancel build"
+                    },
+                    commandContext.CancellationToken);
+
+                if (result.Canceled)
+                {
+                    return CommandResults.Failure("Build was canceled by user.");
+                }
+
+                return CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Shows a progress dialog that only closes when the cancel button is clicked.",
+                IconName = "BuildingFactory",
+                IconVariant = IconVariant.Regular
             });
 
         return resource;

@@ -96,6 +96,33 @@ public interface IInteractionService
     /// An <see cref="InteractionResult{T}"/> containing <c>true</c> if the user accepted, <c>false</c> otherwise.
     /// </returns>
     Task<InteractionResult<bool>> PromptNotificationAsync(string title, string message, NotificationInteractionOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Displays a progress dialog with an indeterminate progress indicator.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The dialog displays a spinning progress wheel and can optionally include a title, message, and a cancel button.
+    /// </para>
+    /// <para>
+    /// If <see cref="ProgressInteractionOptions.Work"/> is provided, the dialog remains open while the callback executes
+    /// and closes automatically when it completes. If no callback is provided, the dialog remains open until
+    /// <paramref name="cancellationToken"/> is canceled.
+    /// </para>
+    /// <para>
+    /// When a button is shown (via <see cref="InteractionOptions.PrimaryButtonText"/>), clicking it signals cancellation
+    /// through the <see cref="ProgressContext.CancellationToken"/> provided to the work callback.
+    /// </para>
+    /// </remarks>
+    /// <param name="title">The optional title of the progress dialog.</param>
+    /// <param name="message">The message to display in the progress dialog.</param>
+    /// <param name="options">Optional configuration for the progress interaction.</param>
+    /// <param name="cancellationToken">A token to cancel the operation and close the dialog.</param>
+    /// <returns>
+    /// An <see cref="InteractionResult{T}"/> containing <c>true</c> if the operation completed successfully,
+    /// or a canceled result if the user clicked the cancel button.
+    /// </returns>
+    Task<InteractionResult<bool>> PromptProgressAsync(string message, string? title = null, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default);
 }
 
 internal record QueueLoadOptions(
@@ -675,6 +702,38 @@ public class NotificationInteractionOptions : InteractionOptions
     /// Gets or sets the URL for the link in the notification.
     /// </summary>
     public string? LinkUrl { get; set; }
+}
+
+/// <summary>
+/// Options for configuring a progress interaction.
+/// </summary>
+public class ProgressInteractionOptions : InteractionOptions
+{
+    internal static ProgressInteractionOptions CreateDefault() => new();
+
+    /// <summary>
+    /// Gets or sets an optional asynchronous work callback to execute while the progress dialog is displayed.
+    /// </summary>
+    /// <remarks>
+    /// When provided, the progress dialog remains open while this callback executes and closes automatically
+    /// when the callback completes. The <see cref="ProgressContext.CancellationToken"/> passed to the callback
+    /// is triggered when the user clicks the cancel button or the operation is externally canceled.
+    /// When not provided, the dialog remains open until the <see cref="CancellationToken"/> passed to
+    /// <see cref="IInteractionService.PromptProgressAsync"/> is canceled.
+    /// </remarks>
+    public Func<ProgressContext, Task>? Work { get; set; }
+}
+
+/// <summary>
+/// Provides context to the work callback of a progress interaction.
+/// </summary>
+public sealed class ProgressContext
+{
+    /// <summary>
+    /// Gets the <see cref="System.Threading.CancellationToken"/> that is triggered when the user clicks
+    /// the cancel button or the operation is externally canceled.
+    /// </summary>
+    public required CancellationToken CancellationToken { get; init; }
 }
 
 /// <summary>

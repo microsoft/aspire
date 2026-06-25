@@ -272,6 +272,70 @@ internal class InteractionService : IInteractionService
         }
     }
 
+    public async Task<InteractionResult<bool>> PromptProgressAsync(string message, string? title = null, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        EnsureServiceAvailable();
+
+        cancellationToken.ThrowIfCancellationRequested();
+        using var interactionCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        try
+        {
+            options ??= ProgressInteractionOptions.CreateDefault();
+
+            var newState = new Interaction(title ?? string.Empty, message, options, new Interaction.ProgressInteractionInfo(), interactionCts.Token);
+            AddInteractionUpdate(newState);
+
+            using var ctRegistration = cancellationToken.Register(OnInteractionCancellation, state: newState);
+
+            if (options.Work is { } work)
+            {
+                // When the button is clicked, CompletionTcs fires. Cancel the work's CT so it can stop.
+                using var buttonRegistration = newState.CompletionTcs.Task.ContinueWith(
+                    _ => interactionCts.Cancel(),
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+
+                try
+                {
+                    await work(new ProgressContext { CancellationToken = interactionCts.Token }).ConfigureAwait(false);
+
+                    // Work completed successfully. Complete the interaction.
+                    newState.State = Interaction.InteractionState.Complete;
+                    newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true, State = true });
+                    AddInteractionUpdate(newState);
+
+                    return InteractionResult.Ok(true);
+                }
+                catch (OperationCanceledException) when (interactionCts.IsCancellationRequested)
+                {
+                    // The work was canceled. Complete the interaction if not already done.
+                    newState.State = Interaction.InteractionState.Complete;
+                    newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true });
+                    AddInteractionUpdate(newState);
+
+                    return InteractionResult.Cancel<bool>();
+                }
+            }
+            else
+            {
+                // No work callback. Wait for the dialog to be completed by either:
+                // - The user clicking the button (sends response from dashboard)
+                // - External cancellation via cancellationToken (handled by OnInteractionCancellation registration)
+                var completion = await newState.CompletionTcs.Task.ConfigureAwait(false);
+                var promptState = completion.State as bool?;
+                return promptState == null
+                    ? InteractionResult.Cancel<bool>()
+                    : InteractionResult.Ok(promptState.Value);
+            }
+        }
+        finally
+        {
+            interactionCts.Cancel();
+        }
+    }
+
     // For testing.
     internal List<Interaction> GetCurrentInteractions()
     {
@@ -602,5 +666,9 @@ internal class Interaction
         }
 
         public InteractionInputCollection Inputs { get; }
+    }
+
+    internal sealed class ProgressInteractionInfo : InteractionInfoBase
+    {
     }
 }

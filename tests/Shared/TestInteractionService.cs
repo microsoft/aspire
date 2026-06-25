@@ -57,4 +57,9 @@ internal sealed class TestInteractionService : IInteractionService
     {
         throw new NotImplementedException();
     }
+
+    public Task<InteractionResult<bool>> PromptProgressAsync(string message, string? title = null, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
 }
