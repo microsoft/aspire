@@ -51,14 +51,16 @@ public sealed class CliTelemetryTests(ITestOutputHelper output)
         // The profile is exported to a ZIP archive containing OTLP-format trace data.
         // Write diagnostic files into the .aspire-diagnostics/ directory so TerminalRun
         // always copies them to testresults (not just on failure).
+        //
+        // NOTE: --capture-profile is a "run, capture, stop" workflow — the CLI starts the
+        // AppHost, waits for readiness, stops it, collects traces from the profile dashboard,
+        // and exits. The AppHost (and its dashboard) is already shut down by the time the
+        // command returns, so we skip the dashboard health check.
         var diagDir = $"$ASPIRE_E2E_WORKSPACE/{CliE2EAutomatorHelpers.DiagnosticsDirectoryName}";
         var profilePath = $"{diagDir}/profile.zip";
         var verResultPath = $"{diagDir}/ver_result";
         await auto.RunCommandAsync($"mkdir -p {diagDir}", counter);
-        await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(4), additionalArgs: $"--capture-profile --capture-profile-output {profilePath}");
-
-        // Stop the background AppHost
-        await auto.AspireStopAsync(counter);
+        await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(4), additionalArgs: $"--capture-profile --capture-profile-output {profilePath}", skipDashboardCheck: true);
 
         // Dump profile contents for debugging visibility in the recording
         await auto.TypeAsync($"unzip -l {profilePath}");

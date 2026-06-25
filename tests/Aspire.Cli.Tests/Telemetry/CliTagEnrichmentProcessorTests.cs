@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Telemetry;
@@ -38,17 +39,28 @@ public class CliTagEnrichmentProcessorTests
     }
 
     [Fact]
-    public void OnEnd_WhenTagsNotYetResolved_StillAppliesTags()
+    public async Task OnEnd_WhenTagsNotYetResolved_BlocksUntilTagsAvailable()
     {
         // Verifies the processor handles the synchronous wait path when tags
         // haven't completed yet (the GetResolvedTags blocking path).
         var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
 
-        // Create a fixture just to start the tag calculation on the tagsSource
-        using var fixture = new TelemetryFixture();
+        // Gate the tag calculation behind a TaskCompletionSource so it hasn't completed
+        // when OnEnd is called — this forces the blocking wait path in GetResolvedTags.
+        var gate = new TaskCompletionSource<bool>();
+        var expectedTags = new List<KeyValuePair<string, object?>>
+        {
+            new("aspire.cli.version", "1.0.0-test"),
+            new("machine.device_id", "test-device-id")
+        };
 
-        // Use the fixture's TagsSource which has completed calculation
-        var processor = new CliTagEnrichmentProcessor(fixture.TagsSource);
+        tagsSource.StartCalculation(async () =>
+        {
+            await gate.Task;
+            return expectedTags;
+        });
+
+        var processor = new CliTagEnrichmentProcessor(tagsSource);
 
         using var source = new ActivitySource($"Test.{Path.GetRandomFileName()}");
         using var listener = new ActivityListener
@@ -59,10 +71,21 @@ public class CliTagEnrichmentProcessorTests
         ActivitySource.AddActivityListener(listener);
 
         using var activity = source.StartActivity("test-op")!;
-        processor.OnEnd(activity);
 
-        // Tags were applied even though we used GetResolvedTags (sync path)
-        var tags = activity.Tags.ToList();
-        Assert.NotEmpty(tags);
+        // OnEnd will block waiting for the tags — run it on a background thread
+        var onEndTask = Task.Run(() => processor.OnEnd(activity));
+
+        // Tags should NOT be present yet (calculation is gated)
+        Assert.False(onEndTask.IsCompleted);
+
+        // Release the gate so GetResolvedTags unblocks
+        gate.SetResult(true);
+
+        // OnEnd should complete now
+        await onEndTask.DefaultTimeout();
+
+        // Tags were applied via the blocking wait path
+        Assert.Contains(activity.Tags, t => t.Key == "aspire.cli.version" && (string?)t.Value == "1.0.0-test");
+        Assert.Contains(activity.Tags, t => t.Key == "machine.device_id" && (string?)t.Value == "test-device-id");
     }
 }

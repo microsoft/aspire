@@ -715,13 +715,23 @@ internal static class CliE2EAutomatorHelpers
     /// On failure, dumps the latest CLI log file to the terminal output and promotes the highest-signal
     /// diagnostics into the workspace for artifact capture.
     /// </summary>
+    /// <param name="auto">The terminal automator.</param>
+    /// <param name="counter">The prompt sequence counter.</param>
+    /// <param name="startTimeout">How long to wait for <c>aspire start</c> to complete.</param>
+    /// <param name="isolated">Pass <c>--isolated</c> to <c>aspire start</c>.</param>
+    /// <param name="apphost">Explicit AppHost path to pass via <c>--apphost</c>.</param>
+    /// <param name="additionalArgs">Extra arguments appended to the <c>aspire start</c> command.</param>
+    /// <param name="skipDashboardCheck">When <see langword="true"/>, skip the dashboard URL extraction and
+    /// HTTP health check. Use this for modes like <c>--capture-profile</c> where the AppHost is already
+    /// stopped by the time the command returns.</param>
     internal static async Task AspireStartAsync(
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter,
         TimeSpan? startTimeout = null,
         bool isolated = false,
         string? apphost = null,
-        string? additionalArgs = null)
+        string? additionalArgs = null,
+        bool skipDashboardCheck = false)
     {
         var effectiveTimeout = startTimeout ?? TimeSpan.FromMinutes(3);
         var expectedCounter = counter.Value;
@@ -780,6 +790,11 @@ internal static class CliE2EAutomatorHelpers
                 workspacePath is null || !ShouldCaptureWorkspaceDiagnostics()
                     ? "aspire start failed. Check terminal output for CLI logs."
                     : $"aspire start failed. Workspace: {workspacePath}. See {DiagnosticsDirectoryName}/ in the captured workspace.");
+        }
+
+        if (skipDashboardCheck)
+        {
+            return;
         }
 
         await auto.TypeAsync(
