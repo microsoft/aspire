@@ -131,3 +131,26 @@ merge-clean, **append** a clearly-delimited block at the end of the file per sur
 
 Do not restructure the shared Deck-derived rules above. Keep page component edits within your own
 page's files.
+
+## Theming in tests (drive the real toggle, not `setAttribute`)
+
+When switching light/dark in Playwright (or any automated check), **drive the real theme path** —
+click the top-bar **Settings → Theme** radio, or call the dashboard's theme JS
+(`wwwroot/js/app-theme.js` `applyTheme`). **Do NOT** flip the theme with
+`document.documentElement.setAttribute('data-theme', 'dark'|'light')`.
+
+Why: the dashboard runs **two** theme systems that must change together:
+
+1. **Deck design tokens** (`--bg-*`, etc.) scoped by `:root[data-theme="…"]` in `wwwroot/css/deck-theme.css` — pure CSS, driven by the `data-theme` attribute.
+2. **Fluent FAST tokens** (`--neutral-layer-*`, `--fill-color`, …) driven by **`baseLayerLuminance`** in JavaScript.
+
+Only `app-theme.js`'s `applyTheme()` updates **both** (it sets `data-theme` *and* `baseLayerLuminance`),
+and the real top-bar/Settings toggle goes through it. Setting `data-theme` directly updates only the
+Deck half; Fluent's `baseLayerLuminance` stays stale, so any element still using a Fluent token keeps
+its old luminance. The result is a **false** "content light / shell dark" mismatch in screenshots —
+a test artifact, not a product bug. Verified via computed styles: on the real toggle both `--bg-app`
+and `--neutral-layer-2` flip together (0 stragglers each direction); via `setAttribute`, `--bg-app`
+flips but `--neutral-layer-2` does not.
+
+This artifact disappears entirely as the Fluent-removal phase (P7) lands, since there will be no
+Fluent-`baseLayerLuminance` tokens left to lag.
