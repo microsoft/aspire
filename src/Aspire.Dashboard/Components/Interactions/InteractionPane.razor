@@ -1,0 +1,204 @@
+@*
+    Blocking interaction surface (command-input dialog or message box) as a right-side Deck pane,
+    ported from src/Aspire.Deck/ui/src/components/InteractionPane.tsx and reusing the Deck Drawer.
+    Inputs marked UpdateStateOnChange re-validate with the server live (OnUpdate); validation errors
+    come back on the same interaction and render under each field. Notifications are non-blocking and
+    handled separately by NotificationStack.
+*@
+@namespace Aspire.Dashboard.Components.Interactions
+
+<Drawer Class="interaction-pane" Title="@(string.IsNullOrEmpty(Title) ? FallbackTitle : Title)"
+        Subtitle="@MessageText" ShowClose="ShowDismiss" OnClose="OnCancel">
+    <ChildContent>
+        @if (IsInputs)
+        {
+            <form class="interaction-form" @onsubmit="HandleSubmit" @onsubmit:preventDefault="true">
+                @foreach (var input in Inputs)
+                {
+                    <div class="field @(input.ValidationErrors.Count > 0 ? "field--error" : "")">
+                        @if (input.InputType == "boolean")
+                        {
+                            <label class="field__check">
+                                <input type="checkbox"
+                                       checked="@(GetValue(input) == "true")"
+                                       disabled="@input.Disabled"
+                                       @onchange="e => SetBool(input, e)" />
+                                <span>@input.Label</span>
+                            </label>
+                        }
+                        else
+                        {
+                            <label class="field__label">
+                                @input.Label
+                                @if (input.Required)
+                                {
+                                    <span class="field__required"> *</span>
+                                }
+                            </label>
+                            @if (input.InputType == "choice")
+                            {
+                                <select class="select" value="@GetValue(input)" disabled="@input.Disabled"
+                                        @onchange="e => SetValue(input, e.Value?.ToString() ?? string.Empty)">
+                                    @if (input.AllowCustomChoice && !input.Options.Any(o => o.Value == GetValue(input)))
+                                    {
+                                        <option value="@GetValue(input)">@(string.IsNullOrEmpty(GetValue(input)) ? "—" : GetValue(input))</option>
+                                    }
+                                    @foreach (var (value, display) in input.Options)
+                                    {
+                                        <option value="@value">@display</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <input class="input"
+                                       type="@(input.InputType == "secretText" ? "password" : input.InputType == "number" ? "number" : "text")"
+                                       value="@GetValue(input)"
+                                       placeholder="@input.Placeholder"
+                                       disabled="@input.Disabled"
+                                       maxlength="@(input.MaxLength > 0 ? input.MaxLength : (int?)null)"
+                                       @oninput="e => SetValue(input, e.Value?.ToString() ?? string.Empty)" />
+                            }
+                        }
+
+                        @if (!string.IsNullOrEmpty(input.Description))
+                        {
+                            <div class="field__desc">@input.Description</div>
+                        }
+                        @foreach (var error in input.ValidationErrors)
+                        {
+                            <div class="field__error">@error</div>
+                        }
+                    </div>
+                }
+
+                <div class="interaction-form__actions">
+                    @if (ShowSecondaryButton)
+                    {
+                        <button type="button" class="btn" @onclick="OnCancel">
+                            @(string.IsNullOrEmpty(SecondaryButtonText) ? "Cancel" : SecondaryButtonText)
+                        </button>
+                    }
+                    <button type="submit" class="btn btn--primary">
+                        @(string.IsNullOrEmpty(PrimaryButtonText) ? "Submit" : PrimaryButtonText)
+                    </button>
+                </div>
+            </form>
+        }
+        else
+        {
+            <div class="interaction-form">
+                <div class="interaction-form__actions">
+                    @if (ShowSecondaryButton)
+                    {
+                        <button type="button" class="btn" @onclick="OnSecondary">
+                            @(string.IsNullOrEmpty(SecondaryButtonText) ? "No" : SecondaryButtonText)
+                        </button>
+                    }
+                    <button type="button" class="btn btn--primary" @onclick="OnPrimary">
+                        @(string.IsNullOrEmpty(PrimaryButtonText) ? "OK" : PrimaryButtonText)
+                    </button>
+                </div>
+            </div>
+        }
+    </ChildContent>
+</Drawer>
+
+@code {
+    private Dictionary<string, string> _values = new();
+    private int _interactionId = -1;
+
+    /// <summary>A stable id for the current interaction; changing it resets local input values.</summary>
+    [Parameter]
+    public int InteractionId { get; set; }
+
+    /// <summary>Whether this is an inputs dialog (vs a message box).</summary>
+    [Parameter]
+    public bool IsInputs { get; set; }
+
+    /// <summary>The pane title.</summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    /// <summary>Fallback title when <see cref="Title"/> is empty.</summary>
+    [Parameter]
+    public string FallbackTitle { get; set; } = "Input required";
+
+    /// <summary>The pane message (shown as the subtitle).</summary>
+    [Parameter]
+    public string? MessageText { get; set; }
+
+    /// <summary>Input fields (for inputs dialogs).</summary>
+    [Parameter]
+    public IReadOnlyList<DeckInteractionInput> Inputs { get; set; } = [];
+
+    /// <summary>Primary button label.</summary>
+    [Parameter]
+    public string? PrimaryButtonText { get; set; }
+
+    /// <summary>Secondary button label.</summary>
+    [Parameter]
+    public string? SecondaryButtonText { get; set; }
+
+    /// <summary>Whether to show the secondary button.</summary>
+    [Parameter]
+    public bool ShowSecondaryButton { get; set; }
+
+    /// <summary>Whether to show the header dismiss button. Defaults to <c>true</c>.</summary>
+    [Parameter]
+    public bool ShowDismiss { get; set; } = true;
+
+    /// <summary>Invoked with the submitted values when an inputs form is submitted.</summary>
+    [Parameter]
+    public EventCallback<IReadOnlyDictionary<string, string>> OnSubmit { get; set; }
+
+    /// <summary>Invoked with the current values when a field with live validation changes.</summary>
+    [Parameter]
+    public EventCallback<IReadOnlyDictionary<string, string>> OnUpdate { get; set; }
+
+    /// <summary>Invoked when a message box's primary button is clicked.</summary>
+    [Parameter]
+    public EventCallback OnPrimary { get; set; }
+
+    /// <summary>Invoked when a message box's secondary button is clicked.</summary>
+    [Parameter]
+    public EventCallback OnSecondary { get; set; }
+
+    /// <summary>Invoked when the pane is dismissed/cancelled.</summary>
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        // Reset local values only when a brand-new interaction arrives — not on the validation
+        // updates that re-send the same interaction id with new errors (matches Deck).
+        if (_interactionId != InteractionId)
+        {
+            _interactionId = InteractionId;
+            _values = Inputs.ToDictionary(i => i.Name, i => i.Value);
+        }
+    }
+
+    private string GetValue(DeckInteractionInput input)
+        => _values.TryGetValue(input.Name, out var v) ? v : input.Value;
+
+    private async Task SetValue(DeckInteractionInput input, string value)
+    {
+        _values[input.Name] = value;
+        if (input.UpdateStateOnChange && OnUpdate.HasDelegate)
+        {
+            await OnUpdate.InvokeAsync(_values);
+        }
+    }
+
+    private Task SetBool(DeckInteractionInput input, ChangeEventArgs e)
+        => SetValue(input, e.Value is true ? "true" : "false");
+
+    private async Task HandleSubmit()
+    {
+        if (OnSubmit.HasDelegate)
+        {
+            await OnSubmit.InvokeAsync(_values);
+        }
+    }
+}
