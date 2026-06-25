@@ -201,7 +201,7 @@ function makeProofTerminalProvider(sandbox: sinon.SinonSandbox, proof: ShellProo
     const terminalProvider = new AspireTerminalProvider(subscriptions);
     sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: proof.cliPath, available: true, source: 'configured' });
     sandbox.stub(terminalProvider, 'isCliDebugLoggingEnabled').returns(false);
-    sandbox.stub(terminalProvider, 'getAspireTerminal').returns({
+    const aspireTerminal = {
         terminal: {
             shellIntegration: {
                 executeCommand: (commandLine: string) => {
@@ -213,7 +213,9 @@ function makeProofTerminalProvider(sandbox: sinon.SinonSandbox, proof: ShellProo
             show: () => { }
         } as unknown as vscode.Terminal,
         dispose: () => { },
-    });
+    };
+    sandbox.stub(terminalProvider, 'getAspireTerminal').returns(aspireTerminal);
+    sandbox.stub(terminalProvider as unknown as { createAspireEditorTerminal: () => typeof aspireTerminal }, 'createAspireEditorTerminal').returns(aspireTerminal);
 
     return {
         terminalProvider,
