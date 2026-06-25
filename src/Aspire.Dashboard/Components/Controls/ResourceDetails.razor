@@ -12,12 +12,10 @@
 <div class="resource-details-layout">
 
     <FluentToolbar Orientation="Orientation.Horizontal">
-        <FluentSearch Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                      Immediate="true"
-                      Autofocus="true"
-                      AutoComplete="off"
-                      @bind-Value="_filter"
-                      slot="end" />
+        <SearchBox Placeholder="@ControlStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                   Autofocus="true"
+                   @bind-Value="_filter"
+                   slot="end" />
         <Divider slot="end" />
         <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
                           ButtonClass="resource-details-actions"

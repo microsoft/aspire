@@ -23,12 +23,10 @@
                 }
                 @Loc[nameof(ControlsStrings.SpanDetailsStartTimeLabel)] <strong>@formattedStartTime</strong>
             </div>
-            <FluentSearch Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
-                          Immediate="true"
-                          Autofocus="true"
-                          AutoComplete="off"
-                          @bind-Value="_filter"
-                          slot="end" />
+            <SearchBox Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
+                       Autofocus="true"
+                       @bind-Value="_filter"
+                       slot="end" />
             <Divider slot="end" />
             <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
                               Icon="DeckIconName.Options"

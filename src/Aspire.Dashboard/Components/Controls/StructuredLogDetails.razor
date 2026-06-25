@@ -13,12 +13,10 @@
         <div title="@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Full)">
             @Loc[nameof(ControlsStrings.StructuredLogsDetailsTimestampLabel)] <strong>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, ViewModel.LogEntry.TimeStamp, MillisecondsDisplay.Truncated)</strong>
         </div>
-        <FluentSearch Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
-                      Immediate="true"
-                      Autofocus="true"
-                      AutoComplete="off"
-                      @bind-Value="_filter"
-                      slot="end" />
+        <SearchBox Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
+                   Autofocus="true"
+                   @bind-Value="_filter"
+                   slot="end" />
         <Divider slot="end" />
         <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
                           Icon="DeckIconName.Options"

@@ -2,12 +2,14 @@
     Search/filter input, ported from src/Aspire.Deck/ui/src/components/SearchBox.tsx.
     Two-way bindable via @bind-Value (updates on each keystroke).
 *@
-<div class="searchbox">
+<div class="searchbox" @attributes="AdditionalAttributes">
     <DeckIcon Name="DeckIconName.Search" Size="15" />
     <input type="text"
            value="@Value"
            placeholder="@Placeholder"
            aria-label="@(string.IsNullOrEmpty(Placeholder) ? "Search" : Placeholder)"
+           autocomplete="off"
+           autofocus="@Autofocus"
            @oninput="OnInputAsync" />
 </div>
 
@@ -23,6 +25,15 @@
     /// <summary>Placeholder text shown when empty.</summary>
     [Parameter]
     public string? Placeholder { get; set; }
+
+    /// <summary>Whether the input should grab focus when first rendered.</summary>
+    [Parameter]
+    public bool Autofocus { get; set; }
+
+    /// <summary>Unmatched attributes (e.g. <c>slot</c>) splatted onto the searchbox container.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IDictionary<string, object>? AdditionalAttributes { get; set; }
+
 
     private async Task OnInputAsync(ChangeEventArgs e)
     {
