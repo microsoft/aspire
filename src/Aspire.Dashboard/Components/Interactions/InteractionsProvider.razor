@@ -1,0 +1,35 @@
+@*
+    Renders the AppHost interactions in the Deck design language: one blocking dialog (inputs or
+    message box) as a right-side InteractionPane, and notifications as a NotificationStack of toasts.
+    Logic lives in InteractionsProvider.razor.cs. This component is placed inside the shell (.app)
+    so the toasts sit alongside the drawers and Deck's `:has(.drawer) .notif-stack` shift applies.
+*@
+@namespace Aspire.Dashboard.Components.Interactions
+@using Aspire.DashboardService.Proto.V1
+
+@if (_enabled == true)
+{
+    @if (_currentDialog is { } dialog)
+    {
+        <InteractionPane InteractionId="dialog.InteractionId"
+                         IsInputs="@(dialog.KindCase == WatchInteractionsResponseUpdate.KindOneofCase.InputsDialog)"
+                         Title="@dialog.Title"
+                         FallbackTitle="@Loc[nameof(Resources.Dialogs.InteractionButtonOk)]"
+                         MessageText="@_currentDialogMessage"
+                         Inputs="_currentDialogInputs"
+                         PrimaryButtonText="@ResolvedPrimaryButtonText(dialog, GetDialogIntent(dialog))"
+                         SecondaryButtonText="@ResolvedSecondaryButtonText(dialog)"
+                         ShowSecondaryButton="dialog.ShowSecondaryButton"
+                         ShowDismiss="dialog.ShowDismiss"
+                         OnSubmit="OnDialogSubmitAsync"
+                         OnUpdate="OnDialogUpdateAsync"
+                         OnPrimary="OnMessageBoxPrimaryAsync"
+                         OnSecondary="OnMessageBoxSecondaryAsync"
+                         OnCancel="OnDialogCancelAsync" />
+    }
+
+    <NotificationStack Notifications="_notifications"
+                       OnPrimary="OnNotificationPrimaryAsync"
+                       OnSecondary="OnNotificationSecondaryAsync"
+                       OnDismiss="OnNotificationDismissAsync" />
+}

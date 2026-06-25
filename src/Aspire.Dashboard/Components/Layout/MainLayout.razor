@@ -29,6 +29,9 @@
                 <Aspire.Dashboard.Components.Dialogs.AssistantSidebarDialog Content="@(new AssistantDialogViewModel { Chat = vm, ReturnFocusElementId = _assistantReturnFocusElementId })" />
             }
             @Body
+            @* Inside .app so interaction panes/toasts sit alongside the Deck drawers and the
+               `:has(.drawer) .notif-stack` toast-shift applies. *@
+            <InteractionsProvider />
         </main>
     </div>
 }
@@ -71,6 +74,8 @@ else
             LaunchAIAssistantAsync="@LaunchAssistantAsync"
             LaunchNotificationsAsync="@LaunchNotificationsAsync"
             LaunchSettingsAsync="@LaunchSettingsAsync" />
+
+        <InteractionsProvider />
     </div>
 }
 
@@ -84,7 +89,6 @@ else
 <FluentDialogProvider/>
 <FluentTooltipProvider />
 <FluentMenuProvider />
-<InteractionsProvider />
 <ResourceServiceConnectionProvider />
 <div id="blazor-error-ui">
     @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]
