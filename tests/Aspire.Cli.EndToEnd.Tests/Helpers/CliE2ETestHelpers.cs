@@ -1177,7 +1177,7 @@ internal static class CliE2ETestHelpers
         // in the artifact upload glob (testresults/**). AppContext.BaseDirectory is the
         // test binary's output directory, which is NOT uploaded.
         var githubWorkspace = Environment.GetEnvironmentVariable("GITHUB_WORKSPACE");
-        var baseDir = githubWorkspace is not null
+        var baseDir = !string.IsNullOrEmpty(githubWorkspace)
             ? Path.Combine(githubWorkspace, "testresults")
             : Path.Combine(AppContext.BaseDirectory, "TestResults");
 

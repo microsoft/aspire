@@ -55,9 +55,7 @@ public sealed class CliTelemetryTests(ITestOutputHelper output)
         var profilePath = $"{diagDir}/profile.aspire";
         var verResultPath = $"{diagDir}/ver_result";
         await auto.RunCommandAsync($"mkdir -p {diagDir}", counter);
-        await auto.TypeAsync($"aspire start --capture-profile --capture-profile-output {profilePath}");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
+        await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(4), additionalArgs: $"--capture-profile --capture-profile-output {profilePath}");
 
         // Stop the background AppHost
         await auto.AspireStopAsync(counter);

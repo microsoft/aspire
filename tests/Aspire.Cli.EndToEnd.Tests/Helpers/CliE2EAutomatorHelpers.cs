@@ -720,7 +720,8 @@ internal static class CliE2EAutomatorHelpers
         SequenceCounter counter,
         TimeSpan? startTimeout = null,
         bool isolated = false,
-        string? apphost = null)
+        string? apphost = null,
+        string? additionalArgs = null)
     {
         var effectiveTimeout = startTimeout ?? TimeSpan.FromMinutes(3);
         var expectedCounter = counter.Value;
@@ -732,11 +733,12 @@ internal static class CliE2EAutomatorHelpers
 
         var isolatedFlag = isolated ? " --isolated" : "";
         var apphostFlag = apphost is not null ? $" --apphost {AspireCliShellCommandHelpers.QuoteBashArg(apphost)}" : "";
+        var extraArgs = !string.IsNullOrEmpty(additionalArgs) ? $" {additionalArgs}" : "";
         var startupTimeoutSeconds = Math.Max(1, (int)Math.Ceiling(effectiveTimeout.TotalSeconds));
 
         // Keep aspire start as a single shell pipeline so tee captures the exact JSON emitted to the terminal while
         // pipefail preserves the real CLI exit code instead of letting tee mask build/startup failures.
-        await auto.TypeAsync($"(set -o pipefail; ASPIRE_CLI_START_TIMEOUT={startupTimeoutSeconds.ToString(CultureInfo.InvariantCulture)} aspire start{isolatedFlag}{apphostFlag} --format json | tee \"{jsonFile}\")");
+        await auto.TypeAsync($"(set -o pipefail; ASPIRE_CLI_START_TIMEOUT={startupTimeoutSeconds.ToString(CultureInfo.InvariantCulture)} aspire start{isolatedFlag}{apphostFlag}{extraArgs} --format json | tee \"{jsonFile}\")");
         await auto.EnterAsync();
 
         // Wait for the command to finish — check for success or error exit.
