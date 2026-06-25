@@ -428,6 +428,8 @@ const expectedActivationEvents = [
     'onDebugInitialConfigurations:aspire',
     'onDebugDynamicConfigurations:aspire',
     'workspaceContains:**/*.csproj',
+    'workspaceContains:**/*.fsproj',
+    'workspaceContains:**/*.vbproj',
     'workspaceContains:**/aspire.config.json',
     'workspaceContains:**/.aspire/**',
     'onView:workbench.view.debug',
