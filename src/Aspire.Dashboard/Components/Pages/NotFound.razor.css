@@ -1,17 +1,34 @@
-.error-stack {
+/* NotFound renders inside the main Deck shell (it uses the default MainLayout, not EmptyLayout),
+   so it is styled as a centered empty-state filling the content area rather than a full-page card. */
+
+.notfound {
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-top: calc(var(--design-unit) * 10px);
+    justify-content: center;
+    text-align: center;
+    gap: 10px;
+    min-height: 60vh;
+    padding: 40px 24px;
 }
 
-.error-code {
-    --error-code-font-size: 90px;
-    font-size: var(--error-code-font-size);
-    line-height: var(--error-code-font-size);
+.notfound-code {
+    font-size: 88px;
+    line-height: 1;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--accent);
 }
 
-.error-description {
-    font-size: var(--type-ramp-plus-6-font-size);
-    line-height: var(--type-ramp-plus-6-line-height);
+.notfound-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.notfound-text {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.6;
+    color: var(--text-secondary);
 }
