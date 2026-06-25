@@ -51,6 +51,43 @@ public partial class AspireMenuButton : FluentComponentBase
 
     private string? IconStyle => IconColorStyle is null ? null : $"color: {IconColorStyle};";
 
+    // Map the Fluent Appearance parameter (kept for call-site compatibility) onto the native Deck
+    // button classes. No Text => icon-only trigger (.icon-btn); with Text => .btn, where the accent
+    // appearance is primary and the lightweight/stealth appearances are ghost (transparent) triggers.
+    private string TriggerClass
+    {
+        get
+        {
+            var classes = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(Text))
+            {
+                classes.Add("icon-btn");
+            }
+            else
+            {
+                classes.Add("btn");
+                switch (ButtonAppearance)
+                {
+                    case Appearance.Accent:
+                        classes.Add("btn--primary");
+                        break;
+                    case Appearance.Lightweight:
+                    case Appearance.Stealth:
+                        classes.Add("btn--ghost");
+                        break;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(ButtonClass))
+            {
+                classes.Add(ButtonClass);
+            }
+
+            return string.Join(' ', classes);
+        }
+    }
+
     protected override void OnParametersSet()
     {
         _icon = Icon ?? DefaultIcon;
