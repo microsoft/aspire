@@ -45,6 +45,32 @@ export interface AspireTerminalCommandEvent {
     executionMode: 'suppressed' | 'shellIntegration' | 'sendText';
 }
 
+const noExtensionVariablesScrubbedEnvironmentVariables = [
+    'ASPIRE_BACKCHANNEL_PATH',
+    'ASPIRE_CLI_LOG_FILE',
+    'ASPIRE_CLI_PID',
+    'ASPIRE_CLI_STARTED',
+    'ASPIRE_EXTENSION_CAPABILITIES',
+    'ASPIRE_EXTENSION_CERT',
+    'ASPIRE_EXTENSION_DEBUG_RUN_MODE',
+    'ASPIRE_EXTENSION_DEBUG_SESSION_ID',
+    'ASPIRE_EXTENSION_ENDPOINT',
+    'ASPIRE_EXTENSION_PROMPT_ENABLED',
+    'ASPIRE_EXTENSION_TOKEN',
+    'ASPIRE_NON_INTERACTIVE',
+    'ASPIRE_SUPPRESS_CLI_RUN_HOOK',
+    'DCP_INSTANCE_ID_PREFIX',
+    'DEBUG_SESSION_INFO',
+    'DEBUG_SESSION_PORT',
+    'DEBUG_SESSION_RUN_MODE',
+    'DEBUG_SESSION_SERVER_CERTIFICATE',
+    'DEBUG_SESSION_TOKEN',
+] as const;
+
+const noExtensionVariablesScrubbedEnvironmentVariablePrefixes = [
+    'ASPIRE_TERMINAL_HOST_',
+] as const;
+
 /**
  * Quotes a single argument for safe interpolation into a shell command line.
  *
@@ -271,7 +297,18 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
     createEnvironment(debugSessionId?: string, noDebug?: boolean, noExtensionVariables?: boolean): any {
         if (noExtensionVariables) {
-            return getEnvironmentWithoutE2EBridgeVariables();
+            const env: any = {
+                ...getEnvironmentWithoutE2EBridgeVariables(),
+
+                // Hidden CLI processes still render status/error text that VS Code shows to the user.
+                // Keep those messages aligned with the VS Code UI language without enabling the
+                // extension RPC/DCP backchannels that noExtensionVariables intentionally suppresses.
+                ASPIRE_LOCALE_OVERRIDE: vscode.env.language,
+            };
+
+            scrubNoExtensionVariablesEnvironment(env);
+
+            return env;
         }
 
         const env: any = {
@@ -435,6 +472,38 @@ function hasConfiguredEnvironmentVariable(env: Record<string, string | undefined
     // Windows environment variables are case-insensitive. Avoid adding a second
     // differently-cased key because Node picks only one when spawning the child process.
     return Object.entries(env).some(([key, value]) => key.toUpperCase() === name && !!value);
+}
+
+function scrubNoExtensionVariablesEnvironment(env: Record<string, string | undefined>): void {
+    for (const key of noExtensionVariablesScrubbedEnvironmentVariables) {
+        deleteEnvironmentVariable(env, key);
+    }
+
+    for (const key of Object.keys(env)) {
+        if (noExtensionVariablesScrubbedEnvironmentVariablePrefixes.some(prefix => isEnvironmentVariablePrefixMatch(key, prefix))) {
+            delete env[key];
+        }
+    }
+}
+
+function deleteEnvironmentVariable(env: Record<string, string | undefined>, name: string): void {
+    if (process.platform === 'win32') {
+        for (const key of Object.keys(env)) {
+            if (key.toUpperCase() === name) {
+                delete env[key];
+            }
+        }
+
+        return;
+    }
+
+    delete env[name];
+}
+
+function isEnvironmentVariablePrefixMatch(key: string, prefix: string): boolean {
+    return process.platform === 'win32'
+        ? key.toUpperCase().startsWith(prefix)
+        : key.startsWith(prefix);
 }
 
 function isE2eTerminalCommandExecutionSuppressed(): boolean {

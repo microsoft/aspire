@@ -2260,16 +2260,38 @@ function isPathInWorkspace(filePath: string): boolean {
 }
 
 function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {
-    const output = [...nonJsonLines, stderr].join('\n').toLowerCase();
+    const lines = [...nonJsonLines, ...stderr.split(/\r?\n/)];
+    const output = lines.join('\n');
     if (!output) {
         return false;
     }
 
-    return (output.includes('usage:') && output.includes('commands:'))
-        || output.includes('unknown command')
-        || output.includes('unrecognized command')
-        || output.includes('unrecognized option')
-        || output.includes('is not a recognized command');
+    // The surrounding help/error text and placeholder names are localized by System.CommandLine,
+    // but the command name and bracket/angle syntax are stable. Older CLIs that do not support
+    // `describe` either print top-level help such as:
+    //   Uso:
+    //   aspire <comando> [opciones]
+    // or reject stable tokens from the attempted invocation, such as `describe` or `--follow`.
+    const normalizedOutput = output.toLowerCase();
+    return lines.some(isAspireCommandHelpSyntaxLine)
+        || containsQuotedCliToken(output, 'describe')
+        || containsQuotedCliToken(output, '--follow')
+        || containsQuotedCliToken(output, '--format')
+        || containsQuotedCliToken(output, '--apphost')
+        || (normalizedOutput.includes('usage:') && normalizedOutput.includes('commands:'))
+        || normalizedOutput.includes('unknown command')
+        || normalizedOutput.includes('unrecognized command')
+        || normalizedOutput.includes('unrecognized option')
+        || normalizedOutput.includes('is not a recognized command');
+}
+
+function isAspireCommandHelpSyntaxLine(line: string): boolean {
+    return /^aspire(?:\.exe)?\s+(?:<[^>]+>|\[[^\]]+\])(?:\s|$)/i.test(normalizeResourceCommandStatusLine(line));
+}
+
+function containsQuotedCliToken(output: string, token: string): boolean {
+    const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`[\\'"\`\\u2018\\u2019\\u201C\\u201D]${escapedToken}[\\'"\`\\u2018\\u2019\\u201C\\u201D]`).test(output);
 }
 
 function isIncludeDisabledCommandsUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {

@@ -657,6 +657,35 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('describe watch reports minimum CLI version when localized command help is returned', async () => {
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const lineCallback = spawnStub.firstCall.args[3].lineCallback;
+            const exitCallback = spawnStub.firstCall.args[3].exitCallback;
+            lineCallback('Descripción:');
+            lineCallback('Uso:');
+            lineCallback('aspire <comando> [opciones]');
+            lineCallback('Comandos:');
+            exitCallback(1);
+
+            assert.strictEqual(repository.hasError, true);
+            assert.ok(repository.errorMessage?.includes('Aspire CLI 13.2.0'), repository.errorMessage);
+
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], true);
+        } finally {
+            repository.dispose();
+            executeCommandStub.restore();
+        }
+    });
+
     test('describe watch does not report compatibility error when workspace AppHost returns no data successfully', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
@@ -729,8 +758,11 @@ suite('AppHostDataRepository', () => {
 
             const describeCall = spawnStub.getCalls().find(call => (call.args[2] as string[])[0] === 'describe');
             assert.ok(describeCall);
+            const lineCallback = describeCall.args[3].lineCallback;
             const stderrCallback = describeCall.args[3].stderrCallback;
             const exitCallback = describeCall.args[3].exitCallback;
+            lineCallback('Usage:');
+            lineCallback('aspire describe [options]');
             stderrCallback('No container runtime detected');
             exitCallback(1);
 
