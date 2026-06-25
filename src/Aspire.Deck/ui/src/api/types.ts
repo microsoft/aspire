@@ -65,6 +65,14 @@ export interface ResourceRelationship {
   type: string;
 }
 
+// Well-known resource type for AppHost parameters. Parameters get their own page
+// in the UI, separate from the Resources list.
+export const PARAMETER_RESOURCE_TYPE = "Parameter";
+
+// Well-known property name carrying a parameter's resolved value (sensitive when
+// the parameter was declared as a secret).
+export const PARAMETER_VALUE_PROPERTY = "Value";
+
 export interface Resource {
   name: string;
   resourceType: string;

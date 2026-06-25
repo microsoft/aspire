@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { DeckConfig } from "./api/types";
+import { PARAMETER_RESOURCE_TYPE } from "./api/types";
 import { getConfig } from "./api/deck";
 import { Sidebar, type PageId } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -7,6 +8,7 @@ import { NotConnected } from "./components/NotConnected";
 import { useConnection, useResources, useTelemetry, useApphosts, useInteractions } from "./lib/useDeckEvent";
 import { useTheme } from "./lib/theme";
 import { ResourcesPage } from "./pages/ResourcesPage";
+import { ParametersPage } from "./pages/ParametersPage";
 import { ConsolePage } from "./pages/ConsolePage";
 import { StructuredLogsPage } from "./pages/StructuredLogsPage";
 import { TracesPage } from "./pages/TracesPage";
@@ -38,7 +40,8 @@ export function App() {
   }, []);
 
   const counts: Partial<Record<PageId, number>> = {
-    resources: resources.filter((r) => !r.isHidden).length,
+    resources: resources.filter((r) => !r.isHidden && r.resourceType !== PARAMETER_RESOURCE_TYPE).length,
+    parameters: resources.filter((r) => !r.isHidden && r.resourceType === PARAMETER_RESOURCE_TYPE).length,
     logs: telemetry?.recentLogs.length ?? undefined,
     traces: telemetry ? new Set(telemetry.recentSpans.map((s) => s.traceId)).size : undefined,
     metrics: telemetry?.metrics.length ?? undefined,
@@ -78,6 +81,7 @@ export function App() {
         ) : (
           <>
             {page === "resources" ? <ResourcesPage /> : null}
+            {page === "parameters" ? <ParametersPage /> : null}
             {page === "console" ? <ConsolePage /> : null}
             {page === "logs" ? <StructuredLogsPage /> : null}
             {page === "traces" ? <TracesPage /> : null}

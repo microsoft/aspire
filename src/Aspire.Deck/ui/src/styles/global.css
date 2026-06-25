@@ -495,6 +495,21 @@ table.data tbody tr.selected {
   color: var(--text-muted);
   flex-shrink: 0;
 }
+.param-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text);
+}
+.param-value--secret .secret {
+  flex: 0 1 auto;
+}
+.param-value .icon-btn {
+  flex-shrink: 0;
+}
 
 /* ---------- State dot ---------- */
 .state {

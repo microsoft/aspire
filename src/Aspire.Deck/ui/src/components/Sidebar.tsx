@@ -4,11 +4,12 @@ import {
   ConsoleIcon,
   LogsIcon,
   MetricsIcon,
+  ParametersIcon,
   ResourcesIcon,
   TracesIcon,
 } from "./Icons";
 
-export type PageId = "resources" | "console" | "logs" | "traces" | "metrics" | "canvases";
+export type PageId = "resources" | "parameters" | "console" | "logs" | "traces" | "metrics" | "canvases";
 
 interface NavEntry {
   id: PageId;
@@ -18,6 +19,7 @@ interface NavEntry {
 
 const NAV: NavEntry[] = [
   { id: "resources", label: "Resources", icon: ResourcesIcon },
+  { id: "parameters", label: "Parameters", icon: ParametersIcon },
   { id: "console", label: "Console", icon: ConsoleIcon },
   { id: "logs", label: "Structured Logs", icon: LogsIcon },
   { id: "traces", label: "Traces", icon: TracesIcon },
