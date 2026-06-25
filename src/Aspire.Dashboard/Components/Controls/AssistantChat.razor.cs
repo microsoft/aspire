@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Resources;
@@ -120,7 +121,7 @@ public sealed partial class AssistantChat : ComponentBase, IAsyncDisposable
             _modelMenuItems.Add(CreateItem(model));
         }
         _selectedModelItem = _modelMenuItems.FirstOrDefault(i => i.Text == ChatViewModel.SelectedModel?.DisplayName) ?? _modelMenuItems.LastOrDefault();
-        _selectedModelItem?.Icon = new Icons.Regular.Size16.Checkmark();
+        _selectedModelItem?.Icon = DeckIconName.Checkmark;
     }
 
     private async Task ScrollToEndOfMessagesAsync()

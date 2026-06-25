@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Assistant.Prompts;
@@ -12,8 +11,7 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
+using Aspire.Dashboard.Components.Deck;
 
 namespace Aspire.Dashboard.Model;
 
@@ -22,11 +20,11 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 public sealed class SpanMenuBuilder
 {
-    private static readonly Icon s_viewDetailsIcon = new Icons.Regular.Size16.Info();
-    private static readonly Icon s_structuredLogsIcon = new Icons.Regular.Size16.SlideTextSparkle();
-    private static readonly Icon s_gitHubCopilotIcon = new AspireIcons.Size16.GitHubCopilot();
-    private static readonly Icon s_genAIIcon = new Icons.Regular.Size16.Sparkle();
-    private static readonly Icon s_bracesIcon = new Icons.Regular.Size16.Braces();
+    private const DeckIconName ViewDetailsIcon = DeckIconName.Info;
+    private const DeckIconName StructuredLogsIcon = DeckIconName.Logs;
+    private const DeckIconName GitHubCopilotIcon = DeckIconName.Sparkle;
+    private const DeckIconName GenAIIcon = DeckIconName.Sparkle;
+    private const DeckIconName BracesIcon = DeckIconName.Braces;
 
     private readonly IStringLocalizer<ControlsStrings> _controlsLoc;
     private readonly IStringLocalizer<AIAssistant> _aiAssistantLoc;
@@ -80,7 +78,7 @@ public sealed class SpanMenuBuilder
             menuItems.Add(new MenuButtonItem
             {
                 Text = _controlsLoc[nameof(ControlsStrings.ActionViewDetailsText)],
-                Icon = s_viewDetailsIcon,
+                Icon = ViewDetailsIcon,
                 OnClick = onViewDetails.InvokeAsync
             });
         }
@@ -88,7 +86,7 @@ public sealed class SpanMenuBuilder
         menuItems.Add(new MenuButtonItem
         {
             Text = _controlsLoc[nameof(ControlsStrings.ActionStructuredLogsText)],
-            Icon = s_structuredLogsIcon,
+            Icon = StructuredLogsIcon,
             OnClick = () =>
             {
                 _navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(spanId: span.SpanId));
@@ -101,7 +99,7 @@ public sealed class SpanMenuBuilder
             menuItems.Add(new MenuButtonItem
             {
                 Text = _controlsLoc[nameof(ControlsStrings.GenAIDetailsTitle)],
-                Icon = s_genAIIcon,
+                Icon = GenAIIcon,
                 OnClick = () => onLaunchGenAI.InvokeAsync(span)
             });
         }
@@ -109,7 +107,7 @@ public sealed class SpanMenuBuilder
         menuItems.Add(new MenuButtonItem
         {
             Text = _controlsLoc[nameof(ControlsStrings.ViewJson)],
-            Icon = s_bracesIcon,
+            Icon = BracesIcon,
             OnClick = async () =>
             {
                 var result = ExportHelpers.GetSpanAsJson(span, _telemetryRepository, _outgoingPeerResolvers);
@@ -129,7 +127,7 @@ public sealed class SpanMenuBuilder
             menuItems.Add(new MenuButtonItem
             {
                 Text = _aiAssistantLoc[nameof(AIAssistant.MenuTextAskGitHubCopilot)],
-                Icon = s_gitHubCopilotIcon,
+                Icon = GitHubCopilotIcon,
                 OnClick = async () =>
                 {
                     await _aiContextProvider.LaunchAssistantSidebarAsync(

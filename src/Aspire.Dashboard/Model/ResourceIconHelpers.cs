@@ -19,7 +19,7 @@ internal static class ResourceIconHelpers
         // nearest Deck glyph. Unknown names fall through to the resource-type icon below: Deck ships a
         // fixed, single-stroke glyph set rather than the full Fluent icon library, so arbitrary names
         // can't be resolved — and we intentionally don't reach back to Fluent for them.
-        if (!string.IsNullOrWhiteSpace(resource.IconName) && TryMapCustomIcon(resource.IconName, out var custom))
+        if (!string.IsNullOrWhiteSpace(resource.IconName) && TryGetDeckIcon(resource.IconName, out var custom))
         {
             return custom;
         }
@@ -52,10 +52,10 @@ internal static class ResourceIconHelpers
         };
     }
 
-    // Maps a Fluent system-icon name (passed to WithIconName by Aspire integrations) to the nearest
+    // Maps a Fluent system-icon name (passed via WithIconName, or a command's IconName) to the nearest
     // Deck glyph. Comparison is case-insensitive. Returns false for names with no Deck equivalent so the
-    // caller falls back to the resource-type icon.
-    private static bool TryMapCustomIcon(string iconName, out DeckIconName icon)
+    // caller can fall back (to a resource-type icon, or to no icon for a command).
+    public static bool TryGetDeckIcon(string iconName, out DeckIconName icon)
     {
         switch (iconName.ToLowerInvariant())
         {

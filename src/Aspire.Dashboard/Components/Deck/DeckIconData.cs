@@ -293,6 +293,145 @@ internal static class DeckIconData
             """
             <circle cx="12" cy="12" r="9" />
             """,
+        // circle with an "i" (lucide "info").
+        [DeckIconName.Info] =
+            """
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4" />
+            <path d="M12 8h.01" />
+            """,
+        // curly braces (lucide "braces").
+        [DeckIconName.Braces] =
+            """
+            <path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1" />
+            <path d="M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1" />
+            """,
+        // document with text lines (lucide "file-text").
+        [DeckIconName.DocumentText] =
+            """
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <path d="M14 2v6h6" />
+            <path d="M16 13H8" />
+            <path d="M16 17H8" />
+            <path d="M10 9H8" />
+            """,
+        // toolbox — resource commands menu.
+        [DeckIconName.Toolbox] =
+            """
+            <rect x="2" y="7" width="20" height="14" rx="2" />
+            <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <path d="M2 13h20" />
+            <path d="M10 13v2" />
+            <path d="M14 13v2" />
+            """,
+        // downward chevron (lucide "chevron-down").
+        [DeckIconName.ChevronDown] =
+            """
+            <path d="m6 9 6 6 6-6" />
+            """,
+        // three horizontal dots (lucide "more-horizontal"). Dots are filled.
+        [DeckIconName.MoreHorizontal] =
+            """
+            <circle cx="12" cy="12" r="1" fill="currentColor" />
+            <circle cx="19" cy="12" r="1" fill="currentColor" />
+            <circle cx="5" cy="12" r="1" fill="currentColor" />
+            """,
+        // horizontal sliders (lucide "sliders-horizontal") — options menu.
+        [DeckIconName.Options] =
+            """
+            <line x1="21" y1="4" x2="14" y2="4" />
+            <line x1="10" y1="4" x2="3" y2="4" />
+            <line x1="21" y1="12" x2="12" y2="12" />
+            <line x1="8" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="20" x2="16" y2="20" />
+            <line x1="12" y1="20" x2="3" y2="20" />
+            <line x1="14" y1="2" x2="14" y2="6" />
+            <line x1="8" y1="10" x2="8" y2="14" />
+            <line x1="16" y1="18" x2="16" y2="22" />
+            """,
+        // trash can (lucide "trash-2").
+        [DeckIconName.Delete] =
+            """
+            <path d="M3 6h18" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+            <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            <line x1="10" y1="11" x2="10" y2="17" />
+            <line x1="14" y1="11" x2="14" y2="17" />
+            """,
+        // checkmark (lucide "check").
+        [DeckIconName.Checkmark] =
+            """
+            <path d="M20 6 9 17l-5-5" />
+            """,
+        // double down chevron — expand all.
+        [DeckIconName.ExpandAll] =
+            """
+            <path d="m7 6 5 5 5-5" />
+            <path d="m7 13 5 5 5-5" />
+            """,
+        // double up chevron — collapse all.
+        [DeckIconName.CollapseAll] =
+            """
+            <path d="m7 11 5-5 5 5" />
+            <path d="m7 18 5-5 5 5" />
+            """,
+        // down arrow into a tray (lucide "download").
+        [DeckIconName.Download] =
+            """
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <path d="M7 10l5 5 5-5" />
+            <path d="M12 15V3" />
+            """,
+        // clock (lucide "clock").
+        [DeckIconName.Clock] =
+            """
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+            """,
+        // checked checkbox (lucide "square-check").
+        [DeckIconName.CheckboxChecked] =
+            """
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="m8 12 3 3 5-6" />
+            """,
+        // empty checkbox (lucide "square").
+        [DeckIconName.CheckboxUnchecked] =
+            """
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            """,
+        // checkbox with a dash (lucide "square-minus") — indeterminate.
+        [DeckIconName.CheckboxIndeterminate] =
+            """
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M8 12h8" />
+            """,
+        // wrapping arrow (lucide "wrap-text") — toggle line wrapping.
+        [DeckIconName.TextWrap] =
+            """
+            <path d="M3 6h18" />
+            <path d="M3 12h15a3 3 0 1 1 0 6h-4" />
+            <path d="m16 16-2 2 2 2" />
+            <path d="M3 18h7" />
+            """,
+        // overlapping pages (lucide "copy").
+        [DeckIconName.Copy] =
+            """
+            <rect x="9" y="9" width="13" height="13" rx="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            """,
+        // stacked layers (lucide "layers").
+        [DeckIconName.Stack] =
+            """
+            <path d="m12 2 9 5-9 5-9-5 9-5z" />
+            <path d="m3 12 9 5 9-5" />
+            <path d="m3 17 9 5 9-5" />
+            """,
+        // person silhouette (lucide "user").
+        [DeckIconName.Person] =
+            """
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 21a8 8 0 0 1 16 0" />
+            """,
     }.ToFrozenDictionary();
 
     /// <summary>

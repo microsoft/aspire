@@ -80,14 +80,14 @@
                 {
                     <FluentCounterBadge HorizontalPosition="70" Count="@(PageViewModel.Filters.GetEnabledFilters().Count())" Appearance="Appearance.Accent">
                         <AspireMenuButton ButtonAppearance="Appearance.Stealth" HideIcon="true"
-                                          Icon="@(new Icons.Regular.Size20.Filter())"
+                                          Icon="DeckIconName.Filter"
                                           Items="@GetFilterMenuItems()"
                                           Title="@FilterLoc[nameof(StructuredFiltering.Filters)]" />
                     </FluentCounterBadge>
                 }
 
                 <AspireMenuButton ButtonAppearance="Appearance.Lightweight"
-                                  Icon="@(new Icons.Regular.Size20.Options())"
+                                  Icon="DeckIconName.Options"
                                   Items="@_traceActionsMenuItems"
                                   Title="@ControlStringsLoc[nameof(ControlsStrings.ActionsButtonText)]" />
             </div>

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Deck;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Diagnostics;
@@ -22,7 +23,6 @@ using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Pages;
 
@@ -515,7 +515,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             IsDisabled = PageViewModel.SelectedResource is null && !_isSubscribedToAll,
             OnClick = DownloadLogsAsync,
             Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogs)],
-            Icon = new Icons.Regular.Size16.ArrowDownload()
+            Icon = DeckIconName.Download
         });
 
         _logsMenuItems.Add(new()
@@ -551,14 +551,14 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         {
             OnClick = () => ToggleTimestampAsync(showTimestamp: !_showTimestamp, isTimestampUtc: _isTimestampUtc),
             Text = _showTimestamp ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampHide)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShow)],
-            Icon = new Icons.Regular.Size16.CalendarClock()
+            Icon = DeckIconName.Clock
         });
 
         _logsMenuItems.Add(new()
         {
             OnClick = () => ToggleTimestampAsync(showTimestamp: _showTimestamp, isTimestampUtc: !_isTimestampUtc),
             Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc)],
-            Icon = _isTimestampUtc ? new Icons.Regular.Size16.CheckboxChecked() : new Icons.Regular.Size16.CheckboxUnchecked(),
+            Icon = _isTimestampUtc ? DeckIconName.CheckboxChecked : DeckIconName.CheckboxUnchecked,
             IsDisabled = !_showTimestamp
         });
 
@@ -566,7 +566,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         {
             OnClick = () => ToggleWrapLogsAsync(noWrapLogs: !_noWrapLogs),
             Text = _noWrapLogs ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNoWrapLogs)],
-            Icon = _noWrapLogs ? new Icons.Regular.Size16.TextWrap() : new Icons.Regular.Size16.TextWrapOff()
+            Icon = _noWrapLogs ? DeckIconName.TextWrap : DeckIconName.TextWrap
         });
 
         if (selectedResource != null)

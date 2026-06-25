@@ -103,6 +103,46 @@ public enum DeckIconName
     HeartBroken,
     /// <summary>Hollow circle; an unknown/indeterminate health status.</summary>
     CircleHint,
+    /// <summary>Circle with an "i"; informational.</summary>
+    Info,
+    /// <summary>Curly braces; structured/JSON content.</summary>
+    Braces,
+    /// <summary>Document with text lines.</summary>
+    DocumentText,
+    /// <summary>Toolbox; resource commands.</summary>
+    Toolbox,
+    /// <summary>Downward chevron; a dropdown affordance.</summary>
+    ChevronDown,
+    /// <summary>Three horizontal dots; an overflow/more menu.</summary>
+    MoreHorizontal,
+    /// <summary>Horizontal sliders; an options menu.</summary>
+    Options,
+    /// <summary>Trash can; a delete/clear action.</summary>
+    Delete,
+    /// <summary>Checkmark; a selected/applied item.</summary>
+    Checkmark,
+    /// <summary>Double down chevron; expand-all.</summary>
+    ExpandAll,
+    /// <summary>Double up chevron; collapse-all.</summary>
+    CollapseAll,
+    /// <summary>Down arrow into a tray; download/save.</summary>
+    Download,
+    /// <summary>Clock; time/timestamp.</summary>
+    Clock,
+    /// <summary>Checked checkbox.</summary>
+    CheckboxChecked,
+    /// <summary>Empty checkbox.</summary>
+    CheckboxUnchecked,
+    /// <summary>Checkbox with a dash; indeterminate/partial selection.</summary>
+    CheckboxIndeterminate,
+    /// <summary>Wrapping arrow; toggle line wrapping.</summary>
+    TextWrap,
+    /// <summary>Overlapping pages; copy.</summary>
+    Copy,
+    /// <summary>Stacked layers.</summary>
+    Stack,
+    /// <summary>Person silhouette.</summary>
+    Person,
     /// <summary>
     /// Special value: resolves to a project/container/executable icon based on the
     /// <see cref="DeckIcon.ResourceType"/> string.

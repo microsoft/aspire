@@ -25,10 +25,10 @@
             };
 
             return @<FluentMenuItem Id="@item.Id" Class="@item.Class" OnClick="() => HandleItemClicked(item)" Disabled="@item.IsDisabled" AdditionalAttributes="@additionalMenuItemAttributes" Label="@item.Text" MenuItems="@RenderNestedItems(item)">
-                @if (item.Icon != null)
+                @if (item.Icon is { } iconName)
                 {
                     <span slot="start">
-                        <FluentIcon Value="@item.Icon" Style="vertical-align: text-bottom;" Width="16px" />
+                        <DeckIcon Name="iconName" Size="16" Style="vertical-align: text-bottom;" />
                     </span>
                 }
             </FluentMenuItem>;

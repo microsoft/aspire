@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Components.CustomIcons;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Assistant.Prompts;
@@ -10,8 +10,6 @@ using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Model;
 
@@ -20,17 +18,17 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 public sealed class ResourceMenuBuilder
 {
-    private static readonly Icon s_viewDetailsIcon = new Icons.Regular.Size16.Info();
-    private static readonly Icon s_consoleLogsIcon = new Icons.Regular.Size16.SlideText();
-    private static readonly Icon s_structuredLogsIcon = new Icons.Regular.Size16.SlideTextSparkle();
-    private static readonly Icon s_tracesIcon = new Icons.Regular.Size16.GanttChart();
-    private static readonly Icon s_metricsIcon = new Icons.Regular.Size16.ChartMultiple();
-    private static readonly Icon s_linkIcon = new Icons.Regular.Size16.Link();
-    private static readonly Icon s_gitHubCopilotIcon = new AspireIcons.Size16.GitHubCopilot();
-    private static readonly Icon s_toolboxIcon = new Icons.Regular.Size16.Toolbox();
-    private static readonly Icon s_linkMultipleIcon = new Icons.Regular.Size16.LinkMultiple();
-    private static readonly Icon s_bracesIcon = new Icons.Regular.Size16.Braces();
-    private static readonly Icon s_exportEnvIcon = new Icons.Regular.Size16.DocumentText();
+    private const DeckIconName ViewDetailsIcon = DeckIconName.Info;
+    private const DeckIconName ConsoleLogsIcon = DeckIconName.Console;
+    private const DeckIconName StructuredLogsIcon = DeckIconName.Logs;
+    private const DeckIconName TracesIcon = DeckIconName.Traces;
+    private const DeckIconName MetricsIcon = DeckIconName.Metrics;
+    private const DeckIconName LinkIcon = DeckIconName.Link;
+    private const DeckIconName GitHubCopilotIcon = DeckIconName.Sparkle;
+    private const DeckIconName ToolboxIcon = DeckIconName.Toolbox;
+    private const DeckIconName LinkMultipleIcon = DeckIconName.Link;
+    private const DeckIconName BracesIcon = DeckIconName.Braces;
+    private const DeckIconName ExportEnvIcon = DeckIconName.DocumentText;
 
     private readonly NavigationManager _navigationManager;
     private readonly TelemetryRepository _telemetryRepository;
@@ -39,7 +37,6 @@ public sealed class ResourceMenuBuilder
     private readonly IStringLocalizer<Resources.Resources> _loc;
     private readonly IStringLocalizer<Resources.AIAssistant> _aiAssistantLoc;
     private readonly IStringLocalizer<Resources.AIPrompts> _aiPromptsLoc;
-    private readonly IconResolver _iconResolver;
     private readonly DashboardDialogService _dialogService;
 
     /// <summary>
@@ -53,7 +50,6 @@ public sealed class ResourceMenuBuilder
         IStringLocalizer<Resources.Resources> loc,
         IStringLocalizer<Resources.AIAssistant> aiAssistantLoc,
         IStringLocalizer<Resources.AIPrompts> aiPromptsLoc,
-        IconResolver iconResolver,
         DashboardDialogService dialogService)
     {
         _navigationManager = navigationManager;
@@ -63,7 +59,6 @@ public sealed class ResourceMenuBuilder
         _loc = loc;
         _aiAssistantLoc = aiAssistantLoc;
         _aiPromptsLoc = aiPromptsLoc;
-        _iconResolver = iconResolver;
         _dialogService = dialogService;
     }
 
@@ -86,7 +81,7 @@ public sealed class ResourceMenuBuilder
             menuItems.Add(new MenuButtonItem
             {
                 Text = _controlLoc[nameof(ControlsStrings.ActionViewDetailsText)],
-                Icon = s_viewDetailsIcon,
+                Icon = ViewDetailsIcon,
                 OnClick = onViewDetails.InvokeAsync
             });
         }
@@ -96,7 +91,7 @@ public sealed class ResourceMenuBuilder
             menuItems.Add(new MenuButtonItem
             {
                 Text = _loc[nameof(Resources.Resources.ResourceActionConsoleLogsText)],
-                Icon = s_consoleLogsIcon,
+                Icon = ConsoleLogsIcon,
                 OnClick = () =>
                 {
                     _navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
@@ -108,7 +103,7 @@ public sealed class ResourceMenuBuilder
         menuItems.Add(new MenuButtonItem
         {
             Text = _controlLoc[nameof(ControlsStrings.ViewJson)],
-            Icon = s_bracesIcon,
+            Icon = BracesIcon,
             OnClick = async () =>
             {
                 var result = ExportHelpers.GetResourceAsJson(resource, resourceByName);
@@ -129,7 +124,7 @@ public sealed class ResourceMenuBuilder
             menuItems.Add(new MenuButtonItem
             {
                 Text = _controlLoc[nameof(ControlsStrings.ExportEnv)],
-                Icon = s_exportEnvIcon,
+                Icon = ExportEnvIcon,
                 OnClick = async () =>
                 {
                     var result = ExportHelpers.GetEnvironmentVariablesAsEnvFile(resource, resourceByName);
@@ -151,7 +146,7 @@ public sealed class ResourceMenuBuilder
             menuItems.Add(new MenuButtonItem
             {
                 Text = _aiAssistantLoc[nameof(AIAssistant.MenuTextAskGitHubCopilot)],
-                Icon = s_gitHubCopilotIcon,
+                Icon = GitHubCopilotIcon,
                 OnClick = async () =>
                 {
                     await _aiContextProvider.LaunchAssistantSidebarAsync(
@@ -199,7 +194,7 @@ public sealed class ResourceMenuBuilder
             {
                 Text = _loc[nameof(Resources.Resources.ResourceActionUrlsText)],
                 Tooltip = "", // No tooltip for the commands menu item.
-                Icon = s_linkMultipleIcon,
+                Icon = LinkMultipleIcon,
                 NestedMenuItems = urlItems
             });
         }
@@ -220,7 +215,7 @@ public sealed class ResourceMenuBuilder
         {
             Text = url.Text,
             Tooltip = url.Url,
-            Icon = s_linkIcon,
+            Icon = LinkIcon,
             AdditionalAttributes = new Dictionary<string, object>
             {
                 ["data-openbutton"] = "true",
@@ -244,7 +239,7 @@ public sealed class ResourceMenuBuilder
                 {
                     Text = _loc[nameof(Resources.Resources.ResourceActionStructuredLogsText)],
                     Tooltip = _loc[nameof(Resources.Resources.ResourceActionStructuredLogsText)],
-                    Icon = s_structuredLogsIcon,
+                    Icon = StructuredLogsIcon,
                     OnClick = () =>
                     {
                         _navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
@@ -257,7 +252,7 @@ public sealed class ResourceMenuBuilder
             {
                 Text = _loc[nameof(Resources.Resources.ResourceActionTracesText)],
                 Tooltip = _loc[nameof(Resources.Resources.ResourceActionTracesText)],
-                Icon = s_tracesIcon,
+                Icon = TracesIcon,
                 OnClick = () =>
                 {
                     _navigationManager.NavigateTo(DashboardUrls.TracesUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
@@ -271,7 +266,7 @@ public sealed class ResourceMenuBuilder
                 {
                     Text = _loc[nameof(Resources.Resources.ResourceActionMetricsText)],
                     Tooltip = _loc[nameof(Resources.Resources.ResourceActionMetricsText)],
-                    Icon = s_metricsIcon,
+                    Icon = MetricsIcon,
                     OnClick = () =>
                     {
                         _navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: ResourceViewModel.GetResourceName(resource, resourceByName)));
@@ -319,7 +314,7 @@ public sealed class ResourceMenuBuilder
             {
                 Text = _loc[nameof(Resources.Resources.ResourceActionCommandsText)],
                 Tooltip = "", // No tooltip for the commands menu item.
-                Icon = s_toolboxIcon,
+                Icon = ToolboxIcon,
                 NestedMenuItems = commands
             });
         }
@@ -333,7 +328,7 @@ public sealed class ResourceMenuBuilder
 
         MenuButtonItem CreateMenuItem(CommandViewModel command)
         {
-            var icon = (!string.IsNullOrEmpty(command.IconName) && _iconResolver.ResolveIconName(command.IconName, IconSize.Size16, command.IconVariant) is { } i) ? i : null;
+            DeckIconName? icon = (!string.IsNullOrEmpty(command.IconName) && ResourceIconHelpers.TryGetDeckIcon(command.IconName, out var di)) ? di : null;
 
             return new MenuButtonItem
             {

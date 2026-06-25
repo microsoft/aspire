@@ -157,9 +157,8 @@
                     {
                         <AspireMenuButton Text="@_selectedModelItem.Text"
                                           Title="@string.Format(Loc[nameof(AIAssistant.ChatModelSelectButtonTitle)], _selectedModelItem.Text)"
-                                          Icon="@(new Icons.Regular.Size12.ChevronDown())"
-                                          IconColor="Color.Custom"
-                                          IconCustomColor="var(--foreground-settings-text)"
+                                          Icon="DeckIconName.ChevronDown"
+                                          IconColorStyle="var(--foreground-settings-text)"
                                           Items="@_modelMenuItems"
                                           ButtonAppearance="Appearance.Neutral"
                                           ButtonClass="model-button" />

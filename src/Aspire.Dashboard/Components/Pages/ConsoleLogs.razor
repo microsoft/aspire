@@ -31,7 +31,7 @@
         {
             <AspireMenuButton
                 ButtonAppearance="Appearance.Stealth"
-                Icon="@(new Icons.Regular.Size20.Options())"
+                Icon="DeckIconName.Options"
                 Items="@_logsMenuItems"
                 Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]" />
         }
@@ -80,7 +80,7 @@
             if (_resourceMenuItems.Count > 0)
             {
                 <AspireMenuButton ButtonAppearance="@(ViewportInformation.IsDesktop ? Appearance.Lightweight : Appearance.Neutral)"
-                                  Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
+                                  Icon="DeckIconName.MoreHorizontal"
                                   Items="@_resourceMenuItems"
                                   Title="@ControlsStringsLoc[nameof(ControlsStrings.ResourceActions)]"
                                   Text="@(ViewportInformation.IsDesktop ? null : ControlsStringsLoc[nameof(ControlsStrings.ResourceActions)].Value)"/>

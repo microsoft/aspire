@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Deck;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Dashboard.Configuration;
@@ -17,7 +18,6 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Pages;
 
@@ -448,7 +448,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 IsDisabled = false,
                 OnClick = _onToggleCollapseAllCallback.InvokeAsync,
                 Text = Loc[nameof(Dashboard.Resources.Resources.ResourceExpandAllChildren)],
-                Icon = new Icons.Regular.Size16.Eye()
+                Icon = DeckIconName.Eye
             });
         }
         else
@@ -458,7 +458,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 IsDisabled = false,
                 OnClick = _onToggleCollapseAllCallback.InvokeAsync,
                 Text = Loc[nameof(Dashboard.Resources.Resources.ResourceCollapseAllChildren)],
-                Icon = new Icons.Regular.Size16.EyeOff()
+                Icon = DeckIconName.EyeOff
             });
         }
 
@@ -469,7 +469,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 IsDisabled = false,
                 OnClick = _onToggleResourceTypeCallback.InvokeAsync,
                 Text = Loc[nameof(Dashboard.Resources.Resources.ResourcesHideTypes)],
-                Icon = new Icons.Regular.Size16.EyeOff()
+                Icon = DeckIconName.EyeOff
             });
         }
         else
@@ -479,7 +479,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 IsDisabled = false,
                 OnClick = _onToggleResourceTypeCallback.InvokeAsync,
                 Text = Loc[nameof(Dashboard.Resources.Resources.ResourcesShowTypes)],
-                Icon = new Icons.Regular.Size16.Eye()
+                Icon = DeckIconName.Eye
             });
         }
 

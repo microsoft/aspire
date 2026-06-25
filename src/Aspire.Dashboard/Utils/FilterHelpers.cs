@@ -7,8 +7,8 @@ using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Aspire.Dashboard.Components.Deck;
 using Microsoft.FluentUI.AspNetCore.Components;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Utils;
 
@@ -35,7 +35,7 @@ public static class FilterHelpers
             {
                 OnClick = () => openFilterAsync(filter),
                 Text = filter.GetDisplayText(filterLoc),
-                Icon = filter.Enabled ? new Icons.Regular.Size16.Play() : new Icons.Regular.Size16.Pause(),
+                Icon = filter.Enabled ? DeckIconName.Play : DeckIconName.Pause,
                 Class = "filter-menu-item",
             });
         }
@@ -50,7 +50,7 @@ public static class FilterHelpers
             filterMenuItems.Add(new MenuButtonItem
             {
                 Text = dialogsLoc[nameof(Dialogs.FilterDialogDisableAll)],
-                Icon = new Icons.Regular.Size16.Pause(),
+                Icon = DeckIconName.Pause,
                 OnClick = async () =>
                 {
                     foreach (var filter in filters)
@@ -67,7 +67,7 @@ public static class FilterHelpers
             filterMenuItems.Add(new MenuButtonItem
             {
                 Text = dialogsLoc[nameof(Dialogs.FilterDialogEnableAll)],
-                Icon = new Icons.Regular.Size16.Play(),
+                Icon = DeckIconName.Play,
                 OnClick = async () =>
                 {
                     foreach (var filter in filters)
@@ -83,7 +83,7 @@ public static class FilterHelpers
         filterMenuItems.Add(new MenuButtonItem
         {
             Text = dialogsLoc[nameof(Dialogs.SettingsRemoveAllButtonText)],
-            Icon = new Icons.Regular.Size16.Delete(),
+            Icon = DeckIconName.Delete,
             OnClick = async () =>
             {
                 clearFilters();
