@@ -31,6 +31,7 @@ internal sealed class AppHostServerProjectFactory(
     IDotNetSdkInstaller sdkInstaller,
     CliExecutionContext executionContext,
     IEnvironment environment,
+    IProcessExecutionFactory processExecutionFactory,
     ILoggerFactory loggerFactory) : IAppHostServerProjectFactory
 {
     public async Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
@@ -47,6 +48,7 @@ internal sealed class AppHostServerProjectFactory(
                 repoRoot,
                 dotNetCliRunner,
                 packagingService,
+                processExecutionFactory,
                 loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>(),
                 environment: environment,
                 logFilePath: executionContext.LogFilePath);
@@ -85,6 +87,7 @@ internal sealed class AppHostServerProjectFactory(
                 sdkInstaller,
                 packagingService,
                 executionContext,
+                processExecutionFactory,
                 loggerFactory.CreateLogger<PrebuiltAppHostServer>(),
                 layoutLease);
         }

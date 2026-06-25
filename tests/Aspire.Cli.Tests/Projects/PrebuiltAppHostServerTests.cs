@@ -232,17 +232,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("apphost");
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-        var server = new PrebuiltAppHostServer(
-            appHostDirectory.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
-            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(workspace, appPath: appHostDirectory.FullName);
 
         var workingDirectory = Assert.IsType<string>(
             typeof(PrebuiltAppHostServer)
@@ -276,23 +266,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var firstAppHost = workspace.CreateDirectory(Path.Combine("apps", "api"));
         var secondAppHost = workspace.CreateDirectory(Path.Combine("apps", "web"));
 
-        var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-
-        PrebuiltAppHostServer CreateServer(string appHostDirectory) => new(
-            appHostDirectory,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
-            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        PrebuiltAppHostServer CreateServer(string appHostDirectory) =>
+            CreatePrebuiltAppHostServer(workspace, appPath: appHostDirectory);
 
         var firstServer = CreateServer(firstAppHost.FullName);
         var secondServer = CreateServer(secondAppHost.FullName);
@@ -909,23 +884,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             GetStagingChannelUnavailableReasonCallback = () => "Staging unavailable"
         };
 
-        var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            executionContext,
-            NullLogger<BundleNuGetService>.Instance);
-
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            packagingService,
-            executionContext,
-            NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(workspace, packagingService: packagingService, executionContext: executionContext);
 
         var sources = await server.GetNuGetSourcesAsync("daily", packageSourceOverride: null, CancellationToken.None);
 
@@ -955,23 +914,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             GetStagingChannelUnavailableReasonCallback = () => unavailableReason
         };
 
-        var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            executionContext,
-            NullLogger<BundleNuGetService>.Instance);
-
-        return new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            packagingService,
-            executionContext,
-            NullLogger.Instance);
+        return CreatePrebuiltAppHostServer(workspace, packagingService: packagingService, executionContext: executionContext);
     }
 
     private static CliExecutionContext CreateContextWithIdentityChannel(string identityChannel) =>
@@ -982,6 +925,42 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "logs")),
             "test.log",
             identityChannel: identityChannel);
+
+    // Builds a PrebuiltAppHostServer with the constant test wiring (socket name, SDK installer, process
+    // execution factory, logger) so individual tests only specify the parameters their scenario exercises.
+    // The execution context defaults to a fresh test context and is shared with the default NuGet service.
+    // Tests that need bundle-layout discovery (FixedLayoutDiscovery) or a custom process runner build their
+    // own BundleNuGetService and pass it via nugetService.
+    private static PrebuiltAppHostServer CreatePrebuiltAppHostServer(
+        TemporaryWorkspace workspace,
+        string? appPath = null,
+        LayoutConfiguration? layout = null,
+        TestDotNetCliRunner? dotNetCliRunner = null,
+        IPackagingService? packagingService = null,
+        CliExecutionContext? executionContext = null,
+        BundleNuGetService? nugetService = null)
+    {
+        executionContext ??= TestExecutionContextFactory.CreateTestContext();
+
+        nugetService ??= new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        return new PrebuiltAppHostServer(
+            appPath ?? workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            layout ?? new LayoutConfiguration(),
+            nugetService,
+            dotNetCliRunner ?? new TestDotNetCliRunner(),
+            new TestDotNetSdkInstaller(),
+            packagingService ?? MockPackagingServiceFactory.Create(),
+            executionContext,
+            new TestProcessExecutionFactory(),
+            NullLogger.Instance);
+    }
 
     private static PrebuiltAppHostServer CreateServerWithExplicitChannel(
         TemporaryWorkspace workspace,
@@ -1017,24 +996,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         IPackagingService packagingService,
         CliExecutionContext? executionContext = null)
     {
-        executionContext ??= TestExecutionContextFactory.CreateTestContext();
-        var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            executionContext,
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-
-        return new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            packagingService,
-            executionContext,
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        return CreatePrebuiltAppHostServer(workspace, packagingService: packagingService, executionContext: executionContext);
     }
 
     private static async Task<TemporaryNuGetConfig?> InvokeTryCreateTemporaryNuGetConfigAsync(
@@ -1078,17 +1040,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             }
             """);
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
-            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(workspace);
 
         var channel = server.ResolveRequestedChannel();
 
@@ -1100,17 +1052,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            MockPackagingServiceFactory.Create(),
-            TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(workspace);
 
         var workingDirectory = GetWorkingDirectory(server);
 
@@ -1759,22 +1701,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel])
         };
 
-        var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
-            NullLogger<BundleNuGetService>.Instance);
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            dotNetCliRunner,
-            new TestDotNetSdkInstaller(),
-            packagingService,
-            TestExecutionContextFactory.CreateTestContext(),
-            NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(
+            workspace,
+            dotNetCliRunner: dotNetCliRunner,
+            packagingService: packagingService);
         var workingDirectory = GetWorkingDirectory(server);
 
         try
@@ -1903,22 +1833,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
                 return 0;
             }
         };
-        var nugetService = new BundleNuGetService(
-            new NullLayoutDiscovery(),
-            new LayoutProcessRunner(new TestProcessExecutionFactory()),
-            new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            new LayoutConfiguration(),
-            nugetService,
-            dotNetCliRunner,
-            new TestDotNetSdkInstaller(),
-            MockPackagingServiceFactory.Create(),
-            TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(workspace, dotNetCliRunner: dotNetCliRunner);
         var workingDirectory = GetWorkingDirectory(server);
 
         try
@@ -1987,7 +1902,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(layout),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            executionContext,
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var stagingChannel = PackageChannel.CreateExplicitChannel(
@@ -2005,16 +1920,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([stagingChannel])
         };
 
-        var server = new PrebuiltAppHostServer(
-            projectDirectory.FullName,
-            "test.sock",
-            layout,
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            packagingService,
-            executionContext,
-            NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(
+            workspace,
+            appPath: projectDirectory.FullName,
+            layout: layout,
+            packagingService: packagingService,
+            executionContext: executionContext,
+            nugetService: nugetService);
         var workingDirectory = GetWorkingDirectory(server);
 
         try
@@ -2486,17 +2398,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             }
         };
 
-        var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
-        return new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            layout ?? new LayoutConfiguration(),
-            nugetService,
-            dotNetCliRunner,
-            new TestDotNetSdkInstaller(),
-            MockPackagingServiceFactory.Create(),
-            TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        return CreatePrebuiltAppHostServer(workspace, layout: layout, dotNetCliRunner: dotNetCliRunner);
     }
 
     private static (PrebuiltAppHostServer Server, TestProcessExecutionFactory ExecutionFactory) CreatePackageReferenceServer(TemporaryWorkspace workspace)
@@ -2514,19 +2416,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(layout),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
 
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            layout,
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            packagingService,
-            TestExecutionContextFactory.CreateTestContext(),
-            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var server = CreatePrebuiltAppHostServer(
+            workspace,
+            layout: layout,
+            packagingService: packagingService,
+            nugetService: nugetService);
 
         return (server, executionFactory);
     }
@@ -2660,19 +2557,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(layout),
             new LayoutProcessRunner(new TestProcessExecutionFactory()),
             new TestFeatures(),
-            executionContext,
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
-        var server = new PrebuiltAppHostServer(
-            workspace.WorkspaceRoot.FullName,
-            "test.sock",
-            layout,
-            nugetService,
-            new TestDotNetCliRunner(),
-            new TestDotNetSdkInstaller(),
-            MockPackagingServiceFactory.Create(),
-            executionContext,
-            NullLogger<PrebuiltAppHostServer>.Instance);
+        var server = CreatePrebuiltAppHostServer(
+            workspace,
+            layout: layout,
+            executionContext: executionContext,
+            nugetService: nugetService);
 
         var startInfo = server.CreateStartInfo(123);
 

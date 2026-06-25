@@ -175,12 +175,21 @@ path_rules:
     targets: [job:typescript-sdk]
     reason: vitest over generated TS SDK; ts-starter is a narrow sub-path of Aspire.Cli, not the whole project
   - paths:
-      - src/Aspire.Hosting*/api/*.ats.txt
       - src/**/*.tscompat.suppression.txt
       - tools/TypeScriptApiCompat/**
       - .github/workflows/typescript-api-compat.yml
     targets: [job:typescript-api-compat]
-    reason: checked-in *.ats.txt/suppression baselines are not compiled items (Layer 1 blind); Hosting/Cli production projects are in affected_project_rules
+    reason: checked-in suppression baselines are not compiled items (Layer 1 blind); Hosting/Cli production projects are in affected_project_rules
+  # A checked-in *.ats.txt baseline changes EXACTLY when an integration's [AspireExport] surface
+  # changes -- the same surface the per-language polyglot playground scripts regenerate and compile
+  # (aspire restore --apphost over tests/PolyglotAppHosts/<integration>/<lang>). So an exported-surface
+  # change must run BOTH typescript-api-compat (baseline diff) AND polyglot (regenerate+compile in every
+  # language), even when the author has not also touched the tests/PolyglotAppHosts fixtures. The baseline
+  # is not a compiled item, so Layer 1 is blind to it and these targets must be enumerated here.
+  - paths:
+      - src/Aspire.Hosting*/api/*.ats.txt
+    targets: [job:typescript-api-compat, job:polyglot]
+    reason: an integration's *.ats.txt baseline tracks its exported ATS surface; the polyglot playground regenerates+compiles that surface per language, so a baseline change must run polyglot too
   - paths: [extension/**]
     targets: [job:extension-unit]
     reason: extension_tests_win + extension_bootstrap_linux run yarn build/test in extension/

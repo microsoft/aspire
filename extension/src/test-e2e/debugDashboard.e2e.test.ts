@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCommandInvocationCount, getDebugLaunchCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
+import { getCommandInvocationCount, getDebugLaunchCount, getStoppingPathEventCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForStoppingPathEvent, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { openAspireView, waitForEditorTitle, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
@@ -75,11 +75,9 @@ suite('Aspire debug dashboard E2E', function () {
 
         await setShowStatusDelayForE2E(2500);
         try {
-            await executeE2eControlCommand({ name: 'stopDebugging' });
-            await waitForExtensionState(
-                file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
-                `AppHost '${appHostPath}' to enter stopping state`,
-                120000);
+            const beforeStoppingPathEvent = getStoppingPathEventCount();
+            await executeE2eControlCommand({ name: 'stopDebugging' }, { waitFor: 'started' });
+            await waitForStoppingPathEvent(appHostPath, 'entered', beforeStoppingPathEvent, 120000);
             await waitForNoDebugSessions();
             await waitForNoRunningAppHost(120000, appHostPath);
             await waitForExtensionState(
@@ -107,11 +105,9 @@ suite('Aspire debug dashboard E2E', function () {
 
         await setShowStatusDelayForE2E(2500);
         try {
-            await executeE2eControlCommand({ name: 'stopDebugging' });
-            await waitForExtensionState(
-                file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
-                `AppHost '${appHostPath}' to enter stopping state`,
-                120000);
+            const beforeStoppingPathEvent = getStoppingPathEventCount();
+            await executeE2eControlCommand({ name: 'stopDebugging' }, { waitFor: 'started' });
+            await waitForStoppingPathEvent(appHostPath, 'entered', beforeStoppingPathEvent, 120000);
             await waitForNoDebugSessions();
             await waitForNoRunningAppHost(120000, appHostPath);
             await waitForExtensionState(

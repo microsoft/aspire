@@ -326,7 +326,9 @@ public class Program
         builder.Services.AddSingleton<ILoggerFactory>(startupContext.LoggerFactory);
         builder.Services.TryAddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
-        // Register the cancellation manager so commands can observe forced-termination signals
+        // Register the cancellation manager so commands can observe forced-termination signals.
+        // It is registered as the existing instance (not a type) so disposal ownership stays with
+        // Program.Main, which owns its lifetime via a `using` statement.
         builder.Services.AddSingleton(startupContext.CancellationManager);
 
         // Register file logger provider for components that write directly to the log file
@@ -338,12 +340,19 @@ public class Program
         // Register logging options so components can read the user's chosen log level
         builder.Services.AddSingleton(startupContext.LoggingOptions);
 
+        // The graceful-shutdown window is the same object as the CCM (CCM owns the OS-signal
+        // registration AND the graceful budget/clock/token). Map the consumer-facing interface to
+        // the CCM singleton so per-child shutdown ladders depend on the narrow contract rather than
+        // the whole signal manager.
+        builder.Services.AddSingleton<IGracefulShutdownWindow>(sp => sp.GetRequiredService<ConsoleCancellationManager>());
+
         // Configure OpenTelemetry tracing. TelemetryManager reads configuration and creates
         // separate TracerProvider instances:
         // - Azure Monitor provider with filtering (only exports activities with EXTERNAL_TELEMETRY=true)
         // - Profiling provider for explicit startup profiling OTLP export
         // - Diagnostic provider for DEBUG-only diagnostics
-        builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
+        builder.Services.AddSingleton(sp => TelemetryConfiguration.Create(sp.GetRequiredService<IConfiguration>(), args));
+        builder.Services.AddSingleton<TelemetryManager>();
 
         // Shared services.
         builder.Services.AddSingleton<IProcessPathProvider, EnvironmentProcessPathProvider>();
@@ -437,11 +446,20 @@ public class Program
         builder.Services.AddTelemetryServices();
         builder.Services.AddTransient<IProcessExecutionFactory, ProcessExecutionFactory>();
         builder.Services.AddSingleton<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
+        // Windows-only crash-time safety net for interactive children spawned by
+        // IsolatedProcess is provided by WindowsConsoleProcessJob.Shared — a process-wide
+        // job created on first isolated spawn. The OS closes the job handle automatically on
+        // process exit, firing KILL_ON_JOB_CLOSE on any assigned children that haven't already
+        // exited (e.g. orphaned tsx after the CLI crashes). On non-Windows, process-group
+        // reparenting + ordinary signal delivery cover the same case, so nothing is needed.
         builder.Services.AddTransient<LayoutProcessRunner>();
-        builder.Services.AddTransient<ProcessShutdownService>();
+        builder.Services.AddTransient<ProcessTreeGracefulShutdownService>();
+        // Forward the interface to the existing concrete service so consumers can depend on the
+        // abstraction (used by AppHostServerSession + GuestLaunchOptions in the aspire run path).
+        builder.Services.AddTransient<IProcessTreeGracefulShutdownSignaler>(sp => sp.GetRequiredService<ProcessTreeGracefulShutdownService>());
 
         // Register certificate tool runner - uses native CertificateManager directly (no subprocess needed)
-        builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>()));
+        builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>(), sp.GetRequiredService<IEnvironment>()));
         builder.Services.AddSingleton<ICertificateToolRunner, NativeCertificateToolRunner>();
 
         builder.Services.AddTransient<IDotNetCliRunner, DotNetCliRunner>();
@@ -484,6 +502,7 @@ public class Program
         builder.Services.AddSingleton<IBundleService, BundleService>();
         builder.Services.AddSingleton<ProfileCaptureService>();
         builder.Services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
+        builder.Services.AddSingleton<IAppHostServerSessionFactory, AppHostServerSessionFactory>();
         builder.Services.AddSingleton<ICliDownloader, CliDownloader>();
         builder.Services.AddSingleton<IFirstTimeUseNoticeSentinel>(_ => new FirstTimeUseNoticeSentinel(GetUsersAspirePath()));
         builder.Services.AddSingleton<IBannerService, BannerService>();
@@ -542,9 +561,6 @@ public class Program
 
         // Language discovery for polyglot support.
         builder.Services.AddSingleton<ILanguageDiscovery, DefaultLanguageDiscovery>();
-
-        // AppHost server session factory for RPC communication.
-        builder.Services.AddSingleton<IAppHostServerSessionFactory, AppHostServerSessionFactory>();
 
         // AppHost project handlers.
         builder.Services.AddSingleton<DotNetAppHostProject>();
@@ -905,10 +921,28 @@ public class Program
 
     public static async Task<int> Main(string[] args)
     {
+        // Re-enable CTRL+C delivery for ourselves and any process we subsequently spawn.
+        // Per https://learn.microsoft.com/windows/console/setconsolectrlhandler, the "ignore
+        // CTRL+C" state is process-level and inherited across CreateProcess. If our parent was
+        // started with CREATE_NEW_PROCESS_GROUP (or otherwise called SetConsoleCtrlHandler(NULL,
+        // TRUE)), we inherit "CTRL+C disabled" and the kernel will silently drop CTRL_C_EVENT
+        // for both us and our descendants — including the AppHost and DCP-launched services.
+        // Calling SetConsoleCtrlHandler(NULL, FALSE) once at startup clears that inherited
+        // state so the CLI's signal ladder (CCM → AppHost SIGINT → DCP stop-process-tree)
+        // can actually deliver. The runtime/Spectre still own the actual CTRL+C handler chain;
+        // we only flip the inherited "ignored" attribute.
+        if (OperatingSystem.IsWindows())
+        {
+            WindowsProcessInterop.SetConsoleCtrlHandler(nint.Zero, false);
+        }
+
         // Setup handling of CTRL-C and SIGTERM as early as possible so that if
         // we get a signal anywhere that is not handled by Spectre Console
-        // already that we know to trigger cancellation.
-        using var cancellationManager = new ConsoleCancellationManager(processTerminationTimeout: TimeSpan.FromSeconds(5));
+        // already that we know to trigger cancellation. The cancellation manager
+        // owns both the OS-signal registration and the graceful-shutdown budget,
+        // clock, and token. It is registered as a DI singleton below via
+        // AddSingleton(instance) so the container does not take disposal ownership.
+        using var cancellationManager = new ConsoleCancellationManager(finalDrainBudget: TimeSpan.FromSeconds(5));
 
         Console.OutputEncoding = Encoding.UTF8;
 
@@ -1043,6 +1077,14 @@ public class Program
 
                 // Log exit code for debugging
                 logger.LogInformation("Exit code: {ExitCode}", exitCode);
+            }
+            catch (OperationCanceledException)
+            {
+                // The command observed cancellation and propagated OCE rather than returning a
+                // normal exit code. Internal failures `return X` directly from the command, so
+                // anything reaching here is user-initiated cancellation (Ctrl+C / SIGTERM).
+                exitCode = CliExitCodes.Cancelled;
+                logger.LogInformation("Command cancelled. Exit code: {ExitCode}", exitCode);
             }
             catch (Exception ex)
             {

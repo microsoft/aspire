@@ -130,6 +130,7 @@ internal enum AppHostProjectCandidateStatus
 internal sealed class ProjectLocator(
     ILogger<ProjectLocator> logger,
     CliExecutionContext executionContext,
+    IEnvironment environment,
     IInteractionService interactionService,
     IConfigurationService configurationService,
     IAppHostProjectFactory projectFactory,
@@ -1180,7 +1181,7 @@ internal sealed class ProjectLocator(
 
     private string? GetNuGetPackagesCachePath()
     {
-        var envPath = executionContext.GetEnvironmentVariable("NUGET_PACKAGES");
+        var envPath = environment.GetEnvironmentVariable("NUGET_PACKAGES");
         if (!string.IsNullOrEmpty(envPath))
         {
             return Path.GetFullPath(envPath);

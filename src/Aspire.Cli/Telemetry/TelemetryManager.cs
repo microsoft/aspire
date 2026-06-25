@@ -54,34 +54,21 @@ internal sealed class TelemetryManager : IDisposable
     /// <summary>
     /// Initializes a new instance of the <see cref="TelemetryManager"/> class.
     /// </summary>
-    /// <param name="configuration">The configuration to read telemetry settings from.</param>
-    /// <param name="args">The command-line arguments.</param>
-    public TelemetryManager(IConfiguration configuration, string[]? args = null)
+    /// <param name="telemetryConfiguration">The telemetry configuration.</param>
+    public TelemetryManager(TelemetryConfiguration telemetryConfiguration)
     {
-        // Don't send telemetry for informational commands or if the user has opted out.
-        var hasOptOutArg = args?.Any(a => CommonOptionNames.InformationalOptionNames.Contains(a)) ?? false;
-        var telemetryOptOut = hasOptOutArg || configuration.GetBool(AspireCliTelemetry.TelemetryOptOutConfigKey, defaultValue: false);
-
-        var profilingEnabled =
-            configuration.GetBool(Aspire.Hosting.KnownConfigNames.ProfilingEnabled) ??
-            configuration.GetBool(Aspire.Hosting.KnownConfigNames.Legacy.StartupProfilingEnabled, defaultValue: false);
-        var requestedOtlpExporter = !string.IsNullOrEmpty(configuration[AspireCliTelemetry.OtlpExporterEndpointConfigKey]);
-        var useProfilingProvider = profilingEnabled && requestedOtlpExporter;
-
 #if DEBUG
-        var consoleExporterLevel = configuration.GetEnum<ConsoleExporterLevel>(AspireCliTelemetry.ConsoleExporterLevelConfigKey, defaultValue: null);
         // Preserve the DEBUG-only diagnostic OTLP path for non-profiling diagnostics. When
         // profiling is enabled, the same OTLP endpoint is reserved for the profiling provider
         // so reported/diagnostic sources do not get mixed into startup profiling exports.
-        var useDebugDiagnosticOtlpExporter = requestedOtlpExporter && !profilingEnabled;
+        var useDebugDiagnosticOtlpExporter = telemetryConfiguration.RequestedOtlpExporter && !telemetryConfiguration.ProfilingEnabled;
 #else
-        ConsoleExporterLevel? consoleExporterLevel = null;
         var useDebugDiagnosticOtlpExporter = false;
 #endif
-        var useDebugDiagnosticProvider = useDebugDiagnosticOtlpExporter || consoleExporterLevel == ConsoleExporterLevel.Diagnostic;
+        var useDebugDiagnosticProvider = useDebugDiagnosticOtlpExporter || telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Diagnostic;
 
         // Don't create any providers if nothing is enabled
-        if (telemetryOptOut && !useProfilingProvider && !useDebugDiagnosticProvider)
+        if (!telemetryConfiguration.ReportedTelemetryEnabled && !telemetryConfiguration.UseProfilingProvider && !useDebugDiagnosticProvider)
         {
             return;
         }
@@ -96,7 +83,7 @@ internal sealed class TelemetryManager : IDisposable
 
         // Create Azure Monitor provider if connection string is provided.
         // The Azure Monitor only exports telemetry from the Reported activity source.
-        if (!telemetryOptOut)
+        if (telemetryConfiguration.ReportedTelemetryEnabled)
         {
             var azureMonitorBuilder = Sdk.CreateTracerProviderBuilder()
                 .AddSource(AspireCliTelemetry.ReportedActivitySourceName)
@@ -109,7 +96,7 @@ internal sealed class TelemetryManager : IDisposable
                 });
 
 #if DEBUG
-            if (consoleExporterLevel == ConsoleExporterLevel.Reported)
+            if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Reported)
             {
                 azureMonitorBuilder.AddConsoleExporter();
             }
@@ -118,7 +105,7 @@ internal sealed class TelemetryManager : IDisposable
             _azureMonitorProvider = azureMonitorBuilder.Build();
         }
 
-        if (useProfilingProvider)
+        if (telemetryConfiguration.UseProfilingProvider)
         {
             _profilingProvider = Sdk.CreateTracerProviderBuilder()
                 .AddSource(ProfilingTelemetry.ActivitySourceName)
@@ -133,7 +120,7 @@ internal sealed class TelemetryManager : IDisposable
                 .AddSource(AspireCliTelemetry.DiagnosticsActivitySourceName)
                 .SetResourceBuilder(resource);
 
-            if (consoleExporterLevel == ConsoleExporterLevel.Diagnostic)
+            if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Diagnostic)
             {
                 diagnosticBuilder.AddConsoleExporter();
             }
@@ -145,6 +132,16 @@ internal sealed class TelemetryManager : IDisposable
 
             _debugDiagnosticProvider = diagnosticBuilder.Build();
         }
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TelemetryManager"/> class.
+    /// </summary>
+    /// <param name="configuration">The configuration to read telemetry settings from.</param>
+    /// <param name="args">The command-line arguments.</param>
+    internal TelemetryManager(IConfiguration configuration, string[]? args = null)
+        : this(TelemetryConfiguration.Create(configuration, args))
+    {
     }
 
     /// <summary>

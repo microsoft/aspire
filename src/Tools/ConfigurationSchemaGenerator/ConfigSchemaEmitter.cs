@@ -88,7 +88,7 @@ internal sealed partial class ConfigSchemaEmitter(SchemaGenerationSpec spec, Com
                 var path = spec.ConfigurationPaths[i];
 
                 var pathSegments = new Queue<string>();
-                foreach (var segment in path.Split(':').Where(segment => !segment.StartsWith(RootPathPrefix)))
+                foreach (var segment in path.Split(':').Where(segment => !segment.StartsWith(RootPathPrefix, StringComparison.Ordinal)))
                 {
                     pathSegments.Enqueue(segment);
                 }
@@ -686,7 +686,7 @@ internal sealed partial class ConfigSchemaEmitter(SchemaGenerationSpec spec, Com
 
             foreach (var excludedPath in _exclusionPaths)
             {
-                if (excludedPath.StartsWith(currentPath) && excludedPath.EndsWith(property.ConfigurationKeyName))
+                if (excludedPath.StartsWith(currentPath, StringComparison.Ordinal) && excludedPath.EndsWith(property.ConfigurationKeyName, StringComparison.Ordinal))
                 {
                     var fullPath = $"{currentPath}.{property.ConfigurationKeyName}";
                     if (excludedPath == fullPath)

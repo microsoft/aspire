@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Utils;
 using Aspire.TypeSystem;
@@ -16,19 +16,47 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class FakeAppHostServerSession : IAppHostServerSession
 {
     private readonly FakeAppHostRpcClient _rpcClient = new();
+    private readonly TaskCompletionSource<int> _exit = new();
 
-    public string SocketPath => "fake-socket";
+    public string AuthenticationToken { get; } = "fake-token";
 
-    public Process ServerProcess { get; } = Process.GetCurrentProcess();
+    public string? SocketPath { get; } = "fake.sock";
 
-    public OutputCollector Output { get; } = new();
+    public OutputCollector? Output { get; } = new();
 
-    public string AuthenticationToken => "fake-token";
+    public bool? HasServerExited => _exit.Task.IsCompleted;
+
+    public int? TryGetServerExitCode() => _exit.Task.IsCompletedSuccessfully ? _exit.Task.Result : null;
+
+    public Task StartAsync() => Task.CompletedTask;
+
+    public Task<int> WaitForExitAsync() => _exit.Task;
 
     public Task<IAppHostRpcClient> GetRpcClientAsync(CancellationToken cancellationToken)
         => Task.FromResult<IAppHostRpcClient>(_rpcClient);
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        _exit.TrySetResult(0);
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Fake <see cref="IAppHostServerSessionFactory"/> that hands back a <see cref="FakeAppHostServerSession"/>
+/// without building or launching a real AppHost server.
+/// </summary>
+internal sealed class FakeAppHostServerSessionFactory : IAppHostServerSessionFactory
+{
+    public IAppHostServerSession Create(
+        IAppHostServerProject appHostServerProject,
+        Dictionary<string, string>? environmentVariables,
+        bool debug,
+        IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler,
+        IGracefulShutdownWindow? shutdownService,
+        bool isolateConsole,
+        CancellationToken stopRequested)
+        => new FakeAppHostServerSession();
 }
 
 /// <summary>

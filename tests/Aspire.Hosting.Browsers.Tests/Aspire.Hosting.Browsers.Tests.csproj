@@ -32,7 +32,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Browsers\Aspire.Hosting.Browsers.csproj" IsAspireProjectResource="false" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" IsAspireProjectResource="false" />
   </ItemGroup>
 

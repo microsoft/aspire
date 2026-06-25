@@ -23,7 +23,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         var vsCodeFolder = workspace.CreateDirectory(".vscode");
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -41,7 +41,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         var childDir = workspace.CreateDirectory("subdir");
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(childDir);
-        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(childDir, workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -59,7 +59,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         // Repository root is the workspace root, so search should stop there
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(childDir);
-        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(childDir, workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -73,7 +73,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var vsCodeCliRunner = new FakeVsCodeCliRunner(new SemVersion(1, 85, 0));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -89,7 +89,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         // This test assumes no VSCODE_* environment variables are set
@@ -107,7 +107,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         var vsCodePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".vscode");
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
         
         // First, make the scanner find a parent .vscode folder to get an applicator
         var parentVsCode = workspace.CreateDirectory(".vscode");
@@ -134,7 +134,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         var vsCodeFolder = workspace.CreateDirectory(".vscode");
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -190,7 +190,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -231,7 +231,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -262,7 +262,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         var vsCodeFolder = workspace.CreateDirectory(".vscode");
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -283,7 +283,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -311,7 +311,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -337,7 +337,7 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 
         var vsCodeCliRunner = new FakeVsCodeCliRunner(null);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
+        var scanner = new VsCodeAgentEnvironmentScanner(vsCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<VsCodeAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -384,12 +384,8 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         };
     }
 
-    private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo? homeDirectory = null, Dictionary<string, string?>? environmentVariables = null)
+    private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo? homeDirectory = null)
     {
-        // Default to an empty dictionary to prevent fallback to real system environment variables
-        // This ensures tests are isolated and don't fail based on the test environment (e.g., running from VS Code)
-        environmentVariables ??= [];
-
         // Use a separate directory for home to avoid conflicts with .vscode folder detection
         // (the scanner ignores .vscode in the home directory as that's for user settings, not workspace config)
         homeDirectory ??= new DirectoryInfo(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString()));
@@ -397,7 +393,6 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         return TestExecutionContextHelper.CreateExecutionContext(
             workingDirectory,
             debugMode: false,
-            environment: new TestEnvironment(environmentVariables),
             homeDirectory: homeDirectory);
     }
 }

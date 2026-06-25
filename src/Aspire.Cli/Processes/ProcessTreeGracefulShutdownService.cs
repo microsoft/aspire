@@ -11,15 +11,17 @@ using Microsoft.Extensions.Logging;
 namespace Aspire.Cli.Processes;
 
 /// <summary>
-/// Coordinates graceful process shutdown requests, termination monitoring, and force-kill fallback.
+/// Coordinates graceful process-tree shutdown requests, termination monitoring, and force-kill
+/// fallback. Shared by both the detached <c>aspire stop</c> path and the in-process <c>aspire run</c>
+/// shutdown ladders, the latter reaching it through <see cref="IProcessTreeGracefulShutdownSignaler"/>.
 /// </summary>
-internal sealed class ProcessShutdownService(
+internal sealed class ProcessTreeGracefulShutdownService(
     ILayoutDiscovery layoutDiscovery,
     IBundleService bundleService,
     LayoutProcessRunner layoutProcessRunner,
     CliExecutionContext executionContext,
-    ILogger<ProcessShutdownService> logger,
-    TimeProvider timeProvider)
+    ILogger<ProcessTreeGracefulShutdownService> logger,
+    TimeProvider timeProvider) : IProcessTreeGracefulShutdownSignaler
 {
     private static readonly TimeSpan s_processTerminationTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan s_processTerminationPollInterval = TimeSpan.FromMilliseconds(250);
@@ -94,13 +96,14 @@ internal sealed class ProcessShutdownService(
 
     private void ForceKillRemainingProcesses(IEnumerable<ProcessTarget> processes, bool afterTimeout)
     {
-        // On Unix the AppHost's process tree does not include DCP (it is launched in its own
-        // session/process group), so a tree kill of the AppHost is safe: DCP will detect the
-        // AppHost exiting and gracefully tear down its own children. The same applies to the
-        // launcher CLI handle - any leftover `dotnet run` / AppHost descendants get cleaned up.
-        // On Windows DCP is an in-tree descendant of the AppHost, so we must single-process-kill
-        // here and rely on the graceful DCP `stop-process-tree` path for orderly resource cleanup.
-        var killEntireProcessTree = !OperatingSystem.IsWindows();
+        // On Windows DCP is normally an in-tree descendant of the AppHost, so the success path
+        // (afterTimeout: false, which only mops up leftover shutdown-handle processes after a
+        // graceful stop succeeded) must NOT tree-kill — that would tear DCP down mid-cleanup.
+        // But once graceful shutdown has failed/timed out (afterTimeout: true) the whole point of
+        // this escalation is a guaranteed teardown, so we tree-kill on Windows too; otherwise the
+        // root PID dies while orphaned descendants (DCP, tsx/node, the guest) keep running. On Unix
+        // we always tree-kill.
+        var killEntireProcessTree = afterTimeout || !OperatingSystem.IsWindows();
 
         foreach (var process in processes.Distinct())
         {
@@ -113,6 +116,9 @@ internal sealed class ProcessShutdownService(
                 logger.LogDebug("Forcing remaining shutdown handle process {Pid} to terminate.", process.Pid);
             }
 
+            // Resolve the pid against its expected start time and hard-kill. This path never requests
+            // graceful shutdown — the graceful attempt already happened (or was intentionally skipped),
+            // so we go straight to the kill that the shared shutdown helper's force mode also performs.
             ProcessSignaler.ForceKill(process.Pid, process.StartTime, logger, killEntireProcessTree);
         }
     }
@@ -189,7 +195,16 @@ internal sealed class ProcessShutdownService(
         }
     }
 
-    private async Task<bool> RequestProcessTreeGracefulShutdownAsync(
+    /// <summary>
+    /// Issues an OS-correct graceful shutdown signal to the entire process tree rooted at <paramref name="pid"/>:
+    /// on Windows, shells out to DCP's <c>stop-process-tree</c> (which performs the AttachConsole +
+    /// GenerateConsoleCtrlEvent dance against a child running in its own console group);
+    /// on Unix, sends SIGTERM via <see cref="ProcessSignaler"/>. This method does NOT wait for exit or
+    /// escalate to <c>Kill</c> — callers are expected to own that ladder (bounded by a central graceful
+    /// shutdown budget) and force-kill on escalation. Used by both the detached <c>aspire stop</c> path
+    /// and the in-process <c>aspire run</c> shutdown ladders for AppHost server + guest siblings.
+    /// </summary>
+    public async Task<bool> RequestProcessTreeGracefulShutdownAsync(
         int pid,
         DateTimeOffset? startTime,
         bool includeStartTimeForDcp,

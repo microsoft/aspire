@@ -876,6 +876,63 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
         Assert.False(r.SelectsAll);
     }
 
+    // An integration's checked-in *.ats.txt baseline tracks its exported [AspireExport] surface -- the
+    // same surface the per-language polyglot playground scripts regenerate and compile
+    // (aspire restore --apphost over tests/PolyglotAppHosts/<integration>/<lang>). A change to that
+    // baseline must therefore run BOTH typescript-api-compat (baseline diff) AND polyglot (regenerate +
+    // compile in every language), so a breaking surface change is caught even if the author did not also
+    // touch the tests/PolyglotAppHosts fixtures. The baseline is not a compiled item, so Layer 1 is blind
+    // to it: routing here is the only thing that fires polyglot. Run with --skip-layer1 semantics (no
+    // Layer 1 affected set) to prove the curated layer alone carries both targets.
+    [Fact]
+    public void RealMapIntegrationAtsBaselineChangeRunsTypeScriptApiCompatAndPolyglot()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var atsBaseline = FirstIntegrationAtsBaselineWithPolyglotFixture();
+
+        var r = selector.Select([atsBaseline], [], new SelectorOptions());
+
+        Assert.False(r.SelectsAll);
+        Assert.Contains("job:typescript-api-compat", r.Jobs);
+        Assert.Contains("job:polyglot", r.Jobs);
+    }
+
+    // A real src/Aspire.Hosting*/api/<name>.ats.txt baseline for a genuine INTEGRATION (not the
+    // codegen engine itself) whose integration also has a tests/PolyglotAppHosts/<name> fixture, so the
+    // change exercises the polyglot playground for that integration's exported surface. Computed from the
+    // filesystem (never hardcoded names) so it survives integrations being added or removed. The engine
+    // projects below are excluded because they reach polyglot through affected_project_rules (their
+    // project NAME), not through the *.ats.txt path rule under test here -- so picking one would not prove
+    // the path rule fires polyglot.
+    private static string FirstIntegrationAtsBaselineWithPolyglotFixture()
+    {
+        var srcDir = Path.Combine(RepoRoot.Path, "src");
+        var polyglotRoot = Path.Combine(RepoRoot.Path, "tests", "PolyglotAppHosts");
+
+        static bool IsEngineProject(string name) =>
+            name is "Aspire.Hosting" or "Aspire.Hosting.RemoteHost"
+            || name.StartsWith("Aspire.Hosting.CodeGeneration.", StringComparison.Ordinal);
+
+        foreach (var projectDir in Directory.EnumerateDirectories(srcDir, "Aspire.Hosting*").Order(StringComparer.Ordinal))
+        {
+            var name = Path.GetFileName(projectDir);
+            if (IsEngineProject(name))
+            {
+                continue;
+            }
+
+            var baseline = Path.Combine(projectDir, "api", $"{name}.ats.txt");
+            if (File.Exists(baseline) && Directory.Exists(Path.Combine(polyglotRoot, name)))
+            {
+                return $"src/{name}/api/{name}.ats.txt";
+            }
+        }
+
+        throw new InvalidOperationException("No integration src/Aspire.Hosting*/api/<name>.ats.txt with a matching tests/PolyglotAppHosts/<name> fixture was found.");
+    }
+
     private static (string Dir, string Test) FirstComponentWithSameNamedTest(IReadOnlyCollection<string> matrix)
     {
         var componentsRoot = Path.Combine(RepoRoot.Path, "src", "Components");

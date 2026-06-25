@@ -10,7 +10,7 @@ import { cleanupRun } from '../debugger/runCleanupRegistry';
 import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
-import type { AspireDebugConsoleOutputEvent, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
+import type { AspireDebugConsoleOutputEvent, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { onDidInvokeCommand } from '../utils/telemetry';
@@ -38,23 +38,55 @@ export function createE2eStateFileBridge(
   const terminalCommands: AspireExtensionE2ETerminalCommand[] = [];
   const debugLaunches: AspireExtensionE2EDebugLaunch[] = [];
   const debugConsoleOutputs: AspireExtensionE2EDebugConsoleOutput[] = [];
+  const stoppingPathEvents: AspireExtensionE2EStoppingPathEvent[] = [];
   let commandInvocationSequence = 0;
   let terminalCommandSequence = 0;
   let debugLaunchSequence = 0;
   let debugConsoleOutputSequence = 0;
+  let stoppingPathSequence = 0;
+  let previousStoppingPaths: readonly string[] | undefined;
   let controlStatus: AspireExtensionE2EControlStatus | undefined;
   let lastControlRevision = -1;
   const writeStateFile = () => {
+    const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
+    recordStoppingPathEvents(state.stoppingPaths);
+
     writeJsonFileAtomic(stateFile, {
       updatedAt: new Date().toISOString(),
-      state: createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true),
+      state,
       dashboardUrl: getSensitiveDashboardUrl(dataRepository),
       commandInvocations,
       terminalCommands,
       debugLaunches,
       debugConsoleOutputs,
+      stoppingPathEvents,
       control: controlStatus,
     });
+  };
+
+  const recordStoppingPathEvents = (currentStoppingPaths: readonly string[]) => {
+    if (previousStoppingPaths === undefined) {
+      previousStoppingPaths = [...currentStoppingPaths];
+      return;
+    }
+
+    for (const appHostPath of currentStoppingPaths) {
+      if (!previousStoppingPaths.some(previousPath => isSamePath(previousPath, appHostPath))) {
+        stoppingPathEvents.push({ sequence: ++stoppingPathSequence, appHostPath, state: 'entered' });
+      }
+    }
+
+    for (const appHostPath of previousStoppingPaths) {
+      if (!currentStoppingPaths.some(currentPath => isSamePath(currentPath, appHostPath))) {
+        stoppingPathEvents.push({ sequence: ++stoppingPathSequence, appHostPath, state: 'left' });
+      }
+    }
+
+    if (stoppingPathEvents.length > 100) {
+      stoppingPathEvents.splice(0, stoppingPathEvents.length - 100);
+    }
+
+    previousStoppingPaths = [...currentStoppingPaths];
   };
 
   fs.mkdirSync(path.dirname(stateFile), { recursive: true });
@@ -136,13 +168,13 @@ export function createE2eStateFileBridge(
             const markCommandStarted = () => {
               if (!commandStarted) {
                 commandStarted = true;
-                controlStatus = { revision, status: 'started' };
+                controlStatus = { revision, status: 'started', startedObserved: true };
                 writeStateFile();
               }
             };
 
             const result = await executeE2eControlCommand(context, aspireContext, appHostLaunchService, appHostTreeProvider, terminalProvider, payload.command, markCommandStarted);
-            controlStatus = { revision, status: 'applied', result };
+            controlStatus = { revision, status: 'applied', startedObserved: commandStarted, result };
           }
           else {
             controlStatus = { revision, status: 'applied' };

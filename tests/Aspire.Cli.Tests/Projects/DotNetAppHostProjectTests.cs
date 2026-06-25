@@ -41,6 +41,16 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         GC.SuppressFinalize(this);
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void ShouldKillEntireProcessTreeOnCancel_KillsOnlyTargetProcessOnWindows(bool isWindows, bool expected)
+    {
+        var result = DotNetAppHostProject.ShouldKillEntireProcessTreeOnCancel(isWindows);
+
+        Assert.Equal(expected, result);
+    }
+
     [Fact]
     public async Task ValidateAppHostAsync_OrdinaryMarkerFreeProject_SkipsEvaluation()
     {
