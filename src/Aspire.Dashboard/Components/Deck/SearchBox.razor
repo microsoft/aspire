@@ -1,0 +1,35 @@
+@*
+    Search/filter input, ported from src/Aspire.Deck/ui/src/components/SearchBox.tsx.
+    Two-way bindable via @bind-Value (updates on each keystroke).
+*@
+<div class="searchbox">
+    <DeckIcon Name="DeckIconName.Search" Size="15" />
+    <input type="text"
+           value="@Value"
+           placeholder="@Placeholder"
+           aria-label="@(string.IsNullOrEmpty(Placeholder) ? "Search" : Placeholder)"
+           @oninput="OnInputAsync" />
+</div>
+
+@code {
+    /// <summary>The current search text.</summary>
+    [Parameter]
+    public string? Value { get; set; }
+
+    /// <summary>Raised when the search text changes (enables <c>@bind-Value</c>).</summary>
+    [Parameter]
+    public EventCallback<string> ValueChanged { get; set; }
+
+    /// <summary>Placeholder text shown when empty.</summary>
+    [Parameter]
+    public string? Placeholder { get; set; }
+
+    private async Task OnInputAsync(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString() ?? string.Empty;
+        if (ValueChanged.HasDelegate)
+        {
+            await ValueChanged.InvokeAsync(Value);
+        }
+    }
+}

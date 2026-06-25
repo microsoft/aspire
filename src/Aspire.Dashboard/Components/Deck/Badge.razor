@@ -1,0 +1,17 @@
+@*
+    Pill badge, ported from src/Aspire.Deck/ui/src/components/Badge.tsx.
+    Tone is one of: success, info, warning, error, accent, neutral (default).
+*@
+<span class="badge @Tone">
+    @ChildContent
+</span>
+
+@code {
+    /// <summary>Badge tone: <c>success</c>/<c>info</c>/<c>warning</c>/<c>error</c>/<c>accent</c>/<c>neutral</c>.</summary>
+    [Parameter]
+    public string Tone { get; set; } = "neutral";
+
+    /// <summary>The badge content.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

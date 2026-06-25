@@ -1,0 +1,27 @@
+@*
+    Status dot + label, ported from src/Aspire.Deck/ui/src/components/StateDot.tsx.
+    Presentational only; callers pass a pre-classified tone (see ResourceStateTone) plus the
+    display text and optional health label.
+*@
+<span class="state">
+    <span class="state__dot @Tone" title="@(Text ?? "Unknown")"></span>
+    <span>@(Text ?? "Unknown")</span>
+    @if (!string.IsNullOrEmpty(Health))
+    {
+        <span class="state__health">· @Health</span>
+    }
+</span>
+
+@code {
+    /// <summary>The Deck tone class: <c>success</c>/<c>info</c>/<c>warning</c>/<c>error</c>/<c>neutral</c>.</summary>
+    [Parameter, EditorRequired]
+    public string Tone { get; set; } = ResourceStateTone.Neutral;
+
+    /// <summary>The state display text (e.g. "Running").</summary>
+    [Parameter]
+    public string? Text { get; set; }
+
+    /// <summary>Optional health label rendered after the state (e.g. "Healthy").</summary>
+    [Parameter]
+    public string? Health { get; set; }
+}

@@ -1,0 +1,29 @@
+@*
+    Centered empty-state placeholder, ported from
+    src/Aspire.Deck/ui/src/components/EmptyState.tsx.
+*@
+<div class="empty">
+    @if (IconContent is not null)
+    {
+        <div class="empty__icon">@IconContent</div>
+    }
+    <div class="empty__title">@Title</div>
+    @if (ChildContent is not null)
+    {
+        <div class="empty__text">@ChildContent</div>
+    }
+</div>
+
+@code {
+    /// <summary>Optional icon/glyph rendered above the title.</summary>
+    [Parameter]
+    public RenderFragment? IconContent { get; set; }
+
+    /// <summary>The empty-state title.</summary>
+    [Parameter, EditorRequired]
+    public string Title { get; set; } = default!;
+
+    /// <summary>Optional descriptive body text.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

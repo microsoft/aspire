@@ -1,0 +1,124 @@
+@*
+    Generic right-side drawer (slide-in pane), ported from the drawer markup used by Deck's
+    DetailsDrawer / InteractionPane (src/Aspire.Deck/ui/src/components/*). Renders a dimmed
+    overlay plus an <aside class="drawer">. Clicking the overlay or pressing Escape invokes
+    OnClose. Header (title/subtitle + close button), body, and an optional footer (e.g. command
+    bar) are provided by the caller.
+*@
+<div class="drawer-overlay" @onclick="OnCloseAsync"></div>
+<aside class="drawer @Class" role="dialog" aria-modal="true" aria-label="@Title"
+       tabindex="-1" @onkeydown="HandleKeyDownAsync" @ref="_aside">
+    <div class="drawer__header">
+        <div style="flex: 1; min-width: 0;">
+            <div class="drawer__title">
+                @TitleContent
+                @if (!string.IsNullOrEmpty(Title))
+                {
+                    @Title
+                }
+            </div>
+            @if (SubtitleContent is not null)
+            {
+                <div class="drawer__subtitle">@SubtitleContent</div>
+            }
+            else if (!string.IsNullOrEmpty(Subtitle))
+            {
+                <div class="drawer__subtitle">@Subtitle</div>
+            }
+        </div>
+        @if (ShowClose)
+        {
+            <button class="icon-btn" @onclick="OnCloseAsync" aria-label="Close">
+                <DeckIcon Name="DeckIconName.Close" Size="16" />
+            </button>
+        }
+    </div>
+
+    <div class="drawer__body">
+        @ChildContent
+    </div>
+
+    @if (FooterContent is not null)
+    {
+        <div class="@(string.IsNullOrEmpty(FooterClass) ? "drawer__commands" : FooterClass)">
+            @FooterContent
+        </div>
+    }
+</aside>
+
+@code {
+    private ElementReference _aside;
+
+    /// <summary>Plain-text drawer title. Use <see cref="TitleContent"/> for richer titles (e.g. with an icon).</summary>
+    [Parameter]
+    public string? Title { get; set; }
+
+    /// <summary>Rich title content rendered before <see cref="Title"/> inside the title row.</summary>
+    [Parameter]
+    public RenderFragment? TitleContent { get; set; }
+
+    /// <summary>Plain-text subtitle.</summary>
+    [Parameter]
+    public string? Subtitle { get; set; }
+
+    /// <summary>Rich subtitle content (overrides <see cref="Subtitle"/> when set).</summary>
+    [Parameter]
+    public RenderFragment? SubtitleContent { get; set; }
+
+    /// <summary>The drawer body content.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Optional footer content (e.g. a command/action bar).</summary>
+    [Parameter]
+    public RenderFragment? FooterContent { get; set; }
+
+    /// <summary>CSS class for the footer container. Defaults to <c>drawer__commands</c>.</summary>
+    [Parameter]
+    public string? FooterClass { get; set; }
+
+    /// <summary>Extra CSS class applied to the <c>aside.drawer</c> (e.g. <c>interaction-pane</c>).</summary>
+    [Parameter]
+    public string? Class { get; set; }
+
+    /// <summary>Whether to show the header close button. Defaults to <c>true</c>.</summary>
+    [Parameter]
+    public bool ShowClose { get; set; } = true;
+
+    /// <summary>Invoked when the overlay is clicked or Escape is pressed.</summary>
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Focus the pane so it can receive the Escape keydown without requiring the user to
+            // click into it first (mirrors Deck's window-level Escape handler).
+            try
+            {
+                await _aside.FocusAsync();
+            }
+            catch
+            {
+                // Focus can fail if the element was removed before the call completed; ignore.
+            }
+        }
+    }
+
+    private async Task HandleKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await OnCloseAsync();
+        }
+    }
+
+    private async Task OnCloseAsync()
+    {
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+}
