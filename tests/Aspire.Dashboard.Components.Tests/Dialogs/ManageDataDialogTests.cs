@@ -177,7 +177,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         {
             await cut.InvokeAsync(() =>
             {
-                var toggleButtons = cut.FindAll("fluent-button[aria-label='Toggle nesting']");
+                var toggleButtons = cut.FindAll("button[aria-label='Toggle nesting']");
 
                 Assert.Equal(expectedCount, toggleButtons.Count);
 

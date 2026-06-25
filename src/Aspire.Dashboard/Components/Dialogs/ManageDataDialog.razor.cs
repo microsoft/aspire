@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.ManageData;
@@ -14,7 +15,6 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
@@ -263,11 +263,11 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     {
         return dataType switch
         {
-            AspireDataType.ResourceDetails => new TelemetryDataRow { DataType = AspireDataType.ResourceDetails, Icon = new Icons.Regular.Size16.ContentView(), Url = DashboardUrls.ResourcesUrl(resource: resourceName) },
-            AspireDataType.ConsoleLogs => new TelemetryDataRow { DataType = AspireDataType.ConsoleLogs, Icon = new Icons.Regular.Size16.SlideText(), Url = DashboardUrls.ConsoleLogsUrl(resource: resourceName) },
-            AspireDataType.StructuredLogs => new TelemetryDataRow { DataType = AspireDataType.StructuredLogs, Icon = new Icons.Regular.Size16.SlideTextSparkle(), Url = DashboardUrls.StructuredLogsUrl(resource: resourceName) },
-            AspireDataType.Traces => new TelemetryDataRow { DataType = AspireDataType.Traces, Icon = new Icons.Regular.Size16.GanttChart(), Url = DashboardUrls.TracesUrl(resource: resourceName) },
-            AspireDataType.Metrics => new TelemetryDataRow { DataType = AspireDataType.Metrics, Icon = new Icons.Regular.Size16.ChartMultiple(), Url = DashboardUrls.MetricsUrl(resource: resourceName) },
+            AspireDataType.ResourceDetails => new TelemetryDataRow { DataType = AspireDataType.ResourceDetails, Icon = DeckIconName.Resources, Url = DashboardUrls.ResourcesUrl(resource: resourceName) },
+            AspireDataType.ConsoleLogs => new TelemetryDataRow { DataType = AspireDataType.ConsoleLogs, Icon = DeckIconName.Console, Url = DashboardUrls.ConsoleLogsUrl(resource: resourceName) },
+            AspireDataType.StructuredLogs => new TelemetryDataRow { DataType = AspireDataType.StructuredLogs, Icon = DeckIconName.Logs, Url = DashboardUrls.StructuredLogsUrl(resource: resourceName) },
+            AspireDataType.Traces => new TelemetryDataRow { DataType = AspireDataType.Traces, Icon = DeckIconName.Traces, Url = DashboardUrls.TracesUrl(resource: resourceName) },
+            AspireDataType.Metrics => new TelemetryDataRow { DataType = AspireDataType.Metrics, Icon = DeckIconName.Metrics, Url = DashboardUrls.MetricsUrl(resource: resourceName) },
             _ => throw new ArgumentOutOfRangeException(nameof(dataType), dataType, null)
         };
     }

@@ -52,12 +52,12 @@
                             <span @onclick:stopPropagation="true" class="main-grid-expand-container @(IsResourceExpanded(context.ResourceRow.Name) ? "main-grid-expanded" : "main-grid-collapsed")">
                                 @if (context.ResourceRow.TelemetryData.Count > 0)
                                 {
-                                    <FluentButton Appearance="Appearance.Lightweight"
-                                                  Class="main-grid-expand-button"
-                                                  OnClick="@(() => OnToggleExpand(context.ResourceRow))"
-                                                  aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]">
+                                    <button type="button"
+                                            class="icon-btn icon-btn--sm main-grid-expand-button"
+                                            @onclick="@(() => OnToggleExpand(context.ResourceRow))"
+                                            aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]">
                                         <DeckIcon Name="DeckIconName.Chevron" Size="12" />
-                                    </FluentButton>
+                                    </button>
                                 }
                             </span>
                             <IconCheckbox CheckState="@GetResourceCheckboxState(context.ResourceRow)"
@@ -103,12 +103,14 @@
                     <span @onclick:stopPropagation="true">
                         @foreach (var dataRow in context.ResourceRow.TelemetryData)
                         {
-                            <FluentButton Appearance="Appearance.Lightweight"
-                                          IconEnd="@dataRow.Icon"
-                                          OnClick="@(() => NavigateToDataPage(dataRow))"
-                                          Title="@GetDataTypeDisplayName(dataRow.DataType)"
-                                          aria-label="@GetDataTypeDisplayName(dataRow.DataType)"
-                                          Style="margin-right: 4px;" />
+                            <button type="button"
+                                    class="icon-btn icon-btn--sm"
+                                    @onclick="@(() => NavigateToDataPage(dataRow))"
+                                    title="@GetDataTypeDisplayName(dataRow.DataType)"
+                                    aria-label="@GetDataTypeDisplayName(dataRow.DataType)"
+                                    style="margin-right: 4px;">
+                                <DeckIcon Name="@dataRow.Icon" Size="16" />
+                            </button>
                         }
                     </span>
                 }
@@ -122,22 +124,22 @@
 
 <div class="button-container">
     <div>
-        <FluentButton IconStart="@(new Icons.Regular.Size16.ArrowDownload())"
-                      OnClick="ExportSelectedAsync"
-                      Loading="@_isExporting"
-                      Disabled="@AreNoneSelected()"
-                      Title="@Loc[nameof(Dialogs.ManageDataExportButtonText)]"
-                      aria-label="@Loc[nameof(Dialogs.ManageDataExportButtonText)]">
+        <button type="button" class="btn"
+                @onclick="ExportSelectedAsync"
+                disabled="@(AreNoneSelected() || _isExporting)"
+                title="@Loc[nameof(Dialogs.ManageDataExportButtonText)]"
+                aria-label="@Loc[nameof(Dialogs.ManageDataExportButtonText)]">
+            <DeckIcon Name="DeckIconName.Download" Size="16" />
             @Loc[nameof(Dialogs.ManageDataExportButtonText)]
-        </FluentButton>
-        <FluentButton IconStart="@(new Icons.Regular.Size16.Delete())"
-                      OnClick="RemoveSelectedAsync"
-                      Loading="@_isRemoving"
-                      Disabled="@AreNoneSelected()"
-                      Title="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]"
-                      aria-label="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]">
+        </button>
+        <button type="button" class="btn"
+                @onclick="RemoveSelectedAsync"
+                disabled="@(AreNoneSelected() || _isRemoving)"
+                title="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]"
+                aria-label="@Loc[nameof(Dialogs.ManageDataRemoveButtonText)]">
+            <DeckIcon Name="DeckIconName.Delete" Size="16" />
             @Loc[nameof(Dialogs.ManageDataRemoveButtonText)]
-        </FluentButton>
+        </button>
     </div>
     @if (TelemetryImportService.IsImportEnabled)
     {
@@ -150,13 +152,13 @@
                              Mode="InputFileMode.SaveToTemporaryFolder"
                              OnCompleted="OnInputFileCompleted"
                              OnProgressChange="OnInputFileProgressChange" />
-            <FluentButton Id="import-button"
-                          IconStart="@(new Icons.Regular.Size16.ArrowUpload())"
-                          Loading="@_isImporting"
-                          Title="@Loc[nameof(Dialogs.SettingsImportButtonText)]"
-                          aria-label="@Loc[nameof(Dialogs.SettingsImportButtonText)]">
+            <button type="button" id="import-button" class="btn"
+                    disabled="@_isImporting"
+                    title="@Loc[nameof(Dialogs.SettingsImportButtonText)]"
+                    aria-label="@Loc[nameof(Dialogs.SettingsImportButtonText)]">
+                <DeckIcon Name="DeckIconName.ArrowUpload" Size="16" />
                 @Loc[nameof(Dialogs.SettingsImportButtonText)]
-            </FluentButton>
+            </button>
         </div>
     }
 </div>

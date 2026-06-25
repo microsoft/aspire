@@ -129,6 +129,8 @@ public enum DeckIconName
     CollapseAll,
     /// <summary>Down arrow into a tray; download/save.</summary>
     Download,
+    /// <summary>Up arrow out of a tray; upload/import.</summary>
+    ArrowUpload,
     /// <summary>Clock; time/timestamp.</summary>
     Clock,
     /// <summary>Checked checkbox.</summary>
