@@ -363,14 +363,13 @@ public class Program
         // powers `CliExecutionContext` identity population.
         builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
         builder.Services.AddSingleton<IEnvironment, HostEnvironment>();
-        if (OperatingSystem.IsWindows())
+        builder.Services.AddSingleton<IWindowsRegistryReader>(sp =>
         {
-            builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
-        }
-        else
-        {
-            builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
-        }
+            var environment = sp.GetRequiredService<IEnvironment>();
+            return environment.IsWindows()
+                ? new WindowsRegistryReader()
+                : new NullWindowsRegistryReader();
+        });
         builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton<IIdentityResolver>(sp =>
         {

@@ -24,7 +24,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
             _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
             fileLoggerProvider: null,
             commandResolver: PathLookupHelper.FindFullPathFromPath,
-            processExecutionFactory: new ProcessExecutionFactory(_loggerFactory.CreateLogger<ProcessExecutionFactory>()));
+            processExecutionFactory: new ProcessExecutionFactory(new TestEnvironment(), _loggerFactory.CreateLogger<ProcessExecutionFactory>()));
 
     [Fact]
     public async Task LaunchAsync_NoOptions_OnCancellation_ForceKillsProcessTreeAndReturns()

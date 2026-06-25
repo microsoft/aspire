@@ -38,6 +38,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     private readonly IDotNetCliRunner _dotNetCliRunner;
     private readonly IPackagingService _packagingService;
     private readonly IProcessExecutionFactory _processExecutionFactory;
+    private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly string? _logFilePath;
 
@@ -48,19 +49,20 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         IDotNetCliRunner dotNetCliRunner,
         IPackagingService packagingService,
         IProcessExecutionFactory processExecutionFactory,
-        ILogger<DotNetBasedAppHostServerProject> logger,
         IEnvironment environment,
+        ILogger<DotNetBasedAppHostServerProject> logger,
         string? projectModelPath = null,
         string? logFilePath = null)
     {
         _appPath = Path.GetFullPath(appPath);
         _appPath = new Uri(_appPath).LocalPath;
-        _appPath = CliPathHelper.NormalizePathCasing(_appPath, environment);
+        _appPath = OperatingSystem.IsWindows() ? _appPath.ToLowerInvariant() : _appPath;
         _socketPath = socketPath;
         _repoRoot = Path.GetFullPath(repoRoot) + Path.DirectorySeparatorChar;
         _dotNetCliRunner = dotNetCliRunner;
         _packagingService = packagingService;
         _processExecutionFactory = processExecutionFactory;
+        _environment = environment;
         _logger = logger;
         _logFilePath = logFilePath;
 
@@ -475,7 +477,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         AppHostServerRunControl? runControl)
     {
         var assemblyPath = Path.Combine(BuildPath, ProjectDllName);
-        var dotnetExe = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
+        var dotnetExe = _environment.IsWindows() ? "dotnet.exe" : "dotnet";
 
         // Build the canonical ProcessStartInfo first, then translate to IsolatedProcessStartInfo
         // only if the isolated path is requested. Sharing the env/arg construction avoids drift
@@ -572,7 +574,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             // The graceful ladder always tree-kills on escalation; this fallback only matters when
             // graceful services were not wired (non-Run callers), where it preserves the old session
             // behavior of force-killing the tree on Unix but only the root on Windows.
-            KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
+            KillEntireProcessTreeOnCancel = !_environment.IsWindows(),
         };
 
         execution = _processExecutionFactory.CreateExecution(startInfo, options);
@@ -648,10 +650,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         }
     }
 
-    private static (string Os, string Arch) GetBuildPlatform()
+    private (string Os, string Arch) GetBuildPlatform()
     {
-        var os = OperatingSystem.IsLinux() ? "linux"
-            : OperatingSystem.IsMacOS() ? "darwin"
+        var os = _environment.IsLinux() ? "linux"
+            : _environment.IsMacOS() ? "darwin"
             : "windows";
 
         var arch = RuntimeInformation.OSArchitecture switch

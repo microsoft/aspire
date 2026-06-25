@@ -4,7 +4,6 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Exceptions;
@@ -31,6 +30,7 @@ internal sealed class UpdateCommand : BaseCommand
     private readonly ICliDownloader? _cliDownloader;
     private readonly ICliUpdateNotifier _updateNotifier;
     private readonly IFeatures _features;
+    private readonly IEnvironment _environment;
     private readonly IConfigurationService _configurationService;
     private readonly IConfiguration _configuration;
     private readonly IProcessPathProvider _processPathProvider;
@@ -58,6 +58,7 @@ internal sealed class UpdateCommand : BaseCommand
         IAppHostProjectFactory projectFactory,
         ILogger<UpdateCommand> logger,
         ICliDownloader? cliDownloader,
+        IEnvironment environment,
         IConfigurationService configurationService,
         IConfiguration configuration,
         IProcessPathProvider processPathProvider,
@@ -71,6 +72,7 @@ internal sealed class UpdateCommand : BaseCommand
         _cliDownloader = cliDownloader;
         _updateNotifier = services.UpdateNotifier;
         _features = services.Features;
+        _environment = environment;
         _configurationService = configurationService;
         _configuration = configuration;
         _processPathProvider = processPathProvider;
@@ -638,7 +640,7 @@ internal sealed class UpdateCommand : BaseCommand
             throw new InvalidOperationException($"Unable to determine installation directory from: {currentExePath}");
         }
 
-        var exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "aspire.exe" : "aspire";
+        var exeName = _environment.IsWindows() ? "aspire.exe" : "aspire";
         var targetExePath = Path.Combine(installDir, exeName);
         var tempExtractDir = Directory.CreateTempSubdirectory("aspire-cli-extract").FullName;
 
@@ -649,7 +651,7 @@ internal sealed class UpdateCommand : BaseCommand
                 UpdateCommandStrings.ExtractingNewCli,
                 async () =>
                 {
-                    await ArchiveHelper.ExtractAsync(archivePath, tempExtractDir, cancellationToken);
+                    await ArchiveHelper.ExtractAsync(archivePath, tempExtractDir, _environment, cancellationToken);
                     return 0;
                 },
                 KnownEmojis.Package);
@@ -686,7 +688,7 @@ internal sealed class UpdateCommand : BaseCommand
                 File.Copy(newExePath, targetExePath, overwrite: true);
 
                 // On Unix systems, ensure the executable bit is set
-                if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                if (!_environment.IsWindows())
                 {
                     SetExecutablePermission(targetExePath);
                 }
@@ -707,7 +709,7 @@ internal sealed class UpdateCommand : BaseCommand
                 // which are only accessible when that binary is running.
 
                 // Display helpful message about PATH
-                if (!IsInPath(installDir))
+                if (!IsInPath(installDir, _environment))
                 {
                     InteractionService.DisplayMessage(KnownEmojis.Information, $"Note: {installDir} is not in your PATH. Add it to use the updated CLI globally.");
                 }
@@ -740,7 +742,7 @@ internal sealed class UpdateCommand : BaseCommand
         }
     }
 
-    private static bool IsInPath(string directory)
+    private static bool IsInPath(string directory, IEnvironment environment)
     {
         var pathEnv = Environment.GetEnvironmentVariable("PATH");
         if (string.IsNullOrEmpty(pathEnv))
@@ -753,14 +755,14 @@ internal sealed class UpdateCommand : BaseCommand
 
         return paths.Any(p =>
             string.Equals(Path.GetFullPath(p.Trim()), Path.GetFullPath(directory),
-                RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                environment.IsWindows()
                     ? StringComparison.OrdinalIgnoreCase
                     : StringComparison.Ordinal));
     }
 
     private void SetExecutablePermission(string filePath)
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (!_environment.IsWindows())
         {
             try
             {

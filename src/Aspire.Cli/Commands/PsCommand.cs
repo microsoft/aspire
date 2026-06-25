@@ -72,6 +72,7 @@ internal sealed partial class PsCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
     private readonly IAuxiliaryBackchannelMonitor _backchannelMonitor;
+    private readonly IEnvironment _environment;
     private readonly ILogger<PsCommand> _logger;
     private static readonly Option<OutputFormat> s_formatOption = new("--format")
     {
@@ -85,11 +86,13 @@ internal sealed partial class PsCommand : BaseCommand
 
     public PsCommand(
         IAuxiliaryBackchannelMonitor backchannelMonitor,
+        IEnvironment environment,
         ILogger<PsCommand> logger,
         CommonCommandServices services)
         : base("ps", PsCommandStrings.Description, services)
     {
         _backchannelMonitor = backchannelMonitor;
+        _environment = environment;
         _logger = logger;
 
         Options.Add(s_formatOption);
@@ -283,9 +286,9 @@ internal sealed partial class PsCommand
         return string.Concat(appHost.AppHostPath, "\0", appHost.AppHostPid.ToString(CultureInfo.InvariantCulture));
     }
 
-    private static StringComparer GetAppHostKeyComparer()
+    private StringComparer GetAppHostKeyComparer()
     {
-        return OperatingSystem.IsWindows()
+        return _environment.IsWindows()
             ? StringComparer.OrdinalIgnoreCase
             : StringComparer.Ordinal;
     }
@@ -398,7 +401,7 @@ internal sealed partial class PsCommand
             return;
         }
 
-        var shortPaths = FileSystemHelper.ShortenPaths(appHosts.Select(a => a.AppHostPath).ToList());
+        var shortPaths = FileSystemHelper.ShortenPaths(appHosts.Select(a => a.AppHostPath).ToList(), _environment);
 
         var table = new Table();
         table.AddBoldColumn(PsCommandStrings.HeaderPath);

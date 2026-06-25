@@ -21,6 +21,7 @@ namespace Aspire.Cli.Bundles;
 internal sealed class BundleService(
     IBundlePayloadProvider payloadProvider,
     ILayoutDiscovery layoutDiscovery,
+    IEnvironment environment,
     ILogger<BundleService> logger,
     WingetFirstRunProbe? wingetFirstRunProbe = null) : IBundleService
 {
@@ -195,7 +196,7 @@ internal sealed class BundleService(
         // The winget portable installer has no post-install hook, so the CLI
         // self-stamps the install-route sidecar on first run. No-op on
         // non-Windows and once the sidecar already exists.
-        if (wingetFirstRunProbe is not null && OperatingSystem.IsWindows())
+        if (wingetFirstRunProbe is not null && environment.IsWindows())
         {
             var realBinaryPath = CliPathHelper.ResolveSymlinkOrOriginalPath(processPath, logger);
             var binaryDir = Path.GetDirectoryName(realBinaryPath);
@@ -797,13 +798,13 @@ internal sealed class BundleService(
     internal async Task ExtractPayloadAsync(string destinationPath, CancellationToken cancellationToken)
     {
         using var payloadStream = payloadProvider.OpenPayload() ?? throw new InvalidOperationException("No bundle payload available.");
-        await ExtractPayloadAsync(payloadStream, destinationPath, cancellationToken).ConfigureAwait(false);
+        await ExtractPayloadAsync(payloadStream, destinationPath, environment, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
     /// Extracts a tar.gz payload stream to the specified directory.
     /// </summary>
-    internal static async Task ExtractPayloadAsync(Stream payloadStream, string destinationPath, CancellationToken cancellationToken)
+    internal static async Task ExtractPayloadAsync(Stream payloadStream, string destinationPath, IEnvironment environment, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(destinationPath);
 
@@ -851,7 +852,7 @@ internal sealed class BundleService(
                     await entry.ExtractToFileAsync(fullPath, overwrite: true, cancellationToken);
 
                     // Preserve Unix file permissions from tar entry (e.g., execute bit)
-                    if (!OperatingSystem.IsWindows() && entry.Mode != default)
+                    if (!environment.IsWindows() && entry.Mode != default)
                     {
                         File.SetUnixFileMode(fullPath, (UnixFileMode)entry.Mode);
                     }

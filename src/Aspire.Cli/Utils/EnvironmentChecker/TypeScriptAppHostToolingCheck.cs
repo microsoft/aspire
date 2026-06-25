@@ -15,6 +15,7 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
     private readonly IProjectLocator _projectLocator;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
     private readonly ILogger<TypeScriptAppHostToolingCheck> _logger;
     private readonly Func<string, string?> _commandResolver;
 
@@ -22,8 +23,9 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         IProjectLocator projectLocator,
         ILanguageDiscovery languageDiscovery,
         CliExecutionContext executionContext,
+        IEnvironment environment,
         ILogger<TypeScriptAppHostToolingCheck> logger)
-        : this(projectLocator, languageDiscovery, executionContext, logger, PathLookupHelper.FindFullPathFromPath)
+        : this(projectLocator, languageDiscovery, executionContext, environment, logger, PathLookupHelper.FindFullPathFromPath)
     {
     }
 
@@ -31,12 +33,14 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         IProjectLocator projectLocator,
         ILanguageDiscovery languageDiscovery,
         CliExecutionContext executionContext,
+        IEnvironment environment,
         ILogger<TypeScriptAppHostToolingCheck> logger,
         Func<string, string?> commandResolver)
     {
         _projectLocator = projectLocator;
         _languageDiscovery = languageDiscovery;
         _executionContext = executionContext;
+        _environment = environment;
         _logger = logger;
         _commandResolver = commandResolver;
     }
@@ -54,7 +58,7 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         TypeScriptAppHostToolchain toolchain;
         try
         {
-            toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, _logger);
+            toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, _environment, _logger);
         }
         catch (YarnClassicNotSupportedException ex)
         {

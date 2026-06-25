@@ -1191,6 +1191,7 @@ public class GuestAppHostProjectTests : IDisposable
             features: new Features(_configuration, NullLogger<Features>.Instance),
             languageDiscovery: new TestLanguageDiscovery(),
             executionContext: executionContext,
+            environment: new TestEnvironment(),
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
             profilingTelemetry: _profilingTelemetry,
