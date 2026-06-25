@@ -21,7 +21,6 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Pages;
@@ -1231,14 +1230,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         return _terminalViewRef.SetSizeModeAsync(newKey);
     }
 
-    // Consolidated primary/take-control toggle. Appearance reflects the
-    // current role (Accent = you are primary, Neutral = not), and the label
-    // reflects the action available (or the current state when no action is
-    // possible). Disabled state comes from CanTakeControl in the snapshot.
-    private static Appearance TerminalPrimaryButtonAppearance(string status) => status switch
+    // Consolidated primary/take-control toggle. The class reflects the current role
+    // (primary => accent button, otherwise neutral). The label reflects the action available
+    // (or the current state when no action is possible). Disabled comes from CanTakeControl.
+    private static string TerminalPrimaryButtonClass(string status) => status switch
     {
-        "primary" => Appearance.Accent,
-        _ => Appearance.Neutral,
+        "primary" => "btn btn--primary",
+        _ => "btn",
     };
 
     private string TerminalPrimaryButtonLabel(string status) => status switch
