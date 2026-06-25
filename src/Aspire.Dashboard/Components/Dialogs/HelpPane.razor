@@ -1,0 +1,88 @@
+@*
+    Deck-style help surface shown as a right-side pane (replaces the Fluent HelpDialog modal).
+    Renders the "get help" link and the keyboard-shortcut reference. The shortcut data and the
+    description-list (dl/dt/dd) a11y structure are carried over unchanged from HelpDialog; only the
+    rendering surface (Deck Drawer instead of a centered Fluent dialog) differs.
+*@
+@namespace Aspire.Dashboard.Components.Dialogs
+@using Aspire.Dashboard.Resources
+@inject IStringLocalizer<Dialogs> Loc
+@inject IStringLocalizer<Layout> LayoutLoc
+
+<Drawer Class="help-pane" Title="@LayoutLoc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]" OnClose="OnClose">
+    <ChildContent>
+        <a class="help-link" href="https://aka.ms/aspire/dashboard" target="_blank" rel="noreferrer noopener">
+            <DeckIcon Name="DeckIconName.External" Size="14" />
+            @Loc[nameof(Dialogs.HelpDialogGetHelpLinkText)]
+        </a>
+
+        <h3 class="help-heading">@Loc[nameof(Dialogs.HelpDialogKeyboardShortcutsTitle)]</h3>
+
+        @{
+            var shortcutCategories = GetShortcutsByCategory();
+        }
+
+        @* Each category uses <dl> / <dt> / <dd> so screen readers expose the description -> keys
+           pairing as a description list, and the <dl> is associated to its heading via
+           aria-labelledby. Keep this structure when changing the layout. *@
+        @for (var categoryIndex = 0; categoryIndex < shortcutCategories.Count; categoryIndex++)
+        {
+            var shortcutCategory = shortcutCategories[categoryIndex];
+            var categoryHeadingId = $"help-pane-shortcut-category-{categoryIndex}";
+
+            <section class="help-section">
+                <h4 id="@categoryHeadingId" class="help-section__title">@shortcutCategory.Category</h4>
+                <dl aria-labelledby="@categoryHeadingId" class="help-shortcuts">
+                    @foreach (var shortcut in shortcutCategory.Shortcuts)
+                    {
+                        <div class="help-shortcut">
+                            <dt class="help-shortcut__desc">@shortcut.Description</dt>
+                            <dd class="help-shortcut__keys">
+                                @for (var i = 0; i < shortcut.Keys.Length; i++)
+                                {
+                                    <kbd>@shortcut.Keys[i]</kbd>
+
+                                    if (i < shortcut.Keys.Length - 1)
+                                    {
+                                        <span class="help-shortcut__plus">+</span>
+                                    }
+                                }
+                            </dd>
+                        </div>
+                    }
+                </dl>
+            </section>
+        }
+    </ChildContent>
+</Drawer>
+
+@code {
+    /// <summary>Invoked when the pane is dismissed.</summary>
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private List<KeyboardShortcutCategory> GetShortcutsByCategory() =>
+    [
+        new(Loc[nameof(Dialogs.HelpDialogCategoryPanels)],
+        [
+            new KeyboardShortcut(["+"], Loc[nameof(Dialogs.HelpDialogIncreasePanelSize)]),
+            new KeyboardShortcut(["-"], Loc[nameof(Dialogs.HelpDialogDecreasePanelSize)]),
+            new KeyboardShortcut(["shift", "r"], Loc[nameof(Dialogs.HelpDialogResetPanelSize)]),
+            new KeyboardShortcut(["shift", "t"], Loc[nameof(Dialogs.HelpDialogTogglePanelOrientation)]),
+            new KeyboardShortcut(["shift", "x"], Loc[nameof(Dialogs.HelpDialogTogglePanelOpen)]),
+        ]),
+        new(Loc[nameof(Dialogs.HelpDialogCategoryPageNavigation)],
+        [
+            new KeyboardShortcut(["r"], Loc[nameof(Dialogs.HelpDialogGoToResources)]),
+            new KeyboardShortcut(["c"], Loc[nameof(Dialogs.HelpDialogGoToConsoleLogs)]),
+            new KeyboardShortcut(["s"], Loc[nameof(Dialogs.HelpDialogGoToStructuredLogs)]),
+            new KeyboardShortcut(["t"], Loc[nameof(Dialogs.HelpDialogGoToTraces)]),
+            new KeyboardShortcut(["m"], Loc[nameof(Dialogs.HelpDialogGoToMetrics)]),
+        ]),
+        new(Loc[nameof(Dialogs.HelpDialogCategoryNavigation)],
+        [
+            new KeyboardShortcut(["?"], Loc[nameof(Dialogs.HelpDialogGoToHelp)]),
+            new KeyboardShortcut(["shift", "s"], Loc[nameof(Dialogs.HelpDialogGoToSettings)])
+        ])
+    ];
+}

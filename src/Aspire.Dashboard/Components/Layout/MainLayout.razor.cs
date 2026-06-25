@@ -21,6 +21,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private bool _isNavMenuOpen;
     // Internal for testing: whether the desktop Deck settings pane is open.
     internal bool _showSettingsPane;
+    internal bool _showHelpPane;
 
     private IDisposable? _themeChangedSubscription;
     private IDisposable? _locationChangingRegistration;
@@ -368,6 +369,21 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         StateHasChanged();
     }
 
+    // Desktop renders help as a Deck right-side pane (HelpPane) instead of the Fluent dialog.
+    // Toggled from the top bar; mobile still uses LaunchHelpAsync (Fluent dialog).
+    private Task ToggleHelpPaneAsync()
+    {
+        _showHelpPane = !_showHelpPane;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private void CloseHelpPane()
+    {
+        _showHelpPane = false;
+        StateHasChanged();
+    }
+
     private async Task LaunchSettingsAsync(string? returnFocusElementId)
     {
         var parameters = new DialogParameters
@@ -481,7 +497,15 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         switch (shortcut)
         {
             case AspireKeyboardShortcut.Help:
-                await LaunchHelpAsync();
+                // Desktop uses the Deck help pane; mobile keeps the Fluent help dialog.
+                if (ViewportInformation.IsDesktop)
+                {
+                    await ToggleHelpPaneAsync();
+                }
+                else
+                {
+                    await LaunchHelpAsync();
+                }
                 break;
             case AspireKeyboardShortcut.Settings:
                 // Desktop uses the Deck settings pane; mobile keeps the Fluent settings dialog.

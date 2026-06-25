@@ -17,7 +17,7 @@
             <DeckTopBar IsAiAssistantEnabled="AIContextProvider.Enabled"
                         IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
                         IsAssistantActive="@(AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)"
-                        OnHelp="@(() => LaunchHelpAsync())"
+                        OnHelp="@ToggleHelpPaneAsync"
                         OnAIAgents="@LaunchAIAgentsAsync"
                         OnAssistant="@(() => LaunchAssistantAsync())"
                         OnNotifications="@LaunchNotificationsAsync"
@@ -32,6 +32,10 @@
             @if (_showSettingsPane)
             {
                 <Aspire.Dashboard.Components.Dialogs.SettingsPane OnClose="@CloseSettingsPane" />
+            }
+            @if (_showHelpPane)
+            {
+                <Aspire.Dashboard.Components.Dialogs.HelpPane OnClose="@CloseHelpPane" />
             }
             @* Inside .app so interaction panes/toasts sit alongside the Deck drawers and the
                `:has(.drawer) .notif-stack` toast-shift applies. *@
