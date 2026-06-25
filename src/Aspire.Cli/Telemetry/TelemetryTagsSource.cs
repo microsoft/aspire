@@ -33,6 +33,13 @@ internal sealed class TelemetryTagsSource
     /// </summary>
     public IReadOnlyList<KeyValuePair<string, object?>> GetResolvedTags()
     {
+        // This is called from an OTEL processor which isn't async, so we block here if the background calculation hasn't completed yet.
+        // This should be rare in practice since the tags are calculated at startup and cached for the lifetime of the process.
+        //
+        // If blocking here is a problem then I think the best option is to make StartActivity on AspireCliTelemetry return activities that are
+        // wrapped in a proxy that implements IAsyncDisposable that sets tags in dispose.
+        // Activity events also need the tags so their information could be added to the proxy and added to the activity in DisposeAsync with all tags.
+
         var tagsTask = TagsTask;
         if (tagsTask.IsCompletedSuccessfully)
         {
