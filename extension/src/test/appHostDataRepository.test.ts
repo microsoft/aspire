@@ -379,6 +379,26 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('runResourceCommand ignores older CLI custom command progress stdout without command output', async () => {
+        const resourceProcess = new TestChildProcess();
+        spawnStub.returns(resourceProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const runPromise = repository.runResourceCommand('cache', '/workspace/AppHost.csproj', 'echo-arguments');
+            await waitForMicrotasks();
+
+            spawnStub.firstCall.args[3].stdoutCallback("Executing command 'echo-arguments' on resource 'cache'...\n");
+            resourceProcess.markExited(0);
+            spawnStub.firstCall.args[3].exitCallback(0);
+
+            const output = await runPromise;
+            assert.strictEqual(output.stdout, '');
+        } finally {
+            repository.dispose();
+        }
+    });
+
     test('runResourceCommand marks bounded JSON stdout as truncated', async () => {
         const resourceProcess = new TestChildProcess();
         spawnStub.returns(resourceProcess);

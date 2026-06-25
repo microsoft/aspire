@@ -2178,10 +2178,12 @@ function getResourceCommandStatusLines(resourceName: string, commandName: string
     // Older CLIs emitted resource command status to stdout before the command value, for example:
     //   Restarting resource 'cache'...
     //   Resource 'cache' restarted successfully.
+    //   Executing command 'echo-arguments' on resource 'cache'...
     //   Command 'echo-arguments' executed successfully on resource 'cache'.
     // Keep this compatibility filter narrow so real command output is preserved.
     const lines = [
         `Validating and executing command '${commandName}' on resource '${resourceName}'...`,
+        `Executing command '${commandName}' on resource '${resourceName}'...`,
         `Command '${commandName}' executed successfully on resource '${resourceName}'.`,
     ];
 
