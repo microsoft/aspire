@@ -2035,4 +2035,10 @@ table.data tbody tr.selected {
 .trace-waterfall {
   height: 100%;
 }
+
+/* The ported .min-duration helper right-aligns itself with margin-left:auto; inside the already
+   end-aligned Deck toolbar that just adds a stray gap, so neutralize it here. */
+.traces-toolbar .min-duration {
+  margin-left: 0;
+}
 /* === end Traces === */

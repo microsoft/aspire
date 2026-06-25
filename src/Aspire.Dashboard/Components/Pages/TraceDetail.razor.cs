@@ -15,6 +15,7 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
+using Aspire.Shared;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -46,6 +47,12 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private IList<GridColumn> _gridColumns = null!;
     private readonly List<MenuButtonItem> _traceActionsMenuItems = [];
     private List<SelectViewModel<SpanType>> _spanTypes = default!;
+
+    // Minimum span-duration filter (ms). Spans shorter than this are hidden from the waterfall so
+    // insignificant work doesn't clutter the view. Mirrors Aspire Deck's TracesPage min-duration
+    // dropdown (src/Aspire.Deck/ui/src/pages/TracesPage.tsx). 0 == show all.
+    private int _minDurationMs;
+    private static readonly int[] s_minDurationOptionsMs = [0, 1, 5, 10, 25, 50, 100, 250, 500, 1000];
 
     public TraceDetailPageViewModel PageViewModel { get; set; } = new();
 
@@ -186,7 +193,37 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     {
         Debug.Assert(PageViewModel.SpanWaterfallViewModels != null);
 
-        return TraceDetailPageViewModel.ApplySpanFilters(PageViewModel.SpanWaterfallViewModels, PageViewModel.Filter, PageViewModel.SelectedSpanType.Id?.Filter, PageViewModel.Filters, GetResourceName);
+        var visible = TraceDetailPageViewModel.ApplySpanFilters(PageViewModel.SpanWaterfallViewModels, PageViewModel.Filter, PageViewModel.SelectedSpanType.Id?.Filter, PageViewModel.Filters, GetResourceName);
+
+        if (_minDurationMs > 0)
+        {
+            // Hide spans shorter than the threshold. The flat visible list is filtered (rather than
+            // re-rooting the tree) so collapse/expand state on the underlying spans is preserved.
+            var threshold = TimeSpan.FromMilliseconds(_minDurationMs);
+            visible = visible.Where(vm => vm.Span.Duration >= threshold);
+        }
+
+        return visible;
+    }
+
+    private string GetMinDurationLabel(int ms)
+    {
+        if (ms <= 0)
+        {
+            return Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailMinDurationAll)];
+        }
+
+        var formatted = DurationFormatter.FormatDuration(TimeSpan.FromMilliseconds(ms), CultureInfo.CurrentCulture);
+        return string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailMinDurationOptionFormat)], formatted);
+    }
+
+    private async Task OnMinDurationChangedAsync(ChangeEventArgs e)
+    {
+        _minDurationMs = int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var ms) ? ms : 0;
+
+        ClearSelectedDataIfNotVisible();
+        await InvokeAsync(StateHasChanged);
+        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
     }
 
     private string? GetPageTitle()

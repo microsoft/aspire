@@ -56,6 +56,17 @@
                                 SpanTypes="@_spanTypes"
                                 HandleSelectedSpanTypeChangedAsync="@HandleSelectedSpanTypeChangedAsync" />
 
+                <label class="min-duration">
+                    <span class="min-duration__label">@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailMinDurationLabel)]</span>
+                    <select class="select" @onchange="OnMinDurationChangedAsync"
+                            aria-label="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailMinDurationLabel)]">
+                        @foreach (var ms in s_minDurationOptionsMs)
+                        {
+                            <option value="@ms" selected="@(ms == _minDurationMs)">@GetMinDurationLabel(ms)</option>
+                        }
+                    </select>
+                </label>
+
                 @if (PageViewModel.Filters.Count == 0)
                 {
                     <button id="traceDetailFilterButton" type="button" class="icon-btn"
