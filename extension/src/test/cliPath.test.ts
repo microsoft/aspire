@@ -215,7 +215,7 @@ suite('utils/cliPath tests', () => {
         });
 
         test('resolves relative custom configured path against the first workspace folder', async () => {
-            const workspaceFolder = '/repo';
+            const workspaceFolder = path.resolve('repo');
             const relativeCliPath = path.join('artifacts', 'bin', 'Aspire.Cli', 'Debug', 'net10.0', 'aspire');
             const resolvedCliPath = path.join(workspaceFolder, relativeCliPath);
             const isOnPath = sinon.stub().resolves(true);
