@@ -38,11 +38,11 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
         var menu = page.Locator("fluent-menu.mobile-nav-menu");
         await Assertions.Expect(menu).ToBeVisibleAsync();
 
+        await page.Keyboard.PressAsync("Tab");
+
         var focusHistory = new List<string?>();
         for (var i = 0; i < 15; i++)
         {
-            await page.Keyboard.PressAsync("Tab");
-
             var activeTitle = await page.EvaluateAsync<string?>(GetActiveMenuItemTitleScript);
             focusHistory.Add(activeTitle ?? await page.EvaluateAsync<string>("""
                 () => {
@@ -54,6 +54,8 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
             {
                 break;
             }
+
+            await page.Keyboard.PressAsync("ArrowDown");
         }
 
         var metrics = await page.EvaluateAsync<MobileNavFocusMetrics>("""

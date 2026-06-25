@@ -344,61 +344,17 @@ window.initializeMobileNavMenuKeyboardNavigation = function (menuId, dotnetHelpe
         if (event.key === "Escape") {
             event.preventDefault();
             dotnetHelper.invokeMethodAsync("CloseMobileNavMenuFromKeyboardAsync");
-            return;
         }
-
-        if (event.key !== "Tab") {
-            return;
-        }
-
-        const menuItems = Array.from(menu.querySelectorAll("fluent-menu-item"));
-        if (menuItems.length === 0) {
-            return;
-        }
-
-        const activeMenuItem = getActiveMenuItem();
-        if (!activeMenuItem) {
-            return;
-        }
-
-        event.preventDefault();
-        const activeIndex = menuItems.indexOf(activeMenuItem);
-        const nextIndex = event.shiftKey
-            ? (activeIndex <= 0 ? menuItems.length - 1 : activeIndex - 1)
-            : (activeIndex >= menuItems.length - 1 ? 0 : activeIndex + 1);
-
-        menuItems[nextIndex].focus();
     };
 
-    // The FluentMenu web component uses roving focus for menu items, which makes
-    // Tab leave the open mobile navigation after the first item. Capture Tab while
-    // focus is inside the menu so keyboard users can reach all navigation items.
+    // Keep Escape-to-close available while focus is inside the mobile navigation.
+    // Do not trap Tab: this menu is inline page navigation, not a modal dialog.
     menu.addEventListener("keydown", keydownListener, true);
 
     return {
         menu,
         keydownListener
     };
-
-    function getActiveMenuItem() {
-        const visited = new Set();
-        let element = document.activeElement;
-        while (element && !visited.has(element)) {
-            visited.add(element);
-            if (element.matches?.("fluent-menu-item")) {
-                return element;
-            }
-
-            if (element.shadowRoot?.activeElement) {
-                element = element.shadowRoot.activeElement;
-                continue;
-            }
-
-            element = element.getRootNode?.().host ?? null;
-        }
-
-        return null;
-    }
 };
 
 window.disposeMobileNavMenuKeyboardNavigation = function (obj) {

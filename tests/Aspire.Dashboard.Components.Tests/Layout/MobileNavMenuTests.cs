@@ -53,7 +53,6 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.Contains("padding-block: var(--mobile-nav-menu-focus-padding)", style);
         Assert.Contains("scroll-padding-block: var(--mobile-nav-menu-focus-padding)", style);
         Assert.Contains("mobile-nav-menu", cut.Find("fluent-menu").ClassList);
-        Assert.All(cut.FindAll("fluent-menu-item"), item => Assert.Equal("0", item.GetAttribute("tabindex")));
     }
 
     private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl)

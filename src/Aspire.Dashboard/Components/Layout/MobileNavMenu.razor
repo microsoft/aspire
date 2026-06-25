@@ -4,8 +4,7 @@
         var isActive = item.LinkMatchRegex is not null && item.LinkMatchRegex.IsMatch($"/{NavigationManager.ToBaseRelativePath(NavigationManager.Uri)}");
         var menuItemAttributes = new Dictionary<string, object>
         {
-            ["title"] = item.Text,
-            ["tabindex"] = "0"
+            ["title"] = item.Text
         };
         if (isActive)
         {
