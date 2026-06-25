@@ -5,7 +5,11 @@
 *@
 <svg width="@Size" height="@Size" viewBox="0 0 24 24" fill="none" stroke="currentColor"
      stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"
-     class="@Class" aria-hidden="true">
+     class="@Class" style="@Style" aria-hidden="@(Title is null ? "true" : null)" role="@(Title is null ? null : "img")">
+    @if (Title is not null)
+    {
+        <title>@Title</title>
+    }
     @switch (Resolve(Name))
     {
         case DeckIconName.Resources:
@@ -144,6 +148,60 @@
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
             break;
+        case DeckIconName.Sparkle:
+            <path d="M12 3l1.6 5.1a2 2 0 0 0 1.3 1.3L20 11l-5.1 1.6a2 2 0 0 0-1.3 1.3L12 19l-1.6-5.1a2 2 0 0 0-1.3-1.3L4 11l5.1-1.6a2 2 0 0 0 1.3-1.3z" />
+            <path d="M19 3v3" />
+            <path d="M20.5 4.5h-3" />
+            break;
+        case DeckIconName.ChartMultiple:
+            <path d="M3 3v18h18" />
+            <path d="M18 17V9" />
+            <path d="M13 17V5" />
+            <path d="M8 17v-3" />
+            break;
+        case DeckIconName.GanttChart:
+            <path d="M3 5v14" />
+            <path d="M8 7h10" />
+            <path d="M6 12h9" />
+            <path d="M11 17h7" />
+            break;
+        case DeckIconName.DocumentError:
+            <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" />
+            <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+            <line x1="12" y1="11" x2="12" y2="15" />
+            <line x1="12" y1="18" x2="12.01" y2="18" />
+            break;
+        case DeckIconName.SlideSearch:
+            <rect x="3" y="4" width="18" height="14" rx="2" />
+            <circle cx="11" cy="11" r="2.5" />
+            <path d="m13 13 2.5 2.5" />
+            break;
+        case DeckIconName.AppGeneric:
+            <rect x="2" y="4" width="20" height="16" rx="2" />
+            <path d="M2 9h20" />
+            <path d="M6 4v5" />
+            <path d="M10 4v5" />
+            break;
+        case DeckIconName.Pin:
+            <path d="M12 17v5" />
+            <path d="M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9A2 2 0 0 1 15 10.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+            break;
+        case DeckIconName.ArrowDown:
+            <path d="M12 5v14" />
+            <path d="m19 12-7 7-7-7" />
+            break;
+        case DeckIconName.ArrowTurnDownRight:
+            <path d="m15 10 5 5-5 5" />
+            <path d="M4 4v7a4 4 0 0 0 4 4h12" />
+            break;
+        case DeckIconName.AppsList:
+            <rect x="3" y="4" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="6" rx="1" />
+            <path d="M14 6h7" />
+            <path d="M14 10h7" />
+            <path d="M14 16h7" />
+            <path d="M14 19h7" />
+            break;
         default:
             <rect x="3" y="3" width="7" height="7" rx="1.5" />
             <rect x="14" y="3" width="7" height="7" rx="1.5" />
@@ -165,6 +223,17 @@
     /// <summary>Optional CSS class applied to the root <c>svg</c>.</summary>
     [Parameter]
     public string? Class { get; set; }
+
+    /// <summary>Optional inline style applied to the root <c>svg</c> (e.g. vertical alignment).</summary>
+    [Parameter]
+    public string? Style { get; set; }
+
+    /// <summary>
+    /// Optional accessible title/tooltip. When set, the icon is exposed as <c>role="img"</c> with a
+    /// <c>&lt;title&gt;</c>; otherwise it is decorative (<c>aria-hidden</c>).
+    /// </summary>
+    [Parameter]
+    public string? Title { get; set; }
 
     /// <summary>
     /// Optional resource type string. When <see cref="Name"/> is <see cref="DeckIconName.ResourceType"/>,

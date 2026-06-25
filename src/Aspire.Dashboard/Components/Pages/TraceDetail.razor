@@ -141,7 +141,7 @@
                                         @if (context.Children.Count > 0)
                                         {
                                             <FluentButton aria-label="@ControlStringsLoc[nameof(ControlsStrings.ToggleNesting)]" Appearance="Appearance.Lightweight" Class="main-grid-expand-button" OnClick="@(() => OnToggleCollapse(context))">
-                                                <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Neutral" />
+                                                <DeckIcon Name="DeckIconName.Chevron" Size="12" />
                                             </FluentButton>
                                         }
                                     </span>
@@ -156,7 +156,7 @@
 
                                         @if (context.IsError)
                                         {
-                                            <FluentIcon Icon="Icons.Filled.Size12.ErrorCircle" Color="Color.Error" Class="trace-tag-icon"/>
+                                            <DeckIcon Name="DeckIconName.ErrorCircle" Size="12" Class="trace-tag-icon icon-error" />
                                         }
                                         <FluentHighlighter HighlightedText="@PageViewModel.Filter" Text="@context.Span.GetDisplaySummary()" />
                                         @if (context.HasUninstrumentedPeer)
@@ -193,8 +193,7 @@
                                                           Title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
                                                           Class="genai-details-button"
                                                           OnClick="() => OnGenAIClickedAsync(context.Span)">
-                                                <FluentIcon Icon="Icons.Regular.Size20.Sparkle"
-                                                            Color="Color.Accent" />
+                                                <DeckIcon Name="DeckIconName.Sparkle" Size="20" Class="icon-accent" />
                                             </FluentButton>
                                         }
                                     </span>
@@ -305,7 +304,7 @@
                             </AspireTemplateColumn>
                         </ChildContent>
                         <EmptyContent>
-                            <FluentIcon Icon="Icons.Regular.Size24.GanttChart" />&nbsp;@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNoSpans)]
+                            <DeckIcon Name="DeckIconName.GanttChart" Size="24" />&nbsp;@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailNoSpans)]
                         </EmptyContent>
                     </FluentDataGrid>
                 </GridColumnManager>
@@ -317,7 +316,7 @@
         <div class="page__body">
             <EmptyState Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceNotFound)], TraceId)">
                 <IconContent>
-                    <FluentIcon Icon="Icons.Regular.Size24.GanttChart" />
+                    <DeckIcon Name="DeckIconName.GanttChart" Size="24" />
                 </IconContent>
             </EmptyState>
         </div>

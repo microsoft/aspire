@@ -121,7 +121,7 @@
                                                     title="@ControlsStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
                                                     @onclick="() => OnGenAIClickedAsync(trace)"
                                                     @onclick:stopPropagation="true">
-                                                <FluentIcon Icon="Icons.Regular.Size16.Sparkle" Color="Color.Accent" />
+                                                <DeckIcon Name="DeckIconName.Sparkle" Size="16" Class="icon-accent" />
                                             </button>
                                         }
                                     </span>
@@ -134,7 +134,7 @@
                                                   style="border-left-color: @(TraceColorPalette.GetColorVariable(GetResourceName(item.Resource)));">
                                                 @if (item.ErroredSpans > 0)
                                                 {
-                                                    <FluentIcon Icon="Icons.Filled.Size12.ErrorCircle" Color="Color.Error" Class="trace-tag-icon" />
+                                                    <DeckIcon Name="DeckIconName.ErrorCircle" Size="12" Class="trace-tag-icon icon-error" />
                                                 }
                                                 @GetResourceName(item.Resource) (@item.TotalSpans)
                                             </span>

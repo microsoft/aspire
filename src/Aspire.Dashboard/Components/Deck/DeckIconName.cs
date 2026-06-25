@@ -71,6 +71,26 @@ public enum DeckIconName
     Warning,
     /// <summary>Circle with exclamation (error).</summary>
     ErrorCircle,
+    /// <summary>Four-pointed sparkle(s); AI/GenAI affordances.</summary>
+    Sparkle,
+    /// <summary>Bar chart with multiple columns.</summary>
+    ChartMultiple,
+    /// <summary>Horizontal gantt/timeline bars.</summary>
+    GanttChart,
+    /// <summary>Document with an exclamation (error/exception).</summary>
+    DocumentError,
+    /// <summary>Panel with a magnifier (slide/text search).</summary>
+    SlideSearch,
+    /// <summary>Generic app window.</summary>
+    AppGeneric,
+    /// <summary>Map pin.</summary>
+    Pin,
+    /// <summary>Down arrow.</summary>
+    ArrowDown,
+    /// <summary>Arrow turning down then right (nested item).</summary>
+    ArrowTurnDownRight,
+    /// <summary>List of items/apps.</summary>
+    AppsList,
     /// <summary>
     /// Special value: resolves to a project/container/executable icon based on the
     /// <see cref="DeckIcon.ResourceType"/> string.

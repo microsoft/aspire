@@ -19,8 +19,7 @@
             <FluentButton Appearance="Appearance.Lightweight"
                           Title="@ControlStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
                           OnClick="OnLaunchGenAIVisualizerAsync">
-                <FluentIcon Icon="Icons.Regular.Size20.Sparkle"
-                            Color="Color.Accent" />
+                <DeckIcon Name="DeckIconName.Sparkle" Size="20" Class="icon-accent" />
             </FluentButton>
         }
         <ExceptionDetails ExceptionText="@_exceptionText" />

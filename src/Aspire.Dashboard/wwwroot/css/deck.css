@@ -2534,4 +2534,5 @@ table.data.deck-logs-table tbody td.deck-logs-actions-col {
 .icon-error { color: var(--error); }
 .icon-success { color: var(--success); }
 .icon-muted { color: var(--text-muted); }
+.icon-accent { color: var(--accent); }
 /* === end Icon utilities === */

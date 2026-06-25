@@ -21,8 +21,8 @@
         value.Value.HasStringValue &&
         string.Equals(value.Value.StringValue, KnownContainerLifetimes.Persistent, StringComparison.Ordinal))
     {
-        <FluentIcon Icon="Icons.Regular.Size16.Pin" Title="@Loc[nameof(Columns.PersistentContainerIconTooltip)]"
-            Color="Color.Neutral" Class="persistent-container-icon" />
+        <DeckIcon Name="DeckIconName.Pin" Size="16" Title="@Loc[nameof(Columns.PersistentContainerIconTooltip)]"
+            Class="persistent-container-icon" />
     }
 </span>
 

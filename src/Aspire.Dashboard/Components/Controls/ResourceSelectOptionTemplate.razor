@@ -5,15 +5,15 @@
 <FluentStack Orientation="Orientation.Horizontal" HorizontalGap="3">
     @if (ViewModel.Id?.Type is OtlpResourceType.ResourceGrouping)
     {
-        <FluentIcon Icon="Icons.Regular.Size20.AppsList"
-                    Color="Color.Accent"
-                    Style="vertical-align: text-bottom;"/>
+        <DeckIcon Name="DeckIconName.AppsList" Size="20"
+                    Class="icon-accent"
+                    Style="vertical-align: text-bottom;" />
         <span>@ViewModel.Name (<span class="resource-select-resource-label">@Loc[nameof(ControlsStrings.ApplicationLower)]</span>)</span>
     }
     else if (ViewModel.Id?.Type is OtlpResourceType.Instance)
     {
-        <FluentIcon Icon="Icons.Regular.Size20.ArrowTurnDownRight"
-                    Color="Color.Accent"
+        <DeckIcon Name="DeckIconName.ArrowTurnDownRight" Size="20"
+                    Class="icon-accent"
                     Style="vertical-align: text-bottom;" />
         <span aria-label="@string.Format(@Loc[nameof(ControlsStrings.ResourceDropdownReplicaAccessibleTitle)], ViewModel.Name, ViewModel.Id.ReplicaSetName)">@ViewModel.Name</span>
     }
