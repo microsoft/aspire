@@ -19,7 +19,8 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
-    private bool _showSettingsPane;
+    // Internal for testing: whether the desktop Deck settings pane is open.
+    internal bool _showSettingsPane;
 
     private IDisposable? _themeChangedSubscription;
     private IDisposable? _locationChangingRegistration;
@@ -483,7 +484,15 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
                 await LaunchHelpAsync();
                 break;
             case AspireKeyboardShortcut.Settings:
-                await LaunchSettingsAsync();
+                // Desktop uses the Deck settings pane; mobile keeps the Fluent settings dialog.
+                if (ViewportInformation.IsDesktop)
+                {
+                    await ToggleSettingsPaneAsync();
+                }
+                else
+                {
+                    await LaunchSettingsAsync();
+                }
                 break;
             case AspireKeyboardShortcut.GoToResources:
                 NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl());

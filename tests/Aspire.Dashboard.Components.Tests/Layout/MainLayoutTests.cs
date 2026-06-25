@@ -193,7 +193,6 @@ public partial class MainLayoutTests : DashboardTestContext
 
     [Theory]
     [InlineData(true, "dashboard-help-button", "HelpDialog", "dashboard-help-button")]
-    [InlineData(true, "dashboard-settings-button", "SettingsDialog", "dashboard-settings-button")]
     [InlineData(false, "dashboard-navigation-button", "HelpDialog", "dashboard-navigation-button")]
     [InlineData(false, "dashboard-navigation-button", "SettingsDialog", "dashboard-navigation-button")]
     public async Task HeaderDialogClose_RestoresFocusToLaunchButton(bool isDesktop, string launchButtonId, string expectedDialogId, string expectedFocusId)
@@ -244,7 +243,6 @@ public partial class MainLayoutTests : DashboardTestContext
 
     [Theory]
     [InlineData(true, false, "dashboard-help-button", "HelpDialog", "dashboard-navigation-button")]
-    [InlineData(true, false, "dashboard-settings-button", "SettingsDialog", "dashboard-navigation-button")]
     [InlineData(false, true, "dashboard-navigation-button", "HelpDialog", "dashboard-help-button")]
     [InlineData(false, true, "dashboard-navigation-button", "SettingsDialog", "dashboard-settings-button")]
     public async Task HeaderDialogClose_AfterViewportChange_RestoresFocusToVisibleLaunchButton(
@@ -307,7 +305,6 @@ public partial class MainLayoutTests : DashboardTestContext
 
     [Theory]
     [InlineData(AspireKeyboardShortcut.Help, "dashboard-help-button", "HelpDialog")]
-    [InlineData(AspireKeyboardShortcut.Settings, "dashboard-settings-button", "SettingsDialog")]
     public async Task HeaderDialogShortcutClose_RestoresFocusToLaunchButton(AspireKeyboardShortcut shortcut, string launchButtonId, string expectedDialogId)
     {
         DialogParameters? capturedParameters = null;
@@ -340,6 +337,42 @@ public partial class MainLayoutTests : DashboardTestContext
                 invocation.Arguments.Count == 1 &&
                 string.Equals((string?)invocation.Arguments[0], launchButtonId, StringComparison.Ordinal));
         });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Settings_Desktop_OpensDeckPaneNotFluentDialog(bool viaShortcut)
+    {
+        // On desktop the settings button and the Settings keyboard shortcut both open the Deck
+        // settings pane (SettingsPane), not the Fluent SettingsDialog. (Mobile still uses the dialog.)
+        DialogParameters? capturedParameters = null;
+        TestDialogService? dialogService = null;
+        dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
+        {
+            capturedParameters = parameters;
+            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+        });
+
+        SetupMainLayoutServices(dialogService: dialogService);
+        JSInterop.SetupVoid("focusElement", _ => true);
+
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        if (viaShortcut)
+        {
+            await cut.InvokeAsync(() => cut.Instance.OnPageKeyDownAsync(AspireKeyboardShortcut.Settings));
+        }
+        else
+        {
+            await cut.InvokeAsync(() => cut.Find("#dashboard-settings-button").Click());
+        }
+
+        cut.WaitForAssertion(() => Assert.True(cut.Instance._showSettingsPane));
+        Assert.Null(capturedParameters);
     }
 
     [Fact]
