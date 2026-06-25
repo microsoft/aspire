@@ -172,7 +172,10 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     // UI
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
-    private AspirePageContentLayout? _contentLayout;
+    // The Deck redesign renders this page with the .page layout instead of AspirePageContentLayout,
+    // so there is no mobile toolbar host to coordinate with. The session/URL-state helpers still run
+    // (they no-op the mobile-dialog deferral when the layout is null).
+    private const AspirePageContentLayout? ContentLayout = null;
     private readonly List<CommandViewModel> _highlightedCommands = new();
     private readonly List<MenuButtonItem> _logsMenuItems = new();
     private readonly List<MenuButtonItem> _resourceMenuItems = new();
@@ -540,7 +543,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     UpdateResourcesList();
                     UpdateMenuButtons();
 
-                    await this.RefreshIfMobileAsync(_contentLayout);
+                    await this.RefreshIfMobileAsync(ContentLayout);
                 }));
         }
 
@@ -619,7 +622,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ConsoleLogConsoleSettings, new ConsoleLogConsoleSettings(_showTimestamp, _isTimestampUtc, _noWrapLogs));
         UpdateMenuButtons();
         StateHasChanged();
-        await this.RefreshIfMobileAsync(_contentLayout);
+        await this.RefreshIfMobileAsync(ContentLayout);
     }
 
     private async Task ExecuteResourceCommandAsync(CommandViewModel command)
@@ -952,7 +955,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     private async Task HandleSelectedOptionChangedAsync()
     {
-        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
+        await this.AfterViewModelChangedAsync(ContentLayout, waitToApplyMobileChange: false);
     }
 
     private async Task OnResourceChanged(ResourceViewModelChangeType changeType, ResourceViewModel resource)
@@ -1115,7 +1118,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 // If there is no resource selected and there is only one resource available, select it.
                 viewModel.SelectedResource = _resources.GetResource(Logger, r.Name, canSelectGrouping: false, fallbackViewModel: _allResource);
-                return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
+                return this.AfterViewModelChangedAsync(ContentLayout, waitToApplyMobileChange: false);
             }
         }
 
