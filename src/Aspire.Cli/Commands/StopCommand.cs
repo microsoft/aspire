@@ -22,7 +22,7 @@ internal sealed class StopCommand : BaseCommand
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<StopCommand> _logger;
     private readonly ICliHostEnvironment _hostEnvironment;
-    private readonly ProcessShutdownService _processShutdownService;
+    private readonly ProcessTreeGracefulShutdownService _processShutdownService;
     private readonly ProfilingTelemetry _profilingTelemetry;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", StopCommandStrings.ProjectArgumentDescription);
@@ -35,7 +35,7 @@ internal sealed class StopCommand : BaseCommand
     public StopCommand(
         AppHostConnectionResolver connectionResolver,
         ICliHostEnvironment hostEnvironment,
-        ProcessShutdownService processShutdownService,
+        ProcessTreeGracefulShutdownService processShutdownService,
         ILogger<StopCommand> logger,
         ProfilingTelemetry profilingTelemetry,
         CommonCommandServices services)

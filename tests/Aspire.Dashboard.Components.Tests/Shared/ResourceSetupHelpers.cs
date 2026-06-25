@@ -39,6 +39,7 @@ internal static class ResourceSetupHelpers
         FluentUISetupHelpers.SetupFluentMenu(context);
 
         context.JSInterop.SetupVoid("scrollToTop", _ => true);
+        context.JSInterop.SetupVoid("focusElement", _ => true);
     }
 
     public static void SetupResourcesPage(TestContext context, ViewportInformation viewport, IDashboardClient? dashboardClient = null, ILocalStorage? localStorage = null)
@@ -56,6 +57,7 @@ internal static class ResourceSetupHelpers
         FluentUISetupHelpers.SetupFluentMenu(context);
 
         FluentUISetupHelpers.AddCommonDashboardServices(context, localStorage: localStorage);
+        context.JSInterop.SetupVoid("focusElement", _ => true);
         context.Services.AddSingleton<IconResolver>();
         context.Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);
         context.Services.AddSingleton<StructuredLogsViewModel>();

@@ -5,6 +5,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -1003,12 +1004,12 @@ public class GuestAppHostProjectTests : IDisposable
                 Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(appPath))
         };
 
-        var sessionFactory = new TestAppHostServerSessionFactory();
+        IAppHostServerSessionFactory sessionFactory = new FakeAppHostServerSessionFactory();
 
         var project = CreateGuestAppHostProject(
             interactionService: interactionService,
             appHostServerProjectFactory: factory,
-            appHostServerSessionFactory: sessionFactory);
+            serverSessionFactory: sessionFactory);
 
         var context = new UpdatePackagesContext
         {
@@ -1087,12 +1088,12 @@ public class GuestAppHostProjectTests : IDisposable
                 Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(appPath))
         };
 
-        var sessionFactory = new TestAppHostServerSessionFactory();
+        IAppHostServerSessionFactory sessionFactory = new FakeAppHostServerSessionFactory();
 
         var project = CreateGuestAppHostProject(
             interactionService: interactionService,
             appHostServerProjectFactory: factory,
-            appHostServerSessionFactory: sessionFactory);
+            serverSessionFactory: sessionFactory);
 
         var context = new UpdatePackagesContext
         {
@@ -1154,7 +1155,7 @@ public class GuestAppHostProjectTests : IDisposable
         TestInteractionService? interactionService = null,
         string identityChannel = "local",
         TestAppHostServerProjectFactory? appHostServerProjectFactory = null,
-        IAppHostServerSessionFactory? appHostServerSessionFactory = null,
+        IAppHostServerSessionFactory? serverSessionFactory = null,
         bool identityOverridden = false)
     {
         var language = new LanguageInfo(
@@ -1172,12 +1173,18 @@ public class GuestAppHostProjectTests : IDisposable
             logFilePath: logFilePath,
             identityOverridden: identityOverridden);
 
+        // Construct a real graceful-shutdown window so the contract matches production:
+        // GuestAppHostProject requires it even when a test exits the Run path early
+        // (e.g. via FailedToBuildArtifacts) without exercising shutdown. The test fake stands in for
+        // ConsoleCancellationManager so the fixture doesn't register process-global OS signal handlers;
+        // none of the tests here drive the launcher or AppHostServerSession paths that would fire it.
+        var shutdownWindow = new TestGracefulShutdownWindow();
+
         return new GuestAppHostProject(
             language: language,
             interactionService: interactionService ?? new TestInteractionService(),
             backchannel: new TestAppHostBackchannel(),
             appHostServerProjectFactory: appHostServerProjectFactory ?? new TestAppHostServerProjectFactory(),
-            appHostServerSessionFactory: appHostServerSessionFactory ?? new TestAppHostServerSessionFactory(),
             certificateService: new TestCertificateService(),
             runner: new TestDotNetCliRunner(),
             packagingService: new TestPackagingService(),
@@ -1188,7 +1195,16 @@ public class GuestAppHostProjectTests : IDisposable
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
             profilingTelemetry: _profilingTelemetry,
+            gracefulShutdownSignaler: new NoOpGracefulSignaler(),
+            shutdownService: shutdownWindow,
+            serverSessionFactory: serverSessionFactory ?? new FakeAppHostServerSessionFactory(),
             timeProvider: TimeProvider.System);
+    }
+
+    private sealed class NoOpGracefulSignaler : IProcessTreeGracefulShutdownSignaler
+    {
+        public Task<bool> RequestProcessTreeGracefulShutdownAsync(int pid, DateTimeOffset? startTime, bool includeStartTimeForDcp, CancellationToken cancellationToken)
+            => Task.FromResult(true);
     }
 
 }

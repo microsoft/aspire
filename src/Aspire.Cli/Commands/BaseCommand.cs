@@ -26,6 +26,15 @@ internal abstract class BaseCommand : Command
     /// </summary>
     internal virtual HelpGroup HelpGroup => HelpGroup.None;
 
+    /// <summary>
+    /// The graceful-shutdown budget this command grants its child processes before shutdown ladders
+    /// escalate to forceful termination. <see cref="BaseCommand"/> reads this and configures the
+    /// shared <see cref="ConsoleCancellationManager"/> centrally before invoking <see cref="ExecuteAsync"/>.
+    /// The default of zero preserves force-kill-on-cancel behavior for every command that does not opt in;
+    /// <c>aspire run</c> overrides it to give the AppHost a real cooperative-shutdown window.
+    /// </summary>
+    protected virtual TimeSpan GracefulShutdownBudget => TimeSpan.Zero;
+
     private readonly CliExecutionContext _executionContext;
 
     protected CliExecutionContext ExecutionContext => _executionContext;
@@ -80,6 +89,12 @@ internal abstract class BaseCommand : Command
         var stoppingMessageShown = false;
         try
         {
+            // Configure the shared shutdown manager with this command's graceful-shutdown budget
+            // before the handler starts spawning child processes, so every per-child shutdown
+            // ladder observes the correct window from the first user signal. Commands that don't
+            // override GracefulShutdownBudget get the zero default (force-kill on cancel).
+            services.CancellationManager.ConfigureForCommand(GracefulShutdownBudget);
+
             var handlerTask = ExecuteAsync(parseResult, cancellationToken);
             services.CancellationManager.SetStartedHandler(handlerTask);
 

@@ -22,6 +22,7 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
     private readonly IVsCodeCliRunner _vsCodeCliRunner;
     private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
     private readonly ILogger<VsCodeAgentEnvironmentScanner> _logger;
 
     /// <summary>
@@ -30,16 +31,19 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
     /// <param name="vsCodeCliRunner">The VS Code CLI runner for checking if VS Code is installed.</param>
     /// <param name="playwrightCliInstaller">The Playwright CLI installer for secure installation.</param>
     /// <param name="executionContext">The CLI execution context for accessing environment variables and settings.</param>
+    /// <param name="environment">The environment abstraction for reading environment variables.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
-    public VsCodeAgentEnvironmentScanner(IVsCodeCliRunner vsCodeCliRunner, PlaywrightCliInstaller playwrightCliInstaller, CliExecutionContext executionContext, ILogger<VsCodeAgentEnvironmentScanner> logger)
+    public VsCodeAgentEnvironmentScanner(IVsCodeCliRunner vsCodeCliRunner, PlaywrightCliInstaller playwrightCliInstaller, CliExecutionContext executionContext, IEnvironment environment, ILogger<VsCodeAgentEnvironmentScanner> logger)
     {
         ArgumentNullException.ThrowIfNull(vsCodeCliRunner);
         ArgumentNullException.ThrowIfNull(playwrightCliInstaller);
         ArgumentNullException.ThrowIfNull(executionContext);
+        ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(logger);
         _vsCodeCliRunner = vsCodeCliRunner;
         _playwrightCliInstaller = playwrightCliInstaller;
         _executionContext = executionContext;
+        _environment = environment;
         _logger = logger;
     }
 
@@ -168,7 +172,7 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
     /// </summary>
     private bool HasVsCodeEnvironmentVariables()
     {
-        if (_executionContext.GetEnvironmentVariable("TERM_PROGRAM") == "vscode")
+        if (_environment.GetEnvironmentVariable("TERM_PROGRAM") == "vscode")
         {
             return true;
         }

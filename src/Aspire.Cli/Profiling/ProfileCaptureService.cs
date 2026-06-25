@@ -105,11 +105,11 @@ internal sealed class ProfileCaptureService(
             // Launch aspire-managed directly instead of calling `aspire dashboard run`. Calling
             // back through the CLI being profiled would recursively apply --capture-profile and
             // make the collector part of the measurement.
-            dashboardProcess = layoutProcessRunner.Start(
+            dashboardProcess = await layoutProcessRunner.StartAsync(
                 managedPath,
                 dashboardArgs,
                 environmentVariables: environmentVariables,
-                options: processOptions);
+                options: processOptions).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -377,7 +377,7 @@ internal sealed class ProfileCaptureService(
             }
             finally
             {
-                _dashboardProcess.Dispose();
+                await _dashboardProcess.DisposeAsync().ConfigureAwait(false);
                 _layoutLease?.Dispose();
             }
         }

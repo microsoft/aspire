@@ -13,6 +13,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Mcp.Tools;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Shared;
 
@@ -56,6 +57,7 @@ namespace Aspire.Cli;
 [JsonSerializable(typeof(InstallationInfo))]
 [JsonSerializable(typeof(AppHostInfoCacheEntry))]
 [JsonSerializable(typeof(AppHostProjectInspectionOutput))]
+[JsonSerializable(typeof(InternalMicrosoftDetectorCacheEntry))]
 internal partial class JsonSourceGenerationContext : JsonSerializerContext
 {
     private static JsonSourceGenerationContext? s_relaxedEscaping;

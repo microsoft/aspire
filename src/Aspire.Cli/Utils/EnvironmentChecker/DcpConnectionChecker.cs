@@ -291,7 +291,7 @@ internal sealed class DcpConnectionChecker(
                     }
                     finally
                     {
-                        process.Dispose();
+                        await process.DisposeAsync().ConfigureAwait(false);
                     }
                 }
 
@@ -360,7 +360,7 @@ internal sealed class DcpConnectionChecker(
             }
             finally
             {
-                _process.Dispose();
+                await _process.DisposeAsync().ConfigureAwait(false);
 
                 try
                 {

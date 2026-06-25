@@ -364,7 +364,8 @@ public class DotNetTemplateFactoryTests
             features,
             telemetry,
             hostEnvironment,
-            templateNuGetConfigService);
+            templateNuGetConfigService,
+            new HostEnvironment());
     }
 
     private sealed class TestInteractionService : IInteractionService

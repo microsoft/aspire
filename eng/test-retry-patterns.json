@@ -53,6 +53,10 @@
       "reason": "Transient DNS resolution failure in job log"
     },
     {
+      "output": "Connection reset by peer",
+      "reason": "Transient network connection reset by peer"
+    },
+    {
       "output": { "regex": "mcr\\.microsoft\\.com[\\s\\S]{0,500}403 Forbidden" },
       "reason": "MCR registry rate limiting (HTTP 403)"
     },

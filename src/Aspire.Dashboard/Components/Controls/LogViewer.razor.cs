@@ -17,6 +17,7 @@ namespace Aspire.Dashboard.Components;
 /// </summary>
 public sealed partial class LogViewer
 {
+    private const string ScrollContainerId = "logScrollContainer";
     private static readonly MarkupString s_spaceMarkup = new MarkupString("&#32;");
 
     private LogEntries? _logEntries;
@@ -111,6 +112,9 @@ public sealed partial class LogViewer
             Logger.LogDebug("Initializing log viewer.");
 
             await JS.InvokeVoidAsync("initializeContinuousScroll");
+            // Focus the scroll container without showing the focus ring. The container is a large
+            // content area where a visible focus indicator would be visually noisy on initial load.
+            await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
             DimensionManager.OnViewportInformationChanged += OnBrowserResize;
         }
     }

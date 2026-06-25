@@ -49,7 +49,6 @@ internal sealed class CertificateService(
     IInteractionService interactionService,
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
-    CliExecutionContext executionContext,
     IEnvironment environment) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
@@ -164,17 +163,17 @@ internal sealed class CertificateService(
     /// </summary>
     private bool ShouldGenerateHttpsCertificate()
     {
-        var value = executionContext.GetEnvironmentVariable(KnownConfigNames.CliGenerateHttpsCertificate);
+        var value = environment.GetEnvironmentVariable(KnownConfigNames.CliGenerateHttpsCertificate);
         return !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void ConfigureSslCertDir(Dictionary<string, string> environmentVariables)
+    private void ConfigureSslCertDir(Dictionary<string, string> environmentVariables)
     {
         // Get the dev-certs trust path (respects DOTNET_DEV_CERTS_OPENSSL_CERTIFICATE_DIRECTORY override)
-        var devCertsTrustPath = CertificateHelpers.GetDevCertsTrustPath();
+        var devCertsTrustPath = CertificateHelpers.GetDevCertsTrustPath(environment);
 
         // Get the current SSL_CERT_DIR value (if any)
-        var currentSslCertDir = Environment.GetEnvironmentVariable(SslCertDirEnvVar);
+        var currentSslCertDir = environment.GetEnvironmentVariable(SslCertDirEnvVar);
 
         // Check if the dev-certs trust path is already included
         if (!string.IsNullOrEmpty(currentSslCertDir))
