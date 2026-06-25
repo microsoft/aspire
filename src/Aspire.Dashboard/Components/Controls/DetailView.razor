@@ -15,24 +15,28 @@
         <div class="header-actions">
             @if (ViewportInformation.IsDesktop)
             {
-                <FluentButton Appearance="Appearance.Stealth"
-                              IconEnd="@(Orientation == Orientation.Horizontal ? _splitHorizontalIcon : _splitVerticalIcon)"
-                              OnClick="HandleToggleOrientation"
-                              Title="@(Orientation == Orientation.Horizontal ? Loc[nameof(ControlsStrings.SummaryDetailsViewSplitHorizontal)] : Loc[nameof(ControlsStrings.SummaryDetailsViewSplitVertical)])"
-                              aria-label="@(Orientation == Orientation.Horizontal ? Loc[nameof(ControlsStrings.SummaryDetailsViewSplitHorizontal)] : Loc[nameof(ControlsStrings.SummaryDetailsViewSplitVertical)])"/>
+                <button type="button"
+                        class="icon-btn"
+                        @onclick="HandleToggleOrientation"
+                        title="@(Orientation == Orientation.Horizontal ? Loc[nameof(ControlsStrings.SummaryDetailsViewSplitHorizontal)] : Loc[nameof(ControlsStrings.SummaryDetailsViewSplitVertical)])"
+                        aria-label="@(Orientation == Orientation.Horizontal ? Loc[nameof(ControlsStrings.SummaryDetailsViewSplitHorizontal)] : Loc[nameof(ControlsStrings.SummaryDetailsViewSplitVertical)])">
+                    <DeckIcon Name="@(Orientation == Orientation.Horizontal ? DeckIconName.SplitHorizontal : DeckIconName.SplitVertical)" Size="16" />
+                </button>
             }
 
-            <FluentButton Appearance="Appearance.Stealth" BackgroundColor="@(ViewportInformation.IsDesktop ? null : "rgba(0, 0, 0, 0)")" IconEnd="@(new Icons.Regular.Size16.Dismiss())"
-                          OnClick="HandleDismissAsync" Title="@Loc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]" aria-label="@Loc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]"/>
+            <button type="button"
+                    class="icon-btn"
+                    @onclick="HandleDismissAsync"
+                    title="@Loc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]"
+                    aria-label="@Loc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]">
+                <DeckIcon Name="DeckIconName.Close" Size="16" />
+            </button>
         </div>
     </header>
     @Details
 </div>
 
 @code {
-    private readonly Icon _splitHorizontalIcon = new Icons.Regular.Size16.SplitHorizontal();
-    private readonly Icon _splitVerticalIcon = new Icons.Regular.Size16.SplitVertical();
-
     [Parameter]
     public string? DetailsTitle { get; set; }
 

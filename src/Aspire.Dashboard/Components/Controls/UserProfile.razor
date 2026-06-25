@@ -14,7 +14,7 @@
                             <FluentSpacer />
                             <form @formname="sign-out-form" class="sign-out-form" action="authentication/logout" method="post">
                                 <AntiforgeryToken />
-                                <FluentButton Appearance="Appearance.Stealth" Type="ButtonType.Submit">Sign out</FluentButton>
+                                <button type="submit" class="btn btn--ghost">Sign out</button>
                             </form>
                         </div>
                     </HeaderTemplate>

@@ -49,12 +49,13 @@
     <div @onclick:stopPropagation="true" class="button-container">
 
         <span class="defaultHidden">
-            <FluentButton Appearance="Appearance.Lightweight"
-                          Disabled="@(ValueToVisualize is null && Value is null)"
-                          OnClick="OpenTextVisualizerAsync"
-                          aria-label="@DialogsLoc[nameof(Dialogs.OpenInTextVisualizer)]">
+            <button type="button"
+                    class="icon-btn icon-btn--sm"
+                    disabled="@(ValueToVisualize is null && Value is null)"
+                    @onclick="OpenTextVisualizerAsync"
+                    aria-label="@DialogsLoc[nameof(Dialogs.OpenInTextVisualizer)]">
                 <DeckIcon Name="DeckIconName.SlideSearch" Size="16" />
-            </FluentButton>
+            </button>
         </span>
 
         @if (ContentInButtonArea is not null)
@@ -64,12 +65,13 @@
 
         @if (EnableMasking)
         {
-            <FluentButton Appearance="Appearance.Lightweight"
-                          IconEnd="@(IsMasked ? _unmaskIcon : _maskIcon)"
-                          Title="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
-                          OnClick="ToggleMaskStateAsync"
-                          aria-label="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
-                          Class="grid-value-mask-button" />
+        <button type="button"
+                class="icon-btn icon-btn--sm grid-value-mask-button"
+                title="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
+                @onclick="ToggleMaskStateAsync"
+                aria-label="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])">
+            <DeckIcon Name="@(IsMasked ? DeckIconName.Eye : DeckIconName.EyeOff)" Size="16" />
+        </button>
         }
 
     </div>

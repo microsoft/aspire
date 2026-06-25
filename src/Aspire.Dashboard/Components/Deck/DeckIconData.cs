@@ -494,6 +494,16 @@ internal static class DeckIconData
             <line x1="9" y1="3" x2="9" y2="21" />
             <line x1="15" y1="3" x2="15" y2="21" />
             """,
+        [DeckIconName.SplitHorizontal] =
+            """
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <line x1="12" y1="4" x2="12" y2="20" />
+            """,
+        [DeckIconName.SplitVertical] =
+            """
+            <rect x="4" y="3" width="16" height="18" rx="2" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            """,
     }.ToFrozenDictionary();
 
     /// <summary>

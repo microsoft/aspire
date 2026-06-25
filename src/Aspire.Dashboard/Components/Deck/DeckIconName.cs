@@ -161,6 +161,10 @@ public enum DeckIconName
     Gauge,
     /// <summary>Table/grid of cells.</summary>
     Grid,
+    /// <summary>Two panels side by side (split horizontally).</summary>
+    SplitHorizontal,
+    /// <summary>Two panels stacked (split vertically).</summary>
+    SplitVertical,
     /// <summary>
     /// Special value: resolves to a project/container/executable icon based on the
     /// <see cref="DeckIcon.ResourceType"/> string.

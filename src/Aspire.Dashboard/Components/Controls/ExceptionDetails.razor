@@ -7,12 +7,12 @@
 
 @if (!string.IsNullOrWhiteSpace(ExceptionText))
 {
-    <FluentButton Appearance="Appearance.Lightweight"
-                  OnClick="OnExceptionDetailsClickedAsync"
-                  Title="@Loc[nameof(ControlsStrings.ExceptionDetailsTitle)]"
-                  Class="exception-details-button">
+    <button type="button"
+            class="icon-btn icon-btn--sm exception-details-button"
+            @onclick="OnExceptionDetailsClickedAsync"
+            title="@Loc[nameof(ControlsStrings.ExceptionDetailsTitle)]">
         <DeckIcon Name="DeckIconName.DocumentError" Size="16" Class="icon-accent" />
-    </FluentButton>
+    </button>
 }
 
 @code {

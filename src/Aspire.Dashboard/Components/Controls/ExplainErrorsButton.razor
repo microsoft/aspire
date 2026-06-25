@@ -2,11 +2,9 @@
 
 @if (AIContextProvider.Enabled && HasErrors)
 {
-    <FluentButton slot="end" Title="@Loc[nameof(AIAssistant.ExplainErrorsButtonText)]" aria-label="@Loc[nameof(AIAssistant.ExplainErrorsButtonText)]" OnClick="() => OnClick.InvokeAsync()">
-        <span slot="start">
-            <DeckIcon Name="DeckIconName.Sparkle" Size="16" Style="vertical-align: sub;" />
-        </span>
+    <button type="button" slot="end" class="btn btn--ghost" title="@Loc[nameof(AIAssistant.ExplainErrorsButtonText)]" aria-label="@Loc[nameof(AIAssistant.ExplainErrorsButtonText)]" @onclick="() => OnClick.InvokeAsync()">
+        <DeckIcon Name="DeckIconName.Sparkle" Size="16" />
         @Loc[nameof(AIAssistant.ExplainErrorsButtonText)]
-    </FluentButton>
+    </button>
     <Divider slot="end" />
 }
