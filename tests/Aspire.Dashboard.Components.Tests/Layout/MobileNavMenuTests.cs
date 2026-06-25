@@ -54,35 +54,49 @@ public class MobileNavMenuTests : DashboardTestContext
     }
 
     [Fact]
-    public void Render_OpenMenu_FeedbackEntryRendersNestedFeedbackItems()
+    public async Task Render_OpenMenu_FeedbackEntryExpandsNestedItemsInlineWhenClicked()
     {
+        var bugClicked = false;
+        var closeCount = 0;
         var feedbackItems = new List<MenuButtonItem>
         {
-            new() { Text = "Report a bug", OnClick = () => Task.CompletedTask },
+            new() { Text = "Report a bug", OnClick = () => { bugClicked = true; return Task.CompletedTask; } },
             new() { Text = "Suggest an idea", OnClick = () => Task.CompletedTask },
             new() { Text = "General feedback", OnClick = () => Task.CompletedTask },
         };
 
-        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), feedbackItems);
+        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), feedbackItems, closeNavMenu: () => closeCount++);
 
-        // The feedback entry renders its nested items as a submenu:
-        //   <fluent-menu-item title="Provide feedback">
-        //     ...
-        //     <fluent-menu slot="submenu">
-        //       <div>
-        //         <fluent-menu-item>Report a bug</fluent-menu-item>
-        //         <fluent-menu-item>Suggest an idea</fluent-menu-item>
-        //         <fluent-menu-item>General feedback</fluent-menu-item>
-        //       </div>
-        //     </fluent-menu>
-        //   </fluent-menu-item>
-        // The nested item text is rendered as element text content (not a "label" attribute).
-        var submenu = cut.Find("""fluent-menu[slot="submenu"]""");
-        var nestedItemTexts = submenu.QuerySelectorAll("fluent-menu-item")
+        // The feedback entry's nested items are collapsed until the entry is tapped. This is the fix
+        // for the mobile bug where tapping feedback closed the menu and did nothing, because nested
+        // submenus can't be opened via hover/expander affordances on touch.
+        Assert.Empty(cut.FindAll("fluent-menu-item.mobile-nav-menu-nested-item"));
+
+        var feedbackEntry = cut.FindAll("fluent-menu-item")
+            .Single(item => item.GetAttribute("title") == Resources.Layout.MainLayoutProvideFeedback);
+        Assert.Equal("menu", feedbackEntry.GetAttribute("aria-haspopup"));
+        Assert.Equal("false", feedbackEntry.GetAttribute("aria-expanded"));
+
+        // Tapping the feedback entry expands its nested items inline and keeps the nav menu open.
+        await cut.InvokeAsync(() => feedbackEntry.Click());
+
+        Assert.Equal(0, closeCount);
+        Assert.Equal("true", cut.FindAll("fluent-menu-item")
+            .Single(item => item.GetAttribute("title") == Resources.Layout.MainLayoutProvideFeedback)
+            .GetAttribute("aria-expanded"));
+
+        var nestedItemTexts = cut.FindAll("fluent-menu-item.mobile-nav-menu-nested-item")
             .Select(item => item.TextContent.Trim())
             .ToList();
-
         Assert.Equal(new[] { "Report a bug", "Suggest an idea", "General feedback" }, nestedItemTexts);
+
+        // Tapping a nested item closes the nav menu and invokes that item's action.
+        await cut.InvokeAsync(() => cut.FindAll("fluent-menu-item.mobile-nav-menu-nested-item")
+            .Single(item => item.TextContent.Contains("Report a bug", StringComparison.Ordinal))
+            .Click());
+
+        Assert.True(bugClicked);
+        Assert.Equal(1, closeCount);
     }
 
     private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl)
@@ -90,7 +104,7 @@ public class MobileNavMenuTests : DashboardTestContext
         return RenderMobileNavMenu(currentUrl, feedbackMenuItems: []);
     }
 
-    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, List<MenuButtonItem> feedbackMenuItems)
+    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, List<MenuButtonItem> feedbackMenuItems, Action? closeNavMenu = null)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
@@ -106,7 +120,7 @@ public class MobileNavMenuTests : DashboardTestContext
         {
             builder.Add(p => p.IsNavMenuOpen, true);
             builder.Add(p => p.IsAIEnabled, false);
-            builder.Add(p => p.CloseNavMenu, () => { });
+            builder.Add(p => p.CloseNavMenu, closeNavMenu ?? (() => { }));
             builder.Add(p => p.GetFeedbackMenuItems, () => feedbackMenuItems);
             builder.Add(p => p.LaunchHelpAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchAIAgentsAsync, () => Task.CompletedTask);

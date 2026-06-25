@@ -36,10 +36,7 @@
                               MenuButtonId="@FeedbackButtonId"
                               Items="@GetFeedbackMenuItems()"
                               Title="@Loc[nameof(Layout.MainLayoutProvideFeedback)]"
-                              AdditionalAttributes="@(new Dictionary<string, object>
-                              {
-                                  ["aria-label"] = Loc[nameof(Layout.MainLayoutProvideFeedback)]
-                              })" />
+                              aria-label="@Loc[nameof(Layout.MainLayoutProvideFeedback)]" />
             <FluentButton Class="header-button"
                           Id="@HelpButtonId"
                           Appearance="Appearance.Stealth" OnClick="@(() => LaunchHelpAsync(HelpButtonId))"

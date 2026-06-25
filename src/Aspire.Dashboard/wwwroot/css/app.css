@@ -969,6 +969,11 @@ fluent-tooltip[anchor="dialog_close"] > div {
     max-width: var(--aspire-menu-max-width);
 }
 
+.aspire-menu-container fluent-menu-item.mobile-nav-menu-nested-item::part(content) {
+    /* Indent inline-expanded child entries so the hierarchy under the parent row is clear. */
+    padding-inline-start: 28px;
+}
+
 .overflow-fluent-menu-item::part(content) {
     width: 100%;
     text-overflow: ellipsis;
