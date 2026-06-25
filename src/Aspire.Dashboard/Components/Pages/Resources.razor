@@ -63,8 +63,8 @@
                 <table class="data">
                     <thead>
                         <tr>
-                            <th style="width: 190px;">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]</th>
                             <th>@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]</th>
+                            <th style="width: 190px;">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]</th>
                             @if (_showResourceTypeColumn)
                             {
                                 <th style="width: 130px;">@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]</th>
@@ -99,11 +99,6 @@
                                 <tr class="clickable @(isSelected ? "selected" : "")" @key="resource.Name"
                                     @onclick="() => ShowResourceDetailsAsync(resource, buttonId: null)">
                                     <td>
-                                        <StateDot Tone="@ResourceStateTone.Get(resource)"
-                                                  Text="@ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc).Text"
-                                                  Health="@resource.HealthStatus?.Humanize()" />
-                                    </td>
-                                    <td>
                                         <span class="cell-name" style="padding-left: @(vm.Depth * 16)px;">
                                             @if (vm.Children.Count > 0)
                                             {
@@ -120,6 +115,11 @@
                                             }
                                             <ResourceNameDisplay Resource="resource" FilterText="@PageViewModel.TextFilter" FormatName="GetResourceName" />
                                         </span>
+                                    </td>
+                                    <td>
+                                        <StateDot Tone="@ResourceStateTone.Get(resource)"
+                                                  Text="@ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc).Text"
+                                                  Health="@resource.HealthStatus?.Humanize()" />
                                     </td>
                                     @if (_showResourceTypeColumn)
                                     {
