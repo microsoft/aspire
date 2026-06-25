@@ -1,9 +1,5 @@
 ﻿@using Aspire.Dashboard.Utils
 
-@* Do this to trim significant whitespace so there isn't a space added between icon and text *@
-@{
-    <FluentIcon Value="@_stateViewModel.Icon"
-                Color="@_stateViewModel.Color"
-                Class="severity-icon" />
-}
+@* Render the Deck state dot (tone) inline, keeping the highlighter for the state text. *@
+<span class="state__dot @ResourceStateTone.Get(Resource)" style="margin-right: 6px;" title="@_stateViewModel.Text"></span>
 <FluentHighlighter HighlightedText="@HighlightText" Text="@_stateViewModel.Text" />
