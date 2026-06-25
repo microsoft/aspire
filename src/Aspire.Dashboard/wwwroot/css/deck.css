@@ -105,6 +105,13 @@ a:focus-visible {
     "sidebar content";
   height: 100vh;
   overflow: hidden;
+  /* Anchor the Deck app background on the shell root (a class selector) so it wins over Fluent's
+     reboot.css `body` rule, which otherwise sets the body background to a Fluent neutral token
+     (--neutral-fill-layer-rest / --fill-color). The transparent .app__content shows this through,
+     so without it the content area behind the page renders with the Fluent neutral (a dark band in
+     light mode when Fluent's baseLayerLuminance is out of sync with the Deck data-theme). */
+  background: var(--bg-app);
+  color: var(--text);
 }
 
 .app__topbar {
@@ -118,6 +125,9 @@ a:focus-visible {
   overflow: hidden;
   position: relative;
   min-width: 0;
+  /* Explicit Deck content background so the page area never falls back to the body's Fluent-overridden
+     background (see .app note above). */
+  background: var(--bg-app);
 }
 
 /* ---------- Sidebar ---------- */
