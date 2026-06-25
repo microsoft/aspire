@@ -30,24 +30,26 @@
         <div class="auth-actions">
             <button class="btn btn--primary auth-submit" name="submit-token" type="submit">@Loc[nameof(Dashboard.Resources.Login.LogInButtonText)]</button>
         </div>
-        <a href="@NavigationManager.Uri" id="helpLink" class="auth-help-link">@Loc[nameof(Dashboard.Resources.Login.WhereIsMyTokenLinkText)]</a>
-        <FluentTooltip Anchor="helpLink" MaxWidth="650px" aria-label="https://go.microsoft.com/fwlink/?linkid=2265718">
-            <div class="token-help-container">
-                <div>
-                    <a href="/img/TokenExample.png" target="_blank">
-                        <img class="token-help-image" src="/img/TokenExample.png"
-                             alt="@Loc[nameof(Dashboard.Resources.Login.HelpScreenshotAltText)]" />
+        <span class="token-help-anchor">
+            <a href="@NavigationManager.Uri" id="helpLink" class="auth-help-link">@Loc[nameof(Dashboard.Resources.Login.WhereIsMyTokenLinkText)]</a>
+            <span class="token-help-tooltip" role="tooltip" aria-label="https://go.microsoft.com/fwlink/?linkid=2265718">
+                <div class="token-help-container">
+                    <div>
+                        <a href="/img/TokenExample.png" target="_blank">
+                            <img class="token-help-image" src="/img/TokenExample.png"
+                                 alt="@Loc[nameof(Dashboard.Resources.Login.HelpScreenshotAltText)]" />
+                        </a>
+                    </div>
+                    <div>
+                        <p>@Loc[nameof(Dashboard.Resources.Login.TokenHelpTextLine1)]</p>
+                        <p>@Loc[nameof(Dashboard.Resources.Login.TokenHelpTextLine2)]</p>
+                    </div>
+                    <a href="https://go.microsoft.com/fwlink/?linkid=2265718" target="_blank" rel="noopener noreferrer">
+                        @Loc[nameof(Dashboard.Resources.Login.MoreInfoLinkText)]
                     </a>
                 </div>
-                <div>
-                    <p>@Loc[nameof(Dashboard.Resources.Login.TokenHelpTextLine1)]</p>
-                    <p>@Loc[nameof(Dashboard.Resources.Login.TokenHelpTextLine2)]</p>
-                </div>
-                <a href="https://go.microsoft.com/fwlink/?linkid=2265718" target="_blank" rel="noopener noreferrer">
-                    @Loc[nameof(Dashboard.Resources.Login.MoreInfoLinkText)]
-                </a>
-            </div>
-        </FluentTooltip>
+            </span>
+        </span>
     </EditForm>
     <div class="auth-version">
         @VersionHelpers.DashboardDisplayVersion

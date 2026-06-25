@@ -237,11 +237,11 @@
                                                     var buttonId = $"{context.Span.SpanId}-{item.LogEntry.InternalId}";
                                                     var eventName = StructureLogsDetailsViewModel.GetEventName(item.LogEntry, StructuredLogsLoc);
                                                     var isSelected = SelectedData?.LogEntryViewModel?.LogEntry.InternalId == item.LogEntry.InternalId;
-                                                    var htmlTooltip = item.Index < 500;
                                                     var buttonColor = item.LogEntry.IsError ? "var(--error)" : spanColor;
 
+                                                    @* A native title tooltip shows the event summary on hover; clicking the button opens the full log entry details. *@
                                                     <button id="@buttonId"
-                                                            title="@(!htmlTooltip ? $"{eventName} - {item.LogEntry.Scope.Name}" : string.Empty)"
+                                                            title="@($"{eventName} - {item.LogEntry.Scope.Name}")"
                                                             aria-label="@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsEntryDetails)]"
                                                             class="@($"span-log-entry-button {(isSelected ? "span-log-entry-selected" : null)} {(item.LogEntry.IsError ? "span-log-entry-error" : null)}")"
                                                             data-span-color="@spanColor"
@@ -249,33 +249,6 @@
                                                             @onclick="@(() => ToggleSpanLogsAsync(item.LogEntry))"
                                                             @onclick:stopPropagation="true">
                                                     </button>
-                                                    @*
-                                                        There is a performance impact to having many tooltips on the page. Limit to 500 tooltips.
-                                                        The button continues to be displayed and clicking on it opens the details view.
-                                                        A standard browser tooltip is displayed instead of the FluentTooltip.
-                                                    *@
-                                                    @if (htmlTooltip)
-                                                    {
-                                                        <FluentTooltip Anchor="@buttonId" MaxWidth="350px">
-                                                            <div class="log-tooltip-title-container">
-                                                                <span class="log-tooltip-title">@eventName</span> <span class="log-tooltip-subtitle">@item.LogEntry.Scope.Name</span><br />
-                                                            </div>
-                                                            <table class="log-tooltip-table">
-                                                                <tr>
-                                                                    <td class="label-column">@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevelColumnHeader)]</td>
-                                                                    <td>@item.LogEntry.Severity</td>
-                                                                </tr>
-                                                                <tr>
-                                                                    <td class="label-column">@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTimestampColumnHeader)]</td>
-                                                                    <td>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, item.LogEntry.TimeStamp, MillisecondsDisplay.Truncated)</td>
-                                                                </tr>
-                                                                <tr>
-                                                                    <td class="label-column">@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageColumnHeader)]</td>
-                                                                    <td>@FormatHelpers.TruncateText(item.LogEntry.Message, maxLength: 150)</td>
-                                                                </tr>
-                                                            </table>
-                                                        </FluentTooltip>
-                                                    }
                                                 }
                                             </div>
                                             <div class="span-bar" style="grid-column: 2; background: @spanColor;"></div>
