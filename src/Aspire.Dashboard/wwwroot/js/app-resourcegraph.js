@@ -417,10 +417,6 @@ class ResourceGraph {
             .attr("cx", 8)
             .attr("class", "resource-status-circle")
             .append("title");
-        statusGroup
-            .append("path")
-            .attr("class", "resource-status-path")
-            .append("title");
 
         var resourceNameGroup = newNodesContainer
             .append("g")
@@ -453,13 +449,8 @@ class ResourceGraph {
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-status-circle")
-            .select("title")
-            .text(n => n.stateIcon.tooltip);
-        this.nodeElementsG
-            .selectAll(".resource-group")
-            .select(".resource-status-path")
-            .attr("d", n => n.stateIcon.path)
-            .attr("fill", n => n.stateIcon.color)
+            // Inline style (not attr) so it wins over the .resource-status-circle CSS fill rule.
+            .style("fill", n => n.stateIcon.color)
             .select("title")
             .text(n => n.stateIcon.tooltip);
 

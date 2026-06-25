@@ -2,12 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
-using System.Xml.Linq;
 using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Resources;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components.Extensions;
 
 namespace Aspire.Dashboard.Model.ResourceGraph;
 
@@ -41,7 +38,18 @@ public static class ResourceGraphMapper
 
         var icon = DeckIconData.GetInnerMarkup(ResourceIconHelpers.GetDeckIconForResource(r));
 
-        var stateIcon = ResourceStateViewModel.GetStateViewModel(r, columnsLoc);
+        // The graph shows resource state as a tone-colored dot rather than a glyph: map the Deck state
+        // tone (success/info/warning/error/neutral) to its CSS color variable.
+        var stateTone = ResourceStateTone.Get(r);
+        var stateColor = stateTone switch
+        {
+            "success" => "var(--success)",
+            "info" => "var(--info)",
+            "warning" => "var(--warning)",
+            "error" => "var(--error)",
+            _ => "var(--neutral)"
+        };
+        var stateText = ResourceStateViewModel.GetStateViewModel(r, columnsLoc).Text;
 
         var dto = new ResourceDto
         {
@@ -57,9 +65,8 @@ public static class ResourceGraphMapper
             },
             StateIcon = new IconDto
             {
-                Path = GetIconPathData(stateIcon.Icon),
-                Color = stateIcon.Color.ToAttributeValue()!,
-                Tooltip = stateIcon.Text ?? r.State
+                Color = stateColor,
+                Tooltip = stateText ?? r.State
             },
             ReferencedNames = resolvedNames.Distinct().OrderBy(n => n).ToImmutableArray(),
             EndpointUrl = r.IsParameter ? null : endpoint?.Url,
@@ -83,12 +90,5 @@ public static class ResourceGraphMapper
         }
 
         return text;
-    }
-
-    public static string GetIconPathData(Icon icon)
-    {
-        var p = icon.Content;
-        var e = XElement.Parse(p);
-        return e.Attribute("d")!.Value;
     }
 }
