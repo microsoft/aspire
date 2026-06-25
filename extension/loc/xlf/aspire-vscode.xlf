@@ -595,11 +595,11 @@
     <trans-unit id="views.appHosts.errorWelcome">
       <source xml:lang="en">The Aspire panel workspace view requires Aspire CLI 13.2.0 or newer and an AppHost that references Aspire.Hosting 13.2.0 or newer. Install or update the Aspire CLI and update your AppHost package to get started.&#10;[Update Aspire CLI](command:aspire-vscode.updateSelf)&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
     </trans-unit>
-    <trans-unit id="configuration.aspire.aspireCliExecutablePath">
-      <source xml:lang="en">The absolute path to the Aspire CLI executable. If not set, the extension will attempt to use &apos;aspire&apos; from the system PATH.</source>
-    </trans-unit>
     <trans-unit id="configuration.aspire.dashboardBrowser">
       <source xml:lang="en">The browser to use when auto-launching the Aspire Dashboard.</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.aspireCliExecutablePath">
+      <source xml:lang="en">The path to the Aspire CLI executable. Relative paths are resolved against workspace folders. If not set, the extension will attempt to use &apos;aspire&apos; from the system PATH.</source>
     </trans-unit>
     <trans-unit id="extension.debug.step">
       <source xml:lang="en">The pipeline step name to execute when command is &apos;do&apos;</source>

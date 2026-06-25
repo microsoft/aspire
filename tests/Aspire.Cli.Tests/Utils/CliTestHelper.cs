@@ -531,8 +531,9 @@ internal sealed class CliServiceCollectionTestOptions
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         var executionFactory = serviceProvider.GetRequiredService<IProcessExecutionFactory>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
+        var environment = serviceProvider.GetRequiredService<IEnvironment>();
 
-        return new DotNetCliRunner(logger, serviceProvider, telemetry, profilingTelemetry, configuration, diskCache, features, interactionService, executionContext, executionFactory, new HostEnvironment());
+        return new DotNetCliRunner(logger, serviceProvider, telemetry, profilingTelemetry, configuration, diskCache, features, interactionService, executionContext, executionFactory, environment);
     };
 
     public Func<IServiceProvider, IDotNetSdkInstaller> DotNetSdkInstallerFactory { get; set; } = (IServiceProvider serviceProvider) =>

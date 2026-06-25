@@ -24,7 +24,7 @@
   "command.openLocalSettings": "Open local Aspire settings",
   "command.openGlobalSettings": "Open global Aspire settings",
   "configuration.aspire.enableSettingsFileCreationPromptOnStartup": "Enable AppHost discovery on extension activation and prompt to setup .aspire/settings.json.appHostPath if it does not exist in the workspace.",
-  "configuration.aspire.aspireCliExecutablePath": "The absolute path to the Aspire CLI executable. If not set, the extension will attempt to use 'aspire' from the system PATH.",
+  "configuration.aspire.aspireCliExecutablePath": "The path to the Aspire CLI executable. Relative paths are resolved against workspace folders. If not set, the extension will attempt to use 'aspire' from the system PATH.",
   "configuration.aspire.enableAspireCliDebugLogging": "Enable console debug logging for Aspire CLI commands executed by the extension.",
   "configuration.aspire.enableAspireDcpDebugLogging": "Enable Developer Control Plane (DCP) debug logging for Aspire applications. Logs will be stored in the workspace's .aspire/dcp/logs-{debugSessionId} folder.",
   "configuration.aspire.enableAspireDashboardAutoLaunch": "Controls what happens with the Aspire Dashboard when debugging starts.",

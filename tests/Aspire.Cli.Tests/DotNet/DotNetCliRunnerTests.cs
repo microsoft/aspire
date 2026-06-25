@@ -8,7 +8,6 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
-using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
@@ -21,10 +20,6 @@ using System.Net.Sockets;
 
 namespace Aspire.Cli.Tests.DotNet;
 
-// BuildAsyncPassesInheritedAspireCliPathToMSBuild mutates the process-wide AspireCliPath variable.
-// xUnit runs test classes in parallel by default, so join EnvVarMutatingTestCollection to serialize
-// with other suites that mutate or read environment variables while launching CLI/dotnet processes.
-[Collection(EnvVarMutatingTestCollection.Name)]
 public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
 {
     private static Aspire.Cli.CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
@@ -228,34 +223,28 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var configuredAspireCliPath = Path.Combine(workspace.WorkspaceRoot.FullName, "configured-aspire");
-        var previousAspireCliPath = Environment.GetEnvironmentVariable("AspireCliPath");
 
-        try
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
         {
-            Environment.SetEnvironmentVariable("AspireCliPath", configuredAspireCliPath);
+            ["AspireCliPath"] = configuredAspireCliPath,
+        }));
+        using var provider = services.BuildServiceProvider();
 
-            var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-            using var provider = services.BuildServiceProvider();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (_, env, _, _) =>
+            {
+                Assert.NotNull(env);
+                Assert.Equal(configuredAspireCliPath, env["AspireCliPath"]);
+            },
+            0);
 
-            var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-            var runner = DotNetCliRunnerTestHelper.Create(
-                provider,
-                executionContext,
-                (_, env, _, _) =>
-                {
-                    Assert.NotNull(env);
-                    Assert.Equal(configuredAspireCliPath, env["AspireCliPath"]);
-                },
-                0);
+        var exitCode = await runner.BuildAsync(projectFile, noRestore: false, new ProcessInvocationOptions(), CancellationToken.None).DefaultTimeout();
 
-            var exitCode = await runner.BuildAsync(projectFile, noRestore: false, new ProcessInvocationOptions(), CancellationToken.None).DefaultTimeout();
-
-            Assert.Equal(0, exitCode);
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("AspireCliPath", previousAspireCliPath);
-        }
+        Assert.Equal(0, exitCode);
     }
 
     [Fact]

@@ -278,7 +278,7 @@ internal static class DotNetCliRunnerTestHelper
             serviceProvider.GetRequiredService<IInteractionService>(),
             executionContext,
             executionFactory,
-            new HostEnvironment());
+            serviceProvider.GetRequiredService<IEnvironment>());
     }
 
     public static DotNetCliRunner Create(
@@ -309,7 +309,7 @@ internal static class DotNetCliRunnerTestHelper
             serviceProvider.GetRequiredService<IInteractionService>(),
             executionContext,
             executionFactory,
-            new HostEnvironment());
+            serviceProvider.GetRequiredService<IEnvironment>());
     }
 
     /// <summary>
@@ -342,7 +342,7 @@ internal static class DotNetCliRunnerTestHelper
             serviceProvider.GetRequiredService<IInteractionService>(),
             executionContext,
             executionFactory,
-            new HostEnvironment());
+            serviceProvider.GetRequiredService<IEnvironment>());
 
         return (runner, executionFactory);
     }

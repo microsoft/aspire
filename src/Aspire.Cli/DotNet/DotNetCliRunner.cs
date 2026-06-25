@@ -532,14 +532,14 @@ internal sealed class DotNetCliRunner(
         } while (await timer.WaitForNextTickAsync(cancellationToken));
     }
 
-    private static void AddAspireCliPathEnvironment(Dictionary<string, string> env, FileInfo? projectFile)
+    private void AddAspireCliPathEnvironment(Dictionary<string, string> env, FileInfo? projectFile)
     {
         if (projectFile is null || env.ContainsKey("AspireCliPath"))
         {
             return;
         }
 
-        var aspireCliPath = Environment.GetEnvironmentVariable("AspireCliPath");
+        var aspireCliPath = environment.GetEnvironmentVariable("AspireCliPath");
         if (string.IsNullOrWhiteSpace(aspireCliPath))
         {
             aspireCliPath = Environment.ProcessPath;
