@@ -2620,3 +2620,28 @@ hr.deck-divider {
   flex: none;
 }
 /* === end Tabs === */
+
+/* === Checkbox (FluentCheckbox replacement) === */
+.deck-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+}
+.deck-checkbox input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  flex: none;
+}
+.deck-checkbox--disabled {
+  cursor: not-allowed;
+  opacity: var(--disabled-opacity);
+}
+.deck-checkbox--disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+/* === end Checkbox === */

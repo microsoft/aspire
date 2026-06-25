@@ -9,20 +9,18 @@
 @typeparam TValue where TValue : notnull
 
 <div class="deck-stack deck-stack--vertical" id="@Id">
-    <FluentCheckbox Label="@ControlsStringsLoc[nameof(ControlsStrings.LabelAll)]"
-                    ThreeState="true"
-                    ShowIndeterminate="false"
-                    ThreeStateOrderUncheckToIntermediate="true"
-                    @bind-CheckState:get="@GetCheckState(Values)"
-                    @bind-CheckState:set="@OnAllValuesCheckedChangedInternalAsync" />
+    <Checkbox Label="@ControlsStringsLoc[nameof(ControlsStrings.LabelAll)]"
+              Checked="@(GetCheckState(Values) == true)"
+              Indeterminate="@(GetCheckState(Values) is null)"
+              CheckedChanged="@(v => OnAllValuesCheckedChangedInternalAsync(v))" />
 
     @* OrderBy doesn't use thread safe APIs on ConcurrentDictionary. Call ToArray first. *@
     @foreach (var (key, isChecked) in Values.ToArray().OrderBy(pair => pair.Key.ToString(), StringComparer.OrdinalIgnoreCase))
     {
         var label = string.IsNullOrEmpty(key.ToString()) ? Loc[nameof(Resources.ResourceFilterOptionEmpty)] : key.ToString();
 
-        <FluentCheckbox Label="@label"
-                        @bind-Value:get="@isChecked"
-                        @bind-Value:set="@(c => OnValueVisibilityChangedInternalAsync(key, c))" />
+        <Checkbox Label="@label"
+                  Checked="@isChecked"
+                  CheckedChanged="@(c => OnValueVisibilityChangedInternalAsync(key, c))" />
     }
 </div>

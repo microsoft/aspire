@@ -77,6 +77,12 @@ public partial class SettingsDialog : IDialogContentComponent, IDisposable
         }
     }
 
+    private async Task OnThemeRadioChangedAsync(string value)
+    {
+        _currentSetting = value;
+        await ThemeChangedAsync();
+    }
+
     private void OnLanguageChanged()
     {
         if (_selectedUiCulture is null || string.Equals(CultureInfo.CurrentUICulture.Name, _selectedUiCulture.Name, StringComparisons.CultureName))
@@ -125,6 +131,12 @@ public partial class SettingsDialog : IDialogContentComponent, IDisposable
             .GetComponents(UriComponents.PathAndQuery, UriFormat.Unescaped);
 
         NavigationManager.NavigateTo(uri, forceLoad: true);
+    }
+
+    private async Task OnTimeFormatRadioChangedAsync(TimeFormat value)
+    {
+        _timeFormat = value;
+        await OnTimeFormatChanged();
     }
 
     private string FormatTimeFormatOption(TimeFormat format) => format switch

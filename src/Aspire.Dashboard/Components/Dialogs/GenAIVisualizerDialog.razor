@@ -60,7 +60,7 @@
                                 </FluentButton>
                             </div>
                             @*
-                                Tab content isn't nested inside FluentTab elements. The tab control is just used to display the tabs.
+                                Tab content isn't nested inside DeckTab elements. The tab control is just used to display the tabs.
                                 Content is located in manually created divs so they can be placed in their own CSS grid row.
                             *@
                             @if (selectedItem.Type != GenAIItemType.Error)
@@ -259,7 +259,7 @@
                                 </div>
                             </div>
                             @*
-                                Tab content isn't nested inside FluentTab elements. The tab control is just used to display the tabs.
+                                Tab content isn't nested inside DeckTab elements. The tab control is just used to display the tabs.
                                 Content is located in manually created divs so they can be placed in their own CSS grid row.
                             *@
                             <DeckTabs ActiveTabId="@($"tab-overview-{OverviewActiveView}")" OnTabChange="@OnOverviewTabChange">

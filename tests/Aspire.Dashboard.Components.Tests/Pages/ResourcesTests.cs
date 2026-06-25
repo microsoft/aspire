@@ -14,7 +14,6 @@ using ProtobufValue = Google.Protobuf.WellKnownTypes.Value;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
@@ -164,10 +163,10 @@ public partial class ResourcesTests : DashboardTestContext
 
         // Assert 2 (unselect a resource type, assert that a resource was removed)
         cut.FindComponents<SelectResourceOptions<string>>().First(f => f.Instance.Id == "resource-states")
-            .FindComponents<FluentCheckbox>()
+            .FindComponents<Aspire.Dashboard.Components.Deck.Checkbox>()
             .First(checkbox => checkbox.Instance.Label == "Stopping")
-            .Find("fluent-checkbox")
-            .TriggerEvent("oncheckedchange", new CheckboxChangeEventArgs { Checked = false });
+            .Find("input")
+            .Change(false);
 
         // above is triggered asynchronously, so wait for the state to change
         cut.WaitForState(() => cut.Instance.GetFilteredResources().Count() == 2);
@@ -331,10 +330,10 @@ public partial class ResourcesTests : DashboardTestContext
         cut.Find("#resourceFilterButton").Click();
         cut.FindComponents<SelectResourceOptions<string>>()
             .First(f => f.Instance.Id == "resource-types")
-            .FindComponents<FluentCheckbox>()
+            .FindComponents<Aspire.Dashboard.Components.Deck.Checkbox>()
             .First(checkbox => checkbox.Instance.Label == "Type1")
-            .Find("fluent-checkbox")
-            .TriggerEvent("oncheckedchange", new CheckboxChangeEventArgs { Checked = false });
+            .Find("input")
+            .Change(false);
 
         cut.WaitForState(() => cut.Instance.GetFilteredResources().Count() == 1);
 

@@ -117,6 +117,12 @@ internal static class FluentUISetupHelpers
         checkboxModule.SetupVoid("stop", _ => true);
     }
 
+    public static void SetupDeckCheckbox(TestContext context)
+    {
+        var checkboxModule = context.JSInterop.SetupModule("./Components/Deck/Checkbox.razor.js");
+        checkboxModule.SetupVoid("setIndeterminate", _ => true);
+    }
+
     public static void SetupFluentTextField(TestContext context)
     {
         var textboxModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/TextField/FluentTextField.razor.js"));

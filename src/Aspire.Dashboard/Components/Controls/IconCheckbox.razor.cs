@@ -1,11 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components;
 
@@ -13,20 +12,14 @@ namespace Aspire.Dashboard.Components;
 /// An icon-only checkbox that exposes proper checkbox semantics to assistive tech.
 /// </summary>
 /// <remarks>
-/// FluentButton renders a shadow-DOM button that remains exposed as role=button, so the
-/// checkbox semantics need to live on this focusable element. A small JS helper handles
-/// the Space key here so Tab/Shift+Tab keep their native focus behavior while Space
-/// cannot scroll the page or bubble to an enclosing grid's row activation.
+/// The checkbox semantics live on a focusable <c>span</c> with <c>role=checkbox</c> (rather
+/// than a native <c>input</c>) so the icon glyph can fully control the rendered appearance.
+/// A small JS helper handles the Space key here so Tab/Shift+Tab keep their native focus
+/// behavior while Space cannot scroll the page or bubble to an enclosing grid's row activation.
 /// </remarks>
 public partial class IconCheckbox : ComponentBase, IAsyncDisposable
 {
     private const string JsModulePath = "./Components/Controls/IconCheckbox.razor.js";
-
-    // The control owns the mapping from state to icon so callers only describe the
-    // checked state via CheckState rather than wiring up icons and aria values themselves.
-    private static readonly Icon s_uncheckedIcon = new Icons.Regular.Size20.CheckboxUnchecked().WithColor(Color.FillInverse);
-    private static readonly Icon s_checkedIcon = new Icons.Filled.Size20.CheckboxChecked();
-    private static readonly Icon s_indeterminateIcon = new Icons.Filled.Size20.CheckboxIndeterminate();
 
     private ElementReference _element;
     private IJSObjectReference? _jsModule;
@@ -74,11 +67,13 @@ public partial class IconCheckbox : ComponentBase, IAsyncDisposable
     [Parameter]
     public bool StopPropagation { get; set; } = true;
 
-    private Icon CurrentIcon => CheckState switch
+    // The control owns the mapping from state to icon so callers only describe the
+    // checked state via CheckState rather than wiring up icons and aria values themselves.
+    private DeckIconName CurrentIcon => CheckState switch
     {
-        IconCheckboxState.Checked => s_checkedIcon,
-        IconCheckboxState.Unchecked => s_uncheckedIcon,
-        _ => s_indeterminateIcon
+        IconCheckboxState.Checked => DeckIconName.CheckboxChecked,
+        IconCheckboxState.Unchecked => DeckIconName.CheckboxUnchecked,
+        _ => DeckIconName.CheckboxIndeterminate
     };
 
     // The indeterminate state maps to aria-checked="mixed" per the ARIA checkbox spec.

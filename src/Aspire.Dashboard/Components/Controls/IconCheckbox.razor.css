@@ -27,3 +27,12 @@
     cursor: not-allowed;
     opacity: var(--disabled-opacity);
 }
+
+.icon-checkbox svg {
+    color: var(--text-muted);
+}
+
+.icon-checkbox[aria-checked="true"] svg,
+.icon-checkbox[aria-checked="mixed"] svg {
+    color: var(--accent);
+}

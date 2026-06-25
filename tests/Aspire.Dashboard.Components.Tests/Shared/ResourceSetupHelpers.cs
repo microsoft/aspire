@@ -48,6 +48,7 @@ internal static class ResourceSetupHelpers
         FluentUISetupHelpers.SetupFluentSearch(context);
         FluentUISetupHelpers.SetupFluentKeyCode(context);
         FluentUISetupHelpers.SetupFluentCheckbox(context);
+        FluentUISetupHelpers.SetupDeckCheckbox(context);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(context);
         FluentUISetupHelpers.SetupFluentToolbar(context);
         FluentUISetupHelpers.SetupFluentTab(context);

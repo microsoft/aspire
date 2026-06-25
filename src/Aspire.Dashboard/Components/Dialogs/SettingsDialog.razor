@@ -5,15 +5,27 @@
 <FluentDialogBody>
     <div class="deck-stack deck-stack--vertical" style="height: 100%; overflow-y: auto; row-gap: 12px;">
         <div class="input-container">
-            <FluentRadioGroup TValue="string"
-                              Label="@Loc[nameof(Dialogs.SettingsDialogTheme)]"
-                              @bind-Value="@_currentSetting"
-                              @bind-Value:after="ThemeChangedAsync"
-                              Orientation="Orientation.Vertical">
-                <FluentRadio Value="@ThemeManager.ThemeSettingSystem">@Loc[nameof(Dialogs.SettingsDialogSystemTheme)]</FluentRadio>
-                <FluentRadio Value="@ThemeManager.ThemeSettingLight">@Loc[nameof(Dialogs.SettingsDialogLightTheme)]</FluentRadio>
-                <FluentRadio Value="@ThemeManager.ThemeSettingDark">@Loc[nameof(Dialogs.SettingsDialogDarkTheme)]</FluentRadio>
-            </FluentRadioGroup>
+            <div class="settings-label">@Loc[nameof(Dialogs.SettingsDialogTheme)]</div>
+            <div class="settings-radio-group">
+                <label class="deck-radio">
+                    <input type="radio" name="settings-theme" value="@ThemeManager.ThemeSettingSystem"
+                           checked="@(_currentSetting == ThemeManager.ThemeSettingSystem)"
+                           @onchange="@(() => OnThemeRadioChangedAsync(ThemeManager.ThemeSettingSystem))" />
+                    @Loc[nameof(Dialogs.SettingsDialogSystemTheme)]
+                </label>
+                <label class="deck-radio">
+                    <input type="radio" name="settings-theme" value="@ThemeManager.ThemeSettingLight"
+                           checked="@(_currentSetting == ThemeManager.ThemeSettingLight)"
+                           @onchange="@(() => OnThemeRadioChangedAsync(ThemeManager.ThemeSettingLight))" />
+                    @Loc[nameof(Dialogs.SettingsDialogLightTheme)]
+                </label>
+                <label class="deck-radio">
+                    <input type="radio" name="settings-theme" value="@ThemeManager.ThemeSettingDark"
+                           checked="@(_currentSetting == ThemeManager.ThemeSettingDark)"
+                           @onchange="@(() => OnThemeRadioChangedAsync(ThemeManager.ThemeSettingDark))" />
+                    @Loc[nameof(Dialogs.SettingsDialogDarkTheme)]
+                </label>
+            </div>
         </div>
 
         <div class="input-container">
@@ -34,16 +46,18 @@
         </div>
 
         <div class="input-container">
-            <FluentRadioGroup TValue="TimeFormat"
-                              Label="@Loc[nameof(Dialogs.SettingsDialogTimeFormat)]"
-                              @bind-Value="@_timeFormat"
-                              @bind-Value:after="OnTimeFormatChanged"
-                              Orientation="Orientation.Vertical">
+            <div class="settings-label">@Loc[nameof(Dialogs.SettingsDialogTimeFormat)]</div>
+            <div class="settings-radio-group">
                 @foreach (var format in Enum.GetValues<TimeFormat>())
                 {
-                    <FluentRadio Value="@format">@FormatTimeFormatOption(format)</FluentRadio>
+                    <label class="deck-radio">
+                        <input type="radio" name="settings-timeformat" value="@format"
+                               checked="@(_timeFormat == format)"
+                               @onchange="@(() => OnTimeFormatRadioChangedAsync(format))" />
+                        @FormatTimeFormatOption(format)
+                    </label>
                 }
-            </FluentRadioGroup>
+            </div>
         </div>
 
         <div>
