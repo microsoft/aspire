@@ -69,13 +69,13 @@
                                                  Disabled="input.ViewModel.InputDisabled"
                                                  aria-describedby="@input.DescriptionId"
                                                  Maxlength="@InteractionHelpers.GetMaxLength(input.ViewModel.Input.MaxLength)">
-                                    <FluentButton Appearance="Appearance.Stealth"
-                                                  Title="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
-                                                  OnClick="@(() => ToggleSecretTextVisibilityAsync(input.ViewModel))"
-                                                  class="secret-text-toggle-button"
-                                                  slot="end">
+                                    <button type="button"
+                                            class="icon-btn icon-btn--sm secret-text-toggle-button"
+                                            title="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
+                                            @onclick="@(() => ToggleSecretTextVisibilityAsync(input.ViewModel))"
+                                            slot="end">
                                         <DeckIcon Name="GetSecretTextIcon(input.ViewModel)" Size="16" />
-                                    </FluentButton>
+                                    </button>
                                 </FluentTextField>
                             </InteractionInputField>
                             break;
@@ -175,13 +175,13 @@
 </FluentDialogBody>
 
 <FluentDialogFooter>
-    <FluentButton Appearance="Appearance.Accent" OnClick="@SubmitAsync">
+    <button type="button" class="btn btn--primary" @onclick="@SubmitAsync">
         @Dialog.Instance.Parameters.PrimaryAction
-    </FluentButton>
+    </button>
     @if (!string.IsNullOrEmpty(Dialog.Instance.Parameters.SecondaryAction))
     {
-        <FluentButton Appearance="Appearance.Neutral" OnClick="@CancelAsync">
+        <button type="button" class="btn" @onclick="@CancelAsync">
             @Dialog.Instance.Parameters.SecondaryAction
-        </FluentButton>
+        </button>
     }
 </FluentDialogFooter>

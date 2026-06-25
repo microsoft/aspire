@@ -37,8 +37,9 @@
     align-items: center;
 }
 
-.interaction-input-dialog .interaction-input ::deep .secret-text-toggle-button::part(control) {
+.interaction-input-dialog .interaction-input ::deep .secret-text-toggle-button {
     background-color: transparent;
+    border-color: transparent;
 }
 
 .interaction-input-dialog .interaction-input ::deep fluent-checkbox {
