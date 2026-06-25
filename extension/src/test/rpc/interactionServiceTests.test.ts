@@ -455,22 +455,19 @@ suite('InteractionService endpoints', () => {
 		}
 	});
 
-	test("displayLines without debug session falls back to Aspire terminal", async () => {
+	test("displayLines without debug session writes to output channel only", async () => {
 		const sandbox = sinon.createSandbox();
 
 		try {
-			sandbox.stub(extensionLogOutputChannel, 'info');
-			const sentTexts: { text: string; addNewLine: boolean }[] = [];
+			const infoStub = sandbox.stub(extensionLogOutputChannel, 'info');
+			const showStub = sandbox.stub(extensionLogOutputChannel, 'show');
 			const mockTerminal = {
 				terminal: {
-					sendText: (text: string, addNewLine: boolean) => {
-						sentTexts.push({ text, addNewLine });
-					}
+					sendText: () => assert.fail('display-only lines must not be written to shell stdin')
 				},
 				dispose: () => {}
 			};
 			const testInfo = await createTestRpcServer(null, () => null);
-			// Inject a mock terminal provider via the InteractionService constructor
 			(testInfo.interactionService as any)._getAspireTerminal = () => mockTerminal;
 
 			testInfo.interactionService.displayLines([
@@ -478,11 +475,8 @@ suite('InteractionService endpoints', () => {
 				{ Stream: 'stderr', Line: 'line2' }
 			]);
 
-			assert.strictEqual(sentTexts.length, 2, 'Should send two lines to Aspire terminal');
-			assert.deepStrictEqual(sentTexts, [
-				{ text: 'line1', addNewLine: false },
-				{ text: 'line2', addNewLine: false }
-			]);
+			assert.deepStrictEqual(infoStub.args.map(args => args[0]).slice(-2), ['line1', 'line2']);
+			assert.strictEqual(showStub.calledOnceWithExactly(undefined, true), true);
 		}
 		finally {
 			sandbox.restore();

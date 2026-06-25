@@ -424,18 +424,17 @@ export class InteractionService implements IInteractionService {
         this.clearProgressNotification();
 
         const debugSession = this._getAspireDebugSession();
-        const aspireTerminal = !debugSession ? this._getAspireTerminal?.() : undefined;
         for (const line of lines) {
             const text = getConsoleLineText(line);
             const stream = line.stream ?? line.Stream;
             extensionLogOutputChannel.info(formatText(text));
             if (debugSession) {
                 debugSession.sendMessage(text, true, stream !== 'stderr' ? 'stdout' : 'stderr');
-            } else if (aspireTerminal) {
-                // This is display-only output from the CLI. Passing true submits the text to the
-                // shell, which would execute it instead of only showing it to the user.
-                aspireTerminal.terminal.sendText(text, false);
             }
+        }
+
+        if (!debugSession) {
+            extensionLogOutputChannel.show(undefined, true);
         }
     }
 
