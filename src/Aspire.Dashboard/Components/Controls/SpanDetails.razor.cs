@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Controls.PropertyValues;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
@@ -13,7 +14,6 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Controls;
 
@@ -179,7 +179,7 @@ public partial class SpanDetails : IDisposable
                 [KnownTraceFields.SpanIdField] = new ComponentMetadata
                 {
                     Type = typeof(IconValue),
-                    Parameters = { ["Icon"] = new Icons.Regular.Size16.GanttChart() }
+                    Parameters = { ["Icon"] = DeckIconName.GanttChart }
                 },
             };
 
