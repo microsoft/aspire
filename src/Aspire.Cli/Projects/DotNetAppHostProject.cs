@@ -312,6 +312,10 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
     private static bool ContainsAspireAppHostSdk(string sdkAttribute)
     {
+        // SDK references resolve through NuGet, whose package IDs are case-insensitive, so a project could
+        // legitimately write the SDK name in any casing (e.g. "aspire.apphost.sdk") and still build as an
+        // AppHost. Match case-insensitively so this cheap pre-check agrees with MSBuild rather than wrongly
+        // skipping a real AppHost over a casing difference.
         var sdks = sdkAttribute.Split(';');
         foreach (var sdk in sdks)
         {
