@@ -163,7 +163,13 @@
         {
             @foreach (var command in commands)
             {
-                <button class="btn btn--sm @(command.IsHighlighted ? "btn--primary" : "") @(command.Name.Contains("stop", StringComparison.OrdinalIgnoreCase) ? "btn--danger" : "")"
+                // A destructive command (e.g. Stop) renders as danger and must NOT also get btn--primary:
+                // the two are mutually exclusive because btn--primary's filled accent background combined
+                // with btn--danger's red text produces a clashing purple-background/red-text button.
+                var commandStyle = command.Name.Contains("stop", StringComparison.OrdinalIgnoreCase)
+                    ? "btn--danger"
+                    : command.IsHighlighted ? "btn--primary" : "";
+                <button class="btn btn--sm @commandStyle"
                         disabled="@(command.State == CommandViewModelState.Disabled)"
                         title="@(command.GetDisplayDescription() ?? command.GetDisplayName())"
                         @onclick="() => OnExecuteCommand.InvokeAsync((Resource, command))">
