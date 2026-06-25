@@ -155,6 +155,58 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         AssertArg(args, "--tool-name", "mcp_aspire_list_resources");
     }
 
+    // Copilot CLI delivers toolArgs as a JSON-encoded STRING (e.g. "toolArgs":"{\"skill\":\"aspire\"}"),
+    // not a nested object, so its skill/view events look different on the wire than every other client.
+    // These fixtures capture that real shape to lock in the shape-agnostic extraction.
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_SkillInvocation_CopilotStringArgs_ForwardsSkillName()
+    {
+        var run = await RunBashHookAsync(
+            """{"toolName":"skill","sessionId":"session-1","toolArgs":"{\"skill\":\"aspire\"}"}""",
+            new() { ["COPILOT_CLI"] = "1" });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--client-name", "copilot-cli");
+        AssertArg(args, "--skill-name", "aspire");
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_SkillMdRead_CopilotStringArgs_ForwardsSkillName()
+    {
+        // The exact real Copilot shape: a view tool whose toolArgs is a JSON string with a
+        // Windows path whose separators arrive as doubled backslashes ("C:\\proj\\skills\\...").
+        var run = await RunBashHookAsync(
+            """{"toolName":"view","sessionId":"session-1","toolArgs":"{\"path\":\"C:\\\\proj\\\\skills\\\\aspire\\\\SKILL.md\"}"}""",
+            new() { ["COPILOT_CLI"] = "1" });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--skill-name", "aspire");
+    }
+
+    [Fact]
+    [RequiresTools(["bash"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "The shell hook targets POSIX shells; the PowerShell hook covers Windows.")]
+    public async Task Bash_ReferenceFileRead_CopilotStringArgs_ForwardsRelativePath()
+    {
+        var run = await RunBashHookAsync(
+            """{"toolName":"view","sessionId":"session-1","toolArgs":"{\"path\":\"workspace/.agents/skills/aspire/references/deploy.md\"}"}""",
+            new() { ["COPILOT_CLI"] = "1" });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "reference_file_read");
+        AssertArg(args, "--file-reference", "aspire/references/deploy.md");
+    }
+
     [Fact]
     [RequiresTools(["pwsh"])]
     public async Task Pwsh_SkillInvocation_Copilot_ForwardsSkillName()
@@ -273,6 +325,54 @@ public class TelemetryHookScriptTests(ITestOutputHelper outputHelper)
         // A __vscode marker in tool_use_id distinguishes the VS Code client from Claude Code.
         AssertArg(args, "--client-name", "vscode");
         AssertArg(args, "--tool-name", "mcp_aspire_list_resources");
+    }
+
+    // Copilot CLI delivers toolArgs as a JSON-encoded STRING (e.g. "toolArgs":"{\"skill\":\"aspire\"}"),
+    // not a nested object. These fixtures capture that real shape to lock in the shape-agnostic extraction.
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_SkillInvocation_CopilotStringArgs_ForwardsSkillName()
+    {
+        var run = await RunPwshHookAsync(
+            """{"toolName":"skill","sessionId":"session-1","toolArgs":"{\"skill\":\"aspire\"}"}""",
+            new() { ["COPILOT_CLI"] = "1" });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--client-name", "copilot-cli");
+        AssertArg(args, "--skill-name", "aspire");
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_SkillMdRead_CopilotStringArgs_ForwardsSkillName()
+    {
+        // The exact real Copilot shape: a view tool whose toolArgs is a JSON string with a
+        // Windows path whose separators arrive as doubled backslashes ("C:\\proj\\skills\\...").
+        var run = await RunPwshHookAsync(
+            """{"toolName":"view","sessionId":"session-1","toolArgs":"{\"path\":\"C:\\\\proj\\\\skills\\\\aspire\\\\SKILL.md\"}"}""",
+            new() { ["COPILOT_CLI"] = "1" });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "skill_invocation");
+        AssertArg(args, "--skill-name", "aspire");
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Pwsh_ReferenceFileRead_CopilotStringArgs_ForwardsRelativePath()
+    {
+        var run = await RunPwshHookAsync(
+            """{"toolName":"view","sessionId":"session-1","toolArgs":"{\"path\":\"workspace/.agents/skills/aspire/references/deploy.md\"}"}""",
+            new() { ["COPILOT_CLI"] = "1" });
+
+        AssertContinue(run);
+        var args = AssertInvoked(run);
+        AssertArg(args, "--event-type", "reference_file_read");
+        AssertArg(args, "--file-reference", "aspire/references/deploy.md");
     }
 
     private async Task<HookRun> RunBashHookAsync(string payload, Dictionary<string, string?>? extraEnv = null)

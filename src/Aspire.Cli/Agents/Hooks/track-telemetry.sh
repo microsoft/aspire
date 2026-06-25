@@ -8,7 +8,8 @@
 # actual opt-out + publishing logic; this script only classifies the event and shells out.
 #
 # Hook contract: a PostToolUse hook MUST always print a single JSON object to stdout and exit
-# 0, otherwise it can break the agent session. Every code path here ends in return_success.
+# 0, otherwise it can break the agent session. A single EXIT trap guarantees that response is
+# emitted exactly once, however the script leaves.
 #
 # === Client format reference ===
 #
@@ -49,22 +50,30 @@
 # Never abort the agent: failures must be silent and we must still emit {"continue":true}.
 set +e
 
+# Hook contract enforcement: always print exactly one {"continue":true} and exit 0, however the
+# script leaves — normal completion, an early `exit 0`, or an unexpected failure under `set +e`.
+# A single EXIT trap is the one guaranteed emit point, so every other path just calls `exit 0`
+# and never prints the response itself.
+_emitted=0
+emit_continue() {
+    [ "$_emitted" -eq 0 ] || return 0
+    _emitted=1
+    printf '%s\n' '{"continue":true}'
+}
+trap emit_continue EXIT
+
 # Allowlist of Aspire-owned skill names (must stay in sync with the skills shipped by
 # github.com/microsoft/aspire-skills). A shared .agents/skills directory can also contain
 # third-party skills (dotnet-inspect, playwright, ...), so a path/name is only treated as
 # Aspire when its skill segment is one of these.
 ASPIRE_SKILLS="aspire aspire-init aspireify aspire-orchestration aspire-deployment aspire-monitoring"
 
-return_success() {
-    echo '{"continue":true}'
-    exit 0
-}
-
 # Opt out when the Aspire CLI telemetry switch is set. This is the single opt-out that also
 # gates the `aspire agent telemetry` command path, so honoring it here avoids spawning the CLI
-# at all for opted-out users.
-case "${ASPIRE_CLI_TELEMETRY_OPTOUT}" in
-    1|true|TRUE|True) return_success ;;
+# at all for opted-out users. Lower-case first so the accepted set (1 / any-case true) matches
+# the PowerShell hook's case-insensitive check exactly.
+case "$(printf '%s' "${ASPIRE_CLI_TELEMETRY_OPTOUT}" | tr '[:upper:]' '[:lower:]')" in
+    1|true) exit 0 ;;
 esac
 
 # Extract a top-level string field, e.g. "toolName": "view"  ->  view
@@ -73,14 +82,18 @@ extract_json_field() {
     printf '%s' "$1" | sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1
 }
 
-# Extract a nested string field from toolArgs (Copilot) or tool_input (Claude/VS Code).
+# Read a string field's value from anywhere in the payload, best-effort, without assuming the
+# payload's shape or which client produced it. The nested tool input arrives in two shapes:
+#   - Claude/VS Code send a real nested object:   "tool_input":{"file_path":"..."}
+#   - Copilot sends toolArgs as a JSON-encoded STRING whose quotes are escaped:
+#       "toolArgs":"{\"path\":\"C:\\Users\\me\\skills\\aspire\\SKILL.md\"}"
+# Unescaping \" -> " turns the string form into the same flat "field":"value" pairs as the object
+# form, so a single extractor reads both. The value's own backslashes (doubled Windows path
+# separators) are left intact; the caller's path normalization (tr '\\' '/') collapses them.
 extract_nested_field() {
-    local json="$1" field="$2" value=""
-    value=$(printf '%s' "$json" | sed -n "s/.*\"toolArgs\"[[:space:]]*:[[:space:]]*{[^}]*\"$field\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1)
-    if [ -z "$value" ]; then
-        value=$(printf '%s' "$json" | sed -n "s/.*\"tool_input\"[[:space:]]*:[[:space:]]*{[^}]*\"$field\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -n 1)
-    fi
-    printf '%s' "$value"
+    local unescaped
+    unescaped=$(printf '%s' "$1" | sed 's/\\"/"/g')
+    extract_json_field "$unescaped" "$2"
 }
 
 # Extract a file path from tool input, trying the documented field names in order.
@@ -108,13 +121,22 @@ is_aspire_skill() {
 
 # No stdin (interactive) means nothing to track.
 if [ -t 0 ]; then
-    return_success
+    exit 0
 fi
 
 rawInput=$(cat)
 if [ -z "$rawInput" ]; then
-    return_success
+    exit 0
 fi
+
+# Fast path: the vast majority of PostToolUse events are not Aspire-related. Everything we track
+# carries "skill"/"Skill" or "aspire" somewhere in the payload (the skill tool name, an aspire-/
+# mcp__aspire__ tool name, or a .../skills/<aspire-skill>/ path), so when none of those appear we
+# return immediately and skip all of the sed/grep extraction below.
+case "$rawInput" in
+    *skill*|*Skill*|*aspire*|*Aspire*) ;;
+    *) exit 0 ;;
+esac
 
 toolName=$(extract_json_field "$rawInput" "toolName")
 [ -z "$toolName" ] && toolName=$(extract_json_field "$rawInput" "tool_name")
@@ -143,7 +165,7 @@ fi
 
 # Nothing to classify without a tool name.
 if [ -z "$toolName" ]; then
-    return_success
+    exit 0
 fi
 
 shouldTrack=false
@@ -217,7 +239,7 @@ case "$toolName" in
 esac
 
 if [ "$shouldTrack" != true ]; then
-    return_success
+    exit 0
 fi
 
 # Resolve the Aspire CLI. ASPIRE_CLI_COMMAND lets tests substitute a recording stub.
@@ -239,4 +261,6 @@ else
     "$aspireCmd" "${args[@]}" >/dev/null 2>&1
 fi
 
-return_success
+# Explicit exit 0: the EXIT trap prints the response, but we must not let the CLI's exit code
+# (e.g. timeout's 124) leak through as the hook's exit code.
+exit 0
