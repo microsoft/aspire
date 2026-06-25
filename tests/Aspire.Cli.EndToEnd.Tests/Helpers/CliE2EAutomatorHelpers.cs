@@ -872,11 +872,17 @@ internal static class CliE2EAutomatorHelpers
                 "Check terminal output for CLI logs and JSON content.");
         }
 
+        // Retry curl up to 10 times with 2s delay — the dashboard may still be binding
+        // its listening port immediately after aspire start returns.
         await auto.TypeAsync(
-            "curl -ksSL -o /dev/null -w 'dashboard-http-%{http_code}' \"$DASHBOARD_URL\" " +
-            "|| echo 'dashboard-http-failed'");
+            "for i in $(seq 1 10); do " +
+            "CODE=$(curl -ksSL -o /dev/null -w '%{http_code}' \"$DASHBOARD_URL\" 2>/dev/null); " +
+            "if [ \"$CODE\" = \"200\" ]; then echo 'dashboard-http-200'; break; fi; " +
+            "sleep 2; " +
+            "done; " +
+            "if [ \"$CODE\" != \"200\" ]; then echo \"dashboard-http-${CODE}\"; echo 'dashboard-http-failed'; fi");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("dashboard-http-200", timeout: TimeSpan.FromSeconds(15));
+        await auto.WaitUntilTextAsync("dashboard-http-200", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
     }
 

@@ -52,7 +52,7 @@ public sealed class CliTelemetryTests(ITestOutputHelper output)
         // Write diagnostic files into the .aspire-diagnostics/ directory so TerminalRun
         // always copies them to testresults (not just on failure).
         var diagDir = $"$ASPIRE_E2E_WORKSPACE/{CliE2EAutomatorHelpers.DiagnosticsDirectoryName}";
-        var profilePath = $"{diagDir}/profile.aspire";
+        var profilePath = $"{diagDir}/profile.zip";
         var verResultPath = $"{diagDir}/ver_result";
         await auto.RunCommandAsync($"mkdir -p {diagDir}", counter);
         await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(4), additionalArgs: $"--capture-profile --capture-profile-output {profilePath}");
