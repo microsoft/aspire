@@ -20,7 +20,7 @@
                 @foreach (var initialPrompt in chatMessages.InitialPrompts)
                 {
                     <div>
-                        <FluentButton Class="initial-prompt-button" OnClick="@(() => OnInitialPromptAsync(initialPrompt))">
+                        <button type="button" class="btn initial-prompt-button" @onclick="@(() => OnInitialPromptAsync(initialPrompt))">
                             <div>
                                 <div class="initial-prompt-title">
                                     <DeckIcon Name="initialPrompt.Icon" Size="20" Class="initial-prompt-icon icon-accent" />
@@ -28,7 +28,7 @@
                                 </div>
                                 <div class="initial-prompt-description">@((MarkupString)ChatViewModel.MarkdownProcessor.ToHtml(initialPrompt.ButtonDescription, suppressSurroundingParagraph: true))</div>
                             </div>
-                        </FluentButton>
+                        </button>
 
                     </div>
                 }
@@ -90,30 +90,33 @@
                                 </FluentButton>
                             </span>
                             <span>
-                                <FluentButton Appearance="Appearance.Stealth"
-                                              OnClick="@(() => LikeChatMessage(chatMessage))"
-                                              Title="@Loc[nameof(AIAssistant.LikeMessageButtonText)]"
-                                              aria-label="@Loc[nameof(AIAssistant.LikeMessageButtonText)]"
-                                              aria-pressed="@(chatMessage.IsLiked ? "true" : "false")">
-                                    <FluentIcon Value="@(!chatMessage.IsLiked ? (Icon)new Icons.Regular.Size16.ThumbLike() : new Icons.Filled.Size16.ThumbLike())" Color="Color.Neutral" />
-                                </FluentButton>
+                                <button type="button"
+                                        class="@($"icon-btn icon-btn--sm{(chatMessage.IsLiked ? " icon-btn--active" : "")}")"
+                                        @onclick="@(() => LikeChatMessage(chatMessage))"
+                                        title="@Loc[nameof(AIAssistant.LikeMessageButtonText)]"
+                                        aria-label="@Loc[nameof(AIAssistant.LikeMessageButtonText)]"
+                                        aria-pressed="@(chatMessage.IsLiked ? "true" : "false")">
+                                    <DeckIcon Name="DeckIconName.ThumbLike" Size="16" />
+                                </button>
                             </span>
                             <span>
-                                <FluentButton Appearance="Appearance.Stealth"
-                                              OnClick="@(() => DislikeChatMessage(chatMessage))"
-                                              Title="@Loc[nameof(AIAssistant.DislikeMessageButtonText)]"
-                                              aria-label="@Loc[nameof(AIAssistant.DislikeMessageButtonText)]"
-                                              aria-pressed="@(chatMessage.IsDisliked ? "true" : "false")">
-                                    <FluentIcon Value="@(!chatMessage.IsDisliked ? (Icon)new Icons.Regular.Size16.ThumbDislike() : new Icons.Filled.Size16.ThumbDislike())" Color="Color.Neutral" />
-                                </FluentButton>
+                                <button type="button"
+                                        class="@($"icon-btn icon-btn--sm{(chatMessage.IsDisliked ? " icon-btn--active" : "")}")"
+                                        @onclick="@(() => DislikeChatMessage(chatMessage))"
+                                        title="@Loc[nameof(AIAssistant.DislikeMessageButtonText)]"
+                                        aria-label="@Loc[nameof(AIAssistant.DislikeMessageButtonText)]"
+                                        aria-pressed="@(chatMessage.IsDisliked ? "true" : "false")">
+                                    <DeckIcon Name="DeckIconName.ThumbDislike" Size="16" />
+                                </button>
                             </span>
                             <span>
-                                <FluentButton Appearance="Appearance.Stealth"
-                                              OnClick="@(() => RetryChatMessageAsync(chatMessage))"
-                                              Title="@Loc[nameof(AIAssistant.RetryMessageButtonText)]"
-                                              aria-label="@Loc[nameof(AIAssistant.RetryMessageButtonText)]">
-                                    <FluentIcon Value="@(new Icons.Regular.Size16.ArrowSync())" Color="Color.Neutral" Style="transform: rotate(90deg);" />
-                                </FluentButton>
+                                <button type="button"
+                                        class="icon-btn icon-btn--sm"
+                                        @onclick="@(() => RetryChatMessageAsync(chatMessage))"
+                                        title="@Loc[nameof(AIAssistant.RetryMessageButtonText)]"
+                                        aria-label="@Loc[nameof(AIAssistant.RetryMessageButtonText)]">
+                                    <DeckIcon Name="DeckIconName.Restart" Size="16" />
+                                </button>
                             </span>
                         </div>
                     }
@@ -128,17 +131,18 @@
             @foreach (var followUpPrompt in chatMessages.FollowUpPrompts)
             {
                 <div class="chat-assistant-next-step">
-                    <FluentButton IconStart="@(new Icons.Regular.Size16.Sparkle())" OnClick="@(() => OnNextStepItemAsync(followUpPrompt))">
-                        @((MarkupString)followUpPrompt.Html)
-                    </FluentButton>
+                    <button type="button" class="btn chat-assistant-next-step-button" @onclick="@(() => OnNextStepItemAsync(followUpPrompt))">
+                        <DeckIcon Name="DeckIconName.Sparkle" Size="16" Class="chat-assistant-next-step-icon" />
+                        <span>@((MarkupString)followUpPrompt.Html)</span>
+                    </button>
                 </div>
             }
             @if (ChatViewModel.FollowUpPromptsHasPages)
             {
                 <div class="chat-assistant-next-step-refresh">
-                    <FluentButton OnClick="@RefreshFollowUpPrompts" aria-label="@Loc[nameof(AIAssistant.ChatRefreshFollowUpPrompts)]" Title="@Loc[nameof(AIAssistant.ChatRefreshFollowUpPrompts)]">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.ArrowClockwise())" Style="vertical-align: text-top;" Width="16px" />
-                    </FluentButton>
+                    <button type="button" class="icon-btn" @onclick="@RefreshFollowUpPrompts" aria-label="@Loc[nameof(AIAssistant.ChatRefreshFollowUpPrompts)]" title="@Loc[nameof(AIAssistant.ChatRefreshFollowUpPrompts)]">
+                        <DeckIcon Name="DeckIconName.Restart" Size="16" />
+                    </button>
                 </div>
             }
         </div>
@@ -161,17 +165,17 @@
                                           ButtonAppearance="Appearance.Neutral"
                                           ButtonClass="model-button" />
                     }
-                    <FluentButton Appearance="Appearance.Stealth" Type="ButtonType.Submit" id="chat-form-submit" class="send-button" Disabled="@(!IsSubmitEnabled())" aria-label="@Loc[nameof(AIAssistant.SidebarSendMessage)]" Title="@Loc[nameof(AIAssistant.SidebarSendMessage)]">
+                    <button type="submit" class="btn btn--ghost send-button" id="chat-form-submit" disabled="@(!IsSubmitEnabled())" aria-label="@Loc[nameof(AIAssistant.SidebarSendMessage)]" title="@Loc[nameof(AIAssistant.SidebarSendMessage)]">
                         <DeckIcon Name="GetSubmitIcon()" Size="20" />
-                    </FluentButton>
+                    </button>
                 </div>
             </div>
         </EditForm>
     </div>
     <div class="@Class" id="chat-scroll-bottom-container">
-        <FluentButton Id="chat-scroll-bottom-button" Style="display: none;">
+        <button type="button" class="icon-btn" id="chat-scroll-bottom-button" style="display: none;">
             <DeckIcon Name="DeckIconName.ArrowDown" Size="16" />
-        </FluentButton>
+        </button>
     </div>
 }
 else if (_renderDisplayState is AssistantChatDisplayState.GhcpDisabled or AssistantChatDisplayState.GhcpError)

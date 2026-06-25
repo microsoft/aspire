@@ -58,19 +58,16 @@
     padding-bottom: 0.5rem;
 }
 
-::deep#chat-assistant-container .message-buttons fluent-button {
-    min-width: 28px;
-    height: 28px;
+/* Per-message feedback/retry buttons render as small, borderless (ghost) icon buttons.
+   The :not(.icon-btn--active) guard keeps the liked/disliked accent state (.icon-btn--active)
+   from being flattened by these higher-specificity overrides. */
+::deep#chat-assistant-container .message-buttons .icon-btn:not(.icon-btn--active) {
+    background: transparent;
+    border-color: transparent;
 }
 
-::deep#chat-assistant-container .message-buttons fluent-button::part(control) {
-    background-color: transparent;
-    padding: 0px;
-    line-height: 0;
-}
-
-::deep#chat-assistant-container .message-buttons fluent-button::part(control):hover {
-    background-color: var(--neutral-fill-rest);
+::deep#chat-assistant-container .message-buttons .icon-btn:not(.icon-btn--active):hover {
+    background: var(--bg-hover);
 }
 
 ::deep#chat-assistant-container .error-message {
@@ -160,13 +157,11 @@
     column-gap: 6px;
 }
 
-/* Support multiline buttons */
-/* Adds more line height so there is vertical space between resource links */
-::deep.chat-assistant-next-steps fluent-button {
+/* Follow-up "next step" prompts render as full-width, left-aligned pills whose text wraps. */
+::deep.chat-assistant-next-steps .chat-assistant-next-step-button {
     height: auto;
-}
-::deep.chat-assistant-next-steps fluent-button::part(control) {
     width: 100%;
+    align-items: flex-start;
     white-space: normal;
     text-align: left;
     padding-top: 5px;
@@ -174,7 +169,11 @@
     font-size: 13px;
     line-height: calc(var(--type-ramp-base-line-height) + 1px);
 }
-::deep.chat-assistant-next-steps fluent-button code {
+::deep.chat-assistant-next-steps .chat-assistant-next-step-icon {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+::deep.chat-assistant-next-steps .chat-assistant-next-step-button code {
     overflow-wrap: anywhere; /* Ensure code blocks in buttons wrap */
 }
 
@@ -238,8 +237,8 @@
     padding-right: 0.75rem;
 }
 
-::deep#chat-form-container #chat-form-submit:not(:hover)::part(control) {
-    background-color: transparent;
+::deep#chat-form-container .send-button {
+    padding: 6px;
 }
 
 ::deep#chat-form-container .model-button {
@@ -247,19 +246,12 @@
     margin-right: 4px;
     font-size: 12px;
     color: var(--foreground-settings-text);
-}
-
-::deep#chat-form-container .model-button::part(control) {
     padding-top: 2px;
     padding-bottom: 2px;
 }
 
-::deep#chat-form-container .model-button::part(control):not(:hover) {
+::deep#chat-form-container .model-button:not(:hover) {
     background: transparent;
-}
-
-::deep#chat-form-container .model-button::part(end) {
-    margin-inline-start: 6px;
 }
 
 @media (forced-colors: none) {
@@ -447,23 +439,16 @@
 ::deep.chat-splash .initial-prompt-button {
     height: unset;
     margin-bottom: 16px;
+    padding: calc((10 + (var(--design-unit) * 2 * var(--density))) * 1px);
+    justify-content: flex-start;
+    white-space: normal;
+    text-align: left;
 }
 
 @media (min-width: 400px) {
     ::deep.chat-splash .initial-prompt-button {
         width: 350px;
     }
-}
-
-::deep.chat-splash .initial-prompt-button::part(control) {
-    padding: calc((10 + (var(--design-unit) * 2 * var(--density))) * 1px) calc((10 + (var(--design-unit) * 2 * var(--density))) * 1px);
-    justify-content: left;
-    white-space: unset;
-}
-
-::deep.chat-splash .initial-prompt-button::part(content) {
-    display: flex;
-    flex-direction: row;
 }
 
 ::deep.chat-splash .initial-prompt-icon {

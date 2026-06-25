@@ -133,7 +133,7 @@ public class AssistantChatTests : DashboardTestContext
 
     private static IElement FindButton(IRenderedComponent<AssistantChat> cut, string resourceName)
     {
-        return cut.Find($"fluent-button[aria-label='Localized:{resourceName}']");
+        return cut.Find($"button[aria-label='Localized:{resourceName}']");
     }
 
     private sealed class TestOptionsMonitor<T>(T currentValue) : IOptionsMonitor<T>

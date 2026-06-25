@@ -165,6 +165,10 @@ public enum DeckIconName
     SplitHorizontal,
     /// <summary>Two panels stacked (split vertically).</summary>
     SplitVertical,
+    /// <summary>Thumbs up; positive feedback.</summary>
+    ThumbLike,
+    /// <summary>Thumbs down; negative feedback.</summary>
+    ThumbDislike,
     /// <summary>
     /// Special value: resolves to a project/container/executable icon based on the
     /// <see cref="DeckIcon.ResourceType"/> string.
