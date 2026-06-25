@@ -64,8 +64,7 @@ public class MobileNavMenuTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentDivider(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
-        JSInterop.SetupModule("initializeMobileNavMenuKeyboardNavigation", _ => true);
-        JSInterop.SetupVoid("disposeMobileNavMenuKeyboardNavigation", _ => true);
+        LayoutSetupHelpers.SetupMobileNavMenuKeyboardNavigation(this);
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(currentUrl);
