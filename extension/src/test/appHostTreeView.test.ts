@@ -2047,6 +2047,44 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
+    test('workspace mode unions running AppHost not reported by aspire ls', () => {
+        // The union in _getWorkspaceChildren appends in-workspace running AppHosts (from aspire ps)
+        // that are not among the aspire ls candidate paths. Such a running AppHost (e.g. discovered
+        // by ps before ls reports it) must still appear in the tree rather than being dropped.
+        const idleCandidate = '/repo/apps/Store/AppHost.csproj';
+        const runningOnly = '/repo/apps/Web/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [makeAppHost({ appHostPath: runningOnly, appHostPid: 4242, resources: [] })],
+            workspaceResources: [],
+            workspaceAppHost: undefined,
+            workspaceAppHostPath: undefined,
+            workspaceAppHostName: undefined,
+            workspaceAppHostCandidatePaths: [idleCandidate],
+            workspaceAppHostDescription: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+
+        const topLevelItems = provider.getChildren();
+
+        // Mixed running + idle: the running-only AppHost lands in the running group, the idle
+        // ls candidate stays in the workspace group. Both must be present.
+        assert.strictEqual(topLevelItems.length, 2);
+        assert.strictEqual(topLevelItems[0].contextValue, 'runningAppHostsGroup');
+        assert.strictEqual(topLevelItems[1].contextValue, 'workspaceAppHostsGroup');
+
+        const runningChildren = provider.getChildren(topLevelItems[0]);
+        assert.strictEqual(runningChildren.length, 1);
+        assert.ok(runningChildren[0].contextValue?.startsWith('workspaceResources'));
+
+        const idleChildren = provider.getChildren(topLevelItems[1]);
+        assert.strictEqual(idleChildren.length, 1);
+        assert.strictEqual(idleChildren[0].contextValue, 'workspaceAppHost');
+        provider.dispose();
+    });
+
     test('runAppHost shows warning when element is undefined', async () => {
         const provider = makeTreeProvider([], 'workspace');
         const stub = sinon.stub(vscode.window, 'showWarningMessage');

@@ -5,6 +5,8 @@ import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './cliTypes';
+import { ConfigInfoProvider } from './configInfoProvider';
+import { lsStreamCapability } from '../types/configInfo';
 import { EnvironmentVariables } from './environment';
 import { extensionLogOutputChannel } from './logging';
 import { getAppHostDiscoveryTimeoutMs } from './settings';
@@ -48,12 +50,15 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private readonly _activeCliProcesses = new Set<ChildProcessWithoutNullStreams>();
     private readonly _cancelActiveCliProcesses = new Set<(error: Error) => void>();
     private _disposed = false;
+    private _streamCapabilityLogged = false;
+    private readonly _configInfoProvider: ConfigInfoProvider;
     readonly onDidChangeCandidates = this._onDidChangeCandidates.event;
 
-    constructor(private readonly _terminalProvider: AspireTerminalProvider) {
+    constructor(private readonly _terminalProvider: AspireTerminalProvider, configInfoProvider?: ConfigInfoProvider) {
+        this._configInfoProvider = configInfoProvider ?? new ConfigInfoProvider(_terminalProvider);
     }
 
-    async discover(workspaceFolder: vscode.WorkspaceFolder, forceRefresh = false, cancellationToken?: vscode.CancellationToken): Promise<CandidateAppHostDisplayInfo[]> {
+    async discover(workspaceFolder: vscode.WorkspaceFolder, forceRefresh = false, cancellationToken?: vscode.CancellationToken, onCandidate?: (candidate: CandidateAppHostDisplayInfo) => void): Promise<CandidateAppHostDisplayInfo[]> {
         this._throwIfDisposed();
         throwIfCancellationRequested(cancellationToken);
 
@@ -69,8 +74,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             // The cached discovery promise is shared across extension features. Keep caller
             // cancellation outside the cached operation so one cancelled refresh doesn't reject
             // unrelated callers that are awaiting the same workspace discovery.
-            const discoveryPromise = this._discoverCore(workspaceFolder)
-                .then(candidates => this._includeConfiguredAppHostCandidate(workspaceFolder, candidates));
+            const discoveryPromise = this._discoverCore(workspaceFolder, onCandidate);
             let cachedPromise: Promise<CandidateAppHostDisplayInfo[]>;
             cachedPromise = discoveryPromise.catch(error => {
                 if (this._cache.get(key) === cachedPromise) {
@@ -80,6 +84,10 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             });
             resultPromise = cachedPromise;
             this._cache.set(key, resultPromise);
+
+            // Enrich with the configured-AppHost selection in the background so the findFiles
+            // lookup it performs does not delay discover()'s first resolve.
+            this._scheduleConfiguredAppHostSelection(workspaceFolder, key, cachedPromise);
         }
 
         return await withCancellation(resultPromise, cancellationToken);
@@ -127,9 +135,9 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._onDidChangeCandidates.dispose();
     }
 
-    private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo[]> {
+    private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder, onCandidate?: (candidate: CandidateAppHostDisplayInfo) => void): Promise<CandidateAppHostDisplayInfo[]> {
         try {
-            const appHosts = await this._discoverWithLs(workspaceFolder);
+            const appHosts = await this._discoverWithLs(workspaceFolder, onCandidate);
             extensionLogOutputChannel.info(`Discovered ${appHosts.length} AppHost candidate(s) via aspire ls`);
             return appHosts;
         }
@@ -163,13 +171,22 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         }
     }
 
-    private async _discoverWithLs(workspaceFolder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo[]> {
+    private async _discoverWithLs(workspaceFolder: vscode.WorkspaceFolder, onCandidate?: (candidate: CandidateAppHostDisplayInfo) => void): Promise<CandidateAppHostDisplayInfo[]> {
         this._throwIfDisposed();
 
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
+        const configInfo = await this._configInfoProvider.getConfigInfo({ suppressErrors: true });
+        const streamSupported = configInfo?.capabilities?.includes(lsStreamCapability) ?? false;
+
+        if (configInfo && !this._streamCapabilityLogged) {
+            this._streamCapabilityLogged = true;
+            extensionLogOutputChannel.info(`CLI capability '${lsStreamCapability}' ${streamSupported ? 'advertised' : 'not advertised'}; aspire ls --stream ${streamSupported ? 'enabled' : 'disabled'}.`);
+        }
+
         const args = ['ls', '--format', 'json'];
-        if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-            args.push('--cli-wait-for-debugger');
+        if (streamSupported) {
+            args.push('--stream');
+            return await this._runCliForStream(cliPath, args, workspaceFolder.uri.fsPath, onCandidate);
         }
 
         const output = await this._runCliForStdout(cliPath, args, workspaceFolder.uri.fsPath);
@@ -180,12 +197,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._throwIfDisposed();
 
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        const args = ['extension', 'get-apphosts'];
-        if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-            args.push('--cli-wait-for-debugger');
-        }
-
-        const output = await this._runCliForStdout(cliPath, args, workspaceFolder.uri.fsPath);
+        const output = await this._runCliForStdout(cliPath, ['extension', 'get-apphosts'], workspaceFolder.uri.fsPath);
         const parsed = parseLegacyGetAppHostsOutput(output);
         return toCandidatesFromLegacySearchResult(parsed);
     }
@@ -248,6 +260,42 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         }
     }
 
+    private _scheduleConfiguredAppHostSelection(workspaceFolder: vscode.WorkspaceFolder, key: string, basePromise: Promise<CandidateAppHostDisplayInfo[]>): void {
+        // Enrichment runs after discover() has already resolved; on completion, swap the cached
+        // promise to the enriched list and notify subscribers. Never awaited, so failures must not
+        // surface as unhandled rejections.
+        void basePromise.then(async candidates => {
+            if (this._disposed || this._cache.get(key) !== basePromise) {
+                return;
+            }
+
+            let enriched: CandidateAppHostDisplayInfo[];
+            try {
+                enriched = await this._includeConfiguredAppHostCandidate(workspaceFolder, candidates);
+            }
+            catch (error) {
+                extensionLogOutputChannel.warn(`Failed to apply configured AppHost selection: ${formatErrorMessage(error)}`);
+                return;
+            }
+
+            // _includeConfiguredAppHostCandidate returns the same array reference when nothing
+            // changed, so a reference inequality reliably signals an applied selection.
+            if (enriched === candidates) {
+                return;
+            }
+
+            if (this._disposed || this._cache.get(key) !== basePromise) {
+                return;
+            }
+
+            this._cache.set(key, Promise.resolve(enriched));
+            this._onDidChangeCandidates.fire(workspaceFolder);
+        }).catch(() => {
+            // The base discovery promise rejected; its own .catch already evicts the cache entry and
+            // surfaces the error to awaiting callers. Nothing to enrich here.
+        });
+    }
+
     private async _includeConfiguredAppHostCandidate(workspaceFolder: vscode.WorkspaceFolder, candidates: CandidateAppHostDisplayInfo[]): Promise<CandidateAppHostDisplayInfo[]> {
         if (candidates.some(candidate => candidate.selected)) {
             return candidates;
@@ -280,10 +328,25 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     }
 
     private _runCliForStdout(cliPath: string, args: string[], workingDirectory: string): Promise<string> {
-        return new Promise((resolve, reject) => {
+        let stdout = '';
+        return this._runCliProcess(
+            cliPath,
+            args,
+            workingDirectory,
+            { stdoutCallback: data => { stdout += data; } },
+            () => stdout);
+    }
+
+    private _runCliProcess<T>(cliPath: string, args: string[], workingDirectory: string, dataCallbacks: { stdoutCallback?: (data: string) => void; lineCallback?: (line: string) => void }, onSuccess: () => T, resetTimeoutOnOutput = false): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
             this._throwIfDisposed();
 
-            let stdout = '';
+            // Apply ASPIRE_CLI_STOP_ON_ENTRY here so every discovery spawn shares it alongside the
+            // other universal spawn properties, leaving call sites to pass only their command args.
+            const cliArgs = process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true'
+                ? [...args, '--cli-wait-for-debugger']
+                : args;
+
             let stderr = '';
             let settled = false;
             let childProcess: ChildProcessWithoutNullStreams | undefined;
@@ -292,7 +355,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 if (childProcess && !childProcess.killed) {
                     try {
                         if (!childProcess.kill()) {
-                            extensionLogOutputChannel.warn(`Failed to stop AppHost discovery command: aspire ${args.join(' ')}`);
+                            extensionLogOutputChannel.warn(`Failed to stop AppHost discovery command: aspire ${cliArgs.join(' ')}`);
                         }
                     }
                     catch (killError) {
@@ -322,17 +385,35 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 complete();
             };
 
+            const timeoutMs = getAppHostDiscoveryTimeoutMs();
+            const startTimeout = () => {
+                if (settled) {
+                    return;
+                }
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    const silence = resetTimeoutOnOutput ? ' without output' : '';
+                    cancel(new Error(`aspire ${cliArgs.join(' ')} timed out after ${timeoutMs / 1000} seconds${silence}.`));
+                }, timeoutMs);
+            };
+            const onActivity = resetTimeoutOnOutput ? startTimeout : undefined;
+
             this._cancelActiveCliProcesses.add(cancel);
             try {
-                childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                childProcess = spawnCliProcess(this._terminalProvider, cliPath, cliArgs, {
                     noExtensionVariables: true,
                     workingDirectory,
-                    stdoutCallback: data => { stdout += data; },
+                    stdoutCallback: dataCallbacks.stdoutCallback
+                        ? data => { onActivity?.(); dataCallbacks.stdoutCallback!(data); }
+                        : undefined,
+                    lineCallback: dataCallbacks.lineCallback
+                        ? line => { onActivity?.(); dataCallbacks.lineCallback!(line); }
+                        : undefined,
                     stderrCallback: data => { stderr += data; },
                     exitCallback: code => {
                         settle(() => {
                             if (code === 0) {
-                                resolve(stdout);
+                                resolve(onSuccess());
                             }
                             else {
                                 reject(new Error(stderr || `exit code ${code ?? 1}`));
@@ -354,11 +435,63 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             }
 
             this._activeCliProcesses.add(childProcess);
-            const timeoutMs = getAppHostDiscoveryTimeoutMs();
-            timeout = setTimeout(() => {
-                cancel(new Error(`aspire ${args.join(' ')} timed out after ${timeoutMs / 1000} seconds.`));
-            }, timeoutMs);
+            startTimeout();
         });
+    }
+
+    // Runs a CLI command that streams newline-delimited JSON (NDJSON) candidates — one JSON object
+    // per line, e.g. {"path":"/repo/AppHost/AppHost.csproj","language":"csharp","status":"buildable"}.
+    // `onCandidate` fires per parsed line so callers can render incrementally; resolves the
+    // accumulated candidates on exit code 0 and rejects otherwise.
+    private _runCliForStream(cliPath: string, args: string[], workingDirectory: string, onCandidate?: (candidate: CandidateAppHostDisplayInfo) => void): Promise<CandidateAppHostDisplayInfo[]> {
+        const candidates: CandidateAppHostDisplayInfo[] = [];
+        const handleLine = (line: string) => {
+            const trimmed = line.trim();
+            if (!trimmed) {
+                return;
+            }
+
+            let parsed: unknown;
+            try {
+                parsed = JSON.parse(trimmed);
+            }
+            catch {
+                // Tolerate malformed/non-JSON lines (e.g. stray log output) rather than failing
+                // the whole stream; the process exit code is still authoritative for success.
+                extensionLogOutputChannel.warn(`Ignoring unparseable aspire ls --stream line: ${trimmed}`);
+                return;
+            }
+
+            if (!isLsCandidate(parsed)) {
+                extensionLogOutputChannel.warn('Ignoring aspire ls --stream candidate with an unexpected shape.');
+                return;
+            }
+
+            const candidate: CandidateAppHostDisplayInfo = {
+                path: parsed.path,
+                language: parsed.language,
+                status: parsed.status,
+            };
+            candidates.push(candidate);
+
+            if (onCandidate) {
+                try {
+                    onCandidate(candidate);
+                }
+                catch (callbackError) {
+                    // A consumer callback failure must not abort discovery.
+                    extensionLogOutputChannel.warn(`AppHost discovery candidate callback failed: ${formatErrorMessage(callbackError)}`);
+                }
+            }
+        };
+
+        return this._runCliProcess(
+            cliPath,
+            args,
+            workingDirectory,
+            { lineCallback: handleLine },
+            () => candidates,
+            true);
     }
 }
 

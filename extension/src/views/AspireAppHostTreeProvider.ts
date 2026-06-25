@@ -251,8 +251,8 @@ class WorkspaceAppHostsGroupItem extends vscode.TreeItem {
     constructor(public readonly appHosts: WorkspaceAppHostItem[]) {
         super(workspaceAppHostsGroupLabel, vscode.TreeItemCollapsibleState.Expanded);
         this.id = 'workspace-apphosts-group';
-        this.iconPath = new vscode.ThemeIcon('folder');
         this.contextValue = 'workspaceAppHostsGroup';
+        this.iconPath = new vscode.ThemeIcon('folder');
         this.description = `(${appHosts.length})`;
     }
 }
@@ -989,9 +989,13 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             const workspaceResources = [...this._repository.workspaceResources];
             const workspaceAppHost = this._repository.workspaceAppHost;
             const workspaceCandidatePaths = this._repository.workspaceAppHostCandidatePaths ?? [];
-            const workspaceAppHostPaths = workspaceCandidatePaths.length > 0
-                ? workspaceCandidatePaths
-                : this._repository.appHosts.map(appHost => appHost.appHostPath);
+
+            const workspaceAppHostPaths = [...workspaceCandidatePaths];
+            for (const runningAppHost of this._repository.appHosts) {
+                if (!workspaceAppHostPaths.some(candidatePath => isMatchingAppHostPath(runningAppHost.appHostPath, candidatePath))) {
+                    workspaceAppHostPaths.push(runningAppHost.appHostPath);
+                }
+            }
 
             if (workspaceAppHostPaths.length > 1 || (workspaceResources.length === 0 && !workspaceAppHost)) {
                 const selectedAppHostPath = workspaceAppHost?.appHostPath ?? this._repository.workspaceAppHostPath;
