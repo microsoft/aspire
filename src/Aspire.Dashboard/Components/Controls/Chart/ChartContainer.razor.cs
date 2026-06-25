@@ -3,13 +3,13 @@
 
 using System.Collections.Immutable;
 using System.Runtime.InteropServices;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
-using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components;
 
@@ -284,7 +284,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         return filters;
     }
 
-    private Task OnTabChangeAsync(FluentTab newTab)
+    private Task OnTabChangeAsync(DeckTab newTab)
     {
         var id = newTab.Id?.Substring("tab-".Length);
 

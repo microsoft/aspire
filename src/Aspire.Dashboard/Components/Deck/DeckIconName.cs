@@ -159,6 +159,8 @@ public enum DeckIconName
     BriefcaseMedical,
     /// <summary>Gauge/speedometer.</summary>
     Gauge,
+    /// <summary>Table/grid of cells.</summary>
+    Grid,
     /// <summary>
     /// Special value: resolves to a project/container/executable icon based on the
     /// <see cref="DeckIcon.ResourceType"/> string.

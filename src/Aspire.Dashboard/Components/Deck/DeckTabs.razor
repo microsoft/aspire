@@ -1,0 +1,76 @@
+@*
+    Tab control replacing FluentTabs during the Fluent-removal phase. Renders a tab bar
+    from the registered <DeckTab> children, then their panels (only the active panel is
+    visible; inactive panels stay mounted with [hidden] to preserve child component state,
+    matching FluentTabs). Tabs with no content (display-only, e.g. GenAI) just contribute
+    a header.
+*@
+<div class="deck-tabs-host">
+    <div class="deck-tabs" role="tablist">
+        @foreach (var tab in _tabs)
+        {
+            var isActive = tab.Id == ActiveTabId;
+            <button type="button"
+                    role="tab"
+                    id="@tab.Id"
+                    class="deck-tab @(isActive ? "deck-tab--active" : null) @tab.LabelClass"
+                    aria-selected="@(isActive ? "true" : "false")"
+                    @attributes="tab.HeaderAttributes"
+                    @onclick="@(() => HandleTabClickAsync(tab))">
+                @if (tab.Icon is { } icon)
+                {
+                    <DeckIcon Name="icon" Size="16" />
+                }
+                @if (tab.Header is not null)
+                {
+                    @tab.Header
+                }
+                else
+                {
+                    <span>@tab.Label</span>
+                }
+            </button>
+        }
+    </div>
+    <CascadingValue Value="this" IsFixed="true">
+        @ChildContent
+    </CascadingValue>
+</div>
+
+@code {
+    private readonly List<DeckTab> _tabs = new();
+
+    /// <summary>Id of the currently active tab.</summary>
+    [Parameter]
+    public string? ActiveTabId { get; set; }
+
+    /// <summary>Raised with the clicked <see cref="DeckTab"/> when a tab header is selected.</summary>
+    [Parameter]
+    public EventCallback<DeckTab> OnTabChange { get; set; }
+
+    /// <summary>The <see cref="DeckTab"/> children.</summary>
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    internal bool IsActive(DeckTab tab) => tab.Id == ActiveTabId;
+
+    internal void AddTab(DeckTab tab)
+    {
+        _tabs.Add(tab);
+        StateHasChanged();
+    }
+
+    internal void RemoveTab(DeckTab tab)
+    {
+        _tabs.Remove(tab);
+        StateHasChanged();
+    }
+
+    private async Task HandleTabClickAsync(DeckTab tab)
+    {
+        if (OnTabChange.HasDelegate)
+        {
+            await OnTabChange.InvokeAsync(tab);
+        }
+    }
+}

@@ -2575,3 +2575,48 @@ hr.deck-divider {
   flex-direction: column;
 }
 /* === end Stacks === */
+
+/* === Tabs (FluentTabs replacement) === */
+/* Underlined tab bar built from native buttons. The host wraps the bar + panels in a
+   single block so it occupies one grid/flex slot, exactly like the FluentTabs element
+   it replaces. */
+.deck-tabs-host {
+  display: block;
+}
+.deck-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+}
+.deck-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.14s ease, border-color 0.14s ease;
+}
+.deck-tab:hover {
+  color: var(--text);
+}
+.deck-tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.deck-tab:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: -2px;
+}
+.deck-tab > svg {
+  flex: none;
+}
+/* === end Tabs === */

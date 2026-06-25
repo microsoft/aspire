@@ -65,28 +65,28 @@
                             *@
                             @if (selectedItem.Type != GenAIItemType.Error)
                             {
-                                <FluentTabs ActiveTabId="@($"tab-message-{selectedView}")" OnTabChange="@OnMessageTabChange" Size="null">
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-message-{ItemViewKind.Preview}")"
-                                               Label="@Loc[nameof(Dialogs.GenAIPreviewTabText)]"
-                                               Icon="@(new Icons.Regular.Size24.PreviewLink())">
-                                    </FluentTab>
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-message-{ItemViewKind.Raw}")"
-                                               Label="@Loc[nameof(Dialogs.GenAIRawTabText)]"
-                                               Icon="@(new Icons.Regular.Size24.Code())">
-                                    </FluentTab>
-                                </FluentTabs>
+                                <DeckTabs ActiveTabId="@($"tab-message-{selectedView}")" OnTabChange="@OnMessageTabChange">
+                                    <DeckTab LabelClass="tab-label"
+                                             Id="@($"tab-message-{ItemViewKind.Preview}")"
+                                             Label="@Loc[nameof(Dialogs.GenAIPreviewTabText)]"
+                                             Icon="DeckIconName.Eye">
+                                    </DeckTab>
+                                    <DeckTab LabelClass="tab-label"
+                                             Id="@($"tab-message-{ItemViewKind.Raw}")"
+                                             Label="@Loc[nameof(Dialogs.GenAIRawTabText)]"
+                                             Icon="DeckIconName.Braces">
+                                    </DeckTab>
+                                </DeckTabs>
                             }
                             else
                             {
-                                <FluentTabs ActiveTabId="@($"tab-message-{ItemViewKind.Raw}")" Size="null">
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-message-{ItemViewKind.Raw}")"
-                                               Label="@Loc[nameof(Dialogs.GenAIRawTabText)]"
-                                               Icon="@(new Icons.Regular.Size24.Code())">
-                                    </FluentTab>
-                                </FluentTabs>
+                                <DeckTabs ActiveTabId="@($"tab-message-{ItemViewKind.Raw}")">
+                                    <DeckTab LabelClass="tab-label"
+                                             Id="@($"tab-message-{ItemViewKind.Raw}")"
+                                             Label="@Loc[nameof(Dialogs.GenAIRawTabText)]"
+                                             Icon="DeckIconName.Braces">
+                                    </DeckTab>
+                                </DeckTabs>
                             }
                         </div>
                         @if (selectedView == ItemViewKind.Preview)
@@ -262,40 +262,40 @@
                                 Tab content isn't nested inside FluentTab elements. The tab control is just used to display the tabs.
                                 Content is located in manually created divs so they can be placed in their own CSS grid row.
                             *@
-                            <FluentTabs ActiveTabId="@($"tab-overview-{OverviewActiveView}")" OnTabChange="@OnOverviewTabChange" Size="null">
-                                <FluentTab LabelClass="tab-label"
-                                           Id="@($"tab-overview-{OverviewViewKind.InputOutput}")"
-                                           Label="@Loc[nameof(Dialogs.GenAIInputOutputTabText)]"
-                                           Icon="@(new Icons.Regular.Size24.Chat())">
-                                </FluentTab>
+                            <DeckTabs ActiveTabId="@($"tab-overview-{OverviewActiveView}")" OnTabChange="@OnOverviewTabChange">
+                                <DeckTab LabelClass="tab-label"
+                                         Id="@($"tab-overview-{OverviewViewKind.InputOutput}")"
+                                         Label="@Loc[nameof(Dialogs.GenAIInputOutputTabText)]"
+                                         Icon="DeckIconName.Mail">
+                                </DeckTab>
                                 @if (Content.ToolDefinitions.Count > 0)
                                 {
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-overview-{OverviewViewKind.Tools}")"
-                                               Icon="@(new Icons.Regular.Size24.Wrench())">
+                                    <DeckTab LabelClass="tab-label"
+                                             Id="@($"tab-overview-{OverviewViewKind.Tools}")"
+                                             Icon="DeckIconName.Toolbox">
                                         <Header>
                                             <span class="tab-text">@Loc[nameof(Dialogs.GenAIToolsTabText)]</span>
                                             <Badge>@Content.ToolDefinitions.Count</Badge>
                                         </Header>
-                                    </FluentTab>
+                                    </DeckTab>
                                 }
                                 @if (Content.Evaluations.Count > 0)
                                 {
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-overview-{OverviewViewKind.Evaluations}")"
-                                               Icon="@(new Icons.Regular.Size24.Scales())">
+                                    <DeckTab LabelClass="tab-label"
+                                             Id="@($"tab-overview-{OverviewViewKind.Evaluations}")"
+                                             Icon="DeckIconName.Gauge">
                                         <Header>
                                             <span class="tab-text">@Loc[nameof(Dialogs.GenAIEvaluationsTabText)]</span>
                                             <Badge>@Content.Evaluations.Count</Badge>
                                         </Header>
-                                    </FluentTab>
+                                    </DeckTab>
                                 }
-                                <FluentTab LabelClass="tab-label"
-                                           Id="@($"tab-overview-{OverviewViewKind.Details}")"
-                                           Label="@Loc[nameof(Dialogs.GenAIDetailsTabText)]"
-                                           Icon="@(new Icons.Regular.Size24.Info())">
-                                </FluentTab>
-                            </FluentTabs>
+                                <DeckTab LabelClass="tab-label"
+                                         Id="@($"tab-overview-{OverviewViewKind.Details}")"
+                                         Label="@Loc[nameof(Dialogs.GenAIDetailsTabText)]"
+                                         Icon="DeckIconName.Info">
+                                </DeckTab>
+                            </DeckTabs>
                         </div>
                         @if (OverviewActiveView == OverviewViewKind.InputOutput)
                         {

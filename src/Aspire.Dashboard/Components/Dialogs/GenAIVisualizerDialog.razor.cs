@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.GenAI;
@@ -194,7 +195,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         return Task.CompletedTask;
     }
 
-    private void OnOverviewTabChange(FluentTab newTab)
+    private void OnOverviewTabChange(DeckTab newTab)
     {
         var id = newTab.Id?.Substring("tab-overview-".Length);
 
@@ -213,7 +214,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         OverviewActiveView = viewKind;
     }
 
-    private void OnMessageTabChange(FluentTab newTab)
+    private void OnMessageTabChange(DeckTab newTab)
     {
         var id = newTab.Id?.Substring("tab-message-".Length);
 

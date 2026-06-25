@@ -30,27 +30,27 @@ else
                 </div>
             }
         </div>
-        <FluentTabs ActiveTabId="@($"tab-{ActiveView}")" OnTabChange="@OnTabChangeAsync" Size="null">
-            <FluentTab LabelClass="tab-label"
-                       Id="@($"tab-{Metrics.MetricViewKind.Graph}")"
-                       aria-label="@Loc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]"
-                       Label="@Loc[nameof(ControlsStrings.ChartContainerGraphTab)]"
-                       Icon="@(new Icons.Regular.Size24.DataArea())">
+        <DeckTabs ActiveTabId="@($"tab-{ActiveView}")" OnTabChange="@OnTabChangeAsync">
+            <DeckTab LabelClass="tab-label"
+                     Id="@($"tab-{Metrics.MetricViewKind.Graph}")"
+                     aria-label="@Loc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]"
+                     Label="@Loc[nameof(ControlsStrings.ChartContainerGraphTab)]"
+                     Icon="DeckIconName.Graph">
                 <div class="metrics-chart-container metric-tab">
                     <PlotlyChart InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources"/>
                     <ChartFilters InstrumentViewModel="_instrumentViewModel" Instrument="_instrument" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
-            </FluentTab>
-            <FluentTab LabelClass="tab-label"
-                       Id="@($"tab-{Metrics.MetricViewKind.Table}")"
-                       Label="@Loc[nameof(ControlsStrings.ChartContainerTableTab)]"
-                       Icon="@(new Icons.Regular.Size24.Table())">
+            </DeckTab>
+            <DeckTab LabelClass="tab-label"
+                     Id="@($"tab-{Metrics.MetricViewKind.Table}")"
+                     Label="@Loc[nameof(ControlsStrings.ChartContainerTableTab)]"
+                     Icon="DeckIconName.Grid">
                 <div class="metrics-chart-container metric-tab">
                     <MetricTable InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" />
                     <ChartFilters InstrumentViewModel="_instrumentViewModel" Instrument="_instrument" DimensionFilters="@DimensionFilters" OnDimensionValuesChanged="DimensionValuesChangedAsync" />
                 </div>
-            </FluentTab>
-        </FluentTabs>
+            </DeckTab>
+        </DeckTabs>
         <div class="metrics-chart-footer">
             @if (PauseText is not null)
             {
