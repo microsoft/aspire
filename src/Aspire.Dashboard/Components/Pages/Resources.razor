@@ -85,12 +85,17 @@
                         }
                         else
                         {
-                            @foreach (var vm in rows)
-                            {
-                                var resource = vm.Resource;
-                                var isSelected = string.Equals(resource.Name, PageViewModel.SelectedResource?.Name, StringComparisons.ResourceName);
-                                var source = ResourceSourceViewModel.GetSourceViewModel(resource);
-                                var urls = GetDisplayedUrls(resource);
+                            @* Virtualize keeps the table performant for apps with many resources.
+                               SpacerElement="tr" so the virtualization spacers are valid table rows;
+                               the scroll container is the .page__body (the .table-wrap clips only). *@
+                            <Virtualize Items="rows" Context="vm" ItemSize="46" OverscanCount="20"
+                                        SpacerElement="tr" TItem="Aspire.Dashboard.Model.ResourceGridViewModel">
+                                @{
+                                    var resource = vm.Resource;
+                                    var isSelected = string.Equals(resource.Name, PageViewModel.SelectedResource?.Name, StringComparisons.ResourceName);
+                                    var source = ResourceSourceViewModel.GetSourceViewModel(resource);
+                                    var urls = GetDisplayedUrls(resource);
+                                }
                                 <tr class="clickable @(isSelected ? "selected" : "")" @key="resource.Name"
                                     @onclick="() => ShowResourceDetailsAsync(resource, buttonId: null)">
                                     <td>
@@ -160,7 +165,7 @@
                                         <span class="cell-muted"><StartTimeColumnDisplay Resource="resource" /></span>
                                     </td>
                                 </tr>
-                            }
+                            </Virtualize>
                         }
                     </tbody>
                 </table>
