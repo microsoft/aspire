@@ -2181,3 +2181,27 @@ table.data tbody tr.selected {
   font-size: 12.5px;
 }
 /* === end Console === */
+/* === Metrics ===
+   Page-specific refinements for the Metrics page. The base metrics tokens
+   (.metrics-layout, .metric-list, .metric-detail, .seg, .metric-chart) live in
+   the "Metrics" section earlier in this file; the rules below only adjust how
+   those panes behave for the dashboard's tree selector + Plotly chart, which
+   differ from Deck's flat list + uPlot chart. Subcomponent internals (the
+   FluentTreeView and ChartContainer) are styled with ::deep in
+   Components/Pages/Metrics.razor.css. */
+.metrics-layout {
+  /* Fill the page body so the list and detail panes scroll independently. */
+  height: 100%;
+}
+.metric-detail {
+  /* The dashboard's chart container can be taller than the viewport (chart +
+     dimension filters), so allow the detail pane itself to scroll. */
+  overflow: auto;
+}
+@media (max-width: 768px) {
+  .metrics-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(160px, 30%) 1fr;
+  }
+}
+/* === end Metrics === */
