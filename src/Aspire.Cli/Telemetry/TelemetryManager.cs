@@ -86,9 +86,7 @@ internal sealed class TelemetryManager : IDisposable
         // The Azure Monitor only exports telemetry from the Reported activity source.
         if (telemetryConfiguration.ReportedTelemetryEnabled)
         {
-            var azureMonitorBuilder = Sdk.CreateTracerProviderBuilder()
-                .AddSource(AspireCliTelemetry.ReportedActivitySourceName)
-                .SetResourceBuilder(resource)
+            var azureMonitorBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.ReportedActivitySourceName, resource, tagsSource)
                 .AddAzureMonitorTraceExporter(o =>
                 {
                     o.ConnectionString = ApplicationInsightsConnectionString;
@@ -103,28 +101,19 @@ internal sealed class TelemetryManager : IDisposable
             }
 #endif
 
-            // Tags are applied at export time by the enrichment processor, which reads from
-            // TelemetryTagsSource. This avoids blocking activity start on background tag calculation.
-            azureMonitorBuilder.AddProcessor(new CliTagEnrichmentProcessor(tagsSource));
-
             _azureMonitorProvider = azureMonitorBuilder.Build();
         }
 
         if (telemetryConfiguration.UseProfilingProvider)
         {
-            _profilingProvider = Sdk.CreateTracerProviderBuilder()
-                .AddSource(ProfilingTelemetry.ActivitySourceName)
-                .SetResourceBuilder(resource)
-                .AddProcessor(new CliTagEnrichmentProcessor(tagsSource))
+            _profilingProvider = CreateTracerProviderBuilder(ProfilingTelemetry.ActivitySourceName, resource, tagsSource)
                 .AddOtlpExporter()
                 .Build();
         }
 
         if (useDebugDiagnosticProvider)
         {
-            var diagnosticBuilder = Sdk.CreateTracerProviderBuilder()
-                .AddSource(AspireCliTelemetry.DiagnosticsActivitySourceName)
-                .SetResourceBuilder(resource);
+            var diagnosticBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.DiagnosticsActivitySourceName, resource, tagsSource);
 
             if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Diagnostic)
             {
@@ -138,6 +127,14 @@ internal sealed class TelemetryManager : IDisposable
 
             _debugDiagnosticProvider = diagnosticBuilder.Build();
         }
+    }
+
+    private static TracerProviderBuilder CreateTracerProviderBuilder(string sourceName, ResourceBuilder resource, TelemetryTagsSource tagsSource)
+    {
+        return Sdk.CreateTracerProviderBuilder()
+            .AddSource(sourceName)
+            .SetResourceBuilder(resource)
+            .AddProcessor(new CliTagEnrichmentProcessor(tagsSource));
     }
 
     /// <summary>
