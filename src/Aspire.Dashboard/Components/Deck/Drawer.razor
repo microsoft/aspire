@@ -5,9 +5,11 @@
     OnClose. Header (title/subtitle + close button), body, and an optional footer (e.g. command
     bar) are provided by the caller.
 *@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 <div class="drawer-overlay" @onclick="OnCloseAsync"></div>
 <aside class="drawer @Class" role="dialog" aria-modal="true" aria-label="@Title"
-       tabindex="-1" @onkeydown="HandleKeyDownAsync" @ref="_aside">
+       tabindex="-1" @ref="_aside">
     <div class="drawer__header">
         <div style="flex: 1; min-width: 0;">
             <div class="drawer__title">
@@ -47,7 +49,17 @@
 </aside>
 
 @code {
+    // Escape-to-close is wired through this colocated JS module rather than Blazor's @onkeydown.
+    // The dashboard's pinned blazor.web.js serializes the keyboard event's `isComposing` field,
+    // which the server-side KeyboardEventArgsReader rejects ("Unknown property isComposing"),
+    // throwing a framework error on every Escape press. Forwarding only a close signal from JS
+    // avoids the KeyboardEventArgs deserialization path entirely.
+    private const string JsModulePath = "./Components/Deck/Drawer.razor.js";
+
     private ElementReference _aside;
+    private IJSObjectReference? _jsModule;
+    private DotNetObjectReference<Drawer>? _selfRef;
+    private bool _escapeRegistered;
 
     /// <summary>Plain-text drawer title. Use <see cref="TitleContent"/> for richer titles (e.g. with an icon).</summary>
     [Parameter]
@@ -103,15 +115,19 @@
             {
                 // Focus can fail if the element was removed before the call completed; ignore.
             }
+
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", JsModulePath);
+            _selfRef = DotNetObjectReference.Create(this);
+            await _jsModule.InvokeVoidAsync("registerDrawerEscape", _aside, _selfRef);
+            _escapeRegistered = true;
         }
     }
 
-    private async Task HandleKeyDownAsync(KeyboardEventArgs e)
+    /// <summary>Invoked from <c>Drawer.razor.js</c> when Escape is pressed inside the drawer.</summary>
+    [JSInvokable]
+    public Task CloseFromJavaScript()
     {
-        if (e.Key == "Escape")
-        {
-            await OnCloseAsync();
-        }
+        return OnCloseAsync();
     }
 
     private async Task OnCloseAsync()
@@ -120,5 +136,31 @@
         {
             await OnClose.InvokeAsync();
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_jsModule is not null)
+        {
+            if (_escapeRegistered)
+            {
+                try
+                {
+                    await _jsModule.InvokeVoidAsync("disposeDrawerEscape", _aside);
+                }
+                catch (JSDisconnectedException)
+                {
+                    // The browser may already be gone when the component is disposed.
+                }
+                catch (OperationCanceledException)
+                {
+                    // The browser may already be gone when the component is disposed.
+                }
+            }
+
+            await JSInteropHelpers.SafeDisposeAsync(_jsModule);
+        }
+
+        _selfRef?.Dispose();
     }
 }
