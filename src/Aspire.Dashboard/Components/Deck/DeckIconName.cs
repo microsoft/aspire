@@ -31,6 +31,8 @@ public enum DeckIconName
     Executable,
     /// <summary>Magnifying glass.</summary>
     Search,
+    /// <summary>Funnel (filter).</summary>
+    Filter,
     /// <summary>Play triangle.</summary>
     Play,
     /// <summary>Pause bars.</summary>

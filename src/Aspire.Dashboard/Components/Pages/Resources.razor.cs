@@ -3,11 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Globalization;
-using System.Text;
-using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.ResourceGraph;
@@ -20,7 +16,6 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -38,7 +33,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private const string ActionsColumn = nameof(ActionsColumn);
 
     private Subscription? _logsSubscription;
-    private IList<GridColumn>? _gridColumns;
     private EventCallback _onToggleCollapseAllCallback;
     private EventCallback _onToggleResourceTypeCallback;
     private bool _hideResourceGraph;
@@ -118,15 +112,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private bool _isFilterPopupVisible;
     private Task? _resourceSubscriptionTask;
     private string? _elementIdBeforeDetailsViewOpened;
-    private FluentDataGrid<ResourceGridViewModel> _dataGrid = null!;
-    private GridColumnManager _manager = null!;
     private int _maxHighlightedCount;
     private readonly List<MenuButtonItem> _resourcesMenuItems = new();
     private DotNetObjectReference<ResourcesInterop>? _resourcesInteropReference;
     private IJSObjectReference? _jsModule;
     private bool _graphInitialized;
-    private AspirePageContentLayout? _contentLayout;
-    private TotalItemsFooter _totalItemsFooter = default!;
     private int _totalItemsCount;
 
     private AspireMenu? _contextMenu;
@@ -134,8 +124,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private readonly List<MenuButtonItem> _contextMenuItems = new();
     private TaskCompletionSource? _contextMenuClosedTcs;
 
-    private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
-    private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
     private bool _showResourceTypeColumn;
     private AIContext? _aiContext;
 
@@ -145,19 +133,26 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         await VisibleResourcesChangedAsync();
         UpdateMenuButtons();
-        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
+        await this.AfterViewModelChangedAsync(null, waitToApplyMobileChange: false);
     }
 
     private async Task OnResourceFilterVisibilityChangedAsync(string resourceType, bool isVisible)
     {
         await VisibleResourcesChangedAsync();
         UpdateMenuButtons();
-        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
+        await this.AfterViewModelChangedAsync(null, waitToApplyMobileChange: false);
     }
 
     private async Task HandleSearchFilterChangedAsync()
     {
         await VisibleResourcesChangedAsync();
+    }
+
+    // Bridges the Deck SearchBox (Value/ValueChanged) to the existing text-filter handling.
+    private async Task OnSearchChangedAsync(string value)
+    {
+        PageViewModel.TextFilter = value;
+        await HandleSearchFilterChangedAsync();
     }
 
     private async Task VisibleResourcesChangedAsync()
@@ -172,7 +167,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             await ClearSelectedResourceAsync();
         }
 
-        await _dataGrid.SafeRefreshDataAsync();
+        await RefreshGridAsync();
     }
 
     // Internal for tests
@@ -180,11 +175,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     internal bool AreAllTypesVisible => PageViewModel.ResourceTypesToVisibility.Values.All(value => value);
     internal bool AreAllStatesVisible => PageViewModel.ResourceStatesToVisibility.Values.All(value => value);
     internal bool AreAllHealthStatesVisible => PageViewModel.ResourceHealthStatusesToVisibility.Values.All(value => value);
-
-    private readonly GridSort<ResourceGridViewModel> _nameSort = GridSort<ResourceGridViewModel>.ByAscending(p => p.Resource, ResourceViewModelNameComparer.Instance);
-    private readonly GridSort<ResourceGridViewModel> _stateSort = GridSort<ResourceGridViewModel>.ByAscending(p => p.Resource.State).ThenAscending(p => p.Resource, ResourceViewModelNameComparer.Instance);
-    private readonly GridSort<ResourceGridViewModel> _startTimeSort = GridSort<ResourceGridViewModel>.ByDescending(p => p.Resource.StartTimeStamp).ThenAscending(p => p.Resource, ResourceViewModelNameComparer.Instance);
-    private readonly GridSort<ResourceGridViewModel> _typeSort = GridSort<ResourceGridViewModel>.ByAscending(p => p.Resource.ResourceType).ThenAscending(p => p.Resource, ResourceViewModelNameComparer.Instance);
 
     protected override async Task OnInitializedAsync()
     {
@@ -206,19 +196,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 builder.Resources(context, hasUnhealthyResources);
             };
         });
-
-        (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(ControlsStringsLoc);
-
-        _gridColumns = [
-            new GridColumn(Name: NameColumn, DesktopWidth: "1.5fr", MobileWidth: "1.5fr"),
-            new GridColumn(Name: StateColumn, DesktopWidth: "1.25fr", MobileWidth: "1.25fr"),
-            new GridColumn(Name: StartTimeColumn, DesktopWidth: "1fr", IsVisible: () => PageViewModel.SelectedViewKind != ResourceViewKind.Parameters),
-            new GridColumn(Name: TypeColumn, DesktopWidth: "1fr", IsVisible: () => _showResourceTypeColumn),
-            new GridColumn(Name: SourceColumn, DesktopWidth: "2.25fr"),
-            new GridColumn(Name: ValueColumn, DesktopWidth: "3.25fr", MobileWidth: "1.5fr", IsVisible: () => PageViewModel.SelectedViewKind == ResourceViewKind.Parameters),
-            new GridColumn(Name: UrlsColumn, DesktopWidth: "2.25fr", MobileWidth: "2fr", IsVisible: () => PageViewModel.SelectedViewKind != ResourceViewKind.Parameters),
-            new GridColumn(Name: ActionsColumn, DesktopWidth: "minmax(150px, 1.5fr)", MobileWidth: "1fr")
-        ];
 
         _onToggleCollapseAllCallback = EventCallback.Factory.Create(this, OnToggleCollapseAll);
         _onToggleResourceTypeCallback = EventCallback.Factory.Create(this, OnToggleResourceType);
@@ -268,7 +245,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             if (ResourceErrorCountsChanged(newResourceUnviewedErrorCounts))
             {
                 _resourceUnviewedErrorCounts = newResourceUnviewedErrorCounts;
-                await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+                await RefreshGridAsync();
             }
         });
 
@@ -286,7 +263,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             }
 
             UpdateMaxHighlightedCount();
-            await _dataGrid.SafeRefreshDataAsync();
+            await RefreshGridAsync();
 
             // Listen for updates and apply.
             _resourceSubscriptionTask = Task.Run(async () =>
@@ -326,7 +303,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                     await UpdateResourceGraphResourcesAsync();
                     await InvokeAsync(async () =>
                     {
-                        await _dataGrid.SafeRefreshDataAsync();
+                        await RefreshGridAsync();
                         if (selectedResourceHasChanged)
                         {
                             // Notify page that the selected resource parameter has changed.
@@ -377,13 +354,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Check to see whether max item count should be set on every render.
-        // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<ResourceGridViewModel>.TrySetMaxItemCount(_dataGrid, 10_000))
-        {
-            StateHasChanged();
-        }
-
         if (PageViewModel.SelectedViewKind == ResourceViewKind.Graph && !_graphInitialized)
         {
             // Before any awaits, set a flag to indicate the graph is initialized. This prevents the graph being initialized multiple times.
@@ -446,32 +416,28 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             .Where(Filter);
     }
 
-    private ValueTask<GridItemsProviderResult<ResourceGridViewModel>> GetData(GridItemsProviderRequest<ResourceGridViewModel> request)
+    // Returns the flat, nesting-ordered list of resources to render in the Deck table. Mirrors the
+    // old FluentDataGrid ItemsProvider: filter, order with nested children grouped under parents,
+    // drop collapsed children and hidden resources. Default order is by type then name (interactive
+    // column sorting was intentionally dropped in the Deck redesign).
+    private List<ResourceGridViewModel> GetVisibleRows()
     {
-        // Get filtered and ordered resources.
         var filteredResources = GetFilteredResources()
+            .OrderBy(r => r.ResourceType, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
             .Select(r => new ResourceGridViewModel { Resource = r })
-            .AsQueryable();
-        filteredResources = request.ApplySorting(filteredResources);
+            .ToList();
 
-        // Rearrange resources based on parent information.
-        // This must happen after resources are ordered so nested resources are in the right order.
-        // Collapsed resources are filtered out of results.
-        var orderedResources = ResourceGridViewModel.OrderNestedResources(filteredResources.ToList(), r => _collapsedResourceNames.Contains(r.PersistentKey))
+        var orderedResources = ResourceGridViewModel.OrderNestedResources(filteredResources, r => _collapsedResourceNames.Contains(r.PersistentKey))
             .Where(r => !r.IsHidden)
             .ToList();
 
-        // Paging visible resources.
-        var query = orderedResources
-            .Skip(request.StartIndex)
-            .Take(request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount)
-            .ToList();
-
         _totalItemsCount = orderedResources.Count;
-        _totalItemsFooter.UpdateDisplayedCount(query.Count);
-
-        return ValueTask.FromResult(GridItemsProviderResult.From(query, orderedResources.Count));
+        return orderedResources;
     }
+
+    // Re-renders the Deck table from current state. Replaces the FluentDataGrid's data-refresh.
+    private Task RefreshGridAsync() => InvokeAsync(StateHasChanged);
 
     private void UpdateMenuButtons()
     {
@@ -691,11 +657,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 if (resourceViewKind != PageViewModel.SelectedViewKind)
                 {
                     PageViewModel.SelectedViewKind = resourceViewKind;
-                    await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
+                    await this.AfterViewModelChangedAsync(null, waitToApplyMobileChange: true);
                 }
             }
 
-            await _dataGrid.SafeRefreshDataAsync();
+            await RefreshGridAsync();
         }
     }
 
@@ -722,73 +688,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
 
-    private bool HasMultipleReplicas(ResourceViewModel resource)
-    {
-        var count = 0;
-        foreach (var (_, item) in _resourceByName)
-        {
-            if (item.IsResourceHidden(PageViewModel.ShowHiddenResources))
-            {
-                continue;
-            }
-
-            if (string.Equals(item.DisplayName, resource.DisplayName, StringComparisons.ResourceName))
-            {
-                count++;
-                if (count >= 2)
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    private string GetRowClass(ResourceViewModel resource)
-        => string.Equals(resource.Name, PageViewModel.SelectedResource?.Name, StringComparisons.ResourceName) ? "selected-row resource-row" : "resource-row";
-
     private async Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
     {
         await DashboardCommandExecutor.ExecuteAsync(resource, command, GetResourceName);
-    }
-
-    private static (string? Value, bool IsSensitive, bool IsUnresolved) GetParameterValue(ResourceViewModel resource)
-    {
-        var isUnresolved = !resource.IsRunningState();
-
-        if (resource.Properties.TryGetValue(KnownProperties.Parameter.Value, out var property))
-        {
-            // If unresolved, the value contains the exception message - don't show it
-            var value = isUnresolved ? null : (property.Value.HasStringValue ? property.Value.StringValue : null);
-            return (value, property.IsValueSensitive, isUnresolved);
-        }
-        return (null, false, isUnresolved);
-    }
-
-    private static string GetUrlsTooltip(ResourceViewModel resource)
-    {
-        var displayedUrls = GetDisplayedUrls(resource);
-
-        if (displayedUrls.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        if (displayedUrls.Count == 1)
-        {
-            return displayedUrls[0].Text;
-        }
-
-        var maxShownUrls = 3;
-        var tooltipBuilder = new StringBuilder(string.Join(", ", displayedUrls.Take(maxShownUrls).Select(url => url.Text)));
-
-        if (displayedUrls.Count > maxShownUrls)
-        {
-            tooltipBuilder.Append(CultureInfo.CurrentCulture, $" + {displayedUrls.Count - maxShownUrls}");
-        }
-
-        return tooltipBuilder.ToString();
     }
 
     private async Task OnToggleCollapse(ResourceGridViewModel viewModel)
@@ -807,7 +709,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
 
         await LocalStorage.SetAsync(_collapsedResourceNamesKey, _collapsedResourceNames.ToList());
-        await _dataGrid.SafeRefreshDataAsync();
+        await RefreshGridAsync();
         UpdateMenuButtons();
     }
 
@@ -834,7 +736,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
 
         await LocalStorage.SetAsync(_collapsedResourceNamesKey, _collapsedResourceNames.ToList());
-        await _dataGrid.SafeRefreshDataAsync();
+        await RefreshGridAsync();
         UpdateMenuButtons();
     }
 
@@ -842,7 +744,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         _showResourceTypeColumn = !_showResourceTypeColumn;
         await SessionStorage.SetAsync(BrowserStorageKeys.ResourcesShowResourceTypes, _showResourceTypeColumn);
-        await _dataGrid.SafeRefreshDataAsync();
+        await RefreshGridAsync();
         UpdateMenuButtons();
     }
 
@@ -861,40 +763,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         // Show the menu if there are any child resources (for collapse/expand)
         // OR if there are any hidden resources (for show/hide hidden resources)
         return HasAnyChildResources() || _resourceByName.Values.Any(r => r.IsResourceHidden(showHiddenResources: false));
-    }
-
-    private Task OnTabChangeAsync(FluentTab newTab)
-    {
-        var id = newTab.Id?.Substring("tab-".Length);
-
-        if (id is null
-            || !Enum.TryParse(typeof(ResourceViewKind), id, out var o)
-            || o is not ResourceViewKind viewKind
-            || PageViewModel.SelectedViewKind == viewKind)
-        {
-            return Task.CompletedTask;
-        }
-
-        return OnViewChangedAsync(viewKind);
-    }
-
-    private async Task OnViewChangedAsync(ResourceViewKind newView)
-    {
-        PageViewModel.SelectedViewKind = newView;
-        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
-
-        if (newView == ResourceViewKind.Graph)
-        {
-            await UpdateResourceGraphResourcesAsync();
-            await UpdateResourceGraphSelectedAsync();
-        }
-        else
-        {
-            // Refresh the data grid when switching between Table and Parameters views
-            // since the filter logic depends on the selected view
-            UpdateMaxHighlightedCount();
-            await _dataGrid.SafeRefreshDataAsync();
-        }
     }
 
     private async Task UpdateResourceGraphSelectedAsync()

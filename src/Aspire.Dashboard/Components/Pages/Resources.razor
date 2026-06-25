@@ -10,273 +10,185 @@
 <PageTitle><ApplicationName ResourceName="@nameof(Dashboard.Resources.Resources.ResourcesPageTitle)" Loc="@Loc" /></PageTitle>
 
 @{
-    var showDetailsView = PageViewModel.SelectedResource is not null;
+    var isGraph = !_hideResourceGraph && PageViewModel.SelectedViewKind == ResourceViewKind.Graph;
+    var rows = isGraph ? null : GetVisibleRows();
+    var subtitle = _loadingTcs.Task.IsCompletedSuccessfully
+        ? $"{_totalItemsCount} {Loc[nameof(Dashboard.Resources.Resources.ResourcesHeader)].Value.ToLowerInvariant()}"
+        : ControlsStringsLoc[nameof(ControlsStrings.Loading)].Value;
 }
 
-<div class="page-content-container">
-    <AspirePageContentLayout @ref="@_contentLayout" IsSummaryDetailsViewOpen="@showDetailsView">
-        <PageTitleSection>
-            <h1 class="page-header">@Loc[nameof(Dashboard.Resources.Resources.ResourcesHeader)]</h1>
-        </PageTitleSection>
+<div class="page">
+    <div class="page__header">
+        <div>
+            <div class="page__title">@Loc[nameof(Dashboard.Resources.Resources.ResourcesHeader)]</div>
+            <div class="page__subtitle">@subtitle</div>
+        </div>
+        <div class="page__header-spacer"></div>
 
-        <ToolbarSection>
-            <FluentSearch Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                          Immediate="true"
-                          ImmediateDelay="@FluentUIExtensions.InputDelay"
-                          Name="resources-search"
-                          @bind-Value="PageViewModel.TextFilter"
-                          slot="end"
-                          Label="@(ViewportInformation.IsDesktop ? null : ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value)"
-                          @bind-Value:after="HandleSearchFilterChangedAsync" />
+        <SearchBox Value="@PageViewModel.TextFilter" ValueChanged="OnSearchChangedAsync"
+                   Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]" />
 
-            <DesktopToolbarDivider />
+        <button id="resourceFilterButton" type="button"
+                class="icon-btn @(NoFiltersSet ? string.Empty : "icon-btn--active")"
+                @onclick="() => _isFilterPopupVisible = !_isFilterPopupVisible"
+                title="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])"
+                aria-label="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])">
+            <DeckIcon Name="DeckIconName.Filter" Size="17" />
+        </button>
 
-            @if (ViewportInformation.IsDesktop)
-            {
-                <FluentButton id="resourceFilterButton" slot="end"
-                              Appearance="@(NoFiltersSet ? Appearance.Stealth : Appearance.Accent)"
-                              IconEnd="@(new Icons.Regular.Size20.Filter())"
-                              @onclick="() => _isFilterPopupVisible = !_isFilterPopupVisible"
-                              Title="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])"
-                              aria-label="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])" />
+        @if (HasViewOptionsMenu())
+        {
+            <AspireMenuButton ButtonAppearance="Appearance.Stealth"
+                              Icon="@(new Icons.Regular.Size20.Options())"
+                              Items="@_resourcesMenuItems"
+                              Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)]" />
+        }
+    </div>
 
-                @if (HasViewOptionsMenu())
-                {
-                    <AspireMenuButton ButtonAppearance="Appearance.Stealth"
-                                      Icon="@(new Icons.Regular.Size20.Options())"
-                                      Items="@_resourcesMenuItems"
-                                      Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)]"
-                                      slot="end" />
-                }
-            }
-            else
-            {
-                foreach (var item in _resourcesMenuItems)
-                {
-                    <FluentButton IconStart="@item.Icon"
-                                  OnClick="@(async () => { await item.OnClick!(); _contentLayout?.CloseMobileToolbarAsync(); })"
-                                  Disabled="@item.IsDisabled">
-                        @item.Text
-                    </FluentButton>
-                }
-
-                <div>
-                    <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
-                                     ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
-                                     ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
-                                     OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
-                                     OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
+    <div class="page__body" id="resources-page-body-id">
+        @if (isGraph)
+        {
+            <div class="resource-graph-container">
+                <svg class="resource-graph"></svg>
+                <div class="resource-graph-controls">
+                    <button type="button" class="icon-btn graph-zoom-in" title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]">+</button>
+                    <button type="button" class="icon-btn graph-zoom-out" title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]">−</button>
+                    <button type="button" class="icon-btn graph-reset" title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]">⟳</button>
                 </div>
-            }
-        </ToolbarSection>
-
-        <MainSection>
-            <FluentPopover AnchorId="resourceFilterButton"
-                           @bind-Open="_isFilterPopupVisible"
-                           AutoFocus="true"
-                           FixedPlacement="true"
-                           Class="resources-filter-popup">
-                <Body>
-                    <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
-                                     ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
-                                     ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
-                                     OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
-                                     OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
-                </Body>
-            </FluentPopover>
-
-            <SummaryDetailsView DetailsTitle="@(PageViewModel.SelectedResource != null ? $"{PageViewModel.SelectedResource.ResourceType}: {GetResourceName(PageViewModel.SelectedResource)}" : null)"
-                                ShowDetails="@(showDetailsView && !ViewportInformation.IsDesktop)"
-                                OnDismiss="@(() => ClearSelectedResourceAsync(causedByUserAction: true))"
-                                SelectedValue="@PageViewModel.SelectedResource"
-                                ViewKey="ResourcesList"
-                                OnResize="@(r => _manager.SetWidthFraction(r.Orientation == Orientation.Horizontal ? r.Panel1Fraction : 1))">
-                <Summary>
-                    <div id="resources-summary-layout-id" class="resources-summary-layout">
-                        <div class="@(!_hideResourceGraph ? "resource-tabs" : string.Empty)">
-                            @*
-                                Tab content isn't nested inside FluentTab elements. The tab control is just used to display the tabs.
-                                Content is located in manually created divs so they can be placed in their own CSS grid row.
-                            *@
-                            @if (!_hideResourceGraph)
-                            {
-                                <FluentTabs Class="resources-tab-header" ActiveTabId="@($"tab-{PageViewModel.SelectedViewKind}")" OnTabChange="@OnTabChangeAsync" Size="null">
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-{ResourceViewKind.Table}")"
-                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerTableTab)]"
-                                               Icon="@(new Icons.Regular.Size24.Table())">
-                                    </FluentTab>
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-{ResourceViewKind.Parameters}")"
-                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerParametersTab)]"
-                                               Icon="@(new Icons.Regular.Size24.Key())">
-                                    </FluentTab>
-                                    <FluentTab LabelClass="tab-label"
-                                               Id="@($"tab-{ResourceViewKind.Graph}")"
-                                               aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerGraphAccessibleLabel)]"
-                                               Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerGraphTab)]"
-                                               Icon="@(new Icons.Regular.Size24.ShareAndroid())">
-                                    </FluentTab>
-                                </FluentTabs>
-                            }
-                            <div class="resources-grid-container" hidden="@(PageViewModel.SelectedViewKind == ResourceViewKind.Graph)">
-                                <GridColumnManager @ref="_manager" Columns="@_gridColumns">
-                                    <FluentDataGrid @ref="_dataGrid"
-                                                    ColumnResizeLabels="@_resizeLabels"
-                                                    ColumnSortLabels="@_sortLabels"
-                                                    HeaderCellAsButtonWithMenu="true"
-                                                    ResizeType="DataGridResizeType.Discrete"
-                                                    Virtualize="true"
-                                                    GenerateHeader="GenerateHeaderOption.Sticky"
-                                                    ItemSize="46"
-                                                    OverscanCount="100"
-                                                    ItemsProvider="@GetData"
-                                                    ResizableColumns="true"
-                                                    ResizeColumnOnAllRows="false"
-                                                    GridTemplateColumns="@_manager.GetGridTemplateColumns()"
-                                                    RowClass="@(r => GetRowClass(r.Resource))"
-                                                    Loading="!_loadingTcs.Task.IsCompleted"
-                                                    ShowHover="true"
-                                                    TGridItem="ResourceGridViewModel"
-                                                    ItemKey="@(r => r.Resource.Name)"
-                                                    OnRowClick="@(r => r.ExecuteOnDefault(d => ShowResourceDetailsAsync(d.Resource, buttonId: null)))"
-                                                    Class="main-grid enable-row-click">
-                                        <ChildContent>
-                                            <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" Sortable="true" SortBy="@_nameSort" Tooltip="true" TooltipText="@(c => $"{c.Resource.ResourceType}: {GetResourceName(c.Resource)}")" Class="expand-col">
-                                                @{
-                                                    var indent = context.Depth * 16;
-                                                }
-                                                <span class="resources-name-container" style="margin-left: @(indent)px;">
-                                                    <span @onclick:stopPropagation="true" class="main-grid-expand-container @(context.IsCollapsed ? "main-grid-collapsed" : "main-grid-expanded")">
-                                                        @if (context.Children.Count > 0)
-                                                        {
-                                                            <FluentButton aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]" Appearance="Appearance.Lightweight" Class="main-grid-expand-button" OnClick="@(() => OnToggleCollapse(context))">
-                                                                <FluentIcon Icon="Icons.Regular.Size12.ChevronRight" Color="Color.Neutral" />
-                                                            </FluentButton>
-                                                        }
-                                                    </span>
-                                                    <ResourceNameDisplay Resource="context.Resource" FilterText="@PageViewModel.TextFilter" FormatName="GetResourceName" />
-                                                </span>
-                                            </AspireTemplateColumn>
-                                            <AspireTemplateColumn ColumnId="@StateColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]" Sortable="true" SortBy="@_stateSort" Tooltip="true" TooltipText="@(c => ResourceStateViewModel.GetResourceStateTooltip(c.Resource, ColumnsLoc, _resourceByName.Values))">
-                                                <StateColumnDisplay Resource="@context.Resource" UnviewedErrorCounts="@_resourceUnviewedErrorCounts" />
-                                            </AspireTemplateColumn>
-                                            <AspireTemplateColumn ColumnId="@StartTimeColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]" Sortable="true" SortBy="@_startTimeSort" TooltipText="@(context => context.Resource.StartTimeStamp != null ? FormatHelpers.FormatDateTime(TimeProvider, context.Resource.StartTimeStamp.Value, MillisecondsDisplay.None, CultureInfo.CurrentCulture) : null)" Tooltip="true">
-                                                <StartTimeColumnDisplay Resource="@context.Resource" />
-                                            </AspireTemplateColumn>
-                                            <AspirePropertyColumn ColumnId="@TypeColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]" Property="@(c => c.Resource.ResourceType)" Sortable="true" SortBy="@_typeSort" IsDefaultSortColumn="true" Tooltip="true" TooltipText="@(c => c.Resource.ResourceType)" />
-                                            <AspireTemplateColumn ColumnId="@SourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]" Tooltip="true" TooltipText="@(ctx => ResourceSourceViewModel.GetSourceViewModel(ctx.Resource)?.Tooltip)">
-                                                @if (ResourceSourceViewModel.GetSourceViewModel(context.Resource) is { } columnDisplay)
-                                                {
-                                                    <SourceColumnDisplay FilterText="@PageViewModel.TextFilter" Value="@columnDisplay.Value" ContentAfterValue="@columnDisplay.ContentAfterValue" ValueToVisualize="@columnDisplay.ValueToVisualize" Tooltip="@columnDisplay.Tooltip" />
-                                                }
-                                                else
-                                                {
-                                                    <span class="empty-data"></span>
-                                                }
-                                            </AspireTemplateColumn>
-                                            <AspireTemplateColumn ColumnId="@ValueColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.PropertyGridValueColumnHeader)]" Tooltip="true" TooltipText="@(ctx => GetParameterValue(ctx.Resource) is var pv && (pv.IsSensitive || pv.IsUnresolved) ? null : pv.Value)">
-                                                @{
-                                                    var paramValue = GetParameterValue(context.Resource);
-                                                }
-                                                @if (paramValue.Value is not null)
-                                                {
-                                                    <GridValue Value="@paramValue.Value"
-                                                               ValueDescription="@ControlsStringsLoc[nameof(ControlsStrings.PropertyGridValueColumnHeader)]"
-                                                               EnableMasking="@paramValue.IsSensitive"
-                                                               IsMasked="@paramValue.IsSensitive" />
-                                                }
-                                                else if (paramValue.IsUnresolved)
-                                                {
-                                                    <span class="cellText" @onclick:stopPropagation="true">
-                                                        <ParameterValueDisplay Resource="context.Resource"
-                                                                               OnExecuteCommandAsync="ExecuteResourceCommandAsync"
-                                                                               IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
-                                                    </span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="empty-data"></span>
-                                                }
-                                            </AspireTemplateColumn>
-                                            <AspireTemplateColumn ColumnId="@UrlsColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesUrlsColumnHeader)]" Tooltip="true" TooltipText="@(ctx => GetUrlsTooltip(ctx.Resource))">
-                                                <UrlsColumnDisplay Resource="context.Resource"
-                                                                   HasMultipleReplicas="HasMultipleReplicas(context.Resource)"
-                                                                   DisplayedUrls="GetDisplayedUrls(context.Resource)" />
-                                            </AspireTemplateColumn>
-                                            <AspireTemplateColumn ColumnId="@ActionsColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesActionsColumnHeader)]" Class="no-ellipsis">
-                                                <div class="grid-action-container" @onclick:stopPropagation="true">
-                                                    <ResourceActions CommandSelected="async (command) => await ExecuteResourceCommandAsync(context.Resource, command)"
-                                                                     IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))"
-                                                                     OnViewDetails="@((buttonId) => ShowResourceDetailsAsync(context.Resource, buttonId))"
-                                                                     Resource="context.Resource"
-                                                                     MaxHighlightedCount="_maxHighlightedCount"
-                                                                     ResourceByName="@_resourceByName" />
-                                                </div>
-                                            </AspireTemplateColumn>
-                                        </ChildContent>
-                                        <EmptyContent>
-                                            <FluentIcon Value="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? (Icon)new Icons.Regular.Size24.Key() : new Icons.Regular.Size24.AppGeneric())" />&nbsp;@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNoParameters)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)])
-                                        </EmptyContent>
-                                    </FluentDataGrid>
-                                </GridColumnManager>
-                            </div>
-                            @if (!_hideResourceGraph)
-                            {
-                                <div class="resource-graph-container" hidden="@(PageViewModel.SelectedViewKind != ResourceViewKind.Graph)">
-                                    <svg class="resource-graph">
-                                    </svg>
-                                    <div class="resource-graph-controls">
-                                        <FluentButton Appearance="Appearance.Stealth"
-                                                      Class="graph-zoom-in"
-                                                      Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]"
-                                                      aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]">
-                                            <FluentIcon Value="new Icons.Regular.Size24.ZoomIn()" Color="Color.Accent" />
-                                        </FluentButton>
-                                        <FluentButton Appearance="Appearance.Stealth"
-                                                      Class="graph-zoom-out"
-                                                      Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]"
-                                                      aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]">
-                                            <FluentIcon Value="new Icons.Regular.Size24.ZoomOut()" Color="Color.Accent" />
-                                        </FluentButton>
-                                        <FluentButton Appearance="Appearance.Stealth"
-                                                      Class="graph-reset"
-                                                      Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]"
-                                                      aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]">
-                                            <FluentIcon Value="new Icons.Regular.Size24.ArrowReset()" Color="Color.Accent" />
-                                        </FluentButton>
-                                    </div>
-                                </div>
-                            }
-                        </div>
-                    </div>
-                    <FluentOverlay @bind-Visible="_contextMenuOpen" OnClose="ContextMenuClosed" Transparent="true" FullScreen="true" />
-                    <AspireMenu @bind-Open="_contextMenuOpen" @ref="_contextMenu" Anchor="resources-summary-layout-id" Anchored="false" Items="_contextMenuItems" />
-                </Summary>
-                <Details>
-                    <ResourceDetails Resource="context"
-                                     ResourceByName="_resourceByName"
-                                     ShowSpecOnlyToggle="true"
-                                     ShowHiddenResources="@PageViewModel.ShowHiddenResources"
-                                     CommandSelected="@(command => ExecuteResourceCommandAsync(context!, command))"
-                                     IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
-                </Details>
-            </SummaryDetailsView>
-        </MainSection>
-        <FooterSection>
-            @* Don't display footer with the resource graph *@
-            <div hidden="@(PageViewModel.SelectedViewKind == ResourceViewKind.Graph)">
-                <TotalItemsFooter @ref="_totalItemsFooter"
-                                  SingularText="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterParametersSingularText)] : Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterSingularText)])"
-                                  PluralText="@(PageViewModel.SelectedViewKind == ResourceViewKind.Parameters ? Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterParametersPluralText)] : Loc[nameof(Dashboard.Resources.Resources.TotalItemsFooterPluralText)])"
-                                  TotalItemCount="@_totalItemsCount"/>
             </div>
-        </FooterSection>
-    </AspirePageContentLayout>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="data">
+                    <thead>
+                        <tr>
+                            <th style="width: 190px;">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]</th>
+                            <th>@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]</th>
+                            @if (_showResourceTypeColumn)
+                            {
+                                <th style="width: 130px;">@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]</th>
+                            }
+                            <th>@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]</th>
+                            <th>@Loc[nameof(Dashboard.Resources.Resources.ResourcesUrlsColumnHeader)]</th>
+                            <th style="width: 130px;">@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (rows!.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="@(_showResourceTypeColumn ? 6 : 5)" class="cell-muted" style="text-align: center; padding: 28px;">
+                                    @(_loadingTcs.Task.IsCompletedSuccessfully ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)] : ControlsStringsLoc[nameof(ControlsStrings.Loading)])
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var vm in rows)
+                            {
+                                var resource = vm.Resource;
+                                var isSelected = string.Equals(resource.Name, PageViewModel.SelectedResource?.Name, StringComparisons.ResourceName);
+                                var source = ResourceSourceViewModel.GetSourceViewModel(resource);
+                                var urls = GetDisplayedUrls(resource);
+                                <tr class="clickable @(isSelected ? "selected" : "")" @key="resource.Name"
+                                    @onclick="() => ShowResourceDetailsAsync(resource, buttonId: null)">
+                                    <td>
+                                        <StateDot Tone="@ResourceStateTone.Get(resource)"
+                                                  Text="@ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc).Text"
+                                                  Health="@resource.HealthStatus?.Humanize()" />
+                                    </td>
+                                    <td>
+                                        <span class="cell-name" style="padding-left: @(vm.Depth * 16)px;">
+                                            @if (vm.Children.Count > 0)
+                                            {
+                                                <button type="button" class="row-expand @(vm.IsCollapsed ? string.Empty : "open")"
+                                                        @onclick:stopPropagation="true"
+                                                        @onclick="() => OnToggleCollapse(vm)"
+                                                        aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ToggleNesting)]">
+                                                    <DeckIcon Name="DeckIconName.Chevron" Size="14" />
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <span class="row-expand-spacer"></span>
+                                            }
+                                            <ResourceNameDisplay Resource="resource" FilterText="@PageViewModel.TextFilter" FormatName="GetResourceName" />
+                                        </span>
+                                    </td>
+                                    @if (_showResourceTypeColumn)
+                                    {
+                                        <td><span class="cell-muted">@resource.ResourceType</span></td>
+                                    }
+                                    <td>
+                                        @if (source is { } s && !string.IsNullOrEmpty(s.Value))
+                                        {
+                                            <span class="cell-muted" title="@s.Tooltip">@s.Value</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="cell-muted">—</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (urls.Count == 0)
+                                        {
+                                            <span class="cell-muted">—</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="url-list">
+                                                @foreach (var url in urls)
+                                                {
+                                                    @if (!string.IsNullOrEmpty(url.Url))
+                                                    {
+                                                        <a class="url-chip" href="@url.Url" target="_blank" rel="noreferrer noopener"
+                                                           title="@url.Url" @onclick:stopPropagation="true">
+                                                            <DeckIcon Name="DeckIconName.External" Size="11" />
+                                                            @url.Text
+                                                        </a>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="cell-muted">@url.Text</span>
+                                                    }
+                                                }
+                                            </span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="cell-muted"><StartTimeColumnDisplay Resource="resource" /></span>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
 </div>
 
-@* On desktop, resource details open in a Deck-style right-side drawer overlay instead of the
-   built-in split pane (which is still used on mobile via SummaryDetailsView above). *@
+@* Context menu for the resource graph (opened from graph nodes via JS interop). *@
+<FluentOverlay @bind-Visible="_contextMenuOpen" OnClose="ContextMenuClosed" Transparent="true" FullScreen="true" />
+<AspireMenu @bind-Open="_contextMenuOpen" @ref="_contextMenu" Anchor="resources-page-body-id" Anchored="false" Items="_contextMenuItems" />
+
+@* Filter popover (kept as-is for now; opened by the Deck filter button above). *@
+<FluentPopover AnchorId="resourceFilterButton"
+               @bind-Open="_isFilterPopupVisible"
+               AutoFocus="true"
+               FixedPlacement="true"
+               Class="resources-filter-popup">
+    <Body>
+        <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
+                         ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
+                         ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
+                         OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
+                         OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
+    </Body>
+</FluentPopover>
+
+@* On desktop, resource details open in a Deck-style right-side drawer overlay. *@
 @if (ViewportInformation.IsDesktop && PageViewModel.SelectedResource is { } selectedResource)
 {
     <ResourceDetailsDrawer Resource="selectedResource"
