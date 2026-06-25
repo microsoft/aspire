@@ -69,24 +69,17 @@ public partial class FeedbackDialog : IDisposable
 
     protected override async Task OnInitializedAsync()
     {
-        _additionalContext = FeedbackDiagnosticProvider.BuildAdditionalContext();
+        // The AppHost description is forwarded by the AppHost (DASHBOARD__APPHOST__INFO), so it is
+        // available synchronously and only included for bug reports (matching the CLI feedback
+        // command, which gathers AppHost context only for bugs).
+        _additionalContext = FeedbackDiagnosticProvider.BuildAdditionalContext(includeAppHostInfo: IssueKind == FeedbackIssueKind.Bug);
 
-        // AppHost context and `aspire doctor` output are only relevant to bug reports, and both can
-        // launch external processes: the AppHost probe runs MSBuild (or `dotnet build` for a
-        // single-file apphost.cs, which materializes/builds the app) or Node.js, and the doctor
-        // capture launches the CLI. Skip them entirely for idea/general feedback so opening that
-        // dialog never spawns a build or runtime process. This also matches the CLI feedback
-        // command, which only gathers AppHost context for bug reports.
+        // The `aspire doctor` output is only relevant to bug reports and launches the CLI, so skip it
+        // entirely for idea/general feedback to avoid spawning a process when it isn't needed.
         if (IssueKind != FeedbackIssueKind.Bug)
         {
             return;
         }
-
-        // Resolve the AppHost line out-of-band: it can require launching MSBuild or Node.js, so it
-        // must not block the synchronous environment lines from populating immediately. Remember the
-        // generated value so the result is only appended when the user hasn't edited the field.
-        var generatedContext = _additionalContext;
-        var appHostContextTask = FeedbackDiagnosticProvider.CaptureAppHostContextAsync(_captureCts.Token);
 
         _isCapturingBugContext = true;
         try
@@ -99,18 +92,6 @@ public partial class FeedbackDialog : IDisposable
         finally
         {
             _isCapturingBugContext = false;
-        }
-
-        try
-        {
-            if (await appHostContextTask.ConfigureAwait(true) is { } appHostContext &&
-                string.Equals(_additionalContext, generatedContext, StringComparison.Ordinal))
-            {
-                _additionalContext = generatedContext + appHostContext;
-            }
-        }
-        catch (OperationCanceledException) when (_captureCts.IsCancellationRequested)
-        {
         }
     }
 

@@ -309,7 +309,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task ConfigureEnvironmentVariables_HasAppHostFilePath_CopiedToDashboard()
+    public async Task ConfigureEnvironmentVariables_HasAppHostFilePath_AppHostInfoCopiedToDashboard()
     {
         var resourceLoggerService = new ResourceLoggerService();
         var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
@@ -339,7 +339,12 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
 
         await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: envVars, resource: dashboardResource));
 
-        Assert.Equal(appHostFilePath, envVars.Single(e => e.Key == DashboardConfigNames.AppHostFilePathName.EnvVarName).Value);
+        // The AppHost forwards a precomputed description (not the raw path). The SDK/package/TFM
+        // suffix depends on the running test host's assembly metadata, so assert only the stable,
+        // privacy-preserving file-name clause (never the absolute path).
+        var appHostInfo = Assert.IsType<string>(envVars.Single(e => e.Key == DashboardConfigNames.AppHostInfoName.EnvVarName).Value);
+        Assert.StartsWith("C# (`MyApp.AppHost.csproj`)", appHostInfo, StringComparison.Ordinal);
+        Assert.DoesNotContain(Path.GetDirectoryName(appHostFilePath)!, appHostInfo, StringComparison.Ordinal);
     }
 
     [Fact]

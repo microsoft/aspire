@@ -22,8 +22,7 @@ internal readonly record struct FeedbackDiagnosticProcessResult(
     string? FailureMessage);
 
 /// <summary>
-/// Runs short-lived external processes used to gather feedback diagnostics, for example
-/// <c>aspire doctor</c>, the MSBuild AppHost property probe, and <c>node --version</c>. Abstracted
+/// Runs the short-lived <c>aspire doctor</c> process used to gather feedback diagnostics. Abstracted
 /// behind an interface so the provider can be unit tested without spawning real processes.
 /// </summary>
 internal interface IFeedbackDiagnosticProcessRunner

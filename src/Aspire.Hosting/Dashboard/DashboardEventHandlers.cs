@@ -600,9 +600,15 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         context.EnvironmentVariables["ASPNETCORE_ENVIRONMENT"] = environment;
         context.EnvironmentVariables[DashboardConfigNames.ResourceServiceUrlName.EnvVarName] = resourceServiceUrl;
 
-        if (configuration["AppHost:FilePath"] is { Length: > 0 } appHostFilePath)
+        // Forward a precomputed AppHost description (language, file name, Aspire SDK/package versions,
+        // and target framework) so dashboard feedback diagnostics can report the AppHost's exact loaded
+        // versions without re-running MSBuild. The AppHost knows these precisely because it is the
+        // running app; the dashboard only reads DASHBOARD__APPHOST__INFO. See
+        // DashboardFeedbackDiagnosticProvider in Aspire.Dashboard.
+        if (configuration["AppHost:FilePath"] is { Length: > 0 } appHostFilePath &&
+            AppHostDiagnosticInfo.Describe(appHostFilePath, Assembly.GetEntryAssembly(), typeof(DashboardEventHandlers).Assembly) is { Length: > 0 } appHostInfo)
         {
-            context.EnvironmentVariables[DashboardConfigNames.AppHostFilePathName.EnvVarName] = appHostFilePath;
+            context.EnvironmentVariables[DashboardConfigNames.AppHostInfoName.EnvVarName] = appHostInfo;
         }
 
         // Forward the launching CLI's own path so dashboard feedback diagnostics invoke the exact

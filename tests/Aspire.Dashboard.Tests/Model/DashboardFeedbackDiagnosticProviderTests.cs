@@ -5,19 +5,20 @@ using Aspire.Dashboard.Model;
 using Aspire.Hosting;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class DashboardFeedbackDiagnosticProviderTests
 {
+    private const string SampleAppHostInfo = "C# (`MyApp.AppHost.csproj`) using Aspire.AppHost.Sdk 13.5.0 and Aspire.Hosting.AppHost 9.0.0 targeting `net10.0`";
+
     [Fact]
-    public void BuildAdditionalContext_IncludesEnvironmentLinesOnly()
+    public void BuildAdditionalContext_WithoutAppHostInfo_IncludesEnvironmentLinesOnly()
     {
         var provider = CreateProvider(new ConfigurationBuilder().Build());
 
-        var result = provider.BuildAdditionalContext();
+        var result = provider.BuildAdditionalContext(includeAppHostInfo: false);
 
         Assert.Collection(GetNonEmptyLines(result),
             line => Assert.StartsWith("- Posted from: Dashboard", line, StringComparison.Ordinal),
@@ -27,156 +28,53 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
     }
 
     [Fact]
-    public async Task CaptureAppHostContextAsync_NoAppHostFilePath_ReturnsNull()
+    public void BuildAdditionalContext_IncludeAppHostInfoAndConfigured_AppendsAppHostLine()
+    {
+        var provider = CreateProvider(CreateAppHostInfoConfiguration(SampleAppHostInfo));
+
+        var result = provider.BuildAdditionalContext(includeAppHostInfo: true);
+
+        Assert.Collection(GetNonEmptyLines(result),
+            line => Assert.StartsWith("- Posted from: Dashboard", line, StringComparison.Ordinal),
+            line => Assert.StartsWith("- Aspire version:", line, StringComparison.Ordinal),
+            line => Assert.StartsWith("- Operating system:", line, StringComparison.Ordinal),
+            line => Assert.Equal("- Dashboard route: /resources", line),
+            line => Assert.Equal($"- AppHost: {SampleAppHostInfo}", line));
+    }
+
+    [Fact]
+    public void BuildAdditionalContext_AppHostInfoConfiguredButNotRequested_OmitsAppHostLine()
+    {
+        var provider = CreateProvider(CreateAppHostInfoConfiguration(SampleAppHostInfo));
+
+        var result = provider.BuildAdditionalContext(includeAppHostInfo: false);
+
+        Assert.DoesNotContain("- AppHost:", result, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildAdditionalContext_IncludeAppHostInfoButNotConfigured_OmitsAppHostLine()
     {
         var provider = CreateProvider(new ConfigurationBuilder().Build());
 
-        var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
+        var result = provider.BuildAdditionalContext(includeAppHostInfo: true);
 
-        Assert.Null(result);
+        Assert.DoesNotContain("- AppHost:", result, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task CaptureAppHostContextAsync_ConfiguredMissingAppHostFile_ReturnsNull()
+    public void BuildAdditionalContext_DropsQueryStringFromDashboardRoute()
     {
-        using var tempDirectory = new TemporaryDirectory();
-        var provider = CreateProvider(CreateConfiguration(Path.Combine(tempDirectory.Path, "missing.csproj")));
+        // The route can carry user-specific filters (resource names, log filters) that must not leak
+        // into a public issue, so only the page identity is kept.
+        var provider = CreateProvider(
+            new ConfigurationBuilder().Build(),
+            currentUri: "http://localhost/structuredlogs?resource=customer-api&filters=secret-value");
 
-        var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
+        var result = provider.BuildAdditionalContext(includeAppHostInfo: false);
 
-        Assert.Null(result);
-    }
-
-    [Fact]
-    public async Task CaptureAppHostContextAsync_CSharpProjectAppHost_UsesMSBuildAndIncludesSdkPackageAndTargetFramework()
-    {
-        using var tempDirectory = new TemporaryDirectory();
-        var appHostPath = Path.Combine(tempDirectory.Path, "MyApp.AppHost.csproj");
-        File.WriteAllText(appHostPath, "<Project />");
-        var runner = new FakeFeedbackDiagnosticProcessRunner((fileName, _) => Success("""
-            {
-              "Properties": {
-                "AspireHostingSDKVersion": "13.5.0-preview.1.26319.9",
-                "TargetFramework": "net10.0"
-              },
-              "Items": {
-                "PackageReference": [
-                  { "Identity": "Aspire.Hosting.AppHost", "Version": "9.0.0" }
-                ]
-              }
-            }
-            """));
-        var provider = CreateProvider(CreateConfiguration(appHostPath), runner);
-
-        var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
-
-        Assert.Equal($"- AppHost: C# (`{Path.GetFileName(appHostPath)}`) using Aspire.AppHost.Sdk 13.5.0-preview.1.26319.9 and Aspire.Hosting.AppHost 9.0.0 targeting `net10.0`{Environment.NewLine}", result);
-        var invocation = Assert.Single(runner.Invocations);
-        Assert.Equal("dotnet", invocation.FileName);
-        Assert.Equal("msbuild", invocation.Arguments[0]);
-        Assert.Equal(Path.GetDirectoryName(appHostPath), invocation.WorkingDirectory);
-    }
-
-    [Fact]
-    public async Task CaptureAppHostContextAsync_CSharpProjectAppHost_CentralPackageManagement_UsesPackageVersion()
-    {
-        using var tempDirectory = new TemporaryDirectory();
-        var appHostPath = Path.Combine(tempDirectory.Path, "MyApp.AppHost.csproj");
-        File.WriteAllText(appHostPath, "<Project />");
-        var runner = new FakeFeedbackDiagnosticProcessRunner((_, _) => Success("""
-            {
-              "Properties": {
-                "AspireHostingSDKVersion": "13.5.0",
-                "TargetFramework": "net10.0"
-              },
-              "Items": {
-                "PackageReference": [
-                  { "Identity": "Aspire.Hosting.AppHost" }
-                ],
-                "PackageVersion": [
-                  { "Identity": "Aspire.Hosting.AppHost", "Version": "9.1.0" }
-                ]
-              }
-            }
-            """));
-        var provider = CreateProvider(CreateConfiguration(appHostPath), runner);
-
-        var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
-
-        Assert.Equal($"- AppHost: C# (`{Path.GetFileName(appHostPath)}`) using Aspire.AppHost.Sdk 13.5.0 and Aspire.Hosting.AppHost 9.1.0 targeting `net10.0`{Environment.NewLine}", result);
-    }
-
-    [Fact]
-    public async Task CaptureAppHostContextAsync_CSharpSingleFileAppHost_UsesBuildDriver()
-    {
-        using var tempDirectory = new TemporaryDirectory();
-        var appHostPath = Path.Combine(tempDirectory.Path, "apphost.cs");
-        File.WriteAllText(appHostPath, "var builder = DistributedApplication.CreateBuilder(args);");
-        var runner = new FakeFeedbackDiagnosticProcessRunner((_, _) => Success("""
-            {
-              "Properties": {
-                "AspireHostingSDKVersion": "13.5.0",
-                "TargetFramework": "net10.0"
-              },
-              "Items": {}
-            }
-            """));
-        var provider = CreateProvider(CreateConfiguration(appHostPath), runner);
-
-        var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
-
-        Assert.Equal($"- AppHost: C# (`{Path.GetFileName(appHostPath)}`) using Aspire.AppHost.Sdk 13.5.0 targeting `net10.0`{Environment.NewLine}", result);
-        var invocation = Assert.Single(runner.Invocations);
-        Assert.Equal("build", invocation.Arguments[0]);
-    }
-
-    [Fact]
-    public async Task CaptureAppHostContextAsync_CSharpProjectAppHost_MSBuildProbeFails_FallsBackToPathOnly()
-    {
-        using var tempDirectory = new TemporaryDirectory();
-        var appHostPath = Path.Combine(tempDirectory.Path, "MyApp.AppHost.csproj");
-        File.WriteAllText(appHostPath, "<Project />");
-        var runner = new FakeFeedbackDiagnosticProcessRunner((_, _) =>
-            new FeedbackDiagnosticProcessResult(Started: true, ExitCode: 1, StandardOutput: string.Empty, TimedOut: false, FailureMessage: null));
-        var provider = CreateProvider(CreateConfiguration(appHostPath), runner);
-
-        var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
-
-        Assert.Equal($"- AppHost: C# (`{Path.GetFileName(appHostPath)}`){Environment.NewLine}", result);
-    }
-
-    [Fact]
-    public async Task CaptureAppHostContextAsync_TypeScriptAppHost_IncludesNodeVersionFromPath()
-    {
-        using var tempDirectory = new TemporaryDirectory();
-        var appHostPath = Path.Combine(tempDirectory.Path, "apphost.mts");
-        File.WriteAllText(appHostPath, "await createBuilder();");
-        var runner = new FakeFeedbackDiagnosticProcessRunner((fileName, arguments) =>
-        {
-            Assert.Equal("node", fileName);
-            Assert.Equal("--version", arguments[0]);
-            return Success("v24.15.0\n");
-        });
-        var provider = CreateProvider(CreateConfiguration(appHostPath), runner);
-
-        var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
-
-        Assert.Equal($"- AppHost: TypeScript (`{Path.GetFileName(appHostPath)}`) on Node.js v24.15.0{Environment.NewLine}", result);
-    }
-
-    [Fact]
-    public async Task CaptureAppHostContextAsync_TypeScriptAppHost_NodeUnavailable_OmitsNodeVersion()
-    {
-        using var tempDirectory = new TemporaryDirectory();
-        var appHostPath = Path.Combine(tempDirectory.Path, "apphost.ts");
-        File.WriteAllText(appHostPath, "await createBuilder();");
-        var runner = new FakeFeedbackDiagnosticProcessRunner((_, _) =>
-            new FeedbackDiagnosticProcessResult(Started: false, ExitCode: -1, StandardOutput: string.Empty, TimedOut: false, FailureMessage: "node not found"));
-        var provider = CreateProvider(CreateConfiguration(appHostPath), runner);
-
-        var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
-
-        Assert.Equal($"- AppHost: TypeScript (`{Path.GetFileName(appHostPath)}`){Environment.NewLine}", result);
+        var routeLine = Assert.Single(GetNonEmptyLines(result), line => line.StartsWith("- Dashboard route:", StringComparison.Ordinal));
+        Assert.Equal("- Dashboard route: /structuredlogs", routeLine);
     }
 
     [Fact]
@@ -231,42 +129,6 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
     }
 
     [Fact]
-    public void BuildAdditionalContext_DropsQueryStringFromDashboardRoute()
-    {
-        // The route can carry user-specific filters (resource names, log filters) that must not leak
-        // into a public issue, so only the page identity is kept.
-        var provider = CreateProvider(
-            new ConfigurationBuilder().Build(),
-            currentUri: "http://localhost/structuredlogs?resource=customer-api&filters=secret-value");
-
-        var result = provider.BuildAdditionalContext();
-
-        var routeLine = Assert.Single(GetNonEmptyLines(result), line => line.StartsWith("- Dashboard route:", StringComparison.Ordinal));
-        Assert.Equal("- Dashboard route: /structuredlogs", routeLine);
-    }
-
-    [Fact]
-    public async Task CaptureAppHostContextAsync_DoesNotLeakAbsoluteAppHostDirectory()
-    {
-        using var tempDirectory = new TemporaryDirectory();
-        var appHostPath = Path.Combine(tempDirectory.Path, "MyApp.AppHost.csproj");
-        File.WriteAllText(appHostPath, "<Project />");
-        var runner = new FakeFeedbackDiagnosticProcessRunner((_, _) => Success("""
-            {
-              "Properties": { "AspireHostingSDKVersion": "13.5.0", "TargetFramework": "net10.0" },
-              "Items": {}
-            }
-            """));
-        var provider = CreateProvider(CreateConfiguration(appHostPath), runner);
-
-        var result = await provider.CaptureAppHostContextAsync(CancellationToken.None);
-
-        Assert.NotNull(result);
-        Assert.Contains("MyApp.AppHost.csproj", result, StringComparison.Ordinal);
-        Assert.DoesNotContain(tempDirectory.Path, result, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task CaptureAspireDoctorOutputAsync_UsesConfiguredCliPath_WhenSet()
     {
         var cliPath = Path.Combine("C:\\", "tools", "aspire", "aspire.exe");
@@ -305,15 +167,14 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
         return new DashboardFeedbackDiagnosticProvider(
             new TestNavigationManager(currentUri),
             configuration,
-            processRunner ?? new FakeFeedbackDiagnosticProcessRunner((_, _) => Success(string.Empty)),
-            NullLogger<DashboardFeedbackDiagnosticProvider>.Instance);
+            processRunner ?? new FakeFeedbackDiagnosticProcessRunner((_, _) => Success(string.Empty)));
     }
 
-    private static IConfiguration CreateConfiguration(string appHostPath)
+    private static IConfiguration CreateAppHostInfoConfiguration(string appHostInfo)
     {
         return new ConfigurationBuilder()
             .AddInMemoryCollection([
-                new KeyValuePair<string, string?>(DashboardConfigNames.AppHostFilePathName.ConfigKey, appHostPath)
+                new KeyValuePair<string, string?>(DashboardConfigNames.AppHostInfoName.ConfigKey, appHostInfo)
             ])
             .Build();
     }
@@ -349,24 +210,6 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
         public TestNavigationManager(string currentUri = "http://localhost/resources")
         {
             Initialize("http://localhost/", currentUri);
-        }
-    }
-
-    private sealed class TemporaryDirectory : IDisposable
-    {
-        public TemporaryDirectory()
-        {
-            Path = Directory.CreateTempSubdirectory("dashboard-feedback-").FullName;
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            if (Directory.Exists(Path))
-            {
-                Directory.Delete(Path, recursive: true);
-            }
         }
     }
 }

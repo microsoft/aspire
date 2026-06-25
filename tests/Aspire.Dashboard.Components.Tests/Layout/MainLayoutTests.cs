@@ -461,13 +461,13 @@ public partial class MainLayoutTests : DashboardTestContext
                 SecondaryAction = null
             });
 
-        // The AppHost probe (MSBuild/Node.js) and the `aspire doctor` capture both spawn external
-        // processes, so they must only run for bug reports. Idea/general feedback must leave both
-        // capture counts at zero.
+        // The AppHost description and the `aspire doctor` capture are only relevant to bug reports:
+        // the dialog requests the AppHost line (includeAppHostInfo) and launches the doctor capture
+        // (which spawns the CLI) only for bugs. Idea/general feedback must leave both counts at zero.
         cut.WaitForAssertion(() =>
         {
             Assert.True(cut.HasComponent<FeedbackDialog>());
-            Assert.Equal(expectedCaptures, diagnosticProvider.AppHostContextCaptureCount);
+            Assert.Equal(expectedCaptures, diagnosticProvider.AppHostInfoRequestedCount);
             Assert.Equal(expectedCaptures, diagnosticProvider.DoctorOutputCaptureCount);
         });
     }
@@ -760,16 +760,18 @@ public partial class MainLayoutTests : DashboardTestContext
 
     private sealed class TestDashboardFeedbackDiagnosticProvider(string doctorOutput, string additionalContext) : IDashboardFeedbackDiagnosticProvider
     {
-        public int AppHostContextCaptureCount { get; private set; }
+        public int AppHostInfoRequestedCount { get; private set; }
 
         public int DoctorOutputCaptureCount { get; private set; }
 
-        public string BuildAdditionalContext() => additionalContext;
-
-        public Task<string?> CaptureAppHostContextAsync(CancellationToken cancellationToken)
+        public string BuildAdditionalContext(bool includeAppHostInfo)
         {
-            AppHostContextCaptureCount++;
-            return Task.FromResult<string?>(null);
+            if (includeAppHostInfo)
+            {
+                AppHostInfoRequestedCount++;
+            }
+
+            return additionalContext;
         }
 
         public Task<string> CaptureAspireDoctorOutputAsync(CancellationToken cancellationToken)
@@ -783,9 +785,7 @@ public partial class MainLayoutTests : DashboardTestContext
     {
         private readonly TaskCompletionSource<string> _doctorOutputTaskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public string BuildAdditionalContext() => "- Posted from: Dashboard";
-
-        public Task<string?> CaptureAppHostContextAsync(CancellationToken cancellationToken) => Task.FromResult<string?>(null);
+        public string BuildAdditionalContext(bool includeAppHostInfo) => "- Posted from: Dashboard";
 
         public Task<string> CaptureAspireDoctorOutputAsync(CancellationToken cancellationToken) =>
             _doctorOutputTaskCompletionSource.Task.WaitAsync(cancellationToken);

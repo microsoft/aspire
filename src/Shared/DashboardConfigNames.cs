@@ -47,7 +47,7 @@ internal static class DashboardConfigNames
     public static readonly ConfigName DebugSessionTokenName = new("Dashboard:DebugSession:Token", "DASHBOARD__DEBUGSESSION__TOKEN");
     public static readonly ConfigName DebugSessionDcpInstanceIdName = new("Dashboard:DebugSession:DcpInstanceId", "DASHBOARD__DEBUGSESSION__DCPINSTANCEID");
     public static readonly ConfigName DebugSessionTelemetryOptOutName = new("Dashboard:DebugSession:TelemetryOptOut", "DASHBOARD__DEBUGSESSION__TELEMETRYOPTOUT");
-    public static readonly ConfigName AppHostFilePathName = new("Dashboard:AppHost:FilePath", "DASHBOARD__APPHOST__FILEPATH");
+    public static readonly ConfigName AppHostInfoName = new("Dashboard:AppHost:Info", "DASHBOARD__APPHOST__INFO");
     public static readonly ConfigName CliPathName = new("Dashboard:Cli:Path", "DASHBOARD__CLI__PATH");
     public static readonly ConfigName UIDisableResourceGraphName = new("Dashboard:UI:DisableResourceGraph", "DASHBOARD__UI__DISABLERESOURCEGRAPH");
     public static readonly ConfigName UIDisableImportName = new("Dashboard:UI:DisableImport", "DASHBOARD__UI__DISABLEIMPORT");
