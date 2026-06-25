@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using System.Reflection;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -217,6 +218,52 @@ public partial class ResourcesTests : DashboardTestContext
         var focusInvocation = JSInterop.Invocations.Single(i => i.Identifier == "focusElement");
         Assert.Equal("resourcesGraphContainer", focusInvocation.Arguments[0]);
         Assert.Equal(true, focusInvocation.Arguments[1]);
+    }
+
+    [Fact]
+    public async Task ResourceGraphContextMenu_MenuCloseCompletesBrowserCallback()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resource = CreateResource(
+            "Resource1",
+            "Type1",
+            "Running",
+            ImmutableArray.Create(new HealthReportViewModel("Null", null, "Description1", null)));
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [resource], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(
+            this,
+            viewport,
+            dashboardClient);
+
+        var resourceGraphModule = JSInterop.SetupModule("/js/app-resourcegraph.js");
+        resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true);
+        resourceGraphModule.SetupVoid("updateResourcesGraph", _ => true);
+        resourceGraphModule.SetupVoid("selectResource", _ => true);
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ResourcesUrl(view: "Graph"));
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        var showContextMenuAsync = typeof(Components.Pages.Resources)
+            .GetMethod("ShowContextMenuAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        Task? showContextMenuTask = null;
+        await cut.InvokeAsync(() =>
+        {
+            showContextMenuTask = (Task)showContextMenuAsync.Invoke(cut.Instance, [resource, 1024, 768, 20, 20])!;
+        });
+        Assert.NotNull(showContextMenuTask);
+        cut.WaitForAssertion(() => Assert.True(cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored).Instance.Open));
+
+        var contextMenu = cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored);
+        await cut.InvokeAsync(() => contextMenu.Instance.OpenChanged.InvokeAsync(false));
+
+        await showContextMenuTask.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.False(cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored).Instance.Open);
     }
 
     [Fact]
