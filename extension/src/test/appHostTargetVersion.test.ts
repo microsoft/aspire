@@ -266,6 +266,14 @@ suite('appHostTargetVersion', () => {
         assert.strictEqual(await getAppHostTargetVersion(dir), 'multiple');
     });
 
+    test('buckets mixed known and unknown project SDK versions from a directory as multiple', async () => {
+        const dir = makeTempDir();
+        writeFileSync(join(dir, 'Versioned.AppHost.csproj'), '<Project Sdk="Aspire.AppHost.Sdk/13.6.0" />');
+        writeFileSync(join(dir, 'Unversioned.AppHost.csproj'), '<Project Sdk="Aspire.AppHost.Sdk" />');
+
+        assert.strictEqual(await getAppHostTargetVersion(dir), 'multiple');
+    });
+
     test('reads the C# single-file SDK directive version', async () => {
         const dir = makeTempDir();
         const appHostPath = join(dir, 'apphost.cs');

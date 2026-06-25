@@ -511,7 +511,7 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             await waitFor(() => fake.events.some(event => event.name === 'debug/apphost/start'));
             const startEvent = fake.events.find(event => event.name === 'debug/apphost/start');
             assert.ok(startEvent);
-            assert.strictEqual(startEvent.properties?.apphost_language, 'unknown');
+            assert.strictEqual(startEvent.properties?.apphost_language, 'typescript');
             assert.strictEqual(Object.prototype.hasOwnProperty.call(startEvent.properties ?? {}, 'apphost_target_version'), false);
 
             const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });

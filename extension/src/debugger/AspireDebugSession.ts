@@ -217,9 +217,12 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     this._appHostStartTimeMs = Date.now();
     this._appHostModeAtLaunch = noDebug ? 'run' : 'debug';
     // Before the filesystem probe below, the file extension is the only language
-    // signal available. Directory-launched AppHosts report `unknown` on start
-    // telemetry and are enriched on the matching end event.
-    this._appHostLanguageAtLaunch = classifyAppHostPath(appHostPath);
+    // signal available. Prefer the resolved telemetry target when a default
+    // workspace launch already selected a concrete AppHost.
+    const appHostTelemetryTargetLanguage = classifyAppHostPath(appHostTelemetryTargetPath);
+    this._appHostLanguageAtLaunch = appHostTelemetryTargetLanguage !== 'unknown'
+      ? appHostTelemetryTargetLanguage
+      : classifyAppHostPath(appHostPath);
     this._appHostTargetVersionAtLaunch = 'unknown';
     this._appHostTargetVersionAtLaunchPromise = this.resolveAppHostTargetVersionAtLaunch(appHostTelemetryTargetPath ?? appHostPath);
     this._appHostIsDirectoryAtLaunch = 'unknown';

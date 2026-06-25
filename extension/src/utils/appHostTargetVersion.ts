@@ -101,9 +101,15 @@ async function getAppHostTargetVersionFromDirectory(directoryPath: string): Prom
 
     const versions = new Set<string>();
     let sawCSharpAppHostFile = false;
+    let sawUnversionedCSharpAppHostFile = false;
     for (const result of versionResults) {
         sawCSharpAppHostFile ||= result.isCSharpAppHostFile;
+        sawUnversionedCSharpAppHostFile ||= result.isCSharpAppHostFile && result.version === undefined;
         addVersion(versions, result.version);
+    }
+
+    if (versions.size > 0 && sawUnversionedCSharpAppHostFile) {
+        versions.add(unknownVersion);
     }
 
     const summary = summarizeVersions(versions);
