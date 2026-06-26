@@ -419,7 +419,21 @@ jobs:
                   TEST_UNKNOWN_COUNT=$((TEST_UNKNOWN_COUNT + 1))
                 fi
 
-                # Upload to asciinema with retry logic for transient failures
+                # Upload to asciinema with retry logic for transient failures.
+                # On failure we echo the captured asciinema output so post-mortems can
+                # distinguish an asciinema.org outage (HTTP 5xx, connection errors) from
+                # a client-side problem (rejected cast format, auth, rate limit, etc.).
+                # Without this the logs only say "Upload attempt N failed", which forces
+                # guessing about whether the issue is upstream or in our pipeline.
+                #
+                # SECURITY: this workflow runs in the elevated workflow_run context
+                # (pull-requests: write) and processes .cast artifacts that originate
+                # from PR builds, including fork PRs. asciinema's error output could
+                # echo back attacker-controlled bytes from a malicious .cast file.
+                # Wrap the echo in ::stop-commands::<token>...::<token>:: so the runner
+                # does not interpret any '::workflow-command::' sequences (set-output,
+                # add-mask, add-path, etc.) the output happens to contain.
+                # See https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions#stopping-and-starting-workflow-commands
                 ASCIINEMA_URL=""
                 for attempt in $(seq 1 "$MAX_UPLOAD_RETRIES"); do
                   UPLOAD_OUTPUT=$(asciinema upload "$castfile" 2>&1) || true
@@ -427,9 +441,14 @@ jobs:
                   if [ -n "$ASCIINEMA_URL" ]; then
                     break
                   fi
+                  STOP_TOKEN=$(uuidgen)
+                  echo "Upload attempt $attempt failed. asciinema output:"
+                  echo "::stop-commands::${STOP_TOKEN}"
+                  echo "$UPLOAD_OUTPUT" | sed 's/^/  /'
+                  echo "::${STOP_TOKEN}::"
                   if [ "$attempt" -lt "$MAX_UPLOAD_RETRIES" ]; then
                     DELAY=$((attempt * RETRY_BASE_DELAY_SECONDS))
-                    echo "Upload attempt $attempt failed, retrying in ${DELAY}s..."
+                    echo "Retrying in ${DELAY}s..."
                     sleep "$DELAY"
                   fi
                 done

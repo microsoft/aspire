@@ -49,12 +49,13 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         IPackagingService packagingService,
         IProcessExecutionFactory processExecutionFactory,
         ILogger<DotNetBasedAppHostServerProject> logger,
+        IEnvironment environment,
         string? projectModelPath = null,
         string? logFilePath = null)
     {
         _appPath = Path.GetFullPath(appPath);
         _appPath = new Uri(_appPath).LocalPath;
-        _appPath = OperatingSystem.IsWindows() ? _appPath.ToLowerInvariant() : _appPath;
+        _appPath = CliPathHelper.NormalizePathCasing(_appPath, environment);
         _socketPath = socketPath;
         _repoRoot = Path.GetFullPath(repoRoot) + Path.DirectorySeparatorChar;
         _dotNetCliRunner = dotNetCliRunner;
@@ -505,7 +506,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         // Dev mode uses debug builds which require Development environment
         // for the dashboard to resolve static web assets correctly
-        startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+        startInfo.Environment[KnownAspNetCoreConfigNames.Environment] = "Development";
 
         // Wire WithTerminal() for guest/polyglot AppHosts running from the repo. The
         // generated AppHostServer references Aspire.Hosting from the repo and DCP resolves

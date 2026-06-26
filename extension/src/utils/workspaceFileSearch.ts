@@ -26,6 +26,10 @@ const commonExcludePatterns = [
     '**/.vscode-test/**',
     '**/.worktrees/**',
     '**/.claude/**',
+    '**/.agents/**',
+    // .github and .opencode hold more than skills, so exclude only the skill subpaths.
+    '**/.github/skills/**',
+    '**/.opencode/skill/**',
     '**/.idea/**',
     '**/.git/**',
     '**/.angular/**',
@@ -46,6 +50,11 @@ const appHostDiscoveryExcludeRules: readonly SegmentExcludeRule[] = [
     // whole tool directory as generated workspace state so discovery doesn't recurse into
     // dozens of nested repo copies and spawn a storm of file-search processes.
     { glob: '**/.claude/**', segments: ['.claude'] },
+    // Agent skill snippets ship apphost.* samples that are not runnable AppHosts. .github/.opencode
+    // hold more than skills, so match only the skill subpath.
+    { glob: '**/.agents/**', segments: ['.agents'] },
+    { glob: '**/.github/skills/**', segments: ['.github', 'skills'] },
+    { glob: '**/.opencode/skill/**', segments: ['.opencode', 'skill'] },
     { glob: '**/.idea/**', segments: ['.idea'] },
     { glob: '**/.aspire/modules/**', segments: ['.aspire', 'modules'] },
 ];
@@ -62,9 +71,17 @@ export function getAppHostDiscoveryExcludeGlob(): string {
 }
 
 export function isExcludedDiscoveryUri(workspaceFolder: vscode.WorkspaceFolder, uri: vscode.Uri): boolean {
+    return isExcludedDiscoveryPath(workspaceFolder, uri, true);
+}
+
+export function isExcludedDiscoveryCandidate(workspaceFolder: vscode.WorkspaceFolder, uri: vscode.Uri): boolean {
+    return isExcludedDiscoveryPath(workspaceFolder, uri, false);
+}
+
+function isExcludedDiscoveryPath(workspaceFolder: vscode.WorkspaceFolder, uri: vscode.Uri, excludeOutsideWorkspace: boolean): boolean {
     const relativePath = path.relative(workspaceFolder.uri.fsPath, uri.fsPath);
     if (relativePath === '' || relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-        return true;
+        return excludeOutsideWorkspace;
     }
 
     const segments = relativePath.split(/[\\/]+/).map(segment => segment.toLowerCase());

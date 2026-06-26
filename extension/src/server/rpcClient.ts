@@ -22,13 +22,11 @@ export type ValidationResult = {
 export class RpcClient implements ICliRpcClient {
     private _messageConnection: MessageConnection;
     private _connectionClosed: boolean;
-    private _terminalProvider: AspireTerminalProvider;
 
     public debugSessionId: string | null;
     public interactionService: IInteractionService;
 
     constructor(terminalProvider: AspireTerminalProvider, messageConnection: MessageConnection, debugSessionId: string | null, getAspireDebugSession: () => AspireDebugSession | null, globalState?: vscode.Memento) {
-        this._terminalProvider = terminalProvider;
         this._messageConnection = messageConnection;
         this._connectionClosed = false;
         this.debugSessionId = debugSessionId;

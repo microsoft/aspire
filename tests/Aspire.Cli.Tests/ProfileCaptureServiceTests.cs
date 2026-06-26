@@ -58,7 +58,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             [
                 "dashboard",
-                $"--{KnownConfigNames.AspNetCoreUrls}={options.DashboardUrl}",
+                $"--{KnownAspNetCoreConfigNames.Urls}={options.DashboardUrl}",
                 $"--{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}={options.OtlpGrpcUrl}",
                 $"--{KnownConfigNames.DashboardOtlpHttpEndpointUrl}={options.OtlpHttpUrl}",
                 $"--{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true",

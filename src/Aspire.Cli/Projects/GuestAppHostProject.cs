@@ -903,7 +903,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             if (profileElement.Value.TryGetProperty("applicationUrl", out var appUrl) &&
                 appUrl.ValueKind == JsonValueKind.String)
             {
-                result["ASPNETCORE_URLS"] = appUrl.GetString()!;
+                result[KnownAspNetCoreConfigNames.Urls] = appUrl.GetString()!;
             }
 
             // Read environment variables
@@ -956,7 +956,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         if (!string.IsNullOrEmpty(profile.ApplicationUrl))
         {
-            result["ASPNETCORE_URLS"] = profile.ApplicationUrl;
+            result[KnownAspNetCoreConfigNames.Urls] = profile.ApplicationUrl;
         }
 
         if (profile.EnvironmentVariables is not null)
@@ -1264,7 +1264,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             catch (SocketException ex) when (serverSession.HasServerExited == true && !cancellationToken.IsCancellationRequested)
             {
                 var exitCode = serverSession.TryGetServerExitCode() ?? -1;
-                _logger.LogError("AppHost server process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", exitCode, socketPath);
+                // Log at Debug level - this is expected when AppHost crashes during startup.
+                // The real error is in the AppHost output, not this connection-level detail.
+                _logger.LogDebug("AppHost server process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", exitCode, socketPath);
                 var message = exitCode == CliExitCodes.Success
                     ? "AppHost server process has exited"
                     : "AppHost server process has exited unexpectedly";

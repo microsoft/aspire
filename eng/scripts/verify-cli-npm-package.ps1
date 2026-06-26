@@ -178,6 +178,10 @@ try {
     throw "Pointer package must expose the aspire bin at bin/aspire.js."
   }
 
+  if (-not $pointerPackageJson.scripts -or $pointerPackageJson.scripts.postinstall -ne 'node bin/aspire.js --npm-postinstall-check') {
+    throw "Pointer package must verify the native RID package during postinstall."
+  }
+
   if (-not (Test-Path -LiteralPath (Join-Path $pointerExtract 'package/bin/aspire.js'))) {
     throw "Pointer package is missing bin/aspire.js."
   }
