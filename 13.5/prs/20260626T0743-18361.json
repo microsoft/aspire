@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "VS Code extension dashboard browser launch made opt-in by default, new aspire.dashboardBrowser setting added",
+  "mergedAt": "2026-06-26T07:43:09Z",
+  "number": 18361,
+  "runDate": "2026-06-26T12:41:32Z",
+  "status": "included",
+  "title": "Make dashboard launch opt-in by default"
+}

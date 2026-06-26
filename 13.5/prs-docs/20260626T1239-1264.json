@@ -1,0 +1,9 @@
+{
+  "author": "Waleed-KH",
+  "comment": "Updates Azure Cache for Redis docs to use RedisEnterprise API; no matching changelog entry found for a new feature in this milestone",
+  "mergedAt": "2026-06-26T12:39:46Z",
+  "number": 1264,
+  "runDate": "2026-06-26T12:41:32Z",
+  "status": "excluded",
+  "title": "Fix Azure Redis generated Bicep and customize infrastructure api"
+}
