@@ -6,7 +6,7 @@ namespace Aspire.Hosting.Maui;
 /// <summary>
 /// Well-known MSBuild property names used when launching MAUI platform resources.
 /// </summary>
-internal static class MauiMSBuildProperties
+internal static class KnownMauiMSBuildProperties
 {
     /// <summary>
     /// MSBuild property that selects which Android device or emulator <c>dotnet run</c> targets.
