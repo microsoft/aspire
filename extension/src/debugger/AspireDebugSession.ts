@@ -827,7 +827,9 @@ function delay(ms: number): Promise<void> {
 
 function getAspireCliPathFromEnvironment(environment: EnvVar[]): string | undefined {
   const aspireCliPathKey = aspireCliPathEnvironmentVariableName.toLowerCase();
-  return environment.find(variable => variable.name.toLowerCase() === aspireCliPathKey)?.value;
+  const value = environment.find(variable => variable.name.toLowerCase() === aspireCliPathKey)?.value?.trim();
+
+  return value || undefined;
 }
 
 export function buildAspireCommandArgs(command: string, commandArgs: string[], extensionArgs: string[]): string[] {

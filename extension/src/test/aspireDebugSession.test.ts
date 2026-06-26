@@ -238,6 +238,57 @@ suite('AspireDebugSession tests', () => {
         }
     });
 
+    test('uses current resolved CLI identity for AppHost debug build when launched identity is blank', async () => {
+        const currentResolvedCliPath = '/usr/local/bin/aspire';
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/AppHost/AppHost.csproj',
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const terminalProvider = {
+            getAspireCliExecutablePath: sinon.stub().resolves(currentResolvedCliPath),
+            isDebugConfigEnvironmentLoggingEnabled: () => false,
+        };
+        let msBuildEnv: { name: string; value: string }[] | undefined;
+        const callbackStub = sinon.stub(projectDebuggerExtension, 'createDebugSessionConfigurationCallback').callsFake(async (_launchConfig, _args, _env, launchOptions) => {
+            msBuildEnv = launchOptions.msBuildEnv;
+        });
+
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        sinon.stub(aspireDebugSession, 'createDebugAdapterTrackerCore');
+        sinon.stub(aspireDebugSession, 'startAndGetDebugSession').resolves(undefined);
+
+        try {
+            await aspireDebugSession.startAppHost(
+                '/workspace/AppHost/AppHost.csproj',
+                ['run', '--no-build', '--project', '/workspace/AppHost/AppHost.csproj'],
+                [
+                    { name: aspireCliPathEnvironmentVariableName, value: '' },
+                    { name: 'CUSTOM_ENV', value: 'custom-value' },
+                ],
+                true,
+                { forceBuild: true });
+
+            assert.strictEqual(terminalProvider.getAspireCliExecutablePath.calledOnce, true);
+            assert.deepStrictEqual(msBuildEnv?.filter(variable => variable.name === aspireCliPathEnvironmentVariableName), [
+                { name: aspireCliPathEnvironmentVariableName, value: currentResolvedCliPath },
+            ]);
+        }
+        finally {
+            callbackStub.restore();
+        }
+    });
+
     test('retries MAUI resource debug sessions when the first start attempt is canceled', async () => {
         let startSessionCallback: ((session: vscode.DebugSession) => void) | undefined;
         const parentDebugSession = {
