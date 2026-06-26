@@ -130,32 +130,21 @@ public class ScaffoldingServiceTests
     }
 
     [Fact]
-    public void AddRootTypeScriptAppHostDelegateScripts_UsesAppHostToolchain()
+    public void AddRootTypeScriptAppHostDelegateScripts_WhenBun_PassesBunFlag()
     {
-        var rootDirectory = Directory.CreateTempSubdirectory();
+        var scripts = JsonNode.Parse("""{ "test": "vitest" }""")!.AsObject();
 
-        try
-        {
-            var appHostDirectory = Directory.CreateDirectory(Path.Combine(rootDirectory.FullName, ScaffoldingService.BrownfieldTypeScriptAppHostDirectoryName));
-            File.WriteAllText(Path.Combine(rootDirectory.FullName, "package.json"), "{ \"packageManager\": \"npm@10.0.0\" }");
-            File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"packageManager\": \"pnpm@10.0.0\" }");
-            var scripts = new JsonObject();
+        var preservedScriptNames = ScaffoldingService.AddRootTypeScriptAppHostDelegateScripts(
+            scripts,
+            TypeScriptAppHostToolchain.Bun,
+            "apps/web/aspire-apphost");
 
-            var preservedScriptNames = ScaffoldingService.AddRootTypeScriptAppHostDelegateScripts(
-                scripts,
-                appHostDirectory,
-                ScaffoldingService.BrownfieldTypeScriptAppHostDirectoryName,
-                logger: null);
-
-            Assert.Empty(preservedScriptNames);
-            Assert.Equal("pnpm --dir aspire-apphost run aspire:start", scripts["aspire:start"]?.GetValue<string>());
-            Assert.Equal("pnpm --dir aspire-apphost run aspire:build", scripts["aspire:build"]?.GetValue<string>());
-            Assert.Equal("pnpm --dir aspire-apphost run aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
-        }
-        finally
-        {
-            rootDirectory.Delete(recursive: true);
-        }
+        Assert.Empty(preservedScriptNames);
+        Assert.Equal("vitest", scripts["test"]?.GetValue<string>());
+        // Bun root delegates pass --bun so the AppHost (and the tools it spawns) run on Bun's runtime.
+        Assert.Equal("bun --cwd apps/web/aspire-apphost run --bun aspire:start", scripts["aspire:start"]?.GetValue<string>());
+        Assert.Equal("bun --cwd apps/web/aspire-apphost run --bun aspire:build", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("bun --cwd apps/web/aspire-apphost run --bun aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
     }
 
     [Fact]
@@ -177,6 +166,23 @@ public class ScaffoldingServiceTests
         Assert.Equal("custom-start", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("npm --prefix aspire-apphost run aspire:build", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("npm --prefix aspire-apphost run aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void GetLanguageDisplayName_ForTypeScript_NamesResolvedToolchain()
+    {
+        Assert.Equal("TypeScript (Node.js)", ScaffoldingService.GetLanguageDisplayName(s_typeScriptLanguage, TypeScriptAppHostToolchain.Npm));
+        Assert.Equal("TypeScript (Bun)", ScaffoldingService.GetLanguageDisplayName(s_typeScriptLanguage, TypeScriptAppHostToolchain.Bun));
+        Assert.Equal("TypeScript (pnpm)", ScaffoldingService.GetLanguageDisplayName(s_typeScriptLanguage, TypeScriptAppHostToolchain.Pnpm));
+        Assert.Equal("TypeScript (Yarn)", ScaffoldingService.GetLanguageDisplayName(s_typeScriptLanguage, TypeScriptAppHostToolchain.Yarn));
+    }
+
+    [Fact]
+    public void GetLanguageDisplayName_ForNonTypeScript_UsesLanguageDisplayName()
+    {
+        var displayName = ScaffoldingService.GetLanguageDisplayName(s_pythonLanguage, toolchain: null);
+
+        Assert.Equal("Python", displayName);
     }
 
     [Fact]

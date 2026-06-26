@@ -1491,4 +1491,182 @@ public class PackageJsonMergerTests
         // Engines set
         Assert.Contains(">=24", doc["engines"]?["node"]?.GetValue<string>());
     }
+
+    [Fact]
+    public void ApplyToolchainToScripts_WhenBun_RewritesNpmRunPrefixes()
+    {
+        var scaffold = """
+            {
+              "name": "aspire-apphost",
+              "scripts": {
+                "aspire:lint": "eslint apphost.mts",
+                "aspire:start": "aspire run",
+                "lint": "npm run aspire:lint",
+                "dev": "npm run aspire:start",
+                "build": "npm run aspire:build"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToScripts(scaffold, "bun");
+
+        var scripts = GetScripts(result);
+        Assert.Equal("bun run --bun aspire:lint", scripts["lint"]?.GetValue<string>());
+        Assert.Equal("bun run --bun aspire:start", scripts["dev"]?.GetValue<string>());
+        Assert.Equal("bun run --bun aspire:build", scripts["build"]?.GetValue<string>());
+        // aspire: scripts are not npm-run delegates and must be left untouched.
+        Assert.Equal("eslint apphost.mts", scripts["aspire:lint"]?.GetValue<string>());
+        Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void ApplyToolchainToScripts_WhenPnpm_RewritesNpmRunPrefixes()
+    {
+        var scaffold = """
+            {
+              "scripts": {
+                "watch": "npm run aspire:dev"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToScripts(scaffold, "pnpm");
+
+        Assert.Equal("pnpm run aspire:dev", GetScript(result, "watch"));
+    }
+
+    [Fact]
+    public void ApplyToolchainToScripts_WhenNpm_ReturnsContentUnchanged()
+    {
+        var scaffold = """
+            {
+              "scripts": {
+                "dev": "npm run aspire:start"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToScripts(scaffold, "npm");
+
+        Assert.Same(scaffold, result);
+    }
+
+    [Fact]
+    public void ApplyToolchainToScripts_WhenNoNpmRunScripts_ReturnsContentUnchanged()
+    {
+        var scaffold = """
+            {
+              "scripts": {
+                "aspire:start": "aspire run",
+                "test": "vitest"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToScripts(scaffold, "bun");
+
+        Assert.Same(scaffold, result);
+    }
+
+    [Fact]
+    public void ConvenienceAliases_WhenBun_PassBunFlag()
+    {
+        var existing = """
+            {
+              "name": "my-app",
+              "scripts": {
+                "test": "vitest"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "scripts": {
+                "aspire:start": "aspire run",
+                "aspire:lint": "eslint apphost.ts"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, scaffold, toolchainCommand: "bun");
+        var scripts = GetScripts(result);
+
+        // For Bun, convenience aliases pass --bun so the spawned tools (eslint, tsc) run on Bun's runtime.
+        Assert.Equal("bun run --bun aspire:start", scripts["start"]?.GetValue<string>());
+        Assert.Equal("bun run --bun aspire:lint", scripts["lint"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void ApplyToolchainToEngines_WhenBun_ReplacesNodeWithBun()
+    {
+        var scaffold = """
+            {
+              "name": "aspire-apphost",
+              "engines": {
+                "node": "^20.19.0 || ^22.13.0 || >=24"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToEngines(scaffold, "bun");
+
+        var engines = ParseJson(result)["engines"]!.AsObject();
+        Assert.Equal(">=1.0.0", engines["bun"]?.GetValue<string>());
+        Assert.False(engines.ContainsKey("node"));
+    }
+
+    [Fact]
+    public void ApplyToolchainToEngines_WhenBun_PreservesExistingBunVersion()
+    {
+        var scaffold = """
+            {
+              "engines": {
+                "node": "^20.19.0 || ^22.13.0 || >=24",
+                "bun": ">=1.2.0"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToEngines(scaffold, "bun");
+
+        var engines = ParseJson(result)["engines"]!.AsObject();
+        Assert.Equal(">=1.2.0", engines["bun"]?.GetValue<string>());
+        Assert.False(engines.ContainsKey("node"));
+    }
+
+    [Theory]
+    [InlineData("npm")]
+    [InlineData("pnpm")]
+    [InlineData("yarn")]
+    public void ApplyToolchainToEngines_WhenNotBun_ReturnsContentUnchanged(string toolchainCommand)
+    {
+        var scaffold = """
+            {
+              "engines": {
+                "node": "^20.19.0 || ^22.13.0 || >=24"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToEngines(scaffold, toolchainCommand);
+
+        Assert.Same(scaffold, result);
+    }
+
+    [Fact]
+    public void ApplyToolchainToEngines_WhenNoNodeEngine_ReturnsContentUnchanged()
+    {
+        var scaffold = """
+            {
+              "engines": {
+                "vscode": "^1.0.0"
+              }
+            }
+            """;
+
+        var result = PackageJsonMerger.ApplyToolchainToEngines(scaffold, "bun");
+
+        Assert.Same(scaffold, result);
+    }
 }

@@ -49,7 +49,14 @@ internal static class TypeScriptAppHostToolchainResolver
 
     internal static TypeScriptAppHostToolchainResolution ResolveWithReason(DirectoryInfo appHostDirectory)
     {
-        foreach (var candidateDirectory in EnumerateCandidateDirectories(appHostDirectory))
+        return ResolveWithReason(appHostDirectory, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+    }
+
+    // The home directory is a parameter so tests can simulate the upward walk halting at the
+    // user's home directory without creating files under the real home directory.
+    internal static TypeScriptAppHostToolchainResolution ResolveWithReason(DirectoryInfo appHostDirectory, string? homeDirectory)
+    {
+        foreach (var candidateDirectory in EnumerateCandidateDirectories(appHostDirectory, homeDirectory))
         {
             if (TryGetToolchainFromPackageJson(candidateDirectory, out var configuredToolchain, out var reason))
             {
@@ -132,6 +139,27 @@ internal static class TypeScriptAppHostToolchainResolver
             TypeScriptAppHostToolchain.Pnpm => "pnpm",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
+    }
+
+    // Builds the interactive language-prompt label for a TypeScript AppHost that would be created under
+    // <paramref name="appHostDirectory"/>, naming the package manager that will actually run it (e.g.
+    // "TypeScript (Bun)") instead of the static "TypeScript (Node.js)" catalog label. The prompt is shown
+    // before any project is scaffolded, so resolution failures - most notably an unsupported classic Yarn
+    // workspace detected mid-walk - fall back to the default "TypeScript (Node.js)" label rather than
+    // aborting the prompt; the unsupported-toolchain error is surfaced later, during scaffolding.
+    public static string GetTypeScriptDisplayName(DirectoryInfo appHostDirectory)
+    {
+        TypeScriptAppHostToolchain toolchain;
+        try
+        {
+            toolchain = ResolveWithReason(appHostDirectory).Toolchain;
+        }
+        catch (YarnClassicNotSupportedException)
+        {
+            toolchain = TypeScriptAppHostToolchain.Npm;
+        }
+
+        return $"TypeScript ({GetDisplayName(toolchain)})";
     }
 
     public static RuntimeSpec ApplyToRuntimeSpec(RuntimeSpec baseRuntimeSpec, TypeScriptAppHostToolchain toolchain)
@@ -400,16 +428,22 @@ internal static class TypeScriptAppHostToolchainResolver
         return false;
     }
 
-    private static IEnumerable<DirectoryInfo> EnumerateCandidateDirectories(DirectoryInfo appHostDirectory)
+    private static IEnumerable<DirectoryInfo> EnumerateCandidateDirectories(DirectoryInfo appHostDirectory, string? homeDirectory)
     {
         yield return appHostDirectory;
 
-        // Only use the immediate parent as a fallback so a project folder can provide
-        // workspace-level hints without inheriting unrelated markers from higher directories.
+        // Walk up the directory tree so a workspace-level marker (e.g. a Bun/pnpm/Yarn
+        // monorepo lockfile or a packageManager field in the workspace root package.json)
+        // is detected even when the AppHost is nested several directories below it. This is
+        // common because brownfield scaffolding nests the AppHost in its own subdirectory,
+        // and matches how the JS package managers themselves locate the workspace root by
+        // walking up the tree. Stop before the filesystem root and the user's home directory
+        // because those can hold unrelated user-level markers that should not govern a project.
         var parentDirectory = appHostDirectory.Parent;
-        if (parentDirectory is not null && ShouldSearchParentDirectory(parentDirectory))
+        while (parentDirectory is not null && ShouldSearchParentDirectory(parentDirectory, homeDirectory))
         {
             yield return parentDirectory;
+            parentDirectory = parentDirectory.Parent;
         }
     }
 

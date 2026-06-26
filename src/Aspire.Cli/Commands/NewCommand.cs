@@ -140,12 +140,14 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             : languageId;
     }
 
-    private static string GetLanguageDisplayName(string languageId)
+    private static string GetLanguageDisplayName(string languageId, DirectoryInfo targetDirectory)
     {
         return NormalizeLanguageId(languageId) switch
         {
             KnownLanguageId.CSharp => KnownLanguageId.CSharpDisplayName,
-            KnownLanguageId.TypeScript => "TypeScript (Node.js)",
+            // Resolve the TypeScript label against the target directory so it names the package manager
+            // that will actually be used (e.g. "TypeScript (Bun)") rather than the static "(Node.js)".
+            KnownLanguageId.TypeScript => TypeScriptAppHostToolchainResolver.GetTypeScriptDisplayName(targetDirectory),
             KnownLanguageId.Python => KnownLanguageId.PythonDisplayName,
             KnownLanguageId.Go => KnownLanguageId.GoDisplayName,
             KnownLanguageId.Java => KnownLanguageId.JavaDisplayName,
@@ -154,12 +156,12 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         };
     }
 
-    private async Task<string> PromptForAppHostLanguageAsync(IReadOnlyList<string> selectableLanguages, CancellationToken cancellationToken)
+    private async Task<string> PromptForAppHostLanguageAsync(IReadOnlyList<string> selectableLanguages, DirectoryInfo targetDirectory, CancellationToken cancellationToken)
     {
         var choices = selectableLanguages
             .Select(NormalizeLanguageId)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(static languageId => (LanguageId: languageId, DisplayName: GetLanguageDisplayName(languageId)))
+            .Select(languageId => (LanguageId: languageId, DisplayName: GetLanguageDisplayName(languageId, targetDirectory)))
             .ToArray();
 
         var selected = await InteractionService.PromptForSelectionAsync(
@@ -247,7 +249,15 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             return (true, NormalizeLanguageId(template.SelectableAppHostLanguages[0]));
         }
 
-        var selectedLanguageId = await PromptForAppHostLanguageAsync(template.SelectableAppHostLanguages, cancellationToken);
+        // Resolve the prompt label against the directory the project will be created in (the --output
+        // path when supplied, otherwise the working directory) so a TypeScript option reflects the
+        // detected workspace toolchain (e.g. "TypeScript (Bun)") instead of the static "(Node.js)".
+        var outputPath = parseResult.GetValue(s_outputOption);
+        var targetDirectory = string.IsNullOrWhiteSpace(outputPath)
+            ? ExecutionContext.WorkingDirectory
+            : new DirectoryInfo(Path.GetFullPath(outputPath, ExecutionContext.WorkingDirectory.FullName));
+
+        var selectedLanguageId = await PromptForAppHostLanguageAsync(template.SelectableAppHostLanguages, targetDirectory, cancellationToken);
         return (true, selectedLanguageId);
     }
 
