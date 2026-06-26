@@ -38,6 +38,11 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         return "dotnet";
     }
 
+    private static void AssertAspireCliPathProperty(string arg)
+    {
+        Assert.StartsWith("/p:AspireCliPath=", arg, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task DotNetCliCorrectlyAppliesNoLaunchProfileArgumentWhenSpecifiedInOptions()
     {
@@ -243,6 +248,89 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             0);
 
         var exitCode = await runner.BuildAsync(projectFile, noRestore: false, new ProcessInvocationOptions(), CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsyncPassesInheritedAspireCliPathAsMSBuildPropertyWithoutRuntimeEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var configuredAspireCliPath = Path.Combine(workspace.WorkspaceRoot.FullName, "configured aspire");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["AspireCliPath"] = configuredAspireCliPath,
+        }));
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (args, env, _, _) =>
+            {
+                Assert.Contains($"/p:AspireCliPath={configuredAspireCliPath}", args);
+                Assert.NotNull(env);
+                Assert.Equal(string.Empty, env["AspireCliPath"]);
+            },
+            0);
+
+        var exitCode = await runner.RunAsync(
+            projectFile: projectFile,
+            watch: false,
+            noBuild: false,
+            noRestore: false,
+            args: ["--operation", "inspect"],
+            env: new Dictionary<string, string>(),
+            null,
+            new ProcessInvocationOptions(),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsyncUsesCallerAspireCliPathAsMSBuildPropertyWithoutRuntimeEnvironment()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var configuredAspireCliPath = Path.Combine(workspace.WorkspaceRoot.FullName, "configured aspire");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (args, env, _, _) =>
+            {
+                Assert.Contains($"/p:AspireCliPath={configuredAspireCliPath}", args);
+                Assert.NotNull(env);
+                Assert.Equal(string.Empty, env["AspireCliPath"]);
+            },
+            0);
+
+        var exitCode = await runner.RunAsync(
+            projectFile: projectFile,
+            watch: false,
+            noBuild: false,
+            noRestore: false,
+            args: ["--operation", "inspect"],
+            env: new Dictionary<string, string>
+            {
+                ["AspireCliPath"] = configuredAspireCliPath,
+            },
+            null,
+            new ProcessInvocationOptions(),
+            CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
     }
@@ -1406,6 +1494,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                     arg => Assert.Equal($"/p:{KnownConfigNames.SuppressCliRunHook}=true", arg),
                     arg => Assert.Equal("--file", arg),
                     arg => Assert.Equal(appHostFile.FullName, arg),
+                    AssertAspireCliPathProperty,
                     arg => Assert.Equal("--", arg)
                 );
             },
@@ -1452,6 +1541,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                     arg => Assert.Equal($"/p:{KnownConfigNames.SuppressCliRunHook}=true", arg),
                     arg => Assert.Equal("--file", arg),
                     arg => Assert.Equal(appHostFile.FullName, arg),
+                    AssertAspireCliPathProperty,
                     arg => Assert.Equal("--", arg)
                 );
             },
@@ -1566,6 +1656,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                     arg => Assert.Equal($"/p:{KnownConfigNames.SuppressCliRunHook}=true", arg),
                     arg => Assert.Equal("--file", arg),
                     arg => Assert.Equal(appHostFile.FullName, arg),
+                    AssertAspireCliPathProperty,
                     arg => Assert.Equal("--", arg)
                 );
                 Assert.DoesNotContain("--no-build", args);
@@ -1664,6 +1755,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                     arg => Assert.Equal($"/p:{KnownConfigNames.SuppressCliRunHook}=true", arg),
                     arg => Assert.Equal("--file", arg),
                     arg => Assert.Equal(appHostFile.FullName, arg),
+                    AssertAspireCliPathProperty,
                     arg => Assert.Equal("--", arg)
                 );
             },
@@ -1713,6 +1805,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                     arg => Assert.Equal("--no-launch-profile", arg),
                     arg => Assert.Equal("--project", arg),
                     arg => Assert.Equal(projectFile.FullName, arg),
+                    AssertAspireCliPathProperty,
                     arg => Assert.Equal("--", arg)
                 );
             },
@@ -1761,6 +1854,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                     arg => Assert.Equal("--no-launch-profile", arg),
                     arg => Assert.Equal("--project", arg),
                     arg => Assert.Equal(projectFile.FullName, arg),
+                    AssertAspireCliPathProperty,
                     arg => Assert.Equal("--", arg)
                 );
             },

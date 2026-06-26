@@ -308,19 +308,19 @@ namespace Projects%3B
       <_AspireRunWorkingDirectory>$(MSBuildProjectDirectory)</_AspireRunWorkingDirectory>
       <_AspireRunWorkingDirectory Condition="'$(FileBasedProgram)' == 'true' and '@(_AspireFileBasedAppHostDirectory)' != ''">@(_AspireFileBasedAppHostDirectory)</_AspireRunWorkingDirectory>
       <_AspireCliPathIsWindowsCommandShim Condition="'$(OS)' == 'Windows_NT' and '$(AspireCliPath)' != '' and ($(AspireCliPath.ToLowerInvariant().EndsWith('.cmd')) or $(AspireCliPath.ToLowerInvariant().EndsWith('.bat')))">true</_AspireCliPathIsWindowsCommandShim>
-      <RunCommand Condition="'$(AspireCliPath)' != '' and '$(_AspireCliPathIsWindowsCommandShim)' != 'true'">$(AspireCliPath)</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' != '' and '$(_AspireCliPathIsWindowsCommandShim)' != 'true'">&quot;$(AspireCliPath)&quot;</RunCommand>
       <RunCommand Condition="'$(_AspireCliPathIsWindowsCommandShim)' == 'true'">cmd</RunCommand>
       <!-- On Windows, Aspire can be installed as a command shim such as aspire.cmd.
-           dotnet run starts RunCommand directly, so use cmd /C for the default PATH
-           lookup, and use cmd /D /C call for explicit shims so the batch file is
-           interpreted without AutoRun commands and returns to this script. -->
+           The SDK Run target shells RunCommand + RunArguments, so quote explicit
+           paths and use cmd /D /C call for command shims so batch files are
+           interpreted without AutoRun commands and return to this script. -->
       <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">cmd</RunCommand>
       <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' != 'Windows_NT'">aspire</RunCommand>
       <!-- dotnet run appends application arguments after ComputeRunArguments, so the double-dash separator
            must be present even when RunArguments is initially empty. -->
       <RunArguments>run --project "$(_AspireRunProject)" --no-build --</RunArguments>
       <RunArguments Condition="'$(_AspireCliPathIsWindowsCommandShim)' == 'true'">/D /C call "$(AspireCliPath)" $(RunArguments)</RunArguments>
-      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">/C aspire $(RunArguments)</RunArguments>
+      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">/D /C call aspire $(RunArguments)</RunArguments>
       <RunArguments Condition="'$(_AspireOriginalRunArguments)' != ''">$(RunArguments) $(_AspireOriginalRunArguments)</RunArguments>
       <RunWorkingDirectory>$(_AspireRunWorkingDirectory)</RunWorkingDirectory>
     </PropertyGroup>

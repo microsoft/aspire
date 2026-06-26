@@ -104,6 +104,19 @@ public class AppHostSdkTargetsTests
     }
 
     [Fact]
+    public async Task ComputeRunArgumentsUsesConfiguredAspireCliPathWhenPathContainsSpaces()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(project, [$"-p:AspireCliPath={aspireCliPath}"]);
+
+        AssertUsesExplicitAspireCli(properties, project, aspireCliPath);
+    }
+
+    [Fact]
     public async Task ComputeRunArgumentsUsesFileBasedAppHostPathWhenCliBundleIsEnabled()
     {
         using var tempDirectory = new TestTempDirectory();
@@ -669,7 +682,7 @@ public class AppHostSdkTargetsTests
 
     private static string GetExpectedAspireRunArguments(string projectPath, string? extraArguments = null)
     {
-        var prefix = OperatingSystem.IsWindows() ? "/C aspire " : string.Empty;
+        var prefix = OperatingSystem.IsWindows() ? "/D /C call aspire " : string.Empty;
         var arguments = $"{prefix}run --project \"{projectPath}\" --no-build --";
 
         return string.IsNullOrEmpty(extraArguments) ? arguments : $"{arguments} {extraArguments}";
@@ -692,7 +705,7 @@ public class AppHostSdkTargetsTests
             return;
         }
 
-        Assert.Equal(cliPath, properties["RunCommand"]);
+        Assert.Equal($"\"{cliPath}\"", properties["RunCommand"]);
         Assert.Equal(GetExpectedExplicitAspireRunArguments(project, expectedArguments), properties["RunArguments"]);
     }
 

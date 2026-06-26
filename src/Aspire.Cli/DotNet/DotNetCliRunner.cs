@@ -143,7 +143,10 @@ internal sealed class DotNetCliRunner(
         // Build the final environment variables by merging caller-provided env with dotnet-specific settings.
         var finalEnv = env?.ToDictionary() ?? new Dictionary<string, string>();
         ConfigureDotNetEnvironment(finalEnv);
-        AddAspireCliPathEnvironment(finalEnv, projectFile);
+        if (ShouldAddAspireCliPathEnvironment(dotnetCommand))
+        {
+            AddAspireCliPathEnvironment(finalEnv, projectFile);
+        }
         processActivity.AddContextToEnvironment(finalEnv);
 
         var command = commandOverride is null ? null : CommandPathResolver.NormalizeRunCommand(commandOverride);
@@ -539,16 +542,56 @@ internal sealed class DotNetCliRunner(
             return;
         }
 
-        var aspireCliPath = environment.GetEnvironmentVariable("AspireCliPath");
-        if (string.IsNullOrWhiteSpace(aspireCliPath))
-        {
-            aspireCliPath = Environment.ProcessPath;
-        }
-
+        var aspireCliPath = GetAspireCliPath(env);
         if (!string.IsNullOrWhiteSpace(aspireCliPath))
         {
             env["AspireCliPath"] = aspireCliPath;
         }
+    }
+
+    private static bool ShouldAddAspireCliPathEnvironment(string dotnetCommand)
+    {
+        return dotnetCommand is "build" or "msbuild" or "restore" or "publish" or "test";
+    }
+
+    private string? GetAspireCliPath(IDictionary<string, string> env)
+    {
+        if (env.TryGetValue("AspireCliPath", out var envAspireCliPath) && !string.IsNullOrWhiteSpace(envAspireCliPath))
+        {
+            return envAspireCliPath;
+        }
+
+        var aspireCliPath = environment.GetEnvironmentVariable("AspireCliPath");
+        if (!string.IsNullOrWhiteSpace(aspireCliPath))
+        {
+            return aspireCliPath;
+        }
+
+        return Environment.ProcessPath;
+    }
+
+    private string[] AddAspireCliPathProperty(string[] args, IDictionary<string, string> env)
+    {
+        var aspireCliPath = GetAspireCliPath(env);
+
+        // ProcessExecutionFactory overlays env values on top of the current process environment.
+        // Set this explicitly so AppHost runtime/resource processes don't inherit the configured
+        // CLI path that only the SDK run hook should observe via the MSBuild property below.
+        env["AspireCliPath"] = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(aspireCliPath))
+        {
+            return args;
+        }
+
+        var property = $"/p:AspireCliPath={aspireCliPath}";
+        var appArgsIndex = Array.IndexOf(args, "--");
+        if (appArgsIndex < 0)
+        {
+            return [.. args, property];
+        }
+
+        return [.. args[..appArgsIndex], property, .. args[appArgsIndex..]];
     }
 
     internal static TimeSpan GetBackchannelConnectionTimeout(IConfiguration configuration)
@@ -826,6 +869,7 @@ internal sealed class DotNetCliRunner(
             // dotnet run -> aspire run -> dotnet run loops.
             suppressCliRunHook: true,
             backchannelCompletionSource);
+        cliArgs = AddAspireCliPathProperty(cliArgs, finalEnv);
 
         return await ExecuteAsync(
             args: cliArgs,
