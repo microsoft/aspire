@@ -14,6 +14,7 @@ using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry.Proto.Logs.V1;
@@ -198,6 +199,37 @@ public partial class StructuredLogsTests : DashboardTestContext
             });
     }
 
+    [Fact]
+    public void Render_FocusesAccessibleScrollContainerOnInitialRender()
+    {
+        SetupStructureLogsServices();
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<StructuredLogs>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var scrollContainer = cut.Find("#structuredLogsScrollContainer");
+        var loc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.StructuredLogs>>();
+
+        Assert.Equal("0", scrollContainer.GetAttribute("tabindex"));
+        Assert.Equal("region", scrollContainer.GetAttribute("role"));
+        Assert.Equal(loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsHeader)].Value, scrollContainer.GetAttribute("aria-label"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(JSInterop.Invocations, invocation =>
+                invocation.Identifier == "focusElement" &&
+                invocation.Arguments.Count == 2 &&
+                string.Equals(invocation.Arguments[0]?.ToString(), "structuredLogsScrollContainer", StringComparison.Ordinal) &&
+                string.Equals(invocation.Arguments[1]?.ToString(), bool.TrueString, StringComparison.OrdinalIgnoreCase));
+        });
+    }
+
     private void SetupStructureLogsServices()
     {
         FluentUISetupHelpers.SetupFluentDivider(this);
@@ -210,7 +242,8 @@ public partial class StructuredLogsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        JSInterop.SetupVoid("initializeContinuousScroll");
+        JSInterop.SetupVoid("initializeContinuousScroll").SetVoidResult();
+        JSInterop.SetupVoid("focusElement", _ => true);
 
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);

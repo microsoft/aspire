@@ -36,6 +36,8 @@ internal static class TelemetryServiceCollectionExtensions
         }
 
         services.AddSingleton<ICIEnvironmentDetector, CIEnvironmentDetector>();
+        services.AddSingleton<ICodingAgentDetector, CodingAgentDetector>();
+        services.AddSingleton<IInternalMicrosoftDetector, InternalMicrosoftDetector>();
         services.AddSingleton<AspireCliTelemetry>();
         services.AddSingleton<ProfilingTelemetry>();
         services.AddHostedService(sp => sp.GetRequiredService<AspireCliTelemetry>());

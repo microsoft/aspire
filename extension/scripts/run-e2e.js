@@ -535,6 +535,9 @@ async function main() {
       LC_ALL: 'C.UTF-8',
       NODE_PATH: [extesterNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter),
     });
+    if (process.env.ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT === 'true') {
+      extestEnv.ASPIRE_CLI_START_TIMEOUT = undefined;
+    }
 
     logStep('Downloading VS Code');
     runWithRetry(process.execPath, [extesterCli, 'get-vscode', '--storage', storageDir, '--code_version', vscodeVersion], extestEnv, { attempts: 2, retryDelayMs: 5000, beforeRetry: cleanPartialExtesterDownloads, timeout: 240000 });
@@ -756,8 +759,6 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
   fs.writeFileSync(path.join(vscodeDirectory, 'settings.json'), JSON.stringify({
     'aspire.aspireCliExecutablePath': resolvedCliPath,
     'aspire.closeDashboardOnDebugEnd': true,
-    'aspire.dashboardBrowser': 'integratedBrowser',
-    'aspire.enableAspireDashboardAutoLaunch': 'launch',
     'aspire.enableAutoRestore': false,
     'aspire.enableSettingsFileCreationPromptOnStartup': false,
     'aspire.appHostDiscoveryTimeoutMs': 120000,
@@ -818,7 +819,8 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion) {
 `);
 
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
-
+#pragma warning disable ASPIRETERMINAL001
+// The E2E fixture intentionally covers interaction command arguments and terminal metadata while those APIs are still experimental.
 var builder = DistributedApplication.CreateBuilder(args);
 
 builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
@@ -886,6 +888,13 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
         });
 
 builder.AddResource(new NoCommandsResource("e2e-no-commands"));
+
+// e2e-terminal opts into WithTerminal so the real CLI surfaces terminal.enabled and
+// terminal.replicaIndex over the backchannel. The extension's Open terminal action reads
+// those properties, so this resource exercises that metadata flowing through a real CLI process.
+builder.AddProject<Projects.AspireE2E_Worker>("e2e-terminal")
+    .WithHttpEndpoint(name: "http")
+    .WithTerminal();
 
 builder.Build().Run();
 
@@ -960,6 +969,7 @@ function getAspireCliEnvironment(extraEnv = {}) {
     ASPIRE_CLI_START_TIMEOUT: process.env.ASPIRE_EXTENSION_E2E_CLI_START_TIMEOUT || '300',
     ASPIRE_CLI_TELEMETRY_OPTOUT: 'true',
     ASPIRE_VERSION_CHECK_DISABLED: 'true',
+    DOTNET_CLI_UI_LANGUAGE: 'en',
     DOTNET_CLI_TELEMETRY_OPTOUT: '1',
     DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE: '1',
     DOTNET_NOLOGO: '1',

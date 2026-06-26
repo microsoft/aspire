@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREUSERSECRETS001
 
 using System.Diagnostics;
@@ -135,6 +134,11 @@ internal sealed class VersionCheckService : BackgroundService
                 return;
             }
         }
+        else if (IsVersionIgnoredByWildcard(latestVersion))
+        {
+            _logger.LogDebug("Ignoring version {Version} as it matches the ignored version wildcard pattern.", latestVersion);
+            return;
+        }
 
         if (IsVersionGreater(latestVersion, storedKnownLatestVersion) || storedKnownLatestVersion == null)
         {
@@ -157,7 +161,18 @@ internal sealed class VersionCheckService : BackgroundService
         if (result.Data)
         {
             _logger.LogDebug("User chose to ignore version {Version}.", latestVersion);
-            _userSecretsManager.TrySetSecret(IgnoreVersionKey, latestVersion.ToString());
+
+            if (latestVersion.IsPrerelease)
+            {
+                // Store a wildcard pattern that ignores all pre-release versions with the same major.minor.patch.
+                // For example, 13.5.0-preview1 becomes 13.5.0-* which will ignore all 13.5.0 pre-releases
+                // but still notify when the stable 13.5.0 is released.
+                _userSecretsManager.TrySetSecret(IgnoreVersionKey, $"{latestVersion.Major}.{latestVersion.Minor}.{latestVersion.Patch}-*");
+            }
+            else
+            {
+                _userSecretsManager.TrySetSecret(IgnoreVersionKey, latestVersion.ToString());
+            }
         }
     }
 
@@ -179,6 +194,35 @@ internal sealed class VersionCheckService : BackgroundService
         return SemVersion.ComparePrecedence(version1, version2) > 0;
     }
 
+    /// <summary>
+    /// Checks whether the given version matches a wildcard ignore pattern (e.g., "13.5.0-*").
+    /// A wildcard pattern ignores all pre-release versions with the same major.minor.patch,
+    /// but does not ignore the stable release.
+    /// </summary>
+    internal bool IsVersionIgnoredByWildcard(SemVersion latestVersion)
+    {
+        if (_configuration[IgnoreVersionKey] is string ignorePattern &&
+            ignorePattern.EndsWith("-*", StringComparison.Ordinal))
+        {
+            // Only pre-release versions can be matched by the wildcard pattern.
+            // The stable release (e.g., 13.5.0) should still trigger a notification.
+            if (!latestVersion.IsPrerelease)
+            {
+                return false;
+            }
+
+            var versionPrefix = ignorePattern[..^2];
+            if (SemVersion.TryParse(versionPrefix, out var baseVersion))
+            {
+                return latestVersion.Major == baseVersion.Major &&
+                       latestVersion.Minor == baseVersion.Minor &&
+                       latestVersion.Patch == baseVersion.Patch;
+            }
+        }
+
+        return false;
+    }
+
     private bool TryGetConfigVersion(string key, [NotNullWhen(true)] out SemVersion? knownLatestVersion)
     {
         if (_configuration[key] is string latestVersionString &&
@@ -191,5 +235,3 @@ internal sealed class VersionCheckService : BackgroundService
         return false;
     }
 }
-
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

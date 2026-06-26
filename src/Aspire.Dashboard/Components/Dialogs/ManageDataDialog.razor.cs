@@ -61,9 +61,6 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     private readonly HashSet<string> _expandedResourceNames = new(StringComparers.ResourceName);
     private readonly HashSet<(string ResourceName, AspireDataType DataType)> _selectedRows = [];
     private readonly CancellationTokenSource _cts = new();
-    private readonly Icon _iconUnselectedMultiple = new Icons.Regular.Size20.CheckboxUnchecked().WithColor(Color.FillInverse);
-    private readonly Icon _iconSelectedMultiple = new Icons.Filled.Size20.CheckboxChecked();
-    private readonly Icon _iconIndeterminate = new Icons.Filled.Size20.CheckboxIndeterminate();
     private Task? _resourceSubscriptionTask;
     private FluentDataGrid<ManageDataGridItem>? _dataGrid;
     private bool _isExporting;
@@ -343,6 +340,28 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
     private string GetOtlpResourceName(OtlpResource resource) => OtlpHelpers.GetResourceName(resource, TelemetryRepository.GetResources());
 
+    private string GetHeaderSelectionLabel() => Loc[nameof(Resources.Dialogs.ManageDataAllDataCheckboxLabel)];
+
+    private string GetResourceDisplayName(ResourceDataRow row)
+    {
+        if (row.Resource is not null)
+        {
+            return GetResourceName(row.Resource);
+        }
+
+        if (row.OtlpResource is not null)
+        {
+            return GetOtlpResourceName(row.OtlpResource);
+        }
+
+        return row.Name;
+    }
+
+    private string GetResourceDisplayName(string resourceName) => _resourceDataRows.TryGetValue(resourceName, out var row) ? GetResourceDisplayName(row) : resourceName;
+
+    private string GetDataRowSelectionLabel(string dataTypeDisplayName, string parentResourceDisplayName) =>
+        Loc[nameof(Resources.Dialogs.ManageDataDataTypeForResourceCheckboxLabel), dataTypeDisplayName, parentResourceDisplayName];
+
     private string GetDataTypeDisplayName(AspireDataType dataType) => dataType switch
     {
         AspireDataType.ResourceDetails => Loc[nameof(Resources.Dialogs.ManageDataResource)],
@@ -368,6 +387,11 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
     private void OnSelectAllClicked()
     {
+        if (_resourceDataRows.Count == 0)
+        {
+            return;
+        }
+
         // If any are unselected (including data rows), select all. Otherwise deselect all.
         var shouldSelectAll = !AreAllSelected();
 
@@ -468,31 +492,19 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
         return true;
     }
 
-    private Icon GetHeaderCheckboxIcon()
-    {
-        if (AreAllSelected())
-        {
-            return _iconSelectedMultiple;
-        }
-        if (AreNoneSelected())
-        {
-            return _iconUnselectedMultiple;
-        }
-        return _iconIndeterminate;
-    }
+    private IconCheckboxState GetHeaderCheckboxState() => GetCheckboxState(AreAllSelected(), AreNoneSelected());
 
-    private Icon GetResourceCheckboxIcon(ResourceDataRow row)
+    private IconCheckboxState GetResourceCheckboxState(ResourceDataRow row) => GetCheckboxState(AreAllDataRowsSelected(row), AreNoDataRowsSelected(row));
+
+    private IconCheckboxState GetDataRowCheckboxState(string resourceName, AspireDataType dataType) =>
+        IsDataRowSelected(resourceName, dataType) ? IconCheckboxState.Checked : IconCheckboxState.Unchecked;
+
+    private static IconCheckboxState GetCheckboxState(bool isChecked, bool isUnchecked) => (isChecked, isUnchecked) switch
     {
-        if (AreAllDataRowsSelected(row))
-        {
-            return _iconSelectedMultiple;
-        }
-        if (AreNoDataRowsSelected(row))
-        {
-            return _iconUnselectedMultiple;
-        }
-        return _iconIndeterminate;
-    }
+        (true, _) => IconCheckboxState.Checked,
+        (_, true) => IconCheckboxState.Unchecked,
+        _ => IconCheckboxState.Indeterminate
+    };
 
     private void NavigateToDataPage(TelemetryDataRow dataRow)
     {

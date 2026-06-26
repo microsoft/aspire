@@ -179,6 +179,25 @@
         "comment": "The numeric process exit code for the resource debug session."
       }
     },
+    "microsoft-aspire.aspire-vscode/dashboard/launch/resolved": {
+      "behavior": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The resolved Aspire Dashboard launch behavior, such as none, notification, integrated browser, or a debug browser."
+      },
+      "source": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The configuration source that selected the dashboard launch behavior."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/dashboard/launch/migration": {
+      "action": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The one-time dashboard launch behavior migration notification action, such as shown, settings, changelog, or dismissed."
+      }
+    },
     "microsoft-aspire.aspire-vscode/dashboard/operation": {
       "dashboard_event_name": {
         "classification": "SystemMetaData",

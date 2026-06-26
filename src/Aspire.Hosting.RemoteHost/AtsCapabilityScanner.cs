@@ -616,6 +616,14 @@ public static class AtsCapabilityScanner
         CollectEnumClrTypes(typeRef.ElementType, enumTypes);
         CollectEnumClrTypes(typeRef.KeyType, enumTypes);
         CollectEnumClrTypes(typeRef.ValueType, enumTypes);
+
+        if (typeRef.UnionTypes is not null)
+        {
+            foreach (var unionType in typeRef.UnionTypes)
+            {
+                CollectEnumClrTypes(unionType, enumTypes);
+            }
+        }
     }
 
     /// <summary>
@@ -2245,7 +2253,7 @@ public static class AtsCapabilityScanner
         var voidTypeRef = new AtsTypeRef { TypeId = AtsConstants.Void, Category = AtsTypeCategory.Primitive };
 
         // Action<T>, Action<T1, T2>, etc. - all params are inputs, void return
-        if (genericDefFullName.StartsWith("System.Action`"))
+        if (genericDefFullName.StartsWith("System.Action`", StringComparison.Ordinal))
         {
             var parameters = new List<AtsCallbackParameterInfo>();
             for (var i = 0; i < genericArgs.Count; i++)
@@ -2266,7 +2274,7 @@ public static class AtsCapabilityScanner
 
         // Func<TResult>, Func<T, TResult>, Func<T1, T2, TResult>, etc.
         // Last generic arg is return type, rest are parameters
-        if (genericDefFullName.StartsWith("System.Func`"))
+        if (genericDefFullName.StartsWith("System.Func`", StringComparison.Ordinal))
         {
             var parameters = new List<AtsCallbackParameterInfo>();
             for (var i = 0; i < genericArgs.Count - 1; i++)

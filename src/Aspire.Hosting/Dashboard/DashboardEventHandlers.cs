@@ -425,7 +425,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         {
             // If the dashboard has an HTTPS endpoint and we haven't already applied an HTTPS certificate configuration (no HttpsCertificateConfigurationCallbackAnnotation),
             // apply a default configuration with a valid trusted dev cert instance.
-            var developerCertificateService = executionContext.ServiceProvider.GetRequiredService<IDeveloperCertificateService>();
+            var developerCertificateService = executionContext.Services.GetRequiredService<IDeveloperCertificateService>();
             var trustDeveloperCertificate = developerCertificateService.TrustCertificate;
             if (dashboardResource.TryGetLastAnnotation<CertificateAuthorityCollectionAnnotation>(out var certificateAuthorityAnnotation))
             {
@@ -438,10 +438,10 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                 {
                     // Ensure we use a trusted developer certificate (Kestrel selects the latest certificate, which may not be trusted after an SDK update).
                     // There can be issues referencing an exported PEM key pair on MacOS, so we the PFX version of the certificate here.
-                    ctx.EnvironmentVariables["Kestrel__Certificates__Default__Path"] = ctx.PfxPath;
+                    ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath] = ctx.PfxPath;
                     if (ctx.Password is not null)
                     {
-                        ctx.EnvironmentVariables["Kestrel__Certificates__Default__Password"] = ctx.Password;
+                        ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword] = ctx.Password;
                     }
 
                     return Task.CompletedTask;
@@ -597,7 +597,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         var resourceServiceUrl = await dashboardEndpointProvider.GetResourceServiceUriAsync(context.CancellationToken).ConfigureAwait(false);
 
-        context.EnvironmentVariables["ASPNETCORE_ENVIRONMENT"] = environment;
+        context.EnvironmentVariables[KnownAspNetCoreConfigNames.Environment] = environment;
         context.EnvironmentVariables[DashboardConfigNames.ResourceServiceUrlName.EnvVarName] = resourceServiceUrl;
 
         PopulateDashboardUrls(context);
@@ -611,7 +611,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             // If allowed origins are not configured then calculate allowed origins from endpoints.
             if (string.IsNullOrEmpty(allowedOrigins))
             {
-                var model = context.ExecutionContext.ServiceProvider.GetRequiredService<DistributedApplicationModel>();
+                var model = context.ExecutionContext.Services.GetRequiredService<DistributedApplicationModel>();
                 allowedOrigins = GetAllowedOriginsFromResourceEndpoints(model);
             }
 
@@ -947,13 +947,18 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
     {
         var logger = loggerCache.GetOrAdd(logMessage.Category, static (string category, ILoggerFactory loggerFactory) =>
         {
-            // Looks strange to see Aspire.Hosting.Dashboard.Aspire.Dashboard.Category,
-            // so trim the prefix and append Aspire.Hosting.Why is this important?
-            // Well there are logs emitting from categories that don't start with Aspire.Dashboard so we want to prefix all logs so that they can be controlled by config.
-            var categoryTrimmed = category.StartsWith("Aspire.Dashboard.") ?
-                category["Aspire.Dashboard.".Length..] : category;
+            // Dashboard logs arrive with their original category. Aspire's own categories start with
+            // "Aspire.Dashboard." — trim that prefix so the resulting logger category reads naturally
+            // (e.g. Aspire.Hosting.Dashboard.Model.IconResolver). Third-party categories (e.g.
+            // Microsoft.AspNetCore.Server.Kestrel) get a "ThirdParty" segment so they can be filtered
+            // with a single rule on "Aspire.Hosting.Dashboard.ThirdParty".
+            if (category.StartsWith("Aspire.Dashboard.", StringComparison.Ordinal))
+            {
+                var categoryTrimmed = category["Aspire.Dashboard.".Length..];
+                return loggerFactory.CreateLogger($"Aspire.Hosting.Dashboard.{categoryTrimmed}");
+            }
 
-            return loggerFactory.CreateLogger($"Aspire.Hosting.Dashboard.{categoryTrimmed}");
+            return loggerFactory.CreateLogger($"Aspire.Hosting.Dashboard.ThirdParty.{category}");
         },
         loggerFactory);
 

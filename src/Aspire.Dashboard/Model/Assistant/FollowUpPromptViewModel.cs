@@ -74,7 +74,7 @@ public sealed class FollowUpPromptViewModel
         text = writer.ToString();
 
         // Trim bold stars if the question was surrounded with them.
-        if (text.Length >= 4 && text.StartsWith("**") && text.EndsWith("**"))
+        if (text.Length >= 4 && text.StartsWith("**", StringComparison.Ordinal) && text.EndsWith("**", StringComparison.Ordinal))
         {
             text = text[2..^2];
         }

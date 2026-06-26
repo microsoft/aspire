@@ -214,7 +214,7 @@ jobs:
           ls -la "$ASPIRE_HOME/dcp/" 2>/dev/null || echo "  (no dcp)"
 
       - name: Azure Login (OIDC)
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_CLIENT_ID }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_DEPLOYMENT_TEST_TENANT_ID }}
@@ -282,6 +282,18 @@ jobs:
             ${{ matrix.extraTestArgs }} \
             || echo "test_failed=true" >> $GITHUB_OUTPUT
 
+      - name: Collect Aspire CLI logs
+        if: always()
+        run: |
+          # The CLI writes a detailed deployment log (including the underlying ARM error,
+          # e.g. the subcode behind a generic "OperationFailed" provisioning failure) to
+          # ~/.aspire/logs/cli_*.log. That detail is otherwise lost because only testresults/
+          # is uploaded, so copy the logs under testresults/ to capture them in the artifact.
+          if [ -d "$HOME/.aspire/logs" ]; then
+            mkdir -p "${{ github.workspace }}/testresults/aspire-cli-logs"
+            cp -r "$HOME/.aspire/logs/." "${{ github.workspace }}/testresults/aspire-cli-logs/" || true
+          fi
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
@@ -319,7 +331,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Create GitHub Issue
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -333,12 +345,31 @@ jobs:
 
             **Workflow Run:** ${runUrl}
 
+            ### Investigation Checklist
+
+            - [ ] Review workflow logs for error details
+            - [ ] Check if failures are timeout-related or deployment failures
+            - [ ] Download test artifacts (logs, asciinema recordings)
+            - [ ] Identify common failure patterns across tests
+            - [ ] Check Azure authentication and resource provisioning status
+
+            ### Resources
+
+            - **Workflow Logs:** See link above for detailed test output
+            - **Test Artifacts:** Download recordings and logs from the workflow run (testresults/recordings, testresults/logs)
+            - **Deployment E2E Tests:** \`tests/Aspire.Deployment.EndToEnd.Tests/\`
+            - **Test Helpers:** \`tests/Shared/Hex1bAutomatorTestHelpers.cs\`
+
             ### Next Steps
+
             1. Check the workflow run for detailed error logs
-            2. Download test artifacts for asciinema recordings
-            3. Investigate and fix the failing tests
+            2. Download test artifacts for asciinema recordings and error logs
+            3. Investigate which specific tests are failing
+            4. Determine if this is a timeout, deployment, or test automation issue
+            5. Implement fix and verify with local test run
 
             ### Labels
+
             This issue was automatically created by the deployment E2E test workflow.
 
             /cc @microsoft/aspire-team
@@ -373,7 +404,8 @@ jobs:
                 repo: context.repo.repo,
                 title: issueTitle,
                 body: issueBody,
-                labels: ['area-testing', 'deployment-e2e']
+                labels: ['area-testing', 'area-deployment', 'deployment-e2e'],
+                assignees: ['mitchdenny']
               });
               console.log(`Created issue: ${issue.data.html_url}`);
             }
@@ -390,7 +422,7 @@ jobs:
     steps:
       - name: Get job results and download recording artifacts
         id: get_results
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require('fs');

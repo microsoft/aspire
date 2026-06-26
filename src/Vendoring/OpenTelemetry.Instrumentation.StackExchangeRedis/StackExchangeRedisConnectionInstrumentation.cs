@@ -17,15 +17,27 @@ namespace OpenTelemetry.Instrumentation.StackExchangeRedis;
 internal sealed class StackExchangeRedisConnectionInstrumentation : IDisposable
 {
     internal const string RedisDatabaseIndexKeyName = "db.redis.database_index";
-    internal const string RedisFlagsKeyName = "db.redis.flags";
+
     internal const string ActivitySourceName = "OpenTelemetry.Instrumentation.StackExchangeRedis";
-    internal const string ActivityName = ActivitySourceName + ".Execute";
-    internal static readonly Version Version = new Version(1, 0, 0, 13);
-    internal static readonly ActivitySource ActivitySource = new(ActivitySourceName, Version.ToString());
-    internal static readonly IEnumerable<KeyValuePair<string, object?>> CreationTags = new[]
-    {
-        new KeyValuePair<string, object?>(SemanticConventions.AttributeDbSystem, "redis"),
-    };
+    internal static readonly Version SemanticConventionsVersion = new(1, 23, 0);
+    internal static readonly ActivitySource ActivitySource = ActivitySourceFactory.Create(typeof(StackExchangeRedisConnectionInstrumentation), SemanticConventionsVersion, name: ActivitySourceName);
+
+    internal static readonly Version SemanticConventionsVersionNew = new(1, 28, 0);
+    internal static readonly ActivitySource ActivitySourceNew = ActivitySourceFactory.Create(typeof(StackExchangeRedisConnectionInstrumentation), SemanticConventionsVersionNew, name: ActivitySourceName);
+
+    internal static readonly ActivitySource ActivitySourceBoth = ActivitySourceFactory.Create(typeof(StackExchangeRedisConnectionInstrumentation), null, name: ActivitySourceName);
+
+    internal static readonly string ActivityName = $"{ActivitySource.Name}.Execute";
+
+    internal static readonly IEnumerable<KeyValuePair<string, object?>> OldCreationTags =
+    [
+        new(SemanticConventions.AttributeDbSystem, "redis")
+    ];
+
+    internal static readonly IEnumerable<KeyValuePair<string, object?>> NewCreationTags =
+    [
+        new(SemanticConventions.AttributeDbSystemName, "redis")
+    ];
 
     internal readonly ConcurrentDictionary<(ActivityTraceId TraceId, ActivitySpanId SpanId), (Activity Activity, ProfilingSession Session)> Cache
         = new();
@@ -65,34 +77,31 @@ internal sealed class StackExchangeRedisConnectionInstrumentation : IDisposable
     /// Returns session for the Redis calls recording.
     /// </summary>
     /// <returns>Session associated with the current span context to record Redis calls.</returns>
-    public Func<ProfilingSession?> GetProfilerSessionsFactory()
+    public Func<ProfilingSession?> GetProfilerSessionsFactory() => () =>
     {
-        return () =>
+        if (this.stopHandle.WaitOne(0))
         {
-            if (this.stopHandle.WaitOne(0))
-            {
-                return null;
-            }
+            return null;
+        }
 
-            var parent = Activity.Current;
+        var parent = Activity.Current;
 
-            // If no parent use the default session.
-            if (parent == null || parent.IdFormat != ActivityIdFormat.W3C)
-            {
-                return this.defaultSession;
-            }
+        // If no parent use the default session.
+        if (parent == null || parent.IdFormat != ActivityIdFormat.W3C)
+        {
+            return this.defaultSession;
+        }
 
-            // Try to reuse a session for all activities created under the same TraceId+SpanId.
-            var cacheKey = (parent.TraceId, parent.SpanId);
-            if (!this.Cache.TryGetValue(cacheKey, out var session))
-            {
-                session = (parent, new ProfilingSession());
-                this.Cache.TryAdd(cacheKey, session);
-            }
+        // Try to reuse a session for all activities created under the same TraceId+SpanId.
+        var cacheKey = (parent.TraceId, parent.SpanId);
+        if (!this.Cache.TryGetValue(cacheKey, out var session))
+        {
+            session = (parent, new ProfilingSession());
+            this.Cache.TryAdd(cacheKey, session);
+        }
 
-            return session.Session;
-        };
-    }
+        return session.Session;
+    };
 
     /// <inheritdoc/>
     public void Dispose()
@@ -112,15 +121,18 @@ internal sealed class StackExchangeRedisConnectionInstrumentation : IDisposable
         foreach (var entry in this.Cache)
         {
             var parent = entry.Value.Activity;
-            if (parent.Duration == TimeSpan.Zero)
+            var parentCompleted = parent.Duration != TimeSpan.Zero;
+
+            if (this.options.EnableEarlyCommandDrain || parentCompleted)
             {
-                // Activity is still running, don't drain.
-                continue;
+                var session = entry.Value.Session;
+                RedisProfilerEntryToActivityConverter.DrainSession(parent, session.FinishProfiling(), this.options);
             }
 
-            ProfilingSession session = entry.Value.Session;
-            RedisProfilerEntryToActivityConverter.DrainSession(parent, session.FinishProfiling(), this.options);
-            this.Cache.TryRemove((entry.Key.TraceId, entry.Key.SpanId), out _);
+            if (parentCompleted)
+            {
+                this.Cache.TryRemove((entry.Key.TraceId, entry.Key.SpanId), out _);
+            }
         }
     }
 

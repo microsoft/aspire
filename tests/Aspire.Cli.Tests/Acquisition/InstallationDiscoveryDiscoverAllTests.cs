@@ -580,10 +580,11 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var capturedLog = new CapturingLogger<InstallationDiscovery>();
         var discovery = new InstallationDiscovery(
             channelReader: new FakeIdentityChannelReader("local"),
-            sidecarReader: new InstallSidecarReader(),
+            sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: new FakePeerInstallProbe(),
             executionContext: CreateExecutionContext(workspace),
-            logger: capturedLog);
+            logger: capturedLog,
+            candidateSources: []);
 
         await discovery.DiscoverAllAsync(TestContext.Current.CancellationToken);
 
@@ -607,10 +608,11 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var capturedLog = new CapturingLogger<InstallationDiscovery>();
         var discovery = new InstallationDiscovery(
             channelReader: new FakeIdentityChannelReader("local"),
-            sidecarReader: new InstallSidecarReader(),
+            sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: new FakePeerInstallProbe(),
             executionContext: CreateExecutionContext(workspace),
-            logger: capturedLog);
+            logger: capturedLog,
+            candidateSources: []);
 
         await discovery.DiscoverAllAsync(TestContext.Current.CancellationToken);
 
@@ -641,10 +643,11 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             var capturedLog = new CapturingLogger<InstallationDiscovery>();
             var discovery = new InstallationDiscovery(
                 channelReader: new FakeIdentityChannelReader("local"),
-                sidecarReader: new InstallSidecarReader(),
+                sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
                 peerProbe: new FakePeerInstallProbe(),
                 executionContext: CreateExecutionContext(workspace),
-                logger: capturedLog);
+                logger: capturedLog,
+                candidateSources: []);
 
             var results = await discovery.DiscoverAllAsync(TestContext.Current.CancellationToken);
 
@@ -682,10 +685,11 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             var capturedLog = new CapturingLogger<InstallationDiscovery>();
             var discovery = new InstallationDiscovery(
                 channelReader: new FakeIdentityChannelReader("local"),
-                sidecarReader: new InstallSidecarReader(),
+                sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
                 peerProbe: new FakePeerInstallProbe(),
                 executionContext: CreateExecutionContext(workspace),
-                logger: capturedLog);
+                logger: capturedLog,
+                candidateSources: []);
 
             var results = await discovery.DiscoverAllAsync(TestContext.Current.CancellationToken);
 
@@ -805,14 +809,16 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             sdksDirectory: root,
             logsDirectory: root,
             logFilePath: Path.Combine(root.FullName, "test.log"),
+            identityChannel: "local",
             homeDirectory: userHome,
             aspireHomeDirectory: aspireHome);
         var discovery = new InstallationDiscovery(
             channelReader: new FakeIdentityChannelReader("local"),
-            sidecarReader: new InstallSidecarReader(),
+            sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: probe,
             executionContext: context,
-            logger: NullLogger<InstallationDiscovery>.Instance);
+            logger: NullLogger<InstallationDiscovery>.Instance,
+            candidateSources: []);
 
         var results = await discovery.DiscoverAllAsync(TestContext.Current.CancellationToken);
 
@@ -917,7 +923,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var hintSource = new FixedCandidateSource(new InstallationDiscoveryCandidate(binary, "test-hint", fakeCanonical));
         var discovery = new InstallationDiscovery(
             channelReader: new FakeIdentityChannelReader("local"),
-            sidecarReader: new InstallSidecarReader(),
+            sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: probe,
             executionContext: CreateExecutionContext(workspace),
             logger: NullLogger<InstallationDiscovery>.Instance,
@@ -951,14 +957,15 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         }
     }
 
-    private static InstallationDiscovery NewDiscovery(FakePeerInstallProbe probe, TemporaryWorkspace workspace, string identityChannel = "local")
+    private InstallationDiscovery NewDiscovery(FakePeerInstallProbe probe, TemporaryWorkspace workspace, string identityChannel = "local")
     {
         return new InstallationDiscovery(
             channelReader: new FakeIdentityChannelReader(identityChannel),
-            sidecarReader: new InstallSidecarReader(),
+            sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: probe,
             executionContext: CreateExecutionContext(workspace),
-            logger: NullLogger<InstallationDiscovery>.Instance);
+            logger: NullLogger<InstallationDiscovery>.Instance,
+            candidateSources: []);
     }
 
     /// <summary>
@@ -980,6 +987,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             sdksDirectory: root,
             logsDirectory: root,
             logFilePath: Path.Combine(root.FullName, "test.log"),
+            identityChannel: "local",
             homeDirectory: root);
     }
 

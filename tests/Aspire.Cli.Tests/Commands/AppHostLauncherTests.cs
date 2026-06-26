@@ -10,13 +10,16 @@ using Aspire.Cli.Layout;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Tests;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -301,22 +304,28 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     public async Task WaitForLegacyDetachedStartupStabilityAsync_RetriesV2ProbeUntilChildExits()
     {
         var probeCount = 0;
-        using var childProcess = Process.Start(CreateQuickFailProcessStartInfo()) ?? throw new InvalidOperationException("Failed to start test child process.");
+        var childExitTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var connection = new TestAppHostAuxiliaryBackchannel
         {
             SupportsV2 = true,
             GetResourceSnapshotsHandler = _ =>
             {
                 probeCount++;
+                // Signal child exit after the first probe so the method observes the exit
+                // during the retry delay, making the test deterministic.
+                childExitTcs.TrySetResult();
                 throw new IOException("model unavailable");
             }
         };
 
+        // Use FakeTimeProvider so the test never waits for real time and is fully deterministic.
+        var timeProvider = new FakeTimeProvider();
+
         var stable = await AppHostLauncher.WaitForLegacyDetachedStartupStabilityAsync(
             connection,
-            childProcess.WaitForExitAsync(),
+            childExitTcs.Task,
             TimeSpan.FromSeconds(120),
-            TimeProvider.System,
+            timeProvider,
             CancellationToken.None);
 
         Assert.False(stable);
@@ -413,8 +422,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DetachedChildEnvironment_IncludesProfilingTelemetryContext()
     {
-        using var listener = CreateActivityListener("test-detached-child-environment");
         using var source = new ActivitySource("test-detached-child-environment");
+        using var listener = ActivityListenerHelper.Create(source);
         using var activity = source.StartActivity("parent");
         Assert.NotNull(activity);
         activity.SetBaggage(ProfilingTelemetry.Baggage.SessionId, "session-1");
@@ -441,9 +450,9 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DetachedChildEnvironment_IncludesProfilingTelemetryContextFromActiveProfilingSpan()
     {
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
+        using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource);
 
         using var activity = profilingTelemetry.StartDetachedSpawnChild("aspire", ["run"], childCommand: "run");
         Assert.True(activity.IsRunning);
@@ -461,8 +470,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DetachedChildEnvironment_DoesNotEnableProfilingForNonProfilingActivity()
     {
-        using var listener = CreateActivityListener("test-detached-child-environment");
         using var source = new ActivitySource("test-detached-child-environment");
+        using var listener = ActivityListenerHelper.Create(source);
         using var activity = source.StartActivity("parent");
         Assert.NotNull(activity);
 
@@ -634,38 +643,11 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             });
     }
 
-    private static ActivityListener CreateActivityListener(string sourceName)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
-    }
-
     private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)
     {
         return new ConfigurationBuilder()
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
-    }
-
-    private static ProcessStartInfo CreateQuickFailProcessStartInfo()
-    {
-        var (fileName, arguments) = OperatingSystem.IsWindows()
-            ? ("cmd.exe", "/c ping -n 2 127.0.0.1 >NUL & exit /b 6")
-            : ("/bin/sh", "-c \"sleep 0.1; exit 6\"");
-
-        return new ProcessStartInfo(fileName)
-        {
-            Arguments = arguments,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
     }
 
     private sealed class AppHostLauncherHarness : IDisposable
@@ -722,17 +704,18 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 sdkDirectory,
                 logsDirectory,
                 Path.Combine(logsDirectory.FullName, "parent.log"),
+                identityChannel: "local",
                 homeDirectory: homeDirectory);
             var interactionService = new TestInteractionService();
             var monitor = new TestAuxiliaryBackchannelMonitor();
             var processLauncher = new TestDetachedProcessLauncher();
             var fileLoggerProvider = new FileLoggerProvider(executionContext.LogFilePath, new TestStartupErrorWriter());
-            var processShutdownService = new ProcessShutdownService(
+            var processShutdownService = new ProcessTreeGracefulShutdownService(
                 new FixedLayoutDiscovery(),
                 new NullBundleService(),
                 new LayoutProcessRunner(new TestProcessExecutionFactory()),
                 executionContext,
-                NullLogger<ProcessShutdownService>.Instance,
+                NullLogger<ProcessTreeGracefulShutdownService>.Instance,
                 TimeProvider.System);
             var launcher = new AppHostLauncher(
                 new TestProjectLocator(),
@@ -779,7 +762,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             var backchannelsDir = Path.Combine(_homeDirectory.FullName, ".aspire", "cli", "bch");
             Directory.CreateDirectory(backchannelsDir);
 
-            var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(AppHostFile.FullName, _homeDirectory.FullName);
+            var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(AppHostFile.FullName);
+            var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, _homeDirectory.FullName);
             var appHostId = Path.GetFileName(prefix);
             var socketPath = Path.Combine(
                 backchannelsDir,

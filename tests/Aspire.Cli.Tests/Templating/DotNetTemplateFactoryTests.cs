@@ -13,6 +13,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
+using Microsoft.Extensions.Logging.Abstractions;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
@@ -31,7 +32,7 @@ public class DotNetTemplateFactoryTests
     }
 
     private static PackageChannel CreateExplicitChannel(PackageMapping[] mappings) =>
-        PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
+        PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
 
     private static async Task WriteNuGetConfigAsync(DirectoryInfo dir, string content)
     {
@@ -218,7 +219,7 @@ public class DotNetTemplateFactoryTests
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 
-        var channel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
+        var channel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
 
         // Act
         await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
@@ -363,7 +364,8 @@ public class DotNetTemplateFactoryTests
             features,
             telemetry,
             hostEnvironment,
-            templateNuGetConfigService);
+            templateNuGetConfigService,
+            new HostEnvironment());
     }
 
     private sealed class TestInteractionService : IInteractionService
@@ -479,7 +481,7 @@ public class DotNetTemplateFactoryTests
         public Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null)
+        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, Func<string, ValidationResult>? validator = null, Func<string, string>? outputPathResolver = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)

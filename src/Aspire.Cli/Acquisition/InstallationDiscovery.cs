@@ -36,21 +36,22 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
         IPeerInstallProbe peerProbe,
         CliExecutionContext executionContext,
         ILogger<InstallationDiscovery> logger,
-        IEnumerable<IInstallationCandidateSource>? candidateSources = null)
+        IEnumerable<IInstallationCandidateSource> candidateSources)
     {
         ArgumentNullException.ThrowIfNull(channelReader);
         ArgumentNullException.ThrowIfNull(sidecarReader);
         ArgumentNullException.ThrowIfNull(peerProbe);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(candidateSources);
 
         _channelReader = channelReader;
         _sidecarReader = sidecarReader;
         _peerProbe = peerProbe;
         _executionContext = executionContext;
         _logger = logger;
-        var sources = candidateSources?.ToArray();
-        _candidateSources = sources is { Length: > 0 } ? sources : CreateDefaultCandidateSources();
+        var sources = candidateSources.ToArray();
+        _candidateSources = sources.Length > 0 ? sources : CreateDefaultCandidateSources();
     }
 
     /// <inheritdoc />
@@ -93,6 +94,11 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
             // non-empty when resolution fails on a malformed input.
             Path = canonicalPath ?? processPath ?? string.Empty,
             CanonicalPath = canonicalPath,
+            // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
+            // `aspire doctor --self` reports the REAL build installed on disk, so this must read
+            // the assembly's stamped version even when ASPIRE_CLI_VERSION / the sidecar override
+            // the CLI's runtime identity. Routing this through CliExecutionContext.IdentityVersion
+            // would make doctor lie about what is physically installed.
             Version = VersionHelper.GetDefaultTemplateVersion(),
             Channel = TryReadChannel(),
             Route = route,

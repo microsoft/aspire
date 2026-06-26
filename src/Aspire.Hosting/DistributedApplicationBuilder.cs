@@ -211,8 +211,14 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<BackchannelLoggerProvider>());
         _innerBuilder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error);
-        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Error);
         _innerBuilder.Logging.AddFilter("Grpc.AspNetCore.Server.ServerCallHandler", LogLevel.Error);
+        // Allow warnings from Aspire's dashboard code. We control this code and want to be able to log warnings to help troubleshoot issues in the dashboard.
+        // For example, misconfigured icons from the apphost are logged as warnings, and we want those to be visible to users.
+        // The volume of logs from this category should be low, so it shouldn't cause too much noise.
+        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Warning);
+        // Third-party dashboard categories (e.g. Microsoft.AspNetCore, Grpc) are routed under
+        // Aspire.Hosting.Dashboard.ThirdParty so they can be filtered with a single rule.
+        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard.ThirdParty", LogLevel.Error);
 
         // This is to reduce log noise when we activate health checks for resources which may not yet be
         // fully initialized. For example a database which is not yet created.
@@ -362,11 +368,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ResourceLoggerService>();
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
         _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
         _innerBuilder.Services.AddSingleton<ParameterProcessor>();
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         _innerBuilder.Services.AddSingleton<IDistributedApplicationEventing>(Eventing);
         _innerBuilder.Services.AddSingleton<LocaleOverrideContext>();
         _innerBuilder.Services.AddHealthChecks();
@@ -500,6 +504,16 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.TryAddSingleton<IRequiredCommandValidator, RequiredCommandValidator>();
 #pragma warning restore ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationEventingSubscriber>();
+
+            // Terminal host binary path resolution (WithTerminal)
+            _innerBuilder.Services.TryAddEventingSubscriber<TerminalHostEventingSubscriber>();
+
+            // Terminal host failure diagnostics (WithTerminal): unhides the failed host
+            // resource and writes an actionable diagnostic to its console log when a
+            // terminal host transitions to a terminal-failure state. Most common cause is
+            // a CLI/AppHost version mismatch (old bundled aspire-managed without the
+            // 'terminalhost' subcommand). See TerminalHostFailureDiagnosticService.
+            _innerBuilder.Services.AddHostedService<TerminalHostFailureDiagnosticService>();
         }
 
         ConfigureProfilingTelemetry();
@@ -512,6 +526,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             // DCP stuff
             _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
+            _innerBuilder.Services.AddSingleton<ProxylessEndpointPortAllocator>();
             _innerBuilder.Services.AddSingleton<ExecutableCreator>();
             _innerBuilder.Services.AddSingleton<ContainerCreator>();
             _innerBuilder.Services.AddSingleton<DcpExecutor>();
@@ -802,7 +817,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         var application = new DistributedApplication(_innerBuilder.Build());
 
-        _executionContextOptions.ServiceProvider = application.Services.GetRequiredService<IServiceProvider>();
+        _executionContextOptions.Services = application.Services.GetRequiredService<IServiceProvider>();
 
         LogAppBuilt(application);
         ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildCompleted, _innerBuilder.Configuration);

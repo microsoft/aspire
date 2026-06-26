@@ -77,12 +77,24 @@ internal sealed class RunCommand : BaseCommand
 
     private static readonly TimeSpan s_appHostStartupCancellationTimeout = TimeSpan.FromSeconds(5);
 
+    // Graceful shutdown budget for `aspire run`. DCP gets a cooperative window to drain
+    // resources before the central drain budget arms and ladders escalate to forceful kill.
+    // 5s is comfortably enough for a default starter template (apphost + 2 services +
+    // dashboard) once CTRL+C actually reaches the AppHost — measured graceful exits run
+    // ~700ms end-to-end. Earlier observations of ~6s drains were an artifact of the
+    // inherited "ignore CTRL+C" attribute (cleared in Program.cs Main on Windows) which
+    // caused DCP to fall back to its internal 6s SIGKILL deadline because the kernel was
+    // silently dropping the CTRL_C_EVENT.
+    internal static readonly TimeSpan s_gracefulShutdownBudget = TimeSpan.FromSeconds(5);
+
     // Guest AppHosts can bring up the temporary server/backchannel and then fail immediately
     // afterward when the guest startup process hits a syntax, pre-execute, or model validation
     // error. Keep guest AppHost startup waits alive briefly so those failures are reported instead of hidden.
     private static readonly TimeSpan s_startupFailureObservationWindow = TimeSpan.FromSeconds(2);
 
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
+
+    protected override TimeSpan GracefulShutdownBudget => s_gracefulShutdownBudget;
 
     private static readonly Option<bool> s_detachOption = new("--detach")
     {
@@ -504,9 +516,10 @@ internal sealed class RunCommand : BaseCommand
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
 
-                // The user cancelled (e.g. Ctrl+C); the linked CTS we passed to project.RunAsync
-                // propagated the cancellation and the OCE bubbled out with the linked token.
-                // Treat as successful exit since the user intentionally stopped the AppHost.
+                // User Ctrl+C is the normal exit path for `aspire run`; surface as success.
+                // Internal failures `return X` directly from GuestAppHostProject.RunAsync rather
+                // than flowing through this catch, so we don't need to distinguish failure codes
+                // here.
                 return CommandResult.Cancelled(CliExitCodes.Success);
             }
             finally
@@ -529,8 +542,9 @@ internal sealed class RunCommand : BaseCommand
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
 
-            // Command is designed to be cancellable by the user (e.g. Ctrl+C) at any time.
-            // Treat cancellation as a successful exit since the user intentionally stopped the AppHost.
+            // User Ctrl+C is the normal exit path for `aspire run`; surface as success.
+            // Internal failures `return X` directly from GuestAppHostProject.RunAsync rather
+            // than flowing through this catch.
             return CommandResult.Cancelled(CliExitCodes.Success);
         }
         catch (ProjectLocatorException ex)
@@ -553,9 +567,13 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (FailedToConnectBackchannelConnection ex)
         {
+            // The AppHost process exited before the backchannel could connect. This is an
+            // AppHost startup failure (e.g. the user's code crashed), not a CLI infrastructure
+            // error. WaitForAppHostStartupAsync normally wraps this in AppHostExitedDuringStartupException
+            // with the real exit code; this catch is a defensive fallback for edge-case races.
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "backchannel_connection_failed");
+            _logger.LogDebug(ex, "AppHost exited before backchannel connected.");
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ErrorConnectingToAppHost, ex.Message);
-            Telemetry.RecordError(errorMessage, ex);
             return CommandResult.Failure(CliExitCodes.FailedToDotnetRunAppHost, errorMessage);
         }
         catch (ConnectionLostException) when (isExtensionHost)
@@ -1022,9 +1040,12 @@ internal sealed class RunCommand : BaseCommand
             // Swallow the exception if the operation was cancelled.
             return;
         }
-        catch (ConnectionLostException) when (cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
         {
-            // Just swallow this exception because this is an orderly shutdown of the backchannel.
+            // The AppHost process exited and the backchannel connection was lost. This is
+            // expected during orderly shutdown — the connection drops before the cancellation
+            // token fires because logCaptureCancellationSource.Cancel() runs in the finally
+            // block after the AppHost process has already exited.
             return;
         }
     }

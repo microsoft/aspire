@@ -72,11 +72,49 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Assert.Equal(expectedXml, instance.TextVisualizerViewModel.FormattedText);
         Assert.Equal([DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.XmlFormat], instance.EnabledOptions.ToImmutableSortedSet());
 
-        // changing format works
-        instance.ChangeFormat(DashboardUIHelpers.PlaintextFormat, rawXml);
+        instance.ChangeFormat(DashboardUIHelpers.PlaintextFormat);
 
         Assert.Equal(DashboardUIHelpers.PlaintextFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.Equal(rawXml, instance.TextVisualizerViewModel.FormattedText);
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_FormatPicker_UsesFluentSelectAndPreservesSelectionAfterParentRerenderAsync()
+    {
+        const string rawXml = """<parent><child>text<!-- comment --></child></parent>""";
+
+        var content = new TextVisualizerDialogViewModel(rawXml, string.Empty, false);
+        var cut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(content, []);
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var formatSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<string>>>());
+        Assert.NotNull(formatSelect.Find("fluent-select"));
+
+        Assert.Equal(Aspire.Dashboard.Resources.Dialogs.TextVisualizerSelectFormatType, formatSelect.Instance.AriaLabel);
+        Assert.Equal(DashboardUIHelpers.XmlFormat, formatSelect.Instance.SelectedOption?.Id);
+
+        var formatOptions = formatSelect.Instance.Items ?? throw new InvalidOperationException("Expected format options.");
+        var plaintextOption = formatOptions.Single(o => o.Id == DashboardUIHelpers.PlaintextFormat);
+        await formatSelect.InvokeAsync(() => formatSelect.Instance.SelectedOptionChanged.InvokeAsync(plaintextOption));
+
+        cut.WaitForAssertion(() =>
+        {
+            var dialog = cut.FindComponent<TextVisualizerDialog>().Instance;
+            Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.TextVisualizerViewModel.FormatKind);
+            Assert.Equal(rawXml, dialog.TextVisualizerViewModel.FormattedText);
+            Assert.Equal(DashboardUIHelpers.PlaintextFormat, cut.FindComponent<FluentSelect<SelectViewModel<string>>>().Instance.SelectedOption?.Id);
+        });
+
+        cut.FindComponent<TextVisualizerDialog>().SetParametersAndRender(parameters => parameters.Add(p => p.Content, content));
+
+        cut.WaitForAssertion(() =>
+        {
+            var dialog = cut.FindComponent<TextVisualizerDialog>().Instance;
+            Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.TextVisualizerViewModel.FormatKind);
+            Assert.Equal(rawXml, dialog.TextVisualizerViewModel.FormattedText);
+            Assert.Equal(DashboardUIHelpers.PlaintextFormat, cut.FindComponent<FluentSelect<SelectViewModel<string>>>().Instance.SelectedOption?.Id);
+        });
     }
 
     [Fact]
@@ -222,7 +260,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Assert.True(instance.HasFixedFormat);
 
         // Verify the format dropdown is not rendered
-        Assert.Empty(cut.FindAll("#" + instance.GetType().GetField("_openSelectFormatButtonId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)?.GetValue(instance)));
+        Assert.Empty(cut.FindComponents<FluentSelect<SelectViewModel<string>>>());
     }
 
     [Fact]
@@ -238,6 +276,13 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         // Verify the fixed format is used
         Assert.Equal(DashboardUIHelpers.JsonFormat, instance.TextVisualizerViewModel.FormatKind);
+        Assert.Equal(
+            """
+            {
+              "key": "value"
+            }
+            """,
+            instance.TextVisualizerViewModel.FormattedText);
         Assert.True(instance.HasFixedFormat);
     }
 
@@ -249,6 +294,8 @@ public class TextVisualizerDialogTests : DashboardTestContext
         module.SetupVoid();
 
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        FluentUISetupHelpers.SetupFluentInputLabel(this);
+        FluentUISetupHelpers.SetupFluentList(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
         var cut = FluentUISetupHelpers.RenderDialogProvider(this);

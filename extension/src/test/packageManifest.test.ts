@@ -16,6 +16,8 @@ type ManifestCommand = {
 type DebuggerProperty = {
     type?: string | string[];
     description?: string;
+    enum?: string[];
+    enumDescriptions?: string[];
     additionalProperties?: { type?: string };
     items?: { type?: string };
     default?: unknown;
@@ -61,9 +63,13 @@ suite('extension/package.json', () => {
 
         const workspaceWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.welcome%');
         const globalWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.globalWelcome%');
+        const compatibilityErrorWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.errorWelcome%');
+        const genericErrorWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.genericErrorWelcome%');
 
         assertContains(workspaceWelcome?.when, "aspire.viewMode != 'global'");
         assertContains(globalWelcome?.when, "aspire.viewMode == 'global'");
+        assertContains(compatibilityErrorWelcome?.when, 'aspire.fetchAppHostsCompatibilityError');
+        assertContains(genericErrorWelcome?.when, '!aspire.fetchAppHostsCompatibilityError');
     });
 
     test('running apphosts title actions use string view and view mode checks', () => {
@@ -99,9 +105,12 @@ suite('extension/package.json', () => {
         const contextMenus = manifest.contributes.menus?.['view/item/context'] ?? [];
 
         const executeResourceCommandItem = contextMenus.find(item => item.command === 'aspire-vscode.executeResourceCommandItem');
+        const openResourceTerminal = contextMenus.find(item => item.command === 'aspire-vscode.openResourceTerminal');
 
         assertContains(executeResourceCommandItem?.when, 'view == aspire-vscode.appHosts');
         assertContains(executeResourceCommandItem?.when, 'viewItem == resourceCommand:enabled');
+        assertContains(openResourceTerminal?.when, 'view == aspire-vscode.appHosts');
+        assertContains(openResourceTerminal?.when, 'viewItem =~ /^resource.*:canOpenTerminal/');
     });
 
     test('running apphost context actions only target running apphost contexts', () => {
@@ -200,5 +209,35 @@ suite('extension/package.json', () => {
         assert.strictEqual(argsProperty.type, 'array');
         assert.strictEqual(argsProperty.items?.type, 'string');
         assert.strictEqual(argsProperty.description, '%extension.debug.args%');
+    });
+
+    test('aspire launch configuration declares dashboard browser choices', () => {
+        const manifest = readManifest();
+        const aspireDebugger = manifest.contributes.debuggers?.find(d => d.type === 'aspire');
+        const properties = aspireDebugger?.configurationAttributes?.launch?.properties;
+
+        assert.ok(properties, 'Expected aspire debugger to declare launch configuration properties');
+        const dashboardBrowserProperty = properties.dashboardBrowser;
+        assert.ok(dashboardBrowserProperty, 'Expected aspire launch configuration to declare a dashboardBrowser property');
+        assert.strictEqual(dashboardBrowserProperty.type, 'string');
+        assert.strictEqual(dashboardBrowserProperty.description, '%extension.debug.dashboardBrowser%');
+        assert.deepStrictEqual(dashboardBrowserProperty.enum, [
+            'none',
+            'notification',
+            'openExternalBrowser',
+            'integratedBrowser',
+            'debugChrome',
+            'debugEdge',
+            'debugFirefox',
+        ]);
+        assert.deepStrictEqual(dashboardBrowserProperty.enumDescriptions, [
+            '%configuration.aspire.dashboardBrowser.none%',
+            '%configuration.aspire.dashboardBrowser.notification%',
+            '%configuration.aspire.dashboardBrowser.openExternalBrowser%',
+            '%configuration.aspire.dashboardBrowser.integratedBrowser%',
+            '%configuration.aspire.dashboardBrowser.debugChrome%',
+            '%configuration.aspire.dashboardBrowser.debugEdge%',
+            '%configuration.aspire.dashboardBrowser.debugFirefox%',
+        ]);
     });
 });

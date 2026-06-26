@@ -8,7 +8,7 @@
 <PageTitle>
     <ApplicationName
         AdditionalText="@PageViewModel.SelectedResource.Id?.ReplicaSetName"
-        ResourceName="@nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsPageTitle)"
+        ResourceName="@(_selectedResourceHasTerminal ? nameof(Dashboard.Resources.ConsoleLogs.TerminalPageTitle) : nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsPageTitle))"
         Loc="@Loc"/>
 </PageTitle>
 
@@ -18,7 +18,7 @@
                              MainContentStyle="margin-top: 10px;"
                              MobileToolbarButtonText="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSelectResourceToolbar)]">
         <PageTitleSection>
-            <h1 class="page-header">@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsHeader)]</h1>
+            <h1 class="page-header">@Loc[_selectedResourceHasTerminal ? nameof(Dashboard.Resources.ConsoleLogs.TerminalHeader) : nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsHeader)]</h1>
         </PageTitleSection>
         <ToolbarSection>
             <ResourceSelect Resources="_resources"
@@ -27,10 +27,13 @@
                             @bind-SelectedResource:after="HandleSelectedOptionChangedAsync"
                             LabelClass="toolbar-left" />
 
-            <SignalsActionsDisplay HandleClearSignal="@ClearConsoleLogs"
-                                  IsPaused="@PauseManager.ConsoleLogsPaused"
-                                  OnPausedChanged="@OnPausedChanged"
-                                  SelectedResource="@PageViewModel.SelectedResource" />
+            @if (!_selectedResourceHasTerminal)
+            {
+                <SignalsActionsDisplay HandleClearSignal="@ClearConsoleLogs"
+                                      IsPaused="@PauseManager.ConsoleLogsPaused"
+                                      OnPausedChanged="@OnPausedChanged"
+                                      SelectedResource="@PageViewModel.SelectedResource" />
+            }
 
             @if (PageViewModel.SelectedResource is { } selectedResource && !IsAllSelected())
             {
@@ -46,14 +49,7 @@
                                   Disabled="@(command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
                                   OnClick="@(() => ExecuteResourceCommandAsync(command))"
                                   Class="highlighted-command">
-                        @if (!string.IsNullOrEmpty(command.IconName) && IconResolver.ResolveIconName(command.IconName, IconSize.Size16, command.IconVariant) is { } icon)
-                        {
-                            <FluentIcon Value="@icon" Width="16px" />
-                        }
-                        else
-                        {
-                            @command.GetDisplayName()
-                        }
+                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Width="16px" />
                     </FluentButton>
                 }
 
@@ -67,19 +63,67 @@
                 }
             }
 
+            @if (_selectedResourceHasTerminal && _terminalToolbarState is { } terminalState)
+            {
+                <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
+
+                <FluentButton Appearance="@TerminalPrimaryButtonAppearance(terminalState.Status)"
+                              Disabled="@(!terminalState.CanTakeControl)"
+                              OnClick="TerminalTakeControlAsync"
+                              Title="@TerminalPrimaryButtonTitle(terminalState.Status)">
+                    @TerminalPrimaryButtonLabel(terminalState.Status)
+                </FluentButton>
+
+                <FluentButton Appearance="Appearance.Stealth"
+                              Disabled="@(!terminalState.FontControlsEnabled || terminalState.FontPx <= TerminalFontMin)"
+                              OnClick="TerminalFontMinusAsync"
+                              Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)]">−</FluentButton>
+                <span style="min-width: 28px; text-align: center; font-variant-numeric: tabular-nums;"
+                      title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarFontSize)]">@terminalState.FontPx</span>
+                <FluentButton Appearance="Appearance.Stealth"
+                              Disabled="@(!terminalState.FontControlsEnabled || terminalState.FontPx >= TerminalFontMax)"
+                              OnClick="TerminalFontPlusAsync"
+                              Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)]">+</FluentButton>
+
+                @if (_terminalSizePresets.Count > 0)
+                {
+                    <FluentSelect TOption="Controls.TerminalSizePreset"
+                                  Items="@_terminalSizePresets"
+                                  OptionValue="@(p => p.Value)"
+                                  OptionText="@(p => p.Label)"
+                                  Value="@terminalState.SizeKey"
+                                  ValueChanged="TerminalSizeChangedAsync"
+                                  Disabled="@(!terminalState.SizeSelectEnabled)"
+                                  Width="100px"
+                                  Style="min-width: auto;"
+                                  AriaLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)]" />
+                }
+
+                @if (terminalState.Cols > 0 && terminalState.Rows > 0)
+                {
+                    <span style="color: var(--neutral-foreground-hint); font-variant-numeric: tabular-nums;"
+                          title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarCurrentGrid)]">
+                        @terminalState.Cols × @terminalState.Rows
+                    </span>
+                }
+            }
+
             @if (ViewportInformation.IsDesktop)
             {
                 // This takes up too much horizontal space on mobile, so show on a new line on mobile
-                <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]" slot="end">@PageViewModel.Status</FluentLabel>
+                @if (!_selectedResourceHasTerminal)
+                {
+                    <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]" slot="end">@PageViewModel.Status</FluentLabel>
 
-                <AspireMenuButton
-                    ButtonAppearance="Appearance.Lightweight"
-                    Icon="@(new Icons.Regular.Size20.Options())"
-                    Items="@_logsMenuItems"
-                    Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]"
-                    slot="end"/>
+                    <AspireMenuButton
+                        ButtonAppearance="Appearance.Lightweight"
+                        Icon="@(new Icons.Regular.Size20.Options())"
+                        Items="@_logsMenuItems"
+                        Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]"
+                        slot="end"/>
+                }
             }
-            else
+            else if (!_selectedResourceHasTerminal)
             {
                 <AspireMenuButton
                     Icon="@(new Icons.Regular.Size20.Options())"
@@ -91,20 +135,33 @@
         </ToolbarSection>
 
         <MobilePageTitleToolbarSection>
-            <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]">
-                @if (PageViewModel.SelectedResource?.Id is not null)
-                {
-                    @($"{PageViewModel.SelectedResource.Name}: {PageViewModel.Status}")
-                }
-                else
-                {
-                    @PageViewModel.Status
-                }
-            </FluentLabel>
+            @if (!_selectedResourceHasTerminal)
+            {
+                <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]">
+                    @if (PageViewModel.SelectedResource?.Id is not null)
+                    {
+                        @($"{PageViewModel.SelectedResource.Name}: {PageViewModel.Status}")
+                    }
+                    else
+                    {
+                        @PageViewModel.Status
+                    }
+                </FluentLabel>
+            }
         </MobilePageTitleToolbarSection>
 
         <MainSection>
-            <LogViewer
+            @if (_selectedResourceHasTerminal && _terminalResourceName is not null)
+            {
+                <TerminalView
+                    @ref="_terminalViewRef"
+                    ResourceName="@_terminalResourceName"
+                    ReplicaIndex="@_terminalReplicaIndex"
+                    OnToolbarStateChanged="OnTerminalToolbarStateChangedAsync" />
+            }
+            else
+            {
+                <LogViewer
                 @ref="_logViewerRef"
                 LogEntries="@_logEntries"
                 ShowTimestamp="@_showTimestamp"
@@ -112,6 +169,7 @@
                 NoWrapLogs="@_noWrapLogs"
                 ShowNoLogsMessage="@_showNoLogsMessage"
                 ShowResourcePrefix="@_isSubscribedToAll"/>
+            }
         </MainSection>
     </AspirePageContentLayout>
 </div>

@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Utils;
+using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,8 +15,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Backchannel;
-
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe command argument metadata in tests.
 
 [Trait("Partition", "4")]
 public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
@@ -332,6 +331,260 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_RedactsSecretParameterValuesInEnvironmentVariables()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        builder.AddParameter("dbpassword", "s3cr3t-value", secret: true);
+        builder.AddParameter("region", "public-value", secret: false);
+        var custom = builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables =
+            [
+                new EnvironmentVariableSnapshot("DB_PASSWORD", "s3cr3t-value", true),
+                new EnvironmentVariableSnapshot("REGION", "public-value", true),
+                new EnvironmentVariableSnapshot("PLAIN_VAR", "plain-value", true)
+            ]
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result, r => r.Name == "myresource");
+
+        // The value that matches the secret parameter must be redacted; other values are untouched.
+        var dbPassword = Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "DB_PASSWORD");
+        Assert.Null(dbPassword.Value);
+        var region = Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "REGION");
+        Assert.Equal("public-value", region.Value);
+        var plainVar = Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "PLAIN_VAR");
+        Assert.Equal("plain-value", plainVar.Value);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_DoesNotBlockOnUnresolvedSecretParameter()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var secret = builder.AddParameter("dbpassword", "s3cr3t-value", secret: true);
+        var custom = builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        // Simulate a secret parameter whose value has not been resolved yet by replacing its completion
+        // source with one that never completes. GetResolvedSecretParameterValues must peek (not await) the
+        // task, so an unresolved secret cannot block the snapshot call.
+        secret.Resource.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables =
+            [
+                new EnvironmentVariableSnapshot("DB_PASSWORD", "s3cr3t-value", true)
+            ]
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        // The call must complete promptly even though a secret parameter is unresolved. DefaultTimeout
+        // fails the test if GetResolvedSecretParameterValues ever blocks waiting for resolution.
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result, r => r.Name == "myresource");
+        var dbPassword = Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "DB_PASSWORD");
+
+        // Because the secret value was not resolved, it is not part of the redaction set: the unresolved
+        // secret is skipped rather than awaited. Once resolved it is redacted (see the streaming test).
+        Assert.Equal("s3cr3t-value", dbPassword.Value);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task WatchResourceSnapshotsAsync_RedactsSecretResolvedAfterWatchStarted()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var secret = builder.AddParameter("dbpassword", "s3cr3t-value", secret: true);
+        var custom = builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        // Begin with the secret unresolved so the watch starts before the value is known.
+        var waitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        secret.Resource.WaitForValueTcs = waitForValueTcs;
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        using var cts = new CancellationTokenSource();
+        var enumerator = target.WatchResourceSnapshotsAsync(cts.Token).GetAsyncEnumerator(cts.Token);
+        try
+        {
+            // Phase 1: secret unresolved. The env var value is not redacted because the secret value is unknown.
+            await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+            {
+                State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+                EnvironmentVariables =
+                [
+                    new EnvironmentVariableSnapshot("PHASE", "before", false),
+                    new EnvironmentVariableSnapshot("DB_PASSWORD", "s3cr3t-value", true)
+                ]
+            }).DefaultTimeout();
+
+            var before = await ReadSnapshotAsync(enumerator, s => s.Name == "myresource" && HasEnvironmentVariable(s, "PHASE", "before")).DefaultTimeout();
+            Assert.Equal("s3cr3t-value", GetEnvironmentVariableValue(before, "DB_PASSWORD"));
+
+            // Resolve the secret mid-stream, then push a new event whose env var now matches the secret value.
+            waitForValueTcs.SetResult("s3cr3t-value");
+
+            await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+            {
+                State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+                EnvironmentVariables =
+                [
+                    new EnvironmentVariableSnapshot("PHASE", "after", false),
+                    new EnvironmentVariableSnapshot("DB_PASSWORD", "s3cr3t-value", true)
+                ]
+            }).DefaultTimeout();
+
+            var after = await ReadSnapshotAsync(enumerator, s => s.Name == "myresource" && HasEnvironmentVariable(s, "PHASE", "after")).DefaultTimeout();
+
+            // The streaming path recomputes the secret set per event, so a secret resolved after the watch
+            // started is still redacted on later events and does not bypass the filter.
+            Assert.Null(GetEnvironmentVariableValue(after, "DB_PASSWORD"));
+        }
+        finally
+        {
+            cts.Cancel();
+            await enumerator.DisposeAsync();
+        }
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_RedactsNonSecretEnvVarThatCoincidentallyMatchesSecretValue()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        builder.AddParameter("dbpassword", "shared-value", secret: true);
+        var custom = builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", KnownResourceStateStyles.Success),
+            EnvironmentVariables =
+            [
+                new EnvironmentVariableSnapshot("COINCIDENCE", "shared-value", true)
+            ]
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result, r => r.Name == "myresource");
+        var coincidence = Assert.Single(snapshot.EnvironmentVariables, e => e.Name == "COINCIDENCE");
+
+        // Redaction is value-based: any value equal to a secret value is redacted, even when the env var is
+        // not itself sourced from the secret parameter. This is the documented, expected behavior.
+        Assert.Null(coincidence.Value);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    private static async Task<ResourceSnapshot> ReadSnapshotAsync(IAsyncEnumerator<ResourceSnapshot> enumerator, Func<ResourceSnapshot, bool> predicate)
+    {
+        while (await enumerator.MoveNextAsync().ConfigureAwait(false))
+        {
+            if (predicate(enumerator.Current))
+            {
+                return enumerator.Current;
+            }
+        }
+
+        throw new InvalidOperationException("Watch stream ended before a matching snapshot was observed.");
+    }
+
+    private static bool HasEnvironmentVariable(ResourceSnapshot snapshot, string name, string value)
+        => snapshot.EnvironmentVariables.Any(e => e.Name == name && e.Value == value);
+
+    private static string? GetEnvironmentVariableValue(ResourceSnapshot snapshot, string name)
+        => snapshot.EnvironmentVariables.Single(e => e.Name == name).Value;
+
+    [Fact]
+    public async Task WaitForResourceAsync_ReturnsFailureWhenResourceHasErrorStateStyle()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("storage"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Failed to Provision Roles", KnownResourceStateStyles.Error)
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.WaitForResourceAsync(new WaitForResourceRequest
+        {
+            ResourceName = custom.Resource.Name,
+            Status = "up",
+            TimeoutSeconds = 30
+        }).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.False(result.TimedOut);
+        Assert.Equal("Failed to Provision Roles", result.State);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task GetResourceSnapshotsAsync_MapsNonStringPropertiesAsStringsForLegacyCallers()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
@@ -412,6 +665,77 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             value => Assert.Equal("one", value?.GetValue<string>()),
             value => Assert.Equal("two", value?.GetValue<string>()));
         Assert.Null(snapshot.Properties["ConnectionString"]);
+
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_StampsTerminalPropertiesForTerminalEnabledResource()
+    {
+        // The dashboard gRPC path stamps terminal.* onto resource snapshots, but `aspire describe`
+        // and the VS Code extension read this backchannel path instead. Guard that the backchannel
+        // also surfaces terminal availability (and redacts the sensitive consumer UDS path) so the
+        // extension's "Open terminal" affordance lights up.
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myapp"));
+        AddSyntheticTerminalAnnotation(custom.Resource, replicaCount: 1);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", null)
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result);
+        Assert.Equal("true", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["terminal.enabled"]).GetValue<string>());
+        Assert.Equal("0", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["terminal.replicaIndex"]).GetValue<string>());
+        Assert.Equal("1", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["terminal.replicaCount"]).GetValue<string>());
+        // The consumer UDS path is sensitive; it must be present as a key but redacted to null so
+        // the host-local socket path never leaks to CLI/extension callers.
+        Assert.True(snapshot.Properties.ContainsKey("terminal.consumerUdsPath"));
+        Assert.Null(snapshot.Properties["terminal.consumerUdsPath"]);
+
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_DoesNotStampTerminalPropertiesForNonTerminalResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myapp"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", null)
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result);
+        Assert.DoesNotContain(snapshot.Properties.Keys, k => k.StartsWith("terminal.", StringComparison.Ordinal));
 
         await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
     }
@@ -599,6 +923,31 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
     private sealed class CustomResource(string name) : Resource(name)
     {
+    }
+
+    // Synthesise per-replica terminal layouts directly rather than going through the public
+    // WithTerminal() path so the test stays focused on backchannel snapshot stamping and doesn't
+    // depend on real DCP terminal-host provisioning. Mirrors DashboardServiceDataTerminalTests.
+    private static void AddSyntheticTerminalAnnotation(Resource resource, int replicaCount)
+    {
+        var hosts = new TerminalHostResource[replicaCount];
+        var baseDir = Directory.CreateTempSubdirectory("abrt-").FullName;
+        for (var i = 0; i < replicaCount; i++)
+        {
+            var pseudoId = $"test{i.ToString(System.Globalization.CultureInfo.InvariantCulture).PadLeft(7, '0')}";
+            var layout = new TerminalHostLayout(
+                replicaId: pseudoId,
+                parentReplicaIndex: i,
+                producerUdsPath: Path.Combine(baseDir, $"{pseudoId}.dcp.sock"),
+                consumerUdsPath: Path.Combine(baseDir, $"{pseudoId}.host.sock"),
+                controlUdsPath: Path.Combine(baseDir, $"{pseudoId}.ctrl.sock"),
+                metadataPath: Path.Combine(baseDir, $"{pseudoId}.metadata.json"));
+            hosts[i] = new TerminalHostResource($"{resource.Name}-terminalhost-{i}", resource, layout);
+        }
+
+        var annotation = new TerminalAnnotation(new TerminalOptions { Columns = 132, Rows = 40 });
+        annotation.Initialize(hosts);
+        resource.Annotations.Add(annotation);
     }
 
     private sealed class FixedTimeProvider : TimeProvider
@@ -1122,11 +1471,11 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     public async Task GetDashboardUrlsAsync_ReturnsBaseUrl_WhenDashboardAllowsAnonymousAccess()
     {
         var activities = new List<Activity>();
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activities.Add);
+        using var listener = ActivityListenerHelper.Create(ProfilingTelemetry.ActivitySource, onActivityStopped: activities.Add);
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = false,
             outputHelper,
-            $"{KnownConfigNames.AspNetCoreUrls}=http://localhost",
+            $"{KnownAspNetCoreConfigNames.Urls}=http://localhost",
             $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost",
             $"{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true",
             $"{KnownConfigNames.ProfilingEnabled}=true");
@@ -1841,19 +2190,4 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("/logs/cli_session.log", result.CliLogFilePath);
     }
-
-    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activityStopped
-        };
-
-        ActivitySource.AddActivityListener(listener);
-        return listener;
-    }
 }
-
-#pragma warning restore ASPIREINTERACTION001

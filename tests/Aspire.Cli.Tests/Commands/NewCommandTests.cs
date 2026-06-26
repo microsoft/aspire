@@ -20,6 +20,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -319,8 +320,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                     };
                     
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures());
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures(), NullLogger.Instance);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures(), NullLogger.Instance);
                     
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel, dailyChannel]);
                 };
@@ -397,7 +398,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
                     };
                     
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], fakeCache, new TestFeatures());
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], fakeCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel]);
                 };
                 
@@ -474,7 +475,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
                     };
 
-                    var prChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [], fakeCache, new TestFeatures());
+                    var prChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [], fakeCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([prChannel]);
                 };
 
@@ -1596,7 +1597,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                     };
 
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures());
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel]);
                 };
 
@@ -1793,7 +1794,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         }
                     };
 
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -1868,7 +1869,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         }
                     };
 
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -1919,7 +1920,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                             return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                         }
                     };
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -2015,7 +2016,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                             return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                         }
                     };
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures(), NullLogger.Instance);
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -2061,6 +2062,59 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         // the template to try to prompt for options.
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task NewCommandNonInteractive_WithSkillLocationsNone_DoesNotInstallAgentSkills()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = (sp) =>
+            {
+                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --skill-locations none");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        var agentsDir = Path.Combine(outputDir, ".agents", "skills");
+        Assert.False(Directory.Exists(agentsDir), $"Expected no agents/skills directory but found {agentsDir}");
+    }
+
+    [Fact]
+    public async Task NewCommandNonInteractive_WithSkillLocationsAndSkills_InstallsOnlySpecifiedSkills()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = (sp) =>
+            {
+                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --skill-locations standard --skills {CommonAgentApplicators.AspireSkillName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var outputDir = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        var aspireSkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
+        Assert.True(File.Exists(aspireSkillPath), $"Expected aspire skill file at {aspireSkillPath}");
+
+        var aspireifySkillPath = Path.Combine(outputDir, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
+        Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
     }
 
     [Fact]
@@ -3149,7 +3203,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                     GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
                         throw new NuGetPackageCacheException("Package search failed: simulated network failure")
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])

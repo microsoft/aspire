@@ -8,6 +8,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
@@ -38,20 +39,29 @@ internal sealed class ScaffoldingService : IScaffoldingService
     };
 
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
+    private readonly IAppHostServerSessionFactory _serverSessionFactory;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IInteractionService _interactionService;
     private readonly ILogger<ScaffoldingService> _logger;
+    private readonly CliExecutionContext _executionContext;
+    private readonly ProfilingTelemetry _profilingTelemetry;
 
     public ScaffoldingService(
         IAppHostServerProjectFactory appHostServerProjectFactory,
+        IAppHostServerSessionFactory serverSessionFactory,
         ILanguageDiscovery languageDiscovery,
         IInteractionService interactionService,
-        ILogger<ScaffoldingService> logger)
+        ILogger<ScaffoldingService> logger,
+        CliExecutionContext executionContext,
+        ProfilingTelemetry profilingTelemetry)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
+        _serverSessionFactory = serverSessionFactory;
         _languageDiscovery = languageDiscovery;
         _interactionService = interactionService;
         _logger = logger;
+        _executionContext = executionContext;
+        _profilingTelemetry = profilingTelemetry;
     }
 
     /// <inheritdoc />
@@ -73,7 +83,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
 
         // Step 1: Resolve SDK and package strategy
         var sdkVersion = string.IsNullOrWhiteSpace(context.SdkVersion)
-            ? VersionHelper.GetDefaultSdkVersion()
+            ? _executionContext.IdentitySdkVersion
             : context.SdkVersion;
         var config = AspireConfigFile.LoadOrCreate(directory.FullName, sdkVersion);
         if (!string.IsNullOrWhiteSpace(context.SdkVersion))
@@ -136,11 +146,11 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         // Step 2: Start the server temporarily for scaffolding and code generation
-        await using var serverSession = AppHostServerSession.Start(
-            appHostServerProject,
-            environmentVariables: null,
-            debug: false,
-            _logger);
+        await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+        // Short-lived RPC session: StartAsync() spawns the server. We never observe the
+        // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
+        // activity scope and the only failure mode we care about surfaces via the RPC call below.
+        await serverSession.StartAsync();
 
         // Step 3: Connect to server and get scaffold templates via RPC
         var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
@@ -406,7 +416,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
         }
 
-        var runtime = new GuestRuntime(runtimeSpec, _logger);
+        var runtime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _profilingTelemetry);
 
         var (initResult, initOutput) = await runtime.InitializeAsync(directory, cancellationToken);
         if (initResult != 0)

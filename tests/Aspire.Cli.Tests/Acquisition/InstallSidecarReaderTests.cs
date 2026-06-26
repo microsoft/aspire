@@ -22,6 +22,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [InlineData("brew", "Brew")]
     [InlineData("dotnet-tool", "DotnetTool")]
     [InlineData("localhive", "LocalHive")]
+    [InlineData("nix", "Nix")]
     public void TryRead_ParsesEachKnownSource(string wireValue, string expectedEnumName)
     {
         var expected = Enum.Parse<InstallSource>(expectedEnumName);
@@ -29,7 +30,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, $"{{\"source\":\"{wireValue}\"}}");
 
-        var reader = new InstallSidecarReader();
+        var reader = CliTestHelper.CreateSidecarReader(outputHelper);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var ok = Assert.IsType<InstallSidecarReadResult.Ok>(result);
@@ -43,7 +44,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var expectedPath = Path.Combine(workspace.WorkspaceRoot.FullName, InstallSidecarReader.SidecarFileName);
 
-        var reader = new InstallSidecarReader();
+        var reader = CliTestHelper.CreateSidecarReader(outputHelper);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var notFound = Assert.IsType<InstallSidecarReadResult.NotFound>(result);
@@ -53,7 +54,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryRead_ReturnsNotFoundForEmptyBinaryDir()
     {
-        var reader = new InstallSidecarReader();
+        var reader = CliTestHelper.CreateSidecarReader(outputHelper);
 
         var empty = Assert.IsType<InstallSidecarReadResult.NotFound>(reader.TryRead(string.Empty));
         Assert.Equal(string.Empty, empty.SidecarPath);
@@ -79,7 +80,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         {
             File.SetUnixFileMode(sidecarPath, UnixFileMode.None);
 
-            var reader = new InstallSidecarReader();
+            var reader = CliTestHelper.CreateSidecarReader(outputHelper);
             var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
             var invalid = Assert.IsType<InstallSidecarReadResult.Invalid>(result);
@@ -98,7 +99,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var sidecarPath = WriteSidecar(workspace.WorkspaceRoot.FullName, "{not valid json");
 
-        var reader = new InstallSidecarReader();
+        var reader = CliTestHelper.CreateSidecarReader(outputHelper);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var invalid = Assert.IsType<InstallSidecarReadResult.Invalid>(result);
@@ -121,7 +122,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, sidecarBody);
 
-        var reader = new InstallSidecarReader();
+        var reader = CliTestHelper.CreateSidecarReader(outputHelper);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var ok = Assert.IsType<InstallSidecarReadResult.Ok>(result);
@@ -135,7 +136,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, "{\"source\":\"script\"}");
 
-        var reader = new InstallSidecarReader();
+        var reader = CliTestHelper.CreateSidecarReader(outputHelper);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var ok = Assert.IsType<InstallSidecarReadResult.Ok>(result);
@@ -210,6 +211,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [InlineData("Brew", "brew")]
     [InlineData("DotnetTool", "dotnet-tool")]
     [InlineData("LocalHive", "localhive")]
+    [InlineData("Nix", "nix")]
     public void ToWireString_RoundTripsWithParseInstallSource(string enumName, string expectedWire)
     {
         var source = Enum.Parse<InstallSource>(enumName);
@@ -234,7 +236,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         var oversized = new string('a', (int)InstallSidecarReader.MaxSidecarBytes + 1);
         File.WriteAllText(sidecarPath, $"{{\"source\":\"{oversized}\"}}");
 
-        var reader = new InstallSidecarReader();
+        var reader = CliTestHelper.CreateSidecarReader(outputHelper);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var invalid = Assert.IsType<InstallSidecarReadResult.Invalid>(result);
@@ -266,7 +268,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes("{\"source\":\"script\"}")).ToArray();
         File.WriteAllBytes(sidecarPath, bytes);
 
-        var reader = new InstallSidecarReader();
+        var reader = CliTestHelper.CreateSidecarReader(outputHelper);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var ok = Assert.IsType<InstallSidecarReadResult.Ok>(result);
@@ -297,12 +299,63 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         WriteSidecar(workspace.WorkspaceRoot.FullName, "{\"source\":\"script\",\"futureField\":\"value\",\"nested\":{\"a\":1,\"b\":[1,2]}}");
 
-        var reader = new InstallSidecarReader();
+        var reader = CliTestHelper.CreateSidecarReader(outputHelper);
         var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
 
         var ok = Assert.IsType<InstallSidecarReadResult.Ok>(result);
         Assert.Equal(InstallSource.Script, ok.Info.Source);
         Assert.Equal("script", ok.Info.RawSource);
+    }
+
+    [Fact]
+    public void TryRead_PopulatesIdentityFields_WhenPresent()
+    {
+        // The identity overrides (channel/version/commit) plus the optional
+        // NuGet service-index override all parse straight off the sidecar.
+        // Older sidecars omit these fields; the resolver layer applies its
+        // own fallback when they are null, so the reader's contract is just
+        // "round-trip what's on disk".
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        WriteSidecar(
+            workspace.WorkspaceRoot.FullName,
+            """
+            {
+              "source": "script",
+              "channel": "staging",
+              "version": "13.5.0-preview.1.99999.1",
+              "commit": "deadbeef",
+              "nugetServiceIndexOverride": "http://localhost:5400/v3/index.json"
+            }
+            """);
+
+        var reader = CliTestHelper.CreateSidecarReader(outputHelper);
+        var ok = Assert.IsType<InstallSidecarReadResult.Ok>(reader.TryRead(workspace.WorkspaceRoot.FullName));
+
+        Assert.Equal(InstallSource.Script, ok.Info.Source);
+        Assert.Equal("staging", ok.Info.Channel);
+        Assert.Equal("13.5.0-preview.1.99999.1", ok.Info.Version);
+        Assert.Equal("deadbeef", ok.Info.Commit);
+        Assert.Equal("http://localhost:5400/v3/index.json", ok.Info.NuGetServiceIndexOverride);
+    }
+
+    [Fact]
+    public void TryRead_IdentityFieldsDefaultToNull_WhenAbsent()
+    {
+        // Source-only sidecar (the shape shipped before the identity sidecar
+        // work) must continue to parse cleanly with all identity fields null.
+        // This is the bytes-on-disk compatibility guarantee that lets older
+        // installers and parents coexist with the new resolver.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        WriteSidecar(workspace.WorkspaceRoot.FullName, "{\"source\":\"script\"}");
+
+        var reader = CliTestHelper.CreateSidecarReader(outputHelper);
+        var ok = Assert.IsType<InstallSidecarReadResult.Ok>(reader.TryRead(workspace.WorkspaceRoot.FullName));
+
+        Assert.Equal(InstallSource.Script, ok.Info.Source);
+        Assert.Null(ok.Info.Channel);
+        Assert.Null(ok.Info.Version);
+        Assert.Null(ok.Info.Commit);
+        Assert.Null(ok.Info.NuGetServiceIndexOverride);
     }
 
     private static string WriteSidecar(string binaryDir, string content)

@@ -8,8 +8,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dashboard;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 /// <summary>
 /// Models the state for <see cref="DashboardService"/>, as that service is constructed
 /// for each gRPC request. This long-lived object holds state across requests.
@@ -39,6 +37,31 @@ internal sealed class DashboardServiceData : IDisposable
         {
             static GenericResourceSnapshot CreateResourceSnapshot(IResource resource, string resourceId, DateTime creationTimestamp, CustomResourceSnapshot snapshot)
             {
+                // If the resource has a TerminalAnnotation, stamp the per-replica terminal
+                // properties onto the snapshot so the Dashboard can:
+                //   * detect that a terminal is available (HasTerminal),
+                //   * build a /api/terminal?resource=<name>&replica=<index> URL pointing
+                //     at the right replica (TryGetTerminalReplicaInfo).
+                //
+                // The dashboard never *follows* this path itself - it only displays it
+                // (masked) in the resource details panel and uses it via
+                // ITerminalConnectionResolver, which resolves replica -> UDS server-side
+                // so an authenticated browser cannot coerce the dashboard into
+                // connecting to arbitrary UDS endpoints by tampering with the path.
+                //
+                // The same stamping is applied on the auxiliary backchannel path so that
+                // `aspire describe` and the VS Code extension observe identical terminal
+                // metadata; both call sites share TerminalResourceSnapshotProperties.
+                var terminalProperties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource, resourceId, snapshot.Properties);
+
+                // ImmutableArray's == operator compares the underlying array reference, so this is
+                // true only when AddTerminalProperties returned the original array unchanged (no
+                // TerminalAnnotation). Avoid rebuilding the snapshot in that common case.
+                if (terminalProperties != snapshot.Properties)
+                {
+                    snapshot = snapshot with { Properties = terminalProperties };
+                }
+
                 return new GenericResourceSnapshot(snapshot)
                 {
                     Uid = resourceId,
@@ -229,6 +252,11 @@ internal sealed class DashboardServiceData : IDisposable
                 // If we're processing updates because of a dependency change, check to see if this input is depended on.
                 if (dependencyChange)
                 {
+                    // Response updates are sent by the dashboard when an input marked
+                    // UpdateStateOnChange changes. Only queue dependents whose source value actually
+                    // changed; otherwise a validation/update roundtrip for one field could repeatedly
+                    // restart unrelated dynamic loads. Inputs that need an initial load before any user
+                    // change must opt into AlwaysLoadOnStart.
                     var dependentInputs = inputsInfo.Inputs.Where(
                         i => i.DynamicLoading is { } dynamic &&
                         (dynamic.DependsOnInputs?.Any(d => string.Equals(modelInput.Name, d, StringComparisons.InteractionInputName)) ?? false));
@@ -264,4 +292,3 @@ internal enum ExecuteCommandResultType
     Canceled
 }
 
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

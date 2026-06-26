@@ -17,19 +17,29 @@
         <target state="needs-review-translation">AppHost 版本不兼容。请升级应用主机或 Aspire CLI。</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateAppHost">
+        <source>The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</source>
+        <target state="new">The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateCli">
+        <source>The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</source>
+        <target state="new">The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostShutDown">
         <source>The application shut down.</source>
         <target state="new">The application shut down.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
-        <source>Aspire CLI Version</source>
-        <target state="translated">Aspire CLI 版本</target>
+        <source>Aspire CLI version</source>
+        <target state="needs-review-translation">Aspire CLI 版本</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingSDKVersion">
-        <source>Aspire.Hosting Version</source>
-        <target state="translated">Aspire.Hosting 版本</target>
+        <source>Aspire.Hosting version</source>
+        <target state="needs-review-translation">Aspire.Hosting 版本</target>
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
@@ -163,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
-        <source>Required Capability</source>
-        <target state="translated">所需功能</target>
+        <source>Required capability</source>
+        <target state="needs-review-translation">所需功能</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingProjects">

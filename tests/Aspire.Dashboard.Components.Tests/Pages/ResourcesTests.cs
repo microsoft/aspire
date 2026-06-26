@@ -14,6 +14,7 @@ using ProtobufValue = Google.Protobuf.WellKnownTypes.Value;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -208,6 +209,37 @@ public partial class ResourcesTests : DashboardTestContext
 
         // Assert
         Assert.Single(initializeGraphInvocationHandler.Invocations);
+        var focusInvocation = JSInterop.Invocations.Single(i => i.Identifier == "focusElement");
+        Assert.Equal("resourcesGraphContainer", focusInvocation.Arguments[0]);
+        Assert.Equal(true, focusInvocation.Arguments[1]);
+    }
+
+    [Fact]
+    public void TableView_FocusesAccessibleScrollContainerOnInitialRender()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        var scrollContainer = cut.Find("#resourcesScrollContainer");
+        var loc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.Resources>>();
+
+        Assert.Equal("0", scrollContainer.GetAttribute("tabindex"));
+        Assert.Equal("region", scrollContainer.GetAttribute("role"));
+        Assert.Equal(loc[nameof(Dashboard.Resources.Resources.ResourcesHeader)].Value, scrollContainer.GetAttribute("aria-label"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(JSInterop.Invocations, invocation =>
+                invocation.Identifier == "focusElement" &&
+                invocation.Arguments.Count == 2 &&
+                string.Equals(invocation.Arguments[0]?.ToString(), "resourcesScrollContainer", StringComparison.Ordinal) &&
+                string.Equals(invocation.Arguments[1]?.ToString(), bool.TrueString, StringComparison.OrdinalIgnoreCase));
+        });
     }
 
     [Fact]
@@ -442,7 +474,6 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal(2, filteredResources.Count);
         Assert.Contains(filteredResources, r => r.Name == "myapp");
         Assert.Contains(filteredResources, r => r.Name == "mycontainer");
-        Assert.DoesNotContain(filteredResources, r => r.Name == "myparameter");
     }
 
     [Fact]
@@ -474,8 +505,6 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal(2, filteredResources.Count);
         Assert.Contains(filteredResources, r => r.Name == "myparameter1");
         Assert.Contains(filteredResources, r => r.Name == "myparameter2");
-        Assert.DoesNotContain(filteredResources, r => r.Name == "myapp");
-        Assert.DoesNotContain(filteredResources, r => r.Name == "mycontainer");
     }
 
     [Fact]
@@ -509,11 +538,10 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal(2, filteredResources.Count);
         Assert.Contains(filteredResources, r => r.Name == "myparameter1");
         Assert.Contains(filteredResources, r => r.Name == "myparameter2");
-        Assert.DoesNotContain(filteredResources, r => r.Name == "myapp");
     }
 
     [Fact]
-    public void GraphView_ShowsAllResources()
+    public void GraphView_ExcludesParameters()
     {
         // Arrange
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -539,11 +567,50 @@ public partial class ResourcesTests : DashboardTestContext
         cut.Instance.PageViewModel.SelectedViewKind = Components.Pages.Resources.ResourceViewKind.Graph;
         cut.Render();
 
-        // Assert - Graph view should show all resources (no parameter filtering)
+        // Assert - Graph view should exclude parameters (they have their own dedicated view)
         var filteredResources = cut.Instance.GetFilteredResources().ToList();
-        Assert.Equal(2, filteredResources.Count);
+        Assert.Single(filteredResources);
         Assert.Contains(filteredResources, r => r.Name == "myapp");
-        Assert.Contains(filteredResources, r => r.Name == "myparameter");
+    }
+
+    [Fact]
+    public void GetVisibleViewKindForSelectedResource_GraphParameter_ReturnsParameters()
+    {
+        var parameter = CreateResource("myparameter", KnownResourceTypes.Parameter, "Running", null);
+
+        var viewKind = Components.Pages.Resources.GetVisibleViewKindForSelectedResource(Components.Pages.Resources.ResourceViewKind.Graph, parameter);
+
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Parameters, viewKind);
+    }
+
+    [Fact]
+    public void GetVisibleViewKindForSelectedResource_GraphNonParameter_ReturnsGraph()
+    {
+        var resource = CreateResource("myapp", "Project", "Running", null);
+
+        var viewKind = Components.Pages.Resources.GetVisibleViewKindForSelectedResource(Components.Pages.Resources.ResourceViewKind.Graph, resource);
+
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Graph, viewKind);
+    }
+
+    [Fact]
+    public void GetVisibleViewKindForViewChange_GraphParameter_ReturnsParameters()
+    {
+        var parameter = CreateResource("myparameter", KnownResourceTypes.Parameter, "Running", null);
+
+        var viewKind = Components.Pages.Resources.GetVisibleViewKindForViewChange(Components.Pages.Resources.ResourceViewKind.Graph, parameter);
+
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Parameters, viewKind);
+    }
+
+    [Fact]
+    public void GetVisibleViewKindForViewChange_ParametersNonParameter_ReturnsParameters()
+    {
+        var resource = CreateResource("myapp", "Project", "Running", null);
+
+        var viewKind = Components.Pages.Resources.GetVisibleViewKindForViewChange(Components.Pages.Resources.ResourceViewKind.Parameters, resource);
+
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Parameters, viewKind);
     }
 
     [Fact]
@@ -557,7 +624,9 @@ public partial class ResourcesTests : DashboardTestContext
                 ProtobufValue.ForString("my-secret-value"),
                 isValueSensitive: true,
                 knownProperty: null,
-                priority: 0));
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false));
 
         var initialResources = new List<ResourceViewModel>
         {
@@ -601,7 +670,9 @@ public partial class ResourcesTests : DashboardTestContext
                 ProtobufValue.ForString("Parameter 'myparameter' not found in configuration."),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: 0));
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false));
 
         var initialResources = new List<ResourceViewModel>
         {
@@ -643,7 +714,9 @@ public partial class ResourcesTests : DashboardTestContext
                 ProtobufValue.ForString("Error initializing parameter"),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: 0));
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false));
 
         var initialResources = new List<ResourceViewModel>
         {

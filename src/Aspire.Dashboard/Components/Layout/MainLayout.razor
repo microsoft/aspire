@@ -29,7 +29,8 @@
                 <FluentIcon Value="@(new AspireIcons.Size24.GitHub())" Color="Color.Neutral"/>
             </FluentAnchor>
             <FluentButton Class="header-button"
-                          Appearance="Appearance.Stealth" OnClick="@LaunchHelpAsync"
+                          Id="@HelpButtonId"
+                          Appearance="Appearance.Stealth" OnClick="@(() => LaunchHelpAsync(HelpButtonId))"
                           Title="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]" aria-label="@Loc[nameof(Layout.MainLayoutAspireDashboardHelpLink)]">
                 <FluentIcon Value="@(new Icons.Regular.Size24.QuestionCircle())" Color="Color.Neutral"/>
             </FluentButton>
@@ -44,14 +45,16 @@
             @if (AIContextProvider.Enabled)
             {
                 <FluentButton Class="@("header-button" + ((AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog) ? " header-button-selected" : ""))"
-                              Appearance="Appearance.Stealth" OnClick="@LaunchAssistantAsync"
+                              Id="@AssistantButtonId"
+                              Appearance="Appearance.Stealth" OnClick="@(() => LaunchAssistantAsync(AssistantButtonId))"
                               Title="@AIAssistantLoc[nameof(AIAssistant.AIAssistantLaunchButtonText)]" aria-label="@AIAssistantLoc[nameof(AIAssistant.AIAssistantLaunchButtonText)]">
                     <FluentIcon Value="@(new AspireIcons.Size24.GitHubCopilot())" Color="Color.Neutral" />
                 </FluentButton>
             }
             <NotificationsHeaderButton OnClick="@LaunchNotificationsAsync" />
             <FluentButton Class="header-button"
-                          Appearance="Appearance.Stealth" OnClick="@LaunchSettingsAsync"
+                          Id="@SettingsButtonId"
+                          Appearance="Appearance.Stealth" OnClick="@(() => LaunchSettingsAsync(SettingsButtonId))"
                           Title="@Loc[nameof(Layout.MainLayoutLaunchSettings)]" aria-label="@Loc[nameof(Layout.MainLayoutLaunchSettings)]">
                 <FluentIcon Value="@(new Icons.Regular.Size24.Settings())" Color="Color.Neutral"/>
             </FluentButton>
@@ -60,7 +63,7 @@
 
         @if (AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog)
         {
-            <Aspire.Dashboard.Components.Dialogs.AssistantSidebarDialog Content="@(new AssistantDialogViewModel { Chat = vm })" />
+            <Aspire.Dashboard.Components.Dialogs.AssistantSidebarDialog Content="@(new AssistantDialogViewModel { Chat = vm, ReturnFocusElementId = _assistantReturnFocusElementId })" />
         }
         <DesktopNavMenu/>
     }
@@ -75,6 +78,7 @@
             <UserProfile/>
             <FluentButton
                 IconEnd="@(_isNavMenuOpen ? new Icons.Regular.Size24.Dismiss() : new Icons.Regular.Size24.Navigation())"
+                Id="@NavigationButtonId"
                 Title="@(DialogsLoc[nameof(Dialogs.HelpDialogCategoryNavigation)])"
                 Appearance="Appearance.Stealth"
                 BackgroundColor="transparent"
@@ -116,6 +120,7 @@
     <FluentTooltipProvider />
     <FluentMenuProvider />
     <InteractionsProvider />
+    <ResourceServiceConnectionProvider />
     <div id="blazor-error-ui">
         @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]
         <a href="" class="reload">@Loc[nameof(Layout.MainLayoutUnhandledErrorReload)]</a>

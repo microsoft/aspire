@@ -12,6 +12,7 @@ interface Deadline {
 }
 
 let controlRevision = Date.now();
+let atomicWriteSequence = 0;
 let workspaceFolderOpened = false;
 
 export async function waitForRepositoryIdle(timeoutMs = 120000): Promise<ExtensionE2EStateFile> {
@@ -49,7 +50,10 @@ export async function waitForAppHostLaunching(appHostPath = getPrimaryAppHostPro
 
 export async function waitForNoRunningAppHost(timeoutMs = 90000, appHostPath = getPrimaryAppHostProjectPath()): Promise<ExtensionE2EStateFile> {
     return await waitForExtensionState(
-        file => findRunningAppHost(file.state, appHostPath) === undefined && !file.state.launchingPaths.some(launchingPath => isSamePath(launchingPath, appHostPath)),
+        file =>
+            findRunningAppHost(file.state, appHostPath) === undefined
+            && !file.state.launchingPaths.some(launchingPath => isSamePath(launchingPath, appHostPath))
+            && !file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath)),
         `AppHost '${appHostPath}' to stop`,
         timeoutMs);
 }
@@ -118,6 +122,23 @@ export function getCommandInvocationCount(command?: string): number {
         : file.commandInvocations;
 
     return Math.max(0, ...matchingEvents.map(event => event.sequence));
+}
+
+export function getStoppingPathEventCount(): number {
+    return Math.max(0, ...readStateFile().stoppingPathEvents.map(event => event.sequence));
+}
+
+export async function waitForStoppingPathEvent(appHostPath: string, state: 'entered' | 'left', afterSequence: number, timeoutMs = 60000): Promise<ExtensionE2EStateFile['stoppingPathEvents'][number]> {
+    const file = await waitForExtensionState(
+        stateFile => stateFile.stoppingPathEvents.some(event => event.sequence > afterSequence && event.state === state && isSamePath(event.appHostPath, appHostPath)),
+        `AppHost '${appHostPath}' stopping path ${state} event`,
+        timeoutMs);
+    const event = file.stoppingPathEvents.find(candidate => candidate.sequence > afterSequence && candidate.state === state && isSamePath(candidate.appHostPath, appHostPath));
+    if (!event) {
+        throw new Error(`Stopping path '${state}' event for '${appHostPath}' was not found even though the state predicate matched.`);
+    }
+
+    return event;
 }
 
 export async function waitForTerminalCommand(
@@ -304,9 +325,9 @@ export async function applyE2eControl(payload: Record<string, unknown>, waitFor:
     }
 
     const revision = ++controlRevision;
-    fs.writeFileSync(controlFilePath, JSON.stringify({ revision, ...payload }, undefined, 2));
+    writeJsonFileAtomic(controlFilePath, { revision, ...payload });
     const stateFile = await waitForExtensionState(
-        file => file.control?.revision === revision && (file.control.status === 'error' || file.control.status === 'applied' || (waitFor === 'started' && file.control.status === 'started')),
+        file => file.control?.revision === revision && (file.control.status === 'error' || (waitFor === 'applied' ? file.control.status === 'applied' : file.control.startedObserved === true)),
         `E2E control revision ${revision}`,
         timeoutMs);
 
@@ -319,6 +340,34 @@ export async function applyE2eControl(payload: Record<string, unknown>, waitFor:
     }
 
     return stateFile.control;
+}
+
+function writeJsonFileAtomic(filePath: string, value: unknown): void {
+    const temporaryPath = `${filePath}.${process.pid}.${atomicWriteSequence++}.tmp`;
+    fs.writeFileSync(temporaryPath, JSON.stringify(value, undefined, 2));
+    try {
+        renameFileWithRetry(temporaryPath, filePath);
+    }
+    finally {
+        fs.rmSync(temporaryPath, { force: true });
+    }
+}
+
+function renameFileWithRetry(sourcePath: string, destinationPath: string): void {
+    const maxAttempts = process.platform === 'win32' ? 10 : 1;
+    for (let attempt = 1; ; attempt++) {
+        try {
+            fs.renameSync(sourcePath, destinationPath);
+            return;
+        }
+        catch (error) {
+            if (attempt >= maxAttempts || !isRetryableRenameError(error)) {
+                throw error;
+            }
+
+            sleepSynchronously(25);
+        }
+    }
 }
 
 function createDeadline(timeoutMs: number): Deadline {
@@ -368,6 +417,14 @@ function isRetryableStateFileReadError(error: unknown): boolean {
     }
 
     return error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY' || error.code === 'ENOENT';
+}
+
+function isRetryableRenameError(error: unknown): boolean {
+    if (process.platform !== 'win32' || !error || typeof error !== 'object' || !('code' in error)) {
+        return false;
+    }
+
+    return error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'EBUSY' || error.code === 'EEXIST';
 }
 
 function isDebugSessionForAppHost(session: AspireDebugSessionState, appHostPath: string): boolean {
@@ -440,7 +497,7 @@ function sanitizeUrlForDiagnostics(url: string): string {
     }
 }
 
-function sleepSynchronously(milliseconds: number): void {
+export function sleepSynchronously(milliseconds: number): void {
     const buffer = new SharedArrayBuffer(4);
     Atomics.wait(new Int32Array(buffer), 0, 0, milliseconds);
 }

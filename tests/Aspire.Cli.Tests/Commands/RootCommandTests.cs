@@ -13,6 +13,130 @@ namespace Aspire.Cli.Tests.Commands;
 public class RootCommandTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task RootCommandVersionOption_PrintsIdentityVersion_WhenIdentityOverridden()
+    {
+        // Emulates `ASPIRE_CLI_VERSION=13.4.2` so `--version` must report the identity version,
+        // not the assembly's build-time stamp.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityVersion: "13.4.2",
+                identityOverridden: true);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--version");
+
+        var output = new StringWriter();
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("13.4.2", output.ToString().Trim());
+    }
+
+    [Fact]
+    public async Task RootCommandVersionShortAlias_PrintsIdentityVersion_WhenIdentityOverridden()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityVersion: "13.4.2",
+                identityOverridden: true);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("-v");
+
+        var output = new StringWriter();
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("13.4.2", output.ToString().Trim());
+    }
+
+    [Fact]
+    public async Task RootCommandVersionOption_IncludesCommitSha_WhenCommitProvided()
+    {
+        // When a commit SHA is provided, it should be included in the version output as "+<sha>".
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityVersion: "13.4.2",
+                identityCommit: "abcdef01",
+                identityOverridden: true);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--version");
+
+        var output = new StringWriter();
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("13.4.2+abcdef01", output.ToString().Trim());
+    }
+
+    /// <summary>
+    /// Theory test validating version output across all build stages/channels:
+    /// PR builds, daily builds, staging builds, and stable builds.
+    /// Tests various override combinations (env vars, sidecar) to ensure the output
+    /// matches the legacy behavior (version + optional +sha).
+    /// </summary>
+    [Theory]
+    [InlineData("pr-18087", "13.5.0-preview.1.26318.5", "abc123def456", "13.5.0-preview.1.26318.5+abc123def456")]
+    [InlineData("pr-18087", "13.5.0-preview.1.26318.5", null, "13.5.0-preview.1.26318.5")]
+    [InlineData("daily", "13.5.0-preview.1.26318.1", "95f0d296", "13.5.0-preview.1.26318.1+95f0d296")]
+    [InlineData("daily", "13.5.0-preview.1.26318.1", null, "13.5.0-preview.1.26318.1")]
+    [InlineData("staging", "13.4.0-preview.1.26280.6", "abcdef01", "13.4.0-preview.1.26280.6+abcdef01")]
+    [InlineData("staging", "13.4.0", "abcdef01", "13.4.0+abcdef01")]
+    [InlineData("stable", "13.4.5", "73114e86c64aeb9f3f3c7da8e37df1ae4281b27e", "13.4.5+73114e86c64aeb9f3f3c7da8e37df1ae4281b27e")]
+    [InlineData("local", "13.5.0-dev", "localcommit123", "13.5.0-dev+localcommit123")]
+    [InlineData("local", "13.5.0-dev", null, "13.5.0-dev")]
+    // IdentityVersion may already carry a "+<sha>" build-metadata suffix (e.g. ASPIRE_CLI_VERSION
+    // set to a full informational version). The output must keep a single "+" and never double it.
+    [InlineData("stable", "13.4.5+73114e86", "73114e86", "13.4.5+73114e86")]
+    [InlineData("stable", "13.4.5+73114e86", null, "13.4.5+73114e86")]
+    // When the version carries an embedded "+<sha>" AND an explicit commit is provided, the
+    // explicit commit must win and the embedded sha must be discarded (single "+", explicit value).
+    [InlineData("stable", "13.4.5+aaaaaaaa", "bbbbbbbb", "13.4.5+bbbbbbbb")]
+    public async Task RootCommandVersion_ProducesCorrectOutput_AcrossBuildStages(
+        string channel,
+        string version,
+        string? commit,
+        string expectedOutput)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                identityChannel: channel,
+                identityVersion: version,
+                identityCommit: commit,
+                identityOverridden: true);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--version");
+
+        var output = new StringWriter();
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal(expectedOutput, output.ToString().Trim());
+    }
+
+    [Fact]
     public async Task RootCommandWithHelpArgumentReturnsZero()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

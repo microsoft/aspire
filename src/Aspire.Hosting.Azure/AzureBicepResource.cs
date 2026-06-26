@@ -14,7 +14,6 @@ using Aspire.Hosting.Azure.Utils;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Azure;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -272,15 +271,29 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         if (Scope is not null)
         {
             context.Writer.WriteStartObject("scope");
-            var resourceGroup = Scope.ResourceGroup switch
+            WriteScopeValue(context, "resourceGroup", Scope.ResourceGroup);
+            WriteScopeValue(context, "subscription", Scope.Subscription);
+            if (Scope.IsTenantScope)
             {
-                IManifestExpressionProvider output => output.ValueExpression,
-                object obj => obj.ToString(),
-                null => ""
-            };
-            context.Writer.WriteString("resourceGroup", resourceGroup);
+                context.Writer.WriteString("tenant", "current");
+            }
             context.Writer.WriteEndObject();
         }
+    }
+
+    private static void WriteScopeValue(ManifestPublishingContext context, string propertyName, object? scopeValue)
+    {
+        if (scopeValue is null)
+        {
+            return;
+        }
+
+        var value = scopeValue switch
+        {
+            IManifestExpressionProvider output => output.ValueExpression,
+            object obj => obj.ToString(),
+        };
+        context.Writer.WriteString(propertyName, value);
     }
 
     /// <summary>
@@ -306,7 +319,6 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         }
 
         var bicepProvisioner = context.Services.GetRequiredService<IBicepProvisioner>();
-        var configuration = context.Services.GetRequiredService<IConfiguration>();
 
         // Find the AzureEnvironmentResource from the application model
         var azureEnvironment = context.Model.Resources.OfType<AzureEnvironmentResource>().FirstOrDefault();
@@ -326,7 +338,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
             try
             {
                 if (await bicepProvisioner.ConfigureResourceAsync(
-                    configuration, resource, context.CancellationToken).ConfigureAwait(false))
+                    resource, context.CancellationToken).ConfigureAwait(false))
                 {
                     resource.ProvisioningTaskCompletionSource?.TrySetResult();
                     await resourceTask.CompleteAsync(
@@ -374,83 +386,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
     /// <param name="requestEx">The Azure RequestFailedException containing the error response</param>
     /// <returns>The most specific error message found, or the original exception message if parsing fails</returns>
     internal static string ExtractDetailedErrorMessage(RequestFailedException requestEx)
-    {
-        try
-        {
-            var response = requestEx.GetRawResponse();
-            if (response?.Content is not null)
-            {
-                var responseContent = response.Content.ToString();
-                if (!string.IsNullOrEmpty(responseContent))
-                {
-                    if (JsonNode.Parse(responseContent) is JsonObject responseObj)
-                    {
-                        if (responseObj["error"] is JsonObject errorObj)
-                        {
-                            var code = errorObj["code"]?.ToString();
-                            var message = errorObj["message"]?.ToString();
-
-                            if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(message))
-                            {
-                                if (errorObj["details"] is JsonArray detailsArray && detailsArray.Count > 0)
-                                {
-                                    var deepestErrorMessage = ExtractDeepestErrorMessage(detailsArray);
-                                    if (!string.IsNullOrEmpty(deepestErrorMessage))
-                                    {
-                                        return deepestErrorMessage;
-                                    }
-                                }
-
-                                return $"Error code = {code}, Message = {message}";
-                            }
-                        }
-
-                        if (responseObj["properties"]?["error"] is JsonObject deploymentErrorObj)
-                        {
-                            var code = deploymentErrorObj["code"]?.ToString();
-                            var message = deploymentErrorObj["message"]?.ToString();
-
-                            if (!string.IsNullOrEmpty(code) && !string.IsNullOrEmpty(message))
-                            {
-                                return $"Error code = {code}, Message = {message}";
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        catch (JsonException) { }
-
-        return requestEx.Message;
-    }
-
-    private static string ExtractDeepestErrorMessage(JsonArray detailsArray)
-    {
-        foreach (var detail in detailsArray)
-        {
-            if (detail is JsonObject detailObj)
-            {
-                var detailCode = detailObj["code"]?.ToString();
-                var detailMessage = detailObj["message"]?.ToString();
-
-                if (detailObj["details"] is JsonArray nestedDetailsArray && nestedDetailsArray.Count > 0)
-                {
-                    var deeperMessage = ExtractDeepestErrorMessage(nestedDetailsArray);
-                    if (!string.IsNullOrEmpty(deeperMessage))
-                    {
-                        return deeperMessage;
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(detailCode) && !string.IsNullOrEmpty(detailMessage))
-                {
-                    return $"Error code = {detailCode}, Message = {detailMessage}";
-                }
-            }
-        }
-
-        return string.Empty;
-    }
+        => AzureProvisioningFailureDetails.FromRequestFailedException(requestEx).ToDetailedMessage();
 
     /// <summary>
     /// Known parameters that will be filled in automatically by the host environment.

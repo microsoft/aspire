@@ -387,19 +387,32 @@ jobs:
           ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
           HEARTBEAT_PID=$!
 
-          # Run tests
+          # Run tests. Capture the real MTP exit code without letting "set -e" abort the step:
+          # "|| TEST_EXIT_CODE=$?" both records the code and keeps the compound command successful.
+          TEST_EXIT_CODE=0
           dotnet ${{ env.TEST_ASSEMBLY_NAME }}.dll \
             ${{ env.EFFECTIVE_MTP_BASE_ARGS }} \
             --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" \
             --results-directory ${{ github.workspace }}/testresults \
             --filter-not-trait "category=failing" \
-            ${{ inputs.extraTestArgs }} \
-            ${{ inputs.ignoreTestFailures && '|| true' || '' }}
-          TEST_EXIT_CODE=$?
+            ${{ inputs.extraTestArgs }} || TEST_EXIT_CODE=$?
+
+          # Persist the MTP exit code so the "Verify test results exist" gate can classify the outcome
+          # (test failure vs. infrastructure/crash) even though we exit 0 below in quarantine mode.
+          echo "$TEST_EXIT_CODE" > "${{ github.workspace }}/test-exit-code.txt"
 
           # Stop heartbeat monitor
           kill $HEARTBEAT_PID 2>/dev/null || true
           wait $HEARTBEAT_PID 2>/dev/null || true
+
+          # When ignoreTestFailures is true (the quarantine workflow) a failing test must not fail the job
+          # here; the authoritative pass/fail decision is made later by "Verify test results exist".
+          if [ "${{ inputs.ignoreTestFailures }}" = "true" ]; then
+            if [ "$TEST_EXIT_CODE" -ne 0 ]; then
+              echo "::warning::Tests reported a non-success exit code ($TEST_EXIT_CODE); deferring to the 'Verify test results exist' gate."
+            fi
+            exit 0
+          fi
 
           exit $TEST_EXIT_CODE
 
@@ -448,9 +461,24 @@ jobs:
             }
           }
 
-          if ('${{ inputs.ignoreTestFailures }}' -ne 'true') {
-            exit $testExitCode
+          # Persist the MTP exit code so the "Verify test results exist" gate can classify the outcome
+          # (test failure vs. infrastructure/crash) even though we exit 0 below in quarantine mode.
+          Set-Content -Path "${{ github.workspace }}/test-exit-code.txt" -Value $testExitCode
+
+          # When ignoreTestFailures is true (the quarantine workflow) a failing test must not fail the job
+          # here. The Linux/macOS step neutralizes the exit code inline; this pwsh step captures
+          # $testExitCode instead, so it must explicitly exit 0. Otherwise the non-zero $LASTEXITCODE
+          # survives to the end of the script and GitHub's pwsh wrapper — which appends
+          # "if ((Test-Path variable:\LASTEXITCODE)) { exit $LASTEXITCODE }" — propagates it and fails the
+          # job. The authoritative pass/fail decision is made later by "Verify test results exist".
+          if ('${{ inputs.ignoreTestFailures }}' -eq 'true') {
+            if ($testExitCode -ne 0) {
+              Write-Host "::warning::Tests reported a non-success exit code ($testExitCode); deferring to the 'Verify test results exist' gate."
+            }
+            exit 0
           }
+
+          exit $testExitCode
 
       - name: Run tests (Linux/macOS)
         if: ${{ fromJson(inputs.properties).requiresNugets != true && runner.os != 'Windows' }}
@@ -476,7 +504,9 @@ jobs:
           ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
           HEARTBEAT_PID=$!
 
-          # Run tests
+          # Run tests. Capture the real MTP exit code without letting "set -e" abort the step:
+          # "|| TEST_EXIT_CODE=$?" both records the code and keeps the compound command successful.
+          TEST_EXIT_CODE=0
           ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} \
             /p:ContinuousIntegrationBuild=true \
             /p:TrxFileNamePrefix="${{ inputs.testShortName }}" \
@@ -488,13 +518,24 @@ jobs:
             ${{ env.EFFECTIVE_MTP_BASE_ARGS }} \
             --report-trx \
             --results-directory ${{ github.workspace }}/testresults \
-            ${{ inputs.extraTestArgs }} \
-            ${{ inputs.ignoreTestFailures && '|| true' || '' }}
-          TEST_EXIT_CODE=$?
+            ${{ inputs.extraTestArgs }} || TEST_EXIT_CODE=$?
+
+          # Persist the MTP exit code so the "Verify test results exist" gate can classify the outcome
+          # (test failure vs. infrastructure/crash) even though we exit 0 below in quarantine mode.
+          echo "$TEST_EXIT_CODE" > "${{ github.workspace }}/test-exit-code.txt"
 
           # Stop heartbeat monitor
           kill $HEARTBEAT_PID 2>/dev/null || true
           wait $HEARTBEAT_PID 2>/dev/null || true
+
+          # When ignoreTestFailures is true (the quarantine workflow) a failing test must not fail the job
+          # here; the authoritative pass/fail decision is made later by "Verify test results exist".
+          if [ "${{ inputs.ignoreTestFailures }}" = "true" ]; then
+            if [ "$TEST_EXIT_CODE" -ne 0 ]; then
+              echo "::warning::Tests reported a non-success exit code ($TEST_EXIT_CODE); deferring to the 'Verify test results exist' gate."
+            fi
+            exit 0
+          fi
 
           exit $TEST_EXIT_CODE
 
@@ -550,14 +591,55 @@ jobs:
             }
           }
 
-          if ('${{ inputs.ignoreTestFailures }}' -ne 'true') {
-            exit $testExitCode
+          # Persist the MTP exit code so the "Verify test results exist" gate can classify the outcome
+          # (test failure vs. infrastructure/crash) even though we exit 0 below in quarantine mode.
+          Set-Content -Path "${{ github.workspace }}/test-exit-code.txt" -Value $testExitCode
+
+          # When ignoreTestFailures is true (the quarantine workflow) a failing test must not fail the job
+          # here. The Linux/macOS step neutralizes the exit code inline; this pwsh step captures
+          # $testExitCode instead, so it must explicitly exit 0. Otherwise the non-zero $LASTEXITCODE
+          # survives to the end of the script and GitHub's pwsh wrapper — which appends
+          # "if ((Test-Path variable:\LASTEXITCODE)) { exit $LASTEXITCODE }" — propagates it and fails the
+          # job. The authoritative pass/fail decision is made later by "Verify test results exist".
+          if ('${{ inputs.ignoreTestFailures }}' -eq 'true') {
+            if ($testExitCode -ne 0) {
+              Write-Host "::warning::Tests reported a non-success exit code ($testExitCode); deferring to the 'Verify test results exist' gate."
+            }
+            exit 0
           }
+
+          exit $testExitCode
 
       - name: Verify test results exist
         if: ${{ inputs.ignoreTestFailures }}
         shell: pwsh
         run: |
+          # Classify the test run using the MTP exit code captured by the test step.
+          # https://learn.microsoft.com/dotnet/core/testing/microsoft-testing-platform-troubleshooting#exit-codes
+          # In quarantine mode (ignoreTestFailures) we tolerate genuine test outcomes — 2 (a test failed),
+          # 3 (session aborted, e.g. a hangdump timeout), 7 (the test host crashed) and 13 (--maximum-failed-tests
+          # reached) — because quarantined tests are flaky by definition. But a broken harness must still fail
+          # the job, otherwise the quarantine run stays permanently green and hides real breakage:
+          #   4  = invalid extension setup
+          #   5  = invalid command-line arguments
+          #   10 = test adapter infrastructure failure (e.g. a fixture could not be created)
+          #   11 = the test process exited because a dependent process exited
+          #   12 = no supported protocol version
+          # (Exit code 8 "zero tests ran" is already mapped to 0 by --ignore-exit-code 8 in MtpBaseArgs, so a
+          # genuinely empty run is caught below by the .trx/artifact checks rather than by the exit code.)
+          $exitCodeFile = "${{ github.workspace }}/test-exit-code.txt"
+          if (Test-Path $exitCodeFile) {
+            $mtpExitCode = [int]((Get-Content -Path $exitCodeFile -Raw).Trim())
+            $fatalInfraCodes = @(4, 5, 10, 11, 12)
+            if ($fatalInfraCodes -contains $mtpExitCode) {
+              Write-Host "::error::Test runner exited with code $mtpExitCode, which indicates a test infrastructure/configuration failure rather than a test failure. Failing the job even though ignoreTestFailures is true."
+              exit 1
+            }
+            Write-Host "Test runner exit code: $mtpExitCode (treated as a test outcome, not an infrastructure failure)"
+          } else {
+            Write-Warning "No test exit code file found at $exitCodeFile; relying on .trx/artifact checks only."
+          }
+
           $trxFiles = Get-ChildItem -Path "${{ github.workspace }}/testresults" -Filter *.trx -Recurse -ErrorAction SilentlyContinue
 
           if ($trxFiles.Count -eq 0) {
@@ -624,12 +706,24 @@ jobs:
           # even when all tests passed, so we don't fail on those.
           $hangDumpFiles = Get-ChildItem -Path $testResultsDir -Filter *hangdump* -Recurse -ErrorAction SilentlyContinue
           if ($hangDumpFiles.Count -gt 0) {
-            Write-Host "::error::Hang dump file(s) detected — the test runner timed out:"
-            foreach ($df in $hangDumpFiles) { Write-Host "  - $($df.FullName)" }
-            exit 1
+            # When ignoreTestFailures is true (the quarantine workflow), a hang dump must NOT fail the job.
+            # Quarantined tests are flaky by definition and routinely time out; the whole point of that
+            # workflow is to surface flakiness without going red, so failing here defeats its purpose and
+            # leaves the quarantine run permanently broken. Downgrade to a warning instead — the dump is
+            # still detected, logged, and uploaded as an artifact for investigation.
+            # For all other callers (normal CI, outerloop) ignoreTestFailures is false, so a hang dump
+            # still fails the job: it indicates a real timeout that must not be ignored.
+            if ('${{ inputs.ignoreTestFailures }}' -eq 'true') {
+              Write-Host "::warning::Hang dump file(s) detected — a test timed out (ignored because ignoreTestFailures is true):"
+              foreach ($df in $hangDumpFiles) { Write-Host "  - $($df.FullName)" }
+            } else {
+              Write-Host "::error::Hang dump file(s) detected — the test runner timed out:"
+              foreach ($df in $hangDumpFiles) { Write-Host "  - $($df.FullName)" }
+              exit 1
+            }
+          } else {
+            Write-Host "✓ No hang dump files detected"
           }
-
-          Write-Host "✓ No hang dump files detected"
 
       - name: Dump docker info
         if: ${{ always() && runner.os == 'Linux' }}

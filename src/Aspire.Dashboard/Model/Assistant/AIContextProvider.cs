@@ -8,10 +8,11 @@ using Aspire.Dashboard.Model.Assistant.Prompts;
 using Aspire.Dashboard.Telemetry;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Model.Assistant;
 
-public class AIContextProvider : IAIContextProvider
+public class AIContextProvider : IAIContextProvider, IAssistantDisplayContext
 {
     private readonly object _lock = new object();
     private readonly IServiceProvider _serviceProvider;
@@ -46,6 +47,12 @@ public class AIContextProvider : IAIContextProvider
     public bool ShowAssistantSidebarDialog { get; private set; }
     public AssistantChatState? ChatState { get; set; }
     public IceBreakersBuilder IceBreakersBuilder { get; }
+
+    private string? AssistantReturnFocusElementId { get; set; }
+    private bool RestoreFocusOnAssistantSidebarHidden { get; set; } = true;
+
+    string? IAssistantDisplayContext.AssistantReturnFocusElementId => AssistantReturnFocusElementId;
+    bool IAssistantDisplayContext.RestoreFocusOnAssistantSidebarHidden => RestoreFocusOnAssistantSidebarHidden;
 
     public AIContext? GetContext()
     {
@@ -193,6 +200,8 @@ public class AIContextProvider : IAIContextProvider
 
         AssistantChatViewModel = viewModel;
         ShowAssistantSidebarDialog = true;
+        AssistantReturnFocusElementId = null;
+        RestoreFocusOnAssistantSidebarHidden = false;
 
         await ExecuteSubscriptionsAsync(_displayChangedSubscriptions).ConfigureAwait(false);
         await initializeTask.ConfigureAwait(false);
@@ -240,32 +249,65 @@ public class AIContextProvider : IAIContextProvider
         await ExecuteSubscriptionsAsync(_displayChangedSubscriptions).ConfigureAwait(false);
     }
 
-    public async Task HideAssistantSidebarAsync()
+    public Task HideAssistantSidebarAsync() => HideAssistantSidebarAsync(restoreFocus: true);
+
+    async Task IAssistantDisplayContext.HideAssistantSidebarAsync(bool restoreFocus)
+    {
+        await HideAssistantSidebarAsync(restoreFocus).ConfigureAwait(false);
+    }
+
+    private async Task HideAssistantSidebarAsync(bool restoreFocus)
     {
         AssistantChatViewModel = null;
         ShowAssistantSidebarDialog = false;
+        RestoreFocusOnAssistantSidebarHidden = restoreFocus;
         await ExecuteSubscriptionsAsync(_displayChangedSubscriptions).ConfigureAwait(false);
     }
 
-    public async Task LaunchAssistantModelDialogAsync(AssistantChatViewModel viewModel, bool openedForMobileView = false)
+    public Task LaunchAssistantModelDialogAsync(AssistantChatViewModel viewModel, bool openedForMobileView = false)
+    {
+        return LaunchAssistantModelDialogAsync(viewModel, openedForMobileView, returnFocusElementId: null);
+    }
+
+    Task IAssistantDisplayContext.LaunchAssistantModelDialogAsync(AssistantChatViewModel viewModel, bool openedForMobileView, string? returnFocusElementId)
+    {
+        return LaunchAssistantModelDialogAsync(viewModel, openedForMobileView, returnFocusElementId);
+    }
+
+    private async Task LaunchAssistantModelDialogAsync(AssistantChatViewModel viewModel, bool openedForMobileView, string? returnFocusElementId)
     {
         this.EnsureEnabled();
 
         var dialogService = _serviceProvider.GetRequiredService<IDialogService>();
-        await AssistantModalDialog.OpenDialogAsync(dialogService, "Assistant", new AssistantDialogViewModel
+        var js = _serviceProvider.GetRequiredService<IJSRuntime>();
+        AssistantReturnFocusElementId = returnFocusElementId;
+        await AssistantModalDialog.OpenDialogAsync(dialogService, js, "Assistant", new AssistantDialogViewModel
         {
             Chat = viewModel,
-            OpenedForMobileView = openedForMobileView
-        }).ConfigureAwait(false);
+            OpenedForMobileView = openedForMobileView,
+            ReturnFocusElementId = returnFocusElementId
+        }, returnFocusElementId).ConfigureAwait(false);
         await ExecuteSubscriptionsAsync(_displayChangedSubscriptions).ConfigureAwait(false);
     }
 
-    public async Task LaunchAssistantSidebarAsync(AssistantChatViewModel viewModel)
+    public Task LaunchAssistantSidebarAsync(AssistantChatViewModel viewModel)
+    {
+        return LaunchAssistantSidebarAsync(viewModel, returnFocusElementId: null);
+    }
+
+    Task IAssistantDisplayContext.LaunchAssistantSidebarAsync(AssistantChatViewModel viewModel, string? returnFocusElementId)
+    {
+        return LaunchAssistantSidebarAsync(viewModel, returnFocusElementId);
+    }
+
+    private async Task LaunchAssistantSidebarAsync(AssistantChatViewModel viewModel, string? returnFocusElementId)
     {
         this.EnsureEnabled();
 
         AssistantChatViewModel = viewModel;
         ShowAssistantSidebarDialog = true;
+        AssistantReturnFocusElementId = returnFocusElementId;
+        RestoreFocusOnAssistantSidebarHidden = true;
         await ExecuteSubscriptionsAsync(_displayChangedSubscriptions).ConfigureAwait(false);
     }
 

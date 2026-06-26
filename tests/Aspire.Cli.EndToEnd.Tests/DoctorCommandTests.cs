@@ -56,7 +56,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task DoctorCommand_WithSslCertDir_ShowsTrusted()
+    public async Task DoctorCommand_WithSslCertDir_ShowsTrustedAndDcpConnectionHealthy()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -92,7 +92,8 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
                     "Unexpected 'partially trusted' message when SSL_CERT_DIR is configured!");
             }
 
-            return s.ContainsText("certificate is trusted");
+            return s.ContainsText("certificate is trusted") &&
+                   s.ContainsText("Developer Control Plane (DCP) connection health checks succeeded");
         }, timeout: TimeSpan.FromSeconds(60), description: "doctor to complete with trusted certificate");
         await auto.WaitForSuccessPromptAsync(counter);
     }

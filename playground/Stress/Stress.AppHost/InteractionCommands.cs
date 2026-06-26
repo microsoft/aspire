@@ -5,8 +5,6 @@ using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 internal static class InteractionCommands
 {
     [AspireExportIgnore(Reason = "Uses interaction service callbacks and command handlers that are not ATS-compatible.")]
@@ -15,7 +13,7 @@ internal static class InteractionCommands
         resource
             .WithCommand("confirmation-interaction", "Confirmation interactions", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var resultTask1 = interactionService.PromptConfirmationAsync("Command confirmation", "Are you sure?", cancellationToken: commandContext.CancellationToken);
                 var resultTask2 = interactionService.PromptMessageBoxAsync("Command confirmation", "Are you really sure?", new MessageBoxInteractionOptions { Intent = MessageIntent.Warning, ShowSecondaryButton = true }, cancellationToken: commandContext.CancellationToken);
 
@@ -33,7 +31,7 @@ internal static class InteractionCommands
             {
                 await Task.Yield();
 
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 _ = interactionService.PromptNotificationAsync("Success bar", "The command successfully executed.", new NotificationInteractionOptions { Intent = MessageIntent.Success });
                 _ = interactionService.PromptNotificationAsync("Information bar", "The command successfully executed.", new NotificationInteractionOptions { Intent = MessageIntent.Information });
                 _ = interactionService.PromptNotificationAsync("Warning bar", "The command successfully executed.", new NotificationInteractionOptions { Intent = MessageIntent.Warning });
@@ -45,7 +43,7 @@ internal static class InteractionCommands
             })
             .WithCommand("html-interaction", "HTML interactions", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 _ = interactionService.PromptNotificationAsync("Success <strong>bar</strong>", "The **command** successfully executed.", new NotificationInteractionOptions { Intent = MessageIntent.Success });
                 _ = interactionService.PromptNotificationAsync("Success <strong>bar</strong>", "The **command** successfully executed.", new NotificationInteractionOptions { Intent = MessageIntent.Success, EnableMessageMarkdown = true });
@@ -66,7 +64,7 @@ internal static class InteractionCommands
             })
             .WithCommand("long-content-interaction", "Long content interactions", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 var inputHasMarkdown = new InteractionInput { Name = "Name", Label = "<strong>Name</strong>", InputType = InputType.Text, Placeholder = "Enter <strong>your</strong> name.", Description = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce id massa arcu. Morbi ac risus eget augue venenatis hendrerit. Morbi posuere, **neque id** efficitur ultrices, velit augue suscipit ante, vitae lacinia elit risus nec dui.", EnableDescriptionMarkdown = true };
                 var choiceWithLongContent = new InteractionInput
@@ -103,7 +101,7 @@ internal static class InteractionCommands
             })
             .WithCommand("value-interaction", "Value interactions", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var result = await interactionService.PromptInputAsync(
                     title: "Text request",
                     message: "Provide your name",
@@ -128,7 +126,7 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 var input = result.Data;
@@ -138,7 +136,7 @@ internal static class InteractionCommands
             })
             .WithCommand("choice-no-placeholder", "Choice with no placeholder", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var dinnerInput = new InteractionInput
                 {
                     Name = "Dinner",
@@ -178,7 +176,7 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 foreach (var updatedInput in result.Data)
@@ -190,7 +188,7 @@ internal static class InteractionCommands
             })
             .WithCommand("input-interaction", "Input interactions", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var dinnerInput = new InteractionInput
                 {
                     Name = "Dinner",
@@ -264,7 +262,7 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 foreach (var updatedInput in result.Data)
@@ -276,7 +274,7 @@ internal static class InteractionCommands
             })
             .WithCommand("choice-interaction", "Choice interactions", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var predefinedOptionsInput = new InteractionInput
                 {
                     Name = "PredefinedOptions",
@@ -403,7 +401,7 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 foreach (var updatedInput in result.Data)
@@ -415,7 +413,7 @@ internal static class InteractionCommands
             })
             .WithCommand("dynamic-error", "Dynamic error", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var predefinedOptionsInput = new InteractionInput
                 {
                     Name = "PredefinedOptions",
@@ -502,7 +500,7 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 foreach (var updatedInput in result.Data)
@@ -514,7 +512,7 @@ internal static class InteractionCommands
             })
             .WithCommand("dismiss-interaction", "Dismiss interaction tests", executeCommand: commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 RunInteractionWithDismissValues(nameof(IInteractionService.PromptNotificationAsync), (showDismiss, title) =>
                 {
@@ -555,7 +553,7 @@ internal static class InteractionCommands
             })
             .WithCommand("many-values", "Many values", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var inputs = new List<InteractionInput>();
                 for (var i = 0; i < 50; i++)
                 {
@@ -578,7 +576,7 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 foreach (var input in result.Data)
@@ -590,7 +588,7 @@ internal static class InteractionCommands
             })
             .WithCommand("azure-provisioning-simulation", "Azure provisioning simulation", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 var tenantInput = new InteractionInput
                 {
@@ -769,7 +767,7 @@ internal static class InteractionCommands
                     return CommandResults.Canceled();
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 foreach (var input in result.Data)
@@ -796,5 +794,3 @@ internal static class InteractionCommands
         _ = action(false, $"{title} - ShowDismiss = false");
     }
 }
-
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

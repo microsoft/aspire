@@ -7,8 +7,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
-#pragma warning disable ASPIREINTERACTION001 // Process command arguments intentionally reuse the experimental interaction input model.
-
 /// <summary>
 /// Context passed to callback to configure <see cref="ExecuteCommandResult"/> when using
 /// <see cref="ResourceBuilderExtensions.WithProcessCommand{TResource}(IResourceBuilder{TResource}, string, string, Func{ExecuteCommandContext, ValueTask{ProcessCommandSpec}}, ProcessCommandOptions?)"/>.
@@ -19,7 +17,17 @@ public sealed class ProcessCommandResultContext
     /// <summary>
     /// Gets the service provider.
     /// </summary>
-    public required IServiceProvider ServiceProvider { get; init; }
+    [Obsolete("Use Services instead.")]
+    public IServiceProvider ServiceProvider
+    {
+        get => Services;
+        init => Services = value;
+    }
+
+    /// <summary>
+    /// Gets the service provider.
+    /// </summary>
+    public required IServiceProvider Services { get; init; }
 
     /// <summary>
     /// Gets the name of the resource the command was configured on.
@@ -87,4 +95,3 @@ public sealed class ProcessCommandResultContext
     }
 }
 
-#pragma warning restore ASPIREINTERACTION001

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { AspireTerminalProvider, shellArg } from '../utils/AspireTerminalProvider';
+import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTerminalProvider';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
 import { compareResourceCommands, getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
 import {
@@ -47,6 +47,7 @@ import {
     ResourceCommandArgumentInputJson,
     ResourceJson,
     ViewMode,
+    isAppHostPathUnderFolder,
     isMatchingAppHostPath,
     shortenPaths,
     ResourceCommandJson,
@@ -58,6 +59,8 @@ import { AppHostLaunchService } from '../services/AppHostLaunchService';
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
 
 const integratedBrowserOpenCommand = 'workbench.action.browser.open';
+const terminalEnabledPropertyName = 'terminal.enabled';
+const terminalReplicaIndexPropertyName = 'terminal.replicaIndex';
 
 function sortResources(resources: ResourceJson[]): ResourceJson[] {
     return [...resources].sort((a, b) => {
@@ -420,12 +423,26 @@ export function getResourceContextValue(resource: ResourceJson): string {
     if (hasEnabledCommand(commands, 'restart') || hasEnabledCommand(commands, 'resource-restart')) {
         parts.push('canRestart');
     }
+    if (isTerminalEnabled(resource)) {
+        parts.push('canOpenTerminal');
+    }
     return parts.join(':');
 }
 
 function hasEnabledCommand(commands: Record<string, ResourceCommandJson> | null | undefined, commandName: string): boolean {
     const command = commands?.[commandName];
     return isCommandVisibleToUi(command) && isEnabledCommand(command);
+}
+
+function isTerminalEnabled(resource: ResourceJson): boolean {
+    const value = resource.properties?.[terminalEnabledPropertyName];
+    return value?.trim().toLowerCase() === 'true';
+}
+
+function getTerminalReplicaIndex(resource: ResourceJson): string | undefined {
+    const value = resource.properties?.[terminalReplicaIndexPropertyName];
+    const trimmedValue = value?.trim();
+    return trimmedValue && trimmedValue.length > 0 ? trimmedValue : undefined;
 }
 
 export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
@@ -672,8 +689,9 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     }
 
     private _trackStoppingAppHost(appHostPath: string): void {
-        const existingKey = this._findStoppingAppHostKey(appHostPath);
-        const key = existingKey ?? getComparisonKey(path.normalize(path.resolve(appHostPath)));
+        const resolvedAppHostPath = this._findKnownRunningAppHostPath(appHostPath) ?? appHostPath;
+        const existingKey = this._findStoppingAppHostKey(resolvedAppHostPath);
+        const key = existingKey ?? getComparisonKey(path.normalize(path.resolve(resolvedAppHostPath)));
         const existingTimeout = this._stoppingAppHostTimeouts.get(key);
         if (existingTimeout) {
             clearTimeout(existingTimeout);
@@ -692,6 +710,39 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     private _isStoppingAppHost(appHostPath: string | undefined): boolean {
         return this._findStoppingAppHostKey(appHostPath) !== undefined;
+    }
+
+    private _isKnownRunningAppHost(appHostPath: string | undefined): boolean {
+        if (!appHostPath) {
+            return false;
+        }
+
+        return this._findKnownRunningAppHostPath(appHostPath) !== undefined;
+    }
+
+    private _findKnownRunningAppHostPath(appHostPath: string): string | undefined {
+        const runningAppHostPaths = this._getKnownRunningAppHostPaths();
+        const exactMatch = runningAppHostPaths.find(runningPath => isMatchingAppHostPath(runningPath, appHostPath));
+        if (exactMatch) {
+            return exactMatch;
+        }
+
+        const folderMatches = runningAppHostPaths.filter(runningPath => isAppHostPathUnderFolder(runningPath, appHostPath));
+        return folderMatches.length === 1 ? folderMatches[0] : undefined;
+    }
+
+    private _getKnownRunningAppHostPaths(): string[] {
+        const paths: string[] = [];
+        for (const appHostPath of [
+            this._repository.workspaceAppHost?.appHostPath,
+            ...this._repository.appHosts.map(appHost => appHost.appHostPath),
+        ]) {
+            if (appHostPath && !paths.some(existingPath => isSamePath(existingPath, appHostPath))) {
+                paths.push(appHostPath);
+            }
+        }
+
+        return paths;
     }
 
     private _findStoppingAppHostKey(appHostPath: string | undefined): string | undefined {
@@ -1300,6 +1351,22 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
     }
 
+    notifyAppHostStopping(appHostPath: string): void {
+        if (!appHostPath) {
+            return;
+        }
+
+        this._markAppHostStopping(appHostPath);
+        this._repository.requestAppHostStopRefresh?.(appHostPath);
+    }
+
+    private _markAppHostStopping(appHostPath: string): void {
+        if (this._isKnownRunningAppHost(appHostPath)) {
+            this._trackStoppingAppHost(appHostPath);
+        }
+        this._onDidChangeTreeData.fire();
+    }
+
     async stopAppHost(element: AppHostItem | WorkspaceResourcesItem | WorkspaceAppHostItem): Promise<void> {
         const appHostPath = element instanceof AppHostItem ? element.appHost.appHostPath : element.appHostPath;
         if (!appHostPath) {
@@ -1307,10 +1374,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        this._trackStoppingAppHost(appHostPath);
-        this._onDidChangeTreeData.fire();
+        this._markAppHostStopping(appHostPath);
         try {
             await this._terminalProvider.sendAspireCommandToAspireTerminal(['stop', '--apphost', shellArg(appHostPath)]);
+            this._repository.requestAppHostStopRefresh?.(appHostPath);
         } catch (err) {
             const stoppingKey = this._findStoppingAppHostKey(appHostPath);
             if (stoppingKey) {
@@ -1374,6 +1441,21 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
         await this._terminalProvider.sendAspireCommandToAspireTerminal(['logs', shellArg(resourceName), '--apphost', shellArg(appHost.appHostPath)]);
+    }
+
+    async openResourceTerminal(element: ResourceItem): Promise<void> {
+        const command: Array<string | ShellArg> = ['terminal', 'attach', shellArg(element.resource.name)];
+        const appHostPath = this._getAppHostPathForResource(element);
+        if (appHostPath) {
+            command.push('--apphost', shellArg(appHostPath));
+        }
+
+        const replicaIndex = getTerminalReplicaIndex(element.resource);
+        if (replicaIndex) {
+            command.push('--replica', shellArg(replicaIndex));
+        }
+
+        await this._terminalProvider.sendAspireCommandToAspireTerminal(command, true, undefined, { terminalTarget: 'editor' });
     }
 
     async executeResourceCommand(element: ResourceItem): Promise<void> {
@@ -1498,8 +1580,8 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         vscode.env.openExternal(vscode.Uri.parse(element.url));
     }
 
-    openInIntegratedBrowser(element: EndpointUrlItem): void {
-        vscode.commands.executeCommand('simpleBrowser.show', element.url);
+    async openInIntegratedBrowser(element: EndpointUrlItem): Promise<void> {
+        await vscode.commands.executeCommand('simpleBrowser.show', element.url);
     }
 
     private async _runResourceCommand(element: ResourceItem, commandName: string, additionalArgs?: string[], redactAdditionalArgs = false): Promise<void> {

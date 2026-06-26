@@ -43,7 +43,8 @@ internal static class PackageUpdateRecommendationChannels
 internal class CliUpdateNotifier(
     ILogger<CliUpdateNotifier> logger,
     INuGetPackageCache nuGetPackageCache,
-    IInteractionService interactionService) : ICliUpdateNotifier
+    IInteractionService interactionService,
+    IProcessPathProvider processPathProvider) : ICliUpdateNotifier
 {
     private IEnumerable<Shared.NuGetPackageCli>? _availablePackages;
 
@@ -89,6 +90,10 @@ internal class CliUpdateNotifier(
 
     protected virtual SemVersion? GetCurrentVersion()
     {
+        // physical-binary-version-by-design (see docs/specs/cli-identity-sidecar.md):
+        // the update check compares the ACTUAL installed binary against the latest available
+        // package to decide whether to recommend an update, so it must read the real assembly
+        // version rather than an emulated ASPIRE_CLI_VERSION identity.
         return PackageUpdateHelpers.GetCurrentPackageVersion();
     }
 
@@ -118,7 +123,7 @@ internal class CliUpdateNotifier(
         var newerVersion = PackageUpdateHelpers.GetNewerVersion(logger, currentVersion, _availablePackages);
         var updateCommand = newerVersion is null
             ? null
-            : DotNetToolDetection.GetDotNetToolUpdateCommand()
+            : DotNetToolDetection.GetDotNetToolUpdateCommand(processPathProvider.ProcessPath)
                 ?? NpmInstallDetection.GetNpmUpdateCommand()
                 ?? "aspire update";
         // Derive the lane the recommendation comes from so doctor can show

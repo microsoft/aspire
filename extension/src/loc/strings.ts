@@ -52,12 +52,33 @@ export const aspireConfigExists = vscode.l10n.t('Aspire launch configuration alr
 export const failedToConfigureLaunchJson = (error: any) => vscode.l10n.t('Failed to configure launch.json: {0}.', error);
 export const defaultConfigurationName = vscode.l10n.t('Aspire: Launch default AppHost');
 export const debugSessionAlreadyExists = (id: string) => vscode.l10n.t('A debug session is already active for id {0}.', id);
+export const selectDashboardLaunchBehavior = vscode.l10n.t('Select what should happen with the Aspire Dashboard when this launch configuration starts');
+export const dashboardLaunchNoneLabel = vscode.l10n.t('Do not open the dashboard');
+export const dashboardLaunchNoneDescription = vscode.l10n.t('The dashboard URL is still printed in the terminal and available from the Aspire panel.');
+export const dashboardLaunchNotificationLabel = vscode.l10n.t('Show a notification');
+export const dashboardLaunchNotificationDescription = vscode.l10n.t('Show a notification with a link to open the dashboard.');
+export const dashboardLaunchExternalBrowserLabel = vscode.l10n.t('Open in external browser');
+export const dashboardLaunchExternalBrowserDescription = vscode.l10n.t('Open the dashboard in the system default browser.');
+export const dashboardLaunchIntegratedBrowserLabel = vscode.l10n.t('Open in VS Code');
+export const dashboardLaunchIntegratedBrowserDescription = vscode.l10n.t("Open the dashboard in VS Code's integrated browser.");
+export const dashboardLaunchChromeLabel = vscode.l10n.t('Debug with Chrome');
+export const dashboardLaunchChromeDescription = vscode.l10n.t('Launch Chrome as a child debug session.');
+export const dashboardLaunchEdgeLabel = vscode.l10n.t('Debug with Microsoft Edge');
+export const dashboardLaunchEdgeDescription = vscode.l10n.t('Launch Microsoft Edge as a child debug session.');
+export const dashboardLaunchFirefoxLabel = vscode.l10n.t('Debug with Firefox');
+export const dashboardLaunchFirefoxDescription = vscode.l10n.t('Launch Firefox as a child debug session.');
+export const dashboardLaunchBehaviorChanged = vscode.l10n.t('The Aspire Dashboard does not open automatically. Open it from the Aspire panel anytime, or configure a launch behavior.');
+export const changelogLabel = vscode.l10n.t('Changelog');
 export const processExceptionOccurred = (error: string, command: string) => vscode.l10n.t('Encountered an exception ({0}) while running the following command: {1}.', error, command);
 
 // Aspire panel strings
 export const pidDescription = (pid: number) => vscode.l10n.t('PID: {0}', pid);
 export const dashboardLabel = vscode.l10n.t('Dashboard');
 export const errorFetchingAppHosts = (error: string) => vscode.l10n.t('Error fetching running AppHosts: {0}', error);
+export const aspireCliCommandFailed = (command: string, exitCode: string, output: string) => vscode.l10n.t('{0} exited with code {1}{2}', command, exitCode, output);
+export const aspireCliCommandTimedOut = (timeoutMs: number) => vscode.l10n.t('timed out after {0}ms', timeoutMs);
+export const aspireCliOutputParseFailed = (command: string, error: string) => vscode.l10n.t('Failed to parse {0} output: {1}', command, error);
+export const appHostPathMustBeNonEmptyAbsolute = vscode.l10n.t('appHostPath must be a non-empty absolute path');
 export const aspireDescribeMinimumVersion = '13.2.0';
 export const aspireCliDescribeNotSupported = (version: string) => vscode.l10n.t('Workspace resources require Aspire CLI {0} or newer. Update the Aspire CLI and refresh the Aspire panel.', version);
 export const appHostDescribeMayNotBeSupported = (version: string) => vscode.l10n.t('No workspace resources were returned. Workspace resources require the AppHost to reference Aspire.Hosting {0} or newer.', version);
@@ -131,6 +152,7 @@ export const invalidTokenLength = vscode.l10n.t('Invalid token length in Authori
 export const authorizationHeaderMustStartWithBearer = vscode.l10n.t('Authorization header must start with \'Bearer \'.');
 export const authorizationAndDcpHeadersRequired = vscode.l10n.t('Authorization and Microsoft-Developer-DCP-Instance-ID headers are required.');
 export const authorizationHeaderRequired = vscode.l10n.t('Authorization header is required.');
+export const testRunSessionManagerNotInitialized = vscode.l10n.t('Test run session manager has not been initialized with DCP server connection information.');
 export const buildFailedForProjectWithError = (project: string, error: string) => vscode.l10n.t('Build failed for project {0} with error: {1}.', project, error);
 export const failedToInspectRuntimeConfig = (outputPath: string, error: string) => vscode.l10n.t('Failed to inspect runtimeconfig for {0}: {1}', outputPath, error);
 export const dotNetRunFallbackDisablesDebugger = (outputPath: string, projectPath: string) => vscode.l10n.t('Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', outputPath, projectPath);

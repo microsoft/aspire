@@ -22,6 +22,7 @@ public static class GitHubModelsExtensions
     /// <param name="model">The model name to use with GitHub Models.</param>
     /// <param name="organization">The organization login associated with the organization to which the request is to be attributed.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [Obsolete(GitHubModelsDeprecation.Message)]
     [AspireExportIgnore(Reason = "The polyglot overload uses the GitHubModelName enum instead. See the internal AddGitHubModel(GitHubModelName) overload.")]
     public static IResourceBuilder<GitHubModelResource> AddGitHubModel(this IDistributedApplicationBuilder builder, [ResourceName] string name, string model, IResourceBuilder<ParameterResource>? organization = null)
     {
@@ -99,6 +100,7 @@ public static class GitHubModelsExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    [Obsolete(GitHubModelsDeprecation.Message)]
     [AspireExportIgnore(Reason = "GitHubModel is a .NET-specific descriptor type not compatible with ATS. Use the GitHubModelName enum-based overload instead.")]
     public static IResourceBuilder<GitHubModelResource> AddGitHubModel(this IDistributedApplicationBuilder builder, [ResourceName] string name, GitHubModel model, IResourceBuilder<ParameterResource>? organization = null)
     {
@@ -117,6 +119,7 @@ public static class GitHubModelsExtensions
     /// <param name="organization">The organization login associated with the organization to which the request is to be attributed.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    [Obsolete(GitHubModelsDeprecation.Message)]
     [AspireExport]
     internal static IResourceBuilder<GitHubModelResource> AddGitHubModel(this IDistributedApplicationBuilder builder, [ResourceName] string name, GitHubModelName model, IResourceBuilder<ParameterResource>? organization = null)
     {
@@ -132,6 +135,7 @@ public static class GitHubModelsExtensions
     /// <param name="organization">The organization login associated with the organization to which the request is to be attributed.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    [Obsolete(GitHubModelsDeprecation.Message)]
     [AspireExport]
     internal static IResourceBuilder<GitHubModelResource> AddGitHubModelById(this IDistributedApplicationBuilder builder, [ResourceName] string name, string modelId, IResourceBuilder<ParameterResource>? organization = null)
     {
@@ -145,6 +149,7 @@ public static class GitHubModelsExtensions
     /// <param name="apiKey">The API key parameter.</param>
     /// <returns>The resource builder.</returns>
     /// <exception cref="ArgumentException">Thrown when the provided parameter is not marked as secret.</exception>
+    [Obsolete(GitHubModelsDeprecation.Message)]
     [AspireExport]
     public static IResourceBuilder<GitHubModelResource> WithApiKey(this IResourceBuilder<GitHubModelResource> builder, IResourceBuilder<ParameterResource> apiKey)
     {
@@ -189,6 +194,7 @@ public static class GitHubModelsExtensions
     /// the model is not working as expected. Furthermore, the health check will run a single time per application instance.
     /// </para>
     /// </remarks>
+    [Obsolete(GitHubModelsDeprecation.Message)]
     [AspireExport("enableHealthCheck")]
     public static IResourceBuilder<GitHubModelResource> WithHealthCheck(this IResourceBuilder<GitHubModelResource> builder)
     {

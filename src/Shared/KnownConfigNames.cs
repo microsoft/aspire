@@ -5,7 +5,6 @@ namespace Aspire.Hosting;
 
 internal static class KnownConfigNames
 {
-    public const string AspNetCoreUrls = "ASPNETCORE_URLS";
     public const string AllowUnsecuredTransport = "ASPIRE_ALLOW_UNSECURED_TRANSPORT";
     public const string VersionCheckDisabled = "ASPIRE_VERSION_CHECK_DISABLED";
     public const string DashboardOtlpGrpcEndpointUrl = "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL";
@@ -26,6 +25,7 @@ internal static class KnownConfigNames
 
     public const string ContainerRuntime = "ASPIRE_CONTAINER_RUNTIME";
     public const string DependencyCheckTimeout = "ASPIRE_DEPENDENCY_CHECK_TIMEOUT";
+    public const string ProxylessEndpointPortRange = "ASPIRE_PROXYLESS_ENDPOINT_PORT_RANGE";
     public const string ServiceStartupWatchTimeout = "ASPIRE_SERVICE_STARTUP_WATCH_TIMEOUT";
     public const string WaitForDebugger = "ASPIRE_WAIT_FOR_DEBUGGER";
     public const string WaitForDebuggerTimeout = "ASPIRE_DEBUGGER_TIMEOUT";

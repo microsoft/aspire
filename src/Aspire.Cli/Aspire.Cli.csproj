@@ -8,6 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationIcon>$(MSBuildThisFileDirectory)..\Shared\Aspire.ico</ApplicationIcon>
     <EnablePackageValidation>false</EnablePackageValidation>
     <AssemblyName>aspire</AssemblyName>
     <RootNamespace>Aspire.Cli</RootNamespace>
@@ -95,6 +96,7 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.Monitor.OpenTelemetry.Exporter" />
+    <PackageReference Include="Hex1b" />
     <PackageReference Include="Markdig" />
     <PackageReference Include="Spectre.Console" />
     <PackageReference Include="System.CommandLine" />
@@ -126,12 +128,14 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)CliExitCodes.cs" Link="CliExitCodes.cs" />
     <Compile Include="$(SharedDir)AppHostProfilePortGenerator.cs" Link="Utils\AppHostProfilePortGenerator.cs" />
+    <Compile Include="$(SharedDir)AspireCliIdentityEnvVars.cs" Link="Acquisition\AspireCliIdentityEnvVars.cs" />
     <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="Utils\AssemblyVersionHelper.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Bundles\BundleVersionLease.cs" />
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="Utils\ChannelExtensions.cs" />
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" Link="Utils\CommandLineArgsParser.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
+    <Compile Include="$(SharedDir)KnownAspNetCoreConfigNames.cs" Link="Utils\KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
     <Compile Include="$(SharedDir)LaunchProfiles\LaunchSettingsReader.cs" Link="LaunchProfiles\LaunchSettingsReader.cs" />
     <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="Utils\IntegrationPackageProbeManifest.cs" />
@@ -169,6 +173,7 @@
     <Compile Include="$(SharedDir)UserSecrets\UserSecretsPathHelper.cs" Link="Utils\UserSecretsPathHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\IsolatedUserSecretsHelper.cs" Link="Utils\IsolatedUserSecretsHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\SecretsStore.cs" Link="Secrets\SecretsStore.cs" />
+    <Compile Include="$(SharedDir)UserSecrets\UserSecretsJsonOptions.cs" Link="Secrets\UserSecretsJsonOptions.cs" />
     <Compile Include="$(SharedDir)Json\AtsJsonCodeWriter.cs" Link="Utils\AtsJsonCodeWriter.cs" />
     <Compile Include="$(SharedDir)Json\JsonFlattener.cs" Link="Utils\JsonFlattener.cs" />
     <Compile Include="$(SharedDir)Otlp\OtlpHelpers.cs" Link="Otlp\OtlpHelpers.cs" />

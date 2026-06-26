@@ -17,19 +17,29 @@
         <target state="needs-review-translation">Die AppHost-Version ist nicht kompatibel. Aktualisieren Sie den AppHost oder die Aspire-CLI.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateAppHost">
+        <source>The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</source>
+        <target state="new">The AppHost is using an older Aspire version than the Aspire CLI. Update the AppHost's Aspire packages to continue.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostNotCompatibleUpdateCli">
+        <source>The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</source>
+        <target state="new">The Aspire CLI is older than the Aspire version used by the AppHost. Update the Aspire CLI to continue.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostShutDown">
         <source>The application shut down.</source>
         <target state="new">The application shut down.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
-        <source>Aspire CLI Version</source>
-        <target state="translated">Aspire CLI-Version</target>
+        <source>Aspire CLI version</source>
+        <target state="needs-review-translation">Aspire CLI-Version</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireHostingSDKVersion">
-        <source>Aspire.Hosting Version</source>
-        <target state="translated">Apsire.Hosting-Version</target>
+        <source>Aspire.Hosting version</source>
+        <target state="needs-review-translation">Apsire.Hosting-Version</target>
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
@@ -163,8 +173,8 @@
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
-        <source>Required Capability</source>
-        <target state="translated">Erforderliche Funktion</target>
+        <source>Required capability</source>
+        <target state="needs-review-translation">Erforderliche Funktion</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchingProjects">

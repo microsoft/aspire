@@ -4,7 +4,6 @@
 using System.Collections.Concurrent;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
-using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Shared;
@@ -37,7 +36,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var manifestPath = await service.RestorePackagesAsync(
@@ -73,7 +72,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var resultA = await service.RestorePackagesAsync(
@@ -115,7 +114,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         await service.RestorePackagesAsync(
@@ -161,7 +160,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
@@ -212,7 +211,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var result = await service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
@@ -241,7 +240,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var resultA = await service.RestorePackagesAsync(
@@ -276,7 +275,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var restoreRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations", "package-restore");
@@ -355,7 +354,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         var packageList = new List<(string Id, string Version)> { ("Aspire.Hosting.JavaScript", "9.4.0") };
@@ -404,7 +403,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
             new LayoutProcessRunner(executionFactory),
             new TestFeatures(),
-            TestExecutionContextFactory.CreateTestContext(),
+            new TestEnvironment(),
             NullLogger<BundleNuGetService>.Instance);
 
         using var lockedFile = new FileStream(lockedFilePath, FileMode.Open, FileAccess.Read, FileShare.None);

@@ -9,9 +9,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
@@ -116,19 +114,17 @@ internal sealed class LogsCommand : BaseCommand
     private readonly ResourceColorMap _resourceColorMap;
 
     public LogsCommand(
-        IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IProjectLocator projectLocator,
+        AppHostConnectionResolver connectionResolver,
         ICliHostEnvironment hostEnvironment,
         ResourceColorMap resourceColorMap,
         ILogger<LogsCommand> logger,
-        ProfilingTelemetry profilingTelemetry,
         CommonCommandServices services)
         : base("logs", LogsCommandStrings.Description, services)
     {
         _resourceColorMap = resourceColorMap;
         _hostEnvironment = hostEnvironment;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger, profilingTelemetry);
+        _connectionResolver = connectionResolver;
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);

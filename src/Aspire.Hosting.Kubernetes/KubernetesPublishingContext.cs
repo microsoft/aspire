@@ -86,7 +86,7 @@ internal sealed class KubernetesPublishingContext(
                 {
                     var dockerfileContext = new DockerfileFactoryContext
                     {
-                        Services = executionContext.ServiceProvider,
+                        Services = executionContext.Services,
                         Resource = serviceResource.TargetResource,
                         CancellationToken = cancellationToken
                     };
@@ -314,7 +314,7 @@ internal sealed class KubernetesPublishingContext(
         }
 
         var resourceName = templatedItem.Metadata.Name;
-        if (resourceName.StartsWith($"{baseName.ToLowerInvariant()}-"))
+        if (resourceName.StartsWith($"{baseName.ToLowerInvariant()}-", StringComparison.Ordinal))
         {
             resourceName = resourceName.Substring(baseName.Length + 1); // +1 for the hyphen
         }

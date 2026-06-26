@@ -21,6 +21,10 @@
     line-height: 1;
 }
 
+::deep .tracedetails-grid-container {
+    overflow: auto;
+}
+
 ::deep .trace-view-grid {
 }
 

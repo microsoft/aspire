@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
@@ -32,6 +33,7 @@ internal sealed class UpdateCommand : BaseCommand
     private readonly IFeatures _features;
     private readonly IConfigurationService _configurationService;
     private readonly IConfiguration _configuration;
+    private readonly IProcessPathProvider _processPathProvider;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", UpdateCommandStrings.ProjectArgumentDescription);
     private static readonly Option<bool> s_selfOption = new("--self")
@@ -58,6 +60,7 @@ internal sealed class UpdateCommand : BaseCommand
         ICliDownloader? cliDownloader,
         IConfigurationService configurationService,
         IConfiguration configuration,
+        IProcessPathProvider processPathProvider,
         CommonCommandServices services)
         : base("update", UpdateCommandStrings.Description, services)
     {
@@ -70,6 +73,7 @@ internal sealed class UpdateCommand : BaseCommand
         _features = services.Features;
         _configurationService = configurationService;
         _configuration = configuration;
+        _processPathProvider = processPathProvider;
 
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
@@ -100,14 +104,34 @@ internal sealed class UpdateCommand : BaseCommand
         Options.Add(_qualityOption);
     }
 
-    private static string? GetDotNetToolUpdateCommand()
+    private string? GetDotNetToolUpdateCommand()
     {
-        return DotNetToolDetection.GetDotNetToolUpdateCommand();
+        return DotNetToolDetection.GetDotNetToolUpdateCommand(_processPathProvider.ProcessPath);
     }
 
     private static string? GetNpmUpdateCommand()
     {
         return NpmInstallDetection.GetNpmUpdateCommand();
+    }
+
+    private bool IsNixInstall()
+    {
+        var processPath = _processPathProvider.ProcessPath;
+        if (string.IsNullOrEmpty(processPath))
+        {
+            return false;
+        }
+
+        var resolvedProcessPath = CliPathHelper.ResolveSymlinkOrOriginalPath(processPath, _logger);
+        var binaryDir = Path.GetDirectoryName(resolvedProcessPath);
+        if (string.IsNullOrEmpty(binaryDir))
+        {
+            return false;
+        }
+
+        var sidecarPath = Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName);
+        var source = InstallSidecarReader.ReadSourceField(sidecarPath);
+        return InstallSourceExtensions.ParseInstallSource(source) == InstallSource.Nix;
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -137,14 +161,9 @@ internal sealed class UpdateCommand : BaseCommand
                 return CommandResult.Success();
             }
 
-            if (_cliDownloader is null)
-            {
-                return CommandResult.Failure(CliExitCodes.InvalidCommand, "CLI self-update is not available in this environment.");
-            }
-
             try
             {
-                return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
+                return await ExecuteSelfUpdateAsync(parseResult, null, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -360,7 +379,7 @@ internal sealed class UpdateCommand : BaseCommand
                     }
 
                     // Use the same channel that was selected for the project update
-                    return await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
+                    return await ExecuteSelfUpdateAsync(parseResult, channel.Name, cancellationToken);
                 }
             }
         }
@@ -381,10 +400,11 @@ internal sealed class UpdateCommand : BaseCommand
             // Check if this is a "no project found" error and prompt for self-update
             if (string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
             {
-                // Only prompt for self-update when we can actually perform it: not as a
-                // dotnet tool, not from an npm install, and the GitHub-binary downloader
-                // is wired up. Otherwise the downloader would overwrite package-manager-owned
-                // files instead of letting the package manager handle the update.
+                // dotnet tool and npm installs have package-manager-specific update commands, so
+                // this recovery path does not prompt for archive self-update in those cases. Nix
+                // does not have a launcher-provided command here; let it reach ExecuteSelfUpdateAsync
+                // where the Nix store guard can print Nix-specific guidance instead of writing to
+                // the read-only install path.
                 if (GetDotNetToolUpdateCommand() is null && GetNpmUpdateCommand() is null && _cliDownloader is not null)
                 {
                     var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
@@ -394,7 +414,7 @@ internal sealed class UpdateCommand : BaseCommand
 
                     if (shouldUpdateCli)
                     {
-                        return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
+                        return await ExecuteSelfUpdateAsync(parseResult, null, cancellationToken);
                     }
                 }
             }
@@ -427,7 +447,7 @@ internal sealed class UpdateCommand : BaseCommand
 
         var targetSdkVersion = await GetLatestGuestSdkVersionAsync(channel, projectDirectory, cancellationToken);
         if (targetSdkVersion is null ||
-            !SemVersion.TryParse(VersionHelper.GetDefaultSdkVersion(), SemVersionStyles.Strict, out var currentCliVersion) ||
+            !SemVersion.TryParse(ExecutionContext.IdentitySdkVersion, SemVersionStyles.Strict, out var currentCliVersion) ||
             SemVersion.PrecedenceComparer.Compare(targetSdkVersion, currentCliVersion) <= 0)
         {
             return null;
@@ -461,7 +481,7 @@ internal sealed class UpdateCommand : BaseCommand
             return CommandResult.Success();
         }
 
-        var selfUpdateResult = await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
+        var selfUpdateResult = await ExecuteSelfUpdateAsync(parseResult, channel.Name, cancellationToken);
         if (selfUpdateResult.ExitCode == CliExitCodes.Success)
         {
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
@@ -496,8 +516,29 @@ internal sealed class UpdateCommand : BaseCommand
             || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
     }
 
-    private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
+    private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, string? selectedChannel, CancellationToken cancellationToken)
     {
+        // Keep the Nix guard at the archive self-update boundary. The dotnet tool and npm
+        // checks live at the call sites because they produce package-manager commands before
+        // the user is prompted or before project-update skip messaging is emitted. Nix installs
+        // are identified from the sidecar next to the resolved binary, and every path that
+        // reaches this method is about to replace that binary in-place. A Nix profile or flake
+        // points at an immutable /nix/store path, so archive self-update would either fail with
+        // no write permission or bypass Nix if it fell back to another directory. Let Nix update
+        // the profile/flake instead.
+        if (IsNixInstall())
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NixSelfUpdateMessage);
+            InteractionService.DisplayPlainText("  nix profile upgrade aspire-cli");
+            InteractionService.DisplayPlainText("  nix flake update <input-name>");
+            return CommandResult.Success();
+        }
+
+        if (_cliDownloader is null)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, "CLI self-update is not available in this environment.");
+        }
+
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
 
         // If channel is not specified, prompt the user to select one. The choice
@@ -510,19 +551,47 @@ internal sealed class UpdateCommand : BaseCommand
             var channels = isStagingEnabled
                 ? new[] { PackageChannelNames.Stable, PackageChannelNames.Staging, PackageChannelNames.Daily }
                 : new[] { PackageChannelNames.Stable, PackageChannelNames.Daily };
-            var channelBinding = PromptBinding.Create(parseResult, _channelOption);
-            channel = await InteractionService.PromptForSelectionAsync(
-                "Select the channel to update to:",
-                channels,
-                q => q,
-                binding: channelBinding,
-                cancellationToken: cancellationToken);
+
+            // In non-interactive mode, avoid prompting. Prefer the CLI identity channel when it
+            // maps to an update channel; use stable for local dev builds; otherwise require --channel.
+            var nonInteractive = parseResult.GetValue(RootCommand.NonInteractiveOption);
+            if (nonInteractive)
+            {
+                var identityChannel = ExecutionContext.IdentityChannel;
+                if (!string.IsNullOrWhiteSpace(identityChannel)
+                    && !string.Equals(identityChannel, PackageChannelNames.Local, StringComparisons.ChannelName)
+                    && channels.FirstOrDefault(c => string.Equals(c, identityChannel, StringComparisons.ChannelName)) is { } matchedChannel)
+                {
+                    channel = matchedChannel;
+                }
+                else if (string.Equals(identityChannel, PackageChannelNames.Local, StringComparisons.ChannelName))
+                {
+                    channel = PackageChannelNames.Stable;
+                }
+                else
+                {
+                    var channelOptionDisplayName = $"'{_channelOption.Name}'";
+                    InteractionService.DisplayError(
+                        string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveOptionRequired, channelOptionDisplayName));
+                    throw new NonInteractiveException(channelOptionDisplayName);
+                }
+            }
+            else
+            {
+                var channelBinding = PromptBinding.Create(parseResult, _channelOption);
+                channel = await InteractionService.PromptForSelectionAsync(
+                    "Select the channel to update to:",
+                    channels,
+                    q => q,
+                    binding: channelBinding,
+                    cancellationToken: cancellationToken);
+            }
         }
 
         try
         {
             // Get current executable path for display purposes only
-            var currentExePath = Environment.ProcessPath;
+            var currentExePath = _processPathProvider.ProcessPath;
             if (string.IsNullOrEmpty(currentExePath))
             {
                 return CommandResult.Failure(CliExitCodes.InvalidCommand, "Unable to determine the current executable path.");
@@ -532,9 +601,10 @@ internal sealed class UpdateCommand : BaseCommand
             InteractionService.DisplayMessage(KnownEmojis.UpButton, $"Updating to channel: {channel}");
 
             // Download the latest CLI
-            var archivePath = await _cliDownloader!.DownloadLatestCliAsync(channel, cancellationToken);
+            var archivePath = await _cliDownloader.DownloadLatestCliAsync(channel, cancellationToken);
 
-            // Extract and update to $HOME/.aspire/bin
+            // Replace the current CLI in-place. Package-manager-owned installs that should not
+            // be mutated, such as dotnet tool, npm, and Nix, are handled before this path.
             await ExtractAndUpdateAsync(archivePath, cancellationToken);
 
             return CommandResult.Success();
@@ -553,8 +623,10 @@ internal sealed class UpdateCommand : BaseCommand
 
     private async Task ExtractAndUpdateAsync(string archivePath, CancellationToken cancellationToken)
     {
-        // Install to the same directory as the current CLI executable
-        var currentExePath = Environment.ProcessPath;
+        // Archive self-update is a same-directory replacement, not an installer that searches
+        // for a writable fallback. If the executable is package-manager-owned, installing
+        // elsewhere would leave the user's PATH/profile pointing at the old package-managed CLI.
+        var currentExePath = _processPathProvider.ProcessPath;
         if (string.IsNullOrEmpty(currentExePath))
         {
             throw new InvalidOperationException("Unable to determine current CLI location.");
@@ -754,4 +826,5 @@ internal sealed class UpdateCommand : BaseCommand
             _logger.LogWarning(ex, "Failed to clean up directory {Directory}", directory);
         }
     }
+
 }
