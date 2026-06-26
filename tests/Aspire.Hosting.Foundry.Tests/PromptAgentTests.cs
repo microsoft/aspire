@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
 #pragma warning disable ASPIREAZURE001 // Azure types are experimental
 
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
@@ -585,80 +586,44 @@ public class PromptAgentTests
     }
 
     [Fact]
-    public async Task AddPromptAgent_RunMode_AllPipelineStepDependenciesResolve()
+    public async Task AddPromptAgent_RunMode_BeforeStartPipelineExecutesSuccessfully()
     {
-        // Integration test: verifies that all DependsOnSteps and RequiredBySteps references
-        // from AzurePromptAgentResource resolve to steps that actually exist in the pipeline,
-        // including steps produced by AzureEnvironmentResource and the framework's well-known steps.
-        // This catches regressions where a step name is removed or renamed elsewhere without
-        // updating AzurePromptAgentResource.
+        // Integration test: runs the real before-start pipeline with both AzureEnvironmentResource
+        // and AzurePromptAgentResource in the model. This catches regressions where a step dependency
+        // is renamed or removed elsewhere without updating AzurePromptAgentResource (the original bug
+        // was a reference to 'run-mode-azure-provision' which was removed from the pipeline).
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var activityReporter = new TestPipelineActivityReporter(new NullTestOutputHelper());
+        builder.Services.AddSingleton<IPipelineActivityReporter>(activityReporter);
+
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
         project.AddPromptAgent("my-agent", model, instructions: "Test agent");
 
-        builder.Build();
+        using var app = builder.Build();
 
-        using var serviceProvider = builder.Services.BuildServiceProvider();
-        var pipelineContext = new PipelineContext(
-            serviceProvider.GetRequiredService<DistributedApplicationModel>(),
-            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
-            serviceProvider,
-            NullLogger.Instance,
-            CancellationToken.None);
+        // This calls the real pipeline resolution + validation + execution.
+        // If any DependsOnSteps reference a non-existent step, it throws InvalidOperationException.
+        await ExecuteBeforeStartHooksAsync(app, default);
 
-        // Collect all steps from all resources in the model (mirrors what the pipeline does at runtime).
-        var allSteps = new List<PipelineStep>();
-        foreach (var resource in pipelineContext.Model.Resources)
-        {
-            foreach (var annotation in resource.Annotations.OfType<PipelineStepAnnotation>())
-            {
-                allSteps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
-                {
-                    PipelineContext = pipelineContext,
-                    Resource = resource
-                }));
-            }
-        }
+        // Verify the prompt agent's deploy step was created and executed by the pipeline.
+        Assert.Contains("deploy-my-agent-before-start", activityReporter.CreatedSteps);
+        // Verify the azure-prepare-resources step (the dependency) was also executed.
+        Assert.Contains(AzureEnvironmentResource.PrepareResourcesStepName, activityReporter.CreatedSteps);
+    }
 
-        // Add the well-known framework steps that are always present at runtime.
-        var frameworkStepNames = new HashSet<string>(StringComparer.Ordinal)
-        {
-            WellKnownPipelineSteps.BeforeStart,
-            WellKnownPipelineSteps.Deploy,
-            WellKnownPipelineSteps.DeployPrereq,
-            WellKnownPipelineSteps.Build,
-            WellKnownPipelineSteps.BuildPrereq,
-            WellKnownPipelineSteps.Push,
-            WellKnownPipelineSteps.PushPrereq,
-            WellKnownPipelineSteps.Publish,
-            WellKnownPipelineSteps.PublishPrereq,
-            WellKnownPipelineSteps.Destroy,
-            WellKnownPipelineSteps.DestroyPrereq,
-            WellKnownPipelineSteps.ProcessParameters,
-            WellKnownPipelineSteps.CheckContainerRuntime,
-            WellKnownPipelineSteps.ValidateComputeEnvironments,
-            WellKnownPipelineSteps.Diagnostics,
-        };
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 
-        var allStepNames = new HashSet<string>(allSteps.Select(s => s.Name), StringComparer.Ordinal);
-        allStepNames.UnionWith(frameworkStepNames);
-
-        // Validate: every DependsOnSteps and RequiredBySteps reference must resolve to an existing step.
-        foreach (var step in allSteps)
-        {
-            foreach (var dep in step.DependsOnSteps)
-            {
-                Assert.True(allStepNames.Contains(dep),
-                    $"Step '{step.Name}' depends on unknown step '{dep}'");
-            }
-            foreach (var req in step.RequiredBySteps)
-            {
-                Assert.True(allStepNames.Contains(req),
-                    $"Step '{step.Name}' is required by unknown step '{req}'");
-            }
-        }
+    private sealed class NullTestOutputHelper : ITestOutputHelper
+    {
+        public string Output => string.Empty;
+        public void Write(string message) { }
+        public void Write(string format, params object[] args) { }
+        public void WriteLine(string message) { }
+        public void WriteLine(string format, params object[] args) { }
     }
 }
