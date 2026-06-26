@@ -584,11 +584,6 @@ public class PromptAgentTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task AddPromptAgent_RunMode_BeforeStartPipelineExecutesSuccessfully()
     {
-        // Integration test: runs the real before-start pipeline with both AzureEnvironmentResource
-        // and AzurePromptAgentResource in the model. This catches regressions where a step dependency
-        // is renamed or removed elsewhere without updating AzurePromptAgentResource (the original bug
-        // was a reference to 'run-mode-azure-provision' which was removed from the pipeline).
-
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var activityReporter = new TestPipelineActivityReporter(testOutputHelper);
