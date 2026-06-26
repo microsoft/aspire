@@ -1984,6 +1984,41 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('switching from global to workspace view in an empty window clears global AppHosts', async () => {
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'global ps watch did not start');
+
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/other/apps/Store/AppHost.csproj',
+                    appHostPid: 125881,
+                    dashboardUrl: 'https://localhost:17193/login?t=061212',
+                },
+            ]));
+
+            assert.strictEqual(repository.appHosts.length, 1);
+
+            repository.setViewMode('workspace');
+
+            assert.strictEqual(repository.appHosts.length, 0);
+            assert.strictEqual(repository.workspaceAppHost, undefined);
+        } finally {
+            repository.dispose();
+        }
+    });
+
     test('workspace ps empty snapshot keeps loading while workspace discovery is pending', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
