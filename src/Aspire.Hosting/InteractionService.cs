@@ -296,7 +296,19 @@ internal class InteractionService : IInteractionService
                 // Don't dispose the continuation task — it may not have completed when scope exits
                 // because CompletionTcs uses RunContinuationsAsynchronously.
                 _ = newState.CompletionTcs.Task.ContinueWith(
-                    _ => interactionCts.Cancel(),
+                    _ =>
+                    {
+                        try
+                        {
+                            interactionCts.Cancel();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            // interactionCts may already be disposed if work completed before this
+                            // continuation ran (RunContinuationsAsynchronously schedules it to the
+                            // thread pool, so it can race with the using-dispose).
+                        }
+                    },
                     CancellationToken.None,
                     TaskContinuationOptions.ExecuteSynchronously,
                     TaskScheduler.Default);

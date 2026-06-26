@@ -114,8 +114,8 @@ public interface IInteractionService
     /// through the <see cref="ProgressContext.CancellationToken"/> provided to the work callback.
     /// </para>
     /// </remarks>
-    /// <param name="title">The optional title of the progress dialog.</param>
     /// <param name="message">The message to display in the progress dialog.</param>
+    /// <param name="title">The optional title of the progress dialog.</param>
     /// <param name="options">Optional configuration for the progress interaction.</param>
     /// <param name="cancellationToken">A token to cancel the operation and close the dialog.</param>
     /// <returns>
