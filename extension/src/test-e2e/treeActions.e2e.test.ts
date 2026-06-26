@@ -188,10 +188,9 @@ suite('Aspire tree action command E2E', function () {
         // The echo-arguments command returns a value, which the extension now renders in a read-only
         // editor rather than streaming raw stdout to a shared terminal. Prompted secret arguments are
         // passed to the hidden CLI process (not echoed to a terminal others can scroll); redaction of
-        // those arguments in spawn diagnostics is covered by the unit tests
-        // (resourceCommandExecution / AppHostDataRepository). Here we drive the interactive argument
-        // prompts and assert the real Extension Host opens the aspire-source output editor without
-        // creating any new terminal command events.
+        // those arguments in spawn diagnostics is covered by the cliSpawn unit tests. Here we drive
+        // the interactive argument prompts and assert the real Extension Host opens the aspire-source
+        // output editor without creating any new terminal command events.
         terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.executeResourceCommandItem');
         assert.ok(enabledCommandItem, 'Expected enabled command tree item.');
