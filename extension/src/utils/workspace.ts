@@ -256,7 +256,7 @@ async function promptToAddAppHostPathToSettingsFile(result: AppHostProjectSearch
  * If not available, shows a message prompting to open Aspire CLI installation steps.
  * @returns An object containing the CLI path to use and whether CLI is available
  */
-export async function checkCliAvailableOrRedirect(operation: 'command_gate' | 'debug_gate' = 'command_gate'): Promise<{ cliPath: string; available: boolean }> {
+export async function checkCliAvailableOrRedirect(operation: 'command_gate' | 'debug_gate'): Promise<{ cliPath: string; available: boolean }> {
     // Resolve CLI path fresh each time — settings or PATH may have changed
     const startTime = Date.now();
     const result = await resolveCliPath();
