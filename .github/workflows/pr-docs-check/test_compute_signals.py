@@ -513,6 +513,16 @@ class BackportExclusionTests(unittest.TestCase):
         self.assertTrue(result["excluded"])
         self.assertIn("backport_label", result["exclusion_reasons"])
 
+    def test_needs_backport_label_is_not_excluded(self) -> None:
+        # `backport_label` matches the WHOLE label, not a substring: an
+        # intent-to-port label such as `needs-backport` flags a forward PR that
+        # still needs documenting, so it must not be mistaken for a backport.
+        pr = _backport_pr(labels=["area-dashboard", "needs-backport"])
+        result = compute_signals.compute_signals(pr, [])
+        self.assertFalse(result["excluded"])
+        self.assertFalse(result["signals"]["is_backport"])
+        self.assertNotIn("backport_label", compute_signals.detect_backport(pr))
+
     def test_release_base_plus_strong_marker_records_base_reason(self) -> None:
         # When a strong marker excludes, the weak release base is still recorded
         # alongside it in `exclusion_reasons` as supporting context.

@@ -72,13 +72,27 @@ def is_copilot_authored(author: dict) -> bool:
     return type_ == "Bot" and "copilot" in login
 
 
+# Review states that represent a standing decision. A later COMMENTED review
+# (which GitHub also emits for plain thread replies) must not override one of
+# these — it mirrors GitHub's own "latest decision wins" review-state rule.
+_DECISION_STATES = frozenset({"APPROVED", "CHANGES_REQUESTED", "DISMISSED"})
+
+
 def _latest_review_by_reviewer(reviews: list[dict]) -> dict[str, dict]:
-    """Collapse review events to each reviewer's most recent one.
+    """Collapse review events to each reviewer's *effective* latest review.
 
     GitHub returns one entry per review *event*; a reviewer may appear several
-    times (e.g. COMMENTED then APPROVED). We keep only the latest by
-    `submitted_at`. ISO-8601 timestamps sort correctly as plain strings, e.g.
-    "2026-05-10T18:34:22Z".
+    times (e.g. COMMENTED then APPROVED, or APPROVED then a later COMMENTED).
+    A bare COMMENTED event must NOT erase an earlier decision: GitHub emits a
+    COMMENTED review for ordinary thread replies ("thanks!"), and its own review
+    state keeps the latest APPROVED / CHANGES_REQUESTED as the reviewer's
+    standing. So we keep the most recent *decision* event (APPROVED,
+    CHANGES_REQUESTED, DISMISSED) when one exists, and only fall back to the most
+    recent non-decision event for reviewers who never made a decision. Without
+    this, a lone approver who later comments would collapse to COMMENTED and drop
+    out of the approved set, leaving the drafted PR with no reviewer even though
+    a human approved (microsoft/aspire#18119 review). ISO-8601 timestamps sort
+    correctly as plain strings, e.g. "2026-05-10T18:34:22Z".
     """
     latest: dict[str, dict] = {}
     for review in reviews:
@@ -86,11 +100,26 @@ def _latest_review_by_reviewer(reviews: list[dict]) -> dict[str, dict]:
         login = user.get("login") or ""
         if not login:
             continue
-        submitted_at = review.get("submitted_at") or ""
-        state = review.get("state") or ""
+        candidate = {
+            "state": review.get("state") or "",
+            "submitted_at": review.get("submitted_at") or "",
+        }
         existing = latest.get(login)
-        if existing is None or submitted_at >= existing["submitted_at"]:
-            latest[login] = {"state": state, "submitted_at": submitted_at}
+        if existing is None:
+            latest[login] = candidate
+            continue
+        existing_is_decision = existing["state"] in _DECISION_STATES
+        candidate_is_decision = candidate["state"] in _DECISION_STATES
+        # A non-decision (COMMENTED) never overrides a recorded decision.
+        if existing_is_decision and not candidate_is_decision:
+            continue
+        # A decision always supersedes a previously recorded non-decision.
+        if candidate_is_decision and not existing_is_decision:
+            latest[login] = candidate
+            continue
+        # Same precedence class: keep the most recent by timestamp.
+        if candidate["submitted_at"] >= existing["submitted_at"]:
+            latest[login] = candidate
     return latest
 
 

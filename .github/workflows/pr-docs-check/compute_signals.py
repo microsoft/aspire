@@ -353,7 +353,7 @@ _ONLY_TEST_OR_BUILD_RE = re.compile(
 #   head_branch_is_backport  strong    head.ref = "backport/pr-1234-to-release/13.3"
 #   title_release_prefix     strong    title    = "[release/13.3] Fix the thing"
 #   body_backport_marker     strong    body     = "Backport of #1234 to release/13.3"
-#   backport_label           strong    labels   = ["backport"]
+#   backport_label           strong    labels   = ["backport"]  (exact, not substring)
 #   base_branch_is_release   weak      base.ref = "release/13.3"
 #
 # A STRONG marker is positive evidence that the PR is a port of an
@@ -377,6 +377,14 @@ _BACKPORT_TITLE_RE = re.compile(r"^\s*\[release/", re.IGNORECASE)
 # "we should backport this later" does NOT trip it. The bot/explicit body
 # starts with "Backport of #<N> to release/X.Y".
 _BACKPORT_BODY_RE = re.compile(r"(?im)^\s*backport(?:ed|ing)?\s+of\s+#?\d+")
+
+# Exact label names that mark a completed backport. Matched case-insensitively
+# but as a WHOLE label, never a substring: `backport_label` is a strong marker
+# that excludes on its own, so a future intent-to-port label such as
+# `needs-backport` or `backport-candidate` — which flags a *forward* PR that
+# still needs documenting — must NOT be mistaken for a real backport.
+# (microsoft/aspire#18119 review.)
+_BACKPORT_LABELS = frozenset({"backport"})
 
 # Strong backport markers are positive evidence of a port; any one of them is
 # sufficient to exclude. `base_branch_is_release` is intentionally absent — it
@@ -411,7 +419,7 @@ def detect_backport(pr: dict) -> list[str]:
         reasons.append("title_release_prefix")
     if _BACKPORT_BODY_RE.search(body):
         reasons.append("body_backport_marker")
-    if any("backport" in lab.lower() for lab in labels):
+    if any(lab.strip().lower() in _BACKPORT_LABELS for lab in labels):
         reasons.append("backport_label")
     return reasons
 
