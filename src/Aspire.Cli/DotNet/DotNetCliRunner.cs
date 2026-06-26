@@ -657,8 +657,10 @@ internal sealed class DotNetCliRunner(
         using var activity = telemetry.StartDiagnosticActivity();
 
         // Argument construction (driver selection plus the MSBuild evaluation switches, including the
-        // MSBuildVersion -getProperty workaround) is shared with the dashboard's feedback diagnostics
-        // via DotNetProjectProbe so the two probes stay identical.
+        // MSBuildVersion -getProperty workaround) was extracted to the shared DotNetProjectProbe helper
+        // in src/Shared so it is isolated from this runner's process plumbing and can be reused/tested
+        // on its own. Only the CLI runs this probe; the dashboard's feedback diagnostics don't probe
+        // MSBuild, they read the AppHost-forwarded DASHBOARD__APPHOST__INFO value instead.
         string[] cliArgs = [.. DotNetProjectProbe.BuildItemsAndPropertiesArguments(projectFile.FullName, items, properties, targets)];
         // These probes parse dotnet/msbuild stdout as machine-readable JSON. Disable
         // telemetry and workload-update notifications for every property/item probe so
