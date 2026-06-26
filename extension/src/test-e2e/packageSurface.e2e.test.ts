@@ -77,12 +77,6 @@ suite('Aspire package contribution surface E2E', function () {
         assert.deepStrictEqual(getAspireDebugger(sourcePackage).configurationAttributes?.launch?.required, ['program']);
         assert.ok(installedPackage.contributes?.jsonValidation?.some(validation => getFileMatches(validation.fileMatch).includes('aspire.config.json')));
         assert.ok(installedPackage.contributes?.configuration?.properties?.['aspire.aspireCliExecutablePath']);
-        assert.ok(sourceCommandIds.includes('aspire-vscode.installCliStable'));
-        assert.ok(sourceCommandIds.includes('aspire-vscode.installCliDaily'));
-        assert.ok(sourceCommandIds.includes('aspire-vscode.verifyCliInstalled'));
-        assert.ok(installedPackage.activationEvents?.includes('onCommand:aspire-vscode.installCliStable'));
-        assert.ok(installedPackage.activationEvents?.includes('onCommand:aspire-vscode.verifyCliInstalled'));
-        assert.ok(getWalkthroughCompletionEvents(installedPackage).includes('onCommand:aspire-vscode.verifyCliInstalled'));
     });
 
     test('keeps hidden menus, debugger schema, welcome states, colors, and packaged assets intact', async () => {
@@ -363,12 +357,6 @@ function getFileMatches(fileMatch: string | string[] | undefined): string[] {
     return typeof fileMatch === 'string' ? [fileMatch] : fileMatch ?? [];
 }
 
-function getWalkthroughCompletionEvents(packageJson: PackageJson): string[] {
-    return (packageJson.contributes?.walkthroughs ?? [])
-        .flatMap(walkthrough => walkthrough.steps ?? [])
-        .flatMap(step => step.completionEvents ?? []);
-}
-
 function getWalkthroughMarkdownFiles(packageJson: PackageJson): string[] {
     return (packageJson.contributes?.walkthroughs ?? [])
         .flatMap(walkthrough => walkthrough.steps ?? [])
@@ -438,9 +426,6 @@ const expectedActivationEvents = [
     'workspaceContains:**/apphost.js',
     'workspaceContains:**/apphost.mjs',
     'workspaceContains:**/apphost.cjs',
-    'onCommand:aspire-vscode.installCliStable',
-    'onCommand:aspire-vscode.installCliDaily',
-    'onCommand:aspire-vscode.verifyCliInstalled',
 ];
 
 const expectedCommandIds = [
@@ -465,8 +450,6 @@ const expectedCommandIds = [
     'aspire-vscode.expandAll',
     'aspire-vscode.globalRefreshAppHosts',
     'aspire-vscode.init',
-    'aspire-vscode.installCliDaily',
-    'aspire-vscode.installCliStable',
     'aspire-vscode.new',
     'aspire-vscode.openAppHostSource',
     'aspire-vscode.openDashboard',
@@ -491,7 +474,6 @@ const expectedCommandIds = [
     'aspire-vscode.switchToWorkspaceView',
     'aspire-vscode.update',
     'aspire-vscode.updateSelf',
-    'aspire-vscode.verifyCliInstalled',
     'aspire-vscode.viewAppHostLogFile',
     'aspire-vscode.viewAppHostSource',
     'aspire-vscode.viewResourceLogs',

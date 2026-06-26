@@ -322,12 +322,6 @@
     <trans-unit id="command.init">
       <source xml:lang="en">Initialize Aspire in an existing codebase</source>
     </trans-unit>
-    <trans-unit id="command.installCliDaily">
-      <source xml:lang="en">Install Aspire CLI (daily)</source>
-    </trans-unit>
-    <trans-unit id="command.installCliStable">
-      <source xml:lang="en">Install Aspire CLI (stable)</source>
-    </trans-unit>
     <trans-unit id="walkthrough.getStarted.installCli.title">
       <source xml:lang="en">Install the Aspire CLI</source>
     </trans-unit>
@@ -635,7 +629,7 @@
       <source xml:lang="en">The Aspire CLI command to execute (run, deploy, publish, or do)</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.installCli.description">
-      <source xml:lang="en">The Aspire CLI creates, runs, and manages your applications. Install it using the commands in the panel, then verify your installation.&#10;&#10;[Verify installation](command:aspire-vscode.verifyCliInstalled)</source>
+      <source xml:lang="en">The Aspire CLI creates, runs, and manages your applications. Install it with a package manager or the install script.&#10;&#10;[Open the installation guide](https://aspire.dev/get-started/install-cli/)</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dashboardUrlUnsupported">
       <source xml:lang="en">The Aspire Dashboard URL must use http or https.</source>
@@ -699,9 +693,6 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandMaxLength">
       <source xml:lang="en">Value must be {0} characters or fewer.</source>
-    </trans-unit>
-    <trans-unit id="command.verifyCliInstalled">
-      <source xml:lang="en">Verify Aspire CLI installation</source>
     </trans-unit>
     <trans-unit id="command.codeLensViewAppHostLogs">
       <source xml:lang="en">View Aspire AppHost logs</source>

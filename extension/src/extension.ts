@@ -30,7 +30,6 @@ import { AspireEditorCommandProvider } from './editor/AspireEditorCommandProvide
 import { AspirePackageRestoreProvider } from './utils/AspirePackageRestoreProvider';
 import { AspireAppHostTreeProvider, isEnabledCommand } from './views/AspireAppHostTreeProvider';
 import { AppHostDataRepository } from './views/AppHostDataRepository';
-import { installCliStableCommand, installCliDailyCommand, verifyCliInstalledCommand } from './commands/walkthroughCommands';
 import { AspireMcpServerDefinitionProvider } from './mcp/AspireMcpServerDefinitionProvider';
 import { AspireCodeLensProvider } from './editor/AspireCodeLensProvider';
 import { AspireGutterDecorationProvider } from './editor/AspireGutterDecorationProvider';
@@ -147,11 +146,6 @@ export async function activate(context: vscode.ExtensionContext) {
   const openGlobalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openGlobalSettings', () => tryExecuteCommand('aspire-vscode.openGlobalSettings', terminalProvider, openGlobalSettingsCommand));
   const runAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.runAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(true));
   const debugAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.debugAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(false));
-
-  // Walkthrough commands (no CLI check - CLI may not be installed yet)
-  const installCliStableRegistration = registerInstrumentedCommand('aspire-vscode.installCliStable', 'walkthrough', installCliStableCommand);
-  const installCliDailyRegistration = registerInstrumentedCommand('aspire-vscode.installCliDaily', 'walkthrough', installCliDailyCommand);
-  const verifyCliInstalledRegistration = registerInstrumentedCommand('aspire-vscode.verifyCliInstalled', 'walkthrough', verifyCliInstalledCommand);
 
   // Aspire panel - running app hosts tree view
   const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService);
@@ -310,7 +304,6 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(cliAddCommandRegistration, cliNewCommandRegistration, cliInitCommandRegistration, cliDeployCommandRegistration, cliPublishCommandRegistration, cliDoCommandRegistration, openTerminalCommandRegistration, configureLaunchJsonCommandRegistration);
   context.subscriptions.push(cliUpdateCommandRegistration, cliUpdateSelfCommandRegistration, settingsCommandRegistration, openLocalSettingsCommandRegistration, openGlobalSettingsCommandRegistration, runAppHostCommandRegistration, debugAppHostCommandRegistration);
-  context.subscriptions.push(installCliStableRegistration, installCliDailyRegistration, verifyCliInstalledRegistration);
 
   const debugConfigProvider = new AspireDebugConfigurationProvider(appHostDiscoveryService);
   context.subscriptions.push(
