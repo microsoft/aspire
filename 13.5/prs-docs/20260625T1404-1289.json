@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Documents a 13.4 PostgreSQL 18 data volume breaking change, not related to 13.5 milestone features",
+  "mergedAt": "2026-06-25T14:04:44Z",
+  "number": 1289,
+  "runDate": "2026-06-26T00:28:45Z",
+  "status": "excluded",
+  "title": "Document PostgreSQL 18 data volume breaking change (13.4)"
+}

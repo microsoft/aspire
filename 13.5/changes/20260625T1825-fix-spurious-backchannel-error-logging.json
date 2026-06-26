@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed spurious error-level logging when `aspire run` ends normally — a race condition caused `ConnectionLostException` and `FailedToConnectBackchannelConnection` errors to surface as warnings instead of being silently treated as expected disconnects.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔕",
+  "firstMergedAt": "2026-06-25T18:25:22Z",
+  "lastMergedAt": "2026-06-25T18:25:22Z",
+  "name": "Fix spurious backchannel error logging in aspire run",
+  "owner": "JamesNK",
+  "prs": [
+    18487
+  ]
+}

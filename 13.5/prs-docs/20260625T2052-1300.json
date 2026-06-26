@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Docs repo CI automation (forbidden words checker), not a product feature doc",
+  "mergedAt": "2026-06-25T20:52:16Z",
+  "number": 1300,
+  "runDate": "2026-06-26T00:28:45Z",
+  "status": "excluded",
+  "title": "Add CI check for forbidden words in pull requests"
+}

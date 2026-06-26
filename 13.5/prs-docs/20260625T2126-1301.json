@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Terminology fixes in existing docs to comply with forbidden-words CI; not a new feature doc",
+  "mergedAt": "2026-06-25T21:26:58Z",
+  "number": 1301,
+  "runDate": "2026-06-26T00:28:45Z",
+  "status": "excluded",
+  "title": "Fix forbidden phrases flagged by CI"
+}

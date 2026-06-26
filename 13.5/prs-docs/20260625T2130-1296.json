@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs website infrastructure fix (RSS feed locale filtering), not a product feature doc",
+  "mergedAt": "2026-06-25T21:30:57Z",
+  "number": 1296,
+  "runDate": "2026-06-26T00:28:45Z",
+  "status": "excluded",
+  "title": "Filter RSS feed to default locale"
+}

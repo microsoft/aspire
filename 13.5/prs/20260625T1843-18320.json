@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Agentic workflow CI fix for pr-docs-check workflow; not a user-facing product change",
+  "mergedAt": "2026-06-25T18:43:41Z",
+  "number": 18320,
+  "runDate": "2026-06-26T00:28:45Z",
+  "status": "excluded",
+  "title": "fix(pr-docs-check): remove duplicate aspire.dev checkout that broke create_pull_request branch pinning"
+}

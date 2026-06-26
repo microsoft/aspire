@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Repository maintenance: adds field IDs to GitHub issue templates for prefill; no product behavior change",
+  "mergedAt": "2026-06-25T19:04:08Z",
+  "number": 18499,
+  "runDate": "2026-06-26T00:28:45Z",
+  "status": "excluded",
+  "title": "Add field IDs to issue templates for prefill support"
+}

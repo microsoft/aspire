@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "CLI performance improvement: faster AppHost discovery by skipping MSBuild for non-AppHost projects",
+  "mergedAt": "2026-06-25T20:00:57Z",
+  "number": 18436,
+  "runDate": "2026-06-26T00:28:45Z",
+  "status": "included",
+  "title": "Speed up AppHost discovery by skipping MSBuild evaluation for non-AppHost projects"
+}

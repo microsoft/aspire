@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents microsoft/aspire#18405 - GitHub Models integration deprecation; matched to sunset-github-models-integration changelog entry",
+  "mergedAt": "2026-06-25T18:59:04Z",
+  "number": 1279,
+  "runDate": "2026-06-26T00:28:45Z",
+  "status": "included",
+  "title": "[docs] Add deprecation notices to GitHub Models integration docs"
+}

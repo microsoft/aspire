@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs website infrastructure fix (cookie consent), not related to product features",
+  "mergedAt": "2026-06-25T14:23:19Z",
+  "number": 1295,
+  "runDate": "2026-06-26T00:28:45Z",
+  "status": "excluded",
+  "title": "Fix cookie consent scanner flow and preference-action reload"
+}

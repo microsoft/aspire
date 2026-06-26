@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI bug fix: spurious error logging for expected backchannel disconnects in aspire run",
+  "mergedAt": "2026-06-25T18:25:22Z",
+  "number": 18487,
+  "runDate": "2026-06-26T00:28:45Z",
+  "status": "included",
+  "title": "Fix spurious error logging for expected backchannel disconnects in aspire run"
+}

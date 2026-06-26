@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Docs/branding only: replaces .NET Aspire with Aspire in docs and README; no product behavior change",
+  "mergedAt": "2026-06-25T21:14:31Z",
+  "number": 18505,
+  "runDate": "2026-06-26T00:28:45Z",
+  "status": "excluded",
+  "title": "Branding: use Aspire instead of .NET Aspire"
+}

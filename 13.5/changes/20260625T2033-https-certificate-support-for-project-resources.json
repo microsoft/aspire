@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "ASP.NET project resources can now use Aspire HTTPS certificate configuration without needing their own Kestrel certificate mapping. When a project resource has a TLS endpoint and an HTTPS certificate is configured, the generated PFX path and password are automatically mapped to Kestrel's default certificate environment variables.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔑",
+  "firstMergedAt": "2026-06-25T20:33:46Z",
+  "lastMergedAt": "2026-06-25T20:33:46Z",
+  "name": "HTTPS certificate support for project resources",
+  "owner": "danegsta",
+  "prs": [
+    18481
+  ]
+}

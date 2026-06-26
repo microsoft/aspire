@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents microsoft/aspire#18491 (bot-authored Foundry model update, excluded from product changelog); no matching changelog entry",
+  "mergedAt": "2026-06-25T22:19:31Z",
+  "number": 1297,
+  "runDate": "2026-06-26T00:28:45Z",
+  "status": "excluded",
+  "title": "[docs] Update Foundry model families documentation for Aspire 13.5"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "AppHost improvement: ASP.NET project resources can now use Aspire HTTPS certificate configuration",
+  "mergedAt": "2026-06-25T20:33:46Z",
+  "number": 18481,
+  "runDate": "2026-06-26T00:28:45Z",
+  "status": "included",
+  "title": "Configure HTTPS certificates for project resources"
+}
