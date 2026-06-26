@@ -229,6 +229,19 @@ suite('E2E launch profile', () => {
         assert.ok(!runner.includes("'aspire.enableAspireDashboardAutoLaunch':"));
     });
 
+    test('resets the dashboard default notification key for E2E dashboard launch coverage', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
+
+        assert.ok(apiTypes.includes('resetDashboardDefaultChangedNotification?: boolean;'));
+        assert.ok(e2eStateFileBridge.includes("context.globalState.update(dashboardDefaultChangedNotificationKey, undefined)"));
+        assert.ok(fixtures.includes('resetDashboardDefaultChangedNotificationForE2E'));
+        assert.ok(debugDashboard.includes('await resetDashboardDefaultChangedNotificationForE2E();'));
+    });
+
     test('uses known AppHost PID when E2E teardown CLI status probes time out', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');

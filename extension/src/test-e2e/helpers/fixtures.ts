@@ -63,6 +63,10 @@ export async function setShowStatusDelayForE2E(delayMs: number | undefined): Pro
     await applyE2eControl({ showStatusDelayMs: delayMs ?? null });
 }
 
+export async function resetDashboardDefaultChangedNotificationForE2E(): Promise<void> {
+    await applyE2eControl({ resetDashboardDefaultChangedNotification: true });
+}
+
 export async function executeE2eControlCommand(
     command: AspireExtensionE2EControlCommand,
     options?: { waitFor?: 'started' | 'applied'; timeoutMs?: number }

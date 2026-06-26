@@ -148,6 +148,7 @@ export interface AspireExtensionE2EControlPayload {
     suppressTerminalCommandExecution?: boolean;
     suppressDebugLaunch?: boolean;
     showStatusDelayMs?: number | null;
+    resetDashboardDefaultChangedNotification?: boolean;
     command?: AspireExtensionE2EControlCommand;
 }
 

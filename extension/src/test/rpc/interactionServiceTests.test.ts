@@ -582,7 +582,8 @@ suite('InteractionService endpoints', () => {
 				openDashboard: openDashboardStub,
 				sendMessage: () => {}
 			} as unknown as AspireDebugSession;
-			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+			const globalState = createTestMemento();
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession, globalState);
 
 			await testInfo.interactionService.displayDashboardUrls({
 				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
@@ -590,6 +591,7 @@ suite('InteractionService endpoints', () => {
 
 			assert.strictEqual(openDashboardStub.callCount, 0);
 			assert.strictEqual(showInformationMessageStub.callCount, 0);
+			assert.strictEqual(globalState.get('aspire.dashboardBrowser.defaultChangedNotification.v1'), undefined);
 		}
 		finally {
 			sandbox.restore();
@@ -704,7 +706,8 @@ suite('InteractionService endpoints', () => {
 				openDashboard: openDashboardStub,
 				sendMessage: () => {}
 			} as unknown as AspireDebugSession;
-			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+			const globalState = createTestMemento();
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession, globalState);
 
 			await testInfo.interactionService.displayDashboardUrls({
 				BaseUrlWithLoginToken: 'http://localhost/login?t=base-secret'
@@ -712,6 +715,7 @@ suite('InteractionService endpoints', () => {
 
 			assert.strictEqual(openDashboardStub.callCount, 0);
 			assert.strictEqual(showInformationMessageStub.callCount, 0);
+			assert.strictEqual(globalState.get('aspire.dashboardBrowser.defaultChangedNotification.v1'), undefined);
 		}
 		finally {
 			sandbox.restore();

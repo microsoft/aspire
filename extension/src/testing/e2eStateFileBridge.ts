@@ -18,6 +18,7 @@ import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository } from '../views/AppHostDataRepository';
 
 let atomicWriteSequence = 0;
+const dashboardDefaultChangedNotificationKey = 'aspire.dashboardBrowser.defaultChangedNotification.v1';
 
 export function createE2eStateFileBridge(
   context: vscode.ExtensionContext,
@@ -162,6 +163,9 @@ export function createE2eStateFileBridge(
           }
           else if (typeof payload.showStatusDelayMs === 'number') {
             process.env.ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS = String(payload.showStatusDelayMs);
+          }
+          if (payload.resetDashboardDefaultChangedNotification) {
+            await context.globalState.update(dashboardDefaultChangedNotificationKey, undefined);
           }
           if (payload.command) {
             let commandStarted = false;

@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCommandInvocationCount, getDebugLaunchCount, getStoppingPathEventCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugDashboardUrl, waitForDebugLaunch, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForRunningAppHost, waitForStoppingPathEvent, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceSetting } from './helpers/fixtures';
+import { executeE2eControlCommand, resetDashboardDefaultChangedNotificationForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setShowStatusDelayForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceSetting } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { openAspireView, waitForEditorTitle, waitForNotificationMessage, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
@@ -13,6 +13,7 @@ suite('Aspire debug dashboard E2E', function () {
         await runE2eTeardown([
             () => setCliUnavailableForE2E(false),
             () => setShowStatusDelayForE2E(undefined),
+            () => resetDashboardDefaultChangedNotificationForE2E(),
             () => writeWorkspaceSetting('aspire.dashboardBrowser', undefined),
             () => writeWorkspaceSetting('aspire.enableAspireDashboardAutoLaunch', undefined),
             () => restoreWorkspaceCliPath(),
@@ -24,6 +25,7 @@ suite('Aspire debug dashboard E2E', function () {
     });
 
     test('debugs the AppHost with unconfigured dashboard launch defaults', async () => {
+        await resetDashboardDefaultChangedNotificationForE2E();
         await openAspireView();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
