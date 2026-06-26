@@ -168,6 +168,11 @@ tests/PolyglotAppHosts/**/Java/**/*.class
 /playground/**/next-steps.md
 *.svclog
 
+# The AzdImport playground checks in a real azd project on purpose: its azure.yaml is the
+# hand-authored INPUT that the Aspire importer (builder.addAzdProject) consumes, not azd-generated
+# output. Un-ignore it so the sample is complete and importable after a fresh clone.
+!/playground/AzdImport/azd-app/azure.yaml
+
 # Python virtual environments
 .venv
 
