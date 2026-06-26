@@ -39,5 +39,6 @@
     max-height: 60vh;
     overflow-y: auto;
     overflow-wrap: break-word;
+    word-break: break-all;
     margin-bottom: 16px;
 }
