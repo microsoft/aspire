@@ -1,18 +1,27 @@
 import * as vscode from 'vscode';
-import { aspireTerminalName, installCliPlaceholder, installCliViewAllOptions, installCliViewAllOptionsDescription } from '../loc/strings';
+import { aspireTerminalName, installCliDailyBuild, installCliDailyBuildDescription, installCliPlaceholder, installCliViewAllOptions, installCliViewAllOptionsDescription } from '../loc/strings';
 
 // The Aspire CLI install guide lists the supported package managers and the
 // exact commands used here: https://aspire.dev/get-started/install-cli/
 const installGuideUrl = 'https://aspire.dev/get-started/install-cli/';
 
+// Daily ("dev") builds are not published to any package manager — they are only
+// available through the install script with `--quality dev`. The script is
+// shell-specific, so the command differs per platform and is run through an
+// explicit shell host (see runInstallScript).
+// https://aspire.dev/reference/cli/install-script/
+const dailyInstallScriptCommand = process.platform === 'win32'
+    ? `Invoke-Expression "& { $(Invoke-RestMethod 'https://aspire.dev/install.ps1') } -Quality 'dev'"`
+    : 'curl -sSL https://aspire.dev/install.sh | bash -s -- --quality dev';
+
 interface InstallOption extends vscode.QuickPickItem {
-    // Shell-agnostic command run in the integrated terminal. Package-manager
-    // commands (winget/brew/npm/dotnet/mise) are plain executables, so they
-    // behave the same in cmd.exe, PowerShell, bash, and zsh. This is the key
-    // reason we offer package managers instead of the install scripts: the
-    // `irm ... | iex` / `curl ... | bash` scripts are shell-specific and
-    // failed on Windows when the terminal inherited cmd.exe (issue #18459).
+    // Package-manager command. These are plain executables, so they run the same
+    // in any shell and are sent to the standard integrated terminal.
     command?: string;
+    // Install-script command. The script is shell-specific (PowerShell on
+    // Windows), so it is run through an explicit shell host rather than the
+    // user's default terminal shell (see runInstallScript / issue #18459).
+    scriptCommand?: string;
     // When set, open this URL in the browser instead of running a command.
     // Used by the escape-hatch item so the shell-specific install script is
     // reached through the docs rather than piped into an unknown shell.
@@ -52,6 +61,12 @@ const installOptions: InstallOption[] = [
         command: 'mise use -g aspire',
         platforms: ['darwin', 'linux'],
     },
+    {
+        label: installCliDailyBuild,
+        description: installCliDailyBuildDescription,
+        scriptCommand: dailyInstallScriptCommand,
+        platforms: ['win32', 'darwin', 'linux'],
+    },
 ];
 
 function getOrCreateTerminal(): vscode.Terminal {
@@ -69,12 +84,35 @@ function runInTerminal(command: string): void {
     terminal.sendText(command);
 }
 
+// The install script is shell-specific: on Windows it is PowerShell
+// (`irm ... | iex`), which cmd.exe cannot run. VS Code's default terminal
+// inherits the user's configured shell — frequently cmd.exe on Windows — which
+// is the root cause of issue #18459. Launch the script in an explicit shell
+// host so it never depends on whatever shell the terminal happened to inherit.
+function runInstallScript(command: string): void {
+    if (process.platform === 'win32') {
+        // `powershell.exe` (Windows PowerShell 5.1) ships with every supported
+        // Windows version and is always on PATH, so it is a safe default host.
+        const terminal = vscode.window.createTerminal({
+            name: aspireTerminalName,
+            shellPath: 'powershell.exe',
+        });
+        terminal.show();
+        terminal.sendText(command);
+        return;
+    }
+
+    // On macOS/Linux the script is piped explicitly to `bash`, so it runs
+    // correctly regardless of the user's interactive shell (bash, zsh, fish).
+    runInTerminal(command);
+}
+
 export async function installCliCommand(): Promise<void> {
     const items: InstallOption[] = installOptions.filter(option => option.platforms.includes(process.platform));
 
-    // Always offer the full install guide as an escape hatch. It covers the
-    // install script (the only shell-specific route, deliberately kept out of
-    // the terminal-run options) and any package manager not surfaced above.
+    // Always offer the full install guide as an escape hatch. It covers any
+    // package manager or quality not surfaced above, plus the stable install
+    // script.
     items.push({
         label: installCliViewAllOptions,
         description: installCliViewAllOptionsDescription,
@@ -92,6 +130,11 @@ export async function installCliCommand(): Promise<void> {
 
     if (selected.command) {
         runInTerminal(selected.command);
+        return;
+    }
+
+    if (selected.scriptCommand) {
+        runInstallScript(selected.scriptCommand);
         return;
     }
 
