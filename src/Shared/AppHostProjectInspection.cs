@@ -6,12 +6,13 @@ using System.Text.Json.Serialization;
 namespace Aspire.Shared;
 
 /// <summary>
-/// Shared model + lookup helpers for the MSBuild "inspect the AppHost" probe used by both the
-/// Aspire CLI (<c>AppHostInfoResolver</c>) and the Dashboard
-/// (<c>DashboardFeedbackDiagnosticProvider</c>). Both probe an AppHost with
-/// <c>dotnet build/msbuild &lt;apphost&gt; -getProperty:... -getItem:...</c> and then need to apply
-/// the same Aspire package-version precedence to the resulting JSON, so the model and the
-/// precedence rule live here rather than being mirrored in each consumer.
+/// Shared model + lookup helpers for the MSBuild "inspect the AppHost" probe used by the Aspire CLI
+/// (<c>AppHostInfoResolver</c>). It probes an AppHost with
+/// <c>dotnet build/msbuild &lt;apphost&gt; -getProperty:... -getItem:...</c> and then applies the
+/// Aspire package-version precedence to the resulting JSON. The model and the precedence rule live
+/// here in <c>src/Shared</c> so they can be unit-tested in isolation (see
+/// <c>AppHostProjectInspectionTests</c>). The dashboard does not run this probe; its feedback
+/// diagnostics instead read the AppHost description forwarded via <c>DASHBOARD__APPHOST__INFO</c>.
 /// </summary>
 internal static class AppHostProjectInspection
 {

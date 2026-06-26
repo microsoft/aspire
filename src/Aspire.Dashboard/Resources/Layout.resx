@@ -162,6 +162,33 @@
   <data name="MainLayoutProvideFeedbackOpenIssueButton" xml:space="preserve">
     <value>Open issue</value>
   </data>
+  <data name="MainLayoutProvideFeedbackDetailsHeading" xml:space="preserve">
+    <value>Additional details</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackContextPostedFrom" xml:space="preserve">
+    <value>Posted from: Dashboard</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackContextAspireVersion" xml:space="preserve">
+    <value>Aspire version: {0}</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackContextOperatingSystem" xml:space="preserve">
+    <value>Operating system: {0}</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackContextDashboardRoute" xml:space="preserve">
+    <value>Dashboard route: /{0}</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackContextAppHost" xml:space="preserve">
+    <value>AppHost: {0}</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackDoctorCaptureFailed" xml:space="preserve">
+    <value>Could not capture `aspire doctor` output ({0}).</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackDoctorCaptureTimedOut" xml:space="preserve">
+    <value>Could not capture `aspire doctor` output because it did not complete within {0} seconds.</value>
+  </data>
+  <data name="MainLayoutProvideFeedbackDoctorCaptureExitCode" xml:space="preserve">
+    <value>Could not capture `aspire doctor` output (exit code {0}).</value>
+  </data>
   <data name="MainLayoutLaunchSettings" xml:space="preserve">
     <value>Settings</value>
   </data>

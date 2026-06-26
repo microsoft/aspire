@@ -34,6 +34,22 @@
     flex: 0 0 auto;
 }
 
+/* The doctor output and additional-context fields are tucked into a collapsed-by-default
+   accordion to keep the dialog minimal; the accordion should span the dialog width. */
+.feedback-details-accordion {
+    width: 100%;
+}
+
+/* Loading indicator shown in the accordion header (slot="end") while `aspire doctor` output is
+   being gathered, so it stays visible even when the accordion is collapsed. */
+.feedback-details-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--type-ramp-minus-1-font-size);
+    color: var(--foreground-settings-text);
+}
+
 /* FluentTextArea renders its editable <textarea> inside a shadow root, so the
    monospace font must be applied through the exposed ::part(control) rather than
    the host element. The doctor output and additional-context fields contain

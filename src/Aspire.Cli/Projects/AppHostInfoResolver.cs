@@ -212,7 +212,8 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         // Resolve the Aspire package version using the shared precedence rule (PackageReference,
         // then SDK-provided AspireProjectOrPackageReference, then CPM PackageVersion), trying
         // Aspire.Hosting before Aspire.Hosting.AppHost within each list, then fall back to the SDK
-        // version. Shared with the Dashboard via AppHostProjectInspection so the rule isn't mirrored.
+        // version. The precedence rule lives in the shared AppHostProjectInspection helper so it can
+        // be unit-tested independently of this resolver.
         var aspireHostingVersion = AppHostProjectInspection.FindPackageVersion(msbuildOutput?.Items, "Aspire.Hosting", "Aspire.Hosting.AppHost")
             ?? properties.AspireHostingSDKVersion;
 

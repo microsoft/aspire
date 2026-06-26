@@ -31,44 +31,60 @@
             </div>
         </div>
 
-        @if (IssueKind == FeedbackIssueKind.Bug)
-        {
-            <div class="feedback-input input-container">
-                <div class="feedback-textarea-label">
-                    <FluentInputLabel ForId="@DoctorOutputInputId" Label="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAspireDoctorOutputLabel)]" AriaLabel="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAspireDoctorOutputLabel)]" />
-                </div>
-                <div class="feedback-input-line">
-                    <FluentTextArea Id="@DoctorOutputInputId"
-                                    Class="feedback-dialog-monospace"
-                                    @bind-Value="_aspireDoctorOutput"
-                                    Immediate="true"
-                                    ReadOnly="@_isCapturingBugContext"
-                                    Rows="8"
-                                    Resize="TextAreaResize.Vertical"
-                                    Spellcheck="false"
-                                    aria-busy="@(_isCapturingBugContext ? "true" : "false")" />
-                    @if (_isCapturingBugContext)
+        <FluentAccordion Class="feedback-details-accordion">
+            <FluentAccordionItem Heading="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackDetailsHeading)]" Expanded="false">
+                @if (_isCapturingBugContext)
+                {
+                    @* While `aspire doctor` output is being gathered the Open issue button is disabled
+                       (see CanOpenIssue). The accordion is collapsed by default, so surface the spinner
+                       in the header so the user can see why submission is blocked without expanding it. *@
+                    <div slot="end" class="feedback-details-loading">
+                        <FluentProgressRing Width="16px" />
+                        <span>@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackDoctorLoadingMessage)]</span>
+                    </div>
+                }
+                <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
+                    @if (_showAspireDoctorOutput)
                     {
-                        <FluentProgressRing Width="20px" Class="feedback-input-progress" Title="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackDoctorLoadingMessage)]" />
+                        <div class="feedback-input input-container">
+                            <div class="feedback-textarea-label">
+                                <FluentInputLabel ForId="@DoctorOutputInputId" Label="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAspireDoctorOutputLabel)]" AriaLabel="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAspireDoctorOutputLabel)]" />
+                            </div>
+                            <div class="feedback-input-line">
+                                <FluentTextArea Id="@DoctorOutputInputId"
+                                                Class="feedback-dialog-monospace"
+                                                @bind-Value="_aspireDoctorOutput"
+                                                Immediate="true"
+                                                ReadOnly="@_isCapturingBugContext"
+                                                Rows="8"
+                                                Resize="TextAreaResize.Vertical"
+                                                Spellcheck="false"
+                                                aria-busy="@(_isCapturingBugContext ? "true" : "false")" />
+                                @if (_isCapturingBugContext)
+                                {
+                                    <FluentProgressRing Width="20px" Class="feedback-input-progress" Title="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackDoctorLoadingMessage)]" />
+                                }
+                            </div>
+                        </div>
                     }
-                </div>
-            </div>
-        }
 
-        <div class="feedback-input input-container">
-            <div class="feedback-textarea-label">
-                <FluentInputLabel ForId="@AdditionalContextInputId" Label="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAdditionalContextLabel)]" AriaLabel="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAdditionalContextLabel)]" />
-            </div>
-            <div class="feedback-input-line">
-                <FluentTextArea Id="@AdditionalContextInputId"
-                                Class="feedback-dialog-monospace"
-                                @bind-Value="_additionalContext"
-                                Immediate="true"
-                                Rows="5"
-                                Resize="TextAreaResize.Vertical"
-                                Spellcheck="false" />
-            </div>
-        </div>
+                    <div class="feedback-input input-container">
+                        <div class="feedback-textarea-label">
+                            <FluentInputLabel ForId="@AdditionalContextInputId" Label="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAdditionalContextLabel)]" AriaLabel="@Loc[nameof(LayoutResources.MainLayoutProvideFeedbackAdditionalContextLabel)]" />
+                        </div>
+                        <div class="feedback-input-line">
+                            <FluentTextArea Id="@AdditionalContextInputId"
+                                            Class="feedback-dialog-monospace"
+                                            @bind-Value="_additionalContext"
+                                            Immediate="true"
+                                            Rows="5"
+                                            Resize="TextAreaResize.Vertical"
+                                            Spellcheck="false" />
+                        </div>
+                    </div>
+                </FluentStack>
+            </FluentAccordionItem>
+        </FluentAccordion>
     </FluentStack>
 </FluentDialogBody>
 

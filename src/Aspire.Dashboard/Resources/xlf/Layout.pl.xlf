@@ -62,6 +62,51 @@
         <target state="new">What happened?</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackContextAppHost">
+        <source>AppHost: {0}</source>
+        <target state="new">AppHost: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackContextAspireVersion">
+        <source>Aspire version: {0}</source>
+        <target state="new">Aspire version: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackContextDashboardRoute">
+        <source>Dashboard route: /{0}</source>
+        <target state="new">Dashboard route: /{0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackContextOperatingSystem">
+        <source>Operating system: {0}</source>
+        <target state="new">Operating system: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackContextPostedFrom">
+        <source>Posted from: Dashboard</source>
+        <target state="new">Posted from: Dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackDetailsHeading">
+        <source>Additional details</source>
+        <target state="new">Additional details</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackDoctorCaptureExitCode">
+        <source>Could not capture `aspire doctor` output (exit code {0}).</source>
+        <target state="new">Could not capture `aspire doctor` output (exit code {0}).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackDoctorCaptureFailed">
+        <source>Could not capture `aspire doctor` output ({0}).</source>
+        <target state="new">Could not capture `aspire doctor` output ({0}).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackDoctorCaptureTimedOut">
+        <source>Could not capture `aspire doctor` output because it did not complete within {0} seconds.</source>
+        <target state="new">Could not capture `aspire doctor` output because it did not complete within {0} seconds.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutProvideFeedbackDoctorLoadingMessage">
         <source>Collecting Aspire doctor output...</source>
         <target state="new">Collecting Aspire doctor output...</target>

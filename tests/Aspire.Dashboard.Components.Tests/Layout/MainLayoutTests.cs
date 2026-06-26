@@ -386,6 +386,12 @@ public partial class MainLayoutTests : DashboardTestContext
                 Assert.Equal("true", doctorOutput.GetAttribute("aria-busy"));
                 Assert.Contains("Collecting Aspire doctor output...", doctorInputLine.InnerHtml, StringComparison.Ordinal);
                 Assert.Equal(string.Empty, doctorInputLine.TextContent.Trim());
+
+                // The details are collapsed by default, so the loading indicator is also surfaced in the
+                // accordion header (slot="end") so it stays visible while the user can't yet submit.
+                var headerLoading = cut.Find(".feedback-details-loading");
+                Assert.NotEmpty(headerLoading.QuerySelectorAll("fluent-progress-ring"));
+                Assert.Contains("Collecting Aspire doctor output...", headerLoading.TextContent, StringComparison.Ordinal);
             });
         }
         finally
@@ -475,6 +481,38 @@ public partial class MainLayoutTests : DashboardTestContext
             Assert.Equal(expectedCaptures, diagnosticProvider.AppHostInfoRequestedCount);
             Assert.Equal(expectedCaptures, diagnosticProvider.DoctorOutputCaptureCount);
         });
+    }
+
+    [Fact]
+    public async Task FeedbackDialog_ReportBug_AspireDoctorUnavailable_HidesFieldAndSkipsCapture()
+    {
+        // When the AppHost didn't forward the CLI path (e.g. a standalone dashboard), doctor output is
+        // unavailable. The dialog must not show the field and must not attempt a capture (no probing).
+        var diagnosticProvider = new TestDashboardFeedbackDiagnosticProvider(
+            doctorOutput: """{"sdk":"10.0.301"}""",
+            additionalContext: "- Posted from: Dashboard",
+            isAspireDoctorOutputAvailable: false);
+        SetupMainLayoutServices(feedbackDiagnosticProvider: diagnosticProvider);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentInputLabel(this);
+        FluentUISetupHelpers.SetupFluentTextField(this);
+
+        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
+        var dialogService = Services.GetRequiredService<IDialogService>();
+        await dialogService.ShowDialogAsync<FeedbackDialog>(
+            new FeedbackDialogViewModel(nameof(FeedbackIssueKind.Bug), "Report a bug"),
+            new DialogParameters
+            {
+                Title = "Report a bug",
+                PrimaryAction = null,
+                SecondaryAction = null
+            });
+
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<FeedbackDialog>()));
+        Assert.Equal(0, diagnosticProvider.DoctorOutputCaptureCount);
+        Assert.Empty(cut.FindAll($"#{FeedbackDialog.DoctorOutputInputId}"));
+        // The additional-context field stays available even without doctor output.
+        Assert.NotEmpty(cut.FindAll($"#{FeedbackDialog.AdditionalContextInputId}"));
     }
 
     [Theory]
@@ -740,11 +778,13 @@ public partial class MainLayoutTests : DashboardTestContext
         JSInterop.Setup<BrowserInfo>("window.getBrowserInfo").SetResult(new BrowserInfo { TimeZone = "abc", UserAgent = "mozilla" });
     }
 
-    private sealed class TestDashboardFeedbackDiagnosticProvider(string doctorOutput, string additionalContext) : IDashboardFeedbackDiagnosticProvider
+    private sealed class TestDashboardFeedbackDiagnosticProvider(string doctorOutput, string additionalContext, bool isAspireDoctorOutputAvailable = true) : IDashboardFeedbackDiagnosticProvider
     {
         public int AppHostInfoRequestedCount { get; private set; }
 
         public int DoctorOutputCaptureCount { get; private set; }
+
+        public bool IsAspireDoctorOutputAvailable => isAspireDoctorOutputAvailable;
 
         public string BuildAdditionalContext(bool includeAppHostInfo)
         {
@@ -766,6 +806,8 @@ public partial class MainLayoutTests : DashboardTestContext
     private sealed class WaitingDashboardFeedbackDiagnosticProvider : IDashboardFeedbackDiagnosticProvider
     {
         private readonly TaskCompletionSource<string> _doctorOutputTaskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool IsAspireDoctorOutputAvailable => true;
 
         public string BuildAdditionalContext(bool includeAppHostInfo) => "- Posted from: Dashboard";
 

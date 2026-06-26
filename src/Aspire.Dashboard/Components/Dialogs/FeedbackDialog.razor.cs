@@ -25,6 +25,7 @@ public partial class FeedbackDialog : IDisposable
     private string? _aspireDoctorOutput;
     private string? _additionalContext;
     private bool _isCapturingBugContext;
+    private bool _showAspireDoctorOutput;
 
     [Parameter, EditorRequired]
     public required FeedbackDialogViewModel Content { get; set; }
@@ -81,9 +82,12 @@ public partial class FeedbackDialog : IDisposable
         // command, which gathers AppHost context only for bugs).
         _additionalContext = FeedbackDiagnosticProvider.BuildAdditionalContext(includeAppHostInfo: IssueKind == FeedbackIssueKind.Bug);
 
-        // The `aspire doctor` output is only relevant to bug reports and launches the CLI, so skip it
-        // entirely for idea/general feedback to avoid spawning a process when it isn't needed.
-        if (IssueKind != FeedbackIssueKind.Bug)
+        // `aspire doctor` output is only relevant to bug reports, and the dashboard can only capture it
+        // when the AppHost forwarded the launching CLI's path (DASHBOARD__CLI__PATH). When it didn't
+        // (for example a standalone dashboard with no CLI), we neither show the field nor spawn the
+        // capture, because the dashboard never probes for an `aspire` on PATH itself.
+        _showAspireDoctorOutput = IssueKind == FeedbackIssueKind.Bug && FeedbackDiagnosticProvider.IsAspireDoctorOutputAvailable;
+        if (!_showAspireDoctorOutput)
         {
             return;
         }

@@ -615,7 +615,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         // `aspire` build that started the AppHost (the CLI's Environment.ProcessPath) instead of a
         // possibly-different `aspire` on PATH. The CLI sets AspireCliPath when it launches the AppHost
         // via `dotnet run` (DotNetCliRunner.AddAspireCliPathEnvironment); when it's absent the
-        // dashboard falls back to `aspire` from PATH.
+        // dashboard treats `aspire doctor` capture as unavailable and omits it rather than probing.
         if (configuration["AspireCliPath"] is { Length: > 0 } aspireCliPath)
         {
             context.EnvironmentVariables[DashboardConfigNames.CliPathName.EnvVarName] = aspireCliPath;

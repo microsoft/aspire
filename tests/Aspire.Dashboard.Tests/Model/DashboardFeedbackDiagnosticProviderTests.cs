@@ -3,12 +3,19 @@
 
 using Aspire.Dashboard.Model;
 using Aspire.Hosting;
+using Aspire.TestUtilities;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Xunit;
+using LayoutResources = Aspire.Dashboard.Resources.Layout;
 
 namespace Aspire.Dashboard.Tests.Model;
 
+// The provider localizes the issue-body labels and failure messages, so pin the culture to en-US to
+// keep the asserted English output deterministic regardless of the test runner's culture.
+[UseCulture("en-US")]
 public sealed class DashboardFeedbackDiagnosticProviderTests
 {
     private const string SampleAppHostInfo = "C# (`MyApp.AppHost.csproj`) using Aspire.AppHost.Sdk 13.5.0 and Aspire.Hosting.AppHost 9.0.0 targeting `net10.0`";
@@ -85,7 +92,7 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
             {"sdk":"10.0.301"}
 
             """));
-        var provider = CreateProvider(new ConfigurationBuilder().Build(), runner);
+        var provider = CreateProvider(CreateCliPathConfiguration("aspire"), runner);
 
         var result = await provider.CaptureAspireDoctorOutputAsync(CancellationToken.None);
 
@@ -97,7 +104,7 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
     {
         var runner = new FakeFeedbackDiagnosticProcessRunner((_, _) =>
             new FeedbackDiagnosticProcessResult(Started: false, ExitCode: -1, StandardOutput: string.Empty, TimedOut: false, FailureMessage: "aspire not found"));
-        var provider = CreateProvider(new ConfigurationBuilder().Build(), runner);
+        var provider = CreateProvider(CreateCliPathConfiguration("aspire"), runner);
 
         var result = await provider.CaptureAspireDoctorOutputAsync(CancellationToken.None);
 
@@ -109,7 +116,7 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
     {
         var runner = new FakeFeedbackDiagnosticProcessRunner((_, _) =>
             new FeedbackDiagnosticProcessResult(Started: true, ExitCode: -1, StandardOutput: string.Empty, TimedOut: true, FailureMessage: null));
-        var provider = CreateProvider(new ConfigurationBuilder().Build(), runner);
+        var provider = CreateProvider(CreateCliPathConfiguration("aspire"), runner);
 
         var result = await provider.CaptureAspireDoctorOutputAsync(CancellationToken.None);
 
@@ -121,7 +128,7 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
     {
         var runner = new FakeFeedbackDiagnosticProcessRunner((_, _) =>
             new FeedbackDiagnosticProcessResult(Started: true, ExitCode: 3, StandardOutput: "   ", TimedOut: false, FailureMessage: null));
-        var provider = CreateProvider(new ConfigurationBuilder().Build(), runner);
+        var provider = CreateProvider(CreateCliPathConfiguration("aspire"), runner);
 
         var result = await provider.CaptureAspireDoctorOutputAsync(CancellationToken.None);
 
@@ -143,15 +150,31 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
     }
 
     [Fact]
-    public async Task CaptureAspireDoctorOutputAsync_FallsBackToAspireOnPath_WhenCliPathNotConfigured()
+    public void IsAspireDoctorOutputAvailable_True_WhenCliPathConfigured()
     {
+        var provider = CreateProvider(CreateCliPathConfiguration("aspire"));
+
+        Assert.True(provider.IsAspireDoctorOutputAvailable);
+    }
+
+    [Fact]
+    public void IsAspireDoctorOutputAvailable_False_WhenCliPathNotConfigured()
+    {
+        var provider = CreateProvider(new ConfigurationBuilder().Build());
+
+        Assert.False(provider.IsAspireDoctorOutputAvailable);
+    }
+
+    [Fact]
+    public async Task CaptureAspireDoctorOutputAsync_Throws_WhenCliPathNotConfigured()
+    {
+        // The dashboard never probes for `aspire` on PATH, so capturing without the AppHost-forwarded
+        // CLI path is a contract violation; callers must gate on IsAspireDoctorOutputAvailable.
         var runner = new FakeFeedbackDiagnosticProcessRunner((_, _) => Success("""{"sdk":"10.0.301"}"""));
         var provider = CreateProvider(new ConfigurationBuilder().Build(), runner);
 
-        await provider.CaptureAspireDoctorOutputAsync(CancellationToken.None);
-
-        var invocation = Assert.Single(runner.Invocations);
-        Assert.Equal("aspire", invocation.FileName);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.CaptureAspireDoctorOutputAsync(CancellationToken.None));
+        Assert.Empty(runner.Invocations);
     }
 
     private static FeedbackDiagnosticProcessResult Success(string standardOutput) =>
@@ -167,7 +190,16 @@ public sealed class DashboardFeedbackDiagnosticProviderTests
         return new DashboardFeedbackDiagnosticProvider(
             new TestNavigationManager(currentUri),
             configuration,
-            processRunner ?? new FakeFeedbackDiagnosticProcessRunner((_, _) => Success(string.Empty)));
+            processRunner ?? new FakeFeedbackDiagnosticProcessRunner((_, _) => Success(string.Empty)),
+            CreateLocalizer());
+    }
+
+    private static IStringLocalizer<LayoutResources> CreateLocalizer()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddLocalization();
+        return services.BuildServiceProvider().GetRequiredService<IStringLocalizer<LayoutResources>>();
     }
 
     private static IConfiguration CreateAppHostInfoConfiguration(string appHostInfo)

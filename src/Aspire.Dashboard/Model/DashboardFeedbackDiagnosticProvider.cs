@@ -7,6 +7,8 @@ using System.Text;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Localization;
+using LayoutResources = Aspire.Dashboard.Resources.Layout;
 
 namespace Aspire.Dashboard.Model;
 
@@ -20,7 +22,16 @@ internal interface IDashboardFeedbackDiagnosticProvider
     string BuildAdditionalContext(bool includeAppHostInfo);
 
     /// <summary>
-    /// Captures the output of <c>aspire doctor --format json</c> for inclusion in a bug report.
+    /// Gets a value indicating whether <c>aspire doctor</c> output can be captured. This is only true
+    /// when the AppHost forwarded the launching CLI's path (via <c>DASHBOARD__CLI__PATH</c>); the
+    /// dashboard never probes for an <c>aspire</c> on <c>PATH</c> itself. Callers should check this
+    /// before showing a doctor-output field or calling <see cref="CaptureAspireDoctorOutputAsync"/>.
+    /// </summary>
+    bool IsAspireDoctorOutputAvailable { get; }
+
+    /// <summary>
+    /// Captures the output of <c>aspire doctor --format json</c> for inclusion in a bug report. Only
+    /// call this when <see cref="IsAspireDoctorOutputAvailable"/> is <see langword="true"/>.
     /// </summary>
     Task<string> CaptureAspireDoctorOutputAsync(CancellationToken cancellationToken);
 }
@@ -28,17 +39,21 @@ internal interface IDashboardFeedbackDiagnosticProvider
 internal sealed class DashboardFeedbackDiagnosticProvider(
     NavigationManager navigationManager,
     IConfiguration configuration,
-    IFeedbackDiagnosticProcessRunner processRunner) : IDashboardFeedbackDiagnosticProvider
+    IFeedbackDiagnosticProcessRunner processRunner,
+    IStringLocalizer<LayoutResources> localizer) : IDashboardFeedbackDiagnosticProvider
 {
     private static readonly TimeSpan s_doctorTimeout = TimeSpan.FromSeconds(30);
 
     public string BuildAdditionalContext(bool includeAppHostInfo)
     {
+        // These lines are inserted into the (editable) issue body the user reviews before submitting,
+        // so the labels are localized. The leading "- " markdown bullet and the interpolated values
+        // (versions, OS, route) are kept out of the resources so translators can't break the format.
         var builder = new StringBuilder();
-        builder.AppendLine("- Posted from: Dashboard");
-        builder.AppendLine(CultureInfo.InvariantCulture, $"- Aspire version: {VersionHelpers.DashboardDisplayVersion}");
-        builder.AppendLine(CultureInfo.InvariantCulture, $"- Operating system: {RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})");
-        builder.AppendLine(CultureInfo.InvariantCulture, $"- Dashboard route: /{GetSanitizedDashboardRoute()}");
+        builder.AppendLine(CultureInfo.CurrentCulture, $"- {localizer[nameof(LayoutResources.MainLayoutProvideFeedbackContextPostedFrom)]}");
+        builder.AppendLine(CultureInfo.CurrentCulture, $"- {localizer[nameof(LayoutResources.MainLayoutProvideFeedbackContextAspireVersion), VersionHelpers.DashboardDisplayVersion ?? string.Empty]}");
+        builder.AppendLine(CultureInfo.CurrentCulture, $"- {localizer[nameof(LayoutResources.MainLayoutProvideFeedbackContextOperatingSystem), $"{RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})"]}");
+        builder.AppendLine(CultureInfo.CurrentCulture, $"- {localizer[nameof(LayoutResources.MainLayoutProvideFeedbackContextDashboardRoute), GetSanitizedDashboardRoute()]}");
 
         // The AppHost description is forwarded by the AppHost itself (DASHBOARD__APPHOST__INFO) because
         // it is the running app and therefore knows its exact Aspire SDK/package versions and target
@@ -47,11 +62,14 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
         if (includeAppHostInfo &&
             configuration[DashboardConfigNames.AppHostInfoName.ConfigKey] is { Length: > 0 } appHostInfo)
         {
-            builder.AppendLine(CultureInfo.InvariantCulture, $"- AppHost: {appHostInfo}");
+            builder.AppendLine(CultureInfo.CurrentCulture, $"- {localizer[nameof(LayoutResources.MainLayoutProvideFeedbackContextAppHost), appHostInfo]}");
         }
 
         return builder.ToString();
     }
+
+    public bool IsAspireDoctorOutputAvailable =>
+        configuration[DashboardConfigNames.CliPathName.ConfigKey] is { Length: > 0 };
 
     private string GetSanitizedDashboardRoute()
     {
@@ -66,13 +84,16 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
 
     public async Task<string> CaptureAspireDoctorOutputAsync(CancellationToken cancellationToken)
     {
-        // Prefer the exact CLI that launched the AppHost (forwarded by the AppHost as
-        // DASHBOARD__CLI__PATH from the CLI's Environment.ProcessPath) so the captured diagnostics
-        // come from the same `aspire` build the user is running. Fall back to `aspire` on PATH when
-        // the dashboard wasn't started via the CLI (for example a manual `dotnet run`).
-        var cliExecutable = configuration[DashboardConfigNames.CliPathName.ConfigKey] is { Length: > 0 } configuredCliPath
-            ? configuredCliPath
-            : "aspire";
+        // Run `aspire doctor` only against the exact CLI the AppHost forwarded (DASHBOARD__CLI__PATH,
+        // taken from the CLI's Environment.ProcessPath) so the captured diagnostics come from the same
+        // `aspire` build the user is running. When that path is absent (e.g. the dashboard was started
+        // without the CLI, or runs standalone in a container) doctor output is unavailable; callers
+        // gate on IsAspireDoctorOutputAvailable, so the dashboard never probes for `aspire` on PATH.
+        if (configuration[DashboardConfigNames.CliPathName.ConfigKey] is not { Length: > 0 } cliExecutable)
+        {
+            throw new InvalidOperationException(
+                $"{nameof(CaptureAspireDoctorOutputAsync)} requires '{DashboardConfigNames.CliPathName.ConfigKey}' to be configured; check {nameof(IsAspireDoctorOutputAvailable)} first.");
+        }
 
         var result = await processRunner.RunAsync(
             cliExecutable,
@@ -84,12 +105,12 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
 
         if (!result.Started)
         {
-            return $"Could not capture `aspire doctor` output ({result.FailureMessage}).";
+            return localizer[nameof(LayoutResources.MainLayoutProvideFeedbackDoctorCaptureFailed), result.FailureMessage ?? string.Empty];
         }
 
         if (result.TimedOut)
         {
-            return $"Could not capture `aspire doctor` output because it did not complete within {s_doctorTimeout.TotalSeconds:N0} seconds.";
+            return localizer[nameof(LayoutResources.MainLayoutProvideFeedbackDoctorCaptureTimedOut), (int)s_doctorTimeout.TotalSeconds];
         }
 
         // `aspire doctor --format json` writes clean JSON to stdout; progress text goes to stderr
@@ -97,7 +118,7 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
         var output = result.StandardOutput.Trim();
         if (result.ExitCode != 0 && output.Length == 0)
         {
-            return $"Could not capture `aspire doctor` output (exit code {result.ExitCode}).";
+            return localizer[nameof(LayoutResources.MainLayoutProvideFeedbackDoctorCaptureExitCode), result.ExitCode];
         }
 
         return output;

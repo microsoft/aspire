@@ -5,12 +5,12 @@ namespace Aspire.Shared;
 
 /// <summary>
 /// Builds the <c>dotnet</c> command-line arguments for an MSBuild "get items and properties" probe
-/// of an AppHost. This is the shared recipe used both by the Aspire CLI
-/// (<c>DotNetCliRunner.GetProjectItemsAndPropertiesAsync</c>) and by the dashboard's feedback
-/// diagnostics. The actual process execution differs between the two callers (the CLI runs through
-/// its own process plumbing with telemetry and retries; the dashboard uses a lightweight short-lived
-/// process runner), but the argument construction — driver selection and the MSBuild evaluation
-/// switches — must stay identical, so it lives here rather than being duplicated.
+/// of an AppHost. It is used by the Aspire CLI
+/// (<c>DotNetCliRunner.GetProjectItemsAndPropertiesAsync</c>). The argument construction — driver
+/// selection and the MSBuild evaluation switches — lives here in <c>src/Shared</c>, extracted from
+/// <c>DotNetCliRunner</c>, so it is isolated from the CLI's process plumbing and can be reused or
+/// tested on its own. The dashboard does not run this probe; its feedback diagnostics instead read
+/// the AppHost description the AppHost forwards via <c>DASHBOARD__APPHOST__INFO</c>.
 /// </summary>
 internal static class DotNetProjectProbe
 {

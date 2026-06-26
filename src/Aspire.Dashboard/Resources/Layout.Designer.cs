@@ -196,6 +196,87 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Additional details.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackDetailsHeading {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackDetailsHeading", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Posted from: Dashboard.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackContextPostedFrom {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackContextPostedFrom", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire version: {0}.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackContextAspireVersion {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackContextAspireVersion", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Operating system: {0}.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackContextOperatingSystem {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackContextOperatingSystem", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard route: /{0}.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackContextDashboardRoute {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackContextDashboardRoute", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to AppHost: {0}.
+        /// </summary>
+        public static string MainLayoutProvideFeedbackContextAppHost {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackContextAppHost", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Could not capture `aspire doctor` output ({0})..
+        /// </summary>
+        public static string MainLayoutProvideFeedbackDoctorCaptureFailed {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackDoctorCaptureFailed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Could not capture `aspire doctor` output because it did not complete within {0} seconds..
+        /// </summary>
+        public static string MainLayoutProvideFeedbackDoctorCaptureTimedOut {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackDoctorCaptureTimedOut", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Could not capture `aspire doctor` output (exit code {0})..
+        /// </summary>
+        public static string MainLayoutProvideFeedbackDoctorCaptureExitCode {
+            get {
+                return ResourceManager.GetString("MainLayoutProvideFeedbackDoctorCaptureExitCode", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Aspire repo.
         /// </summary>
         public static string MainLayoutAspireRepoLink {
