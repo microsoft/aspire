@@ -13,6 +13,7 @@ import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import type { DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
 import { isDirectory } from '../utils/io';
 import { sendTelemetryEvent } from '../utils/telemetry';
+import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 
 export interface IInteractionService {
     showStatus: (statusText: string | null) => void;
@@ -44,7 +45,6 @@ export interface IInteractionService {
 }
 
 type CSLogLevel = 'Trace' | 'Debug' | 'Information' | 'Warn' | 'Error' | 'Critical';
-const dashboardDefaultChangedNotificationKey = 'aspire.dashboardBrowser.defaultChangedNotification.v1';
 const preOptInDefaultDashboardBrowser: DashboardLaunchBehavior = 'integratedBrowser';
 type DashboardLaunchBehaviorSource = 'debugConfiguration' | 'globalConfiguration' | 'legacyConfiguration' | 'default';
 type ResolvedDashboardLaunchBehavior = {

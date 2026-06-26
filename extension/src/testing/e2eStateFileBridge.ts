@@ -12,13 +12,13 @@ import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../ex
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
 import type { AspireDebugConsoleOutputEvent, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { onDidInvokeCommand } from '../utils/telemetry';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository } from '../views/AppHostDataRepository';
 
 let atomicWriteSequence = 0;
-const dashboardDefaultChangedNotificationKey = 'aspire.dashboardBrowser.defaultChangedNotification.v1';
 
 export function createE2eStateFileBridge(
   context: vscode.ExtensionContext,
@@ -958,12 +958,19 @@ async function stopDebuggingForE2E(
   const trackedSessions = aspireContext.aspireDebugSessions;
   if (trackedSessions.length > 0) {
     const stoppedDebugSessionIds = new Set(trackedSessions.map(debugSession => debugSession.debugSessionId));
+    const stoppedAppHostPaths = trackedSessions
+      .map(debugSession => debugSession.appHostPath)
+      .filter(path => path !== undefined);
     await Promise.all(trackedSessions.map(debugSession => debugSession.stopDebugging()));
+    for (const appHostPath of stoppedAppHostPaths) {
+      dataRepository.requestAppHostStopRefresh(appHostPath);
+    }
 
     await waitForE2eValue('Aspire debug sessions to stop', 120000, () => {
       const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
       const stoppedSessionsAreGone = aspireContext.aspireDebugSessions.every(debugSession => !stoppedDebugSessionIds.has(debugSession.debugSessionId));
-      return stoppedSessionsAreGone && state.launchingPaths.length === 0 && state.stoppingPaths.length === 0
+      const stoppedAppHostsAreGone = stoppedAppHostPaths.every(appHostPath => !hasRunningAppHost(state, appHostPath));
+      return stoppedSessionsAreGone && stoppedAppHostsAreGone && state.launchingPaths.length === 0 && state.stoppingPaths.length === 0
         ? true
         : undefined;
     });
@@ -981,6 +988,11 @@ async function stopDebuggingForE2E(
       ? true
       : undefined;
   });
+}
+
+function hasRunningAppHost(state: AspireExtensionStateSnapshot, appHostPath: string): boolean {
+  return (state.workspaceAppHost !== undefined && isSamePath(state.workspaceAppHost.appHostPath, appHostPath))
+    || state.appHosts.some(appHost => isSamePath(appHost.appHostPath, appHostPath));
 }
 
 function delay(ms: number): Promise<void> {

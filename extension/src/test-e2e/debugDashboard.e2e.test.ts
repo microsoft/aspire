@@ -25,8 +25,8 @@ suite('Aspire debug dashboard E2E', function () {
     });
 
     test('debugs the AppHost with unconfigured dashboard launch defaults', async () => {
-        await resetDashboardDefaultChangedNotificationForE2E();
         await openAspireView();
+        await resetDashboardDefaultChangedNotificationForE2E();
         await waitForRepositoryIdle();
         const discovered = await waitForWorkspaceAppHost();
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
