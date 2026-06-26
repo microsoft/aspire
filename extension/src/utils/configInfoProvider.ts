@@ -4,6 +4,7 @@ import { spawnCliProcess } from '../debugger/languages/cli';
 import { extensionLogOutputChannel } from './logging';
 import { ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema } from '../types/configInfo';
 import * as strings from '../loc/strings';
+import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
 
 type RawFeatureInfo = Partial<FeatureInfo> & {
     Name?: unknown;
@@ -100,48 +101,64 @@ export class ConfigInfoProvider {
             // same error path as a failed spawn rather than throwing during construction.
             this._terminalProvider.getAspireCliExecutablePath().then(cliPath => {
                 const workingDirectory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-                const args = ['config', 'info', '--json'];
-                let output = '';
+                const runConfigInfo = (args: string[], allowNoLogoRetry: boolean) => {
+                    let output = '';
+                    let stderr = '';
 
-                spawnCliProcess(this._terminalProvider, cliPath, args, {
-                    stdoutCallback: (data) => {
-                        output += data;
-                    },
-                    stderrCallback: (data) => {
-                        extensionLogOutputChannel.error(`aspire config info stderr: ${data}`);
-                    },
-                    exitCallback: (code) => {
-                        if (code !== 0) {
-                            extensionLogOutputChannel.error(strings.failedToGetConfigInfo(code ?? -1));
+                    spawnCliProcess(this._terminalProvider, cliPath, args, {
+                        stdoutCallback: (data) => {
+                            output += data;
+                        },
+                        stderrCallback: (data) => {
+                            stderr += data;
+                        },
+                        exitCallback: (code) => {
+                            if (code !== 0) {
+                                if (allowNoLogoRetry && isNoLogoUnsupportedOutput(args, output, stderr)) {
+                                    extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying config info without it.`);
+                                    runConfigInfo(removeRootNoLogoOption(args), false);
+                                    return;
+                                }
+
+                                if (stderr) {
+                                    extensionLogOutputChannel.error(`aspire config info stderr: ${stderr}`);
+                                }
+                                extensionLogOutputChannel.error(strings.failedToGetConfigInfo(code ?? -1));
+                                if (!suppressErrors) {
+                                    vscode.window.showErrorMessage(strings.failedToGetConfigInfo(code ?? -1));
+                                }
+                                resolve(null);
+                                return;
+                            }
+
+                            try {
+                                const configInfo = parseConfigInfoOutput(output);
+                                extensionLogOutputChannel.info(`Got config info: ${configInfo.availableFeatures.length} features available`);
+                                resolve(configInfo);
+                            } catch (error) {
+                                if (stderr) {
+                                    extensionLogOutputChannel.error(`aspire config info stderr: ${stderr}`);
+                                }
+                                extensionLogOutputChannel.error(strings.failedToParseConfigInfo(error));
+                                if (!suppressErrors) {
+                                    vscode.window.showErrorMessage(strings.failedToParseConfigInfo(error));
+                                }
+                                resolve(null);
+                            }
+                        },
+                        errorCallback: (error) => {
+                            extensionLogOutputChannel.error(strings.errorGettingConfigInfo(error));
                             if (!suppressErrors) {
-                                vscode.window.showErrorMessage(strings.failedToGetConfigInfo(code ?? -1));
+                                vscode.window.showErrorMessage(strings.errorGettingConfigInfo(error));
                             }
                             resolve(null);
-                            return;
-                        }
+                        },
+                        workingDirectory,
+                        noExtensionVariables: true
+                    });
+                };
 
-                        try {
-                            const configInfo = parseConfigInfoOutput(output);
-                            extensionLogOutputChannel.info(`Got config info: ${configInfo.availableFeatures.length} features available`);
-                            resolve(configInfo);
-                        } catch (error) {
-                            extensionLogOutputChannel.error(strings.failedToParseConfigInfo(error));
-                            if (!suppressErrors) {
-                                vscode.window.showErrorMessage(strings.failedToParseConfigInfo(error));
-                            }
-                            resolve(null);
-                        }
-                    },
-                    errorCallback: (error) => {
-                        extensionLogOutputChannel.error(strings.errorGettingConfigInfo(error));
-                        if (!suppressErrors) {
-                            vscode.window.showErrorMessage(strings.errorGettingConfigInfo(error));
-                        }
-                        resolve(null);
-                    },
-                    workingDirectory,
-                    noExtensionVariables: true
-                });
+                runConfigInfo(['config', 'info', '--json', noLogoOption], true);
             }, error => {
                 extensionLogOutputChannel.error(strings.errorGettingConfigInfo(error));
                 if (!suppressErrors) {

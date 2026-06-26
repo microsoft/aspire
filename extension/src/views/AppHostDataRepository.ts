@@ -6,6 +6,7 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
 import { AppHostCandidate, AppHostDiscoveryService, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
+import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
 
@@ -193,6 +194,7 @@ export class AppHostDataRepository {
     // that, if capability resolution fails (e.g. a CLI too old to support `config info`), we still
     // attempt the flag and rely on the locale-independent no-data fallback below.
     private _includeDisabledCommandsSupported = true;
+    private _noLogoSupported = true;
     private readonly _configInfoProvider: ConfigInfoProvider;
 
     // ── Running AppHost state (ps polling) ──
@@ -498,7 +500,7 @@ export class AppHostDataRepository {
     }
 
     async fetchAppHostsOnce(): Promise<AppHostDisplayInfo[]> {
-        const appHosts = await this._runCliJson<AppHostDisplayInfo[] | AppHostDisplayInfo>('aspire ps', ['ps', '--format', 'json']);
+        const appHosts = await this._runCliJson<AppHostDisplayInfo[] | AppHostDisplayInfo>('aspire ps', this._withNoLogo(['ps', '--format', 'json']));
         const appHostList = Array.isArray(appHosts) ? appHosts : [appHosts];
         const appHostsWithResources = await Promise.allSettled(appHostList.map(async appHost => ({
             ...appHost,
@@ -813,7 +815,7 @@ export class AppHostDataRepository {
 
             // Read the cached capability synchronously — see constructor for why we don't await here.
             const includeDisabledCommands = forceIncludeDisabledCommands ?? this._includeDisabledCommandsSupported;
-            const args = ['describe', '--follow', '--format', 'json'];
+            const args = this._withNoLogo(['describe', '--follow', '--format', 'json']);
             if (includeDisabledCommands) {
                 args.push('--include-disabled-commands');
             }
@@ -862,6 +864,11 @@ export class AppHostDataRepository {
                     // loop forever. The panel will refresh when the user explicitly
                     // retries or when activity resumes.
                     if (!this._describeReceivedData) {
+                        if (this._tryGetNoLogoRetryArgs(args, describeNonJsonLines.join('\n'), describeStderr, 'aspire describe --follow')) {
+                            this._startDescribeWatch(forceIncludeDisabledCommands);
+                            return;
+                        }
+
                         if (includeDisabledCommands && isIncludeDisabledCommandsUnsupportedOutput(describeNonJsonLines, describeStderr)) {
                             this._includeDisabledCommandsSupported = false;
                             this._startDescribeWatch(false);
@@ -1080,7 +1087,7 @@ export class AppHostDataRepository {
 
             // Read the cached capability synchronously — see constructor for why we don't await here.
             const includeDisabledCommands = this._includeDisabledCommandsSupported;
-            const args = ['describe', '--follow', '--format', 'json'];
+            const args = this._withNoLogo(['describe', '--follow', '--format', 'json']);
             if (includeDisabledCommands) {
                 args.push('--include-disabled-commands');
             }
@@ -1113,6 +1120,12 @@ export class AppHostDataRepository {
                     extensionLogOutputChannel.info(`aspire describe --follow for ${appHostPath} exited with code ${code}`);
                     stream.process = undefined;
                     if (this._disposed) {
+                        return;
+                    }
+
+                    if (code !== 0 && this._tryGetNoLogoRetryArgs(args, stream.nonJsonLines.join('\n'), stream.stderr, `aspire describe --follow for ${appHostPath}`)) {
+                        this._globalDescribeStreams.delete(appHostPath);
+                        this._startGlobalDescribe(appHostPath);
                         return;
                     }
 
@@ -1214,6 +1227,29 @@ export class AppHostDataRepository {
         }
     }
 
+    private _withNoLogo(args: string[]): string[] {
+        if (!this._noLogoSupported) {
+            return args;
+        }
+
+        const appHostIndex = args.indexOf('--apphost');
+        const insertIndex = appHostIndex === -1 ? args.length : appHostIndex;
+        return [...args.slice(0, insertIndex), noLogoOption, ...args.slice(insertIndex)];
+    }
+
+    private _tryGetNoLogoRetryArgs(args: string[], stdout: string, stderr: string, operation: string): string[] | undefined {
+        if (!isNoLogoUnsupportedOutput(args, stdout, stderr)) {
+            return undefined;
+        }
+
+        if (this._noLogoSupported) {
+            this._noLogoSupported = false;
+            extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying ${operation} without it.`);
+        }
+
+        return removeRootNoLogoOption(args);
+    }
+
     private async _runCliCommand(command: string, args: string[]): Promise<{ stdout: string; stderr: string }> {
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath().catch(error => {
             throw new AspireCliNotInstalledError(String(error));
@@ -1255,6 +1291,14 @@ export class AppHostDataRepository {
                 stderrCallback: (data) => { stderr = appendLimitedOutput(stderr, data, AppHostDataRepository._oneShotOutputBufferLimit); },
                 exitCallback: (code) => {
                     if (code !== 0) {
+                        const retryArgs = this._tryGetNoLogoRetryArgs(args, stdout, stderr, command);
+                        if (retryArgs) {
+                            settle(() => {
+                                this._runCliCommand(command, retryArgs).then(resolve, reject);
+                            });
+                            return;
+                        }
+
                         settle(() => reject(new AspireCliFailedError(command, code, stdout, stderr)));
                         return;
                     }
@@ -1270,7 +1314,7 @@ export class AppHostDataRepository {
     }
 
     private async _fetchAppHostResourcesOnce(appHostPath: string): Promise<ResourceJson[]> {
-        const snapshot = await this._runCliJson<DescribeSnapshotJson>('aspire describe', ['describe', '--format', 'json', '--apphost', appHostPath]);
+        const snapshot = await this._runCliJson<DescribeSnapshotJson>('aspire describe', this._withNoLogo(['describe', '--format', 'json', '--apphost', appHostPath]));
         return snapshot.resources ?? [];
     }
 
@@ -1410,10 +1454,15 @@ export class AppHostDataRepository {
             }
         };
 
-        const args = ['ps', '--follow', '--format', 'json'];
+        const args = this._withNoLogo(['ps', '--follow', '--format', 'json']);
+        let psFollowStdout = '';
+        let psFollowStderr = '';
 
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
             noExtensionVariables: true,
+            stdoutCallback: (data) => {
+                psFollowStdout = appendLimitedOutput(psFollowStdout, data, AppHostDataRepository._oneShotOutputBufferLimit);
+            },
             lineCallback: (line) => {
                 if (!this._isCurrentPsFetch(fetchVersion) || line.trim().length === 0) {
                     return;
@@ -1421,6 +1470,9 @@ export class AppHostDataRepository {
 
                 this._setPsError(undefined);
                 this._handlePsOutput(line);
+            },
+            stderrCallback: (data) => {
+                psFollowStderr = appendLimitedOutput(psFollowStderr, data, AppHostDataRepository._oneShotOutputBufferLimit);
             },
             exitCallback: (code) => {
                 removePsProcess();
@@ -1433,6 +1485,11 @@ export class AppHostDataRepository {
                 }
 
                 if (code !== 0) {
+                    if (this._tryGetNoLogoRetryArgs(args, psFollowStdout, psFollowStderr, 'aspire ps --follow')) {
+                        this._startPsFollow();
+                        return;
+                    }
+
                     this._supportsPsFollow = false;
                     extensionLogOutputChannel.info('aspire ps --follow failed, falling back to aspire ps polling');
                     this._startPsIntervalPolling();
@@ -1476,7 +1533,7 @@ export class AppHostDataRepository {
         this._fetchInProgress = true;
         const fetchVersion = ++this._psFetchVersion;
 
-        const args = ['ps', '--format', 'json'];
+        const args = this._withNoLogo(['ps', '--format', 'json']);
         this._runPsCommand(args, (code, stdout, stderr) => {
             if (code === 0) {
                 this._setPsError(undefined);
@@ -1503,7 +1560,7 @@ export class AppHostDataRepository {
         const snapshotRequestId = ++this._authoritativeSnapshotRequestId;
         this._activeAuthoritativeSnapshotRequestId = snapshotRequestId;
         const pollingGeneration = this._psPollingGeneration;
-        const args = ['ps', '--format', 'json'];
+        const args = this._withNoLogo(['ps', '--format', 'json']);
         this._runPsCommand(args, (code, stdout, stderr) => {
             if (this._activeAuthoritativeSnapshotRequestId !== snapshotRequestId) {
                 return;
@@ -1795,6 +1852,14 @@ export class AppHostDataRepository {
             exitCallback: (code) => {
                 removePsProcess();
                 if (!callbackInvoked) {
+                    if ((code ?? 1) !== 0) {
+                        const retryArgs = this._tryGetNoLogoRetryArgs(args, stdout, stderr, 'aspire ps');
+                        if (retryArgs) {
+                            this._runPsCommand(retryArgs, callback, options);
+                            return;
+                        }
+                    }
+
                     callbackInvoked = true;
                     if (isCurrentPsCommand()) {
                         callback(code ?? 1, stdout, stderr);

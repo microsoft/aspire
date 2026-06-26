@@ -5,6 +5,7 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
@@ -92,6 +93,41 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(projectFile.FullName, searchResult.SelectedProjectFile);
         Assert.Single(searchResult.AllProjectFileCandidates);
         Assert.Equal(projectFile.FullName, searchResult.AllProjectFileCandidates[0]);
+    }
+
+    [Fact]
+    public async Task GetAppHostsCommand_WithRealDiscovery_ReturnsOnlyJson()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "MyApp.AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, """
+            <Project Sdk="Aspire.AppHost.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        var capturedOutput = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory();
+            options.OutputTextWriter = capturedOutput;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("extension get-apphosts --nologo");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var allOutput = string.Join(string.Empty, capturedOutput.Logs);
+        var searchResult = JsonSerializer.Deserialize(allOutput, BackchannelJsonSerializerContext.Default.AppHostProjectSearchResultPoco);
+
+        Assert.NotNull(searchResult);
+        Assert.Equal(projectFile.FullName, searchResult.SelectedProjectFile);
+        Assert.Equal([projectFile.FullName], searchResult.AllProjectFileCandidates);
     }
 
     [Fact]
