@@ -76,17 +76,20 @@ suite('configureLaunchJsonCommand', () => {
             const vscodeDir = path.join(tempRoot, '.vscode');
             const launchJsonPath = path.join(vscodeDir, 'launch.json');
             await fs.mkdir(vscodeDir);
-            await fs.writeFile(launchJsonPath, JSON.stringify({
-                version: '0.2.0',
-                configurations: [
-                    {
-                        type: 'aspire',
-                        request: 'launch',
-                        name: 'Aspire: Launch default AppHost',
-                        program: '${workspaceFolder}'
-                    }
-                ]
-            }));
+            const originalLaunchJson = `{
+  // Existing launch.json files often contain comments because VS Code treats them as JSONC.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "aspire",
+      "request": "launch",
+      "name": "Custom Aspire AppHost",
+      "program": "\${workspaceFolder}"
+    }
+  ]
+}
+`;
+            await fs.writeFile(launchJsonPath, originalLaunchJson);
 
             const workspaceFolder = {
                 uri: vscode.Uri.file(tempRoot),
@@ -104,6 +107,7 @@ suite('configureLaunchJsonCommand', () => {
 
             assert.strictEqual(showQuickPickStub.callCount, 0);
             assert.strictEqual(showInformationMessageStub.callCount, 1);
+            assert.strictEqual(await fs.readFile(launchJsonPath, 'utf8'), originalLaunchJson);
         }
         finally {
             sandbox.restore();

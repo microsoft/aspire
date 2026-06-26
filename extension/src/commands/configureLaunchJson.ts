@@ -1,10 +1,16 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { parse as parseJsonc, type ParseError } from 'jsonc-parser';
 import { aspireConfigExists, failedToConfigureLaunchJson, defaultConfigurationName, selectDashboardLaunchBehavior, dashboardLaunchNoneLabel, dashboardLaunchNoneDescription, dashboardLaunchNotificationLabel, dashboardLaunchNotificationDescription, dashboardLaunchExternalBrowserLabel, dashboardLaunchExternalBrowserDescription, dashboardLaunchIntegratedBrowserLabel, dashboardLaunchIntegratedBrowserDescription, dashboardLaunchChromeLabel, dashboardLaunchChromeDescription, dashboardLaunchEdgeLabel, dashboardLaunchEdgeDescription, dashboardLaunchFirefoxLabel, dashboardLaunchFirefoxDescription } from '../loc/strings';
 import type { DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
 
 type DashboardLaunchBehaviorQuickPickItem = vscode.QuickPickItem & {
     value: DashboardLaunchBehavior;
+};
+
+type LaunchJson = {
+    configurations?: unknown[];
+    [key: string]: unknown;
 };
 
 export async function configureLaunchJsonCommand() {
@@ -15,7 +21,7 @@ export async function configureLaunchJsonCommand() {
         const vscodeDir = path.join(workspaceFolder.uri.fsPath, '.vscode');
         const vscodeUri = vscode.Uri.file(vscodeDir);
         const launchUri = vscode.Uri.file(launchJsonPath);
-        let launchConfig: any = {
+        let launchConfig: LaunchJson = {
             version: '0.2.0',
             configurations: []
         };
@@ -24,12 +30,20 @@ export async function configureLaunchJsonCommand() {
         try {
             const existingContent = await vscode.workspace.fs.readFile(launchUri);
             const existingText = Buffer.from(existingContent).toString('utf8');
-            launchConfig = JSON.parse(existingText);
+            const parseErrors: ParseError[] = [];
+            const parsedLaunchConfig = parseJsonc(existingText, parseErrors) as unknown;
+            if (parseErrors.length > 0) {
+                throw new Error('launch.json contains invalid JSON.');
+            }
+
+            if (!isLaunchJson(parsedLaunchConfig)) {
+                throw new Error('launch.json root must be an object.');
+            }
+
+            launchConfig = parsedLaunchConfig;
 
             // Check if Aspire configuration already exists
-            const hasAspireConfig = launchConfig.configurations?.some((config: any) =>
-                config.type === 'aspire' && config.name === defaultConfigurationName
-            );
+            const hasAspireConfig = launchConfig.configurations?.some(isAspireLaunchConfiguration);
 
             if (hasAspireConfig) {
                 vscode.window.showInformationMessage(aspireConfigExists);
@@ -130,4 +144,15 @@ async function promptForDashboardLaunchBehavior(): Promise<DashboardLaunchBehavi
     });
 
     return selected?.value;
+}
+
+function isLaunchJson(value: unknown): value is LaunchJson {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isAspireLaunchConfiguration(value: unknown): boolean {
+    return typeof value === 'object'
+        && value !== null
+        && 'type' in value
+        && value.type === 'aspire';
 }
