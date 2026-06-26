@@ -155,6 +155,28 @@
                   "type": "string"
                 },
                 "default": {}
+              },
+              "dashboardBrowser": {
+                "type": "string",
+                "description": "%extension.debug.dashboardBrowser%",
+                "enum": [
+                  "none",
+                  "notification",
+                  "openExternalBrowser",
+                  "integratedBrowser",
+                  "debugChrome",
+                  "debugEdge",
+                  "debugFirefox"
+                ],
+                "enumDescriptions": [
+                  "%configuration.aspire.dashboardBrowser.none%",
+                  "%configuration.aspire.dashboardBrowser.notification%",
+                  "%configuration.aspire.dashboardBrowser.openExternalBrowser%",
+                  "%configuration.aspire.dashboardBrowser.integratedBrowser%",
+                  "%configuration.aspire.dashboardBrowser.debugChrome%",
+                  "%configuration.aspire.dashboardBrowser.debugEdge%",
+                  "%configuration.aspire.dashboardBrowser.debugFirefox%"
+                ]
               }
             }
           }
@@ -832,7 +854,7 @@
             "notification",
             "off"
           ],
-          "default": "launch",
+          "default": "off",
           "description": "%configuration.aspire.enableAspireDashboardAutoLaunch%",
           "enumDescriptions": [
             "%configuration.aspire.enableAspireDashboardAutoLaunch.launch%",
@@ -844,15 +866,19 @@
         "aspire.dashboardBrowser": {
           "type": "string",
           "enum": [
+            "none",
+            "notification",
             "openExternalBrowser",
             "integratedBrowser",
             "debugChrome",
             "debugEdge",
             "debugFirefox"
           ],
-          "default": "integratedBrowser",
+          "default": "none",
           "description": "%configuration.aspire.dashboardBrowser%",
           "enumDescriptions": [
+            "%configuration.aspire.dashboardBrowser.none%",
+            "%configuration.aspire.dashboardBrowser.notification%",
             "%configuration.aspire.dashboardBrowser.openExternalBrowser%",
             "%configuration.aspire.dashboardBrowser.integratedBrowser%",
             "%configuration.aspire.dashboardBrowser.debugChrome%",

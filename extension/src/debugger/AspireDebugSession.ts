@@ -27,6 +27,7 @@ import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
 import { appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
 
+export type DashboardLaunchBehavior = 'none' | 'notification' | DashboardBrowserType;
 export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
 
 export function getLoggableDebugConfiguration(debugConfig: AspireResourceExtendedDebugConfiguration, includeEnvironment: boolean): vscode.DebugConfiguration {
@@ -119,6 +120,10 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     this._disposables.push({
       dispose: () => removeAspireDebugSession(this)
     });
+  }
+
+  async stopDebugging(): Promise<void> {
+    await vscode.debug.stopDebugging(this._session);
   }
 
   handleMessage(message: any): void {
