@@ -59,7 +59,7 @@ Run `build.ps1` (Windows) or `build.sh` (Mac/Linux) from the repository root to 
 
 ### Optional: set the CLI path
 
-If you want to effectively debug the Aspire CLI together with the Aspire VS Code extension, set the `Aspire Cli Executable Path` setting to the Aspire CLI output path. The raw local build output path, relative to the Aspire repository root directory, is `artifacts/bin/Aspire.Cli/Debug/net10.0/aspire`.
+If you want to effectively debug the Aspire CLI together with the Aspire VS Code extension, set the `Aspire Cli Executable Path` setting to the Aspire CLI output path. The raw local build output path, relative to the Aspire repository root directory, is `artifacts/bin/Aspire.Cli/Debug/net10.0/aspire`. Pointing at the raw build output makes the extension invoke your dev CLI, but that raw path is intentionally not forwarded as `AspireCliPath` (see Dogfooding below). To also dogfood bundle metadata, use an installed/bundled CLI layout instead.
 
 You may also want to use the `Run Extension (cli stop on entry)` launch configuration, as `Run Extension` does not prevent the Aspire CLI from executing immediately.
 
