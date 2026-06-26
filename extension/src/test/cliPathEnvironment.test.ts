@@ -98,6 +98,19 @@ suite('cliPathEnvironment.getForwardableAspireCliPath tests', () => {
             },
         })), '/work/aspire/bin/aspire');
     });
+
+    test('returns the configured path for a framework-dependent CLI with an adjacent bundle layout', () => {
+        assert.strictEqual(getForwardableAspireCliPath(makeDeps({
+            getConfiguredPath: () => '/work/aspire/bin/aspire',
+            fileExists: (candidate) => {
+                const normalized = normalizeCandidate(candidate);
+                return normalized === '/work/aspire/bin/aspire'
+                    || normalized === '/work/aspire/bin/aspire.dll'
+                    || normalized === '/work/aspire/bin/dcp/dcp'
+                    || normalized === '/work/aspire/bin/managed/aspire-managed';
+            },
+        })), '/work/aspire/bin/aspire');
+    });
 });
 
 suite('cliPathEnvironment.createAspireCliPathProcessEnvironment tests', () => {
