@@ -287,7 +287,6 @@ public partial class MainLayoutTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentTextField(this);
-        JSInterop.SetupVoid("open", _ => true);
 
         var cut = FluentUISetupHelpers.RenderDialogProvider(this);
         var dialogService = Services.GetRequiredService<IDialogService>();
@@ -327,20 +326,27 @@ public partial class MainLayoutTests : DashboardTestContext
         cut.Find($"#{FeedbackDialog.MainTextInputId}").Input("Bug details");
         cut.Find($"#{FeedbackDialog.DoctorOutputInputId}").Input("""{"sdk":"edited"}""");
         cut.Find($"#{FeedbackDialog.AdditionalContextInputId}").Input("Edited context");
-        await cut.InvokeAsync(() => cut.FindAll("fluent-button").Single(button => button.TextContent.Contains("Open issue", StringComparison.OrdinalIgnoreCase)).Click());
 
-        Assert.Contains(JSInterop.Invocations, invocation =>
-            invocation.Identifier == "open" &&
-            TryGetOpenArguments(invocation.Arguments, out var url, out var target) &&
-            url.StartsWith("https://github.com/microsoft/aspire/issues/new?", StringComparison.Ordinal) &&
-            url.Contains("template=10_bug_report.yml", StringComparison.Ordinal) &&
-            url.Contains("title=Bug%20title", StringComparison.Ordinal) &&
-            url.Contains("description=Bug%20details", StringComparison.Ordinal) &&
-            url.Contains("aspire-doctor-output=", StringComparison.Ordinal) &&
-            url.Contains("sdk", StringComparison.Ordinal) &&
-            url.Contains("edited", StringComparison.Ordinal) &&
-            url.Contains("additional-context=Edited%20context", StringComparison.Ordinal) &&
-            string.Equals(target, "_blank", StringComparison.Ordinal));
+        // The new issue page is opened client-side (buttonOpenLink in app.js) so window.open runs
+        // inside the click gesture and isn't blocked by popup blockers, so the URL is bound to the
+        // button's data-url attribute rather than opened via JS interop after a SignalR round-trip.
+        var openIssueButton = cut.Find($"#{FeedbackDialog.OpenIssueButtonId}");
+        Assert.Equal("true", openIssueButton.GetAttribute("data-openbutton"));
+        Assert.Equal("_blank", openIssueButton.GetAttribute("data-target"));
+        var url = openIssueButton.GetAttribute("data-url");
+        Assert.NotNull(url);
+        Assert.StartsWith("https://github.com/microsoft/aspire/issues/new?", url, StringComparison.Ordinal);
+        Assert.Contains("template=10_bug_report.yml", url, StringComparison.Ordinal);
+        Assert.Contains("title=Bug%20title", url, StringComparison.Ordinal);
+        Assert.Contains("description=Bug%20details", url, StringComparison.Ordinal);
+        Assert.Contains("aspire-doctor-output=", url, StringComparison.Ordinal);
+        Assert.Contains("sdk", url, StringComparison.Ordinal);
+        Assert.Contains("edited", url, StringComparison.Ordinal);
+        Assert.Contains("additional-context=Edited%20context", url, StringComparison.Ordinal);
+
+        // Clicking the button closes the dialog (the link itself is opened client-side).
+        await cut.InvokeAsync(() => openIssueButton.Click());
+        cut.WaitForAssertion(() => Assert.False(cut.HasComponent<FeedbackDialog>()));
     }
 
     [Fact]
@@ -396,7 +402,6 @@ public partial class MainLayoutTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentTextField(this);
-        JSInterop.SetupVoid("open", _ => true);
 
         var cut = FluentUISetupHelpers.RenderDialogProvider(this);
         var dialogService = Services.GetRequiredService<IDialogService>();
@@ -422,12 +427,13 @@ public partial class MainLayoutTests : DashboardTestContext
             {
                 Assert.False(cut.Find($"#{FeedbackDialog.DoctorOutputInputId}").HasAttribute("readonly"));
             });
-            await cut.InvokeAsync(() => cut.FindAll("fluent-button").Single(button => button.TextContent.Contains("Open issue", StringComparison.OrdinalIgnoreCase)).Click());
 
-            Assert.Contains(JSInterop.Invocations, invocation =>
-                invocation.Identifier == "open" &&
-                TryGetOpenArguments(invocation.Arguments, out var url, out _) &&
-                url.Contains("additional-context=Edited%20while%20loading", StringComparison.Ordinal));
+            // The edited additional context flows into the button's data-url, which is what the
+            // client-side open handler (buttonOpenLink) navigates to inside the click gesture.
+            var openIssueButton = cut.Find($"#{FeedbackDialog.OpenIssueButtonId}");
+            var url = openIssueButton.GetAttribute("data-url");
+            Assert.NotNull(url);
+            Assert.Contains("additional-context=Edited%20while%20loading", url, StringComparison.Ordinal);
         }
         finally
         {
@@ -448,7 +454,6 @@ public partial class MainLayoutTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentTextField(this);
-        JSInterop.SetupVoid("open", _ => true);
 
         var cut = FluentUISetupHelpers.RenderDialogProvider(this);
         var dialogService = Services.GetRequiredService<IDialogService>();
@@ -733,29 +738,6 @@ public partial class MainLayoutTests : DashboardTestContext
         JSInterop.SetupModule("window.registerOpenTextVisualizerOnClick", _ => true);
 
         JSInterop.Setup<BrowserInfo>("window.getBrowserInfo").SetResult(new BrowserInfo { TimeZone = "abc", UserAgent = "mozilla" });
-    }
-
-    private static bool TryGetOpenArguments(IReadOnlyList<object?> arguments, out string url, out string target)
-    {
-        if (arguments is [string directUrl, string directTarget, ..])
-        {
-            url = directUrl;
-            target = directTarget;
-            return true;
-        }
-
-        if (arguments is [object?[] { Length: 2 } nestedArguments] &&
-            nestedArguments[0] is string nestedUrl &&
-            nestedArguments[1] is string nestedTarget)
-        {
-            url = nestedUrl;
-            target = nestedTarget;
-            return true;
-        }
-
-        url = string.Empty;
-        target = string.Empty;
-        return false;
     }
 
     private sealed class TestDashboardFeedbackDiagnosticProvider(string doctorOutput, string additionalContext) : IDashboardFeedbackDiagnosticProvider

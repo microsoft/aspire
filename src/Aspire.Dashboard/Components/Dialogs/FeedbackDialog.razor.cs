@@ -6,7 +6,6 @@ using Aspire.Shared;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
-using Microsoft.JSInterop;
 using DialogResources = Aspire.Dashboard.Resources.Dialogs;
 using LayoutResources = Aspire.Dashboard.Resources.Layout;
 
@@ -18,6 +17,7 @@ public partial class FeedbackDialog : IDisposable
     internal const string MainTextInputId = "feedback-issue-main-text";
     internal const string DoctorOutputInputId = "feedback-issue-doctor-output";
     internal const string AdditionalContextInputId = "feedback-issue-additional-context";
+    internal const string OpenIssueButtonId = "feedback-issue-open-button";
 
     private readonly CancellationTokenSource _captureCts = new();
     private string? _title;
@@ -25,7 +25,6 @@ public partial class FeedbackDialog : IDisposable
     private string? _aspireDoctorOutput;
     private string? _additionalContext;
     private bool _isCapturingBugContext;
-    private bool _isOpeningIssue;
 
     [Parameter, EditorRequired]
     public required FeedbackDialogViewModel Content { get; set; }
@@ -35,9 +34,6 @@ public partial class FeedbackDialog : IDisposable
 
     [Inject]
     public required IStringLocalizer<DialogResources> DialogsLoc { get; init; }
-
-    [Inject]
-    public required IJSRuntime JS { get; init; }
 
     [Inject]
     public required IServiceProvider ServiceProvider { get; init; }
@@ -62,10 +58,21 @@ public partial class FeedbackDialog : IDisposable
     };
 
     private bool CanOpenIssue =>
-        !_isOpeningIssue &&
         !_isCapturingBugContext &&
         !string.IsNullOrWhiteSpace(_title) &&
         !string.IsNullOrWhiteSpace(_mainText);
+
+    // The GitHub "new issue" URL is bound to the Open issue button's data-url attribute so the link is
+    // opened client-side (buttonOpenLink in app.js) synchronously within the user's click gesture.
+    // Opening it from C# via JS interop would run only after a SignalR round-trip, and popup blockers
+    // (Firefox, Safari, Brave, iOS) block window.open that isn't on the synchronous call stack of a user
+    // gesture. Binding the URL here keeps the value in sync with the editable fields on every keystroke.
+    private string IssueUrl => FeedbackIssueUrlBuilder.BuildUrl(new FeedbackIssueContext(
+        Kind: IssueKind,
+        Title: _title,
+        MainText: _mainText,
+        AspireDoctorOutput: _aspireDoctorOutput,
+        AdditionalContext: _additionalContext));
 
     protected override async Task OnInitializedAsync()
     {
@@ -105,26 +112,12 @@ public partial class FeedbackDialog : IDisposable
             return;
         }
 
-        _isOpeningIssue = true;
-        try
+        // The new issue page is opened client-side by the data-openbutton handler (buttonOpenLink in
+        // app.js) so window.open runs inside the click gesture and isn't blocked by popup blockers.
+        // Here we only close the dialog once the user has triggered issue creation.
+        if (Dialog is not null)
         {
-            var url = FeedbackIssueUrlBuilder.BuildUrl(new FeedbackIssueContext(
-                Kind: IssueKind,
-                Title: _title,
-                MainText: _mainText,
-                AspireDoctorOutput: _aspireDoctorOutput,
-                AdditionalContext: _additionalContext));
-
-            await JS.InvokeVoidAsync("open", url, "_blank", "noopener,noreferrer").ConfigureAwait(true);
-
-            if (Dialog is not null)
-            {
-                await Dialog.CloseAsync().ConfigureAwait(true);
-            }
-        }
-        finally
-        {
-            _isOpeningIssue = false;
+            await Dialog.CloseAsync().ConfigureAwait(true);
         }
     }
 

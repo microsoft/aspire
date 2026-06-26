@@ -84,7 +84,13 @@
             }
             @publicMessageParts[0]<FluentAnchor Href="https://github.com/microsoft/aspire" Target="_blank" Rel="noreferrer noopener" Appearance="Appearance.Hypertext">microsoft/aspire</FluentAnchor>@(publicMessageParts.Length > 1 ? publicMessageParts[1] : string.Empty)
         </span>
-        <FluentButton Appearance="Appearance.Accent" Disabled="@(!CanOpenIssue)" OnClick="@OpenIssueAsync">
+        <FluentButton Id="@OpenIssueButtonId"
+                      Appearance="Appearance.Accent"
+                      Disabled="@(!CanOpenIssue)"
+                      OnClick="@OpenIssueAsync"
+                      data-openbutton="@(CanOpenIssue ? "true" : null)"
+                      data-url="@(CanOpenIssue ? IssueUrl : null)"
+                      data-target="_blank">
             @Loc[nameof(LayoutResources.MainLayoutProvideFeedbackOpenIssueButton)]
         </FluentButton>
         <FluentButton Appearance="Appearance.Neutral" OnClick="@CancelAsync">
