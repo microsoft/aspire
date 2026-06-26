@@ -2,8 +2,13 @@
 
 ## v1.16.0
 
-<!-- aspire-ext-changelog from=3d40d4f73ff2ab4fa87edb78cf829934090de87e to=4d7199341506d2a0ffe94011c40fec2b6d187f0c base=1.15.0 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+### Features
+
+- Refresh the extension Marketplace README with real VS Code screenshots showing the AppHost discovery, run/debug, and Aspire Dashboard workflow ([#17898](https://github.com/microsoft/aspire/pull/17898)).
+
+### Fixes
+
+- Fix stale global AppHosts appearing in the Aspire pane when switching back to a workspace view ([#18506](https://github.com/microsoft/aspire/issues/18506), [#18516](https://github.com/microsoft/aspire/pull/18516)).
 
 ## v1.15.0
 
