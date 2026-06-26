@@ -8,7 +8,7 @@ import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './
 import { EnvironmentVariables } from './environment';
 import { extensionLogOutputChannel } from './logging';
 import { getAppHostDiscoveryTimeoutMs } from './settings';
-import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob, isExcludedDiscoveryUri } from './workspaceFileSearch';
+import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob, isExcludedDiscoveryCandidate, isExcludedDiscoveryUri } from './workspaceFileSearch';
 
 // Mirrors the `aspire ls --format json` candidate shape documented in
 // docs/specs/cli-output-formats.md. Older CLI fallback results are adapted into
@@ -70,7 +70,8 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             // cancellation outside the cached operation so one cancelled refresh doesn't reject
             // unrelated callers that are awaiting the same workspace discovery.
             const discoveryPromise = this._discoverCore(workspaceFolder)
-                .then(candidates => this._includeConfiguredAppHostCandidate(workspaceFolder, candidates));
+                .then(candidates => this._includeConfiguredAppHostCandidate(workspaceFolder, candidates))
+                .then(candidates => this._filterExcludedCandidates(workspaceFolder, candidates));
             let cachedPromise: Promise<CandidateAppHostDisplayInfo[]>;
             cachedPromise = discoveryPromise.catch(error => {
                 if (this._cache.get(key) === cachedPromise) {
@@ -277,6 +278,16 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 selected: true,
             },
         ];
+    }
+
+    private _filterExcludedCandidates(workspaceFolder: vscode.WorkspaceFolder, candidates: CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo[] {
+        const filteredCandidates = candidates.filter(candidate => !isExcludedDiscoveryCandidate(workspaceFolder, vscode.Uri.file(candidate.path)));
+        const excludedCandidateCount = candidates.length - filteredCandidates.length;
+        if (excludedCandidateCount > 0) {
+            extensionLogOutputChannel.info(`Filtered ${excludedCandidateCount} AppHost candidate(s) in excluded paths`);
+        }
+
+        return filteredCandidates;
     }
 
     private _runCliForStdout(cliPath: string, args: string[], workingDirectory: string): Promise<string> {

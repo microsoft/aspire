@@ -230,7 +230,7 @@ suite('InteractionService endpoints', () => {
 			sendRequest: sinon.stub()
 		} as any;
 
-		const rpcClient = new RpcClient({} as any, messageConnection, null, () => null);
+		const rpcClient = new RpcClient(messageConnection, null, () => null);
 
 		rpcClient.interactionService.showStatus('Scanning for running AppHosts...');
 		assert.strictEqual((rpcClient.interactionService as any)._progressNotifier.isActive, true);
@@ -455,32 +455,41 @@ suite('InteractionService endpoints', () => {
 		}
 	});
 
-	test("displayLines without debug session falls back to Aspire terminal", async () => {
+	test("displayLines without debug session writes to output channel only", async () => {
 		const sandbox = sinon.createSandbox();
 
 		try {
-			sandbox.stub(extensionLogOutputChannel, 'info');
-			const sentTexts: string[] = [];
-			const mockTerminal = {
-				terminal: {
-					sendText: (text: string, addNewLine: boolean) => {
-						sentTexts.push(text);
-					}
-				},
-				dispose: () => {}
-			};
+			const infoStub = sandbox.stub(extensionLogOutputChannel, 'info');
+			const showStub = sandbox.stub(extensionLogOutputChannel, 'show');
 			const testInfo = await createTestRpcServer(null, () => null);
-			// Inject a mock terminal provider via the InteractionService constructor
-			(testInfo.interactionService as any)._getAspireTerminal = () => mockTerminal;
 
 			testInfo.interactionService.displayLines([
 				{ Stream: 'stdout', Line: 'line1' },
 				{ Stream: 'stderr', Line: 'line2' }
 			]);
 
-			assert.strictEqual(sentTexts.length, 2, 'Should send two lines to Aspire terminal');
-			assert.strictEqual(sentTexts[0], 'line1');
-			assert.strictEqual(sentTexts[1], 'line2');
+			assert.deepStrictEqual(infoStub.args.map(args => args[0]).slice(-2), ['line1', 'line2']);
+			assert.strictEqual(showStub.calledOnce, true);
+			assert.deepStrictEqual(showStub.firstCall.args, [true]);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayLines without debug session does not show output channel for empty lines", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const infoStub = sandbox.stub(extensionLogOutputChannel, 'info');
+			const showStub = sandbox.stub(extensionLogOutputChannel, 'show');
+			const testInfo = await createTestRpcServer(null, () => null);
+			const infoCallCount = infoStub.callCount;
+
+			testInfo.interactionService.displayLines([]);
+
+			assert.strictEqual(infoStub.callCount, infoCallCount);
+			assert.strictEqual(showStub.called, false);
 		}
 		finally {
 			sandbox.restore();

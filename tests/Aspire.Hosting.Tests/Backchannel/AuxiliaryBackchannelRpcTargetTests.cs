@@ -1475,7 +1475,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = false,
             outputHelper,
-            $"{KnownConfigNames.AspNetCoreUrls}=http://localhost",
+            $"{KnownAspNetCoreConfigNames.Urls}=http://localhost",
             $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost",
             $"{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true",
             $"{KnownConfigNames.ProfilingEnabled}=true");
