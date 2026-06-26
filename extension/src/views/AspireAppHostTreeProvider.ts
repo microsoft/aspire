@@ -1046,18 +1046,20 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 }
 
                 if (workspaceItems.length > 0 && runningItems.length > 0) {
-                    // Wrap running items in a sibling group so both sets nest at the same
-                    // indentation depth and the visual hierarchy reads symmetrically.
-                    const runningGroup = new RunningAppHostsGroupItem(runningItems);
-                    // The "Workspace AppHosts (N)" header only appears for two or more idle
-                    // AppHosts. A lone idle AppHost is surfaced directly as a sibling of the
-                    // running group instead of being wrapped in a "(1)" node that adds nesting
-                    // and a redundant click target without value.
+                    // Each set (running / idle) only gets a "(N)" grouping header when it
+                    // contains two or more AppHosts. A lone AppHost on either side is surfaced
+                    // directly as a top-level sibling instead of being wrapped in a "(1)" node
+                    // that adds nesting and a redundant click target without value.
                     // See https://github.com/microsoft/aspire/issues/18420.
+                    // A single running AppHost is a flat WorkspaceResourcesItem (resources shown
+                    // inline), matching the pure single-running case below.
+                    const runningChild = runningItems.length === 1
+                        ? runningItems[0]
+                        : new RunningAppHostsGroupItem(runningItems);
                     const workspaceChild = workspaceItems.length === 1
                         ? workspaceItems[0]
                         : new WorkspaceAppHostsGroupItem(workspaceItems);
-                    return [runningGroup, workspaceChild];
+                    return [runningChild, workspaceChild];
                 }
                 // For a single idle AppHost (nothing running), skip the "Workspace AppHosts"
                 // grouping node and surface the AppHost directly at the root, for the same
