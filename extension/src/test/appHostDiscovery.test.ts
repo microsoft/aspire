@@ -997,16 +997,18 @@ suite('AppHost discovery', () => {
             }
         });
 
-        test('workspace project fallback recognizes AppHost SDK element, package, and property forms', async () => {
+        test('workspace project fallback recognizes AppHost-specific project forms', async () => {
             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
             try {
                 stubFileSystemWatchers(sandbox);
                 const sdkElementProjectPath = path.join(tempDir, 'SdkElementAppHost', 'SdkElementAppHost.csproj');
                 const packageReferenceProjectPath = path.join(tempDir, 'PackageAppHost', 'PackageAppHost.csproj');
                 const propertyProjectPath = path.join(tempDir, 'PropertyAppHost', 'PropertyAppHost.csproj');
+                const hostingOnlyProjectPath = path.join(tempDir, 'HostingOnlyLibrary', 'HostingOnlyLibrary.csproj');
                 fs.mkdirSync(path.dirname(sdkElementProjectPath), { recursive: true });
                 fs.mkdirSync(path.dirname(packageReferenceProjectPath), { recursive: true });
                 fs.mkdirSync(path.dirname(propertyProjectPath), { recursive: true });
+                fs.mkdirSync(path.dirname(hostingOnlyProjectPath), { recursive: true });
                 fs.writeFileSync(sdkElementProjectPath, `<Project Sdk="Microsoft.NET.Sdk">
   <Sdk Name="Aspire.AppHost.Sdk" Version="13.5.0" />
 </Project>
@@ -1023,10 +1025,17 @@ suite('AppHost discovery', () => {
   </PropertyGroup>
 </Project>
 `);
+                fs.writeFileSync(hostingOnlyProjectPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting" Version="8.2.1" />
+  </ItemGroup>
+</Project>
+`);
                 findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
                     const pattern = typeof include === 'string' ? include : include.pattern;
                     return pattern.endsWith('*.csproj')
                         ? [
+                            vscode.Uri.file(hostingOnlyProjectPath),
                             vscode.Uri.file(packageReferenceProjectPath),
                             vscode.Uri.file(propertyProjectPath),
                             vscode.Uri.file(sdkElementProjectPath),

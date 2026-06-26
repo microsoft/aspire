@@ -188,9 +188,17 @@ export function projectContentsReferencesAspireAppHost(contents: string): boolea
     //   <Sdk Name="Aspire.AppHost.Sdk" Version="13.5.0" />
     //   <PackageReference Include="Aspire.Hosting.AppHost" />
     //   <IsAspireHost>true</IsAspireHost>
+    // Classification also accepts plain Aspire.Hosting references because projects
+    // can still be AppHosts without using the AppHost-specific package shape.
+    return projectContentsReferencesRunnableAspireAppHost(uncommentedContents)
+        || /<(?:PackageReference|AspireProjectOrPackageReference)\b(?=[^>]*\bInclude\s*=\s*["']Aspire\.Hosting["'])[^>]*>/is.test(uncommentedContents);
+}
+
+export function projectContentsReferencesRunnableAspireAppHost(contents: string): boolean {
+    const uncommentedContents = contents.replace(/<!--[\s\S]*?-->/g, '');
     return projectSdkReferencesAspireAppHost(uncommentedContents)
         || /<Sdk\b(?=[^>]*\bName\s*=\s*(["'])Aspire\.AppHost\.Sdk\1)[^>]*>/is.test(uncommentedContents)
-        || /<(?:PackageReference|AspireProjectOrPackageReference)\b(?=[^>]*\bInclude\s*=\s*["']Aspire\.Hosting(?:\.AppHost)?["'])[^>]*>/is.test(uncommentedContents)
+        || /<(?:PackageReference|AspireProjectOrPackageReference)\b(?=[^>]*\bInclude\s*=\s*["']Aspire\.Hosting\.AppHost["'])[^>]*>/is.test(uncommentedContents)
         || /<IsAspireHost>\s*true\s*<\/IsAspireHost>/i.test(uncommentedContents);
 }
 
