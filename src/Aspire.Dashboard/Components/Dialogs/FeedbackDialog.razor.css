@@ -8,7 +8,8 @@
 
 .feedback-input ::deep fluent-text-field,
 .feedback-textarea-label,
-.feedback-input-line ::deep fluent-text-area {
+.feedback-input-line ::deep fluent-text-area,
+.feedback-details {
     width: 75%;
     max-width: 680px;
 }
@@ -35,15 +36,20 @@
 }
 
 /* The doctor output and additional-context fields are tucked into a collapsed-by-default
-   accordion to keep the dialog minimal. The accordion is wrapped in this div (which carries the
-   scoped-CSS attribute) so it spans the dialog width; the FluentAccordion's own <fluent-accordion>
-   host element is reached via ::deep because component roots don't inherit the scope attribute. */
-.feedback-details {
+   accordion to keep the dialog minimal. The wrapper div carries the scoped-CSS attribute and is
+   sized to match the title/message inputs above (via the shared 75%/max-680px rule); the
+   FluentAccordion's own <fluent-accordion> host is reached via ::deep to fill that wrapper. */
+.feedback-details ::deep fluent-accordion {
     width: 100%;
 }
 
-.feedback-details ::deep fluent-accordion {
+/* Inside the details the accordion already provides the 75%/max-680px width constraint, so the
+   labels and textareas fill its content area (inset only by the accordion's own symmetric padding)
+   rather than shrinking to 75% again and leaving a large empty gap on the right. */
+.feedback-details .feedback-textarea-label,
+.feedback-details .feedback-input-line ::deep fluent-text-area {
     width: 100%;
+    max-width: unset;
 }
 
 /* Loading indicator shown in the accordion header (slot="end") while `aspire doctor` output is
@@ -82,7 +88,8 @@
 @media (max-width: 600px) {
     .feedback-input ::deep fluent-text-field,
     .feedback-textarea-label,
-    .feedback-input-line ::deep fluent-text-area {
+    .feedback-input-line ::deep fluent-text-area,
+    .feedback-details {
         width: 100%;
         max-width: unset;
     }
