@@ -1898,8 +1898,11 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             'aspire-vscode.debugAppHost',
             undefined,
         ]);
+        // findAppHostElement rebuilds the tree (getChildren is not cached), so the returned
+        // element is a fresh instance. Match by stable id/contextValue rather than reference.
         assert.ok(result, 'Expected to find the workspace AppHost candidate');
-        assert.strictEqual(result, appHostItem);
+        assert.strictEqual(result?.id, appHostItem.id);
+        assert.strictEqual(result?.contextValue, 'workspaceAppHost');
         provider.dispose();
     });
 
