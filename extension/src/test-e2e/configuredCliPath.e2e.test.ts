@@ -25,14 +25,14 @@ suite('Aspire configured CLI path E2E', function () {
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const originalProject = fs.readFileSync(appHostPath, 'utf8');
         const writtenCliPathFile = path.join(path.dirname(appHostPath), 'obj', 'e2e-aspire-cli-path.txt');
-        const proxy = writeCliProxyWrapper();
+        const configuredCliPath = copyCliBundleWithSpaces();
 
         try {
             fs.rmSync(writtenCliPathFile, { force: true });
             await setE2eCliPathForE2E(undefined);
-            await writeWorkspaceCliPath(proxy.wrapperPath);
+            await writeWorkspaceCliPath(configuredCliPath);
             const resolvedCli = await executeE2eControlCommand({ name: 'getResolvedCliPath' });
-            assertResolvedCliPath(resolvedCli.result, proxy.wrapperPath);
+            assertResolvedCliPath(resolvedCli.result, configuredCliPath);
             writeFileWithRetry(appHostPath, addAspireCliPathProbeTarget(originalProject));
 
             const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
@@ -40,8 +40,7 @@ suite('Aspire configured CLI path E2E', function () {
             await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, before);
             await waitForDebugSessionStartup(appHostPath, 300000);
 
-            await waitForFileContent(writtenCliPathFile, proxy.wrapperPath, 180000);
-            await waitForFileContent(proxy.invocationLogPath, 'run', 60000);
+            await waitForFileContent(writtenCliPathFile, configuredCliPath, 180000);
         }
         finally {
             writeFileWithRetry(appHostPath, originalProject);
@@ -53,25 +52,23 @@ suite('Aspire configured CLI path E2E', function () {
     });
 });
 
-function writeCliProxyWrapper(): { wrapperPath: string; invocationLogPath: string } {
-    const wrapperDirectory = path.join(getWorkspaceRoot(), 'configured cli proxy');
-    fs.mkdirSync(wrapperDirectory, { recursive: true });
+function copyCliBundleWithSpaces(): string {
+    const cliPath = getCliPath();
+    const sourceDirectory = path.dirname(cliPath);
+    const configuredDirectory = path.join(getWorkspaceRoot(), 'configured cli bundle');
+    fs.rmSync(configuredDirectory, { recursive: true, force: true });
+    fs.cpSync(sourceDirectory, configuredDirectory, { recursive: true });
 
-    const invocationLogPath = path.join(wrapperDirectory, 'invocations.txt');
-    fs.rmSync(invocationLogPath, { force: true });
-
-    if (process.platform === 'win32') {
-        const wrapperPath = path.join(wrapperDirectory, 'aspire.cmd');
-        writeFileWithRetry(wrapperPath, `@echo off\r\n>>"${invocationLogPath}" echo %*\r\ncall "${getCliPath()}" %*\r\nexit /b %ERRORLEVEL%\r\n`);
-
-        return { wrapperPath, invocationLogPath };
+    const configuredCliPath = path.join(configuredDirectory, path.basename(cliPath));
+    if (!fs.existsSync(configuredCliPath)) {
+        throw new Error(`Configured CLI bundle copy did not contain '${path.basename(cliPath)}'.`);
     }
 
-    const wrapperPath = path.join(wrapperDirectory, 'aspire');
-    writeFileWithRetry(wrapperPath, `#!/usr/bin/env bash\nprintf '%s\\n' "$*" >> ${quotePosixShellArgument(invocationLogPath)}\nexec ${quotePosixShellArgument(getCliPath())} "$@"\n`);
-    fs.chmodSync(wrapperPath, fs.statSync(wrapperPath).mode | 0o700);
+    if (process.platform !== 'win32') {
+        fs.chmodSync(configuredCliPath, fs.statSync(configuredCliPath).mode | 0o700);
+    }
 
-    return { wrapperPath, invocationLogPath };
+    return configuredCliPath;
 }
 
 function addAspireCliPathProbeTarget(projectContents: string): string {
@@ -107,10 +104,6 @@ async function waitForFileContent(filePath: string, expectedText: string, timeou
 
 function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function quotePosixShellArgument(value: string): string {
-    return `'${value.replace(/'/g, `'\"'\"'`)}'`;
 }
 
 function assertResolvedCliPath(value: unknown, expectedCliPath: string): void {
