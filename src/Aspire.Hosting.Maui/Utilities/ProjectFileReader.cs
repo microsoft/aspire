@@ -60,7 +60,7 @@ internal static class ProjectFileReader
             var startInfo = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = $"msbuild \"{projectPath}\" -getProperty:TargetFramework,TargetFrameworks -nologo",
+                Arguments = $"msbuild \"{projectPath}\" -getProperty:{MauiMSBuildProperties.TargetFramework},{MauiMSBuildProperties.TargetFrameworks} -nologo",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -88,13 +88,13 @@ internal static class ProjectFileReader
             // Check both TargetFramework and TargetFrameworks properties
             var targetFrameworksValue = string.Empty;
             
-            if (properties.TryGetProperty("TargetFrameworks", out var targetFrameworks))
+            if (properties.TryGetProperty(MauiMSBuildProperties.TargetFrameworks, out var targetFrameworks))
             {
                 targetFrameworksValue = targetFrameworks.GetString() ?? string.Empty;
             }
             
             if (string.IsNullOrWhiteSpace(targetFrameworksValue) && 
-                properties.TryGetProperty("TargetFramework", out var targetFramework))
+                properties.TryGetProperty(MauiMSBuildProperties.TargetFramework, out var targetFramework))
             {
                 targetFrameworksValue = targetFramework.GetString() ?? string.Empty;
             }
