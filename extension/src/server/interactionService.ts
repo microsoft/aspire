@@ -8,7 +8,7 @@ import { ProgressNotifier } from './progressNotifier';
 import { applyTextStyle, formatText } from '../utils/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { AspireExtendedDebugConfiguration, EnvVar } from '../dcp/types';
-import { AnsiColors, AspireTerminal } from '../utils/AspireTerminalProvider';
+import { AnsiColors } from '../utils/AspireTerminalProvider';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import type { DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
 import { isDirectory } from '../utils/io';
@@ -164,14 +164,12 @@ type DebugSessionOptions = {
 
 export class InteractionService implements IInteractionService {
     private _getAspireDebugSession: () => AspireDebugSession | null;
-    private _getAspireTerminal?: () => AspireTerminal;
 
     private _rpcClient?: ICliRpcClient;
     private _progressNotifier: ProgressNotifier;
 
-    constructor(getAspireDebugSession: () => AspireDebugSession | null, rpcClient: ICliRpcClient, getAspireTerminal?: () => AspireTerminal, private readonly _globalState?: vscode.Memento) {
+    constructor(getAspireDebugSession: () => AspireDebugSession | null, rpcClient: ICliRpcClient, private readonly _globalState?: vscode.Memento) {
         this._getAspireDebugSession = getAspireDebugSession;
-        this._getAspireTerminal = getAspireTerminal;
         this._rpcClient = rpcClient;
         this._progressNotifier = new ProgressNotifier(this._rpcClient);
     }
@@ -550,19 +548,16 @@ export class InteractionService implements IInteractionService {
         this.clearProgressNotification();
 
         const debugSession = this._getAspireDebugSession();
-        const aspireTerminal = !debugSession ? this._getAspireTerminal?.() : undefined;
         for (const line of lines) {
             const text = getConsoleLineText(line);
             const stream = line.stream ?? line.Stream;
             extensionLogOutputChannel.info(formatText(text));
             if (debugSession) {
                 debugSession.sendMessage(text, true, stream !== 'stderr' ? 'stdout' : 'stderr');
-            } else if (aspireTerminal) {
-                aspireTerminal.terminal.sendText(text, true);
             }
         }
 
-        if (!debugSession && !aspireTerminal && lines.length > 0) {
+        if (!debugSession && lines.length > 0) {
             extensionLogOutputChannel.show(true);
         }
     }
