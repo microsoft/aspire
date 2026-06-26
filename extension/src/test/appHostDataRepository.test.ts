@@ -1702,6 +1702,69 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('a parked idle workspace describe restarts only when its AppHost starts running', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        const idlePath = '/workspace/apps/Store/AppHost.csproj';
+        const describeSpawns: string[] = [];
+        const describeOptions = new Map<string, any>();
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider: any, _command: any, args: string[], options: any) => {
+            if (args[0] === 'describe') {
+                const targetPath = args[args.indexOf('--apphost') + 1];
+                describeSpawns.push(targetPath);
+                describeOptions.set(targetPath, options);
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'workspace ps watch did not start');
+
+            // A single buildable candidate that is not running: the selected workspace target is idle.
+            discovery.resolve([{ path: idlePath, language: 'csharp', status: 'buildable' }]);
+            await waitForCondition(() => repository.isWorkspaceAppHostDiscoveryComplete, 'workspace discovery did not complete');
+
+            // An empty ps poll resolves the idle selection and starts its projected describe stream.
+            psOptions.lineCallback(JSON.stringify([]));
+            await waitForCondition(() => describeSpawns.filter(p => p === idlePath).length === 1, 'a describe stream did not start for the idle workspace target');
+
+            // The projected describe exits without ever producing data: it parks (kept in the map with
+            // no process/timer/data) instead of restart-looping.
+            describeOptions.get(idlePath)!.exitCallback(0);
+
+            // A reconcile while the host stays idle must leave the parked stream alone — no respawn.
+            psOptions.lineCallback(JSON.stringify([]));
+            await waitForAppHostDiscovery();
+            assert.strictEqual(describeSpawns.filter(p => p === idlePath).length, 1, 'a parked idle describe stream must not be respawned while its host stays idle');
+
+            // The same AppHost starts running: the idle->running edge unparks it with a fresh describe.
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: idlePath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+            ]));
+            await waitForCondition(() => describeSpawns.filter(p => p === idlePath).length === 2, 'the parked describe stream did not restart when its AppHost started running');
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('configured AppHost outside aspire ls candidates remains selected in workspace view', async () => {
         const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-extension-workspace-'));
         const configuredAppHostPath = path.join(path.dirname(workspaceRoot), 'external', 'AppHost.csproj');
