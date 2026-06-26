@@ -1705,6 +1705,36 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.False(testInteractionService.PromptProgressCalled);
     }
 
+    [Fact]
+    public async Task ExecuteCommandAsync_WithProgressOptions_SuccessPathPropagatesResult()
+    {
+        using var builder = CreateBuilder();
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "success-command",
+                displayName: "Success Command",
+                executeCommand: e =>
+                {
+                    return Task.FromResult(CommandResults.Success("Operation completed successfully."));
+                },
+                commandOptions: new CommandOptions
+                {
+                    Progress = new CommandProgressOptions { Message = "Processing..." }
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "success-command");
+
+        Assert.True(result.Success);
+        Assert.Equal("Operation completed successfully.", result.Message);
+        Assert.True(testInteractionService.PromptProgressCalled);
+    }
+
     private sealed class CustomResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithWaitSupport
     {
 
