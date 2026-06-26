@@ -145,6 +145,24 @@ function getRunTestsTimeoutMs() {
   return configured;
 }
 
+function getSetupDownloadRetryOptions() {
+  return {
+    attempts: getPositiveIntegerEnvironmentVariable('ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_ATTEMPTS', 5),
+    retryDelayMs: getPositiveIntegerEnvironmentVariable('ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_DELAY_MS', 15000),
+    beforeRetry: cleanPartialExtesterDownloads,
+    timeout: getPositiveIntegerEnvironmentVariable('ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_TIMEOUT_MS', 240000),
+  };
+}
+
+function getPositiveIntegerEnvironmentVariable(name, defaultValue) {
+  const configured = Number(process.env[name] || defaultValue);
+  if (!Number.isInteger(configured) || configured <= 0) {
+    throw new Error(`${name} must be a positive integer. Got '${process.env[name]}'.`);
+  }
+
+  return configured;
+}
+
 function redactStateFileForArtifacts() {
   const state = readJsonIfExists(stateFile);
   if (!state) {
@@ -536,10 +554,11 @@ async function main() {
       NODE_PATH: [extesterNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter),
     });
 
+    const setupDownloadRetryOptions = getSetupDownloadRetryOptions();
     logStep('Downloading VS Code');
-    runWithRetry(process.execPath, [extesterCli, 'get-vscode', '--storage', storageDir, '--code_version', vscodeVersion], extestEnv, { attempts: 2, retryDelayMs: 5000, beforeRetry: cleanPartialExtesterDownloads, timeout: 240000 });
+    runWithRetry(process.execPath, [extesterCli, 'get-vscode', '--storage', storageDir, '--code_version', vscodeVersion], extestEnv, setupDownloadRetryOptions);
     logStep('Downloading ChromeDriver');
-    runWithRetry(process.execPath, [extesterCli, 'get-chromedriver', '--storage', storageDir, '--code_version', vscodeVersion], extestEnv, { attempts: 2, retryDelayMs: 5000, beforeRetry: cleanPartialExtesterDownloads, timeout: 240000 });
+    runWithRetry(process.execPath, [extesterCli, 'get-chromedriver', '--storage', storageDir, '--code_version', vscodeVersion], extestEnv, setupDownloadRetryOptions);
     logStep('Installing VSIX');
     run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', vsixPath], extestEnv, { timeout: 300000 });
 
