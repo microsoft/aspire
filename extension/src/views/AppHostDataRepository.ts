@@ -351,6 +351,12 @@ export class AppHostDataRepository {
         this._viewMode = mode;
         vscode.commands.executeCommand('setContext', 'aspire.viewMode', mode);
         this._clearErrors();
+        if (mode === 'workspace') {
+            // Reinterpret the current `aspire ps` snapshot through the workspace filters when
+            // leaving global view. Otherwise an empty window can keep rendering global AppHosts
+            // until the next workspace-mode poll clears them.
+            this._handleWorkspacePsOutput(this._appHosts);
+        }
         this._updateLoadingContext();
         this._syncPolling();
         this._onDidChangeData.fire();
@@ -1688,6 +1694,7 @@ export class AppHostDataRepository {
         }
 
         this._appHosts = workspaceAppHosts;
+        this._appHostsSnapshot = JSON.stringify(this._appHosts);
         this._workspaceAppHost = workspaceAppHost;
 
         // When multiple workspace AppHost candidates exist, start per-AppHost describe

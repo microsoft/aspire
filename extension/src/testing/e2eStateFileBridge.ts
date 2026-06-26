@@ -12,6 +12,7 @@ import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../ex
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
 import type { AspireDebugConsoleOutputEvent, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { onDidInvokeCommand } from '../utils/telemetry';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
@@ -163,6 +164,9 @@ export function createE2eStateFileBridge(
           else if (typeof payload.showStatusDelayMs === 'number') {
             process.env.ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS = String(payload.showStatusDelayMs);
           }
+          if (payload.resetDashboardDefaultChangedNotification) {
+            await context.globalState.update(dashboardDefaultChangedNotificationKey, undefined);
+          }
           if (payload.command) {
             let commandStarted = false;
             const markCommandStarted = () => {
@@ -173,7 +177,7 @@ export function createE2eStateFileBridge(
               }
             };
 
-            const result = await executeE2eControlCommand(context, aspireContext, appHostLaunchService, appHostTreeProvider, terminalProvider, payload.command, markCommandStarted);
+            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, payload.command, markCommandStarted);
             controlStatus = { revision, status: 'applied', startedObserved: commandStarted, result };
           }
           else {
@@ -273,6 +277,7 @@ function getE2eErrorMessage(error: unknown): string {
 async function executeE2eControlCommand(
   context: vscode.ExtensionContext,
   aspireContext: AspireExtensionContext,
+  dataRepository: AppHostDataRepository,
   appHostLaunchService: AppHostLaunchService,
   appHostTreeProvider: AspireAppHostTreeProvider,
   terminalProvider: AspireTerminalProvider,
@@ -462,7 +467,7 @@ async function executeE2eControlCommand(
     }
     case 'stopDebugging': {
       markStarted();
-      await vscode.debug.stopDebugging();
+      await stopDebuggingForE2E(aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider);
       return undefined;
     }
     case 'closeAllEditors': {
@@ -942,6 +947,52 @@ async function waitForE2eValue<T>(description: string, timeoutMs: number, getVal
   }
 
   throw new Error(`Timed out after ${timeoutMs}ms waiting for ${description}. Last error: ${lastError ?? '<none>'}`);
+}
+
+async function stopDebuggingForE2E(
+  aspireContext: AspireExtensionContext,
+  dataRepository: AppHostDataRepository,
+  appHostLaunchService: AppHostLaunchService,
+  appHostTreeProvider: AspireAppHostTreeProvider
+): Promise<void> {
+  const trackedSessions = aspireContext.aspireDebugSessions;
+  if (trackedSessions.length > 0) {
+    const stoppedDebugSessionIds = new Set(trackedSessions.map(debugSession => debugSession.debugSessionId));
+    const stoppedAppHostPaths = trackedSessions
+      .map(debugSession => debugSession.appHostPath)
+      .filter(path => path !== undefined);
+    await Promise.all(trackedSessions.map(debugSession => debugSession.stopDebugging()));
+    for (const appHostPath of stoppedAppHostPaths) {
+      dataRepository.requestAppHostStopRefresh(appHostPath);
+    }
+
+    await waitForE2eValue('Aspire debug sessions to stop', 120000, () => {
+      const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
+      const stoppedSessionsAreGone = aspireContext.aspireDebugSessions.every(debugSession => !stoppedDebugSessionIds.has(debugSession.debugSessionId));
+      const stoppedAppHostsAreGone = stoppedAppHostPaths.every(appHostPath => !hasRunningAppHost(state, appHostPath));
+      return stoppedSessionsAreGone && stoppedAppHostsAreGone && state.launchingPaths.length === 0 && state.stoppingPaths.length === 0
+        ? true
+        : undefined;
+    });
+
+    return;
+  }
+
+  await vscode.debug.stopDebugging();
+
+  await waitForE2eValue('VS Code debug sessions to stop', 120000, () => {
+    const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
+    return state.debugSessions.length === 0
+      && state.launchingPaths.length === 0
+      && state.stoppingPaths.length === 0
+      ? true
+      : undefined;
+  });
+}
+
+function hasRunningAppHost(state: AspireExtensionStateSnapshot, appHostPath: string): boolean {
+  return (state.workspaceAppHost !== undefined && isSamePath(state.workspaceAppHost.appHostPath, appHostPath))
+    || state.appHosts.some(appHost => isSamePath(appHost.appHostPath, appHostPath));
 }
 
 function delay(ms: number): Promise<void> {

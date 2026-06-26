@@ -12,6 +12,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -201,15 +202,15 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var httpsUrls = https["applicationUrl"]!.GetValue<string>();
         Assert.StartsWith("https://localhost:", httpsUrls);
         var httpsEnv = https["environmentVariables"]!.AsObject();
-        Assert.Equal("Development", httpsEnv["ASPNETCORE_ENVIRONMENT"]!.GetValue<string>());
-        Assert.Equal("Development", httpsEnv["DOTNET_ENVIRONMENT"]!.GetValue<string>());
+        Assert.Equal("Development", httpsEnv[KnownAspNetCoreConfigNames.Environment]!.GetValue<string>());
+        Assert.Equal("Development", httpsEnv[KnownAspNetCoreConfigNames.DotNetEnvironment]!.GetValue<string>());
         Assert.StartsWith("https://localhost:", httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
         Assert.StartsWith("https://localhost:", httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
 
         var http = profiles["http"]!.AsObject();
         Assert.Equal("Project", http["commandName"]!.GetValue<string>());
         var httpEnv = http["environmentVariables"]!.AsObject();
-        Assert.Equal("Development", httpEnv["ASPNETCORE_ENVIRONMENT"]!.GetValue<string>());
+        Assert.Equal("Development", httpEnv[KnownAspNetCoreConfigNames.Environment]!.GetValue<string>());
         Assert.StartsWith("http://localhost:", httpEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
         Assert.StartsWith("http://localhost:", httpEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
         Assert.Equal("true", httpEnv["ASPIRE_ALLOW_UNSECURED_TRANSPORT"]!.GetValue<string>());

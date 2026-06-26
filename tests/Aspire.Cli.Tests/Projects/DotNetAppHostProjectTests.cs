@@ -6,9 +6,11 @@ using Aspire.Cli.Layout;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Text.Json;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -51,6 +53,119 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task ValidateAppHostAsync_OrdinaryMarkerFreeProject_SkipsEvaluation()
+    {
+        // An ordinary library project with no AppHost markers is rejected by the cheap heuristic
+        // before the expensive MSBuild evaluation runs, so the resolver is never consulted.
+        var ordinaryProject = CreateOrdinaryProject("Library.csproj");
+        var runner = new TestDotNetCliRunner();
+        var resolver = new TestAppHostInfoResolver();
+        var project = CreateDotNetAppHostProject(runner, appHostInfoResolver: resolver);
+
+        var validation = await project.ValidateAppHostAsync(ordinaryProject, CancellationToken.None);
+
+        Assert.False(validation.IsValid);
+        Assert.False(validation.IsPossiblyUnbuildable);
+        Assert.Equal(0, resolver.CallCount);
+    }
+
+    [Fact]
+    public async Task ValidateAppHostAsync_AppHostConventionalProject_EvaluatesViaResolver()
+    {
+        // An AppHost-conventional project is not confidently rejected, so it flows into MSBuild
+        // evaluation via the resolver, which confirms it is an Aspire host.
+        var appHostFile = CreateProjectAppHost();
+        var runner = new TestDotNetCliRunner();
+        var resolver = new TestAppHostInfoResolver
+        {
+            GetAppHostInfoAsyncCallback = (_, _) => Task.FromResult(new AppHostProjectInfo(
+                ExitCode: 0,
+                IsAspireHost: true,
+                AspireHostingVersion: "13.0.0",
+                IsUsingCliBundle: false,
+                UserSecretsId: null,
+                RunCommand: null,
+                TargetPath: null,
+                RunWorkingDirectory: null,
+                RunArguments: null,
+                TargetFramework: "net10.0",
+                TargetFrameworks: null))
+        };
+        var project = CreateDotNetAppHostProject(runner, appHostInfoResolver: resolver);
+
+        var validation = await project.ValidateAppHostAsync(appHostFile, CancellationToken.None);
+
+        Assert.True(validation.IsValid);
+        Assert.Equal("13.0.0", validation.AspireHostingVersion);
+        Assert.Equal(1, resolver.CallCount);
+    }
+
+    [Fact]
+    public async Task ValidateAppHostAsync_EvaluatesCleanlyButNotAspireHost_RejectsWithoutPossiblyUnbuildable()
+    {
+        // A project can pass the cheap name heuristic without being an Aspire host: e.g. a
+        // Microsoft.NET.Sdk.Web project that merely sits next to an apphost.cs. MSBuild then evaluates it
+        // cleanly (exit code 0) and authoritatively reports IsAspireHost == false. That is a definitive "no",
+        // so it must be rejected quietly rather than surfaced as a spurious possibly-unbuildable AppHost.
+        var appHostFile = CreateProjectAppHost();
+        var runner = new TestDotNetCliRunner();
+        var resolver = new TestAppHostInfoResolver
+        {
+            GetAppHostInfoAsyncCallback = (_, _) => Task.FromResult(new AppHostProjectInfo(
+                ExitCode: 0,
+                IsAspireHost: false,
+                AspireHostingVersion: null,
+                IsUsingCliBundle: false,
+                UserSecretsId: null,
+                RunCommand: null,
+                TargetPath: null,
+                RunWorkingDirectory: null,
+                RunArguments: null,
+                TargetFramework: "net10.0",
+                TargetFrameworks: null))
+        };
+        var project = CreateDotNetAppHostProject(runner, appHostInfoResolver: resolver);
+
+        var validation = await project.ValidateAppHostAsync(appHostFile, CancellationToken.None);
+
+        Assert.False(validation.IsValid);
+        Assert.False(validation.IsPossiblyUnbuildable);
+        Assert.Equal(1, resolver.CallCount);
+    }
+
+    [Fact]
+    public async Task ValidateAppHostAsync_LikelyAppHostFailsEvaluation_MarksPossiblyUnbuildable()
+    {
+        // A likely AppHost that MSBuild cannot evaluate (non-zero exit) may still be a real AppHost that
+        // currently fails to build, so it is kept as a candidate and surfaced as possibly-unbuildable rather
+        // than silently discarded.
+        var appHostFile = CreateProjectAppHost();
+        var runner = new TestDotNetCliRunner();
+        var resolver = new TestAppHostInfoResolver
+        {
+            GetAppHostInfoAsyncCallback = (_, _) => Task.FromResult(new AppHostProjectInfo(
+                ExitCode: 1,
+                IsAspireHost: false,
+                AspireHostingVersion: null,
+                IsUsingCliBundle: false,
+                UserSecretsId: null,
+                RunCommand: null,
+                TargetPath: null,
+                RunWorkingDirectory: null,
+                RunArguments: null,
+                TargetFramework: null,
+                TargetFrameworks: null))
+        };
+        var project = CreateDotNetAppHostProject(runner, appHostInfoResolver: resolver);
+
+        var validation = await project.ValidateAppHostAsync(appHostFile, CancellationToken.None);
+
+        Assert.False(validation.IsValid);
+        Assert.True(validation.IsPossiblyUnbuildable);
+        Assert.Equal(1, resolver.CallCount);
+    }
+
+    [Fact]
     public void ConfigureSingleFileRunEnvironment_DefaultsToDevelopmentForRun()
     {
         var appHostFile = CreateSingleFileAppHost();
@@ -61,9 +176,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             env,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("Development", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
-        Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
+        Assert.Equal("Development", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
+        Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
     }
 
     [Fact]
@@ -77,9 +192,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             env,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("Production", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
-        Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
+        Assert.Equal("Production", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
+        Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
     }
 
     [Fact]
@@ -94,9 +209,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             inheritedEnvironmentVariables: new Dictionary<string, string?>(),
             args: ["--environment", "Staging"]);
 
-        Assert.Equal("Staging", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
-        Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
+        Assert.Equal("Staging", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
+        Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
     }
 
     [Fact]
@@ -126,9 +241,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             env,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("Production", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
-        Assert.Equal("https://localhost:19000;http://localhost:15000", env["ASPNETCORE_URLS"]);
+        Assert.Equal("Production", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
+        Assert.Equal("https://localhost:19000;http://localhost:15000", env[KnownAspNetCoreConfigNames.Urls]);
         Assert.Equal("https://localhost:21000", env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
         Assert.Equal("https://localhost:22000", env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
     }
@@ -147,8 +262,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                 [AppHostEnvironmentDefaults.AspireEnvironmentVariableName] = "Staging"
             });
 
-        Assert.Equal("Staging", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+        Assert.Equal("Staging", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
     }
 
     [Fact]
@@ -165,9 +280,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.True(noBuild);
             Assert.False(noRestore);
             Assert.False(options.NoLaunchProfile);
-            Assert.Equal("Development", env!["DOTNET_ENVIRONMENT"]);
-            Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
-            Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
+            Assert.Equal("Development", env![KnownAspNetCoreConfigNames.DotNetEnvironment]);
+            Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
+            Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
             return Task.FromResult(0);
         };
 
@@ -198,8 +313,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(noRestore);
             Assert.False(options.NoLaunchProfile);
             Assert.Equal(["--environment", "Staging"], args);
-            Assert.Equal("Staging", env!["DOTNET_ENVIRONMENT"]);
-            Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+            Assert.Equal("Staging", env![KnownAspNetCoreConfigNames.DotNetEnvironment]);
+            Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
             return Task.FromResult(0);
         };
 
@@ -559,8 +674,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                 args);
             Assert.NotNull(env);
             Assert.Equal("http", env["DOTNET_LAUNCH_PROFILE"]);
-            Assert.Equal("http://localhost:15000", env["ASPNETCORE_URLS"]);
-            Assert.Equal("Development", env["DOTNET_ENVIRONMENT"]);
+            Assert.Equal("http://localhost:15000", env[KnownAspNetCoreConfigNames.Urls]);
+            Assert.Equal("Development", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
             Assert.Equal("context-value", env["CUSTOM_ENV"]);
             return Task.FromResult(123);
         };
@@ -950,7 +1065,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Empty(args);
             Assert.NotNull(env);
             Assert.Equal("flat", env["DOTNET_LAUNCH_PROFILE"]);
-            Assert.Equal("http://localhost:16000", env["ASPNETCORE_URLS"]);
+            Assert.Equal("http://localhost:16000", env[KnownAspNetCoreConfigNames.Urls]);
             Assert.Equal("from-run-json", env["CUSTOM_ENV"]);
             return Task.FromResult(101);
         };
@@ -1012,7 +1127,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal(appHostCommand.FullName, command);
             Assert.NotNull(env);
             Assert.Equal("vb", env["DOTNET_LAUNCH_PROFILE"]);
-            Assert.Equal("http://localhost:17000", env["ASPNETCORE_URLS"]);
+            Assert.Equal("http://localhost:17000", env[KnownAspNetCoreConfigNames.Urls]);
             return Task.FromResult(102);
         };
 
@@ -1307,9 +1422,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(noRestore);
             Assert.True(options.NoLaunchProfile);
             Assert.Equal(["--operation", "publish"], args);
-            Assert.Equal("Production", env!["DOTNET_ENVIRONMENT"]);
-            Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
-            Assert.Equal("https://localhost:19000;http://localhost:15000", env["ASPNETCORE_URLS"]);
+            Assert.Equal("Production", env![KnownAspNetCoreConfigNames.DotNetEnvironment]);
+            Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
+            Assert.Equal("https://localhost:19000;http://localhost:15000", env[KnownAspNetCoreConfigNames.Urls]);
             Assert.Equal("https://localhost:21000", env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
             Assert.Equal("https://localhost:22000", env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
             Assert.False(env.ContainsKey("ASPIRE_ENVIRONMENT"));
@@ -1342,8 +1457,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(noRestore);
             Assert.True(options.NoLaunchProfile);
             Assert.Equal(["--operation", "publish", "--environment", "Staging"], args);
-            Assert.Equal("Staging", env!["DOTNET_ENVIRONMENT"]);
-            Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+            Assert.Equal("Staging", env![KnownAspNetCoreConfigNames.DotNetEnvironment]);
+            Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
             return Task.FromResult(0);
         };
 
@@ -1391,7 +1506,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(noRestore);
             Assert.True(options.NoLaunchProfile);
             Assert.Equal(["--operation", "publish"], args);
-            Assert.Equal("Production", env!["DOTNET_ENVIRONMENT"]);
+            Assert.Equal("Production", env![KnownAspNetCoreConfigNames.DotNetEnvironment]);
             Assert.Equal(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName), env[BundleDiscovery.DcpPathEnvVar]);
             Assert.Equal(
                 Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
@@ -1437,12 +1552,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             env,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("https://myapp.dev.localhost:17050;http://myapp.dev.localhost:15050", env["ASPNETCORE_URLS"]);
+        Assert.Equal("https://myapp.dev.localhost:17050;http://myapp.dev.localhost:15050", env[KnownAspNetCoreConfigNames.Urls]);
         Assert.Equal("https://myapp.dev.localhost:21050", env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
         Assert.Equal("https://myapp.dev.localhost:22050", env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
         // Run path copies profile env vars verbatim (matches what dotnet does when reading apphost.run.json natively).
-        Assert.Equal("Development", env["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("Development", env["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("Development", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.Equal("Development", env[KnownAspNetCoreConfigNames.Environment]);
     }
 
     [Fact]
@@ -1472,12 +1587,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             env,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("https://myapp.dev.localhost:17050;http://myapp.dev.localhost:15050", env["ASPNETCORE_URLS"]);
+        Assert.Equal("https://myapp.dev.localhost:17050;http://myapp.dev.localhost:15050", env[KnownAspNetCoreConfigNames.Urls]);
         Assert.Equal("https://myapp.dev.localhost:21050", env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
         Assert.Equal("https://myapp.dev.localhost:22050", env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
         // Publish path filters env-name vars from profile, then ApplyEffectiveEnvironment sets DOTNET_ENVIRONMENT=Production.
-        Assert.Equal("Production", env["DOTNET_ENVIRONMENT"]);
-        Assert.False(env.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+        Assert.Equal("Production", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
     }
 
     [Fact]
@@ -1516,7 +1631,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             env,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("https://from-run-json:19000", env["ASPNETCORE_URLS"]);
+        Assert.Equal("https://from-run-json:19000", env[KnownAspNetCoreConfigNames.Urls]);
         Assert.Equal("https://from-run-json:21000", env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
     }
 
@@ -1536,8 +1651,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             env,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
-        Assert.Equal("Development", env["DOTNET_ENVIRONMENT"]);
+        Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
+        Assert.Equal("Development", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
     }
 
     [Fact]
@@ -1563,7 +1678,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             env,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
+        Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
         Assert.Equal("https://localhost:21293", env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
     }
 
@@ -1588,7 +1703,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             env,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
+        Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
     }
 
     [Fact]
@@ -1603,8 +1718,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             env,
             inheritedEnvironmentVariables: new Dictionary<string, string?>());
 
-        Assert.Equal("https://localhost:17193;http://localhost:15069", env["ASPNETCORE_URLS"]);
-        Assert.Equal("Development", env["DOTNET_ENVIRONMENT"]);
+        Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
+        Assert.Equal("Development", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
     }
 
     [Fact]
@@ -1632,8 +1747,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             inheritedEnvironmentVariables: new Dictionary<string, string?>(),
             args: ["--environment", "Staging"]);
 
-        Assert.Equal("Staging", env["DOTNET_ENVIRONMENT"]);
-        Assert.Equal("https://myapp.dev.localhost:17050", env["ASPNETCORE_URLS"]);
+        Assert.Equal("Staging", env[KnownAspNetCoreConfigNames.DotNetEnvironment]);
+        Assert.Equal("https://myapp.dev.localhost:17050", env[KnownAspNetCoreConfigNames.Urls]);
     }
 
     private FileInfo CreateSingleFileAppHost(bool useCliBundle = false)
@@ -1717,6 +1832,239 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public void IsLikelyAppHost_SdkAttributeWithVersion_ReturnsTrue()
+    {
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Aspire.AppHost.Sdk/9.5.0" />
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_SdkAttributeWithoutVersion_ReturnsTrue()
+    {
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Aspire.AppHost.Sdk" />
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_SdkAttributeWithMultipleSdks_ReturnsTrue()
+    {
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk;Aspire.AppHost.Sdk/9.5.0" />
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_NestedSdkElement_ReturnsTrue()
+    {
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_NestedSdkElementInLegacyNamespace_ReturnsTrue()
+    {
+        // Legacy MSBuild XML namespace projects should be matched the same as SDK-style ones.
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+              <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_IsAspireHostPropertyTrue_ReturnsTrue()
+    {
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_IsAspireHostPropertyFalse_ReturnsFalse()
+    {
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <IsAspireHost>false</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_AppHostNamedProjectWithoutInlineMarker_ReturnsTrue()
+    {
+        // No inline Aspire marker, but the file name follows the "*.AppHost.csproj" convention, so it is a
+        // candidate worth confirming via MSBuild rather than being dropped.
+        var projectFile = WriteIsLikelyAppHostProject("Test.AppHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_OrdinaryProjectWithoutInlineMarker_ReturnsFalse()
+    {
+        // Ordinary name, parseable content, and no Aspire signal: not a candidate, so it never reaches MSBuild.
+        var projectFile = WriteIsLikelyAppHostProject("Library.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_SiblingAppHostSourceFile_ReturnsTrue()
+    {
+        // The project has no inline marker and an ordinary name, but a sibling AppHost.cs (shipped by
+        // project-based AppHosts created with `aspire new`) marks it as a candidate. The file is written with
+        // its real PascalCase name so this also guards against a case-sensitive lookup missing it on
+        // Linux/macOS.
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("AppHost.cs", "// builder entrypoint");
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_SiblingAppHostSourceFileWithDifferentCasing_ReturnsTrue()
+    {
+        // The sibling source-file match is case-insensitive (preserving the prior discovery behavior), so a
+        // differently-cased apphost.cs next to an ordinary project is still treated as a candidate.
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("apphost.cs", "// builder entrypoint");
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_UnparseableAppHostNamedCsproj_ReturnsTrue()
+    {
+        // Malformed XML can't be parsed, so the verdict falls back to the name heuristic. The
+        // "*.AppHost.csproj" name keeps it a candidate so a broken AppHost can still surface as
+        // possibly-unbuildable rather than being silently dropped.
+        var projectFile = WriteIsLikelyAppHostProject("Test.AppHost.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\"");
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_UnparseableOrdinaryCsproj_ReturnsFalse()
+    {
+        // Malformed XML falls back to the name heuristic; an ordinary name with no sibling apphost.cs is not
+        // a candidate, so a broken ordinary project is not dragged onto the MSBuild path.
+        var projectFile = WriteIsLikelyAppHostProject("Library.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\"");
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_FsprojWithSdkAttribute_ReturnsTrue()
+    {
+        // Detection is language-agnostic: the same MSBuild XML signals are inspected for .fsproj/.vbproj
+        // AppHosts, not just .csproj.
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.fsproj", """
+            <Project Sdk="Aspire.AppHost.Sdk/9.5.0" />
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_CoLocatedDirectoryBuildPropsSetsIsAspireHost_ReturnsTrue()
+    {
+        // Real-world regression case: the project file has no inline marker and an ordinary name, but a
+        // co-located Directory.Build.props (auto-imported by MSBuild) sets <IsAspireHost>true</IsAspireHost>,
+        // which promotes it to an AppHost during evaluation. The repo's own tests/Aspire.Hosting.Tests does
+        // exactly this, and it must remain a candidate.
+        var projectFile = WriteIsLikelyAppHostProject("Aspire.Hosting.Tests.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.props", """
+            <Project>
+              <PropertyGroup>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_CoLocatedDirectoryBuildTargetsImportsAppHostSdk_ReturnsTrue()
+    {
+        // A co-located Directory.Build.targets that imports the Aspire.AppHost.Sdk also promotes an
+        // otherwise ordinary-looking project to an AppHost during evaluation.
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.targets", """
+            <Project>
+              <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_CoLocatedDirectoryBuildFileOnlyConsumesIsAspireHost_ReturnsFalse()
+    {
+        // A co-located build file that merely *reads* IsAspireHost in a condition (never sets it) must not be
+        // treated as a marker. The playground's Directory.Build.targets does this with
+        // Condition="'$(IsAspireHost)' == 'true'"; a loose substring match would over-promote every sibling
+        // project. Matching on the property *element* threads this needle.
+        var projectFile = WriteIsLikelyAppHostProject("Library.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.targets", """
+            <Project>
+              <PropertyGroup Condition="'$(IsAspireHost)' == 'true'">
+                <SomeSetting>value</SomeSetting>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    private FileInfo WriteIsLikelyAppHostProject(string fileName, string content)
+    {
+        var path = Path.Combine(_workspace.WorkspaceRoot.FullName, fileName);
+        File.WriteAllText(path, content);
+        return new FileInfo(path);
+    }
+
     private static JsonDocument CreateAppHostInfoJson(
         string? runCommand,
         string? targetPath = null,
@@ -1747,12 +2095,28 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <IsAspireHost>true</IsAspireHost>
-                <AspireUseCliBundle>true</AspireUseCliBundle>
               </PropertyGroup>
             </Project>
             """);
 
         return new FileInfo(appHostPath);
+    }
+
+    private FileInfo CreateOrdinaryProject(string fileName = "Library.csproj")
+    {
+        // A plain SDK-style library: no AppHost markers, no imports, and a non-AppHost name.
+        // This is exactly the shape DotNetAppHostProject.IsLikelyAppHost returns false for, so the
+        // cheap heuristic short-circuits validation before MSBuild evaluation runs.
+        var projectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, fileName);
+        File.WriteAllText(projectPath, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        return new FileInfo(projectPath);
     }
 
     private DirectoryInfo CreateCliBundle(out LayoutConfiguration layout)
@@ -1777,6 +2141,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     private DotNetAppHostProject CreateDotNetAppHostProject(
         TestDotNetCliRunner runner,
         LayoutConfiguration? layout = null,
+        IAppHostInfoResolver? appHostInfoResolver = null,
         Action<CliServiceCollectionTestOptions>? configureServices = null)
     {
         var services = CliTestHelper.CreateServiceCollection(_workspace, outputHelper, options =>
@@ -1793,6 +2158,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             configureServices?.Invoke(options);
         });
 
+        if (appHostInfoResolver is not null)
+        {
+            services.RemoveAll<IAppHostInfoResolver>();
+            services.AddSingleton(appHostInfoResolver);
+        }
+
         var provider = services.BuildServiceProvider();
         _serviceProviders.Add(provider);
         return provider.GetRequiredService<DotNetAppHostProject>();
@@ -1800,4 +2171,23 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
     private static void WriteAspireConfigJson(string directory, string content)
         => File.WriteAllText(Path.Combine(directory, "aspire.config.json"), content);
+
+    private sealed class TestAppHostInfoResolver : IAppHostInfoResolver
+    {
+        public Func<FileInfo, CancellationToken, Task<AppHostProjectInfo>>? GetAppHostInfoAsyncCallback { get; init; }
+
+        public int CallCount { get; private set; }
+
+        public Task<AppHostProjectInfo> GetAppHostInfoAsync(FileInfo projectFile, CancellationToken cancellationToken)
+        {
+            CallCount++;
+
+            if (GetAppHostInfoAsyncCallback is not null)
+            {
+                return GetAppHostInfoAsyncCallback(projectFile, cancellationToken);
+            }
+
+            throw new InvalidOperationException("GetAppHostInfoAsync should not be called in this test.");
+        }
+    }
 }

@@ -5,7 +5,7 @@ namespace Aspire.Hosting;
 
 internal static class DashboardConfigNames
 {
-    public static readonly ConfigName DashboardFrontendUrlName = new(KnownConfigNames.AspNetCoreUrls);
+    public static readonly ConfigName DashboardFrontendUrlName = new(KnownAspNetCoreConfigNames.Urls);
 
     public static readonly ConfigName DashboardOtlpGrpcUrlName = new(KnownConfigNames.DashboardOtlpGrpcEndpointUrl);
     public static readonly ConfigName DashboardOtlpHttpUrlName = new(KnownConfigNames.DashboardOtlpHttpEndpointUrl);
