@@ -1570,6 +1570,138 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('multiple running AppHosts each get a describe before workspace discovery completes', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        // Deferred discovery that never resolves and streams no candidates, so the early window
+        // (discovery incomplete, candidate list empty) persists while `ps` reports running hosts.
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        const describeCalls: { args: string[]; options: any }[] = [];
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider: any, _command: any, args: string[], options: any) => {
+            if (args[0] === 'describe') {
+                describeCalls.push({ args, options });
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'workspace ps watch did not start before discovery completed');
+
+            // Two workspace AppHosts are running before `ls` has reported any candidate. Neither the
+            // single-running early-adopt nor the configured selection applies, so the per-AppHost
+            // fan-out must start a describe for each running host off the `ps` set alone.
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                    appHostPid: 125881,
+                    dashboardUrl: 'https://localhost:17193/login?t=061212',
+                },
+                {
+                    appHostPath: '/workspace/tools/Admin/AppHost.csproj',
+                    appHostPid: 125882,
+                    dashboardUrl: 'https://localhost:17194/login?t=061213',
+                },
+            ]));
+
+            await waitForCondition(() => describeCalls.length >= 2, 'a describe stream did not start for each running AppHost');
+
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, []);
+            assert.strictEqual(repository.workspaceAppHostPath, undefined);
+            assert.strictEqual(describeCalls.length, 2);
+            const targetedPaths = describeCalls
+                .map(call => call.args[call.args.indexOf('--apphost') + 1])
+                .sort();
+            assert.deepStrictEqual(targetedPaths, [
+                '/workspace/apps/Store/AppHost.csproj',
+                '/workspace/tools/Admin/AppHost.csproj',
+            ]);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('collapsing from two running AppHosts to one tears down the leftover describe stream', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        // Deferred discovery keeps the early window open (discovery incomplete, candidate list
+        // empty) so the fan-out drives describe streams purely off the `ps` running set.
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        const storePath = '/workspace/apps/Store/AppHost.csproj';
+        const adminPath = '/workspace/tools/Admin/AppHost.csproj';
+        const describeChildren = new Map<string, TestChildProcess>();
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider: any, _command: any, args: string[], options: any) => {
+            const child = new TestChildProcess();
+            if (args[0] === 'describe') {
+                const targetPath = args[args.indexOf('--apphost') + 1];
+                describeChildren.set(targetPath, child);
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return child;
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'workspace ps watch did not start before discovery completed');
+
+            // Both AppHosts run during the early window: each gets a fanned-out describe stream.
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: storePath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+                { appHostPath: adminPath, appHostPid: 125882, dashboardUrl: 'https://localhost:17194/login?t=061213' },
+            ]));
+            await waitForCondition(() => describeChildren.size >= 2, 'a describe stream did not start for each running AppHost');
+            const adminChild = describeChildren.get(adminPath);
+            const storeChild = describeChildren.get(storePath);
+            assert.ok(adminChild, 'expected a describe stream for the Admin AppHost');
+            assert.ok(storeChild, 'expected a describe stream for the Store AppHost');
+
+            // The Admin AppHost stops. With the candidate list still empty the gate would skip
+            // reconciliation unless it also fires while global streams remain, so this asserts the
+            // leftover Admin describe stream is drained instead of leaking.
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: storePath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+            ]));
+            await waitForCondition(() => adminChild!.killed, 'the leftover describe stream for the stopped AppHost was not torn down');
+
+            assert.strictEqual(adminChild!.killed, true);
+            assert.strictEqual(storeChild!.killed, false, 'the still-running AppHost describe stream must stay alive');
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('configured AppHost outside aspire ls candidates remains selected in workspace view', async () => {
         const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-extension-workspace-'));
         const configuredAppHostPath = path.join(path.dirname(workspaceRoot), 'external', 'AppHost.csproj');
