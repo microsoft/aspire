@@ -10,7 +10,7 @@ import { ICliRpcClient, RpcClient, ValidationResult } from '../../server/rpcClie
 import { extensionLogOutputChannel } from '../../utils/logging';
 import AspireRpcServer, { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
 import { AspireDebugSession } from '../../debugger/AspireDebugSession';
-import { AspireTerminalProvider } from '../../utils/AspireTerminalProvider';
+import { AspireTerminalProvider, type AspireTerminal } from '../../utils/AspireTerminalProvider';
 
 suite('InteractionService endpoints', () => {
 	let statusBarItem: vscode.StatusBarItem;
@@ -749,7 +749,42 @@ suite('InteractionService endpoints', () => {
 		}
 	});
 
-	test("displayLines without debug session writes to output channel only", async () => {
+	test("displayLines without debug session writes to Aspire terminal when available", async () => {
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const infoStub = sandbox.stub(extensionLogOutputChannel, 'info');
+			const showStub = sandbox.stub(extensionLogOutputChannel, 'show');
+			const sentTexts: { text: string; addNewLine?: boolean }[] = [];
+			const terminal = {
+				sendText: (text: string, addNewLine?: boolean) => {
+					sentTexts.push({ text, addNewLine });
+				}
+			} as unknown as vscode.Terminal;
+			const disposeStub = sandbox.stub();
+			const testInfo = await createTestRpcServer(null, () => null, undefined, () => ({
+				terminal,
+				dispose: disposeStub
+			}));
+
+			testInfo.interactionService.displayLines([
+				{ Stream: 'stdout', Line: 'line1' },
+				{ Stream: 'stderr', Line: 'line2' }
+			]);
+
+			assert.deepStrictEqual(infoStub.args.map(args => args[0]).slice(-2), ['line1', 'line2']);
+			assert.deepStrictEqual(sentTexts, [
+				{ text: 'line1', addNewLine: true },
+				{ text: 'line2', addNewLine: true }
+			]);
+			assert.strictEqual(showStub.called, false);
+		}
+		finally {
+			sandbox.restore();
+		}
+	});
+
+	test("displayLines without debug session or terminal writes to output channel", async () => {
 		const sandbox = sinon.createSandbox();
 
 		try {
@@ -850,9 +885,9 @@ class TestCliRpcClient implements ICliRpcClient {
     debugSessionId: string | null;
     interactionService: IInteractionService;
 
-    constructor(debugSessionId: string | null, getAspireDebugSession: () => AspireDebugSession | null, globalState?: vscode.Memento) {
+    constructor(debugSessionId: string | null, getAspireDebugSession: () => AspireDebugSession | null, globalState?: vscode.Memento, getAspireTerminal?: () => AspireTerminal) {
         this.debugSessionId = debugSessionId;
-        this.interactionService = new InteractionService(getAspireDebugSession, this, undefined, globalState);
+        this.interactionService = new InteractionService(getAspireDebugSession, this, getAspireTerminal, globalState);
     }
 
 	stopCli(): Promise<void> {
@@ -880,12 +915,12 @@ class TestCliRpcClient implements ICliRpcClient {
 	}
 }
 
-async function createTestRpcServer(debugSessionId?: string | null, getAspireDebugSession?: () => AspireDebugSession | null, globalState?: vscode.Memento): Promise<RpcServerTestInfo> {
+async function createTestRpcServer(debugSessionId?: string | null, getAspireDebugSession?: () => AspireDebugSession | null, globalState?: vscode.Memento, getAspireTerminal?: () => AspireTerminal): Promise<RpcServerTestInfo> {
     getAspireDebugSession ??= () => {
         return null;
     };
 
-	const rpcClient = new TestCliRpcClient(debugSessionId ?? null, getAspireDebugSession, globalState);
+	const rpcClient = new TestCliRpcClient(debugSessionId ?? null, getAspireDebugSession, globalState, getAspireTerminal);
 
 	const rpcServer = await AspireRpcServer.create(() => rpcClient);
 

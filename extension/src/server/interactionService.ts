@@ -561,6 +561,10 @@ export class InteractionService implements IInteractionService {
                 aspireTerminal.terminal.sendText(text, true);
             }
         }
+
+        if (!debugSession && !aspireTerminal && lines.length > 0) {
+            extensionLogOutputChannel.show(true);
+        }
     }
 
     displayCancellationMessage() {
