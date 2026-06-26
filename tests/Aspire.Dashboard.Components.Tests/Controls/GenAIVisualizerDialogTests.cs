@@ -10,9 +10,11 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Resources;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
@@ -163,9 +165,11 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             );
 
         var copyButton = cut.Find("fluent-button.message-copy-button");
+        var copyButtonLabel = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>()
+            [nameof(ControlsStrings.GridValueCopyToClipboard)].Value;
 
-        Assert.Equal("Copy to clipboard", copyButton.GetAttribute("aria-label"));
-        Assert.Equal("Copy to clipboard", copyButton.GetAttribute("title"));
+        Assert.Equal(copyButtonLabel, copyButton.GetAttribute("aria-label"));
+        Assert.Equal(copyButtonLabel, copyButton.GetAttribute("title"));
     }
 
     [Fact]
