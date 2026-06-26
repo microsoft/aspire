@@ -583,4 +583,82 @@ public class PromptAgentTests
         // causing a pipeline validation failure at runtime.
         Assert.Equal(new[] { AzureEnvironmentResource.PrepareResourcesStepName }, beforeStartStep.DependsOnSteps);
     }
+
+    [Fact]
+    public async Task AddPromptAgent_RunMode_AllPipelineStepDependenciesResolve()
+    {
+        // Integration test: verifies that all DependsOnSteps and RequiredBySteps references
+        // from AzurePromptAgentResource resolve to steps that actually exist in the pipeline,
+        // including steps produced by AzureEnvironmentResource and the framework's well-known steps.
+        // This catches regressions where a step name is removed or renamed elsewhere without
+        // updating AzurePromptAgentResource.
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+        project.AddPromptAgent("my-agent", model, instructions: "Test agent");
+
+        builder.Build();
+
+        using var serviceProvider = builder.Services.BuildServiceProvider();
+        var pipelineContext = new PipelineContext(
+            serviceProvider.GetRequiredService<DistributedApplicationModel>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            serviceProvider,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        // Collect all steps from all resources in the model (mirrors what the pipeline does at runtime).
+        var allSteps = new List<PipelineStep>();
+        foreach (var resource in pipelineContext.Model.Resources)
+        {
+            foreach (var annotation in resource.Annotations.OfType<PipelineStepAnnotation>())
+            {
+                allSteps.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+                {
+                    PipelineContext = pipelineContext,
+                    Resource = resource
+                }));
+            }
+        }
+
+        // Add the well-known framework steps that are always present at runtime.
+        var frameworkStepNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            WellKnownPipelineSteps.BeforeStart,
+            WellKnownPipelineSteps.Deploy,
+            WellKnownPipelineSteps.DeployPrereq,
+            WellKnownPipelineSteps.Build,
+            WellKnownPipelineSteps.BuildPrereq,
+            WellKnownPipelineSteps.Push,
+            WellKnownPipelineSteps.PushPrereq,
+            WellKnownPipelineSteps.Publish,
+            WellKnownPipelineSteps.PublishPrereq,
+            WellKnownPipelineSteps.Destroy,
+            WellKnownPipelineSteps.DestroyPrereq,
+            WellKnownPipelineSteps.ProcessParameters,
+            WellKnownPipelineSteps.CheckContainerRuntime,
+            WellKnownPipelineSteps.ValidateComputeEnvironments,
+            WellKnownPipelineSteps.Diagnostics,
+        };
+
+        var allStepNames = new HashSet<string>(allSteps.Select(s => s.Name), StringComparer.Ordinal);
+        allStepNames.UnionWith(frameworkStepNames);
+
+        // Validate: every DependsOnSteps and RequiredBySteps reference must resolve to an existing step.
+        foreach (var step in allSteps)
+        {
+            foreach (var dep in step.DependsOnSteps)
+            {
+                Assert.True(allStepNames.Contains(dep),
+                    $"Step '{step.Name}' depends on unknown step '{dep}'");
+            }
+            foreach (var req in step.RequiredBySteps)
+            {
+                Assert.True(allStepNames.Contains(req),
+                    $"Step '{step.Name}' is required by unknown step '{req}'");
+            }
+        }
+    }
 }
