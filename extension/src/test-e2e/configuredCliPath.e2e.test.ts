@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCommandInvocationCount, waitForCommandOutcome, waitForRepositoryIdle, waitForWorkspaceAppHost } from './helpers/assertions';
+import { getCommandInvocationCount, waitForCommandOutcome, waitForDebugSessionStartup, waitForRepositoryIdle, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, runE2eTeardown, setE2eCliPathForE2E, stopPrimaryAppHostIfRunning, writeFileWithRetry, writeWorkspaceCliPath } from './helpers/fixtures';
 import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
 import { openAspireView } from './helpers/vscode';
@@ -38,6 +38,7 @@ suite('Aspire configured CLI path E2E', function () {
             const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
             await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
             await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, before);
+            await waitForDebugSessionStartup(appHostPath, 300000);
 
             await waitForFileContent(writtenCliPathFile, proxy.wrapperPath, 180000);
             await waitForFileContent(proxy.invocationLogPath, 'run', 60000);
