@@ -23,9 +23,10 @@ internal interface IDashboardFeedbackDiagnosticProvider
 
     /// <summary>
     /// Gets a value indicating whether <c>aspire doctor</c> output can be captured. This is only true
-    /// when the AppHost forwarded the launching CLI's path (via <c>DASHBOARD__CLI__PATH</c>); the
-    /// dashboard never probes for an <c>aspire</c> on <c>PATH</c> itself. Callers should check this
-    /// before showing a doctor-output field or calling <see cref="CaptureAspireDoctorOutputAsync"/>.
+    /// when the AppHost forwarded a CLI path (via <c>DASHBOARD__CLI__PATH</c>) — either the CLI that
+    /// launched the AppHost or an <c>aspire</c> the AppHost resolved on PATH; the dashboard never probes
+    /// for a CLI itself. Callers should check this before showing a doctor-output field or calling
+    /// <see cref="CaptureAspireDoctorOutputAsync"/>.
     /// </summary>
     bool IsAspireDoctorOutputAvailable { get; }
 
@@ -84,11 +85,11 @@ internal sealed class DashboardFeedbackDiagnosticProvider(
 
     public async Task<string> CaptureAspireDoctorOutputAsync(CancellationToken cancellationToken)
     {
-        // Run `aspire doctor` only against the exact CLI the AppHost forwarded (DASHBOARD__CLI__PATH,
-        // taken from the CLI's Environment.ProcessPath) so the captured diagnostics come from the same
-        // `aspire` build the user is running. When that path is absent (e.g. the dashboard was started
-        // without the CLI, or runs standalone in a container) doctor output is unavailable; callers
-        // gate on IsAspireDoctorOutputAvailable, so the dashboard never probes for `aspire` on PATH.
+        // Run `aspire doctor` against the CLI path the AppHost forwarded (DASHBOARD__CLI__PATH): the
+        // exact CLI that launched the AppHost, or the `aspire` the AppHost resolved on PATH for non-CLI
+        // launches (see DashboardEventHandlers in Aspire.Hosting). When that path is absent (e.g. a
+        // standalone dashboard with no AppHost, or no CLI installed) doctor output is unavailable;
+        // callers gate on IsAspireDoctorOutputAvailable, so the dashboard never probes for a CLI itself.
         if (configuration[DashboardConfigNames.CliPathName.ConfigKey] is not { Length: > 0 } cliExecutable)
         {
             throw new InvalidOperationException(
