@@ -11,6 +11,36 @@ namespace Aspire.Cli.Utils;
 internal static class FileSystemHelper
 {
     /// <summary>
+    /// Reads all text from a file, returning an empty string when the file cannot be read.
+    /// </summary>
+    internal static async Task<string> TryReadAllTextAsync(string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Reads all bytes from a file, returning an empty array when the file cannot be read.
+    /// </summary>
+    internal static async Task<byte[]> TryReadAllBytesAsync(string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
+    /// <summary>
     /// Copies an entire directory and its contents to a new location.
     /// </summary>
     /// <param name="sourceDir">The source directory to copy from.</param>

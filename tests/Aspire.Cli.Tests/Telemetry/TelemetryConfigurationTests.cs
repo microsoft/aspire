@@ -10,6 +10,7 @@ using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
 #if DEBUG
 using Microsoft.AspNetCore.InternalTesting;
 #endif
@@ -42,7 +43,7 @@ public class TelemetryConfigurationTests
         var logBufferContext = new ConsoleLogBufferContext();
         var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
         var identityChannelReader = new IdentityChannelReader(typeof(Program).Assembly);
-        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(processTerminationTimeout: Timeout.InfiniteTimeSpan), identityChannelReader);
+        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(finalDrainBudget: Timeout.InfiniteTimeSpan), identityChannelReader);
         return await Program.BuildApplicationAsync([], startupContext, config);
     }
 
@@ -75,6 +76,63 @@ public class TelemetryConfigurationTests
         var telemetryManager = host.Services.GetRequiredService<TelemetryManager>();
         // When telemetry is opted out, Azure Monitor should not be enabled
         Assert.False(telemetryManager.HasAzureMonitor, $"Expected Azure Monitor to be disabled when telemetry opt-out is '{optOutValue}'");
+    }
+
+    [Fact]
+    public async Task ReportedTelemetry_Disabled_WhenVersionFlagProvided()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration, ["--version"]);
+        using var telemetryManager = new TelemetryManager(telemetryConfiguration);
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            IsInternalMicrosoft = true
+        };
+        var telemetry = new AspireCliTelemetry(
+            NullLogger<AspireCliTelemetry>.Instance,
+            new TelemetryFixture.TestMachineInformationProvider(),
+            new TelemetryFixture.TestCIEnvironmentDetector(),
+            new TelemetryFixture.TestCodingAgentDetector(),
+            internalMicrosoftDetector,
+            telemetryConfiguration,
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
+
+        await telemetry.InitializeAsync().DefaultTimeout();
+
+        Assert.False(telemetryManager.HasAzureMonitor);
+        Assert.Equal(0, internalMicrosoftDetector.InvocationCount);
+        Assert.Empty(GetInternalMicrosoftTags(telemetry.GetDefaultTags()));
+    }
+
+    [Fact]
+    public async Task ReportedTelemetry_Disabled_WhenOptOutSet_DoesNotRunInternalMicrosoftDetector()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [AspireCliTelemetry.TelemetryOptOutConfigKey] = "true"
+            })
+            .Build();
+        var telemetryConfiguration = TelemetryConfiguration.Create(configuration);
+        using var telemetryManager = new TelemetryManager(telemetryConfiguration);
+        var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
+        {
+            IsInternalMicrosoft = true
+        };
+        var telemetry = new AspireCliTelemetry(
+            NullLogger<AspireCliTelemetry>.Instance,
+            new TelemetryFixture.TestMachineInformationProvider(),
+            new TelemetryFixture.TestCIEnvironmentDetector(),
+            new TelemetryFixture.TestCodingAgentDetector(),
+            internalMicrosoftDetector,
+            telemetryConfiguration,
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
+
+        await telemetry.InitializeAsync().DefaultTimeout();
+
+        Assert.False(telemetryManager.HasAzureMonitor);
+        Assert.Equal(0, internalMicrosoftDetector.InvocationCount);
+        Assert.Empty(GetInternalMicrosoftTags(telemetry.GetDefaultTags()));
     }
 
     [Fact]
@@ -216,5 +274,11 @@ public class TelemetryConfigurationTests
         };
         ActivitySource.AddActivityListener(listener);
         return listener;
+    }
+
+    private static IReadOnlyList<KeyValuePair<string, object?>> GetInternalMicrosoftTags(IReadOnlyList<KeyValuePair<string, object?>> tags)
+    {
+        return [.. tags.Where(t => t.Key == TelemetryConstants.Tags.InternalMicrosoft ||
+            t.Key.StartsWith("aspire.cli.microsoft_internal", StringComparison.Ordinal))];
     }
 }

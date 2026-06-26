@@ -65,7 +65,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const rpcServer = await AspireRpcServer.create(
     (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => {
-      const client: RpcClient = new RpcClient(terminalProvider, connection, debugSessionId, () => aspireExtensionContext.getAspireDebugSession(client.debugSessionId));
+      const client: RpcClient = new RpcClient(connection, debugSessionId, () => aspireExtensionContext.getAspireDebugSession(client.debugSessionId));
       return client;
     }
   );
@@ -203,6 +203,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const startResourceRegistration = registerInstrumentedCommand('aspire-vscode.startResource', 'tree', (element) => appHostTreeProvider.startResource(element));
   const restartResourceRegistration = registerInstrumentedCommand('aspire-vscode.restartResource', 'tree', (element) => appHostTreeProvider.restartResource(element));
   const viewResourceLogsRegistration = registerInstrumentedCommand('aspire-vscode.viewResourceLogs', 'tree', (element) => appHostTreeProvider.viewResourceLogs(element));
+  const openResourceTerminalRegistration = registerInstrumentedCommand('aspire-vscode.openResourceTerminal', 'tree', (element) => appHostTreeProvider.openResourceTerminal(element));
   const executeResourceCommandRegistration = registerInstrumentedCommand('aspire-vscode.executeResourceCommand', 'tree', (element) => appHostTreeProvider.executeResourceCommand(element));
   const executeResourceCommandItemRegistration = registerInstrumentedCommand('aspire-vscode.executeResourceCommandItem', 'tree', (element) => appHostTreeProvider.executeResourceCommandItem(element));
   const copyEndpointUrlRegistration = registerInstrumentedCommand('aspire-vscode.copyEndpointUrl', 'tree', (element) => appHostTreeProvider.copyEndpointUrl(element));
@@ -239,6 +240,7 @@ export async function activate(context: vscode.ExtensionContext) {
     startResourceRegistration,
     restartResourceRegistration,
     viewResourceLogsRegistration,
+    openResourceTerminalRegistration,
     executeResourceCommandRegistration,
     executeResourceCommandItemRegistration,
     copyEndpointUrlRegistration,

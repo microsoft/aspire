@@ -37,6 +37,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     private readonly string _repoRoot;
     private readonly IDotNetCliRunner _dotNetCliRunner;
     private readonly IPackagingService _packagingService;
+    private readonly IProcessExecutionFactory _processExecutionFactory;
     private readonly ILogger _logger;
     private readonly string? _logFilePath;
 
@@ -46,17 +47,20 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         string repoRoot,
         IDotNetCliRunner dotNetCliRunner,
         IPackagingService packagingService,
+        IProcessExecutionFactory processExecutionFactory,
         ILogger<DotNetBasedAppHostServerProject> logger,
+        IEnvironment environment,
         string? projectModelPath = null,
         string? logFilePath = null)
     {
         _appPath = Path.GetFullPath(appPath);
         _appPath = new Uri(_appPath).LocalPath;
-        _appPath = OperatingSystem.IsWindows() ? _appPath.ToLowerInvariant() : _appPath;
+        _appPath = CliPathHelper.NormalizePathCasing(_appPath, environment);
         _socketPath = socketPath;
         _repoRoot = Path.GetFullPath(repoRoot) + Path.DirectorySeparatorChar;
         _dotNetCliRunner = dotNetCliRunner;
         _packagingService = packagingService;
+        _processExecutionFactory = processExecutionFactory;
         _logger = logger;
         _logFilePath = logFilePath;
 
@@ -463,15 +467,19 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     public string GetInstanceIdentifier() => GetProjectFilePath();
 
     /// <inheritdoc />
-    public (string SocketPath, Process Process, OutputCollector OutputCollector) Run(
+    public async Task<AppHostServerRunResult> RunAsync(
         int hostPid,
-        IReadOnlyDictionary<string, string>? environmentVariables = null,
-        string[]? additionalArgs = null,
-        bool debug = false)
+        IReadOnlyDictionary<string, string>? environmentVariables,
+        string[]? additionalArgs,
+        bool debug,
+        AppHostServerRunControl? runControl)
     {
         var assemblyPath = Path.Combine(BuildPath, ProjectDllName);
         var dotnetExe = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
 
+        // Build the canonical ProcessStartInfo first, then translate to IsolatedProcessStartInfo
+        // only if the isolated path is requested. Sharing the env/arg construction avoids drift
+        // between the two branches — every env var and argument lives in exactly one place.
         var startInfo = new ProcessStartInfo(dotnetExe)
         {
             WorkingDirectory = _projectModelPath,
@@ -498,7 +506,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         // Dev mode uses debug builds which require Development environment
         // for the dashboard to resolve static web assets correctly
-        startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+        startInfo.Environment[KnownAspNetCoreConfigNames.Environment] = "Development";
 
         // Wire WithTerminal() for guest/polyglot AppHosts running from the repo. The
         // generated AppHostServer references Aspire.Hosting from the repo and DCP resolves
@@ -534,29 +542,52 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         startInfo.RedirectStandardOutput = true;
         startInfo.RedirectStandardError = true;
 
-        var process = Process.Start(startInfo)!;
-
         var outputCollector = new OutputCollector();
-        process.OutputDataReceived += (sender, e) =>
-        {
-            if (e.Data is not null)
-            {
-                _logger.LogTrace("AppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
-                outputCollector.AppendOutput(e.Data);
-            }
-        };
-        process.ErrorDataReceived += (sender, e) =>
-        {
-            if (e.Data is not null)
-            {
-                _logger.LogTrace("AppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
-                outputCollector.AppendError(e.Data);
-            }
-        };
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
 
-        return (_socketPath, process, outputCollector);
+        // The execution local is forward-referenced by the log callbacks so they can read the
+        // child's pid per line. ProcessInvocationOptions.StandardOutputCallback is Action<string>
+        // (line only), but the AppHost wants the pid in each trace line (#16729). The callbacks
+        // only fire after Start(), by which point `execution` is assigned and ProcessId is valid.
+        IProcessExecution execution = null!;
+
+        void OnStdout(string line)
+        {
+            _logger.LogTrace("AppHostServer({ProcessId}) stdout: {Line}", execution.ProcessId, line);
+            outputCollector.AppendOutput(line);
+        }
+
+        void OnStderr(string line)
+        {
+            _logger.LogTrace("AppHostServer({ProcessId}) stderr: {Line}", execution.ProcessId, line);
+            outputCollector.AppendError(line);
+        }
+
+        var options = new ProcessInvocationOptions
+        {
+            StandardOutputCallback = OnStdout,
+            StandardErrorCallback = OnStderr,
+            IsolateConsole = runControl?.IsolateConsole ?? false,
+            GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
+            ShutdownService = runControl?.ShutdownService,
+            // The graceful ladder always tree-kills on escalation; this fallback only matters when
+            // graceful services were not wired (non-Run callers), where it preserves the old session
+            // behavior of force-killing the tree on Unix but only the root on Windows.
+            KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
+        };
+
+        execution = _processExecutionFactory.CreateExecution(startInfo, options);
+
+        try
+        {
+            execution.Start();
+        }
+        catch
+        {
+            await execution.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+
+        return new AppHostServerRunResult(_socketPath, outputCollector, execution);
     }
 
     private static string? FindNuGetConfig(string workingDirectory)

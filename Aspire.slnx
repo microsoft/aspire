@@ -527,6 +527,7 @@
     <Project Path="tests/Aspire.Hosting.Go.Tests/Aspire.Hosting.Go.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.JavaScript.Tests/Aspire.Hosting.JavaScript.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.OpenAI.Tests/Aspire.Hosting.OpenAI.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Orleans.Tests/Aspire.Hosting.Orleans.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Oracle.Tests/Aspire.Hosting.Oracle.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.PostgreSQL.Tests/Aspire.Hosting.PostgreSQL.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Python.Tests/Aspire.Hosting.Python.Tests.csproj" />
@@ -543,6 +544,7 @@
     <Project Path="tests/Aspire.Hosting.SqlServer.Tests/Aspire.Hosting.SqlServer.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.TestUtilities/Aspire.Hosting.TestUtilities.csproj" />
     <Project Path="tests/Aspire.TerminalHost.Tests/Aspire.TerminalHost.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Valkey.Tests/Aspire.Hosting.Valkey.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Blazor.Tests/Aspire.Hosting.Blazor.Tests.csproj" />

@@ -12,8 +12,10 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -42,7 +44,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                         [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = version }])
             };
 
-            var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+            var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
 
             var packagingService = new TestPackagingService
             {
@@ -200,15 +202,15 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var httpsUrls = https["applicationUrl"]!.GetValue<string>();
         Assert.StartsWith("https://localhost:", httpsUrls);
         var httpsEnv = https["environmentVariables"]!.AsObject();
-        Assert.Equal("Development", httpsEnv["ASPNETCORE_ENVIRONMENT"]!.GetValue<string>());
-        Assert.Equal("Development", httpsEnv["DOTNET_ENVIRONMENT"]!.GetValue<string>());
+        Assert.Equal("Development", httpsEnv[KnownAspNetCoreConfigNames.Environment]!.GetValue<string>());
+        Assert.Equal("Development", httpsEnv[KnownAspNetCoreConfigNames.DotNetEnvironment]!.GetValue<string>());
         Assert.StartsWith("https://localhost:", httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
         Assert.StartsWith("https://localhost:", httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
 
         var http = profiles["http"]!.AsObject();
         Assert.Equal("Project", http["commandName"]!.GetValue<string>());
         var httpEnv = http["environmentVariables"]!.AsObject();
-        Assert.Equal("Development", httpEnv["ASPNETCORE_ENVIRONMENT"]!.GetValue<string>());
+        Assert.Equal("Development", httpEnv[KnownAspNetCoreConfigNames.Environment]!.GetValue<string>());
         Assert.StartsWith("http://localhost:", httpEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
         Assert.StartsWith("http://localhost:", httpEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
         Assert.Equal("true", httpEnv["ASPIRE_ALLOW_UNSECURED_TRANSPORT"]!.GetValue<string>());
@@ -821,13 +823,13 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                             [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = "99.0.0-pr.12345" }])
                 };
 
-                var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures());
+                var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance);
                 var prHiveChannel = PackageChannel.CreateExplicitChannel(
                     "pr-12345",
                     PackageChannelQuality.Both,
                     [new PackageMapping("Aspire*", hivesDir.FullName + "/pr-12345/packages")],
                     prHiveCache,
-                    features: new TestFeatures());
+                    features: new TestFeatures(), NullLogger.Instance);
 
                 return new TestPackagingService
                 {
@@ -887,7 +889,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                     GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
                         throw new NuGetPackageCacheException("Package search failed: simulated network failure")
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
@@ -1225,7 +1227,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                     GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
                         Task.FromResult<IEnumerable<NuGetPackageCli>>([])
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
@@ -1570,7 +1572,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                         Task.FromResult<IEnumerable<NuGetPackageCli>>(
                             [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = "13.3.0" }])
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
@@ -2004,7 +2006,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                         Task.FromResult<IEnumerable<NuGetPackageCli>>(
                             [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = "13.3.0" }])
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
@@ -2128,7 +2130,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 PackageChannelQuality.Both,
                 [new PackageMapping("Aspire*", channelSource), new PackageMapping(PackageMapping.AllPackages, fallbackSource)],
                 fakeCache,
-                features: new TestFeatures());
+                features: new TestFeatures(), NullLogger.Instance);
         }).ToArray();
 
         return new TestPackagingService

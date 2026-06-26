@@ -26,6 +26,7 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionAndUrlState<StructuredLogs.StructuredLogsPageViewModel, StructuredLogs.StructuredLogsPageState>
 {
+    private const string ScrollContainerId = "structuredLogsScrollContainer";
     private const string ResourceColumn = nameof(ResourceColumn);
     private const string LogLevelColumn = nameof(LogLevelColumn);
     private const string TimestampColumn = nameof(TimestampColumn);
@@ -46,6 +47,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private Subscription? _logsSubscription;
     private bool _resourceChanged;
     private string? _elementIdBeforeDetailsViewOpened;
+    private string? _pendingFocusElementId;
     private AspirePageContentLayout? _contentLayout;
     private string _filter = string.Empty;
     private FluentDataGrid<OtlpLogEntry>? _dataGrid;
@@ -262,7 +264,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             var logEntryId = TelemetryRepository.GetLog(LogEntryId.Value);
             if (logEntryId != null)
             {
-                await OnShowPropertiesAsync(logEntryId, buttonId: null);
+                await OnShowPropertiesAsync(logEntryId, focusElementId: null);
             }
 
             // Navigate to remove ?logEntryId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
@@ -312,9 +314,9 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         }
     }
 
-    private async Task OnShowPropertiesAsync(OtlpLogEntry entry, string? buttonId)
+    private async Task OnShowPropertiesAsync(OtlpLogEntry entry, string? focusElementId)
     {
-        _elementIdBeforeDetailsViewOpened = buttonId;
+        _elementIdBeforeDetailsViewOpened = focusElementId;
 
         if (PageViewModel.SelectedLogEntry?.LogEntry.InternalId == entry.InternalId)
         {
@@ -331,16 +333,18 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         }
     }
 
-    private async Task ClearSelectedLogEntryAsync(bool causedByUserAction = false)
+    private Task ClearSelectedLogEntryAsync(bool causedByUserAction = false)
     {
         PageViewModel.SelectedLogEntry = null;
 
         if (_elementIdBeforeDetailsViewOpened is not null && causedByUserAction)
         {
-            await JS.InvokeVoidAsync("focusElement", _elementIdBeforeDetailsViewOpened);
+            _pendingFocusElementId = _elementIdBeforeDetailsViewOpened;
         }
 
         _elementIdBeforeDetailsViewOpened = null;
+
+        return Task.CompletedTask;
     }
 
     private async Task ExplainErrorsAsync()
@@ -452,7 +456,16 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         if (firstRender)
         {
             await JS.InvokeVoidAsync("initializeContinuousScroll");
+            // Focus the scroll container without showing the focus ring. The container is a large
+            // content area where a visible focus indicator would be visually noisy on initial load.
+            await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
             DimensionManager.OnViewportInformationChanged += OnBrowserResize;
+        }
+
+        if (_pendingFocusElementId is { } pendingFocusElementId)
+        {
+            _pendingFocusElementId = null;
+            await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
         }
     }
 

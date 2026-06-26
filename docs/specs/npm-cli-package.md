@@ -54,6 +54,7 @@ bin/aspire-package-map.json
 The top-level `package.json` declares:
 
 - `bin.aspire = "bin/aspire.js"`
+- `scripts.postinstall = "node bin/aspire.js --npm-postinstall-check"`
 - `optionalDependencies` for every supported RID package at the same version
 - `files = ["bin", "README.md"]`
 
@@ -104,6 +105,8 @@ The launcher:
 4. Finds `bin/aspire` or `bin/aspire.exe` inside that package.
 5. Copies the native binary to an Aspire-owned writable cache.
 6. Spawns the cached binary with inherited stdio and forwards all command-line arguments.
+
+During npm `postinstall`, the same launcher runs in `--npm-postinstall-check` mode. That mode stops after RID detection and native package resolution, so `npm install -g @microsoft/aspire-cli --omit=optional` fails immediately on supported platforms instead of leaving an installed `aspire` shim that can only fail later at first launch. Unsupported platforms continue to install the shim successfully and report the unsupported-platform diagnostic at first `aspire` launch, preserving the optional-dependency package behavior for transitive and exploratory installs. Package managers can still skip lifecycle scripts with `--ignore-scripts`, so the normal runtime launcher keeps the same missing-native-package diagnostic.
 
 The default cache path is:
 
@@ -208,5 +211,4 @@ MicroBuild's npm publish template documentation does not currently expose an npm
 ## Open follow-ups
 
 - Add Sigstore provenance once ESRP/MicroBuild's npm publish path supports it.
-- Add `npm install --no-optional` guidance and a clearer error message in the launcher when no RID package is installed.
 - Extract the large release-job PowerShell validation scripts once `releaseJob` can safely consume repository scripts. They remain inline today because `eng/pipelines/release-publish-nuget.yml` runs the ESRP-backed release job with `checkout: none`; extracting them now would require adding a trusted script artifact or changing release-job checkout behavior.

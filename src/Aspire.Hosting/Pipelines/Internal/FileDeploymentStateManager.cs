@@ -6,6 +6,7 @@
 
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -127,7 +128,7 @@ internal sealed partial class FileDeploymentStateManager(
             }
             await File.WriteAllTextAsync(
                 deploymentStatePath,
-                flattenedSecrets.ToJsonString(s_jsonSerializerOptions),
+                flattenedSecrets.ToJsonString(UserSecretsJsonOptions.s_instance),
                 cancellationToken).ConfigureAwait(false);
 
             logger.LogDebug("Deployment state saved to {Path}", deploymentStatePath);

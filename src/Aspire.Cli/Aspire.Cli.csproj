@@ -135,6 +135,7 @@
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="Utils\ChannelExtensions.cs" />
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" Link="Utils\CommandLineArgsParser.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
+    <Compile Include="$(SharedDir)KnownAspNetCoreConfigNames.cs" Link="Utils\KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
     <Compile Include="$(SharedDir)LaunchProfiles\LaunchSettingsReader.cs" Link="LaunchProfiles\LaunchSettingsReader.cs" />
     <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="Utils\IntegrationPackageProbeManifest.cs" />
@@ -172,6 +173,7 @@
     <Compile Include="$(SharedDir)UserSecrets\UserSecretsPathHelper.cs" Link="Utils\UserSecretsPathHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\IsolatedUserSecretsHelper.cs" Link="Utils\IsolatedUserSecretsHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\SecretsStore.cs" Link="Secrets\SecretsStore.cs" />
+    <Compile Include="$(SharedDir)UserSecrets\UserSecretsJsonOptions.cs" Link="Secrets\UserSecretsJsonOptions.cs" />
     <Compile Include="$(SharedDir)Json\AtsJsonCodeWriter.cs" Link="Utils\AtsJsonCodeWriter.cs" />
     <Compile Include="$(SharedDir)Json\JsonFlattener.cs" Link="Utils\JsonFlattener.cs" />
     <Compile Include="$(SharedDir)Otlp\OtlpHelpers.cs" Link="Otlp\OtlpHelpers.cs" />

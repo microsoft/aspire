@@ -704,6 +704,149 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('filters aspire ls candidates in excluded directories', async () => {
+            stubFileSystemWatchers(sandbox);
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.(JSON.stringify([
+                    {
+                        path: buildPath('workspace', '.agents', 'skills', 'demo', 'snippets', 'apphost.ts'),
+                        language: 'typescript/nodejs',
+                        status: 'buildable',
+                    },
+                    {
+                        path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                        language: 'csharp',
+                        status: 'buildable',
+                    },
+                ]));
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')));
+
+                assert.deepStrictEqual(result, [{
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('filters path-scoped agent skill candidates but keeps other .github apphosts', async () => {
+            stubFileSystemWatchers(sandbox);
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.(JSON.stringify([
+                    {
+                        path: buildPath('workspace', '.github', 'skills', 'demo', 'snippets', 'apphost.ts'),
+                        language: 'typescript/nodejs',
+                        status: 'buildable',
+                    },
+                    {
+                        path: buildPath('workspace', '.opencode', 'skill', 'demo', 'snippets', 'apphost.ts'),
+                        language: 'typescript/nodejs',
+                        status: 'buildable',
+                    },
+                    {
+                        path: buildPath('workspace', '.github', 'AppHost', 'AppHost.csproj'),
+                        language: 'csharp',
+                        status: 'buildable',
+                    },
+                ]));
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')));
+
+                assert.deepStrictEqual(result, [{
+                    path: buildPath('workspace', '.github', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('does not include configured apphost candidate in excluded directories', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                const configPath = path.join(tempDir, 'aspire.config.json');
+                fs.writeFileSync(configPath, JSON.stringify({
+                    appHost: {
+                        path: '.agents/skills/demo/snippets/apphost.ts',
+                    },
+                }));
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    return pattern.endsWith('aspire.config.json')
+                        ? [vscode.Uri.file(configPath)]
+                        : [];
+                });
+                sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                    options?.stdoutCallback?.('[]');
+                    options?.exitCallback?.(0);
+                    return { kill: () => { } } as any;
+                });
+                const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+                try {
+                    const result = await service.discover(makeWorkspaceFolder(tempDir));
+                    assert.deepStrictEqual(result, []);
+                }
+                finally {
+                    service.dispose();
+                }
+            }
+            finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        test('keeps aspire ls candidate that resolves outside the workspace folder', async () => {
+            stubFileSystemWatchers(sandbox);
+            // Configured / CLI-sourced AppHost paths can legitimately live outside the workspace folder.
+            // The candidate filter must keep them; only the stricter scan/watcher path treats
+            // out-of-workspace URIs as excluded. Reverting the candidate filter to the strict variant
+            // (excludeOutsideWorkspace=true) would prune this candidate and fail this test.
+            const outsideCandidatePath = buildPath('outside-workspace', 'AppHost', 'AppHost.csproj');
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.(JSON.stringify([
+                    {
+                        path: outsideCandidatePath,
+                        language: 'csharp',
+                        status: 'buildable',
+                    },
+                ]));
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')));
+
+                assert.deepStrictEqual(result, [{
+                    path: outsideCandidatePath,
+                    language: 'csharp',
+                    status: 'buildable',
+                }]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
         test('reports both aspire ls and legacy fallback errors when discovery fails', async () => {
             stubFileSystemWatchers(sandbox);
             sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
@@ -882,6 +1025,9 @@ suite('AppHost discovery', () => {
                 const excludePattern = String(call.args[1]);
                 assert.ok(excludePattern.includes('**/.worktrees/**'));
                 assert.ok(excludePattern.includes('**/.claude/**'));
+                assert.ok(excludePattern.includes('**/.agents/**'));
+                assert.ok(excludePattern.includes('**/.github/skills/**'));
+                assert.ok(excludePattern.includes('**/.opencode/skill/**'));
                 assert.ok(excludePattern.includes('**/private-checkouts/**'));
                 assert.ok(excludePattern.includes('**/scratch-worktrees/**'));
                 assert.ok(!excludePattern.includes('**/generated-but-enabled/**'));

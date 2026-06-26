@@ -10,7 +10,7 @@ import { extensionLogOutputChannel } from './logging';
 import { getAppHostDiscoveryTimeoutMs } from './settings';
 import { classifyAppHostPath, summarizeAppHostLanguages } from './appHostLanguage';
 import { sendTelemetryEvent } from './telemetry';
-import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob, isExcludedDiscoveryUri } from './workspaceFileSearch';
+import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob, isExcludedDiscoveryCandidate, isExcludedDiscoveryUri } from './workspaceFileSearch';
 
 // Mirrors the `aspire ls --format json` candidate shape documented in
 // docs/specs/cli-output-formats.md. Older CLI fallback results are adapted into
@@ -84,6 +84,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                     let candidates = discovery.candidates;
                     try {
                         candidates = await this._includeConfiguredAppHostCandidate(workspaceFolder, candidates);
+                        candidates = this._filterExcludedCandidates(workspaceFolder, candidates);
                         emitAppHostDiscoveryTelemetry(discovery.source, 'success', candidates, startTime);
                     }
                     catch (error) {
@@ -302,6 +303,16 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 selected: true,
             },
         ];
+    }
+
+    private _filterExcludedCandidates(workspaceFolder: vscode.WorkspaceFolder, candidates: CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo[] {
+        const filteredCandidates = candidates.filter(candidate => !isExcludedDiscoveryCandidate(workspaceFolder, vscode.Uri.file(candidate.path)));
+        const excludedCandidateCount = candidates.length - filteredCandidates.length;
+        if (excludedCandidateCount > 0) {
+            extensionLogOutputChannel.info(`Filtered ${excludedCandidateCount} AppHost candidate(s) in excluded paths`);
+        }
+
+        return filteredCandidates;
     }
 
     private _runCliForStdout(cliPath: string, args: string[], workingDirectory: string): Promise<string> {

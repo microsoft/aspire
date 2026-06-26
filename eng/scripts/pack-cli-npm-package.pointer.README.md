@@ -1,15 +1,55 @@
 # __PACKAGE_NAME__
 
-[![CI](https://github.com/microsoft/aspire/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/microsoft/aspire/actions/workflows/ci.yml)
-[![Tests](https://github.com/microsoft/aspire/actions/workflows/tests.yml/badge.svg?branch=main&event=push)](https://github.com/microsoft/aspire/actions/workflows/tests.yml)
-
-The Aspire CLI, published for npm-based installs.
+The Aspire CLI for npm-based installs. Use it to create, run, publish, and deploy Aspire AppHosts from a terminal.
 
 ## What is Aspire?
 
-Your stack, streamlined. Aspire is a multi-language, code-first orchestration and observability layer for building, running, and deploying distributed applications.
+Aspire is a code-first app model for distributed applications. Your AppHost describes projects, containers, databases, caches, and their connections in code. `aspire run` starts the app locally and opens the Aspire dashboard with logs, traces, metrics, resources, and health checks.
 
-Use an AppHost to describe how services, frontends, containers, databases, caches, and connections fit together in code. The Aspire CLI runs the whole app locally, opens the OpenTelemetry dashboard for logs, traces, metrics, and health checks, and carries the same app model into deployment.
+## Install
+
+This package requires Node.js 20 or later.
+
+Supported platforms: Windows x64/Arm64, macOS x64/Arm64, Linux x64/Arm64 with glibc, and Linux x64 with musl/Alpine.
+
+```bash
+npm install -g __PACKAGE_NAME__
+```
+
+Then verify the install:
+
+```bash
+aspire --version
+aspire --help
+```
+
+The npm package installs a small JavaScript `aspire` launcher. The native platform packages are installed through npm optional dependencies. The launcher selects the package that matches your OS, CPU, and Linux libc. Do not install this package with optional dependencies disabled, or installation fails because the launcher cannot find the native CLI binary.
+
+## Quick start
+
+- New app: run `aspire new` to create an Aspire app from a template.
+- Existing repo: run `aspire init`, then `aspire run`.
+- Dashboard only: run `aspire dashboard run` to start the standalone dashboard.
+
+For an existing repo with one or more app projects:
+
+```bash
+aspire init
+aspire run
+```
+
+Starting from scratch? See [Build your first app](https://aspire.dev/get-started/first-app/).
+
+## Useful commands
+
+- `aspire new` creates a new Aspire app from a template.
+- `aspire init` adds an AppHost to an existing repo.
+- `aspire add <integration>` installs integrations such as PostgreSQL or Redis.
+- `aspire run` starts the AppHost and opens the dashboard.
+- `aspire publish` prepares deployment artifacts from the AppHost model.
+- `aspire deploy` deploys an AppHost to its supported deployment targets.
+- `aspire dashboard run` starts only the dashboard for apps that already export OpenTelemetry.
+- `aspire --help` and `aspire <command> --help` show the current command options.
 
 ## Standalone dashboard
 
@@ -78,31 +118,9 @@ await builder.build().run();
 
 `addPostgres` and `addRedis` become available once the matching integrations are installed with `aspire add postgresql` and `aspire add redis`.
 
-## Install
+## Update or uninstall
 
-This package requires Node.js 20 or later.
-
-```bash
-npm install -g __PACKAGE_NAME__
-```
-
-Then verify the install:
-
-```bash
-aspire --version
-aspire --help
-```
-
-Start from a repo with one or more app projects:
-
-```bash
-aspire init
-aspire run
-```
-
-The native platform packages are installed through npm optional dependencies. Do not install this package with optional dependencies disabled, or the `aspire` launcher will not be able to find the native CLI binary.
-
-## Update
+Update to the latest npm release:
 
 ```bash
 npm install -g __PACKAGE_NAME__@latest
@@ -110,9 +128,47 @@ npm install -g __PACKAGE_NAME__@latest
 
 If you run `aspire update --self` from an npm install, the CLI points you back to this npm update command.
 
+Uninstall the npm package:
+
+```bash
+npm uninstall -g __PACKAGE_NAME__
+```
+
+## Troubleshooting
+
+### Optional dependencies disabled
+
+If installation fails or the launcher says the native package was not installed, reinstall without `--omit=optional`, `--no-optional`, or the `npm_config_optional=false` environment variable:
+
+```bash
+npm install -g __PACKAGE_NAME__
+```
+
+### PATH cannot find `aspire`
+
+Make sure your shell can see npm's global executable directory. `npm prefix -g` shows the global prefix; on macOS and Linux the `aspire` shim is usually under the prefix's `bin` directory. On Windows it is usually under the npm directory in your user profile.
+
+### Supported platforms and architectures
+
+The npm package currently ships native binaries for Windows x64/Arm64, macOS x64/Arm64, Linux x64/Arm64 with glibc, and Linux x64 with musl/Alpine. Other platforms are not supported by this package.
+
+### Corrupted or mismatched install
+
+If the launcher reports a corrupted package, mismatched native package version, or missing native binary, reinstall the package:
+
+```bash
+npm uninstall -g __PACKAGE_NAME__
+npm install -g __PACKAGE_NAME__
+```
+
 ## Learn more
 
-- [Documentation](https://aspire.dev/docs/)
+- [Aspire documentation](https://aspire.dev/docs/)
+- [Aspire CLI command reference](https://aspire.dev/reference/cli/commands/aspire/)
 - [Build your first app](https://aspire.dev/get-started/first-app/)
+- [Browse Aspire samples](https://aspire.dev/reference/samples/)
+- [Standalone dashboard](https://aspire.dev/dashboard/standalone/)
 - [Aspire repository](https://github.com/microsoft/aspire)
 - [Aspire samples repository](https://github.com/microsoft/aspire-samples)
+- [Release notes](https://github.com/microsoft/aspire/releases)
+- [Report an issue](https://github.com/microsoft/aspire/issues)

@@ -4,9 +4,12 @@
 namespace Aspire.Cli.DotNet;
 
 /// <summary>
-/// Represents a configured process execution that can be started and awaited.
+/// Represents a configured process execution that can be started and awaited. Disposal is
+/// asynchronous because the underlying primitive drains its stdout/stderr pumps and releases the
+/// anonymous pipes + console handles it owns (the isolated-console path on Windows), which cannot
+/// be done from a synchronous <see cref="IDisposable.Dispose"/> without blocking.
 /// </summary>
-internal interface IProcessExecution : IDisposable
+internal interface IProcessExecution : IAsyncDisposable
 {
     /// <summary>
     /// Gets the file name of the executable to run.

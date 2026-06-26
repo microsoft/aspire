@@ -115,7 +115,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         // Assert
         // OTLP endpoints are optional, so only frontend URL is required
         Assert.Collection(app.ValidationFailures,
-            s => Assert.Contains(KnownConfigNames.AspNetCoreUrls, s));
+            s => Assert.Contains(KnownAspNetCoreConfigNames.Urls, s));
     }
 
     [Fact]

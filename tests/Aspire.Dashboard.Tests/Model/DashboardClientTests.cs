@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Google.Protobuf.WellKnownTypes;
@@ -13,6 +14,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Xunit;
+using DashboardResources = Aspire.Dashboard.Resources.Resources;
 
 namespace Aspire.Dashboard.Tests.Model;
 
@@ -373,7 +375,7 @@ public sealed class DashboardClientTests
         var testSink = new TestSink();
         var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new TestLoggerProvider(testSink)));
 
-        await using var instance = new DashboardClient(loggerFactory, _configuration, _dashboardOptions, new MockKnownPropertyLookup());
+        await using var instance = new DashboardClient(loggerFactory, _configuration, _dashboardOptions, new MockKnownPropertyLookup(), new TestStringLocalizer<DashboardResources>());
         instance.SetDashboardServiceClient(new MockDashboardServiceClient { FailOnGetApplicationInformation = true });
 
         IDashboardClient client = instance;
@@ -397,10 +399,52 @@ public sealed class DashboardClientTests
         Assert.Contains("https://aka.ms/aspire/dashboard-apphost-connection-failed", errorLog.Message);
     }
 
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_AppHostUnavailable_ReturnsClearFailure()
+    {
+        await using var instance = CreateResourceServiceClient();
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient { FailOnExecuteResourceCommand = true });
+
+        var response = await instance.ExecuteResourceCommandAsync(
+            "api",
+            "Project",
+            CreateCommand(),
+            new ExecuteResourceCommandOptions(),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(Aspire.Dashboard.Model.ResourceCommandResponseKind.Failed, response.Kind);
+        Assert.Equal("Localized:ResourceCommandAppHostDisconnected", response.Message);
+        Assert.Equal(response.Message, response.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_ClientCancellation_ReturnsAppHostDisconnectedFailure()
+    {
+        await using var instance = CreateResourceServiceClient();
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient { CancelExecuteResourceCommandOnCallCancellation = true });
+
+        var commandTask = instance.ExecuteResourceCommandAsync(
+            "api",
+            "Project",
+            CreateCommand(),
+            new ExecuteResourceCommandOptions(),
+            CancellationToken.None);
+
+        await instance.DisposeAsync().DefaultTimeout();
+
+        var response = await commandTask.DefaultTimeout();
+
+        Assert.Equal(Aspire.Dashboard.Model.ResourceCommandResponseKind.Failed, response.Kind);
+        Assert.Equal("Localized:ResourceCommandAppHostDisconnected", response.Message);
+        Assert.Equal(response.Message, response.ErrorMessage);
+    }
+
     private sealed class MockDashboardServiceClient : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceClient
     {
         public bool FailOnWatchResources { get; init; }
         public bool FailOnGetApplicationInformation { get; init; }
+        public bool FailOnExecuteResourceCommand { get; init; }
+        public bool CancelExecuteResourceCommandOnCallCancellation { get; init; }
 
         public override AsyncDuplexStreamingCall<WatchInteractionsRequestUpdate, WatchInteractionsResponseUpdate> WatchInteractions(CallOptions options)
         {
@@ -434,6 +478,53 @@ public sealed class DashboardClientTests
                 () => Status.DefaultSuccess,
                 () => new Metadata(),
                 () => { });
+        }
+
+        public override AsyncUnaryCall<ResourceCommandResponse> ExecuteResourceCommandAsync(ResourceCommandRequest request, CallOptions options)
+        {
+            if (CancelExecuteResourceCommandOnCallCancellation)
+            {
+                return new AsyncUnaryCall<ResourceCommandResponse>(
+                    WaitForCallCancellationAsync(options.CancellationToken),
+                    Task.FromResult(new Metadata()),
+                    () => new Status(StatusCode.Cancelled, "Cancelled"),
+                    () => new Metadata(),
+                    () => { });
+            }
+
+            if (FailOnExecuteResourceCommand)
+            {
+                return new AsyncUnaryCall<ResourceCommandResponse>(
+                    Task.FromException<ResourceCommandResponse>(new RpcException(new Status(StatusCode.Unavailable, "Service unavailable"))),
+                    Task.FromResult(new Metadata()),
+                    () => new Status(StatusCode.Unavailable, "Service unavailable"),
+                    () => new Metadata(),
+                    () => { });
+            }
+
+            return new AsyncUnaryCall<ResourceCommandResponse>(
+                Task.FromResult(new ResourceCommandResponse
+                {
+                    Kind = Aspire.DashboardService.Proto.V1.ResourceCommandResponseKind.Succeeded
+                }),
+                Task.FromResult(new Metadata()),
+                () => Status.DefaultSuccess,
+                () => new Metadata(),
+                () => { });
+        }
+
+        private static async Task<ResourceCommandResponse> WaitForCallCancellationAsync(CancellationToken cancellationToken)
+        {
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw new RpcException(new Status(StatusCode.Cancelled, "Cancelled"));
+            }
+
+            throw new InvalidOperationException("The command should only complete when the call is canceled.");
         }
 
         public override AsyncServerStreamingCall<WatchResourcesUpdate> WatchResources(WatchResourcesRequest request, CallOptions options)
@@ -488,6 +579,20 @@ public sealed class DashboardClientTests
 
     private DashboardClient CreateResourceServiceClient()
     {
-        return new DashboardClient(NullLoggerFactory.Instance, _configuration, _dashboardOptions, new MockKnownPropertyLookup());
+        return new DashboardClient(NullLoggerFactory.Instance, _configuration, _dashboardOptions, new MockKnownPropertyLookup(), new TestStringLocalizer<DashboardResources>());
+    }
+
+    private static CommandViewModel CreateCommand()
+    {
+        return new CommandViewModel(
+            "restart",
+            CommandViewModelState.Enabled,
+            "Restart",
+            "Restart API",
+            confirmationMessage: string.Empty,
+            [],
+            isHighlighted: false,
+            iconName: string.Empty,
+            iconVariant: Microsoft.FluentUI.AspNetCore.Components.IconVariant.Regular);
     }
 }

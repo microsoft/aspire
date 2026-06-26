@@ -22,21 +22,4 @@ internal static class MauiTestHelper
             </Project>
             """;
     }
-
-    public static string CreateTempProjectFile(string content)
-    {
-        var tempFolder = Directory.CreateTempSubdirectory();
-        var tempFile = Path.Combine(tempFolder.FullName, "TempMauiProject.csproj");
-        File.WriteAllText(tempFile, content);
-        return tempFile;
-    }
-
-    public static void CleanupTempFile(string filePath)
-    {
-        var directory = Path.GetDirectoryName(filePath);
-        if (directory is not null && Directory.Exists(directory))
-        {
-            Directory.Delete(directory, recursive: true);
-        }
-    }
 }

@@ -163,6 +163,7 @@
   "command.startResource": "Start",
   "command.restartResource": "Restart",
   "command.viewResourceLogs": "View logs",
+  "command.openResourceTerminal": "Open terminal",
   "command.executeResourceCommand": "Execute resource command",
   "command.executeResourceCommandItem": "Execute command",
   "command.copyEndpointUrl": "Copy URL",
