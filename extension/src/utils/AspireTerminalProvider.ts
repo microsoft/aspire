@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as childProcess from 'child_process';
-import { aspireTerminalName, dcpServerNotInitialized, rpcServerNotInitialized, terminalCommandArgumentControlCharacters, terminalCommandUnsafeLiteral } from '../loc/strings';
+import { aspireTerminalName, cliNotAvailable, dcpServerNotInitialized, rpcServerNotInitialized, terminalCommandArgumentControlCharacters, terminalCommandUnsafeLiteral } from '../loc/strings';
 import { extensionLogOutputChannel } from './logging';
 import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
@@ -391,7 +391,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
     async getAspireCliExecutablePath(): Promise<string> {
         const result = await resolveCliPath();
         if (!result.available) {
-            throw new Error('Aspire CLI is not available.');
+            throw new Error(cliNotAvailable);
         }
 
         return result.cliPath;
