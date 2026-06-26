@@ -35,8 +35,14 @@
 }
 
 /* The doctor output and additional-context fields are tucked into a collapsed-by-default
-   accordion to keep the dialog minimal; the accordion should span the dialog width. */
-.feedback-details-accordion {
+   accordion to keep the dialog minimal. The accordion is wrapped in this div (which carries the
+   scoped-CSS attribute) so it spans the dialog width; the FluentAccordion's own <fluent-accordion>
+   host element is reached via ::deep because component roots don't inherit the scope attribute. */
+.feedback-details {
+    width: 100%;
+}
+
+.feedback-details ::deep fluent-accordion {
     width: 100%;
 }
 
