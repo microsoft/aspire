@@ -160,6 +160,9 @@
     <trans-unit id="aspire-vscode.strings.dcpServerNotInitialized">
       <source xml:lang="en">DCP server not initialized - cannot forward debug output.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.installCliDailyBuild">
+      <source xml:lang="en">Daily build (dev)</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.dashboard">
       <source xml:lang="en">Dashboard</source>
     </trans-unit>
@@ -340,6 +343,9 @@
     <trans-unit id="aspire-vscode.strings.invalidTokenProvided">
       <source xml:lang="en">Invalid token provided.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.installCliDailyBuildDescription">
+      <source xml:lang="en">Latest build from main via the install script</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.openAspireDashboard">
       <source xml:lang="en">Launch Aspire Dashboard</source>
     </trans-unit>
@@ -484,6 +490,9 @@
     <trans-unit id="aspire-vscode.strings.dashboardLaunchExternalBrowserDescription">
       <source xml:lang="en">Open the dashboard in the system default browser.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.installCliViewAllOptionsDescription">
+      <source xml:lang="en">Open the installation guide (includes the install script)</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostPathLabel">
       <source xml:lang="en">Path</source>
     </trans-unit>
@@ -573,6 +582,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.selectFileTitle">
       <source xml:lang="en">Select file</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.installCliPlaceholder">
+      <source xml:lang="en">Select how to install the Aspire CLI</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.selectDefaultLaunchApphost">
       <source xml:lang="en">Select the default AppHost to launch when starting an Aspire debug session</source>
@@ -705,6 +717,9 @@
     </trans-unit>
     <trans-unit id="command.codeLensViewLogs">
       <source xml:lang="en">View Aspire resource logs</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.installCliViewAllOptions">
+      <source xml:lang="en">View all installation options</source>
     </trans-unit>
     <trans-unit id="command.viewResourceLogs">
       <source xml:lang="en">View logs</source>
