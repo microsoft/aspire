@@ -126,7 +126,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
 
         var trace = new OtlpTrace(new byte[] { (byte)'t', (byte)'r', (byte)'a', (byte)'c', (byte)'e' }, DateTime.MinValue);
         var scope = CreateOtlpScope(context);
-        var span = CreateOtlpSpan(resource, trace, scope, spanId: "616263", parentSpanId: null, startDate: s_testTime);
+        var span = CreateOtlpSpan(resource, trace, scope, spanId: GetHexId("abc"), parentSpanId: null, startDate: s_testTime);
 
         var cut = SetUpDialog(out var dialogService);
         var repository = Services.GetRequiredService<TelemetryRepository>();
