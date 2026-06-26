@@ -33,7 +33,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
         var resource = new OtlpResource("app", "instance", uninstrumentedPeer: false, context);
 
-        var trace = new OtlpTrace(new byte[] { (byte)'t', (byte)'r', (byte)'a', (byte)'c', (byte)'e' }, DateTime.MinValue);
+        var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, DateTime.MinValue);
         var scope = CreateOtlpScope(context);
 
         var cut = SetUpDialog(out var dialogService);
