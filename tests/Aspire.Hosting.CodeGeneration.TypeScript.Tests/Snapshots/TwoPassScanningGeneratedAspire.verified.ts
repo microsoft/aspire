@@ -838,11 +838,32 @@ export interface CommandOptions {
     /**
      * Gets or sets options for displaying a progress dialog while the command is executing.
      *
-     * When set with a `Message`, a progress dialog is automatically shown while
-     * the command callback executes. The dialog closes when the command completes.
-     * When `null`, no progress dialog is shown and the command executes without visual feedback.
+     * When `Message` is not `null` or empty, a progress dialog
+     * is automatically shown while the command callback executes. The dialog closes when the command completes.
+     * When `null`, or when `Message` is `null` or empty,
+     * no progress dialog is shown and the command executes without visual feedback.
      */
-    progress?: any;
+    progress?: CommandProgressOptions;
+}
+
+/** Options for displaying a progress dialog while a command is executing. */
+export interface CommandProgressOptions {
+    /**
+     * Gets or sets the message to display in the progress dialog.
+     *
+     * When not `null` or empty, a progress dialog is displayed while the command executes.
+     */
+    message?: string | null;
+    /** Gets or sets the optional title of the progress dialog. */
+    title?: string | null;
+    /**
+     * Gets or sets a value indicating whether the cancel button is hidden in the progress dialog.
+     *
+     * When `false` (the default), a cancel button is shown. Clicking it cancels the command via the
+     * `CancellationToken`.
+     * When `true`, no cancel button is displayed and the user cannot cancel the operation from the dialog.
+     */
+    hideCancelButton?: boolean;
 }
 
 /** Represents a value produced by a command. */

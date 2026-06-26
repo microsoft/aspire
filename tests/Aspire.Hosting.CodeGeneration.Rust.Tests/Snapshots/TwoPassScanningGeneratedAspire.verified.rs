@@ -1339,7 +1339,7 @@ pub struct CommandOptions {
     #[serde(rename = "UpdateState")]
     pub update_state: Value,
     #[serde(rename = "Progress")]
-    pub progress: Value,
+    pub progress: CommandProgressOptions,
 }
 
 impl CommandOptions {
@@ -1358,6 +1358,27 @@ impl CommandOptions {
         map.insert("IsHighlighted".to_string(), serde_json::to_value(&self.is_highlighted).unwrap_or(Value::Null));
         map.insert("UpdateState".to_string(), serde_json::to_value(&self.update_state).unwrap_or(Value::Null));
         map.insert("Progress".to_string(), serde_json::to_value(&self.progress).unwrap_or(Value::Null));
+        map
+    }
+}
+
+/// CommandProgressOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CommandProgressOptions {
+    #[serde(rename = "Message")]
+    pub message: String,
+    #[serde(rename = "Title")]
+    pub title: String,
+    #[serde(rename = "HideCancelButton")]
+    pub hide_cancel_button: bool,
+}
+
+impl CommandProgressOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("Message".to_string(), serde_json::to_value(&self.message).unwrap_or(Value::Null));
+        map.insert("Title".to_string(), serde_json::to_value(&self.title).unwrap_or(Value::Null));
+        map.insert("HideCancelButton".to_string(), serde_json::to_value(&self.hide_cancel_button).unwrap_or(Value::Null));
         map
     }
 }

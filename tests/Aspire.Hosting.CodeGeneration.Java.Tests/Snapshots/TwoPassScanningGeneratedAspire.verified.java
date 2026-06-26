@@ -3675,7 +3675,7 @@ public class CommandOptions implements JsonSerializable {
     private IconVariant iconVariant;
     private boolean isHighlighted;
     private AspireFunc1<UpdateCommandStateContext, ResourceCommandState> updateState;
-    private Object progress;
+    private CommandProgressOptions progress;
 
     public String getDescription() { return description; }
     public void setDescription(String value) { this.description = value; }
@@ -3697,8 +3697,8 @@ public class CommandOptions implements JsonSerializable {
     public void setIsHighlighted(boolean value) { this.isHighlighted = value; }
     public AspireFunc1<UpdateCommandStateContext, ResourceCommandState> getUpdateState() { return updateState; }
     public void setUpdateState(AspireFunc1<UpdateCommandStateContext, ResourceCommandState> value) { this.updateState = value; }
-    public Object getProgress() { return progress; }
-    public void setProgress(Object value) { this.progress = value; }
+    public CommandProgressOptions getProgress() { return progress; }
+    public void setProgress(CommandProgressOptions value) { this.progress = value; }
 
     @SuppressWarnings("unchecked")
     public static CommandOptions fromMap(Map<String, Object> map) {
@@ -3720,7 +3720,7 @@ public class CommandOptions implements JsonSerializable {
         var isHighlightedValue = map.get("IsHighlighted");
         value.setIsHighlighted((Boolean) isHighlightedValue);
         var progressValue = map.get("Progress");
-        value.setProgress(progressValue);
+        value.setProgress(progressValue == null ? null : CommandProgressOptions.fromMap((Map<String, Object>) progressValue));
         return value;
     }
 
@@ -3744,6 +3744,48 @@ public class CommandOptions implements JsonSerializable {
             return AspireClient.awaitValue(updateState.invoke(arg));
         }));
         map.put("Progress", AspireClient.serializeValue(progress));
+        return map;
+    }
+}
+
+// ===== CommandProgressOptions.java =====
+// CommandProgressOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** CommandProgressOptions DTO. */
+public class CommandProgressOptions implements JsonSerializable {
+    private String message;
+    private String title;
+    private boolean hideCancelButton;
+
+    public String getMessage() { return message; }
+    public void setMessage(String value) { this.message = value; }
+    public String getTitle() { return title; }
+    public void setTitle(String value) { this.title = value; }
+    public boolean getHideCancelButton() { return hideCancelButton; }
+    public void setHideCancelButton(boolean value) { this.hideCancelButton = value; }
+
+    @SuppressWarnings("unchecked")
+    public static CommandProgressOptions fromMap(Map<String, Object> map) {
+        var value = new CommandProgressOptions();
+        var messageValue = map.get("Message");
+        value.setMessage(messageValue == null ? null : (String) messageValue);
+        var titleValue = map.get("Title");
+        value.setTitle(titleValue == null ? null : (String) titleValue);
+        var hideCancelButtonValue = map.get("HideCancelButton");
+        value.setHideCancelButton((Boolean) hideCancelButtonValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Message", AspireClient.serializeValue(message));
+        map.put("Title", AspireClient.serializeValue(title));
+        map.put("HideCancelButton", AspireClient.serializeValue(hideCancelButton));
         return map;
     }
 }
@@ -28890,6 +28932,7 @@ public final class WithVolumeOptions {
 .aspire/modules/CommandLineArgsCallbackContext.java
 .aspire/modules/CommandLineArgsEditor.java
 .aspire/modules/CommandOptions.java
+.aspire/modules/CommandProgressOptions.java
 .aspire/modules/CommandResultData.java
 .aspire/modules/CommandResultFormat.java
 .aspire/modules/CompleteStepMarkdownOptions.java

@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
+#pragma warning disable ASPIREINTERACTION001 // PromptProgressAsync and related types are experimental.
+
 /// <summary>
 /// A service to execute resource commands.
 /// </summary>
@@ -412,7 +414,7 @@ public class ResourceCommandService
         ExecuteCommandContext context,
         CancellationToken cancellationToken)
     {
-        if (annotation.Progress is not { } progressOptions)
+        if (annotation.Progress is not { Message: { Length: > 0 } } progressOptions)
         {
             return await annotation.ExecuteCommand(context).ConfigureAwait(false);
         }

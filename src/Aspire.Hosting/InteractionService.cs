@@ -11,6 +11,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
+#pragma warning disable ASPIREINTERACTION001 // PromptProgressAsync and related types are experimental.
+
 internal class InteractionService : IInteractionService
 {
     // Tracks whether the current async flow is executing in a non-interactive context,

@@ -1,7 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Aspire.Hosting.ApplicationModel;
+
+#pragma warning disable ASPIREINTERACTION001 // CommandProgressOptions is experimental.
 
 /// <summary>
 /// Optional configuration for resource commands added with <see cref="ResourceBuilderExtensions.WithCommand{T}(Aspire.Hosting.ApplicationModel.IResourceBuilder{T}, string, string, Func{Aspire.Hosting.ApplicationModel.ExecuteCommandContext, Task{Aspire.Hosting.ApplicationModel.ExecuteCommandResult}}, Aspire.Hosting.ApplicationModel.CommandOptions?)"/>.
@@ -99,11 +103,12 @@ public class CommandOptions
     /// </summary>
     /// <remarks>
     /// <para>
-    /// When set with a <see cref="CommandProgressOptions.Message"/>, a progress dialog is automatically shown while
-    /// the command callback executes. The dialog closes when the command completes.
+    /// When <see cref="CommandProgressOptions.Message"/> is not <see langword="null"/> or empty, a progress dialog
+    /// is automatically shown while the command callback executes. The dialog closes when the command completes.
     /// </para>
     /// <para>
-    /// When <see langword="null"/>, no progress dialog is shown and the command executes without visual feedback.
+    /// When <see langword="null"/>, or when <see cref="CommandProgressOptions.Message"/> is <see langword="null"/> or empty,
+    /// no progress dialog is shown and the command executes without visual feedback.
     /// </para>
     /// </remarks>
     public CommandProgressOptions? Progress { get; set; }
@@ -112,12 +117,17 @@ public class CommandOptions
 /// <summary>
 /// Options for displaying a progress dialog while a command is executing.
 /// </summary>
+[Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireDto]
 public class CommandProgressOptions
 {
     /// <summary>
     /// Gets or sets the message to display in the progress dialog.
     /// </summary>
-    public required string Message { get; set; }
+    /// <remarks>
+    /// When not <see langword="null"/> or empty, a progress dialog is displayed while the command executes.
+    /// </remarks>
+    public string? Message { get; set; }
 
     /// <summary>
     /// Gets or sets the optional title of the progress dialog.

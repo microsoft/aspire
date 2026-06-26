@@ -1789,7 +1789,12 @@ class CommandOptions(typing.TypedDict, total=False):
     IconVariant: IconVariant | None
     IsHighlighted: bool
     UpdateState: typing.Callable[[UpdateCommandStateContext], ResourceCommandState]
-    Progress: typing.Any
+    Progress: CommandProgressOptions
+
+class CommandProgressOptions(typing.TypedDict, total=False):
+    Message: str | None
+    Title: str | None
+    HideCancelButton: bool
 
 class CommandResultData(typing.TypedDict, total=False):
     Value: str

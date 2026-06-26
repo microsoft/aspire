@@ -122,6 +122,7 @@ public interface IInteractionService
     /// An <see cref="InteractionResult{T}"/> containing <c>true</c> if the operation completed successfully,
     /// or a canceled result if the user clicked the cancel button.
     /// </returns>
+    [Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     Task<InteractionResult<bool>> PromptProgressAsync(string message, string? title = null, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default);
 }
 
@@ -707,6 +708,7 @@ public class NotificationInteractionOptions : InteractionOptions
 /// <summary>
 /// Options for configuring a progress interaction.
 /// </summary>
+[Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class ProgressInteractionOptions : InteractionOptions
 {
     internal static ProgressInteractionOptions CreateDefault() => new();
@@ -727,6 +729,7 @@ public class ProgressInteractionOptions : InteractionOptions
 /// <summary>
 /// Provides context to the work callback of a progress interaction.
 /// </summary>
+[Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ProgressContext
 {
     /// <summary>

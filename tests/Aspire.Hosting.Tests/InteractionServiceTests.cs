@@ -9,6 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Hosting.Dashboard.DashboardServiceData;
 
+#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "2")]
