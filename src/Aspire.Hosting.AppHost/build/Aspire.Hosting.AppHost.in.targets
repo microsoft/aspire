@@ -308,8 +308,7 @@ namespace Projects%3B
       <_AspireRunWorkingDirectory>$(MSBuildProjectDirectory)</_AspireRunWorkingDirectory>
       <_AspireRunWorkingDirectory Condition="'$(FileBasedProgram)' == 'true' and '@(_AspireFileBasedAppHostDirectory)' != ''">@(_AspireFileBasedAppHostDirectory)</_AspireRunWorkingDirectory>
       <_AspireCliPathIsWindowsCommandShim Condition="'$(OS)' == 'Windows_NT' and '$(AspireCliPath)' != '' and ($(AspireCliPath.ToLowerInvariant().EndsWith('.cmd')) or $(AspireCliPath.ToLowerInvariant().EndsWith('.bat')))">true</_AspireCliPathIsWindowsCommandShim>
-      <RunCommand Condition="'$(AspireCliPath)' != '' and '$(_AspireCliPathIsWindowsCommandShim)' != 'true' and '$(OS)' == 'Windows_NT'">$(AspireCliPath)</RunCommand>
-      <RunCommand Condition="'$(AspireCliPath)' != '' and '$(_AspireCliPathIsWindowsCommandShim)' != 'true' and '$(OS)' != 'Windows_NT'">$(AspireCliPath)</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' != '' and '$(_AspireCliPathIsWindowsCommandShim)' != 'true'">$(AspireCliPath)</RunCommand>
       <RunCommand Condition="'$(_AspireCliPathIsWindowsCommandShim)' == 'true'">cmd</RunCommand>
       <!-- On Windows, Aspire can be installed as a command shim such as aspire.cmd.
            dotnet run starts RunCommand directly, so keep explicit paths
