@@ -1051,8 +1051,18 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                     const runningGroup = new RunningAppHostsGroupItem(runningItems);
                     return [runningGroup, new WorkspaceAppHostsGroupItem(workspaceItems)];
                 }
-                // When nothing is running, still wrap idle items in the group so they
-                // render under the "Workspace AppHosts" header. This keeps the tree shape
+                // For a single idle AppHost, skip the "Workspace AppHosts" grouping node
+                // and surface the AppHost directly at the root. The "(1)" header just wraps
+                // a lone child, adding nesting and a redundant click target without value
+                // (mirrors VS Code's SCM view for a single repo).
+                // See https://github.com/microsoft/aspire/issues/18420.
+                // Reaching here with one idle item means exactly one AppHost, because the
+                // mixed running/idle case already returned above.
+                if (workspaceItems.length === 1) {
+                    return [workspaceItems[0]];
+                }
+                // When two or more idle AppHosts exist (and none are running), wrap them
+                // under the "Workspace AppHosts" header. This keeps the tree shape
                 // consistent with the mixed case and avoids loose root-level items.
                 if (workspaceItems.length > 0) {
                     return [new WorkspaceAppHostsGroupItem(workspaceItems)];

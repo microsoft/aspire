@@ -567,8 +567,7 @@ suite('AspireAppHostTreeProvider', () => {
         provider.notifyAppHostStopping(appHostPath);
         provider.notifyAppHostStopping(unknownAppHostPath);
 
-        const [groupItem] = provider.getChildren();
-        const [candidateItem] = provider.getChildren(groupItem);
+        const [candidateItem] = provider.getChildren();
         assert.strictEqual(candidateItem.contextValue, 'workspaceAppHost');
         assert.notStrictEqual(candidateItem.description, 'Stopping...');
         assert.strictEqual(provider.stoppingPaths.length, 0);
@@ -1866,7 +1865,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
-    test('workspace mode renders selected non-running AppHost candidate without resources', () => {
+    test('workspace mode renders single non-running AppHost candidate without a grouping node', () => {
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const repository = {
             viewMode: 'workspace' as ViewMode,
@@ -1879,12 +1878,13 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
 
-        const [groupItem] = provider.getChildren();
+        // A single AppHost is surfaced directly at the root with no "Workspace AppHosts"
+        // grouping node (https://github.com/microsoft/aspire/issues/18420).
+        const topLevel = provider.getChildren();
+        assert.strictEqual(topLevel.length, 1);
+        const appHostItem = topLevel[0];
         const result = provider.findAppHostElement('/repo/AppHost/AppHost.csproj');
 
-        assert.ok(groupItem, 'Expected the Workspace AppHosts group');
-        assert.strictEqual(groupItem.contextValue, 'workspaceAppHostsGroup');
-        const [appHostItem] = provider.getChildren(groupItem);
         assert.strictEqual(appHostItem.label, 'AppHost.csproj');
         assert.strictEqual(appHostItem.contextValue, 'workspaceAppHost');
         assert.strictEqual(appHostItem.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
@@ -1901,6 +1901,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             undefined,
         ]);
         assert.ok(result, 'Expected to find the workspace AppHost candidate');
+        assert.strictEqual(result, appHostItem);
         provider.dispose();
     });
 
@@ -1959,9 +1960,8 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
 
-        const [groupItem] = provider.getChildren();
-        assert.strictEqual(groupItem?.contextValue, 'workspaceAppHostsGroup');
-        const [item] = provider.getChildren(groupItem);
+        // A single launching AppHost is surfaced directly at the root with no grouping node.
+        const [item] = provider.getChildren();
 
         assert.ok(item, 'Expected a launching workspace AppHost item');
         assert.strictEqual(item.contextValue, 'workspaceAppHostLaunching');
@@ -2074,9 +2074,8 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
 
-        // Get the workspace item from inside the Workspace AppHosts group and pass it to runAppHost
-        const [groupItem] = provider.getChildren();
-        const [item] = provider.getChildren(groupItem);
+        // A single candidate is surfaced directly at the root (no grouping node); pass it to runAppHost.
+        const [item] = provider.getChildren();
         await provider.runAppHost(item as any, false);
 
         assert.ok(launchStub.calledOnce, 'Expected launch to be called');
@@ -2107,8 +2106,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
 
-        const [groupItem] = provider.getChildren();
-        const [item] = provider.getChildren(groupItem);
+        const [item] = provider.getChildren();
         await assert.rejects(provider.runAppHost(item as any, false), /startDebugging blew up/);
 
         assert.ok(launchStub.calledOnce, 'Expected launch to be called');
