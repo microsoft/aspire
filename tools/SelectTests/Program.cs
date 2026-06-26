@@ -228,7 +228,7 @@ internal static class Selection
 
         trace.EnterStage("select (Layer 2 trigger map + Layer 1 union)");
         var selector = new TestSelector(options.MapPath, allTestProjects, projectDirectories);
-        var result = selector.Select(changedFiles, layer1Affected, new SelectorOptions(options.ForceAll), layer1.AttributedPaths, layer1.Paths);
+        var result = selector.Select(changedFiles, layer1Affected, new SelectorOptions(options.ForceAll, options.ForceAllReason), layer1.AttributedPaths, layer1.Paths);
 
         trace.EnterStage("write summary and outputs");
         WriteSummary(options, result, allTestProjects, changedFiles, layer1Affected, excludedFiles);

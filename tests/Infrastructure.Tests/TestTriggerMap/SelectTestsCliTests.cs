@@ -692,25 +692,56 @@ public sealed class SelectTestsCliTests
 
     // P1-6d. The CI action's OWN merge-base fallback enters the tool with --force-all already set (the
     // shell deepen loop gave up), so RunCore's merge-base block is skipped and the reason can't be derived
-    // here -- the action passes it via --force-all-reason. The summary must render THAT reason ("fail-safe
-    // run-all because ...") so the weekly audit, which reads the summary and not the raw logs, can tell a
-    // systemic shallow-history regression apart from an intentional run-full-ci kill switch. Failure mode:
-    // dropping the --force-all-reason wiring would relabel this as a plain "(kill switch)" full run, hiding
-    // the regression behind a green-but-full-matrix run.
+    // here -- the action passes it via --force-all-reason. ALL THREE output surfaces must name THAT reason
+    // ("fail-safe run-all because ...") rather than the run-full-ci kill switch, so a systemic
+    // shallow-history regression can't hide behind a green-but-full-matrix run no matter which surface a
+    // reader consults:
+    //   - the step summary (the weekly audit reads it, not the raw logs),
+    //   - the PR comment (what a contributor sees on the PR), and
+    //   - the JSON artifact (the durable, machine-readable record).
+    // The reason flows through SelectorOptions.ForceAllReason into SelectionResult.EscalationReason, which
+    // the comment and JSON both render. Failure mode: carrying the reason only into the summary (not the
+    // selector) relabels the comment and JSON as the run-full-ci kill switch, contradicting the summary.
     [Fact]
-    public void ForceAllReasonIsRecordedInSummaryDistinctFromKillSwitch()
+    public void ForceAllReasonIsRecordedAcrossAllSurfacesDistinctFromKillSwitch()
     {
         RunInTempRepo((repoRoot, propsPath, output) =>
         {
-            var changed = WriteChangedFiles(repoRoot, "src/Aspire.Hosting/Foo.cs");
-            const string reason = "git merge-base of base abc123 and head def456 was unreachable within 4096 commits of CI checkout history";
+            var commentPath = Path.Combine(repoRoot, "comment.md");
+            var jsonPath = Path.Combine(repoRoot, "selection.json");
+            var previousComment = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            var previousJson = Environment.GetEnvironmentVariable("SELECT_TESTS_JSON_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", jsonPath);
+            try
+            {
+                var changed = WriteChangedFiles(repoRoot, "src/Aspire.Hosting/Foo.cs");
+                const string reason = "git merge-base of base abc123 and head def456 was unreachable within 4096 commits of CI checkout history";
 
-            Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true, forceAll: true, forceAllReason: reason));
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true, forceAll: true, forceAllReason: reason));
 
-            var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
-            // The action-supplied reason is surfaced verbatim, flagged as fail-safe rather than kill switch.
-            Assert.Contains($"force-all: True — fail-safe run-all because {reason}", summary);
-            Assert.DoesNotContain("force-all: True (kill switch)", summary);
+                // The action-supplied reason is surfaced verbatim, flagged as fail-safe rather than kill switch.
+                var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
+                Assert.Contains($"force-all: True — fail-safe run-all because {reason}", summary);
+                Assert.DoesNotContain("force-all: True (kill switch)", summary);
+                Assert.Contains($"**selects ALL** — {reason}", summary);
+
+                // The PR comment's ALL banner names the same reason, not the run-full-ci kill switch.
+                var comment = File.ReadAllText(commentPath);
+                Assert.Contains($"**Runs the full test matrix + all jobs (ALL)** — {reason}", comment);
+                Assert.DoesNotContain("the run-full-ci label forces the full matrix", comment);
+
+                // The durable JSON artifact records the same reason under escalationReason.
+                using var doc = JsonDocument.Parse(File.ReadAllText(jsonPath));
+                var root = doc.RootElement;
+                Assert.True(root.GetProperty("selectsAll").GetBoolean());
+                Assert.Equal(reason, root.GetProperty("escalationReason").GetString());
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previousComment);
+                Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", previousJson);
+            }
         });
     }
 
