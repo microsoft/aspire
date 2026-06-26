@@ -2,8 +2,15 @@
 
 ## v1.16.0
 
-<!-- aspire-ext-changelog from=3d40d4f73ff2ab4fa87edb78cf829934090de87e to=4187ef74e0f88d66b78df7f1c4070c5dccaaab77 base=1.15.0 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+### Features
+
+- Flatten single-AppHost group nodes in the AppHosts tree view so a lone running or idle AppHost is surfaced directly at the top level instead of under a redundant `(1)` wrapper ([#18420](https://github.com/microsoft/aspire/issues/18420), [#18523](https://github.com/microsoft/aspire/pull/18523)).
+- Update the Marketplace page with focused AppHost-view, debug-session, and dashboard screenshots, and add AppHost telemetry signals for discovery, launch, and running-state metrics; all events respect `telemetry.telemetryLevel` ([#17898](https://github.com/microsoft/aspire/pull/17898)).
+
+### Fixes
+
+- Fix the Get Started walkthrough's Install Aspire CLI step to use a package-manager picker (WinGet, Homebrew, npm, .NET tool, mise) instead of shell-specific piped scripts, resolving failures on Windows when the default shell is `cmd.exe` ([#18459](https://github.com/microsoft/aspire/issues/18459), [#18522](https://github.com/microsoft/aspire/pull/18522)).
+- Fix stale global AppHosts appearing in the Aspire pane when switching back to a workspace view; global AppHosts are now cleared and re-filtered immediately on view switch ([#18506](https://github.com/microsoft/aspire/issues/18506), [#18516](https://github.com/microsoft/aspire/pull/18516)).
 
 ## v1.15.0
 
