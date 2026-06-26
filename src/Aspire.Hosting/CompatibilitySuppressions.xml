@@ -6,5 +6,6 @@
     <Target>M:Aspire.Hosting.IInteractionService.PromptProgressAsync(System.String,System.String,Aspire.Hosting.ProgressInteractionOptions,System.Threading.CancellationToken)</Target>
     <Left>lib/net8.0/Aspire.Hosting.dll</Left>
     <Right>lib/net8.0/Aspire.Hosting.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
   </Suppression>
 </Suppressions>
