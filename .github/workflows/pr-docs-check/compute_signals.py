@@ -345,17 +345,31 @@ _ONLY_TEST_OR_BUILD_RE = re.compile(
 # would be analyzed and could draft a redundant docs PR.
 #
 # We detect both the `/backport` bot's PRs (.github/workflows/backport.yml)
-# and explicit/manual backports, which follow the same conventions. Any one of
-# the following is sufficient evidence; the matched reason names are surfaced
-# in `exclusion_reasons` for the audit trail:
+# and explicit/manual backports, which follow the same conventions. The matched
+# reason names are surfaced in `exclusion_reasons` for the audit trail:
 #
-#   reason name              example match
-#   -----------------------  --------------------------------------------------
-#   base_branch_is_release   base.ref = "release/13.3"
-#   head_branch_is_backport  head.ref = "backport/pr-1234-to-release/13.3"
-#   title_release_prefix     title    = "[release/13.3] Fix the thing"
-#   body_backport_marker     body     = "Backport of #1234 to release/13.3"
-#   backport_label           labels   = ["backport"]
+#   reason name              strength  example match
+#   -----------------------  --------  ----------------------------------------
+#   head_branch_is_backport  strong    head.ref = "backport/pr-1234-to-release/13.3"
+#   title_release_prefix     strong    title    = "[release/13.3] Fix the thing"
+#   body_backport_marker     strong    body     = "Backport of #1234 to release/13.3"
+#   backport_label           strong    labels   = ["backport"]
+#   base_branch_is_release   weak      base.ref = "release/13.3"
+#
+# A STRONG marker is positive evidence that the PR is a port of an
+# already-merged change, so any one of them is sufficient to exclude. The
+# `/backport` bot always sets all three of head/title/body (see backport.yml:
+# temp branch `backport/pr-<n>-to-<target>`, title `[%target%] %title%`, body
+# `Backport of #%n% to %target%`), so a real backport is always caught.
+#
+# `base_branch_is_release` is WEAK and is NOT sufficient on its own: the
+# workflow triggers on `release/*` merges (see `on:`), so a release base also
+# matches a direct release-only fix authored straight against `release/*` — and
+# that IS exactly the kind of user-facing change this workflow exists to catch.
+# Excluding on the base ref alone would silently skip docs for it. We therefore
+# only exclude when at least one strong marker is present; the release base is
+# still recorded alongside the strong markers when one fires, but never drives
+# exclusion by itself. (microsoft/aspire#18119 review.)
 _BACKPORT_BASE_RE = re.compile(r"^release/", re.IGNORECASE)
 _BACKPORT_HEAD_RE = re.compile(r"^backport/", re.IGNORECASE)
 _BACKPORT_TITLE_RE = re.compile(r"^\s*\[release/", re.IGNORECASE)
@@ -364,9 +378,24 @@ _BACKPORT_TITLE_RE = re.compile(r"^\s*\[release/", re.IGNORECASE)
 # starts with "Backport of #<N> to release/X.Y".
 _BACKPORT_BODY_RE = re.compile(r"(?im)^\s*backport(?:ed|ing)?\s+of\s+#?\d+")
 
+# Strong backport markers are positive evidence of a port; any one of them is
+# sufficient to exclude. `base_branch_is_release` is intentionally absent — it
+# is a weak indicator that only counts as supporting context, never on its own.
+_STRONG_BACKPORT_REASONS = frozenset({
+    "head_branch_is_backport",
+    "title_release_prefix",
+    "body_backport_marker",
+    "backport_label",
+})
+
 
 def detect_backport(pr: dict) -> list[str]:
-    """Return the backport reasons that matched (empty list means not a backport)."""
+    """Return the backport reasons that matched (empty list means no markers).
+
+    Note: a non-empty list does not by itself mean the PR is excluded — see
+    `_STRONG_BACKPORT_REASONS`. `base_branch_is_release` can match a direct
+    release-only fix, so exclusion requires at least one strong marker.
+    """
     reasons: list[str] = []
     base_ref = ((pr.get("base") or {}).get("ref")) or ""
     head_ref = ((pr.get("head") or {}).get("ref")) or ""
@@ -391,8 +420,6 @@ def detect_backport(pr: dict) -> list[str]:
 # `only_test_or_build_changes` is advisory; `is_backport` drives the exclusion.
 # Both are excluded from `triggered_signals`.
 _NON_GATING_SIGNALS = frozenset({"only_test_or_build_changes", "is_backport"})
-
-
 
 
 def _trim_hint(text: str, limit: int = 200) -> str:
@@ -537,10 +564,16 @@ def compute_signals(pr: dict, files: list[dict]) -> dict:
 
     # ---- Exclusion: backport PRs ----
     # Detected from the PR's base/head branch, title, body, or labels. A
-    # backport is documented via its forward PR, so it is hard-excluded below
-    # regardless of which user-facing signals fired.
+    # backport is documented via its forward PR, so it is hard-excluded below.
+    # Exclusion requires at least one STRONG marker (head/title/body/label); a
+    # release base alone is a weak indicator that also matches a direct
+    # release-only fix, so it never excludes by itself (see
+    # `_STRONG_BACKPORT_REASONS`).
     backport_reasons = detect_backport(pr)
-    signals["is_backport"] = bool(backport_reasons)
+    has_strong_backport_marker = any(
+        reason in _STRONG_BACKPORT_REASONS for reason in backport_reasons
+    )
+    signals["is_backport"] = has_strong_backport_marker
 
     # `only_test_or_build_changes` and `is_backport` are meta signals —
     # exclude them from triggered_signals so they can't be mistaken for
@@ -550,7 +583,7 @@ def compute_signals(pr: dict, files: list[dict]) -> dict:
         if v and name not in _NON_GATING_SIGNALS
     ]
 
-    excluded = bool(backport_reasons)
+    excluded = has_strong_backport_marker
     if excluded:
         # A backport's docs are handled against its forward PR on the default
         # branch, so never recommend a separate docs PR for it — even when
@@ -569,7 +602,10 @@ def compute_signals(pr: dict, files: list[dict]) -> dict:
         # `excluded` overrides `recommendation`: when true the PR is out of
         # scope for docs generation (e.g. a backport) and the agent must skip.
         "excluded": excluded,
-        "exclusion_reasons": backport_reasons,
+        # Report all matched reasons when excluded (including the weak release
+        # base, as supporting context); empty when a release base matched but no
+        # strong marker did, since that PR is NOT excluded.
+        "exclusion_reasons": backport_reasons if excluded else [],
         "signals": signals,
         # Evidence is only emitted for triggered signals to keep the
         # file small and to avoid confusing the agent with empty arrays.

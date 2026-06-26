@@ -31,19 +31,33 @@ if: >-
   (github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch')
   && github.repository_owner == 'microsoft'
 
-# Cap the number of agent iterations (compiles to the AWF proxy's `maxRuns`).
-# The proxy refuses further inference once EITHER `maxRuns` OR the 25M
-# `maxEffectiveTokens` rail is hit. Historically `maxRuns` defaulted to 500 and
-# was never reached: a deterministic `create_pull_request` failure ("No changes
-# to commit") sent the agent into a retry loop that crossed the 25M effective-
-# token rail and hard-failed the run. AWF audit data on real runs: healthy
-# skip-path runs use ~4-5 inference requests; the runaway failures used ~34 to
-# reach the rail. This cap of 12 sits well above a legitimate run (the doc-writing
-# path needs a few more requests than a skip to read the skill, browse docs,
-# write files, and open the PR) yet far below the ~34-request runaway, so it
-# stops any loop long before the token rail. The anti-loop guidance in "Create
-# Draft PR" below stops the loop at its source; this is the hard backstop.
-max-runs: 12
+# Cap the number of agent turns. `max-turns` is the supported field; the older
+# `max-runs` alias is deprecated and rejected under strict compilation. It
+# compiles to TWO rails on the agent job: the engine turn budget
+# (`GH_AW_MAX_TURNS`) and the AWF proxy's `maxRuns`. The proxy refuses further
+# inference once EITHER `maxRuns` OR the 25M `maxEffectiveTokens` rail is hit.
+# Historically the proxy `maxRuns` defaulted to 500 and was never reached: a
+# deterministic `create_pull_request` failure ("No changes to commit") sent the
+# agent into a retry loop that crossed the 25M effective-token rail and
+# hard-failed the run.
+#
+# The PRIMARY runaway protection is behavioral, not numeric: the anti-loop
+# guidance in "Create Draft PR" below treats any deterministic
+# `create_pull_request` failure as non-retryable, so the loop is stopped at its
+# source. `max-turns` is only a coarse backstop for a true runaway, plus the
+# 25M `maxEffectiveTokens` rail remains the ultimate hard stop.
+#
+# This cap is deliberately set ABOVE the known-good ceiling rather than just
+# above a skip run. AWF audit data: healthy skip-path runs use ~4-5 inference
+# requests, but a heavy-but-SUCCESSFUL skip run was observed at ~35 requests,
+# and a real doc-DRAFTING run (read the skill, pull comment threads + file
+# patches, browse docs, write several files, open the PR) legitimately needs
+# more than a skip. A cap at or below that ceiling would truncate a valid
+# drafting run mid-flight — and a truncated run never emits `notify_source_pr`,
+# so the source PR would get no comment at all. 50 leaves the drafting path
+# ample headroom while still cutting a pathological loop long before it could
+# accrete a runaway transcript, with the AWF token rail backing it up.
+max-turns: 50
 
 checkout:
   # Check out aspire.dev EXACTLY ONCE, as the current workspace, because that is
@@ -173,9 +187,12 @@ safe-outputs:
         Emit exactly one `notify_source_pr` item per run, after you've finished
         any `create_pull_request` or no-docs-needed reasoning. Use `result:
         "drafted"` when you just emitted a `create_pull_request`; use `result:
-        "skipped"` when no docs PR is needed. DO NOT try to embed the drafted
-        PR's URL or number in the `summary` text — the workflow knows them
-        from the safe-outputs handler and will substitute the real values.
+        "skipped"` when no docs PR is needed; use `result: "draft_failed"` when
+        docs WERE required but you could not produce a docs PR (a genuine
+        failure that must be surfaced, not reported as a green no-op). DO NOT
+        try to embed the drafted PR's URL or number in the `summary` text — the
+        workflow knows them from the safe-outputs handler and will substitute
+        the real values.
       runs-on: ubuntu-latest
       needs: [safe_outputs]
       permissions:
@@ -186,7 +203,7 @@ safe-outputs:
           required: true
           type: number
         result:
-          description: "'drafted' if a docs PR was opened on microsoft/aspire.dev, or 'skipped' if no docs PR was needed."
+          description: "'drafted' if a docs PR was opened on microsoft/aspire.dev; 'skipped' if no docs PR was needed; 'draft_failed' if docs were required but a docs PR could not be produced."
           required: true
           type: string
         sme_login:
@@ -296,6 +313,22 @@ safe-outputs:
                   `See the workflow run for details: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
                   '',
                   summary
+                ].join('\n');
+              } else if (result === 'draft_failed') {
+                // Step 5 determined docs WERE required, but Step 10 could not
+                // produce a docs PR (e.g. a base-branch/validation error, a
+                // protected-file rejection, or an empty/invalid patch). This is
+                // a genuine failure, not a no-op: surface it under the ⚠️ banner
+                // so the author sees that documentation is still owed, rather
+                // than letting it fall through to the green "no update needed"
+                // branch below. The agent-supplied summary names the reason.
+                body = [
+                  MARKER,
+                  '⚠️ Documentation was required for this change, but a docs PR could not be drafted automatically.',
+                  '',
+                  summary,
+                  '',
+                  `See the workflow run for details: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
                 ].join('\n');
               } else {
                 body = [
@@ -1043,7 +1076,7 @@ Read `.pr-docs-check/signals.json`. The fields you will use are:
 | Field | Purpose |
 | --- | --- |
 | `excluded` | `true` when the PR is out of scope for docs generation (currently: a backport). When `true` it **overrides `recommendation`** — go straight to the Step 5 exclusion branch and skip. |
-| `exclusion_reasons` | The reason names that caused `excluded` (e.g. `base_branch_is_release`, `head_branch_is_backport`, `title_release_prefix`, `body_backport_marker`, `backport_label`). Empty when `excluded == false`. |
+| `exclusion_reasons` | The reason names that caused `excluded` (e.g. `head_branch_is_backport`, `title_release_prefix`, `body_backport_marker`, `backport_label`; the weak `base_branch_is_release` only appears here as supporting context alongside a strong marker). Empty when `excluded == false`. |
 | `recommendation` | `"docs_required"` if any gating signal fired, otherwise `"docs_optional"`. This is the primary gate for Step 5 **unless `excluded == true`**. |
 | `triggered_signals` | The names of the boolean signals that fired (the advisory `only_test_or_build_changes` and the meta `is_backport` are excluded from this list and never force `docs_required`). |
 | `signal_count` | `len(triggered_signals)`. |
@@ -1108,7 +1141,11 @@ documentation is authored against the original (forward) PR on the
 default branch. Drafting a second docs PR for the backport is pure
 duplicate noise. This workflow runs on `release/*` merges as well as
 `main` (see the `on:` trigger), so backports reach this step and must
-be filtered out here.
+be filtered out here. Note that a `release/*` **base alone does not
+exclude** — a direct release-only fix has the same base ref and *should*
+be documented; `excluded` is only set when a strong backport marker
+(backport head branch, `[release/...]` title, `Backport of #N` body, or
+`backport` label) is present.
 
 Take the `skipped` path: go to Step 6 and emit a single
 `notify_source_pr` whose Step 5 branch is named
@@ -1195,7 +1232,7 @@ result. Emit a single `notify_source_pr` safe output with:
   It **must** include:
   1. The Step 5 branch you took, named explicitly: either
      `"excluded → <reason>"` (use the `exclusion_reasons` from
-     `signals.json`, e.g. `excluded → base_branch_is_release`),
+     `signals.json`, e.g. `excluded → head_branch_is_backport`),
      `"docs_required → already documented by name"`, *or*
      `"docs_optional → <allowlist_category>"` (use the category name
      from the table above).
@@ -1296,13 +1333,19 @@ Ensure all changes follow the doc-writer skill guidelines from Step 7. Include:
 >
 > - If it failed because you had not yet written any doc changes, write them now
 >   (Step 9) and emit `create_pull_request` one more time — at most.
-> - For any other failure, or if it still reports no changes to commit (the
->   triggering change has no concrete documentation edit you can make — for
->   example a signal fired on a string that is not actually an Aspire user-facing
->   feature), **stop drafting**. Emit a single `notify_source_pr` with
->   `result: "skipped"` whose `summary` states that no docs PR could be produced,
->   names the failure reason, and lists the triggered signals, then end the run.
->   Do not loop.
+> - If it failed for any other deterministic reason — a base-branch or validation
+>   error, a protected-file rejection, or an empty/invalid patch — **stop
+>   drafting** and emit a single `notify_source_pr` with `result: "draft_failed"`.
+>   Docs were required (Step 5), so this is a genuine failure, not a no-op: the
+>   `draft_failed` result is surfaced under a ⚠️ banner so the author knows
+>   documentation is still owed. The `summary` must name the failure reason and
+>   list the triggered signals. Do not loop.
+> - Only if, on inspection, there is genuinely nothing to document — the
+>   triggering signal fired on a string that is not actually an Aspire
+>   user-facing feature (a true false positive), so there is no concrete
+>   documentation edit to make — **stop drafting** and emit a single
+>   `notify_source_pr` with `result: "skipped"` whose `summary` explains that the
+>   signal was a false positive and lists the triggered signals. Do not loop.
 
 Create a draft pull request on `microsoft/aspire.dev` with:
 
@@ -1361,6 +1404,6 @@ with:
 > Do **not** try to compose the drafted PR's URL or PR number yourself in the
 > `summary` text. The `notify_source_pr` safe-output job knows the real values
 > from the safe-outputs handler and will substitute them when posting the
-> comment. Likewise, do **not** call `add_comment` for either the "drafted" or
-> "skipped" path — `notify_source_pr` is the only commenting path used by this
-> workflow.
+> comment. Likewise, do **not** call `add_comment` for the "drafted",
+> "skipped", or "draft_failed" path — `notify_source_pr` is the only commenting
+> path used by this workflow.

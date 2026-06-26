@@ -448,14 +448,46 @@ def _backport_pr(
 
 
 class BackportExclusionTests(unittest.TestCase):
-    """A backport PR must be hard-excluded so it never drafts a docs PR."""
+    """A backport PR must be hard-excluded so it never drafts a docs PR.
 
-    def test_base_branch_release_is_excluded(self) -> None:
+    Exclusion requires a STRONG marker (head/title/body/label). A release base
+    alone is a weak indicator that also matches a direct release-only fix, so it
+    must NOT exclude on its own.
+    """
+
+    def test_base_branch_release_alone_is_not_excluded(self) -> None:
+        # A release base alone is NOT a backport: a direct release-only fix has
+        # the same base ref, and that is exactly what this workflow should catch.
+        # `detect_backport` still records the weak reason, but it must not drive
+        # exclusion, and the curated `exclusion_reasons` stays empty.
         pr = _backport_pr(base_ref="release/13.3")
         result = compute_signals.compute_signals(pr, [])
-        self.assertTrue(result["excluded"])
-        self.assertIn("base_branch_is_release", result["exclusion_reasons"])
-        self.assertTrue(result["signals"]["is_backport"])
+        self.assertFalse(result["excluded"])
+        self.assertFalse(result["signals"]["is_backport"])
+        self.assertEqual(result["exclusion_reasons"], [])
+        self.assertIn(
+            "base_branch_is_release", compute_signals.detect_backport(pr)
+        )
+
+    def test_release_base_with_user_facing_signal_is_analyzed(self) -> None:
+        # The regression this guards: a direct release-only fix (release base,
+        # no strong backport marker) that carries a user-facing signal must be
+        # recommended for docs, not silently skipped as a "backport".
+        pr = _backport_pr(
+            base_ref="release/13.3",
+            head_ref="fix/hotfix-thing",
+            title="Fix the thing on release",
+        )
+        files = [
+            _file(
+                "src/Aspire.Hosting/api/Aspire.Hosting.cs",
+                patch="@@ +1,1 @@\n+public static IResourceBuilder<T> WithThing<T>(...)\n",
+            ),
+        ]
+        result = compute_signals.compute_signals(pr, files)
+        self.assertFalse(result["excluded"])
+        self.assertEqual(result["recommendation"], "docs_required")
+        self.assertIn("public_api_surface_file_changed", result["triggered_signals"])
 
     def test_head_branch_backport_is_excluded(self) -> None:
         pr = _backport_pr(head_ref="backport/pr-1234-to-release/13.3")
@@ -480,6 +512,18 @@ class BackportExclusionTests(unittest.TestCase):
         result = compute_signals.compute_signals(pr, [])
         self.assertTrue(result["excluded"])
         self.assertIn("backport_label", result["exclusion_reasons"])
+
+    def test_release_base_plus_strong_marker_records_base_reason(self) -> None:
+        # When a strong marker excludes, the weak release base is still recorded
+        # alongside it in `exclusion_reasons` as supporting context.
+        pr = _backport_pr(
+            base_ref="release/13.3",
+            head_ref="backport/pr-1234-to-release/13.3",
+        )
+        result = compute_signals.compute_signals(pr, [])
+        self.assertTrue(result["excluded"])
+        self.assertIn("base_branch_is_release", result["exclusion_reasons"])
+        self.assertIn("head_branch_is_backport", result["exclusion_reasons"])
 
     def test_excluded_overrides_gating_signals(self) -> None:
         # A backport that ALSO carries a user-facing signal (new public API)
