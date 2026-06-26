@@ -746,6 +746,17 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
         Assert.DoesNotContain(new string('0', 64), installerManifest);
         Assert.DoesNotContain("${", installerManifest);
 
+        // The installer shape is load-bearing for self-extract detection at runtime: the
+        // WingetFirstRunProbe identifies an Aspire winget install via the InstallLocation
+        // ARP value, which winget only writes for an InstallerType: zip + NestedInstallerType:
+        // portable manifest. Switching to InstallerType: portable directly, removing
+        // NestedInstallerType, or moving aspire.exe out of NestedInstallerFiles would change
+        // the registry shape and silently break install detection. See WingetAspireEntryMatcher.
+        Assert.Contains("InstallerType: zip", installerManifest);
+        Assert.Contains("NestedInstallerType: portable", installerManifest);
+        Assert.Contains("NestedInstallerFiles:", installerManifest);
+        Assert.Contains("RelativeFilePath: aspire.exe", installerManifest);
+
         var localeManifest = await File.ReadAllTextAsync(Path.Combine(outputDir, "Microsoft.Aspire.locale.en-US.yaml"));
         Assert.Contains("For testing builds only. Prerelease package in stable manifest.", localeManifest);
         Assert.True(File.Exists(Path.Combine(outputDir, "Microsoft.Aspire.yaml")));

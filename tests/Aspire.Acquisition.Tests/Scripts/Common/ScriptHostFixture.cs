@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Net;
 using Aspire.Templates.Tests;
 using Xunit;
 
@@ -14,188 +13,57 @@ namespace Aspire.Acquisition.Tests.Scripts;
 /// </summary>
 public sealed class ScriptHostFixture : IAsyncLifetime
 {
-    private HttpListener? _listener;
-    private CancellationTokenSource? _cts;
-    private Task? _serverTask;
-    private string? _scriptsDirectory;
-
-    /// <summary>
-    /// Gets the TCP port the HTTP server is listening on.
-    /// </summary>
-    public int Port { get; private set; }
+    private LoopbackHttpFileServer? _server;
 
     /// <summary>
     /// Gets the base URL for the HTTP server (e.g., <c>http://localhost:12345</c>).
     /// </summary>
-    public string BaseUrl => $"http://localhost:{Port}";
+    public string BaseUrl => _server?.BaseUrl ?? throw new InvalidOperationException("Server not started.");
 
     public async ValueTask InitializeAsync()
     {
-        // Resolve the scripts directory from the repo root
+        // Resolve the scripts directory from the repo root.
         var repoRoot = TestUtils.FindRepoRoot()?.FullName
             ?? throw new InvalidOperationException("Could not find repository root");
-        _scriptsDirectory = Path.Combine(repoRoot, "eng", "scripts");
+        var scriptsDirectory = Path.Combine(repoRoot, "eng", "scripts");
 
-        if (!Directory.Exists(_scriptsDirectory))
+        if (!Directory.Exists(scriptsDirectory))
         {
-            throw new DirectoryNotFoundException($"Scripts directory not found: {_scriptsDirectory}");
+            throw new DirectoryNotFoundException($"Scripts directory not found: {scriptsDirectory}");
         }
 
-        // Retry binding to avoid TOCTOU port races: another process can claim the
-        // probed port between TcpListener.Stop() and HttpListener.Start().
-        const int maxRetries = 5;
-        for (var attempt = 0; attempt < maxRetries; attempt++)
-        {
-            // Find a free port by binding to port 0
-            using (var portFinder = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0))
-            {
-                portFinder.Start();
-                Port = ((IPEndPoint)portFinder.LocalEndpoint).Port;
-                portFinder.Stop();
-            }
+        // Snapshot the script files at startup. Files are re-read on each
+        // request by the loopback server, so edits during a test still take
+        // effect; only file *additions* would require a fixture restart, and
+        // these tests don't add scripts at runtime.
+        var fileMap = Directory.EnumerateFiles(scriptsDirectory)
+            .ToDictionary(p => Path.GetFileName(p)!, p => p, StringComparer.OrdinalIgnoreCase);
 
-            _cts = new CancellationTokenSource();
-            _listener = new HttpListener();
-            _listener.Prefixes.Add($"http://localhost:{Port}/");
+        // The piped-install tests embed BaseUrl into shell snippets executed by
+        // bash/pwsh; keep the URL host as "localhost" to preserve existing
+        // call-site URLs verbatim. Content type matches raw.githubusercontent.com
+        // (text/plain) so curl/irm don't apply any transformation a real install
+        // wouldn't see.
+        _server = LoopbackHttpFileServer.Start(
+            fileMap,
+            contentType: "text/plain; charset=utf-8",
+            host: "localhost");
 
-            try
-            {
-                _listener.Start();
-                break;
-            }
-            catch (HttpListenerException) when (attempt < maxRetries - 1)
-            {
-                _listener.Close();
-                _cts.Dispose();
-                _listener = null;
-                _cts = null;
-            }
-        }
-
-        _serverTask = Task.Run(() => ServeAsync(_cts!.Token));
-
-        // Verify the server is reachable
+        // Verify the server is reachable on the documented entry-point script
+        // before any test runs; surfaces port-bind races and the rare case
+        // where the scripts directory is unreadable.
         using var client = new HttpClient();
         using var response = await client.GetAsync($"{BaseUrl}/get-aspire-cli.sh");
         if (!response.IsSuccessStatusCode)
         {
             throw new InvalidOperationException($"Script host failed to start: HTTP {response.StatusCode}");
         }
-
-        await Task.CompletedTask;
     }
 
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
-        _cts?.Cancel();
-
-        try
-        {
-            _listener?.Stop();
-        }
-        catch (ObjectDisposedException)
-        {
-            // Already disposed
-        }
-        catch (HttpListenerException)
-        {
-            // The listener may already be torn down while another process has reused the probed port.
-        }
-
-        if (_serverTask is not null)
-        {
-            try
-            {
-                await _serverTask.WaitAsync(TimeSpan.FromSeconds(5));
-            }
-            catch (TimeoutException)
-            {
-                // Server didn't stop in time — ignore
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected
-            }
-        }
-
-        try
-        {
-            _listener?.Close();
-        }
-        catch (ObjectDisposedException)
-        {
-            // Already disposed
-        }
-        catch (HttpListenerException)
-        {
-            // Closing only releases cleanup state; the server loop has already been canceled.
-        }
-
-        _cts?.Dispose();
-    }
-
-    private async Task ServeAsync(CancellationToken cancellationToken)
-    {
-        while (!cancellationToken.IsCancellationRequested && _listener?.IsListening == true)
-        {
-            HttpListenerContext ctx;
-            try
-            {
-                ctx = await _listener.GetContextAsync().WaitAsync(cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (ObjectDisposedException)
-            {
-                break;
-            }
-            catch (HttpListenerException)
-            {
-                break;
-            }
-
-            try
-            {
-                await HandleRequestAsync(ctx);
-            }
-            catch
-            {
-                // Don't let a single request crash the server
-            }
-        }
-    }
-
-    private async Task HandleRequestAsync(HttpListenerContext ctx)
-    {
-        var requestPath = ctx.Request.Url?.AbsolutePath.TrimStart('/');
-
-        if (string.IsNullOrEmpty(requestPath) || _scriptsDirectory is null)
-        {
-            ctx.Response.StatusCode = 404;
-            ctx.Response.Close();
-            return;
-        }
-
-        // Prevent directory traversal
-        var safeName = Path.GetFileName(requestPath);
-        var filePath = Path.Combine(_scriptsDirectory, safeName);
-
-        if (!File.Exists(filePath))
-        {
-            ctx.Response.StatusCode = 404;
-            ctx.Response.Close();
-            return;
-        }
-
-        var content = await File.ReadAllBytesAsync(filePath);
-
-        // Serve as text/plain — this matches what raw.githubusercontent.com does
-        ctx.Response.ContentType = "text/plain; charset=utf-8";
-        ctx.Response.ContentLength64 = content.Length;
-        ctx.Response.StatusCode = 200;
-        await ctx.Response.OutputStream.WriteAsync(content);
-        ctx.Response.Close();
+        _server?.Dispose();
+        _server = null;
+        return ValueTask.CompletedTask;
     }
 }

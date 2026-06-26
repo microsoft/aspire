@@ -195,13 +195,17 @@ internal sealed class BundleService(
         // The winget portable installer has no post-install hook, so the CLI
         // self-stamps the install-route sidecar on first run. No-op on
         // non-Windows and once the sidecar already exists.
+        //
+        // The probe needs the symlink-resolved real binary path so the
+        // matcher's InstallLocation containment check succeeds when the CLI
+        // is launched via the winget command-alias symlink under
+        // %LOCALAPPDATA%\Microsoft\WinGet\Links — see WingetFirstRunProbe.Run.
         if (wingetFirstRunProbe is not null && OperatingSystem.IsWindows())
         {
             var realBinaryPath = CliPathHelper.ResolveSymlinkOrOriginalPath(processPath, logger);
-            var binaryDir = Path.GetDirectoryName(realBinaryPath);
-            if (!string.IsNullOrEmpty(binaryDir))
+            if (!string.IsNullOrEmpty(realBinaryPath))
             {
-                wingetFirstRunProbe.Run(binaryDir);
+                wingetFirstRunProbe.Run(realBinaryPath);
             }
         }
 
