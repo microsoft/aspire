@@ -1046,24 +1046,28 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 }
 
                 if (workspaceItems.length > 0 && runningItems.length > 0) {
-                    // Wrap running items in a sibling group so both sets share the same
+                    // Wrap running items in a sibling group so both sets nest at the same
                     // indentation depth and the visual hierarchy reads symmetrically.
                     const runningGroup = new RunningAppHostsGroupItem(runningItems);
-                    return [runningGroup, new WorkspaceAppHostsGroupItem(workspaceItems)];
+                    // The "Workspace AppHosts (N)" header only appears for two or more idle
+                    // AppHosts. A lone idle AppHost is surfaced directly as a sibling of the
+                    // running group instead of being wrapped in a "(1)" node that adds nesting
+                    // and a redundant click target without value.
+                    // See https://github.com/microsoft/aspire/issues/18420.
+                    const workspaceChild = workspaceItems.length === 1
+                        ? workspaceItems[0]
+                        : new WorkspaceAppHostsGroupItem(workspaceItems);
+                    return [runningGroup, workspaceChild];
                 }
-                // For a single idle AppHost, skip the "Workspace AppHosts" grouping node
-                // and surface the AppHost directly at the root. The "(1)" header just wraps
-                // a lone child, adding nesting and a redundant click target without value
-                // (mirrors VS Code's SCM view for a single repo).
+                // For a single idle AppHost (nothing running), skip the "Workspace AppHosts"
+                // grouping node and surface the AppHost directly at the root, for the same
+                // reason as the mixed case above (mirrors VS Code's SCM view for a single repo).
                 // See https://github.com/microsoft/aspire/issues/18420.
-                // Reaching here with one idle item means exactly one AppHost, because the
-                // mixed running/idle case already returned above.
                 if (workspaceItems.length === 1) {
                     return [workspaceItems[0]];
                 }
-                // When two or more idle AppHosts exist (and none are running), wrap them
-                // under the "Workspace AppHosts" header. This keeps the tree shape
-                // consistent with the mixed case and avoids loose root-level items.
+                // When two or more idle AppHosts exist, wrap them under the "Workspace AppHosts"
+                // header so the tree shape stays consistent and avoids loose root-level items.
                 if (workspaceItems.length > 0) {
                     return [new WorkspaceAppHostsGroupItem(workspaceItems)];
                 }

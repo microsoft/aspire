@@ -1972,6 +1972,42 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
     test('workspace mode groups idle AppHosts under WorkspaceAppHostsGroupItem when running AppHost exists', () => {
         const runningPath = '/repo/apps/Store/AppHost.csproj';
         const idlePath = '/repo/apps/Backend/AppHost.csproj';
+        const secondIdlePath = '/repo/apps/Web/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [makeAppHost({ appHostPath: runningPath, appHostPid: 1234, cliPid: 5678, resources: [makeResource()] })],
+            workspaceResources: [],
+            workspaceAppHostPath: runningPath,
+            workspaceAppHostCandidatePaths: [runningPath, idlePath, secondIdlePath],
+            workspaceAppHostName: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+
+        const topLevelItems = provider.getChildren();
+
+        // With a running AppHost and two or more idle AppHosts, both sets are wrapped in
+        // sibling groups so they nest at the same depth and read symmetrically in the tree.
+        assert.strictEqual(topLevelItems.length, 2);
+        assert.strictEqual(topLevelItems[0].contextValue, 'runningAppHostsGroup');
+        assert.strictEqual(topLevelItems[1].contextValue, 'workspaceAppHostsGroup');
+
+        // Running group contains the running AppHost (rendered as WorkspaceResourcesItem)
+        const runningChildren = provider.getChildren(topLevelItems[0]);
+        assert.strictEqual(runningChildren.length, 1);
+        assert.ok(runningChildren[0].contextValue?.startsWith('workspaceResources'));
+
+        // Workspace group contains the two idle AppHosts
+        const idleChildren = provider.getChildren(topLevelItems[1]);
+        assert.strictEqual(idleChildren.length, 2);
+        assert.deepStrictEqual(idleChildren.map(item => item.contextValue), ['workspaceAppHost', 'workspaceAppHost']);
+        provider.dispose();
+    });
+
+    test('workspace mode surfaces a single idle AppHost directly when a running AppHost exists', () => {
+        const runningPath = '/repo/apps/Store/AppHost.csproj';
+        const idlePath = '/repo/apps/Backend/AppHost.csproj';
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
         const repository = {
             viewMode: 'workspace' as ViewMode,
@@ -1986,21 +2022,15 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
 
         const topLevelItems = provider.getChildren();
 
-        // When both running and idle AppHosts exist, both sets are wrapped in sibling
-        // groups so they nest at the same depth and read symmetrically in the tree.
+        // A lone idle AppHost is surfaced directly as a sibling of the running group,
+        // with no "Workspace AppHosts (1)" wrapper (https://github.com/microsoft/aspire/issues/18420).
         assert.strictEqual(topLevelItems.length, 2);
         assert.strictEqual(topLevelItems[0].contextValue, 'runningAppHostsGroup');
-        assert.strictEqual(topLevelItems[1].contextValue, 'workspaceAppHostsGroup');
+        assert.strictEqual(topLevelItems[1].contextValue, 'workspaceAppHost');
 
-        // Running group contains the running AppHost (rendered as WorkspaceResourcesItem)
         const runningChildren = provider.getChildren(topLevelItems[0]);
         assert.strictEqual(runningChildren.length, 1);
         assert.ok(runningChildren[0].contextValue?.startsWith('workspaceResources'));
-
-        // Workspace group contains the idle AppHost
-        const idleChildren = provider.getChildren(topLevelItems[1]);
-        assert.strictEqual(idleChildren.length, 1);
-        assert.strictEqual(idleChildren[0].contextValue, 'workspaceAppHost');
         provider.dispose();
     });
 
@@ -2026,13 +2056,13 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
 
         const topLevelItems = provider.getChildren();
 
-        // Both groups must appear: the .csproj candidate should be recognized as running
-        // (rendered in the running group), and the unrelated idle candidate stays in
-        // the workspace group. Without directory-equivalence matching, the .csproj
-        // candidate would be misclassified as idle.
+        // The .csproj candidate should be recognized as running (rendered in the running
+        // group), and the unrelated lone idle candidate is surfaced directly as a sibling.
+        // Without directory-equivalence matching, the .csproj candidate would be
+        // misclassified as idle.
         assert.strictEqual(topLevelItems.length, 2);
         assert.strictEqual(topLevelItems[0].contextValue, 'runningAppHostsGroup');
-        assert.strictEqual(topLevelItems[1].contextValue, 'workspaceAppHostsGroup');
+        assert.strictEqual(topLevelItems[1].contextValue, 'workspaceAppHost');
 
         const runningChildren = provider.getChildren(topLevelItems[0]);
         assert.strictEqual(runningChildren.length, 1);
@@ -2040,10 +2070,6 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         const resourceChildren = provider.getChildren(runningChildren[0]);
         assert.strictEqual(resourceChildren.length, 1);
         assert.strictEqual(resourceChildren[0].label, 'workspace-service');
-
-        const idleChildren = provider.getChildren(topLevelItems[1]);
-        assert.strictEqual(idleChildren.length, 1);
-        assert.strictEqual(idleChildren[0].contextValue, 'workspaceAppHost');
         provider.dispose();
     });
 
