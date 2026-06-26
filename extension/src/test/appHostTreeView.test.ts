@@ -198,19 +198,23 @@ function getPowerShellForShellProof(): string | undefined {
 function makeProofTerminalProvider(sandbox: sinon.SinonSandbox, proof: ShellProof, commandLines: string[]): { terminalProvider: AspireTerminalProvider; dispose: () => void } {
     const subscriptions: vscode.Disposable[] = [];
     const terminalProvider = new AspireTerminalProvider(subscriptions);
+    const terminal = {
+        shellIntegration: {
+            executeCommand: (commandLine: string) => {
+                commandLines.push(commandLine);
+                return {} as vscode.TerminalShellExecution;
+            }
+        },
+        sendText: () => assert.fail('expected shell integration to execute the command'),
+        show: () => { },
+        dispose: () => { },
+    } as unknown as vscode.Terminal;
     sandbox.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: proof.cliPath, available: true, source: 'configured' });
     sandbox.stub(terminalProvider, 'isCliDebugLoggingEnabled').returns(false);
+    sandbox.stub(terminalProvider, 'createEnvironment').returns({});
+    sandbox.stub(vscode.window, 'createTerminal').returns(terminal);
     sandbox.stub(terminalProvider, 'getAspireTerminal').returns({
-        terminal: {
-            shellIntegration: {
-                executeCommand: (commandLine: string) => {
-                    commandLines.push(commandLine);
-                    return {} as vscode.TerminalShellExecution;
-                }
-            },
-            sendText: () => assert.fail('expected shell integration to execute the command'),
-            show: () => { }
-        } as unknown as vscode.Terminal,
+        terminal,
         dispose: () => { },
     });
 
