@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Security fix: CLI display fallback no longer routes text to terminal as shell input when no debug session is active",
+  "mergedAt": "2026-06-26T01:11:09Z",
+  "number": 18500,
+  "runDate": "2026-06-26T07:12:41Z",
+  "status": "included",
+  "title": "Harden extension terminal display fallback"
+}

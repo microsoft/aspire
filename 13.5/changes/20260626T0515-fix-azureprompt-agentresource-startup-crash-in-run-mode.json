@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixes a runtime crash (InvalidOperationException) when running apps that use AzurePromptAgentResource in run mode. The resource's pipeline step dependency was referencing a provisioning step that was removed earlier in the milestone, causing startup to fail.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-06-26T05:15:35Z",
+  "lastMergedAt": "2026-06-26T05:15:35Z",
+  "name": "Fix AzurePromptAgentResource startup crash in run mode",
+  "owner": "JamesNK",
+  "prs": [
+    18496
+  ]
+}

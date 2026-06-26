@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Bug fix: CLI and VS Code extension no longer treat agent skill snippet AppHosts as real runnable AppHosts",
+  "mergedAt": "2026-06-26T02:18:12Z",
+  "number": 18407,
+  "runDate": "2026-06-26T07:12:41Z",
+  "status": "included",
+  "title": "Stop listing agent-skill snippets as AppHosts"
+}

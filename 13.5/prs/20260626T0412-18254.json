@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI workflow change only: adds CLI logs to deployment E2E test artifacts; no user-facing impact",
+  "mergedAt": "2026-06-26T04:12:38Z",
+  "number": 18254,
+  "runDate": "2026-06-26T07:12:41Z",
+  "status": "excluded",
+  "title": "ci: capture Aspire CLI logs in deployment E2E test artifact"
+}

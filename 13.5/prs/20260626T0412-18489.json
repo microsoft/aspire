@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "CI fix: outerloop test workflow compilation mode mismatch; no user-facing impact",
+  "mergedAt": "2026-06-26T04:12:56Z",
+  "number": 18489,
+  "runDate": "2026-06-26T07:12:41Z",
+  "status": "excluded",
+  "title": "[ci] Fix Outerloop tests workflow"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Agent skill script fix only: run-test-repeatedly.sh MTP output parsing; not user-facing",
+  "mergedAt": "2026-06-26T04:26:22Z",
+  "number": 18480,
+  "runDate": "2026-06-26T07:12:41Z",
+  "status": "excluded",
+  "title": "fix(skills): match MTP lowercase \"total:\" in run-test-repeatedly zero-test guard"
+}

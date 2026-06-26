@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Documentation website maintenance: fixes contributors page title encoding and SVG overflow; not related to any product changelog entry",
+  "mergedAt": "2026-06-26T04:19:22Z",
+  "number": 1299,
+  "runDate": "2026-06-26T07:12:41Z",
+  "status": "excluded",
+  "title": "Fix contributors page title mojibake and unbounded map SVG"
+}

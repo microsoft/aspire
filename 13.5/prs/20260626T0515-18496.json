@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: AzurePromptAgentResource startup crash in run mode due to stale pipeline step dependency",
+  "mergedAt": "2026-06-26T05:15:35Z",
+  "number": 18496,
+  "runDate": "2026-06-26T07:12:41Z",
+  "status": "included",
+  "title": "Fix AzurePromptAgentResource run-mode pipeline step dependency"
+}

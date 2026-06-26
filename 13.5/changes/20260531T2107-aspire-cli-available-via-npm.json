@@ -5,7 +5,7 @@
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
-  "description": "The Aspire CLI is now available as an npm package (@microsoft/aspire-cli), providing an alternative installation method. The update command and update notifier now detect and handle npm-installed versions.",
+  "description": "The Aspire CLI is now available as an npm package (@microsoft/aspire-cli), providing an alternative installation method. The npm package README now includes install, verify, update, and troubleshooting guidance, and a postinstall check warns when the matching native platform package is missing on supported platforms.",
   "docsPrs": [
     1239,
     1243,
@@ -14,10 +14,11 @@
   "docsRequired": true,
   "emoji": "📦",
   "firstMergedAt": "2026-05-31T21:07:47Z",
-  "lastMergedAt": "2026-05-31T21:07:47Z",
+  "lastMergedAt": "2026-06-26T01:14:42Z",
   "name": "Aspire CLI available via npm",
   "owner": "adamint",
   "prs": [
-    17297
+    17297,
+    18455
   ]
 }

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI test selector fix: select tests from merge-base diff instead of base tip; no user-facing impact",
+  "mergedAt": "2026-06-26T04:34:52Z",
+  "number": 18482,
+  "runDate": "2026-06-26T07:12:41Z",
+  "status": "excluded",
+  "title": "fix(ci): select tests from the PR merge-base diff, not the base tip"
+}

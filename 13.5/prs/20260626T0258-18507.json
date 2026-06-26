@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "CI workflow change only: logs asciinema upload output on failure; no user-facing impact",
+  "mergedAt": "2026-06-26T02:58:15Z",
+  "number": 18507,
+  "runDate": "2026-06-26T07:12:41Z",
+  "status": "excluded",
+  "title": "Log asciinema upload output on failure (safely)"
+}

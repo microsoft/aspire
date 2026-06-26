@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code extension's CLI display fallback (InteractionService.displayLines) no longer routes text to the integrated terminal as shell input when no active debug session exists. Display output is now sent to the Aspire log output channel, closing a terminal-injection path for command-shaped or control-character-containing text.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🛡️",
+  "firstMergedAt": "2026-06-26T01:11:09Z",
+  "lastMergedAt": "2026-06-26T01:11:09Z",
+  "name": "Fix extension terminal display fallback security",
+  "owner": "adamint",
+  "prs": [
+    18500
+  ]
+}

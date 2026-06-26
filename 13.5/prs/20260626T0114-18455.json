@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Improves npm package README and adds postinstall diagnostic check for missing native platform packages; extends existing npm CLI entry",
+  "mergedAt": "2026-06-26T01:14:42Z",
+  "number": 18455,
+  "runDate": "2026-06-26T07:12:41Z",
+  "status": "included",
+  "title": "Improve npm CLI package README and install diagnostics"
+}

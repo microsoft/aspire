@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Test improvements only for Aspire.Hosting.Maui.Tests; no user-facing change",
+  "mergedAt": "2026-06-26T04:42:45Z",
+  "number": 18328,
+  "runDate": "2026-06-26T07:12:41Z",
+  "status": "excluded",
+  "title": "Follow-up test improvements for Aspire.Hosting.Maui.Tests"
+}
