@@ -1206,8 +1206,7 @@ public class InteractionServiceTests
         await CompleteInteractionAsync(interactionService, interaction.InteractionId, new InteractionCompletionState { Complete = true, State = false });
 
         var result = await resultTask.DefaultTimeout();
-        Assert.False(result.Data);
-        Assert.False(result.Canceled);
+        Assert.True(result.Canceled);
         Assert.Empty(interactionService.GetCurrentInteractions());
     }
 

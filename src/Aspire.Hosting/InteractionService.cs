@@ -293,7 +293,9 @@ internal class InteractionService : IInteractionService
             if (options.Work is { } work)
             {
                 // When the button is clicked, CompletionTcs fires. Cancel the work's CT so it can stop.
-                using var buttonRegistration = newState.CompletionTcs.Task.ContinueWith(
+                // Don't dispose the continuation task — it may not have completed when scope exits
+                // because CompletionTcs uses RunContinuationsAsynchronously.
+                _ = newState.CompletionTcs.Task.ContinueWith(
                     _ => interactionCts.Cancel(),
                     CancellationToken.None,
                     TaskContinuationOptions.ExecuteSynchronously,
@@ -319,6 +321,16 @@ internal class InteractionService : IInteractionService
 
                     return InteractionResult.Cancel<bool>();
                 }
+                catch
+                {
+                    // If work throws a non-cancellation exception, ensure the interaction is
+                    // completed and removed so the progress dialog doesn't stay open indefinitely.
+                    newState.State = Interaction.InteractionState.Complete;
+                    newState.CompletionTcs.TrySetResult(new InteractionCompletionState { Complete = true });
+                    AddInteractionUpdate(newState);
+
+                    throw;
+                }
             }
             else
             {
@@ -327,6 +339,14 @@ internal class InteractionService : IInteractionService
                 // - External cancellation via cancellationToken (handled by OnInteractionCancellation registration)
                 var completion = await newState.CompletionTcs.Task.ConfigureAwait(false);
                 var promptState = completion.State as bool?;
+
+                // When the cancel button is clicked, the dashboard sends State = false.
+                // Treat this as a canceled result to be consistent with the work path.
+                if (promptState == false)
+                {
+                    return InteractionResult.Cancel<bool>();
+                }
+
                 return promptState == null
                     ? InteractionResult.Cancel<bool>()
                     : InteractionResult.Ok(promptState.Value);
