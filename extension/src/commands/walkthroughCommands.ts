@@ -99,3 +99,10 @@ export async function installCliCommand(): Promise<void> {
         await vscode.env.openExternal(vscode.Uri.parse(selected.docsUrl));
     }
 }
+
+export async function verifyCliInstalledCommand(): Promise<void> {
+    // `aspire --version` is a plain executable invocation, so unlike the install
+    // scripts it runs identically in cmd.exe, PowerShell, bash, and zsh. It was
+    // never affected by the shell-inheritance bug in issue #18459.
+    runInTerminal('aspire --version');
+}

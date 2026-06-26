@@ -46,7 +46,8 @@
     "workspaceContains:**/apphost.js",
     "workspaceContains:**/apphost.mjs",
     "workspaceContains:**/apphost.cjs",
-    "onCommand:aspire-vscode.installCli"
+    "onCommand:aspire-vscode.installCli",
+    "onCommand:aspire-vscode.verifyCliInstalled"
   ],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
@@ -431,6 +432,11 @@
       {
         "command": "aspire-vscode.installCli",
         "title": "%command.installCli%",
+        "category": "Aspire"
+      },
+      {
+        "command": "aspire-vscode.verifyCliInstalled",
+        "title": "%command.verifyCliInstalled%",
         "category": "Aspire"
       },
       {

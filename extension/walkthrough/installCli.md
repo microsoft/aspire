@@ -8,3 +8,7 @@ terminal. Need another option? The same picker links to the installation guide, 
 install script and how to verify the install with `aspire --version`.
 
 > [Install the Aspire CLI](command:aspire-vscode.installCli)
+
+Already have it installed? Confirm it's on your PATH:
+
+> [Verify installation](command:aspire-vscode.verifyCliInstalled)

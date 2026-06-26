@@ -194,6 +194,7 @@
   "command.switchToGlobalView": "Show all running AppHosts",
   "command.switchToWorkspaceView": "Show workspace AppHosts",
   "command.installCli": "Install Aspire CLI",
+  "command.verifyCliInstalled": "Verify Aspire CLI installation",
   "command.codeLensDebugPipelineStep": "Debug Aspire pipeline step",
   "command.codeLensResourceAction": "Aspire resource action",
   "command.codeLensRevealResource": "Reveal resource in Aspire panel",

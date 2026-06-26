@@ -80,6 +80,8 @@ suite('Aspire package contribution surface E2E', function () {
         assert.ok(getWalkthroughCompletionEvents(installedPackage).includes('onCommand:aspire-vscode.installCli'));
         assert.ok(sourceCommandIds.includes('aspire-vscode.installCli'));
         assert.ok(installedPackage.activationEvents?.includes('onCommand:aspire-vscode.installCli'));
+        assert.ok(sourceCommandIds.includes('aspire-vscode.verifyCliInstalled'));
+        assert.ok(installedPackage.activationEvents?.includes('onCommand:aspire-vscode.verifyCliInstalled'));
     });
 
     test('keeps hidden menus, debugger schema, welcome states, colors, and packaged assets intact', async () => {
@@ -436,6 +438,7 @@ const expectedActivationEvents = [
     'workspaceContains:**/apphost.mjs',
     'workspaceContains:**/apphost.cjs',
     'onCommand:aspire-vscode.installCli',
+    'onCommand:aspire-vscode.verifyCliInstalled',
 ];
 
 const expectedCommandIds = [
@@ -488,6 +491,7 @@ const expectedCommandIds = [
     'aspire-vscode.viewAppHostLogFile',
     'aspire-vscode.viewAppHostSource',
     'aspire-vscode.viewResourceLogs',
+    'aspire-vscode.verifyCliInstalled',
 ].sort();
 
 const expectedConfigurationKeys = [

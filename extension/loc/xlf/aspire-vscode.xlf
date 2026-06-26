@@ -697,6 +697,9 @@
     <trans-unit id="aspire-vscode.strings.resourceCommandMaxLength">
       <source xml:lang="en">Value must be {0} characters or fewer.</source>
     </trans-unit>
+    <trans-unit id="command.verifyCliInstalled">
+      <source xml:lang="en">Verify Aspire CLI installation</source>
+    </trans-unit>
     <trans-unit id="command.codeLensViewAppHostLogs">
       <source xml:lang="en">View Aspire AppHost logs</source>
     </trans-unit>
