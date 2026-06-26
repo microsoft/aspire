@@ -2,7 +2,7 @@
 
 Aspire hosting integrations are C# libraries. Multi-language AppHosts call the C# implementation through generated SDKs. The Aspire CLI loads the integration assembly, scans ATS metadata such as `[AspireExport]`, generates a typed SDK, and dispatches calls back to the C# code over JSON-RPC.
 
-Design the ATS contract first: the methods, DTOs, callbacks, values, and docs that generated SDK users should see. Keep the C# API ergonomic, then adapt it to ATS with explicit exports, DTO/options types, unions, small context/editor types, ignored C#-only overloads, and internal export adapters.
+Design the ATS contract first: the methods, DTOs, callbacks, values, and docs that generated SDK users should see. Keep the C# API ergonomic, then adapt it to ATS with explicit exports, DTO/options types, unions, small context/editor types, ignored C#-only overloads, and internal export adapters. See `api-naming-and-shape.md` for the naming rules that keep the C# and generated AppHost APIs aligned.
 
 ## Analyzer enablement
 
@@ -14,6 +14,8 @@ Use one supported path:
 - Otherwise, reference `Aspire.Hosting.Integration.Analyzers` with `PrivateAssets="all"` using the same Aspire package version.
 
 A clean build with zero analyzer warnings or errors is the baseline, but it is not enough. Inspect the generated SDK signatures and docs before shipping.
+
+Do not manually edit generated API or ATS baseline files as part of ordinary integration authoring. In the Aspire repo, checked-in `src/Aspire.Hosting*/api/*.cs` and `*.ats.txt` files are release compatibility baselines; PR validation generates the current surface separately and the release/review workflow updates checked-in baselines after API changes are accepted.
 
 ## Export attributes
 
@@ -61,6 +63,11 @@ Use `<ats-see cref="!:kind:identifier.path" />` and `<ats-seealso cref="!:kind:i
 
 Capability IDs are runtime dispatch identifiers. They do not include the C# receiver type, parameter list, generic constraints, or overload signature.
 
+Before adding or reviewing an export, answer two questions:
+
+1. What should the generated AppHost call look like?
+2. Is that generated call still clear if the caller has never seen the C# overload set?
+
 DO:
 
 - Keep capability IDs unique and stable within an assembly.
@@ -92,6 +99,23 @@ internal static IResourceBuilder<TResource> PublishAsStaticWebsitePolyglot<TReso
     return PublishAsStaticWebsiteCore(builder, apiPath, apiTarget);
 }
 ```
+
+Common cases that need a C# API plus a polyglot adapter:
+
+- Callback configuration such as `Action<T>`, `Func<IResourceBuilder<T>, IResourceBuilder<T>>`, or tool-specific option delegates.
+- C# generic metadata markers such as `IProjectMetadata`, package metadata, or strongly typed project references.
+- Mutable dictionaries or framework types that do not project cleanly.
+- Endpoint-reference overloads when generated SDKs need a string/parameter/external-service alternative.
+
+DO:
+
+- Mark the C#-only overload `[AspireExportIgnore(Reason = "...")]` with a reason that names the incompatible type and the replacement API.
+- Export a polyglot-friendly overload with primitive, DTO, resource-builder, parameter, or external-service inputs.
+- Use `MethodName` when the generated name should match the C# concept but the internal adapter method needs a unique CLR name.
+
+DON'T:
+
+- Don't leave C# callback or generic-metadata overloads as the only way to configure an exported feature.
 
 ## DTOs, options, unions, and live values
 

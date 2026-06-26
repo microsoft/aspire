@@ -40,12 +40,16 @@ DO:
 - Honor cancellation tokens.
 - Log useful action progress to resource logs.
 - Avoid commands that require hidden global state.
+- For controller/reconciler integrations, derive command enabled/disabled/hidden state from the controller's active and queued operation state.
+- Keep read-only diagnostic commands available during mutating operations when they help recovery.
+- Return structured command results for operations that agents or users need to inspect.
 
 DON'T:
 
 - Don't add destructive commands without clear naming and safeguards.
 - Don't hide command failures behind success-shaped results.
 - Don't log secrets from command arguments or results.
+- Don't rely on dashboard command disabling as the only concurrency guard; enforce conflicts in the controller too.
 
 ## Notifications and logs
 
@@ -54,11 +58,14 @@ DO:
 - Use resource notifications for state transitions users need to see.
 - Use resource logger services for generated setup or command logs.
 - Keep logs actionable and redact secrets.
+- For synthetic/facade resources, publish clear initial, starting, running, and stopped states because there is no DCP process to do it automatically.
+- Mark URLs inactive when a manually managed owner resource stops.
 
 DON'T:
 
 - Don't emit noisy informational logs for every callback when they do not help users.
 - Don't complete resource logs early if setup work is still running.
+- Don't leave dashboard URLs active for endpoints that are no longer forwarded or reachable.
 
 ## Admin companions
 

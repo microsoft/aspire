@@ -41,6 +41,7 @@ DO:
 - Mark setup siblings `.ExcludeFromManifest()`.
 - Make the main resource wait with `WaitForCompletion`.
 - Handle ordering if setup helpers can be called in any sequence.
+- Make setup sibling creation idempotent when multiple fluent calls can request the same helper.
 
 DON'T:
 
@@ -66,3 +67,19 @@ DON'T:
 - Don't expose admin UIs to publish/deploy output by default.
 - Don't make a companion a top-level required resource.
 - Don't hardcode host ports; provide `WithHostPort(int? port)` when fixed ports are useful.
+
+## Standalone utility containers
+
+Some tools are useful independently or can serve multiple resources, so they should be top-level utilities rather than parent-scoped companions.
+
+DO:
+
+- Use top-level `Add{Tool}` when one tool instance can connect to many resources, such as a database admin UI.
+- Return an existing resource builder when repeat calls intentionally share a singleton tool.
+- Still call `.ExcludeFromManifest()` when the utility is run-only.
+- Provide `WithHostPort(int? port)` for tools where a fixed dashboard port is useful.
+
+DON'T:
+
+- Don't force singleton utility tools into `With{Tool}` APIs on every possible parent.
+- Don't create duplicates from repeat `Add{Tool}` calls unless multiple tool instances are explicitly supported.

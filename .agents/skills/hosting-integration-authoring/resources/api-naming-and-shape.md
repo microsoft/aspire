@@ -14,6 +14,27 @@ Aspire hosting integrations should feel consistent across C# and polyglot AppHos
 | `AsExisting` | Apply existing-resource semantics in both run and publish modes | `AsExisting` |
 | `Configure{Model}` | Mutate a generated deployment or infrastructure model | `ConfigureInfrastructure`, `ConfigureComposeFile` |
 
+## Polyglot AppHost compatibility
+
+Polyglot compatibility is a cross-cutting API shape constraint, not a separate integration archetype. Treat TypeScript and other generated AppHosts as first-class consumers when naming and shaping public APIs.
+
+DO:
+
+- Sketch the intended generated-SDK call shape before finalizing public C# names.
+- Keep one user concept to one generated method name on a given target type. Put variation in an options DTO, enum, union parameter, or internal dispatcher.
+- Use names that describe user behavior, not C# implementation mechanics. For example, prefer `PublishAsStaticWebsite` over names that expose callback, generic, or annotation details.
+- Mark C# convenience overloads, callback overloads, and generic-metadata overloads with `[AspireExportIgnore(Reason = "...")]` when they are not the generated-SDK contract.
+- Add a polyglot-friendly exported adapter when the ergonomic C# API uses callbacks, generics, framework types, or types that do not project cleanly.
+- Use language-neutral XML docs and `ats-*` overrides when the C# docs mention types or behaviors generated SDK users cannot see.
+- Inspect generated SDK names, signatures, docs, and capability IDs before shipping a new exported API.
+
+DON'T:
+
+- Don't rely on C# overload resolution, extension receiver types, generic constraints, or optional-parameter overloads to make generated APIs understandable.
+- Don't expose C# implementation type names such as `Action`, `IServiceProvider`, `IConfiguration`, `IProjectMetadata`, annotations, or builder callbacks as the only way to configure a feature.
+- Don't let internal adapter names leak into generated SDKs. Use an explicit export ID or `MethodName` so generated users see the conceptual API name.
+- Don't add a C#-only API and defer polyglot shape decisions until after the API has shipped.
+
 ## Type naming
 
 Use nouns or noun phrases for public types.

@@ -11,11 +11,13 @@ DO:
 - Keep consuming-app client setup in client integration packages or consuming-app docs, not hosting package docs.
 - Add package metadata, description, icons, README, and tags consistent with nearby integrations.
 - Keep container image tag constants and package metadata easy for automation to update.
+- For a new first-party packable integration that has not shipped a baseline package yet, set the existing repo baseline-validation opt-out used for new packages (for example `DisablePackageBaselineValidation`) until the first release establishes a baseline.
 
 DON'T:
 
 - Don't put unrelated client/runtime code into a hosting integration package.
 - Don't add external package feeds or change shared package configuration unless explicitly requested.
+- Don't fix missing baseline-package restore errors by editing NuGet feeds or package source mappings; use the repo's new-package baseline opt-out instead.
 - Don't make new packages stable by default without checking release posture.
 
 ## Preview, stable, and experimental posture

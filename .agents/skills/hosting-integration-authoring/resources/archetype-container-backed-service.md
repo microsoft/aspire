@@ -1,6 +1,6 @@
 # Archetype: container-backed service integration
 
-Use this archetype for local service dependencies backed by containers: databases, caches, brokers, vector databases, admin tools, and similar infrastructure.
+Use this archetype for primary local service dependencies backed by containers: databases, caches, brokers, vector databases, search engines, object stores, and similar infrastructure that workloads reference with `WithReference`.
 
 Representative examples:
 
@@ -14,6 +14,13 @@ Representative examples:
 Primary resources usually derive from `ContainerResource` and implement `IResourceWithConnectionString` when they can be referenced by apps.
 
 Child resources derive from `Resource`, implement `IResourceWithParent<TParent>`, and often implement `IResourceWithConnectionString`.
+
+This archetype is not the right primary guide for every container:
+
+- Admin UIs and development tools should also read `archetype-admin-and-tool-container.md`.
+- Local tunnels and webhook forwarders should read `archetype-tunnel-and-webhook-bridge.md`.
+- Sidecars, telemetry collectors, and middleware should read `archetype-sidecar-and-middleware.md`.
+- One-shot migration/setup containers should read `archetype-setup-and-migration-helper.md`.
 
 ## Builder pattern
 

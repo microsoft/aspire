@@ -11,6 +11,8 @@ DO test:
 - Endpoint names, schemes, target ports, and host-port behavior.
 - Container image, tag, and registry annotations.
 - Health check registration and keys.
+- Real container startup, credential-enforced readiness, and a simple protocol operation for container-backed services when practical.
+- Data volume and bind-mount persistence with the actual service when the integration exposes persistence helpers; preserve equivalent functional coverage when porting from another implementation.
 - Connection string expressions and connection properties.
 - Parent-child resource registration and physical-name defaults.
 - Run-mode-only resources are absent from publish manifests.
@@ -18,14 +20,17 @@ DO test:
 - `RunAsEmulator`, `RunAsContainer`, `RunAsExisting`, `PublishAsExisting`, and `AsExisting` mode behavior.
 - Generated manifests, Bicep, Docker Compose, Kubernetes YAML, or Dockerfiles with snapshots when shape matters.
 - Polyglot exports when exported API shape changes, including analyzer diagnostics and generated `.d.ts` signatures.
+- Controller/reconciler command serialization, conflict detection, command state transitions, cancellation, drift coalescing, and per-resource completion behavior when the integration owns shared external state.
 
 DON'T:
 
 - Don't use live external services in ordinary unit tests.
+- Don't drop functional coverage just because the hosting package avoids a client dependency; use raw HTTP/protocol calls when that keeps the hosting integration dependency-free.
 - Don't rely on log text for readiness when structured readiness is available.
 - Don't use fixed ports in tests unless the test specifically verifies fixed-port behavior.
 - Don't mutate static environment or global current directory without cleanup.
 - Don't only assert absence; verify the full relevant output shape.
+- Don't use live cloud or external services for ordinary controller/reconciler unit tests; fake the controller's external client/provisioner and exercise the queue/command paths directly.
 
 ## Multi-language validation
 

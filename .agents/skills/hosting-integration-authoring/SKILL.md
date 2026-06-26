@@ -28,14 +28,21 @@ Always read the relevant archetype resource and the cross-cutting resources that
 | --- | --- |
 | Any resource, annotation, lifecycle event, structured value, endpoint, manifest, or app-model behavior | `resources/app-model-fundamentals.md` |
 | Local container service, database, broker, cache, vector DB | `resources/archetype-container-backed-service.md` |
+| Admin UI, inspector, dashboard, load/test tool, or standalone utility container | `resources/archetype-admin-and-tool-container.md` |
+| Migration, package/tool install, model pull, schema deployment, DACPAC, or one-shot setup helper | `resources/archetype-setup-and-migration-helper.md` |
+| Serialized controller, reconciler, command-driven resource operations, drift detection, or state-machine orchestration | `resources/archetype-controller-reconciler.md` |
+| Sidecar, component registry, telemetry collector, service mesh, middleware, or app-wide annotation-driven infrastructure | `resources/archetype-sidecar-and-middleware.md` |
+| Local tunnel, webhook forwarder, callback bridge, or CLI that exposes/forwards local endpoints | `resources/archetype-tunnel-and-webhook-bridge.md` |
+| Secret manager, credential broker, external secret provider, or provider-backed managed secret child resources | `resources/archetype-secret-provider.md` |
 | External/SaaS service reference with API key/endpoint, no local container/provisioning | `resources/archetype-external-cloud-reference.md` |
 | Azure resource provisioning, Bicep, role assignments, existing Azure resources, emulators, local containers for Azure resources | `resources/archetype-azure-provisioning.md` |
 | Docker Compose, Kubernetes, Azure Container Apps, or another deployment target/publisher | `resources/archetype-deployment-target-publisher.md` |
 | Python, Go, JavaScript, Node, Vite, Next.js, or another language runtime/workload | `resources/archetype-language-executable-app.md` |
 | Non-resource model/configuration overlay, e.g. Orleans-style APIs | `resources/archetype-overlay-configuration.md` |
-| Public API names, overloads, return types, annotations, experimental state | `resources/api-naming-and-shape.md` |
+| Public API names, overloads, return types, polyglot AppHost compatibility, annotations, experimental state | `resources/api-naming-and-shape.md` |
 | Any run/publish/deploy branching | `resources/run-publish-deploy-modes.md` |
 | Event subscriptions, initialization, generated files, health checks, pipeline steps | `resources/eventing-and-initialization.md` |
+| Custom resource lifetime, synthetic/facade resources, manually allocated endpoints, or resource notification state machines | `resources/custom-lifecycle-and-facade-resources.md` |
 | `IResourceWithConnectionString`, `WithReference`, environment variables, URI/JDBC properties | `resources/connection-properties.md` |
 | Parent-child resources, companions, setup siblings, `WithReference`, waits, relationships | `resources/relationships-and-companions.md` |
 | `[AspireExport]`, TypeScript/polyglot AppHosts, ATS metadata, analyzer diagnostics, DTOs, union parameters, value catalogs, callback contexts | `resources/polyglot-exports.md` |

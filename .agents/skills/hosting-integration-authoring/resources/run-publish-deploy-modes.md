@@ -19,6 +19,7 @@ DO:
 - Make run-only helpers no-op or hidden in publish mode.
 - Make publish-only APIs no-op outside publish mode.
 - Keep deployment environment resources out of the run model unless they have a real local runtime role.
+- For run-mode controllers/reconcilers, keep user-facing control resources visible only when they can act locally; in publish mode, either omit them or keep hidden/excluded marker resources only when later publish/deploy stages need to discover model metadata.
 - Validate publish-only preconditions in publish/build pipeline steps, not during `aspire start`.
 
 DON'T:
@@ -27,6 +28,7 @@ DON'T:
 - Don't add deployment target environment resources to the local dashboard/run model.
 - Don't let dev tools, setup siblings, or admin UIs appear in manifests.
 - Don't mutate run-mode resources just to satisfy deployment output customization.
+- Don't serialize controller runtime state, queued operations, command state, or drift probe results into publish artifacts.
 
 ## API mode contracts
 

@@ -7,6 +7,7 @@ Many integrations generate config files, mount init files, or move files between
 DO:
 
 - Generate files from callbacks at the lifecycle point where all required model data is available.
+- Generate pre-start config files from `OnBeforeResourceStarted` when a container or CLI must consume the file at launch.
 - Keep generated content deterministic.
 - Include comments in code that explain non-obvious file formats and examples of generated shape.
 - Redact or parameterize secrets.
@@ -28,12 +29,25 @@ DO:
 - Add build pipeline dependencies when one resource's container files come from another resource.
 - Keep destination paths explicit and aligned with the image's expected paths.
 - Set file permissions when the target runtime requires executable or restricted files.
+- Ensure generated Dockerfile stages include container-file sources before the runtime image consumes them.
 
 DON'T:
 
 - Don't assume build order automatically follows file dependencies.
 - Don't mount writable files as read-only unless the service supports it.
 - Don't copy secrets into images when secret mounts or parameters are available.
+
+## Embedded files
+
+DO:
+
+- Use embedded resources for small static helper files that must travel with the integration package.
+- Throw clear errors when an expected embedded resource is missing.
+- Keep generated or embedded file contents deterministic so tests can assert the full output shape.
+
+DON'T:
+
+- Don't silently skip missing embedded files; that creates a success-shaped broken tool container.
 
 ## Init files
 

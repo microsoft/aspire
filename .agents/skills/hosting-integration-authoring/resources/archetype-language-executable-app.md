@@ -20,6 +20,7 @@ They commonly support:
 - OTLP telemetry configuration.
 - Run-mode setup siblings.
 - Publish-time Dockerfile generation when no user Dockerfile exists.
+- Container-file support for publish output and generated Dockerfile build stages.
 
 ## Add methods
 
@@ -27,9 +28,11 @@ DO:
 
 - Name APIs by runtime and app style, for example `AddPythonApp`, `AddPythonModule`, `AddGoApp`, `AddNodeApp`, `AddViteApp`, `AddNextJsApp`.
 - Normalize paths relative to `builder.AppHostDirectory`.
+- Use `Path.GetFullPath(path, builder.AppHostDirectory)` or the repository path-normalization helper used by the existing integration.
 - Validate app directory, script, module, package path, or run script parameters.
 - Configure default executable, working directory, args, endpoints, and icons.
 - Add `WithRequiredCommand` checks for the executable or package manager the resource actually invokes.
+- Use specialized Add APIs for materially different entrypoint shapes. For example, first-party Python uses separate script, module, executable, and Uvicorn APIs instead of one ambiguous catch-all.
 - Add language-specific docs that explain run and publish behavior.
 
 DON'T:
@@ -48,6 +51,9 @@ DO:
 - Add run-mode setup siblings for dependency restore, virtual environments, `go mod`, static analysis, or install commands.
 - Mark setup siblings `.ExcludeFromManifest()`.
 - Wire setup siblings with `WaitForCompletion`.
+- Create setup siblings idempotently with `TryCreateResourceBuilder` when multiple fluent calls can request the same installer or virtual environment creator.
+- Add parent relationships from setup siblings back to the app resource so the dashboard remains understandable.
+- Use `OnBeforeStart` or equivalent final-model hooks when setup dependencies depend on which annotations were ultimately applied.
 - Add development flags such as reload/watch only in run mode.
 
 DON'T:
@@ -66,6 +72,8 @@ DO:
 - Use deterministic base image defaults, and allow explicit base image overrides.
 - Use BuildKit secrets for private package/module credentials.
 - Ensure generated images bind to `0.0.0.0` and use deployment-provided ports.
+- Add pipeline dependencies when generated container files come from other resources.
+- Keep Dockerfile generation mode-aware. Run-mode package-manager scripts, dev servers, reload flags, and local virtual environment paths should not leak into publish output.
 
 DON'T:
 
@@ -73,6 +81,21 @@ DON'T:
 - Don't overwrite user Dockerfiles or entrypoints.
 - Don't fail `aspire start` because a publish-only Dockerfile prerequisite is missing.
 - Don't emit Dockerfiles that depend on host-specific absolute paths.
+
+## Framework and publish variants
+
+First-party Aspire language integrations prefer explicit variants when the runtime behavior materially changes.
+
+DO:
+
+- Use subtype resources or thin wrapper methods for framework variants such as Vite and Uvicorn when they add endpoints, TLS, dev-server flags, or publish behavior.
+- Keep framework-specific run and publish behavior close to the Add/Publish method that introduces it.
+- Provide publish helpers for distinct output shapes, such as static website, Node server, or package-script runtime.
+- For C# callback-based publish options, provide a polyglot-friendly exported adapter with primitive/DTO parameters.
+
+DON'T:
+
+- Don't use one generic language app API when the framework changes endpoint binding, TLS, debugger, or production container semantics.
 
 ## Mode-specific arguments and environment
 

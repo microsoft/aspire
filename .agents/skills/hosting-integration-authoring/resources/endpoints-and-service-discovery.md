@@ -76,3 +76,21 @@ DON'T:
 For language apps and frameworks that expect a port environment variable, use endpoint APIs that set env vars such as `PORT` instead of manually duplicating endpoint state.
 
 Branch mode-specific endpoint args carefully. Development servers may bind localhost or add reload flags in run mode, but published containers should bind `0.0.0.0` and use the deployment-provided port.
+
+## Mediated and externally allocated endpoints
+
+Some integrations expose an endpoint through a mediator such as a tunnel, proxy, or external CLI. The target endpoint and public endpoint are different resources.
+
+DO:
+
+- Preserve the original target endpoint as an `EndpointReference`.
+- Create a separate facade endpoint for the mediated/public URL when consumers need to reference it.
+- Allocate the facade endpoint only when the external endpoint is known at run time.
+- Inject the facade endpoint into consumers through normal `WithReference`, service discovery, or environment flows.
+- Account for host/container differences when deciding whether to forward a target port or an allocated host port.
+
+DON'T:
+
+- Don't overwrite the target resource endpoint with the mediated endpoint.
+- Don't make users parse logs or dashboard URLs to get a mediated endpoint.
+- Don't serialize mediated run-mode URLs into publish output.
