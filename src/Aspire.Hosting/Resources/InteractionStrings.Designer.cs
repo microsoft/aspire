@@ -61,6 +61,15 @@ namespace Aspire.Hosting.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Cancel.
+        /// </summary>
+        internal static string CommandProgressCancelButtonText {
+            get {
+                return ResourceManager.GetString("CommandProgressCancelButtonText", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Ensure that Docker is running and that the Docker daemon is accessible. If Resource Saver mode is enabled, containers may not run..
         /// </summary>
         internal static string ContainerRuntimeDockerAdvice {

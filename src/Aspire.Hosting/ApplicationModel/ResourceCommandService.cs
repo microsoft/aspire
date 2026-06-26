@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Hosting.Resources;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -450,7 +451,7 @@ public class ResourceCommandService
 
         if (!progressOptions.HideCancelButton)
         {
-            options.PrimaryButtonText = "Cancel";
+            options.PrimaryButtonText = InteractionStrings.CommandProgressCancelButtonText;
         }
 
         var progressResult = await interactionService.PromptProgressAsync(progressOptions.Message, title: progressOptions.Title, options: options, cancellationToken: cancellationToken).ConfigureAwait(false);

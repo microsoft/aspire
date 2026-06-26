@@ -7,8 +7,6 @@ using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Hosting.ApplicationModel;
 
-#pragma warning disable ASPIREINTERACTION001 // CommandProgressOptions is experimental.
-
 /// <summary>
 /// Represents a command annotation for a resource.
 /// </summary>

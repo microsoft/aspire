@@ -3,8 +3,6 @@
 
 namespace Aspire.Hosting.ApplicationModel;
 
-#pragma warning disable ASPIREINTERACTION001 // CommandProgressOptions is experimental.
-
 /// <summary>
 /// Optional configuration for resource commands added with <see cref="ResourceBuilderExtensions.WithCommand{T}(Aspire.Hosting.ApplicationModel.IResourceBuilder{T}, string, string, Func{Aspire.Hosting.ApplicationModel.ExecuteCommandContext, Task{Aspire.Hosting.ApplicationModel.ExecuteCommandResult}}, Aspire.Hosting.ApplicationModel.CommandOptions?)"/>.
 /// </summary>
