@@ -6,7 +6,6 @@
 #pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
 #pragma warning disable ASPIREAZURE001 // Azure types are experimental
 
-using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Pipelines;
@@ -17,7 +16,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Foundry.Tests;
 
-public class PromptAgentTests
+public class PromptAgentTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddPromptAgent_CreatesResource()
@@ -579,9 +578,6 @@ public class PromptAgentTests
         var beforeStartStep = steps.SingleOrDefault(s => s.Name == "deploy-my-agent-before-start");
         Assert.NotNull(beforeStartStep);
 
-        // The step must depend on the azure-prepare-resources step (which actually exists in the pipeline).
-        // Previously it depended on 'run-mode-azure-provision' which was never registered,
-        // causing a pipeline validation failure at runtime.
         Assert.Equal(new[] { AzureEnvironmentResource.PrepareResourcesStepName }, beforeStartStep.DependsOnSteps);
     }
 
@@ -595,7 +591,7 @@ public class PromptAgentTests
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
-        var activityReporter = new TestPipelineActivityReporter(new NullTestOutputHelper());
+        var activityReporter = new TestPipelineActivityReporter(testOutputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter>(activityReporter);
 
         var project = builder.AddFoundry("account")
@@ -607,23 +603,11 @@ public class PromptAgentTests
 
         // This calls the real pipeline resolution + validation + execution.
         // If any DependsOnSteps reference a non-existent step, it throws InvalidOperationException.
-        await ExecuteBeforeStartHooksAsync(app, default);
+        await app.ExecuteBeforeStartHooksAsync(default);
 
         // Verify the prompt agent's deploy step was created and executed by the pipeline.
         Assert.Contains("deploy-my-agent-before-start", activityReporter.CreatedSteps);
         // Verify the azure-prepare-resources step (the dependency) was also executed.
         Assert.Contains(AzureEnvironmentResource.PrepareResourcesStepName, activityReporter.CreatedSteps);
-    }
-
-    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
-    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
-
-    private sealed class NullTestOutputHelper : ITestOutputHelper
-    {
-        public string Output => string.Empty;
-        public void Write(string message) { }
-        public void Write(string format, params object[] args) { }
-        public void WriteLine(string message) { }
-        public void WriteLine(string format, params object[] args) { }
     }
 }
