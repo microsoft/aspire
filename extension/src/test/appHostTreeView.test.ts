@@ -632,13 +632,11 @@ suite('AspireAppHostTreeProvider', () => {
             sendAspireCommandToAspireTerminal: (command: AspireSubcommand) => commands.push(command),
         } as unknown as AspireTerminalProvider;
         const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
-        const [groupItem] = provider.getChildren();
-        const [item] = provider.getChildren(groupItem);
+        const [item] = provider.getChildren();
 
         provider.stopAppHost(item as any);
 
-        const [updatedGroupItem] = provider.getChildren();
-        const [updatedItem] = provider.getChildren(updatedGroupItem);
+        const [updatedItem] = provider.getChildren();
         assert.strictEqual(updatedItem.contextValue, 'workspaceResources:stopping');
         assert.strictEqual(updatedItem.description, 'Stopping...');
         assert.strictEqual((updatedItem.iconPath as vscode.ThemeIcon).id, 'loading~spin');
@@ -2269,8 +2267,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         } as unknown as AspireTerminalProvider;
         const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
 
-        const [runningGroup] = provider.getChildren();
-        const [runningAppHostItem] = provider.getChildren(runningGroup);
+        const [runningAppHostItem] = provider.getChildren();
         const resourceItem = provider.getChildren(runningAppHostItem)[0];
 
         provider.viewResourceLogs(resourceItem as any);
