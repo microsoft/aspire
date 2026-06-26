@@ -12,13 +12,13 @@ import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../ex
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
 import type { AspireDebugConsoleOutputEvent, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { onDidInvokeCommand } from '../utils/telemetry';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository } from '../views/AppHostDataRepository';
 
 let atomicWriteSequence = 0;
-const dashboardDefaultChangedNotificationKey = 'aspire.dashboardBrowser.defaultChangedNotification.v1';
 
 export function createE2eStateFileBridge(
   context: vscode.ExtensionContext,

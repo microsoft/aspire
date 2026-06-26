@@ -237,6 +237,7 @@ suite('E2E launch profile', () => {
         const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
 
         assert.ok(apiTypes.includes('resetDashboardDefaultChangedNotification?: boolean;'));
+        assert.ok(e2eStateFileBridge.includes("import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';"));
         assert.ok(e2eStateFileBridge.includes("context.globalState.update(dashboardDefaultChangedNotificationKey, undefined)"));
         assert.ok(fixtures.includes('resetDashboardDefaultChangedNotificationForE2E'));
         assert.ok(debugDashboard.includes('await resetDashboardDefaultChangedNotificationForE2E();'));

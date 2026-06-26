@@ -10,6 +10,7 @@ import { ICliRpcClient, RpcClient, ValidationResult } from '../../server/rpcClie
 import { extensionLogOutputChannel } from '../../utils/logging';
 import AspireRpcServer, { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
 import { AspireDebugSession } from '../../debugger/AspireDebugSession';
+import { dashboardDefaultChangedNotificationKey } from '../../utils/dashboardNotificationState';
 
 suite('InteractionService endpoints', () => {
 	let statusBarItem: vscode.StatusBarItem;
@@ -442,7 +443,7 @@ suite('InteractionService endpoints', () => {
 			});
 
 			assert.strictEqual(showInformationMessageStub.callCount, 1);
-			assert.strictEqual(globalState.get('aspire.dashboardBrowser.defaultChangedNotification.v1'), true);
+			assert.strictEqual(globalState.get(dashboardDefaultChangedNotificationKey), true);
 		}
 		finally {
 			sandbox.restore();
@@ -591,7 +592,7 @@ suite('InteractionService endpoints', () => {
 
 			assert.strictEqual(openDashboardStub.callCount, 0);
 			assert.strictEqual(showInformationMessageStub.callCount, 0);
-			assert.strictEqual(globalState.get('aspire.dashboardBrowser.defaultChangedNotification.v1'), undefined);
+			assert.strictEqual(globalState.get(dashboardDefaultChangedNotificationKey), undefined);
 		}
 		finally {
 			sandbox.restore();
@@ -652,7 +653,7 @@ suite('InteractionService endpoints', () => {
 			});
 
 			assert.strictEqual(showInformationMessageStub.callCount, 0);
-			assert.strictEqual(globalState.get('aspire.dashboardBrowser.defaultChangedNotification.v1'), undefined);
+			assert.strictEqual(globalState.get(dashboardDefaultChangedNotificationKey), undefined);
 		}
 		finally {
 			sandbox.restore();
@@ -715,7 +716,7 @@ suite('InteractionService endpoints', () => {
 
 			assert.strictEqual(openDashboardStub.callCount, 0);
 			assert.strictEqual(showInformationMessageStub.callCount, 0);
-			assert.strictEqual(globalState.get('aspire.dashboardBrowser.defaultChangedNotification.v1'), undefined);
+			assert.strictEqual(globalState.get(dashboardDefaultChangedNotificationKey), undefined);
 		}
 		finally {
 			sandbox.restore();
