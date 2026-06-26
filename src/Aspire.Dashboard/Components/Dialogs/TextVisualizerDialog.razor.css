@@ -38,7 +38,6 @@
 .markdown-content {
     max-height: 60vh;
     overflow-y: auto;
-    overflow-wrap: break-word;
-    word-break: break-all;
+    overflow-wrap: anywhere;
     margin-bottom: 16px;
 }
