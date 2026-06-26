@@ -2270,6 +2270,149 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('runtime state refresh does not force workspace AppHost rediscovery', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoverStub = sinon.stub().resolves([{
+            path: '/workspace/AppHost.csproj',
+            language: 'csharp',
+            status: 'buildable',
+        }]);
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: discoverStub,
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForAppHostDiscovery();
+
+            assert.strictEqual(discoverStub.callCount, 1);
+            spawnStub.resetHistory();
+
+            repository.refreshRuntimeState();
+            await waitForMicrotasks();
+
+            assert.strictEqual(discoverStub.callCount, 1);
+            const spawnedCalls = spawnStub.getCalls();
+            const spawnedArgs = spawnedCalls.map(call => call.args[2] as string[]);
+            assert.ok(spawnedArgs.some(args => args[0] === 'ps' && args.includes('--format') && args.includes('json')), 'expected runtime state refresh to refresh running AppHosts');
+            assert.ok(spawnedArgs.every(args => args[0] !== 'ls' && args[0] !== 'extension'), 'runtime state refresh should not rediscover workspace AppHosts');
+            const snapshotCall = spawnedCalls.find(call => {
+                const args = call.args[2] as string[];
+                return args[0] === 'ps' && !args.includes('--follow');
+            });
+            assert.ok(snapshotCall, 'expected runtime state refresh to request a one-shot ps snapshot');
+            snapshotCall.args[3].stdoutCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 125881,
+                dashboardUrl: 'https://localhost:17193/login?t=061212',
+            }]));
+            snapshotCall.args[3].exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.appHosts.length, 1);
+            assert.strictEqual(repository.workspaceAppHost?.appHostPath, '/workspace/AppHost.csproj');
+            assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('runtime state refresh is no-op when repository data sources are inactive', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => {
+                throw new Error('aspire ls failed');
+            },
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            await waitForAppHostDiscovery();
+
+            assert.match(repository.errorMessage ?? '', /aspire ls failed/);
+
+            repository.refreshRuntimeState();
+            await waitForMicrotasks();
+
+            assert.match(repository.errorMessage ?? '', /aspire ls failed/);
+            assert.strictEqual(spawnStub.called, false);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('runtime state refresh uses ps fallback when active workspace has no discovered candidate', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoverStub = sinon.stub().resolves([]);
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: discoverStub,
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForAppHostDiscovery();
+
+            assert.strictEqual(discoverStub.callCount, 1);
+            spawnStub.resetHistory();
+
+            repository.refreshRuntimeState();
+            await waitForMicrotasks();
+
+            assert.strictEqual(discoverStub.callCount, 1);
+            const spawnedCalls = spawnStub.getCalls();
+            const spawnedArgs = spawnedCalls.map(call => call.args[2] as string[]);
+            assert.ok(spawnedArgs.some(args => args[0] === 'ps' && args.includes('--format') && args.includes('json')), 'expected runtime state refresh to refresh running AppHosts');
+            assert.ok(spawnedArgs.every(args => args[0] !== 'ls' && args[0] !== 'extension'), 'runtime state refresh should not rediscover workspace AppHosts');
+            const snapshotCall = spawnedCalls.find(call => {
+                const args = call.args[2] as string[];
+                return args[0] === 'ps' && !args.includes('--follow');
+            });
+            assert.ok(snapshotCall, 'expected runtime state refresh to request a one-shot ps snapshot');
+            snapshotCall.args[3].stdoutCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 125881,
+                dashboardUrl: 'https://localhost:17193/login?t=061212',
+            }]));
+            snapshotCall.args[3].exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.appHosts.length, 1);
+            assert.strictEqual(repository.workspaceAppHost?.appHostPath, '/workspace/AppHost.csproj');
+            assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('does not apply stale in-flight workspace discovery after refresh is queued', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),

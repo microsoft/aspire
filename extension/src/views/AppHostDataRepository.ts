@@ -215,6 +215,7 @@ export class AppHostDataRepository {
     private _postStopRefreshTimers = new Map<string, PostStopRefreshTimer>();
     private _authoritativeSnapshotInProgress = false;
     private _authoritativeSnapshotPending = false;
+    private _authoritativeSnapshotPendingForce = false;
     private _authoritativeSnapshotRequestId = 0;
     private _activeAuthoritativeSnapshotRequestId: number | undefined;
 
@@ -413,6 +414,33 @@ export class AppHostDataRepository {
         }
     }
 
+    refreshRuntimeState(): void {
+        if (this._disposed) {
+            return;
+        }
+
+        const shouldWatchWorkspace = this._shouldWatchWorkspace;
+        const shouldPoll = this._shouldPoll;
+        const forceSnapshot = this._dataActive && !shouldPoll;
+        if (!shouldWatchWorkspace && !shouldPoll && !forceSnapshot) {
+            return;
+        }
+
+        this._clearErrors();
+        this._describeRestartDelay = 5000;
+        if (shouldWatchWorkspace) {
+            this._startDescribeWatch();
+        } else {
+            this._stopDescribeWatch({ clearWorkspaceResources: true });
+        }
+
+        if (shouldPoll || forceSnapshot) {
+            this._refreshAppHostsFromAuthoritativeSnapshot(forceSnapshot);
+        }
+
+        this._reconcileGlobalDescribes();
+    }
+
     requestAppHostStopRefresh(appHostPath: string): void {
         if (this._disposed || !this._shouldPoll || !appHostPath) {
             return;
@@ -533,6 +561,7 @@ export class AppHostDataRepository {
         this._disposed = true;
         this._clearPostStopRefreshTimers();
         this._authoritativeSnapshotPending = false;
+        this._authoritativeSnapshotPendingForce = false;
         this._stopPolling();
         this._stopDescribeWatch();
         this._stopAllGlobalDescribes();
@@ -1404,6 +1433,7 @@ export class AppHostDataRepository {
         this._fetchInProgress = false;
         this._authoritativeSnapshotInProgress = false;
         this._authoritativeSnapshotPending = false;
+        this._authoritativeSnapshotPendingForce = false;
         this._activeAuthoritativeSnapshotRequestId = undefined;
         this._clearPostStopRefreshTimers();
         if (this._pollingInterval) {
@@ -1546,13 +1576,14 @@ export class AppHostDataRepository {
         }, { fetchVersion });
     }
 
-    private _refreshAppHostsFromAuthoritativeSnapshot(): void {
-        if (this._disposed || !this._shouldPoll) {
+    private _refreshAppHostsFromAuthoritativeSnapshot(force = false): void {
+        if (this._disposed || (!force && !this._shouldPoll)) {
             return;
         }
 
         if (this._authoritativeSnapshotInProgress) {
             this._authoritativeSnapshotPending = true;
+            this._authoritativeSnapshotPendingForce ||= force;
             return;
         }
 
@@ -1572,10 +1603,10 @@ export class AppHostDataRepository {
                 return;
             }
 
-            if (!this._disposed && this._shouldPoll) {
+            if (!this._disposed && (force || this._shouldPoll)) {
                 if (code === 0) {
                     this._setPsError(undefined);
-                    this._handlePsOutput(stdout);
+                    this._handlePsOutput(stdout, { useWorkspaceRootFallback: force });
                 } else {
                     this._clearLoadingForCurrentView();
                     this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
@@ -1585,10 +1616,12 @@ export class AppHostDataRepository {
             this._activeAuthoritativeSnapshotRequestId = undefined;
             this._authoritativeSnapshotInProgress = false;
             if (this._authoritativeSnapshotPending) {
+                const pendingForce = this._authoritativeSnapshotPendingForce;
                 this._authoritativeSnapshotPending = false;
-                this._refreshAppHostsFromAuthoritativeSnapshot();
+                this._authoritativeSnapshotPendingForce = false;
+                this._refreshAppHostsFromAuthoritativeSnapshot(pendingForce);
             }
-        });
+        }, { force });
     }
 
     private _isCurrentPsFetch(fetchVersion: number): boolean {
@@ -1655,7 +1688,7 @@ export class AppHostDataRepository {
         }
     }
 
-    private _handlePsOutput(stdout: string): void {
+    private _handlePsOutput(stdout: string, options?: { useWorkspaceRootFallback?: boolean }): void {
         try {
             const parsed: AppHostDisplayInfo[] | AppHostDisplayInfo = JSON.parse(stdout);
             const appHosts = Array.isArray(parsed)
@@ -1663,7 +1696,7 @@ export class AppHostDataRepository {
                 : this._applyPsDelta(parsed);
 
             if (this._viewMode === 'workspace') {
-                this._handleWorkspacePsOutput(appHosts);
+                this._handleWorkspacePsOutput(appHosts, options);
                 return;
             }
 
@@ -1707,11 +1740,16 @@ export class AppHostDataRepository {
         ];
     }
 
-    private _handleWorkspacePsOutput(appHosts: readonly AppHostDisplayInfo[]): void {
+    private _handleWorkspacePsOutput(appHosts: readonly AppHostDisplayInfo[], options?: { useWorkspaceRootFallback?: boolean }): void {
         let workspaceAppHostPath = this._workspaceAppHostPath;
         const discoveryPending = !this._workspaceAppHostDiscoveryComplete;
         let workspaceAppHosts: AppHostDisplayInfo[];
-        if (this._workspaceAppHostCandidatePaths.length === 0 && discoveryPending) {
+        // Runtime refresh after dashboard startup intentionally avoids rediscovery. If the panel
+        // is active but discovery has no candidates, fall back to workspace-root filtering so a
+        // just-started AppHost can appear without paying for another `aspire ls`.
+        const useWorkspaceRootFallback = this._workspaceAppHostCandidatePaths.length === 0
+            && (discoveryPending || options?.useWorkspaceRootFallback === true);
+        if (useWorkspaceRootFallback) {
             workspaceAppHosts = appHosts.filter(appHost => isPathInWorkspace(appHost.appHostPath));
         } else if (this._workspaceAppHostCandidatePaths.length > 0) {
             workspaceAppHosts = appHosts.filter(appHost => this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHost.appHostPath, candidatePath)));
@@ -1805,14 +1843,15 @@ export class AppHostDataRepository {
         this._attachGlobalResourcesToAppHosts();
     }
 
-    private async _runPsCommand(args: string[], callback: (code: number, stdout: string, stderr: string) => void, options?: { fetchVersion?: number }): Promise<void> {
+    private async _runPsCommand(args: string[], callback: (code: number, stdout: string, stderr: string) => void, options?: { fetchVersion?: number; force?: boolean }): Promise<void> {
         const fetchVersion = options?.fetchVersion;
+        const force = options?.force === true;
         const isCurrentPsCommand = () => {
             if (fetchVersion !== undefined) {
                 return this._isCurrentPsFetch(fetchVersion);
             }
 
-            return !this._disposed && this._shouldPoll;
+            return !this._disposed && (force || this._shouldPoll);
         };
 
         let cliPath: string;

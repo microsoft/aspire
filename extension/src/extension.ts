@@ -185,6 +185,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   const globalRefreshAppHostsRegistration = registerInstrumentedCommand('aspire-vscode.globalRefreshAppHosts', 'tree', () => dataRepository.refresh());
   const refreshAppHostsRegistration = registerInstrumentedCommand('aspire-vscode.refreshAppHosts', 'tree', () => dataRepository.refresh());
+  const refreshAppHostRuntimeStateRegistration = vscode.commands.registerCommand('aspire-vscode.refreshAppHostRuntimeState', () => dataRepository.refreshRuntimeState());
   const switchToGlobalViewRegistration = registerInstrumentedCommand('aspire-vscode.switchToGlobalView', 'tree', () => dataRepository.setViewMode('global'));
   const switchToWorkspaceViewRegistration = registerInstrumentedCommand('aspire-vscode.switchToWorkspaceView', 'tree', () => dataRepository.setViewMode('workspace'));
   const openDashboardRegistration = registerInstrumentedCommand('aspire-vscode.openDashboard', 'tree', (element) => appHostTreeProvider.openDashboard(element));
@@ -222,6 +223,7 @@ export async function activate(context: vscode.ExtensionContext) {
     appHostTreeView,
     globalRefreshAppHostsRegistration,
     refreshAppHostsRegistration,
+    refreshAppHostRuntimeStateRegistration,
     switchToGlobalViewRegistration,
     switchToWorkspaceViewRegistration,
     openDashboardRegistration,
