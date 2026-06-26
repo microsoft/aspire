@@ -45,7 +45,8 @@
     "workspaceContains:**/apphost.cts",
     "workspaceContains:**/apphost.js",
     "workspaceContains:**/apphost.mjs",
-    "workspaceContains:**/apphost.cjs"
+    "workspaceContains:**/apphost.cjs",
+    "onCommand:aspire-vscode.installCli"
   ],
   "main": "./dist/extension.js",
   "l10n": "./l10n",
@@ -426,6 +427,11 @@
         "title": "%command.switchToWorkspaceView%",
         "category": "Aspire",
         "icon": "$(home)"
+      },
+      {
+        "command": "aspire-vscode.installCli",
+        "title": "%command.installCli%",
+        "category": "Aspire"
       },
       {
         "command": "aspire-vscode.codeLensDebugPipelineStep",
@@ -941,7 +947,7 @@
               "markdown": "walkthrough/installCli.md"
             },
             "completionEvents": [
-              "onLink:https://aspire.dev/get-started/install-cli/"
+              "onCommand:aspire-vscode.installCli"
             ]
           },
           {

@@ -77,6 +77,9 @@ suite('Aspire package contribution surface E2E', function () {
         assert.deepStrictEqual(getAspireDebugger(sourcePackage).configurationAttributes?.launch?.required, ['program']);
         assert.ok(installedPackage.contributes?.jsonValidation?.some(validation => getFileMatches(validation.fileMatch).includes('aspire.config.json')));
         assert.ok(installedPackage.contributes?.configuration?.properties?.['aspire.aspireCliExecutablePath']);
+        assert.ok(getWalkthroughCompletionEvents(installedPackage).includes('onCommand:aspire-vscode.installCli'));
+        assert.ok(sourceCommandIds.includes('aspire-vscode.installCli'));
+        assert.ok(installedPackage.activationEvents?.includes('onCommand:aspire-vscode.installCli'));
     });
 
     test('keeps hidden menus, debugger schema, welcome states, colors, and packaged assets intact', async () => {
@@ -364,6 +367,12 @@ function getWalkthroughMarkdownFiles(packageJson: PackageJson): string[] {
         .filter((markdown): markdown is string => typeof markdown === 'string');
 }
 
+function getWalkthroughCompletionEvents(packageJson: PackageJson): string[] {
+    return (packageJson.contributes?.walkthroughs ?? [])
+        .flatMap(walkthrough => walkthrough.steps ?? [])
+        .flatMap(step => step.completionEvents ?? []);
+}
+
 function getHiddenCommandPaletteCommands(packageJson: PackageJson): string[] {
     return (packageJson.contributes?.menus?.commandPalette ?? [])
         .filter(menu => menu.when === 'false' && typeof menu.command === 'string')
@@ -426,6 +435,7 @@ const expectedActivationEvents = [
     'workspaceContains:**/apphost.js',
     'workspaceContains:**/apphost.mjs',
     'workspaceContains:**/apphost.cjs',
+    'onCommand:aspire-vscode.installCli',
 ];
 
 const expectedCommandIds = [
@@ -450,6 +460,7 @@ const expectedCommandIds = [
     'aspire-vscode.expandAll',
     'aspire-vscode.globalRefreshAppHosts',
     'aspire-vscode.init',
+    'aspire-vscode.installCli',
     'aspire-vscode.new',
     'aspire-vscode.openAppHostSource',
     'aspire-vscode.openDashboard',
