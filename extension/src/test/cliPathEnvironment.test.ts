@@ -32,7 +32,6 @@ function makeDeps(overrides: Partial<CliPathEnvironmentDependencies> = {}): CliP
         fileExists: (cliPath: string) => cliPath.endsWith('/aspire') || cliPath.endsWith('\\aspire.exe') || cliPath.endsWith('/aspire.exe'),
         realpath: (cliPath: string) => cliPath,
         log: () => { },
-        warn: () => { },
         ...overrides,
     };
 }

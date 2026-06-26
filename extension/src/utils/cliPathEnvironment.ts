@@ -45,7 +45,6 @@ export interface ForwardableCliPathDependencies {
 export interface CliPathEnvironmentDependencies extends ForwardableCliPathDependencies {
     getConfiguredPath: () => string;
     log?: (message: string) => void;
-    warn?: (message: string) => void;
 }
 
 const defaultForwardableCliPathDeps: ForwardableCliPathDependencies = {
@@ -58,7 +57,6 @@ const defaultDeps: CliPathEnvironmentDependencies = {
     getConfiguredPath: () => getConfiguredCliPath(),
     ...defaultForwardableCliPathDeps,
     log: (message) => extensionLogOutputChannel.info(message),
-    warn: (message) => extensionLogOutputChannel.warn(message),
 };
 
 export function isForwardableAspireCliPath(
@@ -156,10 +154,10 @@ function hasBundleRoot(bundleRoot: string, deps: ForwardableCliPathDependencies)
  * configuration-change listener so user edits to the setting take effect for
  * any subsequently created terminals or task processes.
  *
- * The collection is left untouched when the configured path is empty or not an
- * absolute path. Relative values and the on-PATH `aspire` fallback would either
- * fail `ResolveAspireCliBundle` (which logs a warning and returns no outputs)
- * or be ambiguous, so propagating them would only add noise.
+ * The contributed variable is cleared when the configured path is empty or not
+ * an absolute path. Relative values and the on-PATH `aspire` fallback would
+ * either fail `ResolveAspireCliBundle` (which logs a warning and returns no
+ * outputs) or be ambiguous, so propagating them would only add noise.
  *
  * Returns the value that was applied (or `undefined` when the variable was
  * cleared) so the caller — and tests — can verify the decision without poking
