@@ -997,6 +997,68 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('workspace project fallback recognizes AppHost SDK element, package, and property forms', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                const sdkElementProjectPath = path.join(tempDir, 'SdkElementAppHost', 'SdkElementAppHost.csproj');
+                const packageReferenceProjectPath = path.join(tempDir, 'PackageAppHost', 'PackageAppHost.csproj');
+                const propertyProjectPath = path.join(tempDir, 'PropertyAppHost', 'PropertyAppHost.csproj');
+                fs.mkdirSync(path.dirname(sdkElementProjectPath), { recursive: true });
+                fs.mkdirSync(path.dirname(packageReferenceProjectPath), { recursive: true });
+                fs.mkdirSync(path.dirname(propertyProjectPath), { recursive: true });
+                fs.writeFileSync(sdkElementProjectPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <Sdk Name="Aspire.AppHost.Sdk" Version="13.5.0" />
+</Project>
+`);
+                fs.writeFileSync(packageReferenceProjectPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="8.2.1" />
+  </ItemGroup>
+</Project>
+`);
+                fs.writeFileSync(propertyProjectPath, `<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsAspireHost>true</IsAspireHost>
+  </PropertyGroup>
+</Project>
+`);
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    return pattern.endsWith('*.csproj')
+                        ? [
+                            vscode.Uri.file(packageReferenceProjectPath),
+                            vscode.Uri.file(propertyProjectPath),
+                            vscode.Uri.file(sdkElementProjectPath),
+                        ]
+                        : [];
+                });
+                sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                    options?.stderrCallback?.(`${args.join(' ')} failed`);
+                    options?.exitCallback?.(1);
+                    return { kill: () => { } } as any;
+                });
+                const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+                try {
+                    const result = await service.discover(makeWorkspaceFolder(tempDir));
+
+                    assert.deepStrictEqual(result.map(candidate => candidate.path), [
+                        vscode.Uri.file(packageReferenceProjectPath).fsPath,
+                        vscode.Uri.file(propertyProjectPath).fsPath,
+                        vscode.Uri.file(sdkElementProjectPath).fsPath,
+                    ]);
+                    assert.deepStrictEqual(result.map(candidate => candidate.language), ['csharp', 'csharp', 'csharp']);
+                }
+                finally {
+                    service.dispose();
+                }
+            }
+            finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
         test('uses VS Code file system when falling back to project files', async () => {
             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
             try {

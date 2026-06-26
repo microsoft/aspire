@@ -30,7 +30,7 @@ function languageFamily(raw: string | null | undefined): 'csharp' | 'typescript'
         return 'other';
     }
     const value = raw.toLowerCase();
-    if (value === 'csharp' || value === 'c#') {
+    if (value === 'csharp' || value === 'c#' || value === 'fsharp' || value === 'f#' || value === 'visualbasic' || value === 'visual basic' || value === 'vb') {
         return 'csharp';
     }
     if (value === 'typescript' || value.startsWith('typescript/') || value === 'javascript' || value.startsWith('javascript/')) {
@@ -47,11 +47,9 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
     let sawCsharp = false;
     let sawTypescript = false;
     let sawOther = false;
-    let sawAny = false;
 
     for (const candidate of candidates) {
         const family = languageFamily(candidate.language);
-        sawAny = true;
         if (family === 'csharp') {
             sawCsharp = true;
         }
@@ -61,10 +59,6 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
         else {
             sawOther = true;
         }
-    }
-
-    if (!sawAny) {
-        return 'unknown';
     }
 
     const distinctFamilies = Number(sawCsharp) + Number(sawTypescript) + Number(sawOther);
@@ -184,6 +178,10 @@ async function projectFileReferencesAspireAppHost(directoryPath: string, entry: 
         return false;
     }
 
+    return projectContentsReferencesAspireAppHost(contents);
+}
+
+export function projectContentsReferencesAspireAppHost(contents: string): boolean {
     const uncommentedContents = contents.replace(/<!--[\s\S]*?-->/g, '');
     // C# AppHost project files can advertise Aspire through SDK, package, or evaluated properties:
     //   <Project Sdk="Aspire.AppHost.Sdk/13.5.0">

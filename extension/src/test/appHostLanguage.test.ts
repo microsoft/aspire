@@ -17,6 +17,11 @@ suite('appHostLanguage.summarizeAppHostLanguages', () => {
         assert.strictEqual(summarizeAppHostLanguages([c('csharp'), c('C#')]), 'csharp');
     });
 
+    test('returns csharp for .NET language variants', () => {
+        assert.strictEqual(summarizeAppHostLanguages([c('fsharp'), c('visualbasic')]), 'csharp');
+        assert.strictEqual(summarizeAppHostLanguages([c('F#'), c('Visual Basic'), c('vb')]), 'csharp');
+    });
+
     test('returns typescript for typescript variants', () => {
         assert.strictEqual(summarizeAppHostLanguages([c('typescript'), c('typescript/nodejs')]), 'typescript');
         assert.strictEqual(summarizeAppHostLanguages([c('javascript')]), 'typescript');

@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import { dirname, extname, join, resolve } from 'node:path';
 import { parse, type ParseError } from 'jsonc-parser';
 import type { CandidateAppHostDisplayInfo } from './appHostDiscovery';
+import { aspireConfigFileName } from './cliTypes';
 
 const unknownVersion = 'unknown';
 const noAppHostsVersion = 'none';
@@ -125,18 +126,11 @@ async function getAppHostTargetVersionFromFile(filePath: string): Promise<string
 }
 
 async function getAppHostTargetVersionInfoFromDirectoryEntry(directoryPath: string, entry: string, entries: readonly string[]): Promise<FileTargetVersionInfo> {
-    const entryPath = join(directoryPath, entry);
-    const versionInfo = await getAppHostTargetVersionInfoFromFile(entryPath);
-
-    if (extname(entry).toLowerCase() !== '.cs') {
-        return versionInfo;
+    if (extname(entry).toLowerCase() === '.cs' && !isSingleFileCSharpAppHostEntry(entry, entries)) {
+        return noFileTargetVersionInfo();
     }
 
-    // Match the CLI's single-file AppHost detection so unrelated helper.cs files
-    // cannot block a polyglot directory from using aspire.config.json.
-    return isSingleFileCSharpAppHostEntry(entry, entries)
-        ? versionInfo
-        : noFileTargetVersionInfo();
+    return await getAppHostTargetVersionInfoFromFile(join(directoryPath, entry));
 }
 
 interface FileTargetVersionInfo {
@@ -211,7 +205,7 @@ function isPolyglotAppHostFile(filePath: string): boolean {
 
 function isSingleFileCSharpAppHostEntry(entry: string, entries: readonly string[]): boolean {
     return entry.toLowerCase() === 'apphost.cs'
-        && !entries.some(entry => isDotNetProjectExtension(extname(entry).toLowerCase()));
+        && !entries.some(directoryEntry => isDotNetProjectExtension(extname(directoryEntry).toLowerCase()));
 }
 
 function isDotNetProjectExtension(extension: string): boolean {
@@ -426,7 +420,7 @@ interface ConfiguredSdkVersionInfo {
 }
 
 async function getConfiguredSdkVersionInDirectory(directory: string): Promise<ConfiguredSdkVersionInfo> {
-    const configVersion = await readSdkVersionFromConfigFile(join(directory, 'aspire.config.json'));
+    const configVersion = await readSdkVersionFromConfigFile(join(directory, aspireConfigFileName));
     if (configVersion.version || configVersion.foundConfig) {
         return configVersion;
     }

@@ -8,7 +8,7 @@ import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './
 import { EnvironmentVariables } from './environment';
 import { extensionLogOutputChannel } from './logging';
 import { getAppHostDiscoveryTimeoutMs } from './settings';
-import { classifyAppHostPath, summarizeAppHostLanguages } from './appHostLanguage';
+import { classifyAppHostPath, projectContentsReferencesAspireAppHost, summarizeAppHostLanguages } from './appHostLanguage';
 import { sendTelemetryEvent } from './telemetry';
 import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob, isExcludedDiscoveryCandidate, isExcludedDiscoveryUri } from './workspaceFileSearch';
 
@@ -656,7 +656,7 @@ async function discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder: vscode
 }
 
 function isAppHostProject(projectContents: string): boolean {
-    return /<Project\b[^>]*\bSdk\s*=\s*["']Aspire\.AppHost\.Sdk(?:\/[^"']*)?["']/i.test(projectContents);
+    return projectContentsReferencesAspireAppHost(projectContents);
 }
 
 function getProjectLanguage(projectPath: string): string {
