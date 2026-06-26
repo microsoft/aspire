@@ -74,6 +74,7 @@ DO:
 - Avoid explicit export IDs when the convention-derived ID is already correct.
 - Use `MethodName` only when the runtime capability ID must be unique but the generated methods live on different target types and can safely share a friendly method name.
 - Inspect generated member names per target type, not just runtime capability IDs.
+- Prefer existing framework exports for shared concepts such as container registries; target-specific convenience wrappers can create generated member collisions without adding capability.
 
 DON'T:
 
@@ -81,6 +82,7 @@ DON'T:
 - Don't set an explicit export ID that duplicates the convention-derived name.
 - Don't use `MethodName` to give multiple exports the same generated method name on the same generated target type.
 - Don't assume different C# receiver types prevent capability collisions.
+- Don't export a target-specific overload solely to change annotation mutation behavior when the generic exported helper already expresses the same user concept.
 
 For one user concept, export one ATS method and model variation with a DTO/options object, `[AspireUnion]`, or an internal dispatcher.
 
@@ -146,6 +148,7 @@ DTO rules:
 - Use `init` setters for input properties.
 - Use arrays, records, primitives, enums, other DTOs, and `Dictionary<string, T>` where `T` is ATS-compatible.
 - Prefer flat options objects over nested `{ options: { ... } }` shapes for one optional options parameter.
+- Avoid getter-only raw `List<T>` or `Dictionary<TKey, TValue>` properties on exported DTO/model types. Use `init`-settable arrays/DTO properties for JSON input/output shapes, or expose explicit editor methods/wrapper types for live mutation.
 
 Use `[AspireUnion]` for live AppHost values:
 

@@ -36,7 +36,7 @@ Always read the relevant archetype resource and the cross-cutting resources that
 | Secret manager, credential broker, external secret provider, or provider-backed managed secret child resources | `resources/archetype-secret-provider.md` |
 | External/SaaS service reference with API key/endpoint, no local container/provisioning | `resources/archetype-external-cloud-reference.md` |
 | Azure resource provisioning, Bicep, role assignments, existing Azure resources, emulators, local containers for Azure resources | `resources/archetype-azure-provisioning.md` |
-| Docker Compose, Kubernetes, Azure Container Apps, or another deployment target/publisher | `resources/archetype-deployment-target-publisher.md` |
+| Docker Compose, Kubernetes, Azure Container Apps, or another deployment target/publisher | `resources/archetype-deployment-target-publisher.md` and `resources/deployment-production-readiness.md` |
 | Python, Go, JavaScript, Node, Vite, Next.js, or another language runtime/workload | `resources/archetype-language-executable-app.md` |
 | Non-resource model/configuration overlay, e.g. Orleans-style APIs | `resources/archetype-overlay-configuration.md` |
 | Public API names, overloads, return types, polyglot AppHost compatibility, annotations, experimental state | `resources/api-naming-and-shape.md` |

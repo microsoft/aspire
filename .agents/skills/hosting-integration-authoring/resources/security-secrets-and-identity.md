@@ -26,6 +26,7 @@ Generated deployment or config artifacts must not leak secrets.
 DO:
 
 - Use placeholders, parameter references, or secret mounts for generated artifacts.
+- Use the deployment target's native secret reference shape for deploy-time manifests, such as Kubernetes `secretKeyRef`, cloud secret-manager references, or platform-managed secret resources.
 - Use BuildKit secret mounts for private package/module credentials in generated Dockerfiles.
 - Remove temporary credential files in the same Docker layer when a tool requires a credential file.
 - Keep generated examples redacted.
@@ -34,6 +35,7 @@ DON'T:
 
 - Don't persist credentials in Docker layers.
 - Don't emit `.env`, Compose, Kubernetes, Bicep, or appsettings content with raw secret values.
+- Don't treat deploy-time generated manifests as safe just because they are temporary; anything written under the publish output can be archived, logged, or inspected later.
 - Don't put access tokens in command-line arguments when an environment variable, secret file, or parameter reference works.
 
 ## Azure identity and RBAC
@@ -57,6 +59,11 @@ DON'T:
 DO:
 
 - Make live external credentials explicit prerequisites.
+- Expose common production identity settings as first-class APIs, such as service account/managed identity selection, role bindings, and public/private ingress controls.
+- Use the target's native secret store/reference shape for deployment manifests instead of materializing secret values.
+- Validate least-privilege permissions separately from resource mutation when the target supports non-mutating IAM/probe calls.
+- Preserve least-privilege/private-by-default access for deployed resources unless the integration has an explicit public-access API.
+- Document and test the identity required for smoke validation when the deployed endpoint is private by default.
 - Keep health checks side-effect-free and avoid expensive/rate-limited calls.
 - Avoid validating external credentials during `aspire start` unless the user explicitly opted into that behavior.
 
@@ -64,6 +71,8 @@ DON'T:
 
 - Don't call chargeable or mutating APIs as part of ordinary app-model construction.
 - Don't assume CI has live external-service credentials.
+- Don't make deployed endpoints anonymously reachable just to simplify smoke tests.
+- Don't provide a blanket "make public" helper that hides broad IAM changes; make the security impact explicit in API names, docs, and tests.
 
 ## Logs and diagnostics
 

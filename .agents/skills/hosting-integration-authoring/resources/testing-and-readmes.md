@@ -19,6 +19,12 @@ DO test:
 - Publish-only environment/deployment resources are hidden from run mode.
 - `RunAsEmulator`, `RunAsContainer`, `RunAsExisting`, `PublishAsExisting`, and `AsExisting` mode behavior.
 - Generated manifests, Bicep, Docker Compose, Kubernetes YAML, or Dockerfiles with snapshots when shape matters.
+- `aspire publish` asset behavior separately from `aspire deploy`: publish should produce deterministic, reviewable assets with placeholders/target-native references; deploy should consume or regenerate explicit deploy-time assets, mutate the target, verify provider state, and record outputs.
+- Real deploy smoke coverage for new deployment publishers: build/push an image, apply the generated artifact to the target, query the deployed resource status/URL, call the service once, and clean up deployed resources and images.
+- Target-specific schema constraints such as resource names, labels, annotations, protocol fields, and IAM defaults when generating artifacts for a new deployment platform.
+- The expected deployed access mode. If the target is private by default, smoke tests should call it with the required identity/token; if the integration exposes public access, smoke tests should prove anonymous access only for that explicit opt-in path.
+- Production deployment scenarios for new publishers: at least one project resource, one prebuilt container resource, one multi-service app if service references are supported, one secret/reference scenario, one private/default access scenario, and one cleanup or documented external-cleanup path.
+- Preflight failure paths for missing CLI, missing auth/context, missing registry access, disabled target APIs/services, and insufficient permissions.
 - Polyglot exports when exported API shape changes, including analyzer diagnostics and generated `.d.ts` signatures.
 - Controller/reconciler command serialization, conflict detection, command state transitions, cancellation, drift coalescing, and per-resource completion behavior when the integration owns shared external state.
 
@@ -31,6 +37,9 @@ DON'T:
 - Don't mutate static environment or global current directory without cleanup.
 - Don't only assert absence; verify the full relevant output shape.
 - Don't use live cloud or external services for ordinary controller/reconciler unit tests; fake the controller's external client/provisioner and exercise the queue/command paths directly.
+- Don't treat serializer snapshots or fake CLI argument tests as proof that a deployment target accepts the artifact.
+- Don't stop validation at "the deploy command exited"; check the provider's resource state and perform the expected authenticated or anonymous request.
+- Don't collapse publish and deploy tests into one path; a deployment integration can generate correct assets and still fail provider validation, and provider deploy can work while publish assets are incomplete or unreproducible.
 
 ## Multi-language validation
 
@@ -65,6 +74,16 @@ Required structure:
 6. `## Additional documentation`
 7. `## Feedback & contributing`
 8. Trademark notice if required
+
+Deployment target READMEs should also include:
+
+- Required local tools and authentication commands.
+- Required cloud/project/subscription/cluster prerequisites, including enabled APIs/services and registry setup.
+- The default access mode and how to opt into public access if supported.
+- Secret handling limitations or the target-native secret reference APIs.
+- Publish asset output locations, deploy-time output locations, and cleanup/destroy expectations.
+- The difference between `aspire publish` and `aspire deploy`: what assets are generated, what values remain placeholders, what deploy resolves, and what target mutations deploy performs.
+- Known limitations that affect production use, such as unsupported service-to-service references, networking, custom domains, or provider-specific resources.
 
 Usage examples:
 

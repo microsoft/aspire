@@ -29,6 +29,7 @@ DO:
 - Mark unstable APIs with `[Experimental]`.
 - Keep new packages preview until the team intentionally stabilizes them.
 - Document known limitations in XML docs and README.
+- For new deployment target integrations, keep the package preview/experimental until at least one real deploy smoke path, cleanup story, identity/access model, secret handling path, and polyglot API shape have been validated.
 - Avoid obsolete compatibility shims for APIs that have not shipped stable.
 
 DON'T:

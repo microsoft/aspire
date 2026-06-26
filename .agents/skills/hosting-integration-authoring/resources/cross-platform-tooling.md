@@ -26,11 +26,14 @@ DO:
 - Include installation/help URLs in required-command guidance.
 - Make publish-only tool requirements fail during publish/build validation, not during local run.
 - Distinguish Docker-required features from toolchain-only features.
+- For deployment targets, check external CLI authentication/context separately from CLI installation, and include the selected project/subscription/cluster/region in diagnostics.
+- Check container registry authentication and push/pull access before building large images when the target requires a registry.
 
 DON'T:
 
 - Don't fail app model construction because an optional run-mode tool is missing before the user uses that feature.
 - Don't assume `docker`, `go`, `python`, `node`, package managers, `helm`, or cloud CLIs are available.
+- Don't rely on ambient cloud CLI state when the AppHost model provides an explicit target context.
 
 ## Shell and arguments
 

@@ -51,11 +51,13 @@ DO:
 - Mark health-only, management-only, or internal-only endpoints with `ExcludeReferenceEndpoint` when they should not be used by `WithReference`.
 - Prefer HTTPS reference endpoints when both HTTP and HTTPS are available and that matches existing resource conventions.
 - Keep endpoint schemes accurate; URI expressions use the scheme.
+- Use endpoint transport metadata for protocol-specific deployment output. For example, gRPC/HTTP/2 maps from `Transport == "http2"`, not from `UriScheme == "https"`.
 
 DON'T:
 
 - Don't make readiness/health probe endpoints the default reference endpoint.
 - Don't expose admin UI endpoints as service dependencies unless that is the intended API.
+- Don't infer container protocol from public URL scheme; deployment targets often terminate TLS before forwarding to the container.
 
 ## URL display
 
@@ -94,3 +96,20 @@ DON'T:
 - Don't overwrite the target resource endpoint with the mediated endpoint.
 - Don't make users parse logs or dashboard URLs to get a mediated endpoint.
 - Don't serialize mediated run-mode URLs into publish output.
+
+## Deployed endpoints
+
+Some deployment targets assign service URLs only after deploy. Model this as a deploy-time output, not as a publish-time endpoint value.
+
+DO:
+
+- Store deployed URLs and resource IDs in deployment state or target-specific output resources after the target reports them.
+- Make cross-resource service references fail clearly when the target cannot know the destination URL until after deployment.
+- Support target-native service-to-service discovery only when the target offers a stable logical name, DNS name, or service binding that works before deployment completes.
+- Test both direct user-facing URLs and workload-to-workload references for deployment targets that claim to support them.
+
+DON'T:
+
+- Don't resolve post-deploy URLs during publish by reading local run-mode endpoint values.
+- Don't silently drop generated service-discovery environment variables when the target cannot translate them; fail with guidance or map them to a supported target-native mechanism.
+- Don't treat a dashboard/deploy summary URL as a connection contract for other resources unless it is modeled as a structured value.
