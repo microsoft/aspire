@@ -108,6 +108,7 @@ jobs:
           mkdir -p "$ARTIFACT_DIR/bin"
           mkdir -p "$ARTIFACT_DIR/packages"
           mkdir -p "$ARTIFACT_DIR/managed"
+          mkdir -p "$ARTIFACT_DIR/dcp"
 
           # Copy CLI binary and dependencies
           cp -r "${{ github.workspace }}/artifacts/bin/Aspire.Cli/Release/net10.0/"* "$ARTIFACT_DIR/bin/"
@@ -120,6 +121,27 @@ jobs:
             echo "⚠️ Aspire.Managed build output not found at $MANAGED_DIR"
           fi
 
+          # Stage the DCP binary into the bundle layout. Since #18188 ("Default AppHosts to
+          # use the CLI bundle") AppHosts default to AspireUseCliBundle=true, so the AppHost
+          # build runs the ResolveAspireCliBundle task. That task only treats a layout as a
+          # valid bundle when a real dcp executable exists at <bundle>/dcp/dcp — an empty dcp
+          # directory is not enough (see src/Aspire.Hosting.Tasks/ResolveAspireCliBundle.cs).
+          # Without it the AppHost build fails with ASPIRE009 and `aspire deploy` aborts before
+          # producing a backchannel, so every deploy test times out. The binary originates from
+          # the Microsoft.DeveloperControlPlane.linux-amd64 package the build already restored.
+          DCP_SRC=""
+          for NUGET_ROOT in "$HOME/.nuget/packages" "${{ github.workspace }}/.packages"; do
+            CANDIDATE=$(find "$NUGET_ROOT/microsoft.developercontrolplane.linux-amd64" -path "*/tools/dcp" -type f 2>/dev/null | head -1)
+            if [ -n "$CANDIDATE" ]; then DCP_SRC="$CANDIDATE"; break; fi
+          done
+          if [ -n "$DCP_SRC" ]; then
+            cp -r "$(dirname "$DCP_SRC")/"* "$ARTIFACT_DIR/dcp/"
+            chmod +x "$ARTIFACT_DIR/dcp/dcp"
+            echo "✅ DCP binary staged from $DCP_SRC"
+          else
+            echo "⚠️ DCP binary (microsoft.developercontrolplane.linux-amd64) not found in NuGet caches"
+          fi
+
           # Copy NuGet packages
           PACKAGES_DIR="${{ github.workspace }}/artifacts/packages/Release/Shipping"
           if [ -d "$PACKAGES_DIR" ]; then
@@ -130,6 +152,8 @@ jobs:
           ls -la "$ARTIFACT_DIR/bin/"
           echo "Managed artifacts:"
           ls -la "$ARTIFACT_DIR/managed/" 2>/dev/null || echo "(none)"
+          echo "DCP artifacts:"
+          ls -la "$ARTIFACT_DIR/dcp/" 2>/dev/null || echo "(none)"
           echo "Package count: $(find "$ARTIFACT_DIR/packages" -name "*.nupkg" | wc -l)"
 
       - name: Upload CLI artifacts
@@ -196,8 +220,17 @@ jobs:
             chmod +x "$ASPIRE_HOME/managed/aspire-managed" 2>/dev/null || true
           fi
 
-          # Create dcp directory stub (required for layout discovery validation)
+          # Lay the real DCP binary into the bundle layout. The AppHost build resolves the
+          # bundle via ResolveAspireCliBundle, which requires an actual dcp executable at
+          # <bundle>/dcp/dcp — an empty directory is rejected and the build fails with ASPIRE009.
+          # The binary is staged into the CLI artifact by the build job's "Prepare CLI artifacts" step.
           mkdir -p "$ASPIRE_HOME/dcp"
+          if [ -d "${{ github.workspace }}/cli-artifacts/dcp" ] && [ -n "$(ls -A "${{ github.workspace }}/cli-artifacts/dcp" 2>/dev/null)" ]; then
+            cp -r "${{ github.workspace }}/cli-artifacts/dcp/"* "$ASPIRE_HOME/dcp/"
+            chmod +x "$ASPIRE_HOME/dcp/dcp" 2>/dev/null || true
+          else
+            echo "⚠️ DCP artifacts missing; AppHost builds will fail with ASPIRE009"
+          fi
 
           # Set up NuGet hive for local packages
           HIVE_DIR="$ASPIRE_HOME/hives/local/packages"
