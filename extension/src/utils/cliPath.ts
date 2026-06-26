@@ -170,17 +170,25 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
 
     // Check if user has configured a custom path (not one of the defaults)
     if (configuredPath && !defaultPaths.includes(configuredPath)) {
-        const candidateConfiguredPaths = getConfiguredPathCandidates(configuredPath, deps.getWorkspaceFolders());
-        for (const candidatePath of candidateConfiguredPaths) {
-            const isValid = await deps.tryExecute(candidatePath);
+        if (isBareAspireCommand(configuredPath)) {
+            const isValid = await deps.tryExecute(configuredPath);
             if (isValid) {
-                return { cliPath: candidatePath, available: true, source: 'configured' };
+                return { cliPath: configuredPath, available: true, source: 'path' };
             }
         }
+        else {
+            const candidateConfiguredPaths = getConfiguredPathCandidates(configuredPath, deps.getWorkspaceFolders());
+            for (const candidatePath of candidateConfiguredPaths) {
+                const isValid = await deps.tryExecute(candidatePath);
+                if (isValid) {
+                    return { cliPath: candidatePath, available: true, source: 'configured' };
+                }
+            }
 
-        const attemptedPaths = candidateConfiguredPaths.join(', ');
-        extensionLogOutputChannel.warn(`Configured CLI path is invalid: ${configuredPath}${attemptedPaths !== configuredPath ? ` (tried: ${attemptedPaths})` : ''}`);
-        return { cliPath: candidateConfiguredPaths[0], available: false, source: 'configured' };
+            const attemptedPaths = candidateConfiguredPaths.join(', ');
+            extensionLogOutputChannel.warn(`Configured CLI path is invalid: ${configuredPath}${attemptedPaths !== configuredPath ? ` (tried: ${attemptedPaths})` : ''}`);
+            return { cliPath: candidateConfiguredPaths[0], available: false, source: 'configured' };
+        }
     }
 
     // 2. Check if CLI is on PATH
@@ -223,4 +231,12 @@ function getConfiguredPathCandidates(configuredPath: string, workspaceFolders: s
     }
 
     return [configuredPath];
+}
+
+function isBareAspireCommand(value: string): boolean {
+    if (value.includes('/') || value.includes('\\')) {
+        return false;
+    }
+
+    return /^(?:aspire|aspire\.exe|aspire\.cmd|aspire\.bat)$/i.test(value);
 }

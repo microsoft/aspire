@@ -72,7 +72,7 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
     const aspireCliPathKey = aspireCliPathEnvironmentVariableName.toLowerCase();
     mergeCliSpawnEnvironment(env, options?.env?.filter(e => e.name.toLowerCase() !== aspireCliPathKey));
 
-    extensionLogOutputChannel.info(getCliSpawnDiagnostics(spawnCommand.command, spawnCommand.args, workingDirectory, options?.noDebug, options?.debugSessionId, env));
+    extensionLogOutputChannel.info(getCliSpawnDiagnostics(command, args, workingDirectory, options?.noDebug, options?.debugSessionId, env));
 
     const child = spawn(spawnCommand.command, spawnCommand.args, {
         cwd: workingDirectory,

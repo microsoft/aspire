@@ -192,6 +192,28 @@ suite('spawnCliProcess tests', () => {
         assert.strictEqual(message.includes('s3cr3t'), false);
     });
 
+    test('redacts original command arguments from Windows shim spawn diagnostics', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+
+        try {
+            const message = getCliSpawnDiagnostics(
+                'C:\\Tools\\aspire.cmd',
+                ['resource', 'database', 'reset-password', '--load-arguments', '--', '--password=s3cr3t'],
+                'C:\\workspace',
+                undefined,
+                undefined,
+                {});
+
+            assert.strictEqual(
+                message,
+                'Spawning Aspire CLI process: C:\\Tools\\aspire.cmd resource database reset-password --load-arguments -- <redacted>; cwd=C:\\workspace; noDebug=undefined; debugSessionId=undefined; ASPIRE_CLI_START_TIMEOUT=undefined');
+            assert.strictEqual(message.includes('s3cr3t'), false);
+        }
+        finally {
+            platformStub.restore();
+        }
+    });
+
     test('merges caller env case-insensitively on Windows', () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
         const env: Record<string, string | undefined> = {

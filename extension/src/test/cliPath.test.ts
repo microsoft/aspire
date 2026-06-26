@@ -141,6 +141,46 @@ suite('utils/cliPath tests', () => {
             assert.ok(setConfiguredPath.notCalled, 'should not update settings when CLI is on PATH');
         });
 
+        test('uses configured bare Aspire command as a PATH command', async () => {
+            const workspaceFolder = path.resolve('repo');
+            const tryExecute = sinon.stub().callsFake(async candidatePath => candidatePath === 'aspire.cmd');
+            const isOnPath = sinon.stub().resolves(false);
+            const deps = createMockDeps({
+                getConfiguredPath: () => 'aspire.cmd',
+                getWorkspaceFolders: () => [workspaceFolder],
+                tryExecute,
+                isOnPath,
+            });
+
+            const result = await resolveCliPath(deps);
+
+            assert.strictEqual(result.available, true);
+            assert.strictEqual(result.source, 'path');
+            assert.strictEqual(result.cliPath, 'aspire.cmd');
+            assert.deepStrictEqual(tryExecute.getCalls().map(call => call.args[0]), ['aspire.cmd']);
+            assert.ok(isOnPath.notCalled, 'should not continue to the generic PATH probe when the configured bare command works');
+        });
+
+        test('falls back to normal PATH when configured bare Aspire command is unavailable', async () => {
+            const workspaceFolder = path.resolve('repo');
+            const tryExecute = sinon.stub().resolves(false);
+            const isOnPath = sinon.stub().resolves(true);
+            const deps = createMockDeps({
+                getConfiguredPath: () => 'aspire.cmd',
+                getWorkspaceFolders: () => [workspaceFolder],
+                tryExecute,
+                isOnPath,
+            });
+
+            const result = await resolveCliPath(deps);
+
+            assert.strictEqual(result.available, true);
+            assert.strictEqual(result.source, 'path');
+            assert.strictEqual(result.cliPath, 'aspire');
+            assert.deepStrictEqual(tryExecute.getCalls().map(call => call.args[0]), ['aspire.cmd']);
+            assert.ok(isOnPath.calledOnce, 'should fall through to the generic PATH probe');
+        });
+
         test('clears setting when CLI is on PATH and setting was previously set to a default path', async () => {
             const setConfiguredPath = sinon.stub().resolves();
 
