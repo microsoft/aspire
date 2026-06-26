@@ -204,6 +204,7 @@ public static class HostedAgentResourceBuilderExtensions
                 commandName: "send-message",
                 commandOptions: new()
                 {
+                    Progress = new() { Message = "Sending message to agent..." },
                     Method = HttpMethod.Post,
                     IconName = "ChatSparkle",
                     IconVariant = IconVariant.Regular,

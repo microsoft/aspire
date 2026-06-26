@@ -374,7 +374,7 @@ public class ResourceCommandService
                 // not attempt to prompt the user.
                 using var _ = nonInteractive ? InteractionService.StartNonInteractiveScope() : default;
 
-                var result = await annotation.ExecuteCommand(context).ConfigureAwait(false);
+                var result = await ExecuteCommandWithOptionalProgressAsync(annotation, context, cancellationToken).ConfigureAwait(false);
                 if (result.Success)
                 {
                     logger.LogInformation("Successfully executed command '{CommandName}'.", commandName);
@@ -405,6 +405,60 @@ public class ResourceCommandService
 
         logger.LogInformation("Command '{CommandName}' not available.", commandName);
         return new ExecuteCommandResult { Success = false, Message = $"Command '{commandName}' not available for resource '{resource.GetResolvedDisplayResourceName(resourceId)}'." };
+    }
+
+    private async Task<ExecuteCommandResult> ExecuteCommandWithOptionalProgressAsync(
+        ResourceCommandAnnotation annotation,
+        ExecuteCommandContext context,
+        CancellationToken cancellationToken)
+    {
+        if (annotation.Progress is not { } progressOptions)
+        {
+            return await annotation.ExecuteCommand(context).ConfigureAwait(false);
+        }
+
+        var interactionService = _serviceProvider.GetRequiredService<IInteractionService>();
+        if (!interactionService.IsAvailable)
+        {
+            // No interactive UI available — execute without progress dialog.
+            return await annotation.ExecuteCommand(context).ConfigureAwait(false);
+        }
+
+        ExecuteCommandResult? commandResult = null;
+
+        var options = new ProgressInteractionOptions
+        {
+            Work = async progress =>
+            {
+                // Use a linked token so that clicking Cancel in the progress dialog
+                // cancels the command execution.
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(progress.CancellationToken, cancellationToken);
+                var linkedContext = new ExecuteCommandContext
+                {
+                    ResourceName = context.ResourceName,
+                    Services = context.Services,
+                    CancellationToken = linkedCts.Token,
+                    Logger = context.Logger,
+                    Arguments = context.Arguments
+                };
+
+                commandResult = await annotation.ExecuteCommand(linkedContext).ConfigureAwait(false);
+            }
+        };
+
+        if (!progressOptions.HideCancelButton)
+        {
+            options.PrimaryButtonText = "Cancel";
+        }
+
+        var progressResult = await interactionService.PromptProgressAsync(progressOptions.Message, title: progressOptions.Title, options: options, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (progressResult.Canceled && commandResult is null)
+        {
+            return CommandResults.Canceled();
+        }
+
+        return commandResult ?? CommandResults.Canceled();
     }
 
     internal async Task<(ExecuteCommandResult Result, InteractionInputCollection? Arguments)> ValidateCommandArgumentsAsync(string resourceId, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
