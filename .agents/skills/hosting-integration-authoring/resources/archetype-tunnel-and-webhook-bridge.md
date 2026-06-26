@@ -20,12 +20,14 @@ DO:
 - Make bridge resources wait for the target resource when forwarding requires the target to be ready.
 - If the bridge exposes one public endpoint per target endpoint, model those endpoints as child or facade resources rather than overloading the owner resource with many unrelated URLs.
 - Read `custom-lifecycle-and-facade-resources.md` when the bridge creates resources whose lifecycle, endpoints, or dashboard state are driven by the bridge process or an external service.
+- When centralizing bridge start/ready/stopped behavior, prefer the stateless lifecycle-orchestrator variant in `archetype-controller-reconciler.md`. Add a serialized queue only if the bridge gains shared mutable controller state, command/cancel workflows, or drift/reconcile behavior.
 
 DON'T:
 
 - Don't classify tunnel/webhook bridges as external cloud references; they are local run resources that connect to external services.
 - Don't expose every endpoint by default unless the bridge is explicitly designed to do that.
 - Don't include local tunnels, webhook listeners, or public callback URLs in publish manifests by default.
+- Don't globally serialize independent tunnel resources just because they use the same CLI or login flow; use a narrower concurrency primitive for the shared part.
 
 ## Endpoint handling
 

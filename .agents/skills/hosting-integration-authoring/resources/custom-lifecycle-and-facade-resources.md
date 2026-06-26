@@ -37,7 +37,8 @@ DO:
 - Use `OnResourceReady` on the owner to mark facade resources running after the owner is healthy and the external state is observable.
 - Use `OnResourceStopped` on the owner to mark facade resources stopped and their URLs inactive.
 - Keep remote parent state deletion explicit. If the external service expires or persists state by design, do not delete it on AppHost stop unless the public API promises session-scoped cleanup.
-- Use `archetype-controller-reconciler.md` instead when lifecycle callbacks, commands, background probes, and multiple resources must coordinate shared external state.
+- Use the stateless lifecycle-orchestrator variant in `archetype-controller-reconciler.md` when several facade callbacks need the same helper logic but remain independent.
+- Use the serialized controller/reconciler variant only when lifecycle callbacks, commands, background probes, and multiple resources must coordinate shared mutable state.
 
 DON'T:
 
@@ -81,6 +82,7 @@ DON'T:
 - Don't publish lifecycle events out of order.
 - Don't leave facade resources in `Running` after the owner has stopped.
 - Don't use a successful-looking state when the external service failed to create or expose the facade.
+- Don't add a global controller queue for facade resources that are independently owned by different parent resources.
 
 ## Runtime endpoint allocation
 

@@ -7,6 +7,7 @@ Representative examples:
 - A run-mode provisioning controller that serializes provision, reprovision, reset, delete, cancel, and drift-check operations.
 - A deployment target controller that reconciles desired app-model resources with live platform state.
 - A local infrastructure operator that reacts to commands and resource state changes while keeping dashboard command state accurate.
+- A stateless lifecycle orchestrator that centralizes per-resource start/ready/stopped logic without serializing unrelated resources.
 
 ## Shape
 
@@ -27,9 +28,26 @@ DON'T:
 - Don't let every command, event handler, and background probe mutate shared state independently.
 - Don't use resource names or call order as implicit operation dependencies.
 
+## Pick the lightest controller shape
+
+Centralizing lifecycle logic in a controller service does not always mean adding a queue.
+
+DO:
+
+- Use a stateless lifecycle orchestrator when operations are per-resource, independent, and do not mutate shared controller state. Invoke its methods directly from resource lifecycle callbacks so Aspire's built-in per-resource concurrency is preserved.
+- Keep shared external interactions concurrency-safe without a controller queue when a narrower primitive already exists, such as a coalesced login manager or per-client retry helper.
+- Escalate to a serialized queue/reconciler only when operations contend on shared mutable state, dashboard command state, cancel/delete/reset workflows, drift probes, or an environment-level operation model.
+- Scope serialization to the smallest conflict domain. Use one global queue only when a single intent owns the whole resource set and fans out internally; use keyed/per-resource serialization for independent per-resource lifecycle callbacks.
+
+DON'T:
+
+- Don't introduce a serialized control loop just to move code out of fluent extension methods.
+- Don't funnel independent per-resource lifecycle callbacks through one global single-reader queue; it serializes unrelated resources, increases startup latency, and adds shutdown-loop failure modes.
+- Don't make unrelated resources wait behind a long-running operation unless they really share the same external state or invariant.
+
 ## Serialized control loop
 
-A controller should have one synchronization boundary for all mutating work.
+Use a serialized control loop only after the decision gate above says one is needed. A queued reconciler should have one synchronization boundary for the state it owns.
 
 DO:
 
@@ -40,6 +58,8 @@ DO:
 - Keep the locked state small: current intent, active operation snapshot, queued operation scopes, and coalescing flags.
 - Never `await` while holding the controller state lock.
 - Start background loops lazily and idempotently with `Interlocked` or an equivalent guard.
+- Tie reader-loop lifetime to explicit channel completion/disposal, not only to host shutdown, when the controller must process shutdown-time intents such as stopped/finished transitions.
+- Fence writers after the loop exits. Enqueue-and-await must fail fast rather than waiting on a `TaskCompletionSource` that no reader can complete.
 - Complete every queued operation exactly once: success, failure, or cancellation.
 - Re-enable command state in `finally`, using a non-cancelable token when needed so canceled requests do not leave commands disabled.
 
@@ -48,6 +68,8 @@ DON'T:
 - Don't execute mutating command bodies inline when they can re-enter the same state from another path.
 - Don't rely only on dashboard disabled-state to prevent concurrency; enforce conflicts in the controller.
 - Don't let operation continuations run inline while holding queue or state machinery.
+- Don't await a queued operation from code already running inside the single reader loop, including event handlers published by that operation; the loop cannot service the nested operation until the current one returns.
+- Don't leave a latched "loop started" flag set after loop failure or completion unless writers are also closed/fenced.
 
 ## Command state and dashboard integration
 
@@ -134,6 +156,7 @@ DON'T:
 DO test:
 
 - Concurrent mutating commands serialize when they target different resources.
+- Independent resources still run concurrently when the controller is only a stateless lifecycle orchestrator.
 - Conflicting active or queued operations fail fast even if dashboard command state has not refreshed.
 - Command states disable and re-enable on success, failure, and cancellation.
 - Cancel command availability for active, queued, nonaffected, and noncancelable resource states.
@@ -141,8 +164,10 @@ DO test:
 - Per-resource completion tasks unblock dependents and are not replaced while incomplete.
 - Dynamic command inputs preserve user-entered values and re-enable after loading failures when custom input is allowed.
 - Diagnostic commands return structured data without live external service dependencies in unit tests.
+- Queue lifetime behavior: after the reader loop stops or the controller is disposed, new operations fail fast and already queued operations complete or cancel.
 
 DON'T:
 
 - Don't test controller concurrency only through dashboard snapshots; directly exercise the controller queue and command execution paths.
+- Don't skip a regression test for accidental global serialization. Use a gated fake external client where all independent resources must rendezvous before any operation is released.
 - Don't rely on live cloud or external services for ordinary controller unit tests.
