@@ -1737,7 +1737,7 @@ public class DcpExecutorTests
             Assert.Contains("""portForServing "ServiceA-NoPortNoTargetPort" """, envVarVal);
 
             // ASPNETCORE_URLS should not include dontinjectme, as it was excluded using WithEndpointsInEnvironment
-            var aspnetCoreUrls = dcpExe.Spec.Env?.Single(v => v.Name == "ASPNETCORE_URLS").Value;
+            var aspnetCoreUrls = dcpExe.Spec.Env?.Single(v => v.Name == KnownAspNetCoreConfigNames.Urls).Value;
             Assert.Equal("http://localhost:{{- portForServing \"ServiceA-http\" -}};http://localhost:{{- portForServing \"ServiceA-hp1\" -}}", aspnetCoreUrls);
         }
     }
@@ -1810,7 +1810,7 @@ public class DcpExecutorTests
         Assert.Equal(desiredPort, svc.Status?.EffectivePort);
         Assert.Equal(desiredPort, spAnnList.Single(ann => ann.ServiceName == "ServiceA").Port);
 
-        var aspnetCoreUrls = dcpExe.Spec.Env?.Single(v => v.Name == "ASPNETCORE_URLS").Value;
+        var aspnetCoreUrls = dcpExe.Spec.Env?.Single(v => v.Name == KnownAspNetCoreConfigNames.Urls).Value;
         Assert.Equal($"http://localhost:{desiredPort}", aspnetCoreUrls);
     }
 
@@ -1847,7 +1847,7 @@ public class DcpExecutorTests
         Assert.Equal(desiredPort, svc.Status?.EffectivePort);
         Assert.Equal(desiredPort, spAnnList.Single(ann => ann.ServiceName == "ServiceA").Port);
 
-        var aspnetCoreUrls = dcpExe.Spec.Env?.Single(v => v.Name == "ASPNETCORE_URLS").Value;
+        var aspnetCoreUrls = dcpExe.Spec.Env?.Single(v => v.Name == KnownAspNetCoreConfigNames.Urls).Value;
         Assert.Equal($"http://localhost:{desiredPort}", aspnetCoreUrls);
     }
 
@@ -1887,7 +1887,7 @@ public class DcpExecutorTests
         Assert.NotEqual(desiredPort, svc.Status?.EffectivePort);
         Assert.Null(spAnnList.Single(ann => ann.ServiceName == "ServiceA").Port);
 
-        var aspnetCoreUrls = dcpExe.Spec.Env?.Single(v => v.Name == "ASPNETCORE_URLS").Value;
+        var aspnetCoreUrls = dcpExe.Spec.Env?.Single(v => v.Name == KnownAspNetCoreConfigNames.Urls).Value;
         Assert.Contains("""portForServing "ServiceA" """, aspnetCoreUrls);
     }
 

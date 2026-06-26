@@ -19,6 +19,7 @@ using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -303,22 +304,28 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     public async Task WaitForLegacyDetachedStartupStabilityAsync_RetriesV2ProbeUntilChildExits()
     {
         var probeCount = 0;
-        using var childProcess = Process.Start(CreateQuickFailProcessStartInfo()) ?? throw new InvalidOperationException("Failed to start test child process.");
+        var childExitTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var connection = new TestAppHostAuxiliaryBackchannel
         {
             SupportsV2 = true,
             GetResourceSnapshotsHandler = _ =>
             {
                 probeCount++;
+                // Signal child exit after the first probe so the method observes the exit
+                // during the retry delay, making the test deterministic.
+                childExitTcs.TrySetResult();
                 throw new IOException("model unavailable");
             }
         };
 
+        // Use FakeTimeProvider so the test never waits for real time and is fully deterministic.
+        var timeProvider = new FakeTimeProvider();
+
         var stable = await AppHostLauncher.WaitForLegacyDetachedStartupStabilityAsync(
             connection,
-            childProcess.WaitForExitAsync(),
+            childExitTcs.Task,
             TimeSpan.FromSeconds(120),
-            TimeProvider.System,
+            timeProvider,
             CancellationToken.None);
 
         Assert.False(stable);
@@ -641,22 +648,6 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         return new ConfigurationBuilder()
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
-    }
-
-    private static ProcessStartInfo CreateQuickFailProcessStartInfo()
-    {
-        var (fileName, arguments) = OperatingSystem.IsWindows()
-            ? ("cmd.exe", "/c ping -n 2 127.0.0.1 >NUL & exit /b 6")
-            : ("/bin/sh", "-c \"sleep 0.1; exit 6\"");
-
-        return new ProcessStartInfo(fileName)
-        {
-            Arguments = arguments,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
     }
 
     private sealed class AppHostLauncherHarness : IDisposable

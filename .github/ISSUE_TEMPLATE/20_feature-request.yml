@@ -14,6 +14,7 @@ body:
         - label: I have searched the existing issues
           required: true
   - type: textarea
+    id: problem
     attributes:
       label: Is your feature request related to a problem? Please describe the problem.
       description: A clear and concise description of what the problem is.
@@ -21,6 +22,7 @@ body:
     validations:
       required: false
   - type: textarea
+    id: solution
     attributes:
       label: Describe the solution you'd like
       description: |
@@ -28,6 +30,7 @@ body:
     validations:
       required: true
   - type: textarea
+    id: additional-context
     attributes:
       label: Additional context
       description: |

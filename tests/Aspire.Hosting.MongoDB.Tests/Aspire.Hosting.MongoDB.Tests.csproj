@@ -7,7 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.MongoDB\Aspire.Hosting.MongoDB.csproj" />
     <ProjectReference Include="..\..\src\Components\Aspire.MongoDB.Driver\Aspire.MongoDB.Driver.csproj" />
-    <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
 
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
   </ItemGroup>
