@@ -39,6 +39,10 @@ export interface AppHostDebugSessionTerminatedEvent {
     shouldRequestStopRefresh: boolean;
 }
 
+export interface AppHostLaunchOptions {
+    cliAvailabilityAlreadyChecked?: boolean;
+}
+
 /**
  * Centralizes all Aspire AppHost launch operations that require a resolved
  * AppHost path. Both the editor command provider (which discovers the path)
@@ -137,7 +141,7 @@ export class AppHostLaunchService implements vscode.Disposable {
      * @param noDebug When true, launches without the debugger attached.
      * @param doStep Optional step name for the 'do' command.
      */
-    async launch(appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep?: string): Promise<void> {
+    async launch(appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep?: string, options?: AppHostLaunchOptions): Promise<void> {
         const startTime = Date.now();
         const executionSuppressed = isE2eDebugLaunchSuppressed();
         const telemetryProperties = getLaunchTelemetryProperties(appHostPath, command, noDebug, executionSuppressed);
@@ -181,9 +185,11 @@ export class AppHostLaunchService implements vscode.Disposable {
             this._launchingPaths.add(getComparisonKey(path.resolve(appHostPath)));
             this._onDidChangeLaunchingState.fire();
 
-            const cliAvailability = await checkCliAvailableOrRedirect('debug_gate');
-            if (!cliAvailability.available) {
-                throw new vscode.CancellationError();
+            if (!options?.cliAvailabilityAlreadyChecked) {
+                const cliAvailability = await checkCliAvailableOrRedirect('debug_gate');
+                if (!cliAvailability.available) {
+                    throw new vscode.CancellationError();
+                }
             }
             config.skipCliAvailabilityCheck = true;
 

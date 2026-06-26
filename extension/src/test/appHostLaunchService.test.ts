@@ -92,6 +92,17 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(config.step, 'deploy');
     });
 
+    test('launch skips CLI availability probe when caller already checked availability', async () => {
+        resolveCliPathStub.resolves({ cliPath: 'aspire', available: false, source: 'not-found' });
+
+        await service.launch('/repo/AppHost.csproj', 'deploy', false, undefined, { cliAvailabilityAlreadyChecked: true });
+
+        assert.strictEqual(resolveCliPathStub.called, false);
+        assert.strictEqual(startDebuggingStub.calledOnce, true);
+        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
+        assert.strictEqual(config.skipCliAvailabilityCheck, true);
+    });
+
     test('clearLaunching removes the path from launching state', async () => {
         await service.launch('/repo/AppHost.csproj', 'run', true);
         assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), true);

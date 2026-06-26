@@ -2,14 +2,15 @@ import * as vscode from 'vscode';
 import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
+import type { AppHostLaunchOptions } from '../services/AppHostLaunchService';
 import { enterPipelineStep } from '../loc/strings';
 
-export async function doCommand(terminalProvider: AspireTerminalProvider, editorCommandProvider: AspireEditorCommandProvider) {
+export async function doCommand(terminalProvider: AspireTerminalProvider, editorCommandProvider: AspireEditorCommandProvider, launchOptions?: AppHostLaunchOptions) {
     const step = await resolveStep(terminalProvider);
     if (step === undefined) {
         throw new vscode.CancellationError();
     }
-    await editorCommandProvider.tryExecuteDoAppHost(false, step ?? undefined);
+    await editorCommandProvider.tryExecuteDoAppHost(false, step ?? undefined, launchOptions);
 }
 
 /**

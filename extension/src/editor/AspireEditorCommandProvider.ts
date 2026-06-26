@@ -7,6 +7,7 @@ import { AppHostDiscoveryService, getDebugTargetForCandidate, selectWorkspaceApp
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import type { AppHostLaunchOptions } from '../services/AppHostLaunchService';
 
 export class AspireEditorCommandProvider implements vscode.Disposable {
     private _disposables: vscode.Disposable[] = [];
@@ -118,30 +119,30 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
         }
     }
 
-    public async tryExecuteRunAppHost(noDebug: boolean): Promise<void> {
-        await this.launchAspireDebugSession('run', noDebug);
+    public async tryExecuteRunAppHost(noDebug: boolean, launchOptions?: AppHostLaunchOptions): Promise<void> {
+        await this.launchAspireDebugSession('run', noDebug, undefined, launchOptions);
     }
 
-    public async tryExecuteDeployAppHost(noDebug: boolean): Promise<void> {
-        await this.launchAspireDebugSession('deploy', noDebug);
+    public async tryExecuteDeployAppHost(noDebug: boolean, launchOptions?: AppHostLaunchOptions): Promise<void> {
+        await this.launchAspireDebugSession('deploy', noDebug, undefined, launchOptions);
     }
 
-    public async tryExecutePublishAppHost(noDebug: boolean): Promise<void> {
-        await this.launchAspireDebugSession('publish', noDebug);
+    public async tryExecutePublishAppHost(noDebug: boolean, launchOptions?: AppHostLaunchOptions): Promise<void> {
+        await this.launchAspireDebugSession('publish', noDebug, undefined, launchOptions);
     }
 
-    public async tryExecuteDoAppHost(noDebug: boolean, doStep?: string): Promise<void> {
-        await this.launchAspireDebugSession('do', noDebug, doStep);
+    public async tryExecuteDoAppHost(noDebug: boolean, doStep?: string, launchOptions?: AppHostLaunchOptions): Promise<void> {
+        await this.launchAspireDebugSession('do', noDebug, doStep, launchOptions);
     }
 
-    private async launchAspireDebugSession(aspireCommand: AspireCommandType, noDebug: boolean, doStep?: string): Promise<void> {
+    private async launchAspireDebugSession(aspireCommand: AspireCommandType, noDebug: boolean, doStep?: string, launchOptions?: AppHostLaunchOptions): Promise<void> {
         const appHostToRun = await this.getAppHostPath();
         if (!appHostToRun) {
             vscode.window.showErrorMessage(noAppHostInWorkspace);
             return;
         }
 
-        await this._launchService.launch(appHostToRun, aspireCommand, noDebug, doStep);
+        await this._launchService.launch(appHostToRun, aspireCommand, noDebug, doStep, launchOptions);
     }
 
     dispose() {
