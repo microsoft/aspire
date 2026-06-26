@@ -1,4 +1,5 @@
-import { readdirSync } from 'node:fs';
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
 import { CandidateAppHostDisplayInfo } from './appHostDiscovery';
 
 /**
@@ -24,9 +25,9 @@ export type AppHostLanguageSummary = 'csharp' | 'typescript' | 'polyglot' | 'unk
  * the summary. Anything we don't recognize is grouped as `'other'` so that a
  * mixed workspace still reports `polyglot` rather than hiding the diversity.
  */
-function languageFamily(raw: string | null | undefined): 'csharp' | 'typescript' | 'other' | undefined {
+function languageFamily(raw: string | null | undefined): 'csharp' | 'typescript' | 'other' {
     if (!raw) {
-        return undefined;
+        return 'other';
     }
     const value = raw.toLowerCase();
     if (value === 'csharp' || value === 'c#') {
@@ -50,9 +51,6 @@ export function summarizeAppHostLanguages(candidates: readonly CandidateAppHostD
 
     for (const candidate of candidates) {
         const family = languageFamily(candidate.language);
-        if (family === undefined) {
-            continue;
-        }
         sawAny = true;
         if (family === 'csharp') {
             sawCsharp = true;
@@ -97,7 +95,7 @@ export function classifyAppHostPath(appHostPath: string | undefined): 'csharp' |
         return 'unknown';
     }
     const lower = appHostPath.toLowerCase();
-    if (lower.endsWith('.csproj') || lower.endsWith('.cs')) {
+    if (lower.endsWith('.csproj') || lower.endsWith('.fsproj') || lower.endsWith('.vbproj') || lower.endsWith('.cs')) {
         return 'csharp';
     }
     if (lower.endsWith('.ts') || lower.endsWith('.mts') || lower.endsWith('.cts') ||
@@ -112,22 +110,19 @@ export function classifyAppHostPath(appHostPath: string | undefined): 'csharp' |
  * launches AppHosts as a directory (e.g. `aspire run` without `--apphost`)
  * because the entry file lives next to `package.json` / `*.csproj` and is
  * discovered at runtime. Looking only at the directory name itself loses the
- * language signal entirely, so we synchronously enumerate the directory and
- * match well-known AppHost file names.
+ * language signal entirely, so we enumerate the directory and match well-known
+ * AppHost file names.
  *
- * Used at telemetry-emit time only — the function is intentionally synchronous
- * to keep the launch-telemetry call path simple and to avoid plumbing async
- * through {@link AspireDebugSession.handleMessage}. Directory reads are
- * O(entries), small for typical AppHost roots; any failure (permissions,
- * missing directory) returns `'unknown'` rather than throwing.
+ * Directory reads are O(entries), small for typical AppHost roots; any failure
+ * (permissions, missing directory) returns `'unknown'` rather than throwing.
  */
-export function classifyAppHostDirectory(directoryPath: string | undefined): 'csharp' | 'typescript' | 'unknown' {
+export async function classifyAppHostDirectory(directoryPath: string | undefined): Promise<'csharp' | 'typescript' | 'unknown'> {
     if (!directoryPath) {
         return 'unknown';
     }
     let entries: string[];
     try {
-        entries = readdirSync(directoryPath);
+        entries = await fs.readdir(directoryPath);
     }
     catch {
         return 'unknown';
@@ -135,11 +130,10 @@ export function classifyAppHostDirectory(directoryPath: string | undefined): 'cs
     let sawCsharp = false;
     let sawTypescript = false;
     for (const entry of entries) {
-        const family = classifyAppHostPath(entry);
-        if (family === 'csharp') {
+        if (await isCsharpAppHostMarker(directoryPath, entry)) {
             sawCsharp = true;
         }
-        else if (family === 'typescript') {
+        else if (isTypescriptAppHostMarker(entry)) {
             sawTypescript = true;
         }
     }
@@ -156,4 +150,64 @@ export function classifyAppHostDirectory(directoryPath: string | undefined): 'cs
         return 'typescript';
     }
     return 'unknown';
+}
+
+async function isCsharpAppHostMarker(directoryPath: string, entry: string): Promise<boolean> {
+    const lower = entry.toLowerCase();
+    if (lower === 'apphost.cs') {
+        return true;
+    }
+
+    if (!lower.endsWith('.csproj') && !lower.endsWith('.fsproj') && !lower.endsWith('.vbproj')) {
+        return false;
+    }
+
+    if (projectFileNameLooksLikeAppHost(lower)) {
+        return true;
+    }
+
+    return await projectFileReferencesAspireAppHost(directoryPath, entry);
+}
+
+function projectFileNameLooksLikeAppHost(fileName: string): boolean {
+    const nameWithoutExtension = fileName.replace(/\.[^.]+$/, '');
+    return nameWithoutExtension === 'apphost'
+        || nameWithoutExtension.endsWith('.apphost');
+}
+
+async function projectFileReferencesAspireAppHost(directoryPath: string, entry: string): Promise<boolean> {
+    let contents: string;
+    try {
+        contents = await fs.readFile(join(directoryPath, entry), 'utf8');
+    }
+    catch {
+        return false;
+    }
+
+    const uncommentedContents = contents.replace(/<!--[\s\S]*?-->/g, '');
+    // C# AppHost project files can advertise Aspire through SDK, package, or evaluated properties:
+    //   <Project Sdk="Aspire.AppHost.Sdk/13.5.0">
+    //   <Sdk Name="Aspire.AppHost.Sdk" Version="13.5.0" />
+    //   <PackageReference Include="Aspire.Hosting.AppHost" />
+    //   <IsAspireHost>true</IsAspireHost>
+    return projectSdkReferencesAspireAppHost(uncommentedContents)
+        || /<Sdk\b(?=[^>]*\bName\s*=\s*(["'])Aspire\.AppHost\.Sdk\1)[^>]*>/is.test(uncommentedContents)
+        || /<(?:PackageReference|AspireProjectOrPackageReference)\b(?=[^>]*\bInclude\s*=\s*["']Aspire\.Hosting(?:\.AppHost)?["'])[^>]*>/is.test(uncommentedContents)
+        || /<IsAspireHost>\s*true\s*<\/IsAspireHost>/i.test(uncommentedContents);
+}
+
+function projectSdkReferencesAspireAppHost(contents: string): boolean {
+    const projectSdkMatch = /<Project\b[^>]*\bSdk\s*=\s*(["'])(?<sdks>.*?)\1/is.exec(contents);
+    const sdkAttribute = projectSdkMatch?.groups?.sdks;
+    if (!sdkAttribute) {
+        return false;
+    }
+
+    return sdkAttribute.split(';').some(sdk => /^Aspire\.AppHost\.Sdk(?:\/|$)/i.test(sdk.trim()));
+}
+
+function isTypescriptAppHostMarker(entry: string): boolean {
+    const lower = entry.toLowerCase();
+    return lower === 'apphost.ts' || lower === 'apphost.mts' || lower === 'apphost.cts' ||
+        lower === 'apphost.js' || lower === 'apphost.mjs' || lower === 'apphost.cjs';
 }

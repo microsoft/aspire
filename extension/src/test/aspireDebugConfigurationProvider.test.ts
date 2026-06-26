@@ -94,6 +94,22 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(config?.program, programPath);
     });
 
+    test('leaves workspace folder launch target unchanged and records AppHost telemetry target', async () => {
+        const folder = createWorkspaceFolder(tempDir);
+        const appHostPath = path.join(tempDir, 'NestedAppHost', 'apphost.ts');
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(appHostPath));
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(folder, {
+            name: 'Debug AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: folder.uri.fsPath
+        });
+
+        assert.strictEqual(config?.program, folder.uri.fsPath);
+        assert.strictEqual(config?.__aspireAppHostTelemetryTargetPath, appHostPath);
+    });
+
     test('provides dynamic launch config when active file resolves to AppHost candidate', async () => {
         const folder = createWorkspaceFolder(tempDir);
         const programPath = path.join(tempDir, 'AppHost', 'Program.cs');
@@ -215,13 +231,16 @@ function createWorkspaceFolder(folderPath: string): vscode.WorkspaceFolder {
 }
 
 function createAppHostDiscoveryService(resolvedPath: string, candidatePath: string | null = resolvedPath, language = 'csharp'): AppHostDiscoveryService {
+    const createCandidate = () => candidatePath ? {
+        path: candidatePath,
+        language: language,
+        status: 'buildable',
+    } : undefined;
+
     return {
-        resolveDebugTarget: async () => resolvedPath,
-        tryFindCandidateForEditorFile: async () => candidatePath ? {
-            path: candidatePath,
-            language: language,
-            status: 'buildable',
-        } : undefined,
+        resolveDebugTarget: async (filePath: string, folder?: vscode.WorkspaceFolder) => folder && path.resolve(filePath) === path.resolve(folder.uri.fsPath) ? filePath : resolvedPath,
+        tryFindWorkspaceDefaultCandidate: async (filePath: string, folder?: vscode.WorkspaceFolder) => folder && path.resolve(filePath) === path.resolve(folder.uri.fsPath) ? createCandidate() : undefined,
+        tryFindCandidateForEditorFile: async () => createCandidate(),
     } as unknown as AppHostDiscoveryService;
 }
 

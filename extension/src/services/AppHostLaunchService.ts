@@ -144,7 +144,7 @@ export class AppHostLaunchService implements vscode.Disposable {
     async launch(appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep?: string, options?: AppHostLaunchOptions): Promise<void> {
         const startTime = Date.now();
         const executionSuppressed = isE2eDebugLaunchSuppressed();
-        const telemetryProperties = getLaunchTelemetryProperties(appHostPath, command, noDebug, executionSuppressed);
+        const telemetryProperties = await getLaunchTelemetryProperties(appHostPath, command, noDebug, executionSuppressed);
 
         const config: AspireExtendedDebugConfiguration = {
             type: 'aspire',
@@ -228,12 +228,12 @@ export class AppHostLaunchService implements vscode.Disposable {
     }
 }
 
-function getLaunchTelemetryProperties(appHostPath: string, command: AspireCommandType, noDebug: boolean, executionSuppressed: boolean) {
+async function getLaunchTelemetryProperties(appHostPath: string, command: AspireCommandType, noDebug: boolean, executionSuppressed: boolean) {
     const isDirectory = isDirectoryForTelemetry(appHostPath);
     return {
         mode: noDebug ? 'run' : 'debug',
         command: bucketAspireCommand(command),
-        apphost_language: isDirectory ? classifyAppHostDirectory(appHostPath) : classifyAppHostPath(appHostPath),
+        apphost_language: isDirectory ? await classifyAppHostDirectory(appHostPath) : classifyAppHostPath(appHostPath),
         execution_suppressed: executionSuppressed ? 'true' : 'false',
     };
 }

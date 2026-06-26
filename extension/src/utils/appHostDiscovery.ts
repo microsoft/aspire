@@ -115,8 +115,28 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     }
 
     async tryResolveDebugTarget(filePath: string, workspaceFolder?: vscode.WorkspaceFolder): Promise<string | undefined> {
-        const candidate = await this.tryFindCandidateForEditorFile(filePath, workspaceFolder);
+        const folder = workspaceFolder ?? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
+        if (!folder) {
+            return undefined;
+        }
+
+        if (isSamePath(filePath, folder.uri.fsPath)) {
+            return undefined;
+        }
+
+        const candidates = await this.discover(folder);
+        const candidate = findCandidateForEditorFile(filePath, candidates);
         return candidate ? getDebugTargetForCandidate(candidate) : undefined;
+    }
+
+    async tryFindWorkspaceDefaultCandidate(filePath: string, workspaceFolder?: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo | undefined> {
+        const folder = workspaceFolder ?? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
+        if (!folder || !isSamePath(filePath, folder.uri.fsPath)) {
+            return undefined;
+        }
+
+        const candidates = await this.discover(folder);
+        return findWorkspaceDefaultCandidate(candidates);
     }
 
     async tryFindCandidateForEditorFile(filePath: string, workspaceFolder?: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo | undefined> {
@@ -170,9 +190,9 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 this._throwIfDisposed();
                 let fileFallbackError: unknown;
                 try {
-                    const appHosts = await discoverCSharpAppHostProjectsFromWorkspaceFiles(workspaceFolder);
+                    const appHosts = await discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder);
                     if (appHosts.length > 0) {
-                        extensionLogOutputChannel.warn(`CLI AppHost discovery failed; using ${appHosts.length} C# AppHost project candidate(s) found in the workspace.`);
+                        extensionLogOutputChannel.warn(`CLI AppHost discovery failed; using ${appHosts.length} AppHost project candidate(s) found in the workspace.`);
                         return { source: 'workspace-files', candidates: appHosts };
                     }
                 }
@@ -449,6 +469,12 @@ export function findCandidateForEditorFile(filePath: string, candidates: readonl
     return projectCandidate;
 }
 
+function findWorkspaceDefaultCandidate(candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
+    const buildableCandidates = candidates.filter(isBuildableCandidate);
+    return buildableCandidates.find(candidate => candidate.selected)
+        ?? (buildableCandidates.length === 1 ? buildableCandidates[0] : undefined);
+}
+
 export function getDebugTargetForCandidate(candidate: CandidateAppHostDisplayInfo): string {
     return candidate.path;
 }
@@ -573,11 +599,7 @@ function parseCandidateOutput(output: string, commandName: string): CandidateApp
     if (Array.isArray(parsed)) {
         const appHosts = parsed
             .filter(isLsCandidate)
-            .map(candidate => ({
-                path: candidate.path,
-                language: candidate.language,
-                status: candidate.status,
-            }));
+            .map(candidate => toDisplayCandidate(candidate));
 
         const unexpectedCandidateCount = parsed.length - appHosts.length;
         if (unexpectedCandidateCount > 0) {
@@ -589,9 +611,7 @@ function parseCandidateOutput(output: string, commandName: string): CandidateApp
 
     if (isAppHostProjectSearchResult(parsed)) {
         return parsed.app_host_candidates.map(candidate => ({
-            path: candidate.path,
-            language: candidate.language,
-            status: candidate.status,
+            ...toDisplayCandidate(candidate),
             selected: typeof parsed.selected_project_file === 'string' && isSamePath(parsed.selected_project_file, candidate.path),
         }));
     }
@@ -603,11 +623,15 @@ function parseCandidateOutput(output: string, commandName: string): CandidateApp
     throw new Error(`${commandName} returned an unexpected output shape.`);
 }
 
-async function discoverCSharpAppHostProjectsFromWorkspaceFiles(workspaceFolder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo[]> {
+async function discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo[]> {
     // This is the final fallback after both CLI discovery paths fail. Do not cap the
     // project scan here: VS Code returns only the first maxResults matches, which can
     // hide the only AppHost in a large workspace.
-    const projectUris = await vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.csproj'), getAppHostDiscoveryExcludeGlob());
+    const projectUris = (await Promise.all([
+        vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.csproj'), getAppHostDiscoveryExcludeGlob()),
+        vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.fsproj'), getAppHostDiscoveryExcludeGlob()),
+        vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.vbproj'), getAppHostDiscoveryExcludeGlob()),
+    ])).flat();
     const candidates: CandidateAppHostDisplayInfo[] = [];
     for (const uri of projectUris.sort((left, right) => left.fsPath.localeCompare(right.fsPath))) {
         let projectContents: string;
@@ -619,10 +643,10 @@ async function discoverCSharpAppHostProjectsFromWorkspaceFiles(workspaceFolder: 
             continue;
         }
 
-        if (isCSharpAppHostProject(projectContents)) {
+        if (isAppHostProject(projectContents)) {
             candidates.push({
                 path: uri.fsPath,
-                language: 'csharp',
+                language: getProjectLanguage(uri.fsPath),
                 status: 'buildable',
             });
         }
@@ -631,8 +655,16 @@ async function discoverCSharpAppHostProjectsFromWorkspaceFiles(workspaceFolder: 
     return candidates;
 }
 
-function isCSharpAppHostProject(projectContents: string): boolean {
+function isAppHostProject(projectContents: string): boolean {
     return /<Project\b[^>]*\bSdk\s*=\s*["']Aspire\.AppHost\.Sdk(?:\/[^"']*)?["']/i.test(projectContents);
+}
+
+function getProjectLanguage(projectPath: string): string {
+    return path.extname(projectPath).toLowerCase() === '.fsproj'
+        ? 'fsharp'
+        : path.extname(projectPath).toLowerCase() === '.vbproj'
+            ? 'visualbasic'
+            : 'csharp';
 }
 
 function parseLegacyGetAppHostsOutput(output: string): LegacyAppHostProjectSearchResult {
@@ -664,6 +696,16 @@ function isLsCandidate(obj: unknown): obj is CandidateAppHostDisplayInfo {
         && typeof (obj as CandidateAppHostDisplayInfo).path === 'string'
         && typeof (obj as CandidateAppHostDisplayInfo).language === 'string'
         && typeof (obj as CandidateAppHostDisplayInfo).status === 'string';
+}
+
+function toDisplayCandidate(candidate: CandidateAppHostDisplayInfo | AppHostCandidate): CandidateAppHostDisplayInfo {
+    const displayCandidate: CandidateAppHostDisplayInfo = {
+        path: candidate.path,
+        language: candidate.language,
+        status: candidate.status,
+    };
+
+    return displayCandidate;
 }
 
 function formatErrorMessage(error: unknown): string {
@@ -744,6 +786,10 @@ function isCSharpProjectCandidate(candidate: CandidateAppHostDisplayInfo): boole
     // candidate adaptation/matching.
     return path.extname(candidate.path).toLowerCase() === '.csproj'
         && candidate.language?.toLowerCase() === 'csharp';
+}
+
+function isBuildableCandidate(candidate: CandidateAppHostDisplayInfo): boolean {
+    return candidate.status === null || candidate.status === 'buildable';
 }
 
 function isCSharpSourceFileForProjectCandidate(filePath: string, projectPath: string): boolean {

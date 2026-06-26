@@ -5,6 +5,7 @@ import { AppHostDiscoveryService, getDebugTargetForCandidate } from '../utils/ap
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { checkCliAvailableOrRedirect } from '../utils/workspace';
 import { extensionLogOutputChannel } from '../utils/logging';
+import { appHostTelemetryTargetPathConfigKey } from './AspireDebugConfigurationMetadata';
 
 export class AspireDebugConfigurationProvider implements vscode.DebugConfigurationProvider {
     constructor(private readonly _appHostDiscoveryService: AppHostDiscoveryService) {
@@ -71,7 +72,16 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         delete aspireConfig.skipCliAvailabilityCheck;
 
         if (typeof config.program === 'string') {
-            config.program = await this.resolveDebugTarget(config.program, folder);
+            const program = config.program;
+            config.program = await this.resolveDebugTarget(program, folder);
+
+            const telemetryTarget = await this.tryFindWorkspaceDefaultCandidate(program, folder);
+            if (telemetryTarget) {
+                config[appHostTelemetryTargetPathConfigKey] = telemetryTarget.path;
+            }
+            else {
+                delete config[appHostTelemetryTargetPathConfigKey];
+            }
         }
 
         return config;
@@ -94,6 +104,16 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
         catch (error) {
             extensionLogOutputChannel.warn(`Failed to resolve AppHost debug target ${filePath}: ${error}`);
             return filePath;
+        }
+    }
+
+    private async tryFindWorkspaceDefaultCandidate(filePath: string, folder: vscode.WorkspaceFolder | undefined): Promise<CandidateAppHostDisplayInfo | undefined> {
+        try {
+            return await this._appHostDiscoveryService.tryFindWorkspaceDefaultCandidate(filePath, folder);
+        }
+        catch (error) {
+            extensionLogOutputChannel.warn(`Failed to discover workspace AppHost telemetry target ${filePath}: ${error}`);
+            return undefined;
         }
     }
 
