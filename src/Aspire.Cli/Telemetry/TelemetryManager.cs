@@ -55,7 +55,8 @@ internal sealed class TelemetryManager : IDisposable
     /// Initializes a new instance of the <see cref="TelemetryManager"/> class.
     /// </summary>
     /// <param name="telemetryConfiguration">The telemetry configuration.</param>
-    public TelemetryManager(TelemetryConfiguration telemetryConfiguration)
+    /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
+    public TelemetryManager(TelemetryConfiguration telemetryConfiguration, TelemetryTagsSource tagsSource)
     {
 #if DEBUG
         // Preserve the DEBUG-only diagnostic OTLP path for non-profiling diagnostics. When
@@ -85,9 +86,7 @@ internal sealed class TelemetryManager : IDisposable
         // The Azure Monitor only exports telemetry from the Reported activity source.
         if (telemetryConfiguration.ReportedTelemetryEnabled)
         {
-            var azureMonitorBuilder = Sdk.CreateTracerProviderBuilder()
-                .AddSource(AspireCliTelemetry.ReportedActivitySourceName)
-                .SetResourceBuilder(resource)
+            var azureMonitorBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.ReportedActivitySourceName, resource, tagsSource)
                 .AddAzureMonitorTraceExporter(o =>
                 {
                     o.ConnectionString = ApplicationInsightsConnectionString;
@@ -107,18 +106,14 @@ internal sealed class TelemetryManager : IDisposable
 
         if (telemetryConfiguration.UseProfilingProvider)
         {
-            _profilingProvider = Sdk.CreateTracerProviderBuilder()
-                .AddSource(ProfilingTelemetry.ActivitySourceName)
-                .SetResourceBuilder(resource)
+            _profilingProvider = CreateTracerProviderBuilder(ProfilingTelemetry.ActivitySourceName, resource, tagsSource)
                 .AddOtlpExporter()
                 .Build();
         }
 
         if (useDebugDiagnosticProvider)
         {
-            var diagnosticBuilder = Sdk.CreateTracerProviderBuilder()
-                .AddSource(AspireCliTelemetry.DiagnosticsActivitySourceName)
-                .SetResourceBuilder(resource);
+            var diagnosticBuilder = CreateTracerProviderBuilder(AspireCliTelemetry.DiagnosticsActivitySourceName, resource, tagsSource);
 
             if (telemetryConfiguration.ConsoleExporterLevel == ConsoleExporterLevel.Diagnostic)
             {
@@ -134,13 +129,22 @@ internal sealed class TelemetryManager : IDisposable
         }
     }
 
+    private static TracerProviderBuilder CreateTracerProviderBuilder(string sourceName, ResourceBuilder resource, TelemetryTagsSource tagsSource)
+    {
+        return Sdk.CreateTracerProviderBuilder()
+            .AddSource(sourceName)
+            .SetResourceBuilder(resource)
+            .AddProcessor(new CliTagEnrichmentProcessor(tagsSource));
+    }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="TelemetryManager"/> class.
     /// </summary>
     /// <param name="configuration">The configuration to read telemetry settings from.</param>
+    /// <param name="tagsSource">The shared source for background-calculated telemetry tags.</param>
     /// <param name="args">The command-line arguments.</param>
-    internal TelemetryManager(IConfiguration configuration, string[]? args = null)
-        : this(TelemetryConfiguration.Create(configuration, args))
+    internal TelemetryManager(IConfiguration configuration, TelemetryTagsSource tagsSource, string[]? args = null)
+        : this(TelemetryConfiguration.Create(configuration, args), tagsSource)
     {
     }
 

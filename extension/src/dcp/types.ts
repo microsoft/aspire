@@ -207,6 +207,7 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
     dashboardBrowser?: DashboardLaunchBehavior;
     args?: string[];
     step?: string;
+    skipCliAvailabilityCheck?: boolean;
     env?: { [key: string]: string };
 }
 

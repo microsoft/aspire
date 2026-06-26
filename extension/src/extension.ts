@@ -10,7 +10,7 @@ import { publishCommand } from './commands/publish';
 import { doCommand } from './commands/do';
 import { cliNotAvailable, dismissLabel, errorMessage, openCliInstallInstructions } from './loc/strings';
 import { extensionLogOutputChannel } from './utils/logging';
-import { initializeTelemetry, isCommandCancellation, withCommandTelemetry } from './utils/telemetry';
+import { initializeTelemetry, isCommandCancellation, sendTelemetryEvent, withCommandTelemetry } from './utils/telemetry';
 import { MeaningfulEngagementReporter } from './utils/meaningfulEngagement';
 import { AspireDebugAdapterDescriptorFactory } from './debugger/AspireDebugAdapterDescriptorFactory';
 import { AspireDebugConfigurationProvider } from './debugger/AspireDebugConfigurationProvider';
@@ -53,6 +53,12 @@ export async function activate(context: vscode.ExtensionContext) {
   const gitCommitSha = readGitCommitSha(context);
   extensionLogOutputChannel.info(`Activating Aspire extension (commit: ${gitCommitSha})`);
   initializeTelemetry(context);
+  sendTelemetryEvent('extension/activated', {
+    workspace_open: vscode.workspace.workspaceFolders?.length ? 'true' : 'false',
+    extension_mode: getExtensionModeForTelemetry(context.extensionMode),
+  }, {
+    workspace_folders: vscode.workspace.workspaceFolders?.length ?? 0,
+  });
 
   const terminalProvider = new AspireTerminalProvider(context.subscriptions);
   const testRunSessionManager = new TestRunSessionManager();
@@ -395,6 +401,19 @@ export function deactivate() {
   aspireExtensionContext.dispose();
 }
 
+function getExtensionModeForTelemetry(mode: vscode.ExtensionMode): string {
+  switch (mode) {
+    case vscode.ExtensionMode.Production:
+      return 'production';
+    case vscode.ExtensionMode.Development:
+      return 'development';
+    case vscode.ExtensionMode.Test:
+      return 'test';
+    default:
+      return 'unknown';
+  }
+}
+
 async function tryExecuteCommand(commandName: string, terminalProvider: AspireTerminalProvider, command: (terminalProvider: AspireTerminalProvider) => Promise<void>): Promise<void> {
   try {
     await withCommandTelemetry(commandName, async () => {
@@ -409,7 +428,7 @@ async function tryExecuteCommand(commandName: string, terminalProvider: AspireTe
           throw new vscode.CancellationError();
         }
 
-        const result = await checkCliAvailableOrRedirect();
+        const result = await checkCliAvailableOrRedirect('command_gate');
         if (!result.available) {
           // The command body never ran — the user was redirected to install the
           // CLI. Throwing a cancellation makes withCommandTelemetry record this
@@ -417,6 +436,7 @@ async function tryExecuteCommand(commandName: string, terminalProvider: AspireTe
           // suppresses the error toast (the redirect already informed the user).
           throw new vscode.CancellationError();
         }
+
       }
 
       await command(terminalProvider);

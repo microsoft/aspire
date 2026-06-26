@@ -1,5 +1,22 @@
 {
   "events": {
+    "microsoft-aspire.aspire-vscode/extension/activated": {
+      "workspace_open": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the VS Code window had at least one workspace folder when the extension activated."
+      },
+      "extension_mode": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the extension was running in production, development, or test mode."
+      },
+      "workspace_folders": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The number of workspace folders in the VS Code window when the extension activated."
+      }
+    },
     "microsoft-aspire.aspire-vscode/command/invoked": {
       "command": {
         "classification": "SystemMetaData",
@@ -25,6 +42,97 @@
         "classification": "SystemMetaData",
         "purpose": "PerformanceAndHealth",
         "comment": "The duration of the command invocation in milliseconds."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/cli/availability": {
+      "available": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the Aspire CLI was available when the extension checked for it."
+      },
+      "source": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Where the Aspire CLI was resolved from, such as PATH, a configured path, a default install path, or not found."
+      },
+      "operation": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The extension operation that required an Aspire CLI availability check."
+      },
+      "duration_ms": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The duration of the Aspire CLI availability check in milliseconds."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/apphost/discovery/result": {
+      "outcome": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "Whether AppHost discovery completed successfully or failed."
+      },
+      "source": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded AppHost discovery mechanism that produced the result."
+      },
+      "apphost_languages": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The coarse AppHost language summary detected in the workspace."
+      },
+      "duration_ms": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The duration of the AppHost discovery attempt in milliseconds."
+      },
+      "candidate_count": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The number of AppHost candidates found by discovery."
+      },
+      "buildable_candidate_count": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The number of AppHost candidates marked buildable by discovery."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/apphost/launch/result": {
+      "mode": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the AppHost launch was requested in run or debug mode."
+      },
+      "command": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded Aspire command requested for the AppHost launch: run, deploy, publish, do, or other."
+      },
+      "apphost_language": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The coarse AppHost language detected for the launch target."
+      },
+      "outcome": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "Whether the AppHost launch succeeded, was canceled, failed, or was suppressed by test configuration."
+      },
+      "execution_suppressed": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether test-only launch suppression skipped the actual VS Code debug launch."
+      },
+      "error_kind": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The non-sensitive error type for failed AppHost launches."
+      },
+      "duration_ms": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The duration of the AppHost launch request in milliseconds."
       }
     },
     "microsoft-aspire.aspire-vscode/engagement/active": {
@@ -55,6 +163,16 @@
         "purpose": "FeatureInsight",
         "comment": "Whether the running AppHosts view was visible when tracking started."
       },
+      "workspace_apphost_state": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded workspace AppHost state when the running AppHosts view was shown."
+      },
+      "has_error": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "Whether the running AppHosts view had an error when it was shown."
+      },
       "running_apphosts": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -64,6 +182,11 @@
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
         "comment": "The number of resources displayed across running AppHosts."
+      },
+      "workspace_apphost_candidates": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The number of workspace AppHost candidates known when the running AppHosts view was shown."
       }
     },
     "microsoft-aspire.aspire-vscode/debug/apphost/start": {
@@ -77,15 +200,10 @@
         "purpose": "FeatureInsight",
         "comment": "The AppHost project language detected by the extension."
       },
-      "apphost_is_directory": {
-        "classification": "SystemMetaData",
-        "purpose": "FeatureInsight",
-        "comment": "Whether the AppHost launch target was a directory."
-      },
       "command": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
-        "comment": "The Aspire command used to start the AppHost."
+        "comment": "The bounded Aspire command used to start the AppHost: run, deploy, publish, do, or other."
       }
     },
     "microsoft-aspire.aspire-vscode/debug/apphost/end": {
@@ -98,6 +216,16 @@
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
         "comment": "The AppHost project language detected by the extension."
+      },
+      "apphost_target_version": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The Aspire version targeted by the AppHost."
+      },
+      "apphost_is_directory": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the AppHost launch target was a directory."
       },
       "ended_with_error": {
         "classification": "SystemMetaData",
@@ -437,6 +565,11 @@
       "classification": "SystemMetaData",
       "purpose": "FeatureInsight",
       "comment": "The AppHost languages detected in the current workspace."
+    },
+    "apphost_target_versions": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "The Aspire versions targeted by AppHosts in the current workspace."
     },
     "apphost_present": {
       "classification": "SystemMetaData",

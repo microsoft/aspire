@@ -11,9 +11,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
-#if DEBUG
-using Microsoft.AspNetCore.InternalTesting;
-#endif
 
 namespace Aspire.Cli.Tests.Telemetry;
 
@@ -83,7 +80,8 @@ public class TelemetryConfigurationTests
     {
         var configuration = new ConfigurationBuilder().Build();
         var telemetryConfiguration = TelemetryConfiguration.Create(configuration, ["--version"]);
-        using var telemetryManager = new TelemetryManager(telemetryConfiguration);
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        using var telemetryManager = new TelemetryManager(telemetryConfiguration, tagsSource);
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
             IsInternalMicrosoft = true
@@ -95,13 +93,17 @@ public class TelemetryConfigurationTests
             new TelemetryFixture.TestCodingAgentDetector(),
             internalMicrosoftDetector,
             telemetryConfiguration,
-            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
+            AspireCliTelemetry.ReportedActivitySourceName,
+            AspireCliTelemetry.DiagnosticsActivitySourceName,
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            tagsSource);
 
-        await telemetry.InitializeAsync().DefaultTimeout();
+        telemetry.Initialize();
+        await tagsSource.TagsTask;
 
         Assert.False(telemetryManager.HasAzureMonitor);
         Assert.Equal(0, internalMicrosoftDetector.InvocationCount);
-        Assert.Empty(GetInternalMicrosoftTags(telemetry.GetDefaultTags()));
+        Assert.Empty(GetInternalMicrosoftTags(await telemetry.GetDefaultTagsAsync()));
     }
 
     [Fact]
@@ -114,7 +116,8 @@ public class TelemetryConfigurationTests
             })
             .Build();
         var telemetryConfiguration = TelemetryConfiguration.Create(configuration);
-        using var telemetryManager = new TelemetryManager(telemetryConfiguration);
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        using var telemetryManager = new TelemetryManager(telemetryConfiguration, tagsSource);
         var internalMicrosoftDetector = new TelemetryFixture.TestInternalMicrosoftDetector
         {
             IsInternalMicrosoft = true
@@ -126,13 +129,17 @@ public class TelemetryConfigurationTests
             new TelemetryFixture.TestCodingAgentDetector(),
             internalMicrosoftDetector,
             telemetryConfiguration,
-            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)));
+            AspireCliTelemetry.ReportedActivitySourceName,
+            AspireCliTelemetry.DiagnosticsActivitySourceName,
+            Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory)),
+            tagsSource);
 
-        await telemetry.InitializeAsync().DefaultTimeout();
+        telemetry.Initialize();
+        await tagsSource.TagsTask;
 
         Assert.False(telemetryManager.HasAzureMonitor);
         Assert.Equal(0, internalMicrosoftDetector.InvocationCount);
-        Assert.Empty(GetInternalMicrosoftTags(telemetry.GetDefaultTags()));
+        Assert.Empty(GetInternalMicrosoftTags(await telemetry.GetDefaultTagsAsync()));
     }
 
     [Fact]
@@ -173,8 +180,9 @@ public class TelemetryConfigurationTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(config.Select(pair => new KeyValuePair<string, string?>(pair.Key, pair.Value)))
             .Build();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
 
-        using var manager = new TelemetryManager(configuration);
+        using var manager = new TelemetryManager(configuration, tagsSource);
 
         Assert.False(manager.HasProfilingProvider, "Expected detached child profiling export to require an actual profiling session");
     }
@@ -235,7 +243,9 @@ public class TelemetryConfigurationTests
         Assert.False(telemetryManager.HasProfilingProvider);
 
         var telemetry = host.Services.GetRequiredService<AspireCliTelemetry>();
-        await telemetry.InitializeAsync().DefaultTimeout();
+        telemetry.Initialize();
+        var tagsSource = host.Services.GetRequiredService<TelemetryTagsSource>();
+        await tagsSource.TagsTask;
 
         using var diagnosticActivity = telemetry.StartDiagnosticActivity("TestDiagnosticActivity");
         Assert.NotNull(diagnosticActivity);
@@ -246,8 +256,9 @@ public class TelemetryConfigurationTests
     public void AzureMonitor_Disabled_WhenVersionFlagProvided()
     {
         var configuration = new ConfigurationBuilder().Build();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
 
-        var manager = new TelemetryManager(configuration, ["--version"]);
+        var manager = new TelemetryManager(configuration, tagsSource, ["--version"]);
 
         Assert.False(manager.HasAzureMonitor);
     }
@@ -259,8 +270,9 @@ public class TelemetryConfigurationTests
     public void AzureMonitor_Disabled_ForAllHelpFlags(string flag)
     {
         var configuration = new ConfigurationBuilder().Build();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
 
-        var manager = new TelemetryManager(configuration, [flag]);
+        var manager = new TelemetryManager(configuration, tagsSource, [flag]);
 
         Assert.False(manager.HasAzureMonitor);
     }

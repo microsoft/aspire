@@ -60,26 +60,37 @@ Open your Aspire project in VS Code, or create one with **Aspire: New Aspire pro
 
 There's also a built-in walkthrough at **Help → Get Started → Get started with Aspire** that covers the basics step by step.
 
+The core flow is:
+
+1. Open an Aspire repo or create a starter with **Aspire: New Aspire project**.
+2. Let the Aspire view discover the AppHost.
+3. Press **F5**, or use **Run Aspire apphost** / **Debug Aspire apphost** from the editor.
+4. Inspect resources in the Aspire view and open the dashboard when you need logs, traces, metrics, or endpoint URLs.
+
+Learn more in the [Aspire VS Code extension documentation](https://aspire.dev/get-started/aspire-vscode-extension/).
+
 ---
 
 ## Running and Debugging
 
 ### Launch configuration
 
-Add an entry to `.vscode/launch.json` pointing at your apphost project:
+Add an entry to `.vscode/launch.json` pointing at your apphost:
 
 ```json
 {
     "type": "aspire",
     "request": "launch",
-    "name": "Aspire: Launch MyAppHost",
-    "program": "${workspaceFolder}/MyAppHost/MyAppHost.csproj"
+    "name": "Aspire: Launch TypeScript starter",
+    "program": "${workspaceFolder}/AppHost/apphost.mts"
 }
 ```
 
 When you hit **F5**, the extension builds the apphost, starts all the resources (services, containers, databases) in the right order, hooks up debuggers based on each service's language, and prints the dashboard URL.
 
 You can also right-click an `apphost.cs`, `apphost.ts`, or `apphost.js` file in the Explorer and pick **Run Aspire apphost** or **Debug Aspire apphost**.
+
+![VS Code running and debugging an Aspire AppHost with resource debug sessions.](https://raw.githubusercontent.com/microsoft/aspire/main/extension/resources/vscode-extension-debug-session.png)
 
 ### Deploy, publish, and pipeline steps
 
@@ -93,8 +104,8 @@ The `command` property in the launch config lets you do more than just run:
 {
     "type": "aspire",
     "request": "launch",
-    "name": "Aspire: Deploy MyAppHost",
-    "program": "${workspaceFolder}/MyAppHost/MyAppHost.csproj",
+    "name": "Aspire: Deploy TypeScript starter",
+    "program": "${workspaceFolder}/AppHost/apphost.mts",
     "command": "deploy"
 }
 ```
@@ -128,6 +139,8 @@ The `debuggers` property lets you pass debug config specific to a language. Use 
 The extension adds an **Aspire** panel to the Activity Bar. It shows a live tree of your resources. In **Workspace** mode you see resources from the apphost in your current workspace, updating in real time. Switch to **Global** mode with the toggle in the panel header to see every running apphost on your machine.
 
 Right-click a resource to start, stop, or restart it, view its logs, run resource-specific commands, or open the dashboard.
+
+![Aspire view discovering a workspace AppHost and showing resources with live state.](https://raw.githubusercontent.com/microsoft/aspire/main/extension/resources/vscode-extension-apphost-view.png)
 
 ---
 

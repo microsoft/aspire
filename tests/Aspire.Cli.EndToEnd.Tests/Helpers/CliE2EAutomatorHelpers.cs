@@ -715,12 +715,23 @@ internal static class CliE2EAutomatorHelpers
     /// On failure, dumps the latest CLI log file to the terminal output and promotes the highest-signal
     /// diagnostics into the workspace for artifact capture.
     /// </summary>
+    /// <param name="auto">The terminal automator.</param>
+    /// <param name="counter">The prompt sequence counter.</param>
+    /// <param name="startTimeout">How long to wait for <c>aspire start</c> to complete.</param>
+    /// <param name="isolated">Pass <c>--isolated</c> to <c>aspire start</c>.</param>
+    /// <param name="apphost">Explicit AppHost path to pass via <c>--apphost</c>.</param>
+    /// <param name="additionalArgs">Extra arguments appended to the <c>aspire start</c> command.</param>
+    /// <param name="skipDashboardCheck">When <see langword="true"/>, skip the dashboard URL extraction and
+    /// HTTP health check. Use this for modes like <c>--capture-profile</c> where the AppHost is already
+    /// stopped by the time the command returns.</param>
     internal static async Task AspireStartAsync(
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter,
         TimeSpan? startTimeout = null,
         bool isolated = false,
-        string? apphost = null)
+        string? apphost = null,
+        string? additionalArgs = null,
+        bool skipDashboardCheck = false)
     {
         var effectiveTimeout = startTimeout ?? TimeSpan.FromMinutes(3);
         var expectedCounter = counter.Value;
@@ -732,11 +743,12 @@ internal static class CliE2EAutomatorHelpers
 
         var isolatedFlag = isolated ? " --isolated" : "";
         var apphostFlag = apphost is not null ? $" --apphost {AspireCliShellCommandHelpers.QuoteBashArg(apphost)}" : "";
+        var extraArgs = !string.IsNullOrEmpty(additionalArgs) ? $" {additionalArgs}" : "";
         var startupTimeoutSeconds = Math.Max(1, (int)Math.Ceiling(effectiveTimeout.TotalSeconds));
 
         // Keep aspire start as a single shell pipeline so tee captures the exact JSON emitted to the terminal while
         // pipefail preserves the real CLI exit code instead of letting tee mask build/startup failures.
-        await auto.TypeAsync($"(set -o pipefail; ASPIRE_CLI_START_TIMEOUT={startupTimeoutSeconds.ToString(CultureInfo.InvariantCulture)} aspire start{isolatedFlag}{apphostFlag} --format json | tee \"{jsonFile}\")");
+        await auto.TypeAsync($"(set -o pipefail; ASPIRE_CLI_START_TIMEOUT={startupTimeoutSeconds.ToString(CultureInfo.InvariantCulture)} aspire start{isolatedFlag}{apphostFlag}{extraArgs} --format json | tee \"{jsonFile}\")");
         await auto.EnterAsync();
 
         // Wait for the command to finish — check for success or error exit.
@@ -778,6 +790,11 @@ internal static class CliE2EAutomatorHelpers
                 workspacePath is null || !ShouldCaptureWorkspaceDiagnostics()
                     ? "aspire start failed. Check terminal output for CLI logs."
                     : $"aspire start failed. Workspace: {workspacePath}. See {DiagnosticsDirectoryName}/ in the captured workspace.");
+        }
+
+        if (skipDashboardCheck)
+        {
+            return;
         }
 
         await auto.TypeAsync(
@@ -870,11 +887,17 @@ internal static class CliE2EAutomatorHelpers
                 "Check terminal output for CLI logs and JSON content.");
         }
 
+        // Retry curl up to 10 times with 2s delay — the dashboard may still be binding
+        // its listening port immediately after aspire start returns.
         await auto.TypeAsync(
-            "curl -ksSL -o /dev/null -w 'dashboard-http-%{http_code}' \"$DASHBOARD_URL\" " +
-            "|| echo 'dashboard-http-failed'");
+            "for i in $(seq 1 10); do " +
+            "CODE=$(curl -ksSL -o /dev/null -w '%{http_code}' \"$DASHBOARD_URL\" 2>/dev/null); " +
+            "if [ \"$CODE\" = \"200\" ]; then echo 'dashboard-http-200'; break; fi; " +
+            "sleep 2; " +
+            "done; " +
+            "if [ \"$CODE\" != \"200\" ]; then echo \"dashboard-http-${CODE}\"; echo 'dashboard-http-failed'; fi");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("dashboard-http-200", timeout: TimeSpan.FromSeconds(15));
+        await auto.WaitUntilTextAsync("dashboard-http-200", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
     }
 

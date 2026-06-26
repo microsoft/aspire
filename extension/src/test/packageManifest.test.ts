@@ -166,6 +166,14 @@ suite('extension/package.json', () => {
         assert.ok(activationEvents.includes('workspaceContains:**/apphost.cjs'));
     });
 
+    test('FSharp and Visual Basic AppHost projects activate the extension', () => {
+        const manifest = readManifest();
+        const activationEvents = manifest.activationEvents ?? [];
+
+        assert.ok(activationEvents.includes('workspaceContains:**/*.fsproj'));
+        assert.ok(activationEvents.includes('workspaceContains:**/*.vbproj'));
+    });
+
     test('Explorer AppHost commands include Node module filenames', () => {
         const manifest = readManifest();
         const explorerMenus = manifest.contributes.menus?.['explorer/context'] ?? [];

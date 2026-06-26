@@ -3,10 +3,33 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import * as cliPathModule from '../utils/cliPath';
+import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
+
+interface RecordedEvent {
+    name: string;
+    properties?: Record<string, string>;
+    measurements?: Record<string, number>;
+}
+
+class FakeTelemetryReporter {
+    public events: RecordedEvent[] = [];
+
+    sendTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements });
+    }
+
+    sendTelemetryErrorEvent(): void { /* not used here */ }
+    sendDangerousTelemetryEvent(): void { /* not used here */ }
+    sendDangerousTelemetryErrorEvent(): void { /* not used here */ }
+    sendRawTelemetryEvent(): void { /* not used here */ }
+    dispose(): Promise<void> { return Promise.resolve(); }
+}
 
 suite('AppHostLaunchService', () => {
     let service: AppHostLaunchService;
     let startDebuggingStub: sinon.SinonStub;
+    let resolveCliPathStub: sinon.SinonStub;
     let onDidTerminateDebugSessionStub: sinon.SinonStub;
     let onDidTerminateDebugSessionCallback: ((session: vscode.DebugSession) => void) | undefined;
 
@@ -17,11 +40,13 @@ suite('AppHostLaunchService', () => {
         });
         service = new AppHostLaunchService();
         startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        resolveCliPathStub = sinon.stub(cliPathModule, 'resolveCliPath').resolves({ cliPath: 'aspire', available: true, source: 'path' });
     });
 
     teardown(() => {
         service.dispose();
         startDebuggingStub.restore();
+        resolveCliPathStub.restore();
         onDidTerminateDebugSessionStub.restore();
         onDidTerminateDebugSessionCallback = undefined;
     });
@@ -56,6 +81,7 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(config.command, 'run');
         assert.strictEqual(config.noDebug, false);
         assert.strictEqual(config.step, undefined);
+        assert.strictEqual(config.skipCliAvailabilityCheck, true);
     });
 
     test('launch includes step when doStep is provided', async () => {
@@ -64,6 +90,21 @@ suite('AppHostLaunchService', () => {
         const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.strictEqual(config.command, 'do');
         assert.strictEqual(config.step, 'deploy');
+    });
+
+    test('launch owns CLI availability probe', async () => {
+        resolveCliPathStub.resolves({ cliPath: 'aspire', available: false, source: 'not-found' });
+        const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+
+        try {
+            await assert.rejects(service.launch('/repo/AppHost.csproj', 'deploy', false), vscode.CancellationError);
+
+            assert.strictEqual(resolveCliPathStub.calledOnce, true);
+            assert.strictEqual(startDebuggingStub.called, false);
+        }
+        finally {
+            showErrorMessageStub.restore();
+        }
     });
 
     test('clearLaunching removes the path from launching state', async () => {
@@ -137,12 +178,81 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), false);
     });
 
+    test('launch reports error telemetry when startDebugging returns false', async () => {
+        startDebuggingStub.resolves(false);
+        const fake = new FakeTelemetryReporter();
+        const restore = __setReporterForTests(fake as unknown as Parameters<typeof __setReporterForTests>[0]);
+        try {
+            await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), /did not start the Aspire run session/);
+
+            const appHostLaunchEvents = fake.events.filter(e => e.name === 'apphost/launch/result');
+            assert.strictEqual(appHostLaunchEvents.length, 1);
+            const event = appHostLaunchEvents[0];
+            assert.strictEqual(event.name, 'apphost/launch/result');
+            assert.strictEqual(event.properties?.outcome, 'error');
+            assert.strictEqual(event.properties?.error_kind, 'StartDebuggingDeclined');
+            assert.ok(typeof event.measurements?.duration_ms === 'number');
+        }
+        finally {
+            restore();
+            __resetCommonPropertiesForTests();
+        }
+    });
+
+    test('launch cancels before starting debug session when CLI is unavailable', async () => {
+        resolveCliPathStub.resolves({ cliPath: 'aspire', available: false, source: 'not-found' });
+        const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        const fake = new FakeTelemetryReporter();
+        const restore = __setReporterForTests(fake as unknown as Parameters<typeof __setReporterForTests>[0]);
+        try {
+            await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), vscode.CancellationError);
+
+            assert.strictEqual(startDebuggingStub.called, false);
+            assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), false);
+            const appHostLaunchEvents = fake.events.filter(e => e.name === 'apphost/launch/result');
+            assert.strictEqual(appHostLaunchEvents.length, 1);
+            const event = appHostLaunchEvents[0];
+            assert.strictEqual(event.name, 'apphost/launch/result');
+            assert.strictEqual(event.properties?.outcome, 'canceled');
+            assert.strictEqual(event.properties?.error_kind, undefined);
+            assert.ok(typeof event.measurements?.duration_ms === 'number');
+        }
+        finally {
+            showErrorMessageStub.restore();
+            restore();
+            __resetCommonPropertiesForTests();
+        }
+    });
+
     test('launch clears launching state and rethrows when startDebugging throws', async () => {
         startDebuggingStub.rejects(new Error('boom'));
 
         await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), /boom/);
 
         assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), false);
+    });
+
+    test('launch emits one bounded result telemetry event', async () => {
+        const fake = new FakeTelemetryReporter();
+        const restore = __setReporterForTests(fake as unknown as Parameters<typeof __setReporterForTests>[0]);
+        try {
+            await service.launch('/repo/AppHost.csproj', 'custom' as Parameters<AppHostLaunchService['launch']>[1], true);
+
+            const appHostLaunchEvents = fake.events.filter(e => e.name === 'apphost/launch/result');
+            assert.strictEqual(appHostLaunchEvents.length, 1);
+            const event = appHostLaunchEvents[0];
+            assert.strictEqual(event.name, 'apphost/launch/result');
+            assert.strictEqual(event.properties?.command, 'other');
+            assert.strictEqual(event.properties?.outcome, 'success');
+            assert.strictEqual(event.properties?.mode, 'run');
+            assert.strictEqual(event.properties?.apphost_language, 'csharp');
+            assert.strictEqual(event.properties?.execution_suppressed, 'false');
+            assert.ok(typeof event.measurements?.duration_ms === 'number');
+        }
+        finally {
+            restore();
+            __resetCommonPropertiesForTests();
+        }
     });
 
     test('terminated run sessions include appHostPath and stop refresh semantics', () => {
