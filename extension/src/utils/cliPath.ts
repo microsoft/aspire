@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { extensionLogOutputChannel } from './logging';
-import { isBareAspireCommand } from './environment';
+import { isBareAspireCommand } from './aspireCommand';
 import { getWindowsCommandShimSpawnCommand, shouldUseWindowsCommandShim } from './windowsCommandShim';
 
 const execFileAsync = promisify(execFile);

@@ -1,5 +1,6 @@
 import * as path from 'path';
 import { EnvVar } from "../dcp/types";
+import { isBareAspireCommand } from './aspireCommand';
 
 export const aspireCliPathEnvironmentVariableName = 'AspireCliPath';
 
@@ -47,14 +48,6 @@ export function withAspireCliPathForMSBuild(env: EnvVar[], cliPath: string | und
 export function withoutAspireCliPathForMSBuild(env: EnvVar[]): EnvVar[] {
     const aspireCliPathKey = aspireCliPathEnvironmentVariableName.toLowerCase();
     return env.filter(variable => variable.name.toLowerCase() !== aspireCliPathKey);
-}
-
-export function isBareAspireCommand(value: string): boolean {
-    if (value.includes('/') || value.includes('\\')) {
-        return false;
-    }
-
-    return /^(?:aspire|aspire\.exe|aspire\.cmd|aspire\.bat)$/i.test(value);
 }
 
 function filterBaseEnvironment(env: NodeJS.ProcessEnv): Record<string, string | undefined> {

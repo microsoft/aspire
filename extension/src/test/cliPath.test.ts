@@ -3,6 +3,7 @@ import * as sinon from 'sinon';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { isBareAspireCommand } from '../utils/aspireCommand';
 import { getDefaultCliInstallPaths, resolveCliPath, CliPathDependencies, tryExecuteCli } from '../utils/cliPath';
 
 const bundlePath = '/home/user/.aspire/bin/aspire';
@@ -23,6 +24,19 @@ function createMockDeps(overrides: Partial<CliPathDependencies> = {}): CliPathDe
 }
 
 suite('utils/cliPath tests', () => {
+
+    suite('isBareAspireCommand', () => {
+        test('recognizes only PATH-style Aspire commands', () => {
+            assert.strictEqual(isBareAspireCommand('aspire'), true);
+            assert.strictEqual(isBareAspireCommand('aspire.exe'), true);
+            assert.strictEqual(isBareAspireCommand('aspire.cmd'), true);
+            assert.strictEqual(isBareAspireCommand('aspire.bat'), true);
+            assert.strictEqual(isBareAspireCommand('ASPIRE.CMD'), true);
+            assert.strictEqual(isBareAspireCommand('./aspire'), false);
+            assert.strictEqual(isBareAspireCommand('bin/aspire'), false);
+            assert.strictEqual(isBareAspireCommand('tools\\aspire.cmd'), false);
+        });
+    });
 
     suite('getDefaultCliInstallPaths', () => {
         test('returns bundle path (~/.aspire/bin) as first entry', () => {

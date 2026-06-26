@@ -117,6 +117,22 @@ public class AppHostSdkTargetsTests
     }
 
     [Fact]
+    public async Task ComputeRunArgumentsDoesNotQuoteConfiguredAspireCliPathForProcessStartInfo()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            [$"-p:AspireCliPath={aspireCliPath}", "-p:OS=Windows_NT"]);
+
+        Assert.Equal(aspireCliPath, properties["RunCommand"]);
+        Assert.Equal(GetExpectedExplicitAspireRunArguments(project), properties["RunArguments"]);
+    }
+
+    [Fact]
     public async Task ComputeRunArgumentsUsesFileBasedAppHostPathWhenCliBundleIsEnabled()
     {
         using var tempDirectory = new TestTempDirectory();
@@ -733,8 +749,7 @@ public class AppHostSdkTargetsTests
             return;
         }
 
-        var expectedRunCommand = OperatingSystem.IsWindows() ? $"\"{cliPath}\"" : cliPath;
-        Assert.Equal(expectedRunCommand, properties["RunCommand"]);
+        Assert.Equal(cliPath, properties["RunCommand"]);
         Assert.Equal(GetExpectedExplicitAspireRunArguments(project, expectedArguments), properties["RunArguments"]);
     }
 
