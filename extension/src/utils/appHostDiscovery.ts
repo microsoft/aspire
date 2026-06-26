@@ -169,7 +169,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._throwIfDisposed();
 
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        const args = ['ls', '--format', 'json', '--nologo'];
+        const args = ['ls', '--format', 'json', noLogoOption];
         if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
             args.push('--cli-wait-for-debugger');
         }
@@ -182,7 +182,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._throwIfDisposed();
 
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        const args = ['extension', 'get-apphosts', '--nologo'];
+        const args = ['extension', 'get-apphosts', noLogoOption];
         if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
             args.push('--cli-wait-for-debugger');
         }
