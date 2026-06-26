@@ -701,6 +701,7 @@ type CommandOptions struct {
 	IconVariant *IconVariant `json:"IconVariant,omitempty"`
 	IsHighlighted bool `json:"IsHighlighted,omitempty"`
 	UpdateState func(arg UpdateCommandStateContext) ResourceCommandState `json:"UpdateState,omitempty"`
+	Progress any `json:"Progress,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -727,6 +728,7 @@ func (d *CommandOptions) ToMap() map[string]any {
 			return cb(callbackArg[UpdateCommandStateContext](args, 0))
 		}
 	}
+	if d.Progress != nil { m["Progress"] = serializeValue(d.Progress) }
 	return m
 }
 

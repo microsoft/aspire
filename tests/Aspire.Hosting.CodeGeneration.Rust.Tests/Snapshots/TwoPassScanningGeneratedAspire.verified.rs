@@ -1338,6 +1338,8 @@ pub struct CommandOptions {
     pub is_highlighted: bool,
     #[serde(rename = "UpdateState")]
     pub update_state: Value,
+    #[serde(rename = "Progress")]
+    pub progress: Value,
 }
 
 impl CommandOptions {
@@ -1355,6 +1357,7 @@ impl CommandOptions {
         }
         map.insert("IsHighlighted".to_string(), serde_json::to_value(&self.is_highlighted).unwrap_or(Value::Null));
         map.insert("UpdateState".to_string(), serde_json::to_value(&self.update_state).unwrap_or(Value::Null));
+        map.insert("Progress".to_string(), serde_json::to_value(&self.progress).unwrap_or(Value::Null));
         map
     }
 }

@@ -835,6 +835,14 @@ export interface CommandOptions {
     isHighlighted?: boolean;
     /** A callback that is used to update the command state. The callback is executed when the command's resource snapshot is updated. If a callback isn't specified, the command is always enabled. */
     updateState?: (arg: UpdateCommandStateContext) => Promise<ResourceCommandState>;
+    /**
+     * Gets or sets options for displaying a progress dialog while the command is executing.
+     *
+     * When set with a `Message`, a progress dialog is automatically shown while
+     * the command callback executes. The dialog closes when the command completes.
+     * When `null`, no progress dialog is shown and the command executes without visual feedback.
+     */
+    progress?: any;
 }
 
 /** Represents a value produced by a command. */

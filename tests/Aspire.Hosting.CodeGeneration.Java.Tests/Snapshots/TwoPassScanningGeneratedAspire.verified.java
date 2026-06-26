@@ -3675,6 +3675,7 @@ public class CommandOptions implements JsonSerializable {
     private IconVariant iconVariant;
     private boolean isHighlighted;
     private AspireFunc1<UpdateCommandStateContext, ResourceCommandState> updateState;
+    private Object progress;
 
     public String getDescription() { return description; }
     public void setDescription(String value) { this.description = value; }
@@ -3696,6 +3697,8 @@ public class CommandOptions implements JsonSerializable {
     public void setIsHighlighted(boolean value) { this.isHighlighted = value; }
     public AspireFunc1<UpdateCommandStateContext, ResourceCommandState> getUpdateState() { return updateState; }
     public void setUpdateState(AspireFunc1<UpdateCommandStateContext, ResourceCommandState> value) { this.updateState = value; }
+    public Object getProgress() { return progress; }
+    public void setProgress(Object value) { this.progress = value; }
 
     @SuppressWarnings("unchecked")
     public static CommandOptions fromMap(Map<String, Object> map) {
@@ -3716,6 +3719,8 @@ public class CommandOptions implements JsonSerializable {
         value.setIconVariant(iconVariantValue == null ? null : IconVariant.fromValue((String) iconVariantValue));
         var isHighlightedValue = map.get("IsHighlighted");
         value.setIsHighlighted((Boolean) isHighlightedValue);
+        var progressValue = map.get("Progress");
+        value.setProgress(progressValue);
         return value;
     }
 
@@ -3738,6 +3743,7 @@ public class CommandOptions implements JsonSerializable {
             var arg = (UpdateCommandStateContext) transportArg;
             return AspireClient.awaitValue(updateState.invoke(arg));
         }));
+        map.put("Progress", AspireClient.serializeValue(progress));
         return map;
     }
 }
