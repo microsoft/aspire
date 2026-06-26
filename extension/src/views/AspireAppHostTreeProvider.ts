@@ -54,7 +54,7 @@ import {
 } from './AppHostDataRepository';
 import { collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
-import { executeResourceCommand, type ResourceCommandExecutionOutcome } from './resourceCommandExecution';
+import { executeResourceCommand as executeResourceCommandWithUi, type ResourceCommandExecutionOutcome } from './resourceCommandExecution';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
@@ -1600,7 +1600,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        return await executeResourceCommand(
+        return await executeResourceCommandWithUi(
             this._repository,
             (resourceName, command, content, outputAppHostPath) => this.showResourceCommandOutput(resourceName, command, content, outputAppHostPath),
             {

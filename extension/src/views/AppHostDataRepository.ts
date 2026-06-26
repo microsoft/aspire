@@ -2126,18 +2126,6 @@ class LimitedOutputBuffer {
     }
 }
 
-function truncateOutputWithMarker(output: string, limit: number): string {
-    // Returned resource command values can be JSON, markdown, or plain text. A silent tail-only
-    // truncation makes large JSON look like corrupt full output, so keep both the beginning and end
-    // with an explicit marker while still honoring the same bounded-output limit.
-    const marker = getOutputTruncationMarker(limit);
-    const available = Math.max(limit - marker.length, 0);
-    const headLimit = Math.ceil(available / 2);
-    const tailLimit = available - headLimit;
-
-    return `${output.slice(0, headLimit)}${marker}${takeLast(output, tailLimit)}`;
-}
-
 function getOutputTruncationMarker(limit: number): string {
     const marker = `\n${aspireCommandOutputTruncated(limit)}\n`;
 
