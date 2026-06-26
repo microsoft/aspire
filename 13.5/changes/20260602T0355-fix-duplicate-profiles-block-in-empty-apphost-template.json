@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "\ud83d\udcbb",
+  "areaEmoji": "💻",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Fixed a bug where the empty C# AppHost template generated an aspire.config.json with a duplicated profiles block.",
-  "docsPrs": [],
+  "docsPrs": [
+    1176
+  ],
   "docsRequired": false,
-  "emoji": "\ud83d\udc1b",
+  "emoji": "🐛",
   "firstMergedAt": "2026-06-02T03:55:20Z",
   "lastMergedAt": "2026-06-02T03:55:20Z",
   "name": "Fix duplicate profiles block in empty AppHost template",

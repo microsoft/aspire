@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed horizontal overflow in the text visualizer dialog when displaying markdown content with long unbreakable text such as URLs, tokens, or words without spaces.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📐",
+  "firstMergedAt": "2026-06-26T17:40:15Z",
+  "lastMergedAt": "2026-06-26T17:40:15Z",
+  "name": "Fix markdown content overflow in text visualizer",
+  "owner": "JamesNK",
+  "prs": [
+    18492
+  ]
+}

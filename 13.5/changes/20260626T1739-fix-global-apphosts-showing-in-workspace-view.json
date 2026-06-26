@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where AppHosts discovered in global view were incorrectly shown in the workspace view when VS Code had no open workspace. Switching back to workspace view now immediately re-applies workspace filters to the current snapshot instead of waiting for the next poll cycle.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🪟",
+  "firstMergedAt": "2026-06-26T17:39:29Z",
+  "lastMergedAt": "2026-06-26T17:39:29Z",
+  "name": "Fix global AppHosts showing in workspace view",
+  "owner": "adamint",
+  "prs": [
+    18516
+  ]
+}

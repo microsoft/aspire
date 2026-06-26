@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents fix for duplicate profiles block in empty AppHost template (aspire PR #17781)",
+  "mergedAt": "2026-06-26T14:19:14Z",
+  "number": 1176,
+  "runDate": "2026-06-26T18:35:48Z",
+  "status": "included",
+  "title": "[docs] Clarify C# file-based AppHost launch profile location"
+}

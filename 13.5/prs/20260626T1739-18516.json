@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Bug fix: clears global AppHosts when switching to workspace view in VS Code extension",
+  "mergedAt": "2026-06-26T17:39:29Z",
+  "number": 18516,
+  "runDate": "2026-06-26T18:35:48Z",
+  "status": "included",
+  "title": "Clear global AppHosts when switching to workspace view"
+}

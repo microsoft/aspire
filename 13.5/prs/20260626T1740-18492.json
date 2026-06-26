@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: fixes markdown content overflow in TextVisualizerDialog",
+  "mergedAt": "2026-06-26T17:40:15Z",
+  "number": 18492,
+  "runDate": "2026-06-26T18:35:48Z",
+  "status": "included",
+  "title": "Fix markdown content wrapping in TextVisualizerDialog"
+}
