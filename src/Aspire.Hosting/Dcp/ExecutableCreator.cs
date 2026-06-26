@@ -96,7 +96,10 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         var executableArgumentStartIndex = spec.Args?.Count ?? 0;
         var launchArgs = BuildLaunchArgs(er, spec, configuration.Arguments, executableArgumentStartIndex);
-        AddDotnetRunArgsForExecutableAnnotatedProject(er, launchArgs, executableArgumentStartIndex);
+        if (!HasProjectLaunchArgsOverride(er.ModelResource))
+        {
+            AddDotnetRunArgsForExecutableAnnotatedProject(er, launchArgs, executableArgumentStartIndex);
+        }
         var executableArgs = launchArgs.Where(a => a.Executable).Select(a => a.Value).ToList();
         var displayArgs = launchArgs.Where(a => a.Display).ToList();
         if (executableArgs.Count > 0)
@@ -216,10 +219,34 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
                 var isInDebugSession = !string.IsNullOrEmpty(_configuration[DcpExecutor.DebugSessionPortVar]);
                 var persistent = project.GetLifetimeType() == Lifetime.Persistent;
+#pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+                project.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out var launchOverride);
+#pragma warning restore ASPIREPROJECTS001
                 exe.Spec.Persistent = persistent;
                 if (persistent)
                 {
                     ApplyMonitorProcess(project, exe.Spec);
+                }
+
+                if (launchOverride is not null)
+                {
+                    exe.Spec.ExecutionType = ExecutionType.Process;
+                    launchOverride.Apply(projectArgs, projectMetadata.ProjectPath, _distributedApplicationOptions.Configuration);
+
+                    exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, CreateProjectLaunchConfiguration(project, projectMetadata));
+
+                    exe.SetAnnotationAsObjectList(CustomResource.ResourceProjectArgsAnnotation, projectArgs);
+
+                    if (project.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _))
+                    {
+                        exe.Spec.Start = false;
+                    }
+
+                    var overrideExeAppResource = new RenderedModelResource<Executable>(project, exe);
+                    DcpModelUtilities.AddServicesProducedInfo(overrideExeAppResource, _appResources.Get());
+                    _appResources.Add(overrideExeAppResource);
+
+                    continue;
                 }
 
                 SupportsDebuggingAnnotation? supportsDebuggingAnnotation = null;
@@ -547,6 +574,18 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         // Follows behavior in the IDE execution spec when in IDE execution mode:
         // https://github.com/microsoft/aspire/blob/main/docs/specs/IDE-execution.md#project-launch-configuration-type-project
         var appHostArgList = appHostArgs.ToList();
+#pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        var hasProjectLaunchArgsOverride = er.ModelResource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out var projectLaunchArgsOverride);
+#pragma warning restore ASPIREPROJECTS001
+        if (projectLaunchArgsOverride?.LeadingResourceArgumentToRemove is { } leadingResourceArgumentToRemove &&
+            appHostArgList.Count > 0 &&
+            string.Equals(appHostArgList[0].Value, leadingResourceArgumentToRemove, StringComparison.Ordinal))
+        {
+            // Some integrations keep an SDK-shaped verb in resource args for model consumers, but the
+            // launch override can already represent that verb. Only remove it when the annotation opts in.
+            appHostArgList.RemoveAt(0);
+        }
+
         var launchArgs = new List<LaunchArgument>();
         var nextExecutableArgumentIndex = executableArgumentStartIndex;
 
@@ -557,7 +596,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
 
         // If the executable is a project then include any command line args from the launch profile.
-        if (er.ModelResource is ProjectResource project)
+        if (!hasProjectLaunchArgsOverride && er.ModelResource is ProjectResource project)
         {
             // Args in the launch profile is used when:
             // 1. The project is run as an executable. Launch profile args are combined with app host supplied args.
@@ -676,6 +715,13 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
 
         return false;
+    }
+
+    private static bool HasProjectLaunchArgsOverride(IResource resource)
+    {
+#pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        return resource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out _);
+#pragma warning restore ASPIREPROJECTS001
     }
 
     private static void ReindexExecutableLaunchArgs(List<LaunchArgument> launchArgs, int executableArgumentStartIndex)
