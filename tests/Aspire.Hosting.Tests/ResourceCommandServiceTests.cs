@@ -1625,6 +1625,84 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         return projectPath;
     }
 
+    [Fact]
+    public async Task ExecuteCommandAsync_WithProgressOptions_CancelsCommandWhenProgressCanceled()
+    {
+        using var builder = CreateBuilder();
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        var commandStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "cancelable-command",
+                displayName: "Cancelable Command",
+                executeCommand: async e =>
+                {
+                    commandStarted.SetResult();
+                    await Task.Delay(Timeout.Infinite, e.CancellationToken);
+                    return CommandResults.Success();
+                },
+                commandOptions: new CommandOptions
+                {
+                    Progress = new CommandProgressOptions { Message = "Processing..." }
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var resultTask = app.ResourceCommands.ExecuteCommandAsync("myResource", "cancelable-command");
+
+        // Wait for the Work callback to write the interaction and for the command to start.
+        var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(InteractionType.Progress, interaction.Type);
+        Assert.Equal("Processing...", interaction.Message);
+        await commandStarted.Task.DefaultTimeout();
+
+        // Simulate the user clicking the Cancel button in the progress dialog.
+        interaction.CompletionTcs.SetResult(InteractionResult.Cancel<bool>());
+
+        var result = await resultTask.DefaultTimeout();
+
+        Assert.True(testInteractionService.PromptProgressCalled);
+        Assert.False(result.Success);
+        Assert.True(result.Canceled);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_WithProgressOptions_SkipsProgressWhenNotAvailable()
+    {
+        using var builder = CreateBuilder();
+
+        var testInteractionService = new TestInteractionService();
+        testInteractionService.IsAvailable = false;
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "progress-command",
+                displayName: "Progress Command",
+                executeCommand: e =>
+                {
+                    executed = true;
+                    return Task.FromResult(CommandResults.Success("Done"));
+                },
+                commandOptions: new CommandOptions
+                {
+                    Progress = new CommandProgressOptions { Message = "Working..." }
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "progress-command");
+
+        Assert.True(result.Success);
+        Assert.Equal("Done", result.Message);
+        Assert.True(executed);
+        Assert.False(testInteractionService.PromptProgressCalled);
+    }
+
     private sealed class CustomResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithWaitSupport
     {
 
