@@ -18,7 +18,7 @@ import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob, is
 export interface CandidateAppHostDisplayInfo {
     path: string;
     language: string | null;
-    status: string | null;
+    status: string;
     selected?: boolean;
 }
 
@@ -470,9 +470,7 @@ export function findCandidateForEditorFile(filePath: string, candidates: readonl
 }
 
 function findWorkspaceDefaultCandidate(candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
-    const buildableCandidates = candidates.filter(isBuildableCandidate);
-    return buildableCandidates.find(candidate => candidate.selected)
-        ?? (buildableCandidates.length === 1 ? buildableCandidates[0] : undefined);
+    return findSingleSelectedBuildableCandidate(candidates) ?? findOnlyBuildableCandidate(candidates);
 }
 
 export function getDebugTargetForCandidate(candidate: CandidateAppHostDisplayInfo): string {
@@ -481,8 +479,7 @@ export function getDebugTargetForCandidate(candidate: CandidateAppHostDisplayInf
 
 export function getWorkspaceAppHostProjectSearchResult(workspaceFolder: vscode.WorkspaceFolder, candidates: readonly CandidateAppHostDisplayInfo[]): AppHostProjectSearchResult {
     const appHostCandidates = candidates.map(candidate => toAppHostCandidate(workspaceFolder, candidate));
-    const selectedAppHostPath = candidates.find(candidate => candidate.selected)?.path
-        ?? (candidates.length === 1 ? candidates[0].path : null);
+    const selectedAppHostPath = (findSingleSelectedBuildableCandidate(candidates) ?? findOnlyCandidateIfBuildable(candidates))?.path ?? null;
     const effectiveAppHostCandidates = selectedAppHostPath && !appHostCandidates.some(candidate => isSamePath(candidate.path, selectedAppHostPath))
         ? [...appHostCandidates, toConfiguredAppHostCandidate(workspaceFolder, selectedAppHostPath)]
         : appHostCandidates;
@@ -518,20 +515,20 @@ export function formatAppHostLanguage(language: string): string | undefined {
 }
 
 export async function selectWorkspaceAppHostPath(workspaceFolder: vscode.WorkspaceFolder, candidates: readonly CandidateAppHostDisplayInfo[]): Promise<string | undefined> {
-    const selectedCandidate = candidates.find(candidate => candidate.selected);
+    const selectedCandidate = findSingleSelectedBuildableCandidate(candidates);
     if (selectedCandidate) {
         return selectedCandidate.path;
     }
 
     const configuredPaths = await findConfiguredAppHostPaths(workspaceFolder);
     for (const configuredPath of configuredPaths) {
-        const candidate = candidates.find(candidate => isSamePath(candidate.path, configuredPath));
+        const candidate = candidates.find(candidate => isBuildableCandidate(candidate) && isSamePath(candidate.path, configuredPath));
         if (candidate) {
             return candidate.path;
         }
     }
 
-    return candidates.length === 1 ? candidates[0].path : undefined;
+    return findOnlyCandidateIfBuildable(candidates)?.path;
 }
 
 export async function findConfiguredAppHostPaths(workspaceFolder: vscode.WorkspaceFolder, cancellationToken?: vscode.CancellationToken): Promise<string[]> {
@@ -576,7 +573,7 @@ function toAppHostCandidate(workspaceFolder: vscode.WorkspaceFolder, candidate: 
         relativePath: path.relative(workspaceFolder.uri.fsPath, candidate.path),
         path: candidate.path,
         language: candidate.language ?? '',
-        status: candidate.status ?? 'buildable',
+        status: candidate.status,
     };
 }
 
@@ -789,7 +786,21 @@ function isCSharpProjectCandidate(candidate: CandidateAppHostDisplayInfo): boole
 }
 
 function isBuildableCandidate(candidate: CandidateAppHostDisplayInfo): boolean {
-    return candidate.status === null || candidate.status === 'buildable';
+    return candidate.status === 'buildable';
+}
+
+function findSingleSelectedBuildableCandidate(candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
+    const selectedCandidates = candidates.filter(candidate => candidate.selected && isBuildableCandidate(candidate));
+    return selectedCandidates.length === 1 ? selectedCandidates[0] : undefined;
+}
+
+function findOnlyBuildableCandidate(candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
+    const buildableCandidates = candidates.filter(isBuildableCandidate);
+    return buildableCandidates.length === 1 ? buildableCandidates[0] : undefined;
+}
+
+function findOnlyCandidateIfBuildable(candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
+    return candidates.length === 1 && isBuildableCandidate(candidates[0]) ? candidates[0] : undefined;
 }
 
 function isCSharpSourceFileForProjectCandidate(filePath: string, projectPath: string): boolean {

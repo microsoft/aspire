@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
-import { AppHostDiscoveryService, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
+import { AppHostDiscoveryService, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, getWorkspaceAppHostProjectSearchResult, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { __resetCommonPropertiesForTests, __setReporterForTests } from '../utils/telemetry';
 import { appHostDiscoveryFindFilesMaxResults } from '../utils/workspaceFileSearch';
@@ -1399,6 +1399,60 @@ suite('AppHost discovery', () => {
             finally {
                 fs.rmSync(tempDir, { recursive: true, force: true });
             }
+        });
+
+        test('does not pick an arbitrary workspace default when multiple buildable candidates are selected', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                const workspaceFolder = makeWorkspaceFolder(tempDir);
+                findFilesStub.resolves([]);
+
+                const firstAppHostPath = path.join(tempDir, 'First', 'AppHost.csproj');
+                const secondAppHostPath = path.join(tempDir, 'Second', 'AppHost.csproj');
+                const selectedPath = await selectWorkspaceAppHostPath(workspaceFolder, [
+                    {
+                        path: firstAppHostPath,
+                        language: 'csharp',
+                        status: 'buildable',
+                        selected: true,
+                    },
+                    {
+                        path: secondAppHostPath,
+                        language: 'csharp',
+                        status: 'buildable',
+                        selected: true,
+                    },
+                ]);
+
+                assert.strictEqual(selectedPath, undefined);
+            }
+            finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        test('does not serialize an arbitrary selected_project_file when multiple buildable candidates are selected', () => {
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            const result = getWorkspaceAppHostProjectSearchResult(workspaceFolder, [
+                {
+                    path: buildPath('workspace', 'First', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                    selected: true,
+                },
+                {
+                    path: buildPath('workspace', 'Second', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                    selected: true,
+                },
+            ]);
+
+            assert.strictEqual(result.selected_project_file, null);
+            assert.deepStrictEqual(result.all_project_file_candidates, [
+                buildPath('workspace', 'First', 'AppHost.csproj'),
+                buildPath('workspace', 'Second', 'AppHost.csproj'),
+            ]);
         });
     });
 });

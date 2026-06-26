@@ -92,15 +92,19 @@ suite('AppHostLaunchService', () => {
         assert.strictEqual(config.step, 'deploy');
     });
 
-    test('launch skips CLI availability probe when caller already checked availability', async () => {
+    test('launch owns CLI availability probe', async () => {
         resolveCliPathStub.resolves({ cliPath: 'aspire', available: false, source: 'not-found' });
+        const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);
 
-        await service.launch('/repo/AppHost.csproj', 'deploy', false, undefined, { cliAvailabilityAlreadyChecked: true });
+        try {
+            await assert.rejects(service.launch('/repo/AppHost.csproj', 'deploy', false), vscode.CancellationError);
 
-        assert.strictEqual(resolveCliPathStub.called, false);
-        assert.strictEqual(startDebuggingStub.calledOnce, true);
-        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
-        assert.strictEqual(config.skipCliAvailabilityCheck, true);
+            assert.strictEqual(resolveCliPathStub.calledOnce, true);
+            assert.strictEqual(startDebuggingStub.called, false);
+        }
+        finally {
+            showErrorMessageStub.restore();
+        }
     });
 
     test('clearLaunching removes the path from launching state', async () => {

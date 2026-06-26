@@ -5,7 +5,7 @@ import { summarizeAppHostLanguages, classifyAppHostPath, classifyAppHostDirector
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 
 function c(language: string | null): CandidateAppHostDisplayInfo {
-    return { path: '/x', language, status: null };
+    return { path: '/x', language, status: 'buildable' };
 }
 
 suite('appHostLanguage.summarizeAppHostLanguages', () => {
