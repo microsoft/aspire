@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { extensionLogOutputChannel } from './logging';
+import { isBareAspireCommand } from './environment';
 import { getWindowsCommandShimSpawnCommand, shouldUseWindowsCommandShim } from './windowsCommandShim';
 
 const execFileAsync = promisify(execFile);
@@ -231,12 +232,4 @@ function getConfiguredPathCandidates(configuredPath: string, workspaceFolders: s
     }
 
     return [configuredPath];
-}
-
-function isBareAspireCommand(value: string): boolean {
-    if (value.includes('/') || value.includes('\\')) {
-        return false;
-    }
-
-    return /^(?:aspire|aspire\.exe|aspire\.cmd|aspire\.bat)$/i.test(value);
 }

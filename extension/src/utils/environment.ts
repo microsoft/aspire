@@ -49,7 +49,7 @@ export function withoutAspireCliPathForMSBuild(env: EnvVar[]): EnvVar[] {
     return env.filter(variable => variable.name.toLowerCase() !== aspireCliPathKey);
 }
 
-function isBareAspireCommand(value: string): boolean {
+export function isBareAspireCommand(value: string): boolean {
     if (value.includes('/') || value.includes('\\')) {
         return false;
     }

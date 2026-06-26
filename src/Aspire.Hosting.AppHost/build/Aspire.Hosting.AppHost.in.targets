@@ -308,12 +308,13 @@ namespace Projects%3B
       <_AspireRunWorkingDirectory>$(MSBuildProjectDirectory)</_AspireRunWorkingDirectory>
       <_AspireRunWorkingDirectory Condition="'$(FileBasedProgram)' == 'true' and '@(_AspireFileBasedAppHostDirectory)' != ''">@(_AspireFileBasedAppHostDirectory)</_AspireRunWorkingDirectory>
       <_AspireCliPathIsWindowsCommandShim Condition="'$(OS)' == 'Windows_NT' and '$(AspireCliPath)' != '' and ($(AspireCliPath.ToLowerInvariant().EndsWith('.cmd')) or $(AspireCliPath.ToLowerInvariant().EndsWith('.bat')))">true</_AspireCliPathIsWindowsCommandShim>
-      <RunCommand Condition="'$(AspireCliPath)' != '' and '$(_AspireCliPathIsWindowsCommandShim)' != 'true'">&quot;$(AspireCliPath)&quot;</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' != '' and '$(_AspireCliPathIsWindowsCommandShim)' != 'true' and '$(OS)' == 'Windows_NT'">&quot;$(AspireCliPath)&quot;</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' != '' and '$(_AspireCliPathIsWindowsCommandShim)' != 'true' and '$(OS)' != 'Windows_NT'">$(AspireCliPath)</RunCommand>
       <RunCommand Condition="'$(_AspireCliPathIsWindowsCommandShim)' == 'true'">cmd</RunCommand>
       <!-- On Windows, Aspire can be installed as a command shim such as aspire.cmd.
-           The SDK Run target shells RunCommand + RunArguments, so quote explicit
-           paths and use cmd /D /C call for command shims so batch files are
-           interpreted without AutoRun commands and return to this script. -->
+           dotnet run starts RunCommand directly, so keep explicit non-Windows
+           paths unquoted. Use cmd /D /C call for command shims and default PATH
+           lookup so batch files are interpreted without AutoRun commands. -->
       <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">cmd</RunCommand>
       <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' != 'Windows_NT'">aspire</RunCommand>
       <!-- dotnet run appends application arguments after ComputeRunArguments, so the double-dash separator

@@ -224,6 +224,34 @@ public class AppHostSdkTargetsTests
             await File.ReadAllLinesAsync(captureFile));
     }
 
+    [Fact]
+    public async Task DotNetRunUsesConfiguredAspireCliPathWhenPathContainsSpaces()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake cli"));
+        var captureFile = Path.Combine(tempDirectory.Path, "aspire-args.txt");
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["run", "--project", project.ProjectFile, $"-p:AspireCliPath={aspireCliPath}", "--", "--custom", "foo"],
+            new Dictionary<string, string> { ["ASPIRE_TEST_CAPTURE_PATH"] = captureFile });
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(
+            [
+                "run",
+                "--project",
+                project.ProjectFile,
+                "--no-build",
+                "--",
+                "--custom",
+                "foo"
+            ],
+            await File.ReadAllLinesAsync(captureFile));
+    }
+
     [Theory]
     [InlineData("13.4.0")]
     [InlineData("13.4.1")]
@@ -705,7 +733,8 @@ public class AppHostSdkTargetsTests
             return;
         }
 
-        Assert.Equal($"\"{cliPath}\"", properties["RunCommand"]);
+        var expectedRunCommand = OperatingSystem.IsWindows() ? $"\"{cliPath}\"" : cliPath;
+        Assert.Equal(expectedRunCommand, properties["RunCommand"]);
         Assert.Equal(GetExpectedExplicitAspireRunArguments(project, expectedArguments), properties["RunArguments"]);
     }
 
