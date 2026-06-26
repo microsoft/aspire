@@ -216,6 +216,7 @@ export class AppHostDataRepository {
     private _authoritativeSnapshotInProgress = false;
     private _authoritativeSnapshotPending = false;
     private _authoritativeSnapshotPendingForce = false;
+    private _runtimeSnapshotAfterWorkspaceDiscovery = false;
     private _authoritativeSnapshotRequestId = 0;
     private _activeAuthoritativeSnapshotRequestId: number | undefined;
 
@@ -399,6 +400,7 @@ export class AppHostDataRepository {
         this._stopAllGlobalDescribes();
         this._workspaceResources.clear();
         this._clearErrors();
+        this._runtimeSnapshotAfterWorkspaceDiscovery = false;
         // A user-triggered refresh should observe AppHost/config files written by tools
         // even when the file watcher has not delivered an invalidation event yet.
         this._workspaceAppHostDiscoveryComplete = false;
@@ -422,6 +424,9 @@ export class AppHostDataRepository {
         const shouldWatchWorkspace = this._shouldWatchWorkspace;
         const shouldPoll = this._shouldPoll;
         const forceSnapshot = this._dataActive && !shouldPoll;
+        if (this._dataActive && this._viewMode === 'workspace' && !this._workspaceAppHostDiscoveryComplete && this._workspaceAppHostCandidatePaths.length === 0) {
+            this._runtimeSnapshotAfterWorkspaceDiscovery = true;
+        }
         if (!shouldWatchWorkspace && !shouldPoll && !forceSnapshot) {
             return;
         }
@@ -562,6 +567,7 @@ export class AppHostDataRepository {
         this._clearPostStopRefreshTimers();
         this._authoritativeSnapshotPending = false;
         this._authoritativeSnapshotPendingForce = false;
+        this._runtimeSnapshotAfterWorkspaceDiscovery = false;
         this._stopPolling();
         this._stopDescribeWatch();
         this._stopAllGlobalDescribes();
@@ -654,6 +660,7 @@ export class AppHostDataRepository {
         const discoveryVersion = ++this._workspaceAppHostDiscoveryVersion;
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {
+            this._runtimeSnapshotAfterWorkspaceDiscovery = false;
             this._workspaceAppHostDiscoveryComplete = true;
             this._clearWorkspaceAppHostDiscovery();
             this._clearWorkspaceAppHostData();
@@ -686,6 +693,7 @@ export class AppHostDataRepository {
 
             this._workspaceAppHostDiscoveryComplete = true;
             extensionLogOutputChannel.warn(`Failed to fetch workspace apphost: ${error}`);
+            this._runtimeSnapshotAfterWorkspaceDiscovery = false;
             this._clearWorkspaceAppHostDiscovery();
             this._clearWorkspaceAppHostData();
             this._setDescribeError(errorFetchingAppHosts(String(error)));
@@ -708,6 +716,7 @@ export class AppHostDataRepository {
 
     private _cancelWorkspaceAppHostDiscovery(): void {
         this._workspaceAppHostDiscoveryRefreshQueued = false;
+        this._runtimeSnapshotAfterWorkspaceDiscovery = false;
         this._workspaceAppHostDiscoveryCancellationSource?.cancel();
         this._workspaceAppHostDiscoveryCancellationSource?.dispose();
         this._workspaceAppHostDiscoveryCancellationSource = undefined;
@@ -718,6 +727,8 @@ export class AppHostDataRepository {
         const buildableAppHostCandidates = appHostCandidates.filter(isBuildableAppHostCandidate);
 
         if (buildableAppHostCandidates.length === 0) {
+            const refreshRuntimeStateAfterDiscovery = this._runtimeSnapshotAfterWorkspaceDiscovery;
+            this._runtimeSnapshotAfterWorkspaceDiscovery = false;
             this._clearWorkspaceAppHostDiscovery();
             this._clearWorkspaceAppHostData();
             if (appHostCandidates.length > 0) {
@@ -725,9 +736,14 @@ export class AppHostDataRepository {
             }
             this._clearErrors();
             this._syncPolling();
+            if (refreshRuntimeStateAfterDiscovery && this._dataActive && this._viewMode === 'workspace') {
+                this._refreshAppHostsFromAuthoritativeSnapshot(true);
+            }
             this._updateWorkspaceContext({ clearLoading: true });
             return;
         }
+
+        this._runtimeSnapshotAfterWorkspaceDiscovery = false;
 
         if (buildableAppHostCandidates.length > 1) {
             this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
@@ -1590,6 +1606,9 @@ export class AppHostDataRepository {
         this._authoritativeSnapshotInProgress = true;
         const snapshotRequestId = ++this._authoritativeSnapshotRequestId;
         this._activeAuthoritativeSnapshotRequestId = snapshotRequestId;
+        const isCurrentSnapshot = () => this._activeAuthoritativeSnapshotRequestId === snapshotRequestId
+            && !this._disposed
+            && (force || this._shouldPoll);
         const pollingGeneration = this._psPollingGeneration;
         const args = this._withNoLogo(['ps', '--format', 'json']);
         this._runPsCommand(args, (code, stdout, stderr) => {
@@ -1621,7 +1640,7 @@ export class AppHostDataRepository {
                 this._authoritativeSnapshotPendingForce = false;
                 this._refreshAppHostsFromAuthoritativeSnapshot(pendingForce);
             }
-        }, { force });
+        }, { force, isCurrent: isCurrentSnapshot });
     }
 
     private _isCurrentPsFetch(fetchVersion: number): boolean {
@@ -1843,10 +1862,14 @@ export class AppHostDataRepository {
         this._attachGlobalResourcesToAppHosts();
     }
 
-    private async _runPsCommand(args: string[], callback: (code: number, stdout: string, stderr: string) => void, options?: { fetchVersion?: number; force?: boolean }): Promise<void> {
+    private async _runPsCommand(args: string[], callback: (code: number, stdout: string, stderr: string) => void, options?: { fetchVersion?: number; force?: boolean; isCurrent?: () => boolean }): Promise<void> {
         const fetchVersion = options?.fetchVersion;
         const force = options?.force === true;
         const isCurrentPsCommand = () => {
+            if (options?.isCurrent) {
+                return options.isCurrent();
+            }
+
             if (fetchVersion !== undefined) {
                 return this._isCurrentPsFetch(fetchVersion);
             }
