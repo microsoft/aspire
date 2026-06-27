@@ -15,5 +15,8 @@
     "nodemon": "^3.1.11",
     "tsx": "^4.19.0",
     "typescript": "^5.3.0"
+  },
+  "resolutions": {
+    "esbuild": "^0.28.1"
   }
 }
