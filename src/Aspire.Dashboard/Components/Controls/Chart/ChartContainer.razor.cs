@@ -145,7 +145,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private static bool MatchFilter(KeyValuePair<string, string>[] attributes, DimensionFilterViewModel filter)
     {
         // No filter selected.
-        if (!filter.SelectedValues.Any())
+        if (filter.SelectedValues.Count == 0)
         {
             return false;
         }
@@ -234,9 +234,9 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                     return new DimensionValueViewModel
                     {
                         Text = text,
-                        Value = v
+                        Value = v,
                     };
-                }).OrderBy(v => v.Text));
+                }));
 
                 filters.Add(dimensionModel);
             }

@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { AspireTerminalProvider, shellArg } from '../utils/AspireTerminalProvider';
+import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTerminalProvider';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
 import { compareResourceCommands, getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
 import {
@@ -55,10 +55,13 @@ import {
 import { collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import { isCommandCancellation } from '../utils/telemetry';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
 
 const integratedBrowserOpenCommand = 'workbench.action.browser.open';
+const terminalEnabledPropertyName = 'terminal.enabled';
+const terminalReplicaIndexPropertyName = 'terminal.replicaIndex';
 
 function sortResources(resources: ResourceJson[]): ResourceJson[] {
     return [...resources].sort((a, b) => {
@@ -421,12 +424,26 @@ export function getResourceContextValue(resource: ResourceJson): string {
     if (hasEnabledCommand(commands, 'restart') || hasEnabledCommand(commands, 'resource-restart')) {
         parts.push('canRestart');
     }
+    if (isTerminalEnabled(resource)) {
+        parts.push('canOpenTerminal');
+    }
     return parts.join(':');
 }
 
 function hasEnabledCommand(commands: Record<string, ResourceCommandJson> | null | undefined, commandName: string): boolean {
     const command = commands?.[commandName];
     return isCommandVisibleToUi(command) && isEnabledCommand(command);
+}
+
+function isTerminalEnabled(resource: ResourceJson): boolean {
+    const value = resource.properties?.[terminalEnabledPropertyName];
+    return value?.trim().toLowerCase() === 'true';
+}
+
+function getTerminalReplicaIndex(resource: ResourceJson): string | undefined {
+    const value = resource.properties?.[terminalReplicaIndexPropertyName];
+    const trimmedValue = value?.trim();
+    return trimmedValue && trimmedValue.length > 0 ? trimmedValue : undefined;
 }
 
 export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
@@ -1030,14 +1047,30 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 }
 
                 if (workspaceItems.length > 0 && runningItems.length > 0) {
-                    // Wrap running items in a sibling group so both sets share the same
-                    // indentation depth and the visual hierarchy reads symmetrically.
-                    const runningGroup = new RunningAppHostsGroupItem(runningItems);
-                    return [runningGroup, new WorkspaceAppHostsGroupItem(workspaceItems)];
+                    // Each set (running / idle) only gets a "(N)" grouping header when it
+                    // contains two or more AppHosts. A lone AppHost on either side is surfaced
+                    // directly as a top-level sibling instead of being wrapped in a "(1)" node
+                    // that adds nesting and a redundant click target without value.
+                    // See https://github.com/microsoft/aspire/issues/18420.
+                    // A single running AppHost is a flat WorkspaceResourcesItem (resources shown
+                    // inline), matching the pure single-running case below.
+                    const runningChild = runningItems.length === 1
+                        ? runningItems[0]
+                        : new RunningAppHostsGroupItem(runningItems);
+                    const workspaceChild = workspaceItems.length === 1
+                        ? workspaceItems[0]
+                        : new WorkspaceAppHostsGroupItem(workspaceItems);
+                    return [runningChild, workspaceChild];
                 }
-                // When nothing is running, still wrap idle items in the group so they
-                // render under the "Workspace AppHosts" header. This keeps the tree shape
-                // consistent with the mixed case and avoids loose root-level items.
+                // For a single idle AppHost (nothing running), skip the "Workspace AppHosts"
+                // grouping node and surface the AppHost directly at the root, for the same
+                // reason as the mixed case above (mirrors VS Code's SCM view for a single repo).
+                // See https://github.com/microsoft/aspire/issues/18420.
+                if (workspaceItems.length === 1) {
+                    return [workspaceItems[0]];
+                }
+                // When two or more idle AppHosts exist, wrap them under the "Workspace AppHosts"
+                // header so the tree shape stays consistent and avoids loose root-level items.
                 if (workspaceItems.length > 0) {
                     return [new WorkspaceAppHostsGroupItem(workspaceItems)];
                 }
@@ -1330,7 +1363,9 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         try {
             await this._launchService.launch(appHostPath, 'run', noDebug);
         } catch (err) {
-            vscode.window.showErrorMessage(errorMessage(err));
+            if (!isCommandCancellation(err)) {
+                vscode.window.showErrorMessage(errorMessage(err));
+            }
             throw err;
         }
     }
@@ -1425,6 +1460,21 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
         await this._terminalProvider.sendAspireCommandToAspireTerminal(['logs', shellArg(resourceName), '--apphost', shellArg(appHost.appHostPath)]);
+    }
+
+    async openResourceTerminal(element: ResourceItem): Promise<void> {
+        const command: Array<string | ShellArg> = ['terminal', 'attach', shellArg(element.resource.name)];
+        const appHostPath = this._getAppHostPathForResource(element);
+        if (appHostPath) {
+            command.push('--apphost', shellArg(appHostPath));
+        }
+
+        const replicaIndex = getTerminalReplicaIndex(element.resource);
+        if (replicaIndex) {
+            command.push('--replica', shellArg(replicaIndex));
+        }
+
+        await this._terminalProvider.sendAspireCommandToAspireTerminal(command, true, undefined, { terminalTarget: 'editor' });
     }
 
     async executeResourceCommand(element: ResourceItem): Promise<void> {

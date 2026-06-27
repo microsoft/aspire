@@ -283,6 +283,7 @@ public sealed class TestTriggerMapTests
             ["job:cli-starter"] = () => JobExists("cli_starter_validation_windows"),
             ["job:winget-installer"] = () => JobExists("prepare_winget_installer_artifacts"),
             ["job:homebrew-installer"] = () => JobExists("prepare_homebrew_installer_artifacts"),
+            ["job:nix-package"] = () => JobExists("nix_package"),
             ["job:api-diffs"] = () => WorkflowExists("generate-api-diffs.yml"),
             ["job:ats-diffs"] = () => WorkflowExists("generate-ats-diffs.yml"),
             ["job:deployment-e2e"] = () => WorkflowExists("deployment-tests.yml"),
@@ -382,6 +383,7 @@ public sealed class TestTriggerMapTests
             ("cli_starter_validation_windows", "run_cli_starter"),
             ("prepare_winget_installer_artifacts", "run_winget_installer"),
             ("prepare_homebrew_installer_artifacts", "run_homebrew_installer"),
+            ("nix_package", "run_nix_package"),
         };
 
         var wrong = new List<string>();

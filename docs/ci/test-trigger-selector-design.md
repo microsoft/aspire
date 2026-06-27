@@ -58,11 +58,26 @@ diff is used only to identify changed paths.
 
 ### Changed paths
 
-When `--from` / `--to` are supplied, Layer 1 reads changed files with:
+When `--from` / `--to` are supplied, the selector first resolves the
+**merge-base** (the branch point) of the two refs and diffs FROM there:
 
 ```text
-git diff --name-status -M <from> <to>
+from := git merge-base <from> <to>      # the base..head branch point
+git diff --name-status -M <from> <to>   # Layer 1
+git diff --name-only   --no-renames <from> <to>   # Layer 2
 ```
+
+This makes a PR select on its **own** commits. A file changed on the base
+branch after the PR branched shares the merge-base, so it produces no diff and
+is not mis-attributed to the PR. (Diffing from the base *tip* instead surfaced
+exactly such a file and tripped the run-all fallback —
+[microsoft/aspire#18377](https://github.com/microsoft/aspire/pull/18377#issuecomment-4782187184).)
+The same rebound `from` feeds both layers, so they see an identical change set.
+When `--to` is omitted (local working-tree run) `HEAD` is used only to resolve the
+merge-base; the diff itself then compares that merge-base against the **working
+tree**, so uncommitted changes are included. The
+merge-base (3-dot) base is the same choice Nx, Turborepo, Jest, Pants, and
+GitHub's own PR path filters make; see [Prior art and comparison](#prior-art-and-comparison).
 
 Deletes are included. Renames include both the old path and the new path, so a
 cross-project move marks both the project that lost the file and the project
@@ -119,8 +134,9 @@ carries, per affected project, an ordered chain
 `changed file → directly-changed project → … → affected test`. The selector
 attaches this to each Layer 1 cause (`Cause.Path`), and the renderers surface
 it: the step summary shows the full chain
-(`src/Core/Core.cs → Core → Core.Tests`), the PR comment a terse
-`via graph from <file>`. Only a single representative shortest path per project
+(`src/Core/Core.cs → Core → Core.Tests`), while the PR comment groups every test
+reached from a seed file under that file's heading (in a "via the project graph"
+bucket). Only a single representative shortest path per project
 is tracked — alternate longer paths are not enumerated.
 
 ### Why a HEAD-only graph
@@ -136,8 +152,15 @@ virtual filesystem to diff packages. That has two CI-breaking constraints:
 - it cannot run inside a git worktree.
 
 A HEAD-only graph never evaluates from-commit content, so both constraints
-disappear. Two-commit central-package diffing is intentionally not reproduced:
-Layer 2 routes `Directory.Packages.props` to `ALL`.
+disappear. Two-commit *per-package* diffing (mapping a single changed
+`<PackageVersion>` to only the projects that consume that package) is
+intentionally not reproduced. It is not needed for correctness: the SDK imports
+`Directory.Packages.props` during evaluation, so it appears in every project's
+`ProjectInstance.ImportPaths`, and Layer 1 already attributes a change to it to
+every importing project — i.e. all test projects. Layer 2 *additionally* routes
+`Directory.Packages.props` to `ALL`; that entry is not redundant because Layer 1
+only emits `test:` targets, so the `ALL` route is what also fires the non-.NET
+`job:` targets (extension e2e, CLI archive, …) and the full matrix.
 
 ### Why no `Microsoft.Build.Prediction`
 
@@ -231,7 +254,10 @@ Main options:
 - `--map`: curated map path, defaulting to `eng/github-ci/test-trigger-map.yml`.
 - `--slnx`: path to the solution that defines the project universe, defaulting to
   `<repo-root>/Aspire.slnx`.
-- `--from` / `--to`: git refs for the PR diff.
+- `--from` / `--to`: git refs for the PR diff. The diff is taken from the
+  merge-base of the two (the branch point), so only the PR's own commits count.
+  In CI `--to` is the PR's real head (`pull_request.head.sha`), not the
+  synthetic merge commit.
 - `--changed-files`: newline-delimited changed file list, instead of
   `--from` / `--to`.
 - `--skip-layer1`: skip the graph closure for explicit diagnostics.
@@ -340,6 +366,23 @@ cannot be fetched in the shallow checkout **fails the step** instead of forcing
 run-all: `base.sha` is always reachable on origin, so a fetch failure is a real
 problem, and masking it with run-all would teach the audit nothing.
 
+Because the diff is taken from the merge-base, the shallow PR checkout must be
+deepened until that common ancestor is reachable. The step fetches the base
+commit, then re-fetches both base and head at a growing depth until
+`git merge-base` resolves. If it never resolves within the depth bound, the step
+**warns and falls back to `--force-all`** (run the full matrix) rather than
+failing the PR. An unresolved merge-base must not block PRs while the cause (a
+history-depth gap or a genuinely divergent base) is found and fixed; over-selecting
+is the fail-safe outcome, matching the unmapped-file run-all fallback. `SelectTests`
+applies the same fallback itself if its own `git merge-base` comes up empty. Both
+emit a `::warning::` and record the reason in the run summary, so a systemic
+regression surfaces instead of hiding behind a green-but-full-matrix run.
+
+Note the asymmetry with the base-fetch failure above: a base commit that can't be
+**fetched** still fails the step (`base.sha` is always reachable on origin, so that
+is a real infra problem), whereas a base/head that can't be **merge-based** after
+deepening degrades to run-all.
+
 ## Failure policy
 
 Layer 1 is safety-critical. Any failure to compute the affected-projects graph
@@ -423,11 +466,19 @@ runs the full matrix and all jobs. The summary shows:
 - any `ALL` or kill-switch escalation and why;
 - unattributed changed files that may need curated rules.
 
-The PR comment carries the same selection in a terser form: each test
-project and job is listed with **every** cause that selected it (e.g. a job
-pulled in only because a test runs reads `via test <Name>`), priority-ordered
-and de-duplicated. The full per-item cause list additionally includes the rule
-`reason` text in the step summary. The comment is posted **one per pushed
+The PR comment carries the same selection in a more scannable form. It leads
+with **what runs** — the flat list of selected test projects and the flat list
+of selected jobs (test projects first, since they are the primary review
+signal) — so a reviewer sees the full impact at a glance even when many files
+changed. It then explains **how** the selection was reached in a collapsed
+`<details>` (the heading is the `<summary>`, so the rationale stays out of the
+way until expanded), grouping the selected projects under each trigger (changed
+file, affected project, or derived test) that pulled them in: a changed file
+and its graph fan-out appear under one heading, so a single edit's whole
+closure is stated once rather than repeated per project, and large fan-outs
+collapse into a nested `<details>`. Every cause is still shown — a project
+selected by several triggers appears under each — and a per-job table names
+what triggered each job. The comment is posted **one per pushed
 commit** and links the head commit it was computed for: a re-run of the same
 commit updates that commit's comment in place (no duplicate — re-runs are
 common), a new commit posts a fresh comment at the bottom, and comments from
@@ -456,6 +507,92 @@ flip to enforcing and keep the `run-full-ci` kill switch.
 A convention-miss dir with no same-named test is intentionally not asserted.
 Its MSBuild files are owned by Layer 1, and a non-MSBuild change there safely
 hits a curated rule, the convention backstop, or the run-all fallback.
+
+## Prior art and comparison
+
+Two design choices warrant justification against the field: the **diff base**
+(merge-base / 3-dot) and the **two-layer static-graph + curated-map**
+architecture with fail-safe defaults. We surveyed how comparable affected-test /
+impacted-test systems handle the same problems.
+
+### Diff base: merge-base (3-dot) is the mainstream choice
+
+Every changed-files-based selector that targets PRs takes the diff from the
+**branch point** (the merge-base), not the base tip — so base-branch commits that
+landed after the PR forked are not attributed to it. That is exactly the
+base-tip → merge-base switch this design made.
+
+- **Turborepo** `--affected` is, by its own docs, equivalent to
+  `--filter=...[main...HEAD]` — a 3-dot (merge-base) range.
+  ([`turbo run` reference](https://turborepo.dev/docs/reference/run))
+- **dorny/paths-filter** (the popular GitHub path-filter action) detects
+  feature-branch changes "against the merge-base with the configured base
+  branch," and "only changes introduced by the current branch are considered."
+  ([README](https://github.com/dorny/paths-filter))
+- **Nx** `nx affected` rewrites the base through `git merge-base` before diffing.
+  ([affected docs](https://nx.dev/docs/features/ci-features/affected),
+  [`command-line-utils` source](https://github.com/nrwl/nx/blob/master/packages/nx/src/utils/command-line-utils.ts))
+- **Jest** `--changedSince` and **Pants** `--changed-since` both diff
+  `<since>...HEAD` (3-dot); Pants' docs explicitly show computing a
+  `git merge-base` for PR runs.
+  ([Jest CLI](https://jestjs.io/docs/cli#--changedsince),
+  [Pants target selection](https://www.pantsbuild.org/stable/docs/using-pants/advanced-target-selection))
+- **GitHub's own** PR `paths:` filters compare the merge-base (3-dot); `push`
+  filters compare the previous tip (2-dot).
+
+Content-hash systems (Bazel, Turborepo's task cache) and coverage/ML systems
+(Gradle Develocity Predictive Test Selection, Azure DevOps VSTest Test Impact
+Analysis) sidestep the diff-base question entirely — they key on input hashes or
+per-test coverage rather than a commit range — so the merge-base distinction
+does not arise for them.
+
+### Shallow checkout and the unresolved-merge-base fallback
+
+CI checkouts are shallow, so the merge-base may not be present locally. Our
+action deepens **both** endpoints until `git merge-base` resolves, and if it
+never does, warns and runs **all** tests rather than failing the PR. Both halves
+mirror established behavior:
+
+- **dorny/paths-filter** doubles its `initial-fetch-depth` "until the merge-base
+  is found, or there are no more commits in the history," and if there is no
+  common ancestor "all files are considered as added" — i.e. everything matches.
+  That is the same deepen-then-degrade-to-all behavior, arrived at independently.
+- **Turborepo** warns that "if the checkout is too shallow, then all packages
+  will be considered changed," and recommends `--depth=0`.
+- **Nx** CI recipes use `fetch-depth: 0` for the same reason.
+
+### Where this design deliberately differs
+
+- **Two layers (static project graph + curated path map).** This is more bespoke
+  than the first-class workspace/package graphs of Nx, Turborepo, and Pants, or
+  the build-graph queries of Bazel/Buck2. The tradeoff is transparency and
+  repo-specific accuracy in exchange for maintaining the curated layer for
+  non-MSBuild dependencies (runtime/loose-file reads and non-.NET jobs).
+- **No content hashing or coverage/ML test-impact selection.** Bazel/Turborepo
+  hashing and Develocity/Azure-TIA coverage give finer precision, but they trade
+  away the per-decision explainability the map + graph closure provide ("why did
+  this test run" — a named path), and add caching/coverage infrastructure not
+  warranted at this repo's scale. This is an explicit non-goal, not an oversight.
+
+### Fail-safe vs fail-open
+
+A changed file that is Layer-1-unowned, un-ignored, and matched by no rule forces
+**ALL** (run-all fallback). This conservative stance matches Azure DevOps TIA
+(unknown/unsupported file types fall back to running all tests) and Turborepo
+(too-shallow history → all packages). Graph-only tools (Nx, Pants, Jest) instead
+select *nothing* for a file outside their ownership/input model, which can
+silently skip tests for a new, unmapped loose file — the failure mode the
+run-all fallback exists to prevent.
+
+| System | Mechanism | Diff base | Insufficient / unresolved base |
+| --- | --- | --- | --- |
+| **Aspire SelectTests** | static project graph + curated path map | merge-base (3-dot) | warn → run ALL |
+| Nx | project graph | merge-base (3-dot) | needs full history (`fetch-depth: 0`) |
+| Turborepo | package graph + content hash | merge-base (3-dot) | too-shallow → all packages |
+| dorny/paths-filter | path globs | merge-base (3-dot) | no ancestor → all files added |
+| Jest / Pants | module / target graph | merge-base (3-dot) | error / needs history |
+| Bazel / Buck2 | build graph + content hash | (hash, no range) | n/a |
+| Develocity PTS / Azure VSTest TIA | per-test coverage / ML | (coverage, no range) | unknown → run all (TIA) |
 
 ## Rollout
 

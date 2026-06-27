@@ -276,6 +276,13 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         // Verify the fixed format is used
         Assert.Equal(DashboardUIHelpers.JsonFormat, instance.TextVisualizerViewModel.FormatKind);
+        Assert.Equal(
+            """
+            {
+              "key": "value"
+            }
+            """,
+            instance.TextVisualizerViewModel.FormattedText);
         Assert.True(instance.HasFixedFormat);
     }
 

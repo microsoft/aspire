@@ -1540,6 +1540,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             new ConsoleEnvironment(console, console),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(),
             NullLoggerFactory.Instance,
             new ConsoleLogBufferContext());
 
@@ -1971,11 +1972,12 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                 var consoleEnvironment = sp.GetRequiredService<ConsoleEnvironment>();
                 var executionContext = sp.GetRequiredService<CliExecutionContext>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
+                var processPathProvider = sp.GetRequiredService<IProcessPathProvider>();
                 var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
                 var logBufferContext = sp.GetRequiredService<ConsoleLogBufferContext>();
-                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory, logBufferContext);
+                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, processPathProvider, loggerFactory, logBufferContext);
 
-                return new ExtensionInteractionService(consoleInteractionService, extensionBackchannel, extensionPromptEnabled: false);
+                return new ExtensionInteractionService(consoleInteractionService, extensionBackchannel, extensionPromptEnabled: false, logger: NullLogger<ExtensionInteractionService>.Instance);
             };
             options.ConfigurationCallback += config =>
             {
@@ -2913,6 +2915,46 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                 yield return entry;
             }
             await Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task CaptureAppHostLogsAsync_ConnectionLostException_TreatedAsNormalCompletion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var errorWriter = new TestStartupErrorWriter();
+        using var fileLoggerProvider = new FileLoggerProvider(logFilePath, errorWriter);
+
+        var backchannel = new TestAppHostBackchannel();
+        backchannel.GetAppHostLogEntriesAsyncCallback = ThrowConnectionLostAfterOneEntry;
+        var interactionService = new TestInteractionService();
+
+        // Should complete without throwing, even though the cancellation token is NOT cancelled.
+        // This simulates the AppHost process exiting and the backchannel dropping before the
+        // logCaptureCancellationSource.Cancel() fires in the RunCommand finally block.
+        await RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, CancellationToken.None);
+
+        fileLoggerProvider.Dispose();
+
+        var lines = await File.ReadAllLinesAsync(logFilePath);
+        var nonEmptyLines = lines.Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
+
+        Assert.Single(nonEmptyLines);
+        Assert.Equal("[2026-03-16 12:00:00.000] [INFO] [AppHost/Lifetime] Application started", nonEmptyLines[0]);
+
+        async static IAsyncEnumerable<BackchannelLogEntry> ThrowConnectionLostAfterOneEntry([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return new BackchannelLogEntry
+            {
+                Timestamp = new DateTimeOffset(2026, 3, 16, 12, 0, 0, TimeSpan.Zero),
+                LogLevel = LogLevel.Information,
+                Message = "Application started",
+                EventId = new EventId(),
+                CategoryName = "Microsoft.Hosting.Lifetime"
+            };
+            await Task.CompletedTask;
+            throw new ConnectionLostException();
         }
     }
 

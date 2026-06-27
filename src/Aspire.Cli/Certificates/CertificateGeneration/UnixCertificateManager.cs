@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
+using Aspire.Cli;
 using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNetCore.Certificates.Generation;
@@ -43,14 +44,17 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     private const int MaxHashCollisions = 10; // Something is going badly wrong if we have this many dev certs with the same hash
 
     private HashSet<string>? _availableCommands;
+    private readonly IEnvironment _environment;
 
-    public UnixCertificateManager(ILogger logger) : base(logger)
+    public UnixCertificateManager(ILogger logger, IEnvironment environment) : base(logger)
     {
+        _environment = environment;
     }
 
     internal UnixCertificateManager(string subject, int version)
         : base(subject, version)
     {
+        _environment = new Aspire.Cli.HostEnvironment();
     }
 
     public override TrustLevel GetTrustLevel(X509Certificate2 certificate)
@@ -58,7 +62,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         var sawTrustSuccess = false;
         var sawTrustFailure = false;
 
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable(OpenSslCertDirectoryOverrideVariableName)))
+        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable(OpenSslCertDirectoryOverrideVariableName)))
         {
             // Warn but don't bail.
             Log.UnixOpenSslCertificateDirectoryOverrideIgnored(OpenSslCertDirectoryOverrideVariableName);
@@ -98,7 +102,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         // Will become the name of the file on disk and the nickname in the NSS DBs
         var certificateNickname = GetCertificateNickname(certificate);
 
-        var sslCertDirString = Environment.GetEnvironmentVariable(OpenSslCertificateDirectoryVariableName);
+        var sslCertDirString = _environment.GetEnvironmentVariable(OpenSslCertificateDirectoryVariableName);
         if (string.IsNullOrEmpty(sslCertDirString))
         {
             sawTrustFailure = true;
@@ -364,7 +368,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             var hasValidSslCertDir = false;
 
             // Check if SSL_CERT_DIR is already set and if certDir is already included
-            var existingSslCertDir = Environment.GetEnvironmentVariable(OpenSslCertificateDirectoryVariableName);
+            var existingSslCertDir = _environment.GetEnvironmentVariable(OpenSslCertificateDirectoryVariableName);
             if (!string.IsNullOrEmpty(existingSslCertDir))
             {
                 var existingDirs = existingSslCertDir.Split(Path.PathSeparator);
@@ -582,7 +586,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         return _availableCommands.Contains(command);
     }
 
-    private static HashSet<string> FindAvailableCommands()
+    private HashSet<string> FindAvailableCommands()
     {
         var availableCommands = new HashSet<string>();
 
@@ -590,7 +594,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         // but, given that all of v1 is EOL, it doesn't seem worthwhile to check the version.
         var commands = new[] { OpenSslCommand, CertUtilCommand };
 
-        var searchPath = Environment.GetEnvironmentVariable("PATH");
+        var searchPath = _environment.GetEnvironmentVariable("PATH");
 
         if (searchPath is null)
         {
@@ -639,7 +643,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     /// Detects if the current environment is Windows Subsystem for Linux (WSL) with interop enabled.
     /// </summary>
     /// <returns>True if running on WSL with interop; otherwise, false.</returns>
-    private static bool IsRunningOnWslWithInterop()
+    private bool IsRunningOnWslWithInterop()
     {
         // WSL exposes special files that indicate WSL interop is enabled.
         // Either WSLInterop or WSLInterop-late may be present depending on the WSL version and configuration.
@@ -650,7 +654,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
         // Additionally check for standard WSL environment variables as a fallback.
         // WSL_INTEROP is set to the path of the interop socket.
-        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WSL_INTEROP")))
+        if (!string.IsNullOrEmpty(_environment.GetEnvironmentVariable("WSL_INTEROP")))
         {
             return true;
         }
@@ -807,7 +811,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
     private string GetOpenSslCertificateDirectory(string homeDirectory)
     {
-        var @override = Environment.GetEnvironmentVariable(OpenSslCertDirectoryOverrideVariableName);
+        var @override = _environment.GetEnvironmentVariable(OpenSslCertDirectoryOverrideVariableName);
         if (!string.IsNullOrEmpty(@override))
         {
             Log.UnixOpenSslCertificateDirectoryOverridePresent(OpenSslCertDirectoryOverrideVariableName);
@@ -833,7 +837,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
     private bool TryGetNssDbOverrides(out IReadOnlyList<string> overrides)
     {
-        var nssDbOverride = Environment.GetEnvironmentVariable(NssDbOverrideVariableName);
+        var nssDbOverride = _environment.GetEnvironmentVariable(NssDbOverrideVariableName);
         if (string.IsNullOrEmpty(nssDbOverride))
         {
             overrides = [];

@@ -47,6 +47,7 @@ jobs:
       run_cli_starter: ${{ fromJSON(steps.select_tests.outputs.selection).run_cli_starter }}
       run_winget_installer: ${{ fromJSON(steps.select_tests.outputs.selection).run_winget_installer }}
       run_homebrew_installer: ${{ fromJSON(steps.select_tests.outputs.selection).run_homebrew_installer }}
+      run_nix_package: ${{ fromJSON(steps.select_tests.outputs.selection).run_nix_package }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         # This job runs PR-authored code; don't leave the checkout's GITHUB_TOKEN persisted in
@@ -72,7 +73,13 @@ jobs:
           # plain re-run of an existing run. Empty on non-PR events -> the action force-alls anyway.
           forceAll: ${{ contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}
           prBaseSha: ${{ github.event.pull_request.base.sha }}
-          headSha: ${{ github.sha }}
+          # The PR's real head, NOT github.sha (the synthetic refs/pull/N/merge commit). The selector
+          # diffs head against the merge-base of base..head, so it sees only the PR's own commits. Using
+          # the merge commit instead lets base-branch churn leak into the diff whenever GitHub's merge
+          # ref and the event's base.sha disagree (the merge ref is regenerated asynchronously as the
+          # base advances) -- which over-selected an unrelated file in
+          # https://github.com/microsoft/aspire/pull/18377#issuecomment-4782187184.
+          headSha: ${{ github.event.pull_request.head.sha }}
 
       # Hand the selection summary to the separate comment_selection job (below) as an artifact. The
       # comment is posted from THAT job, which holds pull-requests:write but runs no PR code, so this
@@ -327,6 +334,35 @@ jobs:
     if: ${{ needs.setup_for_tests.outputs.run_homebrew_installer == 'true' }}
     with:
       installer: homebrew
+
+  nix_package:
+    name: Nix package smoke
+    runs-on: ubuntu-latest
+    needs: setup_for_tests
+    if: ${{ needs.setup_for_tests.outputs.run_nix_package == 'true' }}
+    env:
+      NIX_CONFIG: experimental-features = nix-command flakes
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install Nix
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nix-bin
+          sudo git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          sudo --preserve-env=NIX_CONFIG nix --version
+
+      - name: Check flake
+        run: sudo --preserve-env=NIX_CONFIG nix flake check --print-build-logs
+
+      - name: Build Aspire CLI package
+        run: sudo --preserve-env=NIX_CONFIG nix build .#aspire-cli --print-build-logs
+
+      - name: Smoke test packaged CLI
+        run: |
+          test "$(cat result/lib/aspire-cli/.aspire-install.json)" = '{"source":"nix"}'
+          ./result/bin/aspire --version
 
   build_cli_e2e_image:
     name: Build CLI E2E Docker image
@@ -703,6 +739,7 @@ jobs:
       build_cli_archive_macos_x64,
       prepare_winget_installer_artifacts,
       prepare_homebrew_installer_artifacts,
+      nix_package,
       build_cli_e2e_image,
       extension_tests_win,
       extension_e2e_tests,
@@ -810,6 +847,7 @@ jobs:
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||
                  (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
                  (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
+                 (needs.nix_package.result == 'skipped' && (needs.setup_for_tests.outputs.run_nix_package == 'true')) ||
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets).include[0] != null &&
                   needs.tests_no_nugets.result == 'skipped') ||
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_linux).include[0] != null &&
@@ -832,6 +870,7 @@ jobs:
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||
                  (needs.prepare_winget_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_winget_installer == 'true')) ||
                  (needs.prepare_homebrew_installer_artifacts.result == 'skipped' && (needs.setup_for_tests.outputs.run_homebrew_installer == 'true')) ||
+                 (needs.nix_package.result == 'skipped' && (needs.setup_for_tests.outputs.run_nix_package == 'true')) ||
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_no_nugets).include[0] != null &&
                   needs.tests_no_nugets.result == 'skipped') ||
                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_linux).include[0] != null &&

@@ -529,6 +529,7 @@ The following specialized skills are available in `.agents/skills/`:
 - **startup-perf**: Measures Aspire startup profiling with CLI self-profile capture and dashboard export traces
 - **reviewing-aspire-architecture**: Reviews PRs for Aspire-specific architectural patterns across 15 dimensions including API design, resource model, Azure provisioning, pattern conformance, dashboard UX, CLI behavior, and more. Complements the code-review skill with domain knowledge that generic review cannot catch.
 - **vscode-extension**: Guide for developing, building, testing, and debugging the Aspire VS Code extension under `extension/`. Use when investigating an issue in, debugging, or working on a feature for the VS Code extension.
+- **deprecate-integration**: Soft-sunsets a shipped hosting integration: marks its API `[Obsolete]`, adds a README warning, hides the package from `aspire add`, removes integration-specific automation, suppresses the resulting warnings in first-party consumers, and ships one final obsolete release. Use when deprecating, sunsetting, or retiring an integration.
 
 ## Pattern-Based Instructions
 

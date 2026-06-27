@@ -1,9 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
 import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getWorkspaceRoot } from './paths';
-import { runProcess } from './process';
+import { ProcessError, runProcess } from './process';
 
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -62,11 +63,16 @@ export async function setShowStatusDelayForE2E(delayMs: number | undefined): Pro
     await applyE2eControl({ showStatusDelayMs: delayMs ?? null });
 }
 
+export async function resetDashboardDefaultChangedNotificationForE2E(): Promise<void> {
+    await applyE2eControl({ resetDashboardDefaultChangedNotification: true });
+}
+
 export async function executeE2eControlCommand(
     command: AspireExtensionE2EControlCommand,
     options?: { waitFor?: 'started' | 'applied'; timeoutMs?: number }
 ): Promise<AspireExtensionE2EControlStatus> {
-    return await applyE2eControl({ command }, options?.waitFor ?? 'applied', options?.timeoutMs);
+    const timeoutMs = options?.timeoutMs ?? (command.name === 'stopDebugging' ? 180000 : undefined);
+    return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
 }
 
 export async function runE2eTeardown(cleanups: ReadonlyArray<() => unknown | Promise<unknown>>, failureMessage: string): Promise<void> {
@@ -310,6 +316,11 @@ export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
     }
 
     if (/timed out|Failed to stop/i.test(stopError.message)) {
+        if (runningAppHostBeforeStop?.appHostPid !== undefined) {
+            await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop.appHostPid, 'after stopping');
+            return;
+        }
+
         const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
         if (!runningAppHost) {
             await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
@@ -423,7 +434,29 @@ async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string
         await waitForNoRunningAppHostPath(appHostPath, timeoutMs, knownAppHostPid, actionDescription);
     }
     catch (error) {
-        const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
+        let runningAppHost: PsAppHost | undefined;
+        try {
+            runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
+        }
+        catch (cliError) {
+            if (!isProcessTimeoutError(cliError) || knownAppHostPid === undefined) {
+                throw cliError;
+            }
+
+            const runningAppHostFromState = getRunningAppHostFromState(appHostPath);
+            if (runningAppHostFromState?.appHostPid !== knownAppHostPid) {
+                throw error;
+            }
+
+            if (!isKnownAppHostProcess(knownAppHostPid, appHostPath)) {
+                throw error;
+            }
+
+            await stopProcess(knownAppHostPid, 30000);
+            await waitForNoRunningAppHostPath(appHostPath, 5000, knownAppHostPid, actionDescription);
+            return;
+        }
+
         // The extension state file can lag behind the CLI registry after stopDebugging:
         // it may still contain an AppHost PID even though aspire ps has already dropped
         // the AppHost. At that point the PID may be stale/reused, so don't SIGTERM it.
@@ -438,6 +471,61 @@ async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string
         await stopProcess(runningAppHost.appHostPid, 30000);
         await waitForNoRunningAppHostPath(appHostPath, 5000, runningAppHost.appHostPid, actionDescription);
     }
+}
+
+function isProcessTimeoutError(error: unknown): boolean {
+    return error instanceof ProcessError && /\btimed out after \d+ms\b/i.test(error.message);
+}
+
+function isKnownAppHostProcess(pid: number, appHostPath: string): boolean {
+    const commandLine = getProcessCommandLine(pid);
+    if (commandLine === undefined) {
+        return false;
+    }
+
+    return normalizePathForCommandLineSearch(commandLine).includes(normalizePathForCommandLineSearch(appHostPath));
+}
+
+function getProcessCommandLine(pid: number): string | undefined {
+    if (!Number.isInteger(pid) || pid <= 0) {
+        return undefined;
+    }
+
+    if (process.platform === 'linux') {
+        try {
+            const commandLine = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').replace(/\0/g, ' ').trim();
+            return commandLine.length > 0 ? commandLine : undefined;
+        }
+        catch (error) {
+            if (isProcessLookupError(error)) {
+                return undefined;
+            }
+
+            throw error;
+        }
+    }
+
+    if (process.platform === 'win32') {
+        const result = spawnSync('powershell.exe', [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `$process = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}"; if ($process) { $process.CommandLine }`,
+        ], { encoding: 'utf8', timeout: 5000 });
+
+        return result.status === 0 && result.stdout.trim().length > 0 ? result.stdout.trim() : undefined;
+    }
+
+    const result = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8', timeout: 5000 });
+    return result.status === 0 && result.stdout.trim().length > 0 ? result.stdout.trim() : undefined;
+}
+
+function normalizePathForCommandLineSearch(value: string): string {
+    return value.replace(/\\/g, '/').toLowerCase();
+}
+
+function isProcessLookupError(error: unknown): boolean {
+    return error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'ESRCH' || error.code === 'EACCES' || error.code === 'EPERM');
 }
 
 function getRunningAppHostFromState(appHostPath: string) {

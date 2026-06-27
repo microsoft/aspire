@@ -36,21 +36,22 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
         IPeerInstallProbe peerProbe,
         CliExecutionContext executionContext,
         ILogger<InstallationDiscovery> logger,
-        IEnumerable<IInstallationCandidateSource>? candidateSources = null)
+        IEnumerable<IInstallationCandidateSource> candidateSources)
     {
         ArgumentNullException.ThrowIfNull(channelReader);
         ArgumentNullException.ThrowIfNull(sidecarReader);
         ArgumentNullException.ThrowIfNull(peerProbe);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(candidateSources);
 
         _channelReader = channelReader;
         _sidecarReader = sidecarReader;
         _peerProbe = peerProbe;
         _executionContext = executionContext;
         _logger = logger;
-        var sources = candidateSources?.ToArray();
-        _candidateSources = sources is { Length: > 0 } ? sources : CreateDefaultCandidateSources();
+        var sources = candidateSources.ToArray();
+        _candidateSources = sources.Length > 0 ? sources : CreateDefaultCandidateSources();
     }
 
     /// <inheritdoc />

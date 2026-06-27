@@ -31,11 +31,52 @@ if: >-
   (github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch')
   && github.repository_owner == 'microsoft'
 
+# Cap the number of agent turns. `max-turns` is the supported field; the older
+# `max-runs` alias is deprecated and rejected under strict compilation. It
+# compiles to TWO rails on the agent job: the engine turn budget
+# (`GH_AW_MAX_TURNS`) and the AWF proxy's `maxRuns`. The proxy refuses further
+# inference once EITHER `maxRuns` OR the 25M `maxEffectiveTokens` rail is hit.
+# Historically the proxy `maxRuns` defaulted to 500 and was never reached: a
+# deterministic `create_pull_request` failure ("No changes to commit") sent the
+# agent into a retry loop that crossed the 25M effective-token rail and
+# hard-failed the run.
+#
+# The PRIMARY runaway protection is behavioral, not numeric: the anti-loop
+# guidance in "Create Draft PR" below treats any deterministic
+# `create_pull_request` failure as non-retryable, so the loop is stopped at its
+# source. `max-turns` is only a coarse backstop for a true runaway, plus the
+# 25M `maxEffectiveTokens` rail remains the ultimate hard stop.
+#
+# This cap is deliberately set ABOVE the known-good ceiling rather than just
+# above a skip run. AWF audit data: healthy skip-path runs use ~4-5 inference
+# requests, but a heavy-but-SUCCESSFUL skip run was observed at ~35 requests,
+# and a real doc-DRAFTING run (read the skill, pull comment threads + file
+# patches, browse docs, write several files, open the PR) legitimately needs
+# more than a skip. A cap at or below that ceiling would truncate a valid
+# drafting run mid-flight — and a truncated run never emits `notify_source_pr`,
+# so the source PR would get no comment at all. 50 leaves the drafting path
+# ample headroom while still cutting a pathological loop long before it could
+# accrete a runaway transcript, with the AWF token rail backing it up.
+max-turns: 50
+
 checkout:
-  # Use aspire.dev as the current workspace because that is where documentation
-  # changes are authored, and keep a mirrored checkout under _repos so the
-  # safeoutputs create_pull_request tool can reliably rediscover the target repo
-  # in multi-repo mode.
+  # Check out aspire.dev EXACTLY ONCE, as the current workspace, because that is
+  # where documentation changes are authored and the docs branch is created.
+  #
+  # IMPORTANT: do NOT add a second `microsoft/aspire.dev` checkout (e.g. a mirror
+  # under `_repos/aspire.dev`) to this agent-job `checkout:` block. gh-aw builds a
+  # checkout manifest keyed by the lowercased repo slug, and the LAST entry for a
+  # slug wins (see build_checkout_manifest.cjs). A second `microsoft/aspire.dev`
+  # entry shadows this current-workspace entry, so the `create_pull_request`
+  # safe-output's `findRepoCheckout("microsoft/aspire.dev")` resolves to the
+  # mirror instead of the workspace where the agent actually created the docs
+  # branch. The handler then pins the branch with
+  # `git -C <mirror> rev-parse --verify refs/heads/<branch>^{commit}`, which fails
+  # with `fatal: Needed a single revision` because the branch only exists in the
+  # workspace (microsoft/aspire#18319, run 27765082872). The manifest already
+  # maps `microsoft/aspire.dev -> path=""` (the workspace) here, so a mirror is
+  # not needed for the handler to rediscover the target repo. The safe-outputs
+  # job keeps its own separate `_repos/aspire.dev` checkout for bundle apply.
   - repository: microsoft/aspire.dev
     github-app:
       app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
@@ -53,13 +94,6 @@ checkout:
     # using the aspire-bot installation token, so target-branch selection
     # remains correct — the local refs are just a faster, offline path.
     fetch: ["release/*"]
-  - repository: microsoft/aspire.dev
-    path: _repos/aspire.dev
-    github-app:
-      app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
-      private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
-      owner: "microsoft"
-      repositories: ["aspire.dev"]
 
 permissions:
   contents: read
@@ -153,9 +187,12 @@ safe-outputs:
         Emit exactly one `notify_source_pr` item per run, after you've finished
         any `create_pull_request` or no-docs-needed reasoning. Use `result:
         "drafted"` when you just emitted a `create_pull_request`; use `result:
-        "skipped"` when no docs PR is needed. DO NOT try to embed the drafted
-        PR's URL or number in the `summary` text — the workflow knows them
-        from the safe-outputs handler and will substitute the real values.
+        "skipped"` when no docs PR is needed; use `result: "draft_failed"` when
+        docs WERE required but you could not produce a docs PR (a genuine
+        failure that must be surfaced, not reported as a green no-op). DO NOT
+        try to embed the drafted PR's URL or number in the `summary` text — the
+        workflow knows them from the safe-outputs handler and will substitute
+        the real values.
       runs-on: ubuntu-latest
       needs: [safe_outputs]
       permissions:
@@ -166,7 +203,7 @@ safe-outputs:
           required: true
           type: number
         result:
-          description: "'drafted' if a docs PR was opened on microsoft/aspire.dev, or 'skipped' if no docs PR was needed."
+          description: "'drafted' if a docs PR was opened on microsoft/aspire.dev; 'skipped' if no docs PR was needed; 'draft_failed' if docs were required but a docs PR could not be produced."
           required: true
           type: string
         sme_login:
@@ -276,6 +313,22 @@ safe-outputs:
                   `See the workflow run for details: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
                   '',
                   summary
+                ].join('\n');
+              } else if (result === 'draft_failed') {
+                // Step 5 determined docs WERE required, but Step 10 could not
+                // produce a docs PR (e.g. a base-branch/validation error, a
+                // protected-file rejection, or an empty/invalid patch). This is
+                // a genuine failure, not a no-op: surface it under the ⚠️ banner
+                // so the author sees that documentation is still owed, rather
+                // than letting it fall through to the green "no update needed"
+                // branch below. The agent-supplied summary names the reason.
+                body = [
+                  MARKER,
+                  '⚠️ Documentation was required for this change, but a docs PR could not be drafted automatically.',
+                  '',
+                  summary,
+                  '',
+                  `See the workflow run for details: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
                 ].join('\n');
               } else {
                 body = [
@@ -772,12 +825,13 @@ pre-agent-steps:
   # matching unittest suite (`test_compute_signals.py`), so it can be
   # reviewed with syntax highlighting and exercised locally with
   # `python3 -m unittest discover -s .github/workflows/pr-docs-check -v`.
-  - name: Check out signal-computation script
+  - name: Check out pre-agent scripts
     # The `checkout:` block above made microsoft/aspire.dev the current
     # workspace because that's where the doc PR is authored. We need a
     # sparse, side-by-side checkout of microsoft/aspire to bring the
-    # signal-computation script into the runner. A sparse checkout keeps
-    # this fast — only `.github/workflows/pr-docs-check` is fetched.
+    # pre-agent scripts (signal computation + PR context) into the runner.
+    # A sparse checkout keeps this fast — only
+    # `.github/workflows/pr-docs-check` is fetched.
     #
     # Default `ref` resolves to the trigger ref (refs/pull/<N>/merge for
     # pull_request: closed, or the dispatcher-selected branch for
@@ -790,7 +844,7 @@ pre-agent-steps:
       sparse-checkout: |
         .github/workflows/pr-docs-check
       sparse-checkout-cone-mode: false
-  - name: Compute user-facing signals
+  - name: Compute user-facing signals and PR context
     env:
       GH_TOKEN: ${{ steps.resolve-target-app-token.outputs.token }}
       PR_NUMBER: "${{ github.event.pull_request.number || github.event.inputs.pr_number }}"
@@ -827,9 +881,14 @@ pre-agent-steps:
       # https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files
       PR_JSON="$(mktemp)"
       FILES_JSON="$(mktemp)"
+      REVIEWS_JSON="$(mktemp)"
       gh api "/repos/microsoft/aspire/pulls/${PR_NUMBER}" > "${PR_JSON}"
       gh api --paginate "/repos/microsoft/aspire/pulls/${PR_NUMBER}/files?per_page=100" \
         | jq -s 'add // []' > "${FILES_JSON}"
+      # Reviews drive SME resolution below. One paginated call here replaces a
+      # GitHub tool round-trip the agent would otherwise make inside the loop.
+      gh api --paginate "/repos/microsoft/aspire/pulls/${PR_NUMBER}/reviews?per_page=100" \
+        | jq -s 'add // []' > "${REVIEWS_JSON}"
 
       FILE_COUNT="$(jq 'length' "${FILES_JSON}")"
       echo "Files in PR  : ${FILE_COUNT}"
@@ -842,10 +901,35 @@ pre-agent-steps:
       python3 _repos/aspire/.github/workflows/pr-docs-check/compute_signals.py \
         "${PR_JSON}" "${FILES_JSON}" "${OUT}"
 
-      rm -f "${PR_JSON}" "${FILES_JSON}"
+      # --- 3. Build compact PR context ------------------------------------
+      # Reuse the same PR + files payloads (already fetched above) to write
+      # .pr-docs-check/pr.json — the curated metadata the agent reads in
+      # Step 1 instead of re-gathering it with several GitHub tool calls.
+      # That gathering is fully deterministic, so doing it once here removes
+      # those round-trips and the verbose API responses they add to context.
+      # See compute_pr_context.py.
+      PR_CONTEXT_OUT=.pr-docs-check/pr.json
+      python3 _repos/aspire/.github/workflows/pr-docs-check/compute_pr_context.py \
+        "${PR_JSON}" "${FILES_JSON}" "${PR_CONTEXT_OUT}"
+
+      # --- 4. Resolve the subject-matter expert (SME) ---------------------
+      # SME selection from assignees/reviews is a deterministic algorithm, so
+      # it runs once here (reading the curated pr.json + reviews) instead of
+      # inside the agent loop. The agent reads .pr-docs-check/sme.json in
+      # Step 2. Only the fuzzy CODEOWNERS hint is left to the agent, signalled
+      # via "needs_codeowners_fallback". See resolve_sme.py.
+      SME_OUT=.pr-docs-check/sme.json
+      python3 _repos/aspire/.github/workflows/pr-docs-check/resolve_sme.py \
+        "${PR_CONTEXT_OUT}" "${REVIEWS_JSON}" "${SME_OUT}"
+
+      rm -f "${PR_JSON}" "${FILES_JSON}" "${REVIEWS_JSON}"
 
       echo "--- ${OUT} ---"
       cat "${OUT}"
+      echo "--- ${PR_CONTEXT_OUT} ---"
+      cat "${PR_CONTEXT_OUT}"
+      echo "--- ${SME_OUT} ---"
+      cat "${SME_OUT}"
 
 timeout-minutes: 20
 ---
@@ -863,10 +947,9 @@ needed, create a draft PR with the actual documentation changes.
 - **PR Title**: `${{ github.event.pull_request.title }}`
 
 > [!NOTE]
-> The agent runs with `microsoft/aspire.dev` as the current workspace and also
-> has a mirrored checkout at `_repos/aspire.dev`, so use GitHub tools for the
-> source `microsoft/aspire` PR details and diff instead of expecting a local
-> checkout of the merged PR contents to remain available.
+> The agent runs with `microsoft/aspire.dev` as the current workspace, so use
+> GitHub tools for the source `microsoft/aspire` PR details and diff instead of
+> expecting a local checkout of the merged PR contents to remain available.
 >
 > The target `microsoft/aspire.dev` branch (`release/X.Y[.Z]` or `main`) has
 > already been resolved deterministically by a `pre-agent-steps:` shell step
@@ -880,107 +963,68 @@ needed, create a draft PR with the actual documentation changes.
 > `workflow_dispatch` with `pr_number` when a maintainer wants to run the docs
 > check manually for a merged fork PR.
 
-## Step 1: Gather PR Information
+## Step 1: Read PR Information
 
-Use the GitHub tools to read the pull request details from `microsoft/aspire` for the
-PR number above, including:
+The source PR's metadata was gathered deterministically by a `pre-agent-steps:`
+shell step and written to `.pr-docs-check/pr.json` in the workspace. **Read that
+file** — do **not** re-fetch this metadata with GitHub tools. The fields you will
+use are:
 
-- Title and description (the full PR body)
-- Author username
-- Base branch (e.g., `main` or `release/X.Y`)
-- Milestone (if any)
-- Labels applied to the PR
-- Any issues linked via `Closes #N` / `Fixes #N` / `Resolves #N` in the PR body
-- The list of changed files (filenames, status, additions/deletions)
-- **Issue conversation comments** on the source PR
-  (`GET /repos/microsoft/aspire/issues/{N}/comments`) — author intent,
-  reviewer questions and answers, follow-up clarifications, and any
-  "this is how a user will experience it" prose that doesn't appear in
-  the PR body
-- **Review comments** (inline comments tied to specific diff lines)
-  (`GET /repos/microsoft/aspire/pulls/{N}/comments`) — reviewer concerns
-  about wording, default values, error messages, and any decisions made
-  during code review that affect what users see
+| Field | Purpose |
+| --- | --- |
+| `number`, `title`, `body` | Source PR identity and the author's own description of the change. |
+| `author.login`, `author.type` | Author identity; `type` (`User`/`Bot`) drives Step 2's Copilot-authored branch. |
+| `base_ref`, `milestone`, `labels` | Context for the change. |
+| `assignees` | Used by Step 2 to find the SME for Copilot-authored PRs. |
+| `linked_issues` | Same-repo issue numbers from `Closes`/`Fixes`/`Resolves #N` in the body. |
+| `changed_files` | Each `{filename, status, additions, deletions}`. |
 
-Start with the PR metadata, the changed-file list, and a pass over the PR
-body and comment threads. Only inspect diff hunks for files that are likely
-to affect user-facing behavior, configuration, or public API surface, or
-when the significance is unclear from filenames alone.
+Diff hunks (`patch`) are intentionally omitted to keep this file small. Inspect a
+file's diff only for files likely to affect user-facing behavior, configuration,
+or public API surface (or when significance is unclear from the filename), and
+only on the doc-drafting path — fetch the patch for that specific file with the
+GitHub tools in Step 9. Do **not** fetch diffs on the cheap skip path.
 
-**Treat the PR description, the changed files, and the PR/review comment
-threads together as the canonical context for this PR.** Steps 5, 8, 9,
-10, and 11 must all draw from this combined context — not from the
-filenames alone, and not from the PR body alone. In particular:
+**Defer the expensive comment-thread reads until you actually need them.** They
+are only required when you are writing documentation (Step 9), so do **not**
+fetch them on the cheap skip path. When — and only when — Step 5 puts you on the
+docs-drafting path, fetch:
 
-- Step 5 (the docs-required decision) uses the signals in
-  `.pr-docs-check/signals.json` for gating, but the *narrative* in the PR
-  body and comments is what tells you what the change actually does for
-  an end user.
-- Step 9 (writing documentation) and Step 10 (drafting the docs PR
-  description) must paraphrase the explanation the source PR's author
-  and reviewers wrote, so the docs reflect the change as it was reviewed,
-  not as a model might re-imagine it from filenames.
-- Step 11 (notifying the source PR) must cite at least one piece of
-  evidence per triggered signal category, and the comment threads are
-  often where that evidence lives in human-readable form.
+- **Issue conversation comments** (`GET /repos/microsoft/aspire/issues/{N}/comments`)
+  — author intent, reviewer Q&A, follow-up clarifications, and any "this is how a
+  user will experience it" prose that doesn't appear in the PR body.
+- **Review comments** (`GET /repos/microsoft/aspire/pulls/{N}/comments`) — reviewer
+  concerns about wording, default values, and error messages that affect what
+  users see.
 
-If this was triggered via `workflow_dispatch`, use the `pr_number` input to look up
-the PR details.
+**Treat the PR description, the changed files, and (on the drafting path) the
+PR/review comment threads together as the canonical context.** Steps 9 and 10
+must paraphrase the explanation the author and reviewers wrote, so the docs
+reflect the change as it was reviewed — not as a model might re-imagine it from
+filenames. Step 11 must cite at least one piece of evidence per triggered signal
+category, and the comment threads are often where that evidence lives in
+human-readable form.
 
 ## Step 2: Identify the Subject-Matter Expert (SME)
 
-Determine which human is the best fit to review the drafted documentation PR. The
-SME is the person most familiar with the change in the source `microsoft/aspire`
-PR — typically the human who reviewed/approved it, except when the PR was
-authored by GitHub Copilot Coding Agent (in which case the SME is the human who
-**initiated the Copilot session**, not whoever happened to approve the bot's
-output).
+The SME — the human best placed to review the drafted documentation PR — has
+already been resolved deterministically by a `pre-agent-steps:` shell step
+(`resolve_sme.py`) and written to `.pr-docs-check/sme.json`. **Read that file**;
+do **not** re-fetch assignees or reviews or re-run the selection logic.
 
-### Step 2a: If the source PR was authored by Copilot Coding Agent
+| Field | Meaning |
+| --- | --- |
+| `sme_login` | The chosen reviewer login (no `@`), or `""` if none could be resolved. |
+| `sme_source` | How it was chosen — e.g. `copilot_originator` (the human who initiated the Copilot session), `approved_reviewer`, `substantive_reviewer`, or `none`. |
+| `needs_codeowners_fallback` | `true` only when there was no usable assignee/review signal and you should consult CODEOWNERS as a last-resort hint. |
+| `candidates` | The eligible reviewers (login + latest state), for context. |
 
-Fetch the source PR's `user.login` and `user.type`. If the PR was authored by a
-Copilot bot — that is, `user.type == "Bot"` AND `user.login` matches `Copilot`,
-`copilot-swe-agent`, or any login containing `copilot` and ending in `[bot]` —
-then the **human session originator** (the person who assigned `@copilot` to
-an issue and therefore initiated the session) is recorded in the PR's
-`assignees[]` field alongside the `Copilot` bot itself. This person is the SME
-because they framed the original problem and have the deepest context for the
-change, even though they didn't author the code.
-
-Apply the following logic:
-
-1. Read `pull_request.assignees[]` from the source PR.
-2. Filter out bot accounts: any login matching `Copilot`, `copilot-swe-agent`,
-   anything ending in `[bot]`, or matching `dependabot`, `github-actions`,
-   `aspire-bot`.
-3. If exactly one human assignee remains, set `SME_LOGIN` = that login and
-   **skip the rest of Step 2**. That person initiated the Copilot session and
-   is the subject-matter expert.
-4. If multiple human assignees remain, prefer the assignee whose latest review
-   state on the source PR is `APPROVED`. If still ambiguous, pick the one whose
-   login appears earliest in `assignees[]`. **Skip the rest of Step 2.**
-5. If no human assignees remain (unusual — Copilot Coding Agent normally
-   assigns the originator), fall through to Step 2b.
-
-### Step 2b: For human-authored PRs (or as a fallback from Step 2a)
-
-Use the GitHub tools to list pull request reviews for the source PR
-(`GET /repos/microsoft/aspire/pulls/{N}/reviews`) and apply the following logic:
-
-1. **Collapse reviews by reviewer.** For each unique reviewer login, keep only their
-   *most recent* review event (the latest `submitted_at`).
-2. **Exclude** the source PR author and any bot account (login ending in `[bot]`,
-   or matching `dependabot`, `github-actions`, `aspire-bot`, `copilot`, etc.).
-3. **Prefer** reviewers whose latest collapsed state is `APPROVED`. Among those,
-   pick the one with the most recent `submitted_at`.
-4. **Fallback A**: if no `APPROVED` reviewer exists, pick the reviewer with any
-   non-`COMMENTED`-only state (for example, `CHANGES_REQUESTED`) whose latest
-   `submitted_at` is most recent.
-5. **Fallback B**: if no reviews exist at all, look at CODEOWNERS for the changed
-   files in `microsoft/aspire` and use the first individual login (skip team
-   handles). Treat this as a hint, not a strong signal.
-6. **Final fallback**: leave `SME_LOGIN` empty (the workflow will draft the PR
-   without an explicit reviewer rather than guess).
+Use `sme_login` directly as `SME_LOGIN`. **Only** when it is empty **and**
+`needs_codeowners_fallback` is `true`, look at CODEOWNERS for the changed files
+in `microsoft/aspire` and use the first individual login (skip team handles) as
+a weak hint. If `sme_login` is empty and the fallback flag is `false`, leave
+`SME_LOGIN` empty — the workflow drafts the PR without an explicit reviewer
+rather than guess.
 
 Capture the chosen login as `SME_LOGIN`. Do NOT include the `@` prefix. You will pass
 this to the `notify_source_pr` safe output later.
@@ -998,12 +1042,12 @@ Read `.pr-docs-check/target.json`. The fields you will use are:
 | Field | Purpose |
 | --- | --- |
 | `effective_target_branch` | The branch you must base all docs edits and the draft PR on (`main` or `release/X.Y[.Z]`). |
-| `candidate_target_branch` | The branch the resolution *wanted* before checking existence on `microsoft/aspire.dev`. |
-| `candidate_source` | Why `candidate_target_branch` was chosen: `pr_milestone`, `linked_issue_milestone`, `pr_base`, or `fallback_main`. |
-| `candidate_source_detail` | The raw milestone title or base ref that drove the choice (use this in the PR description). |
-| `target_resolution` | How `effective_target_branch` was finally chosen: `exact_match` (candidate exists on `microsoft/aspire.dev`), `latest_release_fallback` (candidate was `main` or missing on `microsoft/aspire.dev`, so the newest `release/*` was used), or `main_fallback` (no `release/*` exists on `microsoft/aspire.dev`). |
-| `available_release_branches` | The full list of `release/*` branches that exist on `microsoft/aspire.dev` (for context only — don't second-guess the resolution). |
-| `enumeration_source` | How the list was obtained (`git` for the local workspace, `gh_api` for the API fallback, or `empty`). |
+| `candidate_source` | Why the candidate was chosen: `pr_milestone`, `linked_issue_milestone`, `pr_base`, or `fallback_main`. Use it in the PR description. |
+| `candidate_source_detail` | The raw milestone title or base ref that drove the choice. Use it in the PR description. |
+| `target_resolution` | How `effective_target_branch` was chosen: `exact_match`, `latest_release_fallback`, or `main_fallback`. Use it in the PR description. |
+
+The remaining fields (`candidate_target_branch`, `available_release_branches`,
+`enumeration_source`) are context only — don't second-guess the resolution.
 
 The current workspace is `microsoft/aspire.dev`. Switch it to
 `effective_target_branch` before editing docs:
@@ -1031,81 +1075,41 @@ Read `.pr-docs-check/signals.json`. The fields you will use are:
 
 | Field | Purpose |
 | --- | --- |
-| `recommendation` | `"docs_required"` if any gating signal fired, otherwise `"docs_optional"`. This is the primary gate for Step 5. |
-| `triggered_signals` | The names of the boolean signals that fired (advisory `only_test_or_build_changes` is excluded from this list and never forces `docs_required`). |
+| `excluded` | `true` when the PR is out of scope for docs generation (currently: a backport). When `true` it **overrides `recommendation`** — go straight to the Step 5 exclusion branch and skip. |
+| `exclusion_reasons` | The reason names that caused `excluded` (e.g. `head_branch_is_backport`, `title_release_prefix`, `body_backport_marker`, `backport_label`; the weak `base_branch_is_release` only appears here as supporting context alongside a strong marker). Empty when `excluded == false`. |
+| `recommendation` | `"docs_required"` if any gating signal fired, otherwise `"docs_optional"`. This is the primary gate for Step 5 **unless `excluded == true`**. |
+| `triggered_signals` | The names of the boolean signals that fired (the advisory `only_test_or_build_changes` and the meta `is_backport` are excluded from this list and never force `docs_required`). |
 | `signal_count` | `len(triggered_signals)`. |
-| `signals` | The full boolean map, including the advisory `only_test_or_build_changes`. |
+| `signals` | The full boolean map, including the advisory `only_test_or_build_changes` and the meta `is_backport`. |
 | `evidence` | Per-triggered-signal list of `{ file, hint }` entries showing the changed file and the matching diff fragment or PR-body snippet. Use these to write the PR description and the `notify_source_pr` summary. |
 
-The signal catalog is broad on purpose: it favors recall over
-precision, because a false positive at worst drafts a docs PR a human
-closes (drafted PRs never auto-merge), while a false negative ships an
-undocumented user-facing change. The signals are grouped by their
-source of evidence.
+The catalog favors recall over precision: a false positive at worst
+drafts a docs PR a human closes (drafted PRs never auto-merge), while a
+false negative ships an undocumented user-facing change. You do **not**
+need the full catalog definition here — `triggered_signals` and
+`evidence` in `signals.json` tell you exactly which signals fired and
+why, and the catalog itself is maintained in `compute_signals.py`.
+Signal names are self-describing; they are grouped by source of evidence:
 
-**Group A — path-pattern signals** (which files exist / changed):
-
-| Signal | Meaning |
-| --- | --- |
-| `cli_command_added` | A new file was added under `src/Aspire.Cli/Commands/*.cs` (excluding base classes). A new CLI command was introduced. |
-| `cli_command_file_changed` | An existing CLI command file under `src/Aspire.Cli/Commands/*.cs` was modified. Option set, behavior, output format, or prompts may have changed. |
-| `cli_resource_strings_changed` | A `.resx` under `src/Aspire.Cli/Resources/` changed. Holds help text, option descriptions, prompts, and error messages the CLI prints. |
-| `mcp_tool_added` | A new file was added under `src/Aspire.Cli/Mcp/Tools/*.cs` (excluding the abstract base). A new MCP tool was introduced. |
-| `mcp_tool_file_changed` | An existing MCP tool file changed. Input schema, output shape, or semantics may have moved. |
-| `new_package_added` | A new `.csproj` was added anywhere under `src/`. A new shipping NuGet package was introduced. |
-| `new_hosting_integration_project` | Subset of `new_package_added`: a new `.csproj` under `src/Aspire.Hosting.*/`. A new hosting integration was introduced. |
-| `new_client_integration_project` | Subset of `new_package_added`: a new `.csproj` under `src/Components/Aspire.*/`. A new client integration was introduced. |
-| `integration_readme_changed` | A `README.md` under a hosting or client integration changed. READMEs ship to nuget.org and are linked from `docs.aspire.dev`. |
-| `public_api_surface_file_changed` | A file under `src/*/api/*.cs` changed. These are shipped public-API baselines (per AGENTS.md they are normally only regenerated at release time), so a committed diff is an explicit shipping-API change. |
-| `dashboard_user_facing_page_changed` | A `.razor`, `.razor.cs`, or `.cs` codebehind under `src/Aspire.Dashboard/Components/Pages/` changed. |
-| `container_image_tags_file_changed` | A `*ContainerImageTags.cs` file changed. These pin the container image registry, name, and tag for an integration; any change may move the image version users get. |
-| `project_template_changed` | A file under `src/Aspire.ProjectTemplates/` changed. Affects `dotnet new aspire-*` and `aspire init` output. |
-| `diagnostic_documentation_changed` | `docs/list-of-diagnostics.md` changed. The user-facing diagnostic catalog. |
-| `analyzer_source_changed` | A Roslyn analyzer under `src/Aspire.(Hosting\|AppHost).Analyzers/` changed. Users see new build warnings or errors. |
-| `defaults_or_constants_file_changed` | A file whose name ends in `Defaults.cs` or `Constants.cs` changed. Typically holds shipping default values (timeouts, retry counts, well-known property names, image tags). |
-
-**Group B — diff-content signals** (what the patch added or removed):
-
-| Signal | Meaning |
-| --- | --- |
-| `cli_option_added` | A patch hunk under `src/Aspire.Cli/**/*.cs` added a line declaring a new `Option<...>(...)`. A new CLI option flag was introduced. |
-| `dashboard_api_endpoint_changed` | A patch hunk in `src/Aspire.Dashboard/DashboardEndpointsBuilder.cs` or `src/Aspire.Dashboard/Api/**/*.cs` added any non-blank line. The dashboard's HTTP API surface changed. |
-| `obsolete_attribute_added` | An `[Obsolete(...)]` attribute was added to a `.cs` file under `src/`. An API was deprecated. |
-| `experimental_attribute_added` | An `[Experimental(...)]` attribute was added under `src/`. A preview / experimental API surface was introduced or expanded. |
-| `new_public_type` | A `public class / interface / struct / record / enum / delegate` declaration was added in non-test source. A new public type was introduced. |
-| `breaking_api_removal` | A line declaring a `public` or `protected` member was removed from a `src/*/api/*.cs` file. Because `api/*.cs` is append-only between releases, this is a strong breaking-change indicator. (Whitespace-only reformats can also trip this.) |
-| `container_image_version_changed` | A `*ContainerImageTags.cs` patch added a line assigning `Tag`, `Image`, `Registry`, or `Digest` — the container image version users get has likely moved. |
-| `default_value_attribute_changed` | A `[DefaultValue(...)]` attribute was added under `src/`. A shipping default value changed. |
-| `target_framework_changed` | A `<TargetFramework>` or `<TargetFrameworks>` element was added/changed in a `src/*.csproj`. Affects which consumers can install the package. |
-
-**Group C — PR-body signals** (author-supplied prose):
-
-| Signal | Meaning |
-| --- | --- |
-| `pr_body_has_user_facing_section` | The PR body contains a heading like `## User-facing usage`, `## Usage`, `## How to use`, or `## Breaking change`. The author signaled the change is user-facing. |
-| `pr_body_has_cli_flag_mention` | The PR body mentions a long-form CLI flag (`--something`). The author is documenting a flag in the PR description. |
-| `pr_body_has_breaking_change_marker` | The PR body contains the literal phrase `breaking change`. |
-| `pr_body_has_security_marker` | The PR body cites a `CVE-YYYY-N`, a `GHSA-xxxx-xxxx-xxxx`, or phrases like `security fix`, `security advisory`, `vulnerability`. |
-| `pr_body_has_deprecation_marker` | The PR body contains `deprecat*` / `obsolet*` wording, or a phrase like `<surface> has been removed / sunset / retired`. |
-
-**Group D — PR-label signals** (author/maintainer-curated):
-
-| Signal | Meaning |
-| --- | --- |
-| `pr_label_breaking_change` | A label whose name contains `breaking` is applied to the PR. |
-| `pr_label_security` | A label whose name contains `security` (as a word, with optional separators like `-`, `_`, `/`, `:`) is applied to the PR. |
-
-**Advisory** (not gating):
-
-| Signal | Meaning |
-| --- | --- |
-| `only_test_or_build_changes` | *Advisory only* — `true` iff **every** changed file is under `tests/`, `eng/`, `playground/`, `docs/`, `.github/`, `.agents/`, or is a top-level build config (`.editorconfig`, `global.json`, `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`). This signal **never** forces `docs_required` — it only narrows the allowlist in Step 5. |
-
-**Conservative-recall fallback (gating)**:
-
-| Signal | Meaning |
-| --- | --- |
-| `diff_scan_skipped_due_to_missing_patch` | A file matched a Group B path regex but the GitHub Pulls/Files API omitted its `patch` (typically because the diff exceeds the per-file 3000-line cap). Group B scanning is skipped for that file, so this signal fires to keep recall conservative — the agent must treat the change as docs-required by default. `evidence` lists each affected file and which Group B signal would have been scanned. |
+- **Group A — path-pattern** (which files changed): new/changed CLI
+  commands, MCP tools, and CLI resource strings; new packages and
+  hosting/client integrations; integration READMEs; public-API surface
+  files (`src/*/api/*.cs`); dashboard pages; container image-tag files;
+  project templates; the diagnostic catalog; analyzers; and
+  `*Defaults.cs` / `*Constants.cs`.
+- **Group B — diff-content** (what the patch added/removed): new CLI
+  `Option<...>`; dashboard API endpoint changes;
+  `[Obsolete]` / `[Experimental]` / `[DefaultValue]` attributes; new
+  public types; breaking API removals from `api/*.cs`; container image
+  version assignments; and target-framework changes.
+- **Group C — PR-body**: a user-facing / usage / breaking-change heading,
+  a long-form `--flag` mention, or breaking-change / security /
+  deprecation prose.
+- **Group D — PR-label**: a `breaking`-named or `security`-named label.
+- **Advisory** `only_test_or_build_changes` (never gating; only narrows
+  the Step 5 allowlist) and the conservative-recall gating fallback
+  `diff_scan_skipped_due_to_missing_patch` (a Group B file whose `patch`
+  the API omitted — treat as docs-required).
 
 Before deciding in Step 5, **enumerate the triggered signals in your
 internal reasoning** like:
@@ -1117,9 +1121,37 @@ Step 10 and the `summary` you emit in Step 11 must both cite at least
 one `evidence` entry per triggered signal category so a human auditor
 can verify the decision.
 
+**Short-circuit:** if `excluded == true`, you do **not** need the
+enumeration above — note the `exclusion_reasons` and go directly to the
+Step 5 exclusion branch.
+
 ## Step 5: Decide Whether a Docs PR Is Required
 
-The decision is driven by `recommendation` in `.pr-docs-check/signals.json`:
+The decision is driven by `.pr-docs-check/signals.json`.
+
+### When `excluded == true` (checked first — overrides everything)
+
+When `excluded` is `true`, the PR is **out of scope** for docs
+generation and you must **not** draft a docs PR — regardless of
+`recommendation`, `triggered_signals`, or the ambiguity rule below.
+
+The current exclusion is **backport PRs**: a backport ports an
+already-merged change onto a `release/*` branch, and its user-facing
+documentation is authored against the original (forward) PR on the
+default branch. Drafting a second docs PR for the backport is pure
+duplicate noise. This workflow runs on `release/*` merges as well as
+`main` (see the `on:` trigger), so backports reach this step and must
+be filtered out here. Note that a `release/*` **base alone does not
+exclude** — a direct release-only fix has the same base ref and *should*
+be documented; `excluded` is only set when a strong backport marker
+(backport head branch, `[release/...]` title, `Backport of #N` body, or
+`backport` label) is present.
+
+Take the `skipped` path: go to Step 6 and emit a single
+`notify_source_pr` whose Step 5 branch is named
+`"excluded → <reason>"`, citing the `exclusion_reasons` from
+`signals.json`. Do **not** evaluate the `recommendation` branches below,
+and do **not** apply the ambiguity rule.
 
 ### When `recommendation == "docs_required"`
 
@@ -1183,10 +1215,10 @@ docs PR.
 
 ### Ambiguity rule
 
-When the evidence is mixed or you are unsure, **draft the PR**. A
-drafted docs PR that a human closes is far cheaper than a user-facing
-change shipping undocumented. The drafted PR is in `draft:` state; it
-does not merge until a human flips it out of draft.
+When the evidence is mixed or you are unsure, **draft the PR** (recall over
+precision, as explained in Step 4). The drafted PR is in `draft:` state; it does
+not merge until a human flips it out of draft. This rule does **not** apply
+when `excluded == true` — an excluded PR is always skipped.
 
 ## Step 6: Emit the No-Docs Outcome (only when Step 5 allowed it)
 
@@ -1199,7 +1231,9 @@ result. Emit a single `notify_source_pr` safe output with:
 - `summary`: a structured markdown rationale that proves the decision.
   It **must** include:
   1. The Step 5 branch you took, named explicitly: either
-     `"docs_required → already documented by name"` *or*
+     `"excluded → <reason>"` (use the `exclusion_reasons` from
+     `signals.json`, e.g. `excluded → head_branch_is_backport`),
+     `"docs_required → already documented by name"`, *or*
      `"docs_optional → <allowlist_category>"` (use the category name
      from the table above).
   2. The list of triggered signals from `.pr-docs-check/signals.json`
@@ -1208,6 +1242,9 @@ result. Emit a single `notify_source_pr` safe output with:
      file path and quoted sentence/code block from Step 5.
   4. For the allowlist branch: the changed-file globs that justify the
      chosen category (for example, *"all 4 changed files match `tests/**`"*).
+  5. For the `excluded` branch: the `exclusion_reasons` from
+     `signals.json` (for example, *"backport: base branch is
+     `release/13.3` and title is prefixed `[release/13.3]`"*).
 
 Then **stop**. Do **not** emit `create_pull_request` or any other safe
 output on the no-docs path.
@@ -1234,6 +1271,12 @@ Explore the existing documentation in `src/frontend/src/content/docs/` to:
 - Determine whether existing pages need updates or new pages should be created
 - Understand the current documentation structure, naming conventions, and patterns
 - Find related pages that should be cross-referenced
+
+**Keep this targeted.** Browse only the pages for the specific feature area the
+triggering change touches — use the changed file paths and triggered signals to
+narrow the search (e.g., grep the docs tree for the affected integration,
+command, or API name). Do not read the whole docs tree or unrelated sections;
+open at most a handful of candidate pages.
 
 ## Step 9: Write Documentation Changes
 
@@ -1276,6 +1319,33 @@ Ensure all changes follow the doc-writer skill guidelines from Step 7. Include:
 - Correct use of Aside, Steps, Tabs, and other components
 
 ## Step 10: Create Draft PR
+
+> [!IMPORTANT]
+> Emit `create_pull_request` **exactly once**, and only after you have actually
+> written documentation file changes to the workspace in Step 9. The safe output
+> builds the PR from those workspace changes.
+>
+> **Treat any `create_pull_request` failure as non-retryable and never re-emit the
+> same safe output after it.** Re-emitting after a deterministic error (no commits
+> found, no diff to commit, an empty/invalid patch, a base-branch or validation
+> error, a protected-file rejection, etc.) is a failure loop that burns the run's
+> token budget without making progress. Handle a failure exactly once:
+>
+> - If it failed because you had not yet written any doc changes, write them now
+>   (Step 9) and emit `create_pull_request` one more time — at most.
+> - If it failed for any other deterministic reason — a base-branch or validation
+>   error, a protected-file rejection, or an empty/invalid patch — **stop
+>   drafting** and emit a single `notify_source_pr` with `result: "draft_failed"`.
+>   Docs were required (Step 5), so this is a genuine failure, not a no-op: the
+>   `draft_failed` result is surfaced under a ⚠️ banner so the author knows
+>   documentation is still owed. The `summary` must name the failure reason and
+>   list the triggered signals. Do not loop.
+> - Only if, on inspection, there is genuinely nothing to document — the
+>   triggering signal fired on a string that is not actually an Aspire
+>   user-facing feature (a true false positive), so there is no concrete
+>   documentation edit to make — **stop drafting** and emit a single
+>   `notify_source_pr` with `result: "skipped"` whose `summary` explains that the
+>   signal was a false positive and lists the triggered signals. Do not loop.
 
 Create a draft pull request on `microsoft/aspire.dev` with:
 
@@ -1334,6 +1404,6 @@ with:
 > Do **not** try to compose the drafted PR's URL or PR number yourself in the
 > `summary` text. The `notify_source_pr` safe-output job knows the real values
 > from the safe-outputs handler and will substitute them when posting the
-> comment. Likewise, do **not** call `add_comment` for either the "drafted" or
-> "skipped" path — `notify_source_pr` is the only commenting path used by this
-> workflow.
+> comment. Likewise, do **not** call `add_comment` for the "drafted",
+> "skipped", or "draft_failed" path — `notify_source_pr` is the only commenting
+> path used by this workflow.

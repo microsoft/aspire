@@ -446,7 +446,7 @@ public static class ContainerResourceBuilderExtensions
         if (parsedReference.Digest is { })
         {
             const string prefix = "sha256:";
-            if (!parsedReference.Digest.StartsWith(prefix))
+            if (!parsedReference.Digest.StartsWith(prefix, StringComparison.Ordinal))
             {
                 throw new ArgumentOutOfRangeException(nameof(image), parsedReference.Digest, "invalid digest format");
             }

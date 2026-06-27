@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
+
 using Azure;
 using Azure.Core;
 using Azure.ResourceManager;
@@ -77,6 +79,13 @@ internal interface IAzureProvisioningOptionsManager
     Task<bool> EnsureProvisioningOptionsAsync(bool forcePrompt, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets the current in-memory provisioning options.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The current provisioning options.</returns>
+    Task<AzureProvisioningOptionsState> GetProvisioningOptionsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Persists the current provisioning options to deployment state without creating a provisioning context.
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -107,6 +116,8 @@ internal sealed record AzureProvisioningOptionsState(string? SubscriptionId, str
 internal sealed class NoOpAzureProvisioningOptionsManager : IAzureProvisioningOptionsManager
 {
     public Task<bool> EnsureProvisioningOptionsAsync(bool forcePrompt, CancellationToken cancellationToken = default) => Task.FromResult(false);
+    public Task<AzureProvisioningOptionsState> GetProvisioningOptionsAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(new AzureProvisioningOptionsState(null, null, null, null));
     public Task PersistProvisioningOptionsAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task<AzureProvisioningOptionsState> ApplyProvisioningOptionsAsync(AzureProvisioningOptionsUpdate options, CancellationToken cancellationToken = default)
         => Task.FromResult(new AzureProvisioningOptionsState(options.SubscriptionId, options.ResourceGroup, options.Location, options.TenantId));
@@ -170,12 +181,32 @@ internal interface IArmClient
     /// <summary>
     /// Deletes the specified Azure resource.
     /// </summary>
+    /// <param name="resourceId">The Azure resource ID to delete.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     Task DeleteResourceAsync(string resourceId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Purges a soft-deleted Azure Key Vault tombstone in the specified location.
+    /// </summary>
+    /// <remarks>
+    /// Key Vault soft-delete tombstones are location-scoped and can remain after the
+    /// live vault resource no longer exists, so purge is modeled separately from delete.
+    /// </remarks>
+    /// <param name="resourceId">The Azure Key Vault resource ID whose deleted tombstone should be purged.</param>
+    /// <param name="location">The Azure location that owns the deleted Key Vault tombstone.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><c>true</c> when a tombstone was found and purged; otherwise, <c>false</c>.</returns>
+    Task<bool> PurgeDeletedKeyVaultAsync(string resourceId, string location, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Cancels the specified Azure deployment.
     /// </summary>
     Task CancelDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the specified Azure deployment, or <c>null</c> when it no longer exists.
+    /// </summary>
+    Task<AzureDeploymentState?> GetDeploymentAsync(string deploymentId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets Azure resource IDs targeted by the specified deployment.
@@ -304,6 +335,11 @@ internal interface IArmDeploymentCollection
     /// </summary>
     Task CancelAsync(string deploymentName, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Captures the ARM deployment fields Aspire needs when reconciling cached deployment state.
+/// </summary>
+internal sealed record AzureDeploymentState(string ProvisioningState, JsonObject? Outputs);
 
 /// <summary>
 /// Abstraction for Azure TenantResource.

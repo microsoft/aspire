@@ -459,24 +459,32 @@ suite('AppHostDataRepository', () => {
     });
 
     test('describe watch reports minimum CLI version when command help is returned', async () => {
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         const repository = new AppHostDataRepository(terminalProvider);
 
-        repository.activate();
-        repository.setPanelVisible(true);
-        await waitForMicrotasks();
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
 
-        const lineCallback = spawnStub.firstCall.args[3].lineCallback;
-        const exitCallback = spawnStub.firstCall.args[3].exitCallback;
-        lineCallback('Description:');
-        lineCallback('Usage:');
-        lineCallback('aspire [command] [options]');
-        lineCallback('Commands:');
-        exitCallback(1);
+            const lineCallback = spawnStub.firstCall.args[3].lineCallback;
+            const exitCallback = spawnStub.firstCall.args[3].exitCallback;
+            lineCallback('Description:');
+            lineCallback('Usage:');
+            lineCallback('aspire [command] [options]');
+            lineCallback('Commands:');
+            exitCallback(1);
 
-        assert.strictEqual(repository.hasError, true);
-        assert.ok(repository.errorMessage?.includes('Aspire CLI 13.2.0'), repository.errorMessage);
+            assert.strictEqual(repository.hasError, true);
+            assert.ok(repository.errorMessage?.includes('Aspire CLI 13.2.0'), repository.errorMessage);
 
-        repository.dispose();
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], true);
+        } finally {
+            repository.dispose();
+            executeCommandStub.restore();
+        }
     });
 
     test('describe watch does not report compatibility error when workspace AppHost returns no data successfully', async () => {
@@ -520,7 +528,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('describe watch reports minimum AppHost version when workspace AppHost exits without unsupported command output', async () => {
+    test('describe watch reports generic error when workspace AppHost exits with runtime failure', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
             getAppHostsLineCallback = createLsLineCallback(options);
@@ -532,6 +540,7 @@ suite('AppHostDataRepository', () => {
             name: 'workspace',
             index: 0,
         }]);
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
         const repository = new AppHostDataRepository(terminalProvider);
 
         try {
@@ -550,14 +559,20 @@ suite('AppHostDataRepository', () => {
 
             const describeCall = spawnStub.getCalls().find(call => (call.args[2] as string[])[0] === 'describe');
             assert.ok(describeCall);
+            const stderrCallback = describeCall.args[3].stderrCallback;
             const exitCallback = describeCall.args[3].exitCallback;
+            stderrCallback('No container runtime detected');
             exitCallback(1);
 
             assert.strictEqual(repository.hasError, true);
-            assert.ok(repository.errorMessage?.includes('Aspire.Hosting 13.2.0'), repository.errorMessage);
-            assert.ok(!repository.errorMessage?.includes('Aspire CLI 13.2.0'), repository.errorMessage);
+            assert.ok(repository.errorMessage?.includes('No container runtime detected'), repository.errorMessage);
+
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
+            executeCommandStub.restore();
             workspaceFoldersStub.restore();
         }
     });
@@ -1665,7 +1680,7 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.viewMode, 'workspace');
             assert.strictEqual(repository.workspaceAppHostPath, '/workspace/apps/Store/AppHost.csproj');
             assert.strictEqual(repository.workspaceAppHostName, 'AppHost.csproj');
-            assert.strictEqual(repository.workspaceAppHostDescription, 'Workspace view selected because aspire ls found one buildable AppHost.');
+            assert.strictEqual(repository.workspaceAppHostDescription, 'Workspace view selected because aspire ls found one buildable C# AppHost.');
         } finally {
             repository.dispose();
             workspaceFoldersStub.restore();
@@ -1969,6 +1984,158 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('switching from global to workspace view in an empty window clears global AppHosts', async () => {
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'global ps watch did not start');
+
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/other/apps/Store/AppHost.csproj',
+                    appHostPid: 125881,
+                    dashboardUrl: 'https://localhost:17193/login?t=061212',
+                },
+            ]));
+
+            assert.strictEqual(repository.appHosts.length, 1);
+
+            repository.setViewMode('workspace');
+
+            assert.strictEqual(repository.appHosts.length, 0);
+            assert.strictEqual(repository.workspaceAppHost, undefined);
+        } finally {
+            repository.dispose();
+        }
+    });
+
+    test('switching from global to workspace view filters AppHosts to the open workspace before discovery completes', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'global ps watch did not start');
+
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                    appHostPid: 125881,
+                    dashboardUrl: 'https://localhost:17193/login?t=061212',
+                },
+                {
+                    appHostPath: '/other/apps/Store/AppHost.csproj',
+                    appHostPid: 225881,
+                    dashboardUrl: 'https://localhost:27193/login?t=061212',
+                },
+            ]));
+
+            assert.strictEqual(repository.appHosts.length, 2);
+
+            repository.setViewMode('workspace');
+
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
+            assert.strictEqual(repository.appHosts.length, 1);
+            assert.strictEqual(repository.appHosts[0].appHostPath, '/workspace/apps/Store/AppHost.csproj');
+            assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('switching from global to workspace view filters AppHosts to discovered workspace candidates', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => [{
+                path: '/workspace/apps/Store/AppHost.csproj',
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+            }],
+            dispose: () => { },
+        };
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => repository.isWorkspaceAppHostDiscoveryComplete, 'workspace discovery did not complete');
+
+            repository.setViewMode('global');
+            await waitForCondition(() => psOptions !== undefined, 'global ps watch did not start');
+
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                    appHostPid: 125881,
+                    dashboardUrl: 'https://localhost:17193/login?t=061212',
+                },
+                {
+                    appHostPath: '/workspace/apps/Other/AppHost.csproj',
+                    appHostPid: 225881,
+                    dashboardUrl: 'https://localhost:27193/login?t=061212',
+                },
+            ]));
+
+            assert.strictEqual(repository.appHosts.length, 2);
+
+            repository.setViewMode('workspace');
+
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, [
+                '/workspace/apps/Store/AppHost.csproj',
+            ]);
+            assert.strictEqual(repository.appHosts.length, 1);
+            assert.strictEqual(repository.appHosts[0].appHostPath, '/workspace/apps/Store/AppHost.csproj');
+            assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('workspace ps empty snapshot keeps loading while workspace discovery is pending', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
@@ -2254,6 +2421,10 @@ suite('AppHostDataRepository', () => {
             const errorContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsError');
             assert.strictEqual(errorContextCalls.at(-1)?.args[2], true);
+
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
             executeCommandStub.restore();
@@ -2299,6 +2470,10 @@ suite('AppHostDataRepository', () => {
             const errorContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsError');
             assert.strictEqual(errorContextCalls.at(-1)?.args[2], true);
+
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
             executeCommandStub.restore();
@@ -2333,6 +2508,10 @@ suite('AppHostDataRepository', () => {
             const errorContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsError');
             assert.strictEqual(errorContextCalls.at(-1)?.args[2], true);
+
+            const compatibilityContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsCompatibilityError');
+            assert.strictEqual(compatibilityContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
             executeCommandStub.restore();

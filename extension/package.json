@@ -3,7 +3,7 @@
   "displayName": "Aspire",
   "description": "%extension.description%",
   "publisher": "microsoft-aspire",
-  "version": "1.14.0",
+  "version": "1.16.0",
   "aiKey": "0c6ae279ed8443289764825290e4f9e2-1a736e7c-1324-4338-be46-fc2a58ae4d14-7255",
   "icon": "aspire-logo-128.png",
   "license": "SEE LICENSE IN LICENSE.TXT",
@@ -36,6 +36,8 @@
     "onDebugInitialConfigurations:aspire",
     "onDebugDynamicConfigurations:aspire",
     "workspaceContains:**/*.csproj",
+    "workspaceContains:**/*.fsproj",
+    "workspaceContains:**/*.vbproj",
     "workspaceContains:**/aspire.config.json",
     "workspaceContains:**/.aspire/**",
     "onView:workbench.view.debug",
@@ -46,8 +48,7 @@
     "workspaceContains:**/apphost.js",
     "workspaceContains:**/apphost.mjs",
     "workspaceContains:**/apphost.cjs",
-    "onCommand:aspire-vscode.installCliStable",
-    "onCommand:aspire-vscode.installCliDaily",
+    "onCommand:aspire-vscode.installCli",
     "onCommand:aspire-vscode.verifyCliInstalled"
   ],
   "main": "./dist/extension.js",
@@ -95,7 +96,12 @@
       {
         "view": "aspire-vscode.appHosts",
         "contents": "%views.appHosts.errorWelcome%",
-        "when": "aspire.fetchAppHostsError && !aspire.loading"
+        "when": "aspire.fetchAppHostsError && aspire.fetchAppHostsCompatibilityError && !aspire.loading"
+      },
+      {
+        "view": "aspire-vscode.appHosts",
+        "contents": "%views.appHosts.genericErrorWelcome%",
+        "when": "aspire.fetchAppHostsError && !aspire.fetchAppHostsCompatibilityError && !aspire.loading"
       }
     ],
     "debuggers": [
@@ -148,6 +154,28 @@
                   "type": "string"
                 },
                 "default": {}
+              },
+              "dashboardBrowser": {
+                "type": "string",
+                "description": "%extension.debug.dashboardBrowser%",
+                "enum": [
+                  "none",
+                  "notification",
+                  "openExternalBrowser",
+                  "integratedBrowser",
+                  "debugChrome",
+                  "debugEdge",
+                  "debugFirefox"
+                ],
+                "enumDescriptions": [
+                  "%configuration.aspire.dashboardBrowser.none%",
+                  "%configuration.aspire.dashboardBrowser.notification%",
+                  "%configuration.aspire.dashboardBrowser.openExternalBrowser%",
+                  "%configuration.aspire.dashboardBrowser.integratedBrowser%",
+                  "%configuration.aspire.dashboardBrowser.debugChrome%",
+                  "%configuration.aspire.dashboardBrowser.debugEdge%",
+                  "%configuration.aspire.dashboardBrowser.debugFirefox%"
+                ]
               }
             }
           }
@@ -338,6 +366,12 @@
         "icon": "$(output)"
       },
       {
+        "command": "aspire-vscode.openResourceTerminal",
+        "title": "%command.openResourceTerminal%",
+        "category": "Aspire",
+        "icon": "$(terminal)"
+      },
+      {
         "command": "aspire-vscode.executeResourceCommand",
         "title": "%command.executeResourceCommand%",
         "category": "Aspire",
@@ -398,13 +432,8 @@
         "icon": "$(home)"
       },
       {
-        "command": "aspire-vscode.installCliStable",
-        "title": "%command.installCliStable%",
-        "category": "Aspire"
-      },
-      {
-        "command": "aspire-vscode.installCliDaily",
-        "title": "%command.installCliDaily%",
+        "command": "aspire-vscode.installCli",
+        "title": "%command.installCli%",
         "category": "Aspire"
       },
       {
@@ -551,6 +580,10 @@
         },
         {
           "command": "aspire-vscode.viewResourceLogs",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.openResourceTerminal",
           "when": "false"
         },
         {
@@ -728,14 +761,19 @@
           "group": "3_info@1"
         },
         {
+          "command": "aspire-vscode.openResourceTerminal",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^resource.*:canOpenTerminal/",
+          "group": "1_open@1"
+        },
+        {
           "command": "aspire-vscode.openInExternalBrowser",
           "when": "view == aspire-vscode.appHosts && viewItem == endpointUrl",
-          "group": "1_open@1"
+          "group": "1_open@2"
         },
         {
           "command": "aspire-vscode.openInIntegratedBrowser",
           "when": "view == aspire-vscode.appHosts && viewItem == endpointUrl",
-          "group": "1_open@2"
+          "group": "1_open@3"
         },
         {
           "command": "aspire-vscode.copyEndpointUrl",
@@ -810,7 +848,7 @@
             "notification",
             "off"
           ],
-          "default": "launch",
+          "default": "off",
           "description": "%configuration.aspire.enableAspireDashboardAutoLaunch%",
           "enumDescriptions": [
             "%configuration.aspire.enableAspireDashboardAutoLaunch.launch%",
@@ -822,15 +860,19 @@
         "aspire.dashboardBrowser": {
           "type": "string",
           "enum": [
+            "none",
+            "notification",
             "openExternalBrowser",
             "integratedBrowser",
             "debugChrome",
             "debugEdge",
             "debugFirefox"
           ],
-          "default": "integratedBrowser",
+          "default": "none",
           "description": "%configuration.aspire.dashboardBrowser%",
           "enumDescriptions": [
+            "%configuration.aspire.dashboardBrowser.none%",
+            "%configuration.aspire.dashboardBrowser.notification%",
             "%configuration.aspire.dashboardBrowser.openExternalBrowser%",
             "%configuration.aspire.dashboardBrowser.integratedBrowser%",
             "%configuration.aspire.dashboardBrowser.debugChrome%",
@@ -913,7 +955,7 @@
               "markdown": "walkthrough/installCli.md"
             },
             "completionEvents": [
-              "onCommand:aspire-vscode.verifyCliInstalled"
+              "onCommand:aspire-vscode.installCli"
             ]
           },
           {

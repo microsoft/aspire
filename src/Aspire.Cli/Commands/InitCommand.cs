@@ -810,8 +810,8 @@ internal sealed class InitCommand : BaseCommand
                     ["applicationUrl"] = $"https://localhost:{ports.DashboardHttpsPort};http://localhost:{ports.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPNETCORE_ENVIRONMENT"] = "Development",
-                        ["DOTNET_ENVIRONMENT"] = "Development",
+                        [KnownAspNetCoreConfigNames.Environment] = "Development",
+                        [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Development",
                         [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = $"https://localhost:{ports.OtlpHttpsPort}",
                         [KnownConfigNames.ResourceServiceEndpointUrl] = $"https://localhost:{ports.ResourceServiceHttpsPort}"
                     }
@@ -824,8 +824,8 @@ internal sealed class InitCommand : BaseCommand
                     ["applicationUrl"] = $"http://localhost:{ports.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPNETCORE_ENVIRONMENT"] = "Development",
-                        ["DOTNET_ENVIRONMENT"] = "Development",
+                        [KnownAspNetCoreConfigNames.Environment] = "Development",
+                        [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Development",
                         [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = $"http://localhost:{ports.OtlpHttpPort}",
                         [KnownConfigNames.ResourceServiceEndpointUrl] = $"http://localhost:{ports.ResourceServiceHttpPort}",
                         [KnownConfigNames.AllowUnsecuredTransport] = "true"
