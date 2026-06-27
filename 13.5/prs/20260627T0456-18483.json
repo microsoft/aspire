@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal refactoring to route OS detection through IEnvironment abstraction for testability. No user-visible changes.",
+  "mergedAt": "2026-06-27T04:56:59Z",
+  "number": 18483,
+  "runDate": "2026-06-27T07:00:29Z",
+  "status": "excluded",
+  "title": "Replace direct OS checks with IEnvironment in CLI"
+}
