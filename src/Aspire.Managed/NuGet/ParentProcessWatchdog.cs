@@ -1,0 +1,80 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Globalization;
+using Aspire.Hosting;
+
+namespace Aspire.Managed.NuGet;
+
+/// <summary>
+/// Watches the launching CLI process and tears this <c>aspire-managed</c> helper down if the parent
+/// disappears. Long-running NuGet search/restore operations would otherwise linger as orphaned
+/// processes when the CLI is killed (for example a test runner timeout sending SIGKILL), which is one
+/// of the ways <c>aspire-managed</c> processes accumulate over time.
+/// </summary>
+internal static class ParentProcessWatchdog
+{
+    // If the operation ignores the cancellation token (e.g. a NuGet network call already issued with
+    // CancellationToken.None), force the process to exit after a short grace period so it cannot
+    // outlive its parent. 124 mirrors the conventional "terminated by timeout" exit code.
+    private const int TerminatedExitCode = 124;
+    private static readonly TimeSpan s_forceExitGracePeriod = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Starts monitoring the parent identified by <c>ASPIRE_CLI_PID</c>/<c>ASPIRE_CLI_STARTED</c>.
+    /// When the parent is no longer alive, <paramref name="operationCts"/> is cancelled (and the
+    /// process force-exits as a backstop). Returns a handle that stops the watchdog when disposed, or
+    /// <see langword="null"/> when no parent is configured (the helper was invoked directly).
+    /// </summary>
+    public static IDisposable? Start(CancellationTokenSource operationCts)
+    {
+        if (!int.TryParse(Environment.GetEnvironmentVariable(KnownConfigNames.CliProcessId), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parentPid))
+        {
+            return null;
+        }
+
+        var expectedStartTimeUnix = ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(
+            Environment.GetEnvironmentVariable(KnownConfigNames.CliProcessStarted));
+
+        var stopCts = new CancellationTokenSource();
+        _ = MonitorAsync(parentPid, expectedStartTimeUnix, operationCts, stopCts.Token);
+        return new Stopper(stopCts);
+    }
+
+    private static async Task MonitorAsync(int parentPid, long? expectedStartTimeUnix, CancellationTokenSource operationCts, CancellationToken stopToken)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+            while (await timer.WaitForNextTickAsync(stopToken).ConfigureAwait(false))
+            {
+                if (ProcessStartTimeHelper.IsProcessRunning(parentPid, expectedStartTimeUnix))
+                {
+                    continue;
+                }
+
+                // Parent is gone: ask the in-flight operation to stop, then hard-exit if it doesn't.
+                if (!operationCts.IsCancellationRequested)
+                {
+                    operationCts.Cancel();
+                }
+
+                await Task.Delay(s_forceExitGracePeriod, stopToken).ConfigureAwait(false);
+                Environment.Exit(TerminatedExitCode);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Stopped normally (operation completed and the watchdog was disposed).
+        }
+    }
+
+    private sealed class Stopper(CancellationTokenSource stopCts) : IDisposable
+    {
+        public void Dispose()
+        {
+            stopCts.Cancel();
+            stopCts.Dispose();
+        }
+    }
+}

@@ -49,12 +49,17 @@ static async Task<int> RunServer(string[] args)
 
 static async Task<int> RunNuGet(string[] args)
 {
+    // Tear this helper down if the launching CLI dies so a hung/slow NuGet operation cannot linger as
+    // an orphaned aspire-managed process. No-op when ASPIRE_CLI_PID is not set (invoked directly).
+    using var operationCts = new CancellationTokenSource();
+    using var parentWatchdog = Aspire.Managed.NuGet.ParentProcessWatchdog.Start(operationCts);
+
     var rootCommand = new RootCommand("Aspire NuGet Helper - Package operations for Aspire CLI bundle");
     rootCommand.Subcommands.Add(SearchCommand.Create());
     rootCommand.Subcommands.Add(RestoreCommand.Create());
     rootCommand.Subcommands.Add(LayoutCommand.Create());
     rootCommand.Subcommands.Add(ManifestCommand.Create());
-    return await rootCommand.Parse(args).InvokeAsync().ConfigureAwait(false);
+    return await rootCommand.Parse(args).InvokeAsync(cancellationToken: operationCts.Token).ConfigureAwait(false);
 }
 
 static async Task<int> RunTerminalHost(string[] args)

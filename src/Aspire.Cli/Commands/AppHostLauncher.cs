@@ -315,6 +315,13 @@ internal sealed class AppHostLauncher(
     {
         var environment = new Dictionary<string, string> { [KnownConfigNames.CliRunDetached] = "true" };
 
+        // Record the foreground launcher's identity (PID + start time) so the detached child can watch
+        // it during startup and tear the AppHost tree down if the launcher is killed before the app
+        // reaches readiness. Without this, killing `aspire start`/`aspire run --detach` mid-start (for
+        // example a test runner timing it out) leaks the AppHost + dashboard as orphaned processes.
+        environment[KnownConfigNames.CliLauncherProcessId] = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
+        environment[KnownConfigNames.CliLauncherProcessStarted] = ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds().ToString(CultureInfo.InvariantCulture);
+
         ProfilingTelemetry.AddActivityContextToEnvironment(activity, environment);
         ProfileCaptureEnvironment.AddCurrentToEnvironment(environment);
         return environment;

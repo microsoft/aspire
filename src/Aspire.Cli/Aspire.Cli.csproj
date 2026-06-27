@@ -198,6 +198,7 @@
     <Compile Include="$(SharedDir)ConsoleLogs\TimestampParser.cs" Link="ConsoleLogs\TimestampParser.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\UrlParser.cs" Link="ConsoleLogs\UrlParser.cs" />
     <Compile Include="$(SharedDir)ProcessSignaler.cs" Link="Utils\ProcessSignaler.cs" />
+    <Compile Include="$(SharedDir)ProcessStartTimeHelper.cs" Link="Utils\ProcessStartTimeHelper.cs" />
     <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="Utils\NpmVersionHelper.cs" />
   </ItemGroup>
 

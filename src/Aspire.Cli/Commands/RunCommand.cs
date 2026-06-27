@@ -12,6 +12,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -206,6 +207,9 @@ internal sealed class RunCommand : BaseCommand
 
         AppHostProjectContext? context = null;
         Activity? runActivity = null;
+        // Hoisted so the outer finally can guarantee disposal on every failure/cancellation path. The
+        // happy path disposes (and nulls) it earlier, once startup succeeds.
+        LauncherLivenessMonitor? launcherMonitor = null;
 
         try
         {
@@ -296,6 +300,16 @@ internal sealed class RunCommand : BaseCommand
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
             var startupStartTimestamp = _timeProvider.GetTimestamp();
             using var runCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            // When this is a detached child, watch the foreground launcher during startup. If the launcher
+            // is killed before the app is ready, cancel the run so the AppHost tree is torn down instead of leaking. 
+            // The monitor is disarmed once startup succeeds (see below); from that point the child
+            // is intentionally independent and the launcher's normal exit must not affect it.
+            if (IsDetachedStartChild())
+            {
+                launcherMonitor = LauncherLivenessMonitor.StartIfConfigured(_configuration, runCancellationTokenSource, _timeProvider, _logger);
+            }
+
             using (_profilingTelemetry.StartRunAppHostStartProject(project.LanguageId, noBuild, waitForDebugger))
             {
                 pendingRun = project.RunAsync(context, runCancellationTokenSource.Token);
@@ -364,6 +378,15 @@ internal sealed class RunCommand : BaseCommand
                 var backchannel = startup.Backchannel;
                 var dashboardUrls = startup.DashboardUrls;
                 pendingLogCapture = startup.PendingLogCapture;
+
+                // Startup succeeded and the app is ready. Disarm the launcher watchdog: from here the
+                // detached child is independent, and the foreground launcher is expected to exit normally
+                // once it has observed readiness, so it must no longer trigger a shutdown.
+                if (launcherMonitor is not null)
+                {
+                    await launcherMonitor.DisposeAsync().ConfigureAwait(false);
+                    launcherMonitor = null;
+                }
 
                 if (dashboardUrls.DashboardHealthy is false)
                 {
@@ -595,6 +618,11 @@ internal sealed class RunCommand : BaseCommand
         }
         finally
         {
+            if (launcherMonitor is not null)
+            {
+                await launcherMonitor.DisposeAsync().ConfigureAwait(false);
+            }
+
             runActivity?.Dispose();
         }
     }

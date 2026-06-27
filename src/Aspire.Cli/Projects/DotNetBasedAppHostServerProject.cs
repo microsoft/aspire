@@ -502,9 +502,18 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         }
 
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
-        startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        startInfo.Environment[KnownConfigNames.RemoteAppHostProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliLogFilePath] = _logFilePath;
+
+        // Pair the parent PID with its start time so the RemoteHost orphan detector verifies both and
+        // does not keep the server alive against a recycled PID. hostPid is the launching CLI process.
+        if (ProcessStartTimeHelper.TryGetProcessStartTimeUnixSeconds(hostPid) is { } hostStartedUnix)
+        {
+            var hostStarted = hostStartedUnix.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            startInfo.Environment[KnownConfigNames.RemoteAppHostProcessStarted] = hostStarted;
+            startInfo.Environment[KnownConfigNames.CliProcessStarted] = hostStarted;
+        }
 
         // Dev mode uses debug builds which require Development environment
         // for the dashboard to resolve static web assets correctly
