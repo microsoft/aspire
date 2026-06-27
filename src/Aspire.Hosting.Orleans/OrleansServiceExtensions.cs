@@ -393,6 +393,41 @@ public static class OrleansServiceExtensions
     }
 
     /// <summary>
+    /// Configures the ADO.NET provider invariant for an Orleans provider resource.
+    /// </summary>
+    /// <param name="builder">The connection-string resource builder.</param>
+    /// <param name="invariant">The Orleans ADO.NET Invariant to use for the resource.</param>
+    /// <returns>The resource builder.</returns>
+    /// <remarks>
+    /// This method only applies to the Orleans ADO.NET provider and should be used together with <c>WithOrleansProviderType("AdoNet")</c>.
+    /// </remarks>
+    /// <example>
+    /// Configure a Postgres database resource as the provider Orleans Clustering and Remainders:
+    /// <code>
+    /// var postgres = builder.AddPostgres("postgres");
+    /// 
+    /// var postgresDb = postgres.AddDatabase("postgresDb")
+    ///     .WithOrleansProviderType("AdoNet")
+    ///     .WithOrleansAdoNetInvariant("Npgsql");
+    /// 
+    /// var orleans = builder.AddOrleans("orleans")
+    ///     .WithClustering(postgresDb)
+    ///     .WithReminders(postgresDb);
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="invariant"/> is null, empty, or consists only of white-space characters.</exception>
+    [AspireExport]
+    public static IResourceBuilder<T> WithOrleansAdoNetInvariant<T>(this IResourceBuilder<T> builder, string invariant)
+        where T : IResourceWithConnectionString
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(invariant);
+
+        return builder.WithAnnotation(new OrleansAdoNetInvariantAnnotation(invariant), ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    /// <summary>
     /// Returns a model of the clients of an Orleans service.
     /// </summary>
     /// <param name="orleansService">The Orleans service</param>
