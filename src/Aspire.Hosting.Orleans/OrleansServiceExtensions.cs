@@ -405,11 +405,11 @@ public static class OrleansServiceExtensions
     /// Configure a Postgres database resource as the provider for Orleans Clustering and Reminders:
     /// <code>
     /// var postgres = builder.AddPostgres("postgres");
-    /// 
+    ///
     /// var postgresDb = postgres.AddDatabase("postgresDb")
     ///     .WithOrleansProviderType("AdoNet")
     ///     .WithOrleansAdoNetInvariant("Npgsql");
-    /// 
+    ///
     /// var orleans = builder.AddOrleans("orleans")
     ///     .WithClustering(postgresDb)
     ///     .WithReminders(postgresDb);
