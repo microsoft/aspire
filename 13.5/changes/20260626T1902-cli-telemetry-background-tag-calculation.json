@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Default telemetry tags (machine ID, OS info, version, identity) are now computed asynchronously in the background rather than blocking CLI startup. Tags are applied to telemetry spans at export time, improving how quickly the CLI becomes responsive after launch.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⚡",
+  "firstMergedAt": "2026-06-26T19:02:24Z",
+  "lastMergedAt": "2026-06-26T19:02:24Z",
+  "name": "CLI telemetry tag calculation no longer blocks startup",
+  "owner": "JamesNK",
+  "prs": [
+    18454
+  ]
+}

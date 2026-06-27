@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "UX improvement: removed redundant grouping node for single AppHosts in VS Code extension tree view",
+  "mergedAt": "2026-06-26T23:11:40Z",
+  "number": 18523,
+  "runDate": "2026-06-27T00:27:04Z",
+  "status": "included",
+  "title": "Flatten single-AppHost group nodes in the AppHosts tree view"
+}

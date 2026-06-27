@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Updated the VS Code Marketplace README to showcase the AppHost discovery, run/debug, and dashboard workflow with real screenshots. Added bounded first-run funnel telemetry (activation, CLI availability, AppHost discovery, and launch events) using coarse enum and count values only — no paths, command output, or user content is collected.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📡",
+  "firstMergedAt": "2026-06-26T18:57:10Z",
+  "lastMergedAt": "2026-06-26T18:57:10Z",
+  "name": "Improved VS Code extension Marketplace page and first-run funnel telemetry",
+  "owner": "adamint",
+  "prs": [
+    17898
+  ]
+}

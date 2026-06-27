@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal CI/agentic workflow optimization with no user-visible product impact",
+  "mergedAt": "2026-06-26T22:49:42Z",
+  "number": 18119,
+  "runDate": "2026-06-27T00:27:04Z",
+  "status": "excluded",
+  "title": "Optimize pr-docs-check agentic workflow to cut token usage"
+}

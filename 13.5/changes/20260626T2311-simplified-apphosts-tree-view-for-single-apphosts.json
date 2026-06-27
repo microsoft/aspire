@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The VS Code extension's AppHosts tree no longer wraps a lone AppHost in a redundant 'Running AppHosts (1)' or 'Workspace AppHosts (1)' grouping node. Single AppHosts are now shown directly at the top level, reducing unnecessary nesting and eliminating the extra click needed to expand the group.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🌲",
+  "firstMergedAt": "2026-06-26T23:11:40Z",
+  "lastMergedAt": "2026-06-26T23:11:40Z",
+  "name": "Simplified AppHosts tree view for single AppHosts",
+  "owner": "ellahathaway",
+  "prs": [
+    18523
+  ]
+}

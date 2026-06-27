@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a missing accessible name on the copy button in the GenAI visualizer dialog. Screen readers and other accessibility tools now correctly announce the button's purpose when it receives focus.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "♿",
+  "firstMergedAt": "2026-06-26T19:47:25Z",
+  "lastMergedAt": "2026-06-26T19:47:25Z",
+  "name": "Fix GenAI copy button accessible name",
+  "owner": "adamint",
+  "prs": [
+    18501
+  ]
+}

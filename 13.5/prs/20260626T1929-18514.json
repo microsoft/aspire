@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Repository maintenance: adds a GitHub Copilot agent skill for authoring hosting integrations; no user-visible product change",
+  "mergedAt": "2026-06-26T19:29:40Z",
+  "number": 18514,
+  "runDate": "2026-06-27T00:27:04Z",
+  "status": "excluded",
+  "title": "Add hosting integration authoring skill"
+}

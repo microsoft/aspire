@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Accessibility fix: added accessible name to GenAI visualizer copy button in Dashboard",
+  "mergedAt": "2026-06-26T19:47:25Z",
+  "number": 18501,
+  "runDate": "2026-06-27T00:27:04Z",
+  "status": "included",
+  "title": "Fix GenAI copy button accessible name"
+}

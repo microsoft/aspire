@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Bug fix: CLI install walkthrough now shell-agnostic, works on cmd.exe and non-PowerShell shells",
+  "mergedAt": "2026-06-26T23:14:42Z",
+  "number": 18522,
+  "runDate": "2026-06-27T00:27:04Z",
+  "status": "included",
+  "title": "Fix VS Code extension CLI install to be shell-agnostic (#18459)"
+}

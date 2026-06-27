@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI telemetry tag calculation moved to background to avoid blocking startup",
+  "mergedAt": "2026-06-26T19:02:24Z",
+  "number": 18454,
+  "runDate": "2026-06-27T00:27:04Z",
+  "status": "included",
+  "title": "Refactor CLI telemetry: background tag calculation with export-time enrichment"
+}

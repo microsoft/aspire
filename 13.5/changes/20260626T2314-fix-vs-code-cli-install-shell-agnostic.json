@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code extension's 'Install Aspire CLI' walkthrough now works correctly on all shells. Previously it sent PowerShell-specific install commands into terminals that might be running cmd.exe on Windows, causing the install to fail. The walkthrough now offers a package-manager picker for stable releases and a shell-safe script for daily builds.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐚",
+  "firstMergedAt": "2026-06-26T23:14:42Z",
+  "lastMergedAt": "2026-06-26T23:14:42Z",
+  "name": "Fixed VS Code extension CLI install walkthrough on all shells",
+  "owner": "ellahathaway",
+  "prs": [
+    18522
+  ]
+}
