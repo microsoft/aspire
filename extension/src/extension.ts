@@ -10,7 +10,7 @@ import { publishCommand } from './commands/publish';
 import { doCommand } from './commands/do';
 import { cliNotAvailable, dismissLabel, errorMessage, openCliInstallInstructions } from './loc/strings';
 import { extensionLogOutputChannel } from './utils/logging';
-import { initializeTelemetry, isCommandCancellation, withCommandTelemetry } from './utils/telemetry';
+import { initializeTelemetry, isCommandCancellation, sendTelemetryEvent, withCommandTelemetry } from './utils/telemetry';
 import { MeaningfulEngagementReporter } from './utils/meaningfulEngagement';
 import { AspireDebugAdapterDescriptorFactory } from './debugger/AspireDebugAdapterDescriptorFactory';
 import { AspireDebugConfigurationProvider } from './debugger/AspireDebugConfigurationProvider';
@@ -30,7 +30,7 @@ import { AspireEditorCommandProvider } from './editor/AspireEditorCommandProvide
 import { AspirePackageRestoreProvider } from './utils/AspirePackageRestoreProvider';
 import { AspireAppHostTreeProvider, isEnabledCommand } from './views/AspireAppHostTreeProvider';
 import { AppHostDataRepository } from './views/AppHostDataRepository';
-import { installCliStableCommand, installCliDailyCommand, verifyCliInstalledCommand } from './commands/walkthroughCommands';
+import { installCliCommand, verifyCliInstalledCommand } from './commands/walkthroughCommands';
 import { AspireMcpServerDefinitionProvider } from './mcp/AspireMcpServerDefinitionProvider';
 import { AspireCodeLensProvider } from './editor/AspireCodeLensProvider';
 import { AspireGutterDecorationProvider } from './editor/AspireGutterDecorationProvider';
@@ -53,13 +53,19 @@ export async function activate(context: vscode.ExtensionContext) {
   const gitCommitSha = readGitCommitSha(context);
   extensionLogOutputChannel.info(`Activating Aspire extension (commit: ${gitCommitSha})`);
   initializeTelemetry(context);
+  sendTelemetryEvent('extension/activated', {
+    workspace_open: vscode.workspace.workspaceFolders?.length ? 'true' : 'false',
+    extension_mode: getExtensionModeForTelemetry(context.extensionMode),
+  }, {
+    workspace_folders: vscode.workspace.workspaceFolders?.length ?? 0,
+  });
 
   const terminalProvider = new AspireTerminalProvider(context.subscriptions);
   const testRunSessionManager = new TestRunSessionManager();
 
   const rpcServer = await AspireRpcServer.create(
     (rpcServerConnectionInfo: RpcServerConnectionInfo, connection: MessageConnection, token: string, debugSessionId: string | null) => {
-      const client: RpcClient = new RpcClient(terminalProvider, connection, debugSessionId, () => aspireExtensionContext.getAspireDebugSession(client.debugSessionId));
+      const client: RpcClient = new RpcClient(connection, debugSessionId, () => aspireExtensionContext.getAspireDebugSession(client.debugSessionId), context.globalState);
       return client;
     }
   );
@@ -148,9 +154,8 @@ export async function activate(context: vscode.ExtensionContext) {
   const runAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.runAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(true));
   const debugAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.debugAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(false));
 
-  // Walkthrough commands (no CLI check - CLI may not be installed yet)
-  const installCliStableRegistration = registerInstrumentedCommand('aspire-vscode.installCliStable', 'walkthrough', installCliStableCommand);
-  const installCliDailyRegistration = registerInstrumentedCommand('aspire-vscode.installCliDaily', 'walkthrough', installCliDailyCommand);
+  // Walkthrough commands (no CLI check - the CLI may not be installed yet).
+  const installCliRegistration = registerInstrumentedCommand('aspire-vscode.installCli', 'walkthrough', installCliCommand);
   const verifyCliInstalledRegistration = registerInstrumentedCommand('aspire-vscode.verifyCliInstalled', 'walkthrough', verifyCliInstalledCommand);
 
   // Aspire panel - running app hosts tree view
@@ -310,7 +315,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(cliAddCommandRegistration, cliNewCommandRegistration, cliInitCommandRegistration, cliDeployCommandRegistration, cliPublishCommandRegistration, cliDoCommandRegistration, openTerminalCommandRegistration, configureLaunchJsonCommandRegistration);
   context.subscriptions.push(cliUpdateCommandRegistration, cliUpdateSelfCommandRegistration, settingsCommandRegistration, openLocalSettingsCommandRegistration, openGlobalSettingsCommandRegistration, runAppHostCommandRegistration, debugAppHostCommandRegistration);
-  context.subscriptions.push(installCliStableRegistration, installCliDailyRegistration, verifyCliInstalledRegistration);
+  context.subscriptions.push(installCliRegistration, verifyCliInstalledRegistration);
 
   const debugConfigProvider = new AspireDebugConfigurationProvider(appHostDiscoveryService);
   context.subscriptions.push(
@@ -393,6 +398,19 @@ export function deactivate() {
   aspireExtensionContext.dispose();
 }
 
+function getExtensionModeForTelemetry(mode: vscode.ExtensionMode): string {
+  switch (mode) {
+    case vscode.ExtensionMode.Production:
+      return 'production';
+    case vscode.ExtensionMode.Development:
+      return 'development';
+    case vscode.ExtensionMode.Test:
+      return 'test';
+    default:
+      return 'unknown';
+  }
+}
+
 async function tryExecuteCommand(commandName: string, terminalProvider: AspireTerminalProvider, command: (terminalProvider: AspireTerminalProvider) => Promise<void>): Promise<void> {
   try {
     await withCommandTelemetry(commandName, async () => {
@@ -407,7 +425,7 @@ async function tryExecuteCommand(commandName: string, terminalProvider: AspireTe
           throw new vscode.CancellationError();
         }
 
-        const result = await checkCliAvailableOrRedirect();
+        const result = await checkCliAvailableOrRedirect('command_gate');
         if (!result.available) {
           // The command body never ran — the user was redirected to install the
           // CLI. Throwing a cancellation makes withCommandTelemetry record this
@@ -415,6 +433,7 @@ async function tryExecuteCommand(commandName: string, terminalProvider: AspireTe
           // suppresses the error toast (the redirect already informed the user).
           throw new vscode.CancellationError();
         }
+
       }
 
       await command(terminalProvider);

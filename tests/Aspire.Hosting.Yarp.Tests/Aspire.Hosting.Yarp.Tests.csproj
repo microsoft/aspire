@@ -15,7 +15,7 @@
     <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Yarp\Aspire.Hosting.Yarp.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Docker\Aspire.Hosting.Docker.csproj" />
-    <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
     <PackageReference Include="Verify.XunitV3" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
   </ItemGroup>

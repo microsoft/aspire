@@ -567,9 +567,13 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (FailedToConnectBackchannelConnection ex)
         {
+            // The AppHost process exited before the backchannel could connect. This is an
+            // AppHost startup failure (e.g. the user's code crashed), not a CLI infrastructure
+            // error. WaitForAppHostStartupAsync normally wraps this in AppHostExitedDuringStartupException
+            // with the real exit code; this catch is a defensive fallback for edge-case races.
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "backchannel_connection_failed");
+            _logger.LogDebug(ex, "AppHost exited before backchannel connected.");
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ErrorConnectingToAppHost, ex.Message);
-            Telemetry.RecordError(errorMessage, ex);
             return CommandResult.Failure(CliExitCodes.FailedToDotnetRunAppHost, errorMessage);
         }
         catch (ConnectionLostException) when (isExtensionHost)
@@ -1036,9 +1040,12 @@ internal sealed class RunCommand : BaseCommand
             // Swallow the exception if the operation was cancelled.
             return;
         }
-        catch (ConnectionLostException) when (cancellationToken.IsCancellationRequested)
+        catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
         {
-            // Just swallow this exception because this is an orderly shutdown of the backchannel.
+            // The AppHost process exited and the backchannel connection was lost. This is
+            // expected during orderly shutdown — the connection drops before the cancellation
+            // token fires because logCaptureCancellationSource.Cancel() runs in the finally
+            // block after the AppHost process has already exited.
             return;
         }
     }

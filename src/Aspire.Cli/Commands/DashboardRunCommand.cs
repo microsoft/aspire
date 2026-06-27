@@ -140,7 +140,7 @@ internal sealed class DashboardRunCommand : BaseCommand
 
     private static void AddOptionArgs(ParseResult parseResult, List<string> args, IReadOnlyList<string> unmatchedTokens, IEnvironment environment)
     {
-        AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_frontendUrlOption, KnownConfigNames.AspNetCoreUrls, defaultValue: "http://localhost:18888");
+        AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_frontendUrlOption, KnownAspNetCoreConfigNames.Urls, defaultValue: "http://localhost:18888");
         AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_otlpGrpcUrlOption, KnownConfigNames.DashboardOtlpGrpcEndpointUrl, defaultValue: "http://localhost:4317");
         AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_otlpHttpUrlOption, KnownConfigNames.DashboardOtlpHttpEndpointUrl, defaultValue: "http://localhost:4318");
         AddBoolOptionArg(parseResult, args, unmatchedTokens, environment, s_allowAnonymousOption, KnownConfigNames.DashboardUnsecuredAllowAnonymous);
@@ -232,7 +232,7 @@ internal sealed class DashboardRunCommand : BaseCommand
 
     internal static DashboardInfo ResolveDashboardInfo(List<string> dashboardArgs, IReadOnlyList<string> unmatchedTokens, IEnvironment environment, string? browserToken)
     {
-        var frontendUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, environment, KnownConfigNames.AspNetCoreUrls) ?? "http://localhost:18888";
+        var frontendUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, environment, KnownAspNetCoreConfigNames.Urls) ?? "http://localhost:18888";
         var otlpGrpcUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, environment, KnownConfigNames.DashboardOtlpGrpcEndpointUrl) ?? "http://localhost:4317";
         var otlpHttpUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, environment, KnownConfigNames.DashboardOtlpHttpEndpointUrl) ?? "http://localhost:4318";
 

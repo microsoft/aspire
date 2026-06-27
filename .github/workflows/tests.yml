@@ -73,7 +73,13 @@ jobs:
           # plain re-run of an existing run. Empty on non-PR events -> the action force-alls anyway.
           forceAll: ${{ contains(github.event.pull_request.labels.*.name, 'run-full-ci') }}
           prBaseSha: ${{ github.event.pull_request.base.sha }}
-          headSha: ${{ github.sha }}
+          # The PR's real head, NOT github.sha (the synthetic refs/pull/N/merge commit). The selector
+          # diffs head against the merge-base of base..head, so it sees only the PR's own commits. Using
+          # the merge commit instead lets base-branch churn leak into the diff whenever GitHub's merge
+          # ref and the event's base.sha disagree (the merge ref is regenerated asynchronously as the
+          # base advances) -- which over-selected an unrelated file in
+          # https://github.com/microsoft/aspire/pull/18377#issuecomment-4782187184.
+          headSha: ${{ github.event.pull_request.head.sha }}
 
       # Hand the selection summary to the separate comment_selection job (below) as an artifact. The
       # comment is posted from THAT job, which holds pull-requests:write but runs no PR code, so this
@@ -702,12 +708,7 @@ jobs:
 
   extension_e2e_tests:
     name: Run VS Code extension E2E tests
-    # Temporarily disabled: the VS Code extension E2E shards are flaky and currently failing in CI
-    # (intermittent teardown AggregateError, see https://github.com/microsoft/aspire/issues/18098),
-    # so they block unrelated PRs. Keep the job defined (it stays in the aggregate gate's needs) but
-    # force it to skip until the flakiness is fixed. Re-enable by removing the `false &&` guard below.
-    # Tracked by https://github.com/microsoft/aspire/issues/18412.
-    if: ${{ false && needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
+    if: ${{ needs.setup_for_tests.outputs.run_extension_e2e == 'true' }}
     uses: ./.github/workflows/extension-e2e-tests.yml
     needs: [setup_for_tests, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_tests_win, extension_bootstrap_linux]
 
@@ -825,10 +826,8 @@ jobs:
         #   bucket actually had work. Before selective CI these were always populated on a full run.
         # - cli_starter_validation_windows: this job only runs for pull requests and is expected to
         #   be skipped for other workflow events.
-        # - extension_e2e_tests: temporarily disabled (always skipped) because the E2E shards are
-        #   flaky/failing; see https://github.com/microsoft/aspire/issues/18412. While
-        #   disabled, a 'skipped' result must NOT fail this gate, so the run_extension_e2e skip checks
-        #   were removed below. Restore them when re-enabling the job.
+        # - extension_e2e_tests: this job only runs when the PR/push changes the VS Code extension,
+        #   Aspire CLI, or the extension E2E workflow wiring.
         # - polyglot_validation: this job runs for pull requests and main branch builds; it is
         #   expected to be skipped for other workflow events.
         # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
@@ -838,6 +837,8 @@ jobs:
                contains(needs.*.result, 'cancelled') ||
                (github.event_name == 'pull_request' &&
                 ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true')) ||
+                 (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
+                  needs.extension_e2e_tests.result == 'skipped') ||
                  (needs.cli_starter_validation_windows.result == 'skipped' && (needs.setup_for_tests.outputs.run_cli_starter == 'true')) ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
@@ -862,6 +863,8 @@ jobs:
                  (needs.polyglot_validation.result == 'skipped' && (needs.setup_for_tests.outputs.run_polyglot == 'true')))) ||
                (github.event_name != 'pull_request' &&
                 ((needs.extension_tests_win.result == 'skipped' && (needs.setup_for_tests.outputs.run_extension_unit == 'true' || needs.setup_for_tests.outputs.run_extension_e2e == 'true')) ||
+                 (needs.setup_for_tests.outputs.run_extension_e2e == 'true' &&
+                  needs.extension_e2e_tests.result == 'skipped') ||
                  (needs.typescript_sdk_tests.result == 'skipped' &&
                   (needs.setup_for_tests.outputs.run_typescript_sdk == 'true')) ||
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||
