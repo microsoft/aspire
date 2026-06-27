@@ -402,7 +402,7 @@ public static class OrleansServiceExtensions
     /// This method only applies to the Orleans ADO.NET provider and should be used together with <c>WithOrleansProviderType("AdoNet")</c>.
     /// </remarks>
     /// <example>
-    /// Configure a Postgres database resource as the provider Orleans Clustering and Remainders:
+    /// Configure a Postgres database resource as the provider for Orleans Clustering and Reminders:
     /// <code>
     /// var postgres = builder.AddPostgres("postgres");
     /// 
