@@ -1338,7 +1338,7 @@ public class DistributedApplicationTests
     {
         const string testName = "dashboard-urls-display";
         var args = new string[] {
-            $"{KnownConfigNames.AspNetCoreUrls}=https://localhost:0;http://localhost:0",
+            $"{KnownAspNetCoreConfigNames.Urls}=https://localhost:0;http://localhost:0",
             $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost:0"
         };
         using var testProgram = CreateTestProgram(testName, args: args, disableDashboard: false);
@@ -1369,7 +1369,7 @@ public class DistributedApplicationTests
         const string testName = "dashboard-auth-config";
         var browserToken = "ThisIsATestToken";
         var args = new string[] {
-            $"{KnownConfigNames.AspNetCoreUrls}=http://localhost:0",
+            $"{KnownAspNetCoreConfigNames.Urls}=http://localhost:0",
             $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost:0",
             $"{tokenEnvVarName}={browserToken}"
         };
@@ -1406,7 +1406,7 @@ public class DistributedApplicationTests
     {
         const string testName = "dashboard-allow-anonymous";
         var args = new string[] {
-            $"{KnownConfigNames.AspNetCoreUrls}=http://localhost:0",
+            $"{KnownAspNetCoreConfigNames.Urls}=http://localhost:0",
             $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost:0",
             $"{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true"
         };

@@ -83,7 +83,7 @@ internal sealed class ProfileCaptureService(
         var dashboardArgs = new[]
         {
             "dashboard",
-            $"--{KnownConfigNames.AspNetCoreUrls}={options.DashboardUrl}",
+            $"--{KnownAspNetCoreConfigNames.Urls}={options.DashboardUrl}",
             $"--{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}={options.OtlpGrpcUrl}",
             $"--{KnownConfigNames.DashboardOtlpHttpEndpointUrl}={options.OtlpHttpUrl}",
             $"--{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true",

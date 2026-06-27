@@ -282,6 +282,18 @@ jobs:
             ${{ matrix.extraTestArgs }} \
             || echo "test_failed=true" >> $GITHUB_OUTPUT
 
+      - name: Collect Aspire CLI logs
+        if: always()
+        run: |
+          # The CLI writes a detailed deployment log (including the underlying ARM error,
+          # e.g. the subcode behind a generic "OperationFailed" provisioning failure) to
+          # ~/.aspire/logs/cli_*.log. That detail is otherwise lost because only testresults/
+          # is uploaded, so copy the logs under testresults/ to capture them in the artifact.
+          if [ -d "$HOME/.aspire/logs" ]; then
+            mkdir -p "${{ github.workspace }}/testresults/aspire-cli-logs"
+            cp -r "$HOME/.aspire/logs/." "${{ github.workspace }}/testresults/aspire-cli-logs/" || true
+          fi
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0

@@ -18,6 +18,11 @@ public interface IEnvironment
     string? GetEnvironmentVariable(string variable);
 
     /// <summary>
+    /// Gets all environment variables.
+    /// </summary>
+    IEnumerable<(string Name, string? Value)> GetEnvironmentVariables();
+
+    /// <summary>
     /// Gets a value indicating whether the current OS is Windows.
     /// </summary>
     bool IsWindows { get; }

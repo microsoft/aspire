@@ -10,6 +10,35 @@ namespace Aspire.Hosting.Orleans;
 /// </summary>
 internal sealed class ProviderConfiguration(string providerType, string? serviceKey = null, IResourceBuilder<IResourceWithConnectionString>? resource = null) : IProviderConfiguration
 {
+    private readonly string _providerType = ValidateProviderType(providerType);
+
+    private static string GetProviderType(IResourceBuilder<IResourceWithConnectionString> resourceBuilder)
+    {
+        string providerType;
+
+        if (resourceBuilder.Resource.TryGetAnnotationsOfType<OrleansProviderTypeAnnotation>(out var annotations) && annotations.FirstOrDefault() is OrleansProviderTypeAnnotation annotation)
+        {
+            providerType = annotation.ProviderType;
+        }
+        else
+        {
+            const string resource = "Resource";
+            var resourceType = resourceBuilder.Resource.GetType().Name;
+
+            // Use a simple transformation to get the provider type: remove the "Resource" suffix if it exists.
+            providerType = resourceType.EndsWith(resource, StringComparison.Ordinal) ? resourceType[..^resource.Length] : resourceType;
+        }
+
+        return providerType;
+    }
+
+    private static string ValidateProviderType(string providerType)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerType);
+
+        return providerType;
+    }
+
     /// <summary>
     /// Initializes a new instance of <see cref="ProviderConfiguration"/>.
     /// </summary>
@@ -17,12 +46,8 @@ internal sealed class ProviderConfiguration(string providerType, string? service
     /// <returns>The new provider configuration.</returns>
     internal static ProviderConfiguration Create(IResourceBuilder<IResourceWithConnectionString> resourceBuilder)
     {
-        const string resource = "Resource";
         var serviceKey = resourceBuilder.Resource.Name;
-        var resourceType = resourceBuilder.Resource.GetType().Name;
-
-        // Use a simple transformation to get the provider type: remove the "Resource" suffix if it exists.
-        var providerType = resourceType.EndsWith(resource, StringComparison.Ordinal) ? resourceType[..^resource.Length] : resourceType;
+        var providerType = GetProviderType(resourceBuilder);
 
         return new(providerType, serviceKey, resourceBuilder);
     }
@@ -36,7 +61,7 @@ internal sealed class ProviderConfiguration(string providerType, string? service
     public void ConfigureResource<T>(IResourceBuilder<T> resourceBuilder, string configurationSectionName) where T : IResourceWithEnvironment
     {
         var envVarPrefix = configurationSectionName.Replace(":", "__");
-        resourceBuilder.WithEnvironment($"Orleans__{envVarPrefix}__ProviderType", providerType);
+        resourceBuilder.WithEnvironment($"Orleans__{envVarPrefix}__ProviderType", _providerType);
         if (!string.IsNullOrEmpty(serviceKey))
         {
             resourceBuilder.WithEnvironment($"Orleans__{envVarPrefix}__ServiceKey", serviceKey);

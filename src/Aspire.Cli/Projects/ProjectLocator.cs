@@ -32,7 +32,7 @@ internal interface IProjectLocator
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Streams candidate AppHost projects as validation completes.
+    /// Streams candidate AppHost projects as discovery/validation completes.
     /// </summary>
     /// <param name="searchDirectory">The directory to search recursively.</param>
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
@@ -42,7 +42,7 @@ internal interface IProjectLocator
     /// <see cref="IAppHostCandidateFinder.FindCandidateFilesAsync"/> for caller obligations.
     /// </param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>An async stream of candidate AppHost projects in validation-completion order.</returns>
+    /// <returns>An async stream of candidate AppHost projects in completion order.</returns>
     async IAsyncEnumerable<AppHostProjectCandidate> FindAppHostProjectsStreamAsync(
         DirectoryInfo searchDirectory,
         AppHostDiscoveryScope scope,

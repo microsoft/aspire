@@ -237,7 +237,7 @@ function isCancellation(err: unknown): boolean {
     return typeof err === 'string' && err.toLowerCase() === 'canceled';
 }
 
-function classifyError(err: unknown): string {
+export function classifyError(err: unknown): string {
     if (err instanceof Error) {
         return err.name || 'Error';
     }

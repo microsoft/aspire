@@ -95,7 +95,7 @@ internal sealed class TerminalRun : IAsyncDisposable
             ? methodName
             : "unknown";
 
-        var destDir = GetDiagnosticsCapturePath(testName);
+        var destDir = CliE2ETestHelpers.GetCaptureRootDirectory(testName);
         CopyDirectoryIfExists(diagnosticsSource, destDir);
 
         WriteTestOutput($"[TerminalRun] Captured diagnostics to: {destDir}");
@@ -114,20 +114,6 @@ internal sealed class TerminalRun : IAsyncDisposable
         {
             WriteTestOutput($"[TerminalRun]   (root): {topLevelFiles.Length} file(s)");
         }
-    }
-
-    private static string GetDiagnosticsCapturePath(string testName)
-    {
-        var githubWorkspace = Environment.GetEnvironmentVariable("GITHUB_WORKSPACE");
-
-        if (!string.IsNullOrEmpty(githubWorkspace))
-        {
-            // CI environment — write to testresults/ so upload-artifact includes these files.
-            return Path.Combine(githubWorkspace, "testresults", "workspaces", testName);
-        }
-
-        // Local development — keep diagnostics with other test output.
-        return Path.Combine(AppContext.BaseDirectory, "TestResults", "workspaces", testName);
     }
 
     private static void CopyDirectoryIfExists(string source, string destination)

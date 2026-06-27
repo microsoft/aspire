@@ -11,6 +11,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -112,7 +113,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var unmatchedTokens = new[] { "--ASPNETCORE_URLS=http://localhost:9999" };
 
-        Assert.True(DashboardRunCommand.ConfigSettingHasValue(unmatchedTokens, environment, "ASPNETCORE_URLS"));
+        Assert.True(DashboardRunCommand.ConfigSettingHasValue(unmatchedTokens, environment, KnownAspNetCoreConfigNames.Urls));
         Assert.False(DashboardRunCommand.ConfigSettingHasValue(unmatchedTokens, environment, "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"));
     }
 
@@ -123,7 +124,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var unmatchedTokens = new[] { "--ASPNETCORE_URLS", "http://localhost:9999" };
 
-        Assert.True(DashboardRunCommand.ConfigSettingHasValue(unmatchedTokens, environment, "ASPNETCORE_URLS"));
+        Assert.True(DashboardRunCommand.ConfigSettingHasValue(unmatchedTokens, environment, KnownAspNetCoreConfigNames.Urls));
     }
 
     [Fact]
@@ -384,7 +385,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     {
         var environment = CreateEnvironment(new Dictionary<string, string?>
         {
-            ["ASPNETCORE_URLS"] = "http://envhost:9999"
+            [KnownAspNetCoreConfigNames.Urls] = "http://envhost:9999"
         });
 
         // No arg in the list — should fall back to the environment variable.
@@ -433,7 +434,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     {
         var environment = CreateEnvironment(new Dictionary<string, string?>
         {
-            ["ASPNETCORE_URLS"] = "http://envhost:9999"
+            [KnownAspNetCoreConfigNames.Urls] = "http://envhost:9999"
         });
 
         var args = new List<string> { "dashboard", "--ASPNETCORE_URLS=http://arghost:5555" };

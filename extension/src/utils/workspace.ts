@@ -6,6 +6,7 @@ import { extensionLogOutputChannel } from './logging';
 import { resolveCliPath } from './cliPath';
 import { AppHostDiscoveryService, AppHostProjectSearchResult, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult } from './appHostDiscovery';
 import type { AppHostCandidate } from './appHostDiscovery';
+import { sendTelemetryEvent } from './telemetry';
 import { getCommonExcludeGlob } from './workspaceFileSearch';
 
 export { getCommonExcludeGlob } from './workspaceFileSearch';
@@ -255,9 +256,17 @@ async function promptToAddAppHostPathToSettingsFile(result: AppHostProjectSearch
  * If not available, shows a message prompting to open Aspire CLI installation steps.
  * @returns An object containing the CLI path to use and whether CLI is available
  */
-export async function checkCliAvailableOrRedirect(): Promise<{ cliPath: string; available: boolean }> {
+export async function checkCliAvailableOrRedirect(operation: 'command_gate' | 'debug_gate'): Promise<{ cliPath: string; available: boolean }> {
     // Resolve CLI path fresh each time — settings or PATH may have changed
+    const startTime = Date.now();
     const result = await resolveCliPath();
+    sendTelemetryEvent('cli/availability', {
+        available: result.available ? 'true' : 'false',
+        source: result.source,
+        operation,
+    }, {
+        duration_ms: Date.now() - startTime,
+    });
 
     if (result.available) {
         // Show informational message if CLI was found at default path (not on PATH)

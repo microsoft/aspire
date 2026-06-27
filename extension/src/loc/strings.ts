@@ -20,6 +20,11 @@ export const aspireHostingSdkVersion = (version: string) => vscode.l10n.t('Aspir
 export const aspireCliVersion = (version: string) => vscode.l10n.t('Aspire CLI Version: {0}.', version);
 export const requiredCapability = (capability: string) => vscode.l10n.t('Required capability: {0}.', capability);
 export const aspireTerminalName = vscode.l10n.t('Aspire terminal');
+export const installCliPlaceholder = vscode.l10n.t('Select how to install the Aspire CLI');
+export const installCliViewAllOptions = vscode.l10n.t('View all installation options');
+export const installCliViewAllOptionsDescription = vscode.l10n.t('Open the installation guide (includes the install script)');
+export const installCliDailyBuild = vscode.l10n.t('Daily build (dev)');
+export const installCliDailyBuildDescription = vscode.l10n.t('Latest build from main via the install script');
 export const terminalCommandArgumentControlCharacters = vscode.l10n.t('Aspire terminal command arguments cannot contain control characters.');
 export const terminalCommandUnsafeLiteral = vscode.l10n.t('Aspire terminal command syntax can only contain command names and flags.');
 export const aspireOutputChannelName = vscode.l10n.t('Aspire Extension');
@@ -52,6 +57,23 @@ export const aspireConfigExists = vscode.l10n.t('Aspire launch configuration alr
 export const failedToConfigureLaunchJson = (error: any) => vscode.l10n.t('Failed to configure launch.json: {0}.', error);
 export const defaultConfigurationName = vscode.l10n.t('Aspire: Launch default AppHost');
 export const debugSessionAlreadyExists = (id: string) => vscode.l10n.t('A debug session is already active for id {0}.', id);
+export const selectDashboardLaunchBehavior = vscode.l10n.t('Select what should happen with the Aspire Dashboard when this launch configuration starts');
+export const dashboardLaunchNoneLabel = vscode.l10n.t('Do not open the dashboard');
+export const dashboardLaunchNoneDescription = vscode.l10n.t('The dashboard URL is still printed in the terminal and available from the Aspire panel.');
+export const dashboardLaunchNotificationLabel = vscode.l10n.t('Show a notification');
+export const dashboardLaunchNotificationDescription = vscode.l10n.t('Show a notification with a link to open the dashboard.');
+export const dashboardLaunchExternalBrowserLabel = vscode.l10n.t('Open in external browser');
+export const dashboardLaunchExternalBrowserDescription = vscode.l10n.t('Open the dashboard in the system default browser.');
+export const dashboardLaunchIntegratedBrowserLabel = vscode.l10n.t('Open in VS Code');
+export const dashboardLaunchIntegratedBrowserDescription = vscode.l10n.t("Open the dashboard in VS Code's integrated browser.");
+export const dashboardLaunchChromeLabel = vscode.l10n.t('Debug with Chrome');
+export const dashboardLaunchChromeDescription = vscode.l10n.t('Launch Chrome as a child debug session.');
+export const dashboardLaunchEdgeLabel = vscode.l10n.t('Debug with Microsoft Edge');
+export const dashboardLaunchEdgeDescription = vscode.l10n.t('Launch Microsoft Edge as a child debug session.');
+export const dashboardLaunchFirefoxLabel = vscode.l10n.t('Debug with Firefox');
+export const dashboardLaunchFirefoxDescription = vscode.l10n.t('Launch Firefox as a child debug session.');
+export const dashboardLaunchBehaviorChanged = vscode.l10n.t('The Aspire Dashboard does not open automatically. Open it from the Aspire panel anytime, or configure a launch behavior.');
+export const changelogLabel = vscode.l10n.t('Changelog');
 export const processExceptionOccurred = (error: string, command: string) => vscode.l10n.t('Encountered an exception ({0}) while running the following command: {1}.', error, command);
 
 // Aspire panel strings
@@ -167,6 +189,7 @@ export const appHostSourceOpenFailed = (path: string) => vscode.l10n.t('Failed t
 export const logFilePathInvalid = vscode.l10n.t('Could not determine the AppHost log file to open.');
 export const logFileOpenFailed = (path: string, error: string) => vscode.l10n.t('Failed to open AppHost log file {0}: {1}', path, error);
 export const logFileLabel = vscode.l10n.t('AppHost logs');
+export const startDebuggingDeclined = (command: string, appHostPath: string) => vscode.l10n.t('VS Code did not start the Aspire {0} session for {1}.', command, appHostPath);
 
 // CodeLens strings.
 // The "\u200A" between the codicon and the label is U+200A HAIR SPACE; it adds
