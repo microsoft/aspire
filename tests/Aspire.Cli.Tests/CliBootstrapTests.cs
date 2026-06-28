@@ -1,16 +1,19 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using System.Reflection;
 using Aspire.Cli.Acquisition;
-using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+
+#if DEBUG
+using System.Globalization;
+using Aspire.Cli.Commands;
+using Aspire.Cli.Resources;
+#endif
 
 namespace Aspire.Cli.Tests;
 
@@ -206,6 +209,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         Assert.Null(context.NuGetServiceIndexOverride);
     }
 
+#if DEBUG
     [Theory]
     [InlineData("ls --cli-wait-for-debugger")]
     [InlineData("run --cli-wait-for-debugger")]
@@ -249,6 +253,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         Assert.False(waitActionCalled);
         Assert.Empty(testInteractionService.ShownStatuses);
     }
+#endif
 
     private static string WriteBinaryWithSidecar(string binaryDir, string source, string? channel = null)
     {

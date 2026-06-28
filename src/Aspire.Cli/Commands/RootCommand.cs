@@ -128,7 +128,6 @@ internal sealed class RootCommand : BaseRootCommand
         }
     }
 
-    private readonly IInteractionService _interactionService;
     private readonly IAnsiConsole _ansiConsole;
 
     public RootCommand(
@@ -176,7 +175,6 @@ internal sealed class RootCommand : BaseRootCommand
         CliExecutionContext executionContext)
         : base(RootCommandStrings.Description)
     {
-        _interactionService = interactionService;
         _ansiConsole = ansiConsole;
 
         Options.Add(DebugOption);
