@@ -89,9 +89,14 @@ public static class PostgresBuilderExtensions
         // WaitFor dependents (and triggering database creation) straight into the restart's connection
         // reset. PostgresServerHealthCheck only reports Healthy once a connection survives several
         // consecutive probes, proving the restart is over. See PostgresServerHealthCheck for details.
+        //
+        // Register a single instance (not a factory): the health check is stateful — it latches once the
+        // server is durably ready — and the default health check service invokes the registration factory
+        // on every poll, which would otherwise reset the latch and run the full probe window forever.
+        var serverHealthCheck = new PostgresServerHealthCheck(() => connectionString);
         builder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
             healthCheckKey,
-            sp => new PostgresServerHealthCheck(() => connectionString),
+            serverHealthCheck,
             failureStatus: null,
             tags: null));
 
