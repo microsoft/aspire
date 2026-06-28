@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Reflection;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Commands;
@@ -224,8 +225,8 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         Program.WaitForDebuggerIfRequested(parseResult, provider, waitAction: () => waitActionCalled = true);
 
         Assert.True(waitActionCalled);
-        Assert.Single(testInteractionService.ShownStatuses);
-        Assert.Contains(Environment.ProcessId.ToString(), testInteractionService.ShownStatuses[0]);
+        var expectedStatus = string.Format(CultureInfo.CurrentCulture, "Waiting for debugger to attach to CLI process ID: {0}", Environment.ProcessId);
+        Assert.Collection(testInteractionService.ShownStatuses, status => Assert.Equal(expectedStatus, status));
     }
 
     [Fact]
