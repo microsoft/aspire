@@ -271,11 +271,22 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     var resourceType = DcpExecutor.GetResourceType(resource, appModelResource);
                     var status = GetResourceStatus(resource);
                     AddDcpResourceObservedEvent(resource, appModelResource, resourceKind, status);
+
+                    // Publishing the terminal state unblocks WaitForResourceAsync. For fast-failing
+                    // resources, DCP can report Exited/FailedToStart before the follow log stream
+                    // has delivered stderr/stdout. Flush only when a subscriber is active so normal
+                    // dashboard-less runs do not pay for an extra snapshot read.
+                    if (HasLogsAvailable(resource) &&
+                        status.State is not null &&
+                        KnownResourceStates.TerminalStates.Contains(status.State) &&
+                        _loggerService.HasActiveSubscribers(resource.Metadata.Name))
+                    {
+                        await FlushCurrentLogsAsync(resource, _shutdownToken).ConfigureAwait(false);
+                    }
+
                     await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceType, appModelResource, resource.Metadata.Name, status, s => snapshotFactory(resource, s))).ConfigureAwait(false);
 
-                    if (resource is Container { LogsAvailable: true } ||
-                        resource is Executable { LogsAvailable: true } ||
-                        resource is ContainerExec { LogsAvailable: true })
+                    if (HasLogsAvailable(resource))
                     {
                         _logInformationChannel.Writer.TryWrite(new(resource.Metadata.Name, LogsAvailable: true, HasSubscribers: null));
                     }
@@ -309,6 +320,47 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                 }
             }
         }
+    }
+
+    private async Task FlushCurrentLogsAsync<T>(T resource, CancellationToken cancellationToken)
+        where T : CustomResource, IKubernetesStaticMetadata
+    {
+        try
+        {
+            // Fast-failing resources can publish their terminal state before the follow stream has
+            // drained stderr/stdout. Flush a snapshot first so tests waiting on terminal states see
+            // the logs from the same startup attempt without adding sleeps.
+            var logEntries = new List<LogEntry>();
+            var logSource = new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: false);
+            await foreach (var batch in logSource.WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                logEntries.AddRange(CreateLogEntries(batch));
+            }
+
+            // These logs came from DCP's external log store, not in-process ILogger. Do not store
+            // them as in-memory entries; otherwise GetAllAsync would replay them before querying
+            // the same DCP log source again.
+            _loggerService.AddLogEntries(resource.Metadata.Name, logEntries, inMemorySource: false, skipExisting: true);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (HttpOperationException ex) when (ex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _logger.LogDebug("Current log flush for {ResourceName} ended because the resource was deleted.", resource.Metadata.Name);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error flushing current logs for {ResourceName}.", resource.Metadata.Name);
+        }
+    }
+
+    private static bool HasLogsAvailable(CustomResource resource)
+    {
+        return resource is Container { LogsAvailable: true } ||
+               resource is Executable { LogsAvailable: true } ||
+               resource is ContainerExec { LogsAvailable: true };
     }
 
     internal static ResourceStatus GetResourceStatus(CustomResource resource)
@@ -437,15 +489,10 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                         _logger.LogDebug("Starting log streaming for {ResourceName}.", resource.Metadata.Name);
                     }
 
-                    // Pump the logs from the enumerable into the logger
-                    var logger = _loggerService.GetInternalLogger(resource.Metadata.Name);
-
                     await foreach (var batch in enumerable.WithCancellation(cancellation.Token).ConfigureAwait(false))
                     {
-                        foreach (var logEntry in CreateLogEntries(batch))
-                        {
-                            logger(logEntry);
-                        }
+                        var logEntries = CreateLogEntries(batch).ToList();
+                        _loggerService.AddLogEntries(resource.Metadata.Name, logEntries, inMemorySource: false, skipExisting: true);
                     }
                 }
                 catch (OperationCanceledException)

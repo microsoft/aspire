@@ -1460,6 +1460,77 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task ResourceLogging_TerminalStateFlushesSnapshotBeforeNotification()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        const string terminalLogMessage = "crash before terminal notification";
+        var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
+        {
+            if (follow == false && logStreamType == Logs.StreamTypeStdErr)
+            {
+                return new MemoryStream(Encoding.UTF8.GetBytes("2024-08-19T06:10:33.473275911Z " + terminalLogMessage + Environment.NewLine));
+            }
+
+            return new MemoryStream();
+        });
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions { DashboardPath = "./dashboard" };
+        var resourceLoggerService = new ResourceLoggerService();
+        var logLines = new List<LogLine>();
+        var logLinesLock = new object();
+        var terminalLogCountAtNotification = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        string? dcpResourceName = null;
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.DcpResourceName == dcpResourceName && context.Status.State == ContainerState.Exited)
+            {
+                int logCount;
+                lock (logLinesLock)
+                {
+                    logCount = logLines.Count(l => l.Content.Contains(terminalLogMessage));
+                }
+
+                terminalLogCountAtNotification.TrySetResult(logCount);
+            }
+
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions, resourceLoggerService: resourceLoggerService, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        dcpResourceName = container.Metadata.Name;
+
+        using var subscription = resourceLoggerService.Subscribe(dcpResourceName, batch =>
+        {
+            lock (logLinesLock)
+            {
+                logLines.AddRange(batch);
+            }
+        });
+
+        container.Status = new ContainerStatus { State = ContainerState.Exited };
+        kubernetesService.PushResourceModified(container);
+
+        Assert.Equal(1, await terminalLogCountAtNotification.Task.DefaultTimeout());
+
+        lock (logLinesLock)
+        {
+            Assert.Single(logLines, l => l.Content.Contains(terminalLogMessage));
+        }
+    }
+
+    [Fact]
     public async Task ResourceLogging_SystemStream_FormatsWithSysPrefix()
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions

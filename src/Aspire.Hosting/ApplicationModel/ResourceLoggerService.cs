@@ -138,18 +138,6 @@ public class ResourceLoggerService : IDisposable
     }
 
     /// <summary>
-    /// The internal logger is used when adding logs from resource's stream logs.
-    /// It allows the parsed date from text to be used as the log line date.
-    /// </summary>
-    internal Action<LogEntry> GetInternalLogger(string resourceName)
-    {
-        ArgumentNullException.ThrowIfNull(resourceName);
-
-        var state = GetResourceLoggerState(resourceName);
-        return (logEntry) => state.AddLog(logEntry, inMemorySource: false);
-    }
-
-    /// <summary>
     /// Get all logs for a resource. This will return all logs that have been written to the log stream for the resource and then complete.
     /// </summary>
     /// <param name="resource">The resource to get all logs for.</param>
@@ -211,6 +199,21 @@ public class ResourceLoggerService : IDisposable
         ArgumentNullException.ThrowIfNull(resourceName);
 
         return GetResourceLoggerState(resourceName).WatchAsync();
+    }
+
+    internal IDisposable Subscribe(string resourceName, Action<IReadOnlyList<LogLine>> onLogs)
+    {
+        ArgumentNullException.ThrowIfNull(resourceName);
+        ArgumentNullException.ThrowIfNull(onLogs);
+
+        return GetResourceLoggerState(resourceName).Subscribe(onLogs);
+    }
+
+    internal Task WaitForCompletionAsync(string resourceName, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(resourceName);
+
+        return GetResourceLoggerState(resourceName).WaitForCompletionAsync(cancellationToken);
     }
 
     /// <summary>
@@ -349,6 +352,20 @@ public class ResourceLoggerService : IDisposable
             return state;
         },
         this);
+
+    internal bool HasActiveSubscribers(string resourceName)
+    {
+        return _loggers.TryGetValue(resourceName, out var logger) && logger.HasActiveSubscribers;
+    }
+
+    internal void AddLogEntries(string resourceName, IReadOnlyList<LogEntry> logEntries, bool inMemorySource, bool skipExisting)
+    {
+        ArgumentNullException.ThrowIfNull(resourceName);
+        ArgumentNullException.ThrowIfNull(logEntries);
+
+        GetResourceLoggerState(resourceName).AddLogs(logEntries, inMemorySource, skipExisting);
+    }
+
     internal Dictionary<string, ResourceLoggerState> Loggers => _loggers.ToDictionary();
 
     /// <summary>
@@ -360,6 +377,7 @@ public class ResourceLoggerService : IDisposable
 
         private readonly ResourceLogger _logger;
         private readonly CancellationTokenSource _logStreamCts = new();
+        private readonly TaskCompletionSource _logStreamCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly object _lock = new();
 
         private readonly CircularBuffer<LogEntry> _inMemoryEntries = new(MaxLogCount);
@@ -378,6 +396,12 @@ public class ResourceLoggerService : IDisposable
         }
 
         private Action<bool>? _onSubscribersChanged;
+
+        // Internal test hook for pausing synchronous Subscribe after it has attached its callback
+        // but before it delivers the backlog. This makes the backlog/live transition deterministic
+        // without sleeps.
+        internal Action? SynchronousSubscribeRegistered { get; set; }
+
         public event Action<bool> OnSubscribersChanged
         {
             add
@@ -481,12 +505,137 @@ public class ResourceLoggerService : IDisposable
             }
         }
 
+        public IDisposable Subscribe(Action<IReadOnlyList<LogLine>> onLogs)
+        {
+            // This is not a replacement for WatchAsync. WatchAsync intentionally decouples
+            // producers and consumers through a channel, which is the right shape for dashboard
+            // and backchannel consumers. This path is for ResourceLoggerForwarderService, which
+            // forwards resource logs into host ILogger when resource logging is enabled. That
+            // forwarder needs stronger ordering: after DCP flushes logs for a terminal state,
+            // those logs must reach ILogger before ResourceNotificationService publishes the
+            // terminal state that unblocks WaitForResourceAsync. Subscribe provides that
+            // producer-thread delivery once the backlog has been drained.
+
+            // Line number always restarts from 1 when watching logs.
+            var lineNumber = 1;
+            var subscriberLock = new object();
+            var backlogDelivered = false;
+
+            // Logs can arrive after we attach OnNewLog but before the backlog has been delivered.
+            // Queue those entries so the subscriber sees backlog first without dropping live logs
+            // from that small transition window.
+            var pendingLiveEntries = new List<LogEntry>();
+
+            void Log(LogEntry log)
+            {
+                if (_logStreamCts.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                IReadOnlyList<LogLine>? logLines = null;
+
+                lock (subscriberLock)
+                {
+                    if (!backlogDelivered)
+                    {
+                        pendingLiveEntries.Add(log);
+                        return;
+                    }
+
+                    logLines = CreateLogLines(ref lineNumber, [log]);
+                }
+
+                onLogs(logLines);
+            }
+
+            LogEntry[] backlogSnapshot;
+            lock (_lock)
+            {
+                // If there are no subscribers then the backlog must be empty. Populate it with any in-memory logs.
+                if (!HasSubscribers)
+                {
+                    Debug.Assert(_backlog.EntriesCount == 0, "The backlog should be empty if there are no subscribers.");
+
+                    // Populate backlog with in-memory log messages on first subscription.
+                    foreach (var logEntry in _inMemoryEntries)
+                    {
+                        _backlog.InsertSorted(logEntry);
+                    }
+                }
+
+                backlogSnapshot = GetBacklogSnapshot();
+                OnNewLog += Log;
+            }
+
+            var subscription = new Subscription(this, Log);
+
+            try
+            {
+                SynchronousSubscribeRegistered?.Invoke();
+
+                var batches = new List<IReadOnlyList<LogLine>>();
+                if (backlogSnapshot.Length > 0)
+                {
+                    batches.Add(CreateLogLines(ref lineNumber, backlogSnapshot));
+                }
+
+                // Drain the backlog and any live entries that arrived during backlog delivery before
+                // returning the subscription. After this point, future AddLogs calls invoke onLogs
+                // synchronously from the producer's thread.
+                while (true)
+                {
+                    foreach (var batch in batches)
+                    {
+                        onLogs(batch);
+                    }
+
+                    lock (subscriberLock)
+                    {
+                        if (pendingLiveEntries.Count == 0)
+                        {
+                            backlogDelivered = true;
+                            break;
+                        }
+
+                        batches = [CreateLogLines(ref lineNumber, pendingLiveEntries)];
+                        pendingLiveEntries.Clear();
+                    }
+                }
+            }
+            catch
+            {
+                subscription.Dispose();
+                throw;
+            }
+
+            return subscription;
+        }
+
+        public Task WaitForCompletionAsync(CancellationToken cancellationToken)
+        {
+            return _logStreamCompletion.Task.WaitAsync(cancellationToken);
+        }
+
         private bool HasSubscribers
         {
             get
             {
                 Debug.Assert(Monitor.IsEntered(_lock));
                 return _onNewLog != null;
+            }
+        }
+
+        internal bool HasActiveSubscribers
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    // Completed streams should not trigger a terminal-state snapshot flush. The
+                    // subscriber might still be disposing, but no more logs should be delivered.
+                    return !_logStreamCts.IsCancellationRequested && HasSubscribers;
+                }
             }
         }
 
@@ -542,6 +691,7 @@ public class ResourceLoggerService : IDisposable
         {
             // REVIEW: Do we clean up the backlog?
             _logStreamCts.Cancel();
+            _logStreamCompletion.TrySetResult();
         }
 
         public void ClearBacklog()
@@ -572,8 +722,8 @@ public class ResourceLoggerService : IDisposable
                     _backlog.InsertSorted(logEntry);
                 }
 
-                // Keep in-memory logs (i.e. logs not loaded from DCP) in their own collection.
-                // These logs are replayed into the backlog when a log watch starts.
+                // Keep replayable logs in their own collection. These logs are replayed into
+                // the backlog when a log watch starts without fetching them from an external source.
                 if (inMemorySource)
                 {
                     _inMemoryEntries.Add(logEntry);
@@ -581,6 +731,96 @@ public class ResourceLoggerService : IDisposable
             }
 
             _onNewLog?.Invoke(logEntry);
+        }
+
+        public void AddLogs(IReadOnlyList<LogEntry> logEntries, bool inMemorySource, bool skipExisting)
+        {
+            if (logEntries.Count == 0)
+            {
+                return;
+            }
+
+            List<LogEntry>? addedEntries = null;
+            lock (_lock)
+            {
+                Dictionary<(DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type), int>? existingLogCounts = null;
+                if (skipExisting)
+                {
+                    // Terminal-state snapshots and the normal follow stream can overlap. Use
+                    // occurrence counts instead of a set so repeated identical log lines are
+                    // preserved while only overlapping copies from the later source are skipped.
+                    var existingEntries = HasSubscribers ? _backlog.GetEntries() : _inMemoryEntries;
+                    existingLogCounts = [];
+
+                    foreach (var existingEntry in existingEntries)
+                    {
+                        IncrementCount(existingLogCounts, GetLogEntryKey(existingEntry));
+                    }
+                }
+
+                foreach (var logEntry in logEntries)
+                {
+                    if (existingLogCounts is not null)
+                    {
+                        var key = GetLogEntryKey(logEntry);
+                        if (existingLogCounts.TryGetValue(key, out var count) && count > 0)
+                        {
+                            existingLogCounts[key] = count - 1;
+                            continue;
+                        }
+                    }
+
+                    addedEntries ??= [];
+
+                    // Only add logs into the backlog if there are subscribers. If there aren't subscribers then
+                    // logs are replayed into this collection from various sources (DCP, in-memory).
+                    if (HasSubscribers)
+                    {
+                        _backlog.InsertSorted(logEntry);
+                    }
+
+                    // Keep replayable logs in their own collection. These logs are replayed into
+                    // the backlog when a log watch starts without fetching them from an external source.
+                    if (inMemorySource)
+                    {
+                        _inMemoryEntries.Add(logEntry);
+                    }
+
+                    addedEntries.Add(logEntry);
+                }
+            }
+
+            if (addedEntries is null)
+            {
+                return;
+            }
+
+            foreach (var logEntry in addedEntries)
+            {
+                _onNewLog?.Invoke(logEntry);
+            }
+
+            static (DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type) GetLogEntryKey(LogEntry logEntry)
+            {
+                return (logEntry.Timestamp, logEntry.Content, logEntry.RawContent, logEntry.Type);
+            }
+
+            static void IncrementCount(Dictionary<(DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type), int> counts, (DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type) key)
+            {
+                counts.TryGetValue(key, out var count);
+                counts[key] = count + 1;
+            }
+        }
+
+        private sealed class Subscription(ResourceLoggerState loggerState, Action<LogEntry> log) : IDisposable
+        {
+            public void Dispose()
+            {
+                lock (loggerState._lock)
+                {
+                    loggerState.OnNewLog -= log;
+                }
+            }
         }
 
         private sealed class ResourceLogger(ResourceLoggerState loggerState) : ILogger
