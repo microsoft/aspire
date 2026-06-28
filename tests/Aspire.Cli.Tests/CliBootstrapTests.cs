@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -201,6 +202,47 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 
         Assert.False(context.IdentityOverridden);
         Assert.Null(context.NuGetServiceIndexOverride);
+    }
+
+    [Theory]
+    [InlineData("ls --cli-wait-for-debugger")]
+    [InlineData("run --cli-wait-for-debugger")]
+    [InlineData("doctor --cli-wait-for-debugger")]
+    public void WaitForDebuggerIfRequested_WithSubcommand_CallsShowStatus(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var parseResult = command.Parse(commandLine);
+
+        // Pass a no-op action so the test doesn't block waiting for a debugger.
+        Program.WaitForDebuggerIfRequested(parseResult, provider, waitAction: () => { });
+
+        Assert.Single(testInteractionService.ShownStatuses);
+        Assert.Contains(Environment.ProcessId.ToString(), testInteractionService.ShownStatuses[0]);
+    }
+
+    [Fact]
+    public void WaitForDebuggerIfRequested_WithoutFlag_DoesNotCallShowStatus()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var parseResult = command.Parse("ls");
+
+        Program.WaitForDebuggerIfRequested(parseResult, provider, waitAction: () => { });
+
+        Assert.Empty(testInteractionService.ShownStatuses);
     }
 
     private static string WriteBinaryWithSidecar(string binaryDir, string source, string? channel = null)
