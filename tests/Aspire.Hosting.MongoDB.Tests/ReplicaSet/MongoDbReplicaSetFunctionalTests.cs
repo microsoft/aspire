@@ -121,36 +121,36 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
 
         await app.ResourceNotifications.WaitForResourceHealthyAsync(mongo1.Resource.Name, cts.Token);
         var connectionString = await mongo2.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
-        // while (true)
-        // {
-        //     try
-        //     {
-        //         var client = new MongoClient(connectionString);
-        //         using var cursor = await client.ListDatabaseNamesAsync(cts.Token);
-        //         await cursor.FirstOrDefaultAsync(cts.Token);
-        //         break;
-        //     }
-        //     catch (Exception ex)
-        //     {
-        //         Console.WriteLine(ex);
-        //     }
-        // }
+        var client = new MongoClient(connectionString);
+        while (true)
+        {
+            try
+            {
+                using var cursor = await client.ListDatabaseNamesAsync(cts.Token);
+                await cursor.FirstOrDefaultAsync(cts.Token);
+                break;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+            }
+        }
         await app.ResourceNotifications.WaitForResourceHealthyAsync(mongo2.Resource.Name, cts.Token);
         var connectionString3 = await mongo3.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
-        // while (true)
-        // {
-        //     try
-        //     {
-        //         var client = new MongoClient(connectionString3);
-        //         using var cursor = await client.ListDatabaseNamesAsync(cts.Token);
-        //         await cursor.FirstOrDefaultAsync(cts.Token);
-        //         break;
-        //     }
-        //     catch (Exception ex)
-        //     {
-        //         Console.WriteLine(ex);
-        //     }
-        // }
+        var client2 = new MongoClient(connectionString3);
+        while (true)
+        {
+            try
+            {
+                using var cursor = await client2.ListDatabaseNamesAsync(cts.Token);
+                await cursor.FirstOrDefaultAsync(cts.Token);
+                break;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+            }
+        }
         await app.ResourceNotifications.WaitForResourceHealthyAsync(mongo3.Resource.Name, cts.Token);
 
         await app.StopAsync();

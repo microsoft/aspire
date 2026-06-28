@@ -4,6 +4,8 @@ using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.MongoDB;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using MongoDB.Bson;
 using MongoDB.Driver;
 
 #pragma warning disable ASPIRECERTIFICATES001
@@ -70,7 +72,7 @@ public static class MongoDBBuilderExtensions
         // cache the client so it is reused on subsequent calls to the health check
         // IMongoClient? client = null;
         builder.Services.AddHealthChecks()
-            .AddMongoDb(
+            .AddMyMongoDb(
                 name: healthCheckKey,
                 clientFactory: sp => new MongoClient(connectionString ?? throw new InvalidOperationException("Connection string is unavailable"))
             );
@@ -468,3 +470,110 @@ internal sealed record MongoDBServerKeyFileAnnotation(
 internal sealed record MongoDBServerTlsAnnotation(
     MongoDBTlsMode Mode
 ) : IResourceAnnotation;
+
+internal static class MyMongoDbHealthCheckBuilderExtensions
+{
+    private const string NAME = "mongodb";
+
+    public static IHealthChecksBuilder AddMyMongoDb(
+        this IHealthChecksBuilder builder,
+        Func<IServiceProvider, IMongoClient>? clientFactory = default,
+        Func<IServiceProvider, string>? databaseNameFactory = default,
+        string? name = default,
+        HealthStatus? failureStatus = default,
+        IEnumerable<string>? tags = default,
+        TimeSpan? timeout = default)
+    {
+        return builder.Add(new HealthCheckRegistration(
+            name ?? NAME,
+            sp => Factory(sp, clientFactory, databaseNameFactory),
+            failureStatus,
+            tags,
+            timeout));
+
+        static MyMongoDbHealthCheck Factory(IServiceProvider sp, Func<IServiceProvider, IMongoClient>? clientFactory, Func<IServiceProvider, string>? databaseNameFactory)
+        {
+            // The user might have registered a factory for MongoClient type, but not for the abstraction (IMongoClient).
+            // That is why we try to resolve MongoClient first.
+            IMongoClient client = clientFactory?.Invoke(sp) ?? sp.GetService<MongoClient>() ?? sp.GetRequiredService<IMongoClient>();
+            string? databaseName = databaseNameFactory?.Invoke(sp);
+            return new(client, databaseName);
+        }
+    }
+}
+internal class MyMongoDbHealthCheck : IHealthCheck
+{
+    // When running the tests locally during development, don't re-attempt
+    // as it prolongs the time it takes to run the tests.
+    private const int MAX_PING_ATTEMPTS
+#if DEBUG
+        = 1;
+#else
+        = 2;
+#endif
+
+    private static readonly Lazy<BsonDocumentCommand<BsonDocument>> s_command = new(() => new(BsonDocument.Parse("{ping:1}")));
+    private readonly IMongoClient _client;
+    private readonly string? _specifiedDatabase;
+
+    public MyMongoDbHealthCheck(IMongoClient client, string? databaseName = default)
+    {
+        _client = client;
+        _specifiedDatabase = databaseName;
+    }
+
+    /// <inheritdoc />
+    public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(_specifiedDatabase))
+            {
+                // some users can't list all databases depending on database privileges, with
+                // this you can check a specified database.
+                // Related with issue #43 and #617
+
+                // For most operations where it is possible, the MongoDB driver itself will retry exactly once
+                // to cover switches in the primary and temporary short term network outages.
+                // Due to the RunCommand being a lower level function, according to the spec (https://github.com/mongodb/specifications/blob/master/source/run-command/run-command.rst#retryability)
+                // for it, it is not retryable and this extends to the ping.
+                for (int attempt = 1; attempt <= MAX_PING_ATTEMPTS; attempt++)
+
+                {
+                    try
+                    {
+                        await _client
+                            .GetDatabase(_specifiedDatabase)
+                            .RunCommandAsync(s_command.Value, cancellationToken: cancellationToken)
+                            .ConfigureAwait(false);
+                        break;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception)
+                    {
+                        if (MAX_PING_ATTEMPTS == attempt)
+                        {
+                            throw;
+                        }
+
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+                }
+            }
+            else
+            {
+                using var cursor = await _client.ListDatabaseNamesAsync(cancellationToken).ConfigureAwait(false);
+                await cursor.FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return HealthCheckResult.Healthy();
+        }
+        catch (Exception ex)
+        {
+            return new HealthCheckResult(context.Registration.FailureStatus, exception: ex);
+        }
+    }
+}
