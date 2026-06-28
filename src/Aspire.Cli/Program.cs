@@ -1046,6 +1046,30 @@ public class Program
                 logger.LogDebug("Parsing arguments: {Args}", string.Join(" ", args));
                 var parseResult = rootCommand.Parse(args);
 
+#if DEBUG
+                // Handle --cli-wait-for-debugger here rather than as an option or command
+                // validator. Adding a validator to the static CliWaitForDebuggerOption causes
+                // a thread-safety race (concurrent List<T>.Add from parallel test classes
+                // that each construct a Transient RootCommand), and command-level validators
+                // only run for the innermost command — not for RootCommand when a subcommand
+                // is invoked (e.g. "aspire run --cli-wait-for-debugger").
+                if (parseResult.GetValue(RootCommand.CliWaitForDebuggerOption))
+                {
+                    var interactionService = app.Services.GetRequiredService<IInteractionService>();
+                    interactionService.ShowStatus(
+                        string.Format(CultureInfo.CurrentCulture, RootCommandStrings.WaitingForDebugger, Environment.ProcessId),
+                        () =>
+                        {
+                            while (!Debugger.IsAttached)
+                            {
+                                Thread.Sleep(1000);
+                            }
+
+                            Debugger.Break();
+                        }, emoji: KnownEmojis.Bug);
+                }
+#endif
+
                 var commandName = GetCommandName(parseResult);
                 logger.LogDebug("Executing command: {CommandName}", commandName);
 

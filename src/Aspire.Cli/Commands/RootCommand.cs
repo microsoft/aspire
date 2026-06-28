@@ -6,11 +6,6 @@ using System.CommandLine.Help;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
-#if DEBUG
-using System.Globalization;
-using System.Diagnostics;
-#endif
-
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Configuration;
@@ -183,33 +178,6 @@ internal sealed class RootCommand : BaseRootCommand
     {
         _interactionService = interactionService;
         _ansiConsole = ansiConsole;
-
-#if DEBUG
-        // Add the validator to the command (this.Validators), not to the static CliWaitForDebuggerOption.
-        // Option validators on a static option are shared across all command trees. Since RootCommand is
-        // registered as Transient, concurrent test classes each construct their own instance, causing
-        // concurrent List<T>.Add on the shared validators list — a thread-safety violation that corrupts
-        // the list and surfaces as a NullReferenceException during Parse().
-        Validators.Add((result) =>
-        {
-            var waitForDebugger = result.GetValue(CliWaitForDebuggerOption);
-
-            if (waitForDebugger)
-            {
-                _interactionService.ShowStatus(
-                    string.Format(CultureInfo.CurrentCulture, RootCommandStrings.WaitingForDebugger, Environment.ProcessId),
-                    () =>
-                    {
-                        while (!Debugger.IsAttached)
-                        {
-                            Thread.Sleep(1000);
-                        }
-
-                        Debugger.Break();
-                    }, emoji: KnownEmojis.Bug);
-            }
-        });
-#endif
 
         Options.Add(DebugOption);
         Options.Add(DebugLevelOption);
