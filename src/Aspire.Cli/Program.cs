@@ -1158,6 +1158,7 @@ public class Program
         return string.Join(' ', parentNames);
     }
 
+#if DEBUG
     /// <summary>
     /// Waits for a debugger to attach if --cli-wait-for-debugger was passed.
     /// </summary>
@@ -1191,6 +1192,7 @@ public class Program
 
         Debugger.Break();
     }
+#endif
 
     private static void AddInteractionServices(HostApplicationBuilder builder)
     {
