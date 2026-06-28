@@ -220,9 +220,10 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var parseResult = command.Parse(commandLine);
 
-        // Pass a no-op action so the test doesn't block waiting for a debugger.
-        Program.WaitForDebuggerIfRequested(parseResult, provider, waitAction: () => { });
+        var waitActionCalled = false;
+        Program.WaitForDebuggerIfRequested(parseResult, provider, waitAction: () => waitActionCalled = true);
 
+        Assert.True(waitActionCalled);
         Assert.Single(testInteractionService.ShownStatuses);
         Assert.Contains(Environment.ProcessId.ToString(), testInteractionService.ShownStatuses[0]);
     }
@@ -240,8 +241,10 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var parseResult = command.Parse("ls");
 
-        Program.WaitForDebuggerIfRequested(parseResult, provider, waitAction: () => { });
+        var waitActionCalled = false;
+        Program.WaitForDebuggerIfRequested(parseResult, provider, waitAction: () => waitActionCalled = true);
 
+        Assert.False(waitActionCalled);
         Assert.Empty(testInteractionService.ShownStatuses);
     }
 

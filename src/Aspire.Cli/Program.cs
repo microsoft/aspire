@@ -1047,7 +1047,7 @@ public class Program
                 var parseResult = rootCommand.Parse(args);
 
 #if DEBUG
-                WaitForDebuggerIfRequested(parseResult, app.Services);
+                WaitForDebuggerIfRequested(parseResult, app.Services, WaitForDebugger);
 #endif
 
                 var commandName = GetCommandName(parseResult);
@@ -1169,27 +1169,27 @@ public class Program
     /// (2) command-level validators only run for the innermost command — not for RootCommand
     ///     when a subcommand is invoked (e.g. "aspire run --cli-wait-for-debugger").
     /// </remarks>
-    internal static void WaitForDebuggerIfRequested(ParseResult parseResult, IServiceProvider services, Action? waitAction = null)
+    internal static void WaitForDebuggerIfRequested(ParseResult parseResult, IServiceProvider services, Action waitAction)
     {
         if (!parseResult.GetValue(RootCommand.CliWaitForDebuggerOption))
         {
             return;
         }
 
-        waitAction ??= static () =>
-        {
-            while (!Debugger.IsAttached)
-            {
-                Thread.Sleep(1000);
-            }
-
-            Debugger.Break();
-        };
-
         var interactionService = services.GetRequiredService<IInteractionService>();
         interactionService.ShowStatus(
             string.Format(CultureInfo.CurrentCulture, RootCommandStrings.WaitingForDebugger, Environment.ProcessId),
             waitAction, emoji: KnownEmojis.Bug);
+    }
+
+    private static void WaitForDebugger()
+    {
+        while (!Debugger.IsAttached)
+        {
+            Thread.Sleep(1000);
+        }
+
+        Debugger.Break();
     }
 
     private static void AddInteractionServices(HostApplicationBuilder builder)
