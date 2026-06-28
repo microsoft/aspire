@@ -3719,6 +3719,7 @@ public class AzureEnvironmentResourceExtensionsTests
         const string subscriptionId = "12345678-1234-1234-1234-123456789012";
         const string resourceGroup = "test-rg";
         const string keyVaultResourceId = $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.KeyVault/vaults/kv-test";
+        var deletedResourceIds = new List<string>();
         var purgedDeletedKeyVaults = new List<(string ResourceId, string Location)>();
         var testBicepProvisioner = new KeyVaultSoftDeleteConflictThenSuccessProvisioner(keyVaultResourceId);
 
@@ -3730,7 +3731,7 @@ public class AzureEnvironmentResourceExtensionsTests
         builder.Services.RemoveAll<IArmClientProvider>();
         builder.Services.AddSingleton<IArmClientProvider>(ProvisioningTestHelpers.CreateArmClientProvider(
             existingResourceIds: [],
-            deletedResourceIds: null,
+            deletedResourceIds: deletedResourceIds,
             deploymentTargetResourceIds: null,
             canceledDeploymentIds: null,
             purgedDeletedKeyVaults: purgedDeletedKeyVaults));
@@ -3779,6 +3780,7 @@ public class AzureEnvironmentResourceExtensionsTests
 
         Assert.True(result.Success);
         Assert.Equal(2, testBicepProvisioner.GetOrCreateResourceCallCount);
+        Assert.Empty(deletedResourceIds);
         var purgedDeletedKeyVault = Assert.Single(purgedDeletedKeyVaults);
         Assert.Equal(keyVaultResourceId, purgedDeletedKeyVault.ResourceId);
         Assert.Equal("ukwest", purgedDeletedKeyVault.Location);
@@ -3796,6 +3798,7 @@ public class AzureEnvironmentResourceExtensionsTests
         const string subscriptionId = "12345678-1234-1234-1234-123456789012";
         const string resourceGroup = "test-rg";
         const string keyVaultResourceId = $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.KeyVault/vaults/kv-test";
+        var deletedResourceIds = new List<string>();
         var purgedDeletedKeyVaults = new List<(string ResourceId, string Location)>();
         var testBicepProvisioner = new KeyVaultSoftDeleteConflictThenSuccessProvisioner(keyVaultResourceId);
 
@@ -3807,7 +3810,7 @@ public class AzureEnvironmentResourceExtensionsTests
         builder.Services.RemoveAll<IArmClientProvider>();
         builder.Services.AddSingleton<IArmClientProvider>(ProvisioningTestHelpers.CreateArmClientProvider(
             existingResourceIds: [],
-            deletedResourceIds: null,
+            deletedResourceIds: deletedResourceIds,
             deploymentTargetResourceIds: null,
             canceledDeploymentIds: null,
             purgedDeletedKeyVaults: purgedDeletedKeyVaults,
@@ -3858,6 +3861,7 @@ public class AzureEnvironmentResourceExtensionsTests
         Assert.False(result.Success);
         Assert.False(result.Canceled);
         Assert.Equal(1, testBicepProvisioner.GetOrCreateResourceCallCount);
+        Assert.Empty(deletedResourceIds);
         Assert.Collection(
             purgedDeletedKeyVaults,
             purgedDeletedKeyVault =>

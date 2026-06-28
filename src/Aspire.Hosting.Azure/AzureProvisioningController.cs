@@ -1913,15 +1913,16 @@ internal sealed class AzureProvisioningController(
             var armClient = await GetArmClientForResourceIdAsync(keyVaultResourceId, cancellationToken).ConfigureAwait(false);
             // Key Vault names are reserved by a location-scoped soft-delete tombstone after the live
             // vault is gone. Reprovision has to purge that tombstone before ARM can create a new vault
-            // with the same generated name; if Azure reports the conflict but the tombstone cannot be
-            // found, retrying would just hide the actionable diagnostic.
-            var purged = await DeleteAzureResourceIdAndPurgeDeletedKeyVaultAsync(
+            // with the same generated name. ARM only reports this conflict once the live vault is already
+            // absent, so issue the purge directly rather than starting another delete that can wait on
+            // the same tombstone and delay the retry.
+            var purged = await PurgeDeletedKeyVaultAsync(
                 armClient,
                 keyVaultResourceId,
                 intent.ResourceName,
                 effectiveLocation,
                 currentContext.Location,
-                allowKeyVaultPurgeTimeout: false,
+                allowTimeout: false,
                 cancellationToken).ConfigureAwait(false);
             if (!purged)
             {
