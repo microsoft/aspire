@@ -1,0 +1,9 @@
+{
+  "author": "martincostello",
+  "comment": "Vendored dependency version bump for OpenTelemetry.Instrumentation.StackExchangeRedis to 1.16.0-beta.1. Routine dependency update with no direct user-visible behavior change.",
+  "mergedAt": "2026-06-28T00:07:26Z",
+  "number": 18532,
+  "runDate": "2026-06-28T00:24:35Z",
+  "status": "excluded",
+  "title": "Update OpenTelemetry.Instrumentation.StackExchangeRedis"
+}
