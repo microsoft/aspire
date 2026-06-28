@@ -185,6 +185,11 @@ internal sealed class RootCommand : BaseRootCommand
         _ansiConsole = ansiConsole;
 
 #if DEBUG
+        // Add the validator to the command (this.Validators), not to the static CliWaitForDebuggerOption.
+        // Option validators on a static option are shared across all command trees. Since RootCommand is
+        // registered as Transient, concurrent test classes each construct their own instance, causing
+        // concurrent List<T>.Add on the shared validators list — a thread-safety violation that corrupts
+        // the list and surfaces as a NullReferenceException during Parse().
         Validators.Add((result) =>
         {
             var waitForDebugger = result.GetValue(CliWaitForDebuggerOption);
