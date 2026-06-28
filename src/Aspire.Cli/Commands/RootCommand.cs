@@ -185,10 +185,9 @@ internal sealed class RootCommand : BaseRootCommand
         _ansiConsole = ansiConsole;
 
 #if DEBUG
-        CliWaitForDebuggerOption.Validators.Add((result) =>
+        Validators.Add((result) =>
         {
-
-            var waitForDebugger = result.GetValueOrDefault<bool>();
+            var waitForDebugger = result.GetValue(CliWaitForDebuggerOption);
 
             if (waitForDebugger)
             {
