@@ -64,50 +64,35 @@ public static class MongoDBBuilderExtensions
 
         var passwordParameter = password?.Resource ?? ParameterResourceBuilderExtensions.CreateDefaultPasswordParameter(builder, $"{name}-password", special: false);
 
-        var mongoDBContainer = new MongoDBServerResource(name, userName?.Resource, passwordParameter);
+        var mongoServerResource = new MongoDBServerResource(name, userName?.Resource, passwordParameter);
 
         string? connectionString = null;
 
         var healthCheckKey = $"{name}_check";
-        // cache the client so it is reused on subsequent calls to the health check
-        // IMongoClient? client = null;
+        // NOTE: `clientFactory` is invoked every time the healthcheck is performed. We cache the client so it is reused.
+        var client = null as IMongoClient;
         builder.Services.AddHealthChecks()
             .AddMyMongoDb(
                 name: healthCheckKey,
-                clientFactory: sp => new MongoClient(connectionString ?? throw new InvalidOperationException("Connection string is unavailable"))
+                clientFactory: sp => client ??= new MongoClient(connectionString ?? throw new InvalidOperationException("Connection string is unavailable")),
+                // NOTE: Without a database as the target of the healthcheck, the healthcheck runs a `listDatabases` command against the Mongo server. This is problematic in cases where the Mongo server is a replica set secondary node, because during the phase in which the replica set is being initialized, the secondary node will return an error when `listDatabases` is called. To avoid this, we specify a database to use for the healthcheck. The healthcheck will then run a `ping` command against the specified database instead of `listDatabases`, which works even on a secondary node during replica set initialization.
+                databaseNameFactory: _ => mongoServerResource.Databases.Values.FirstOrDefault(defaultValue: MongoDBServerResource.DefaultAuthenticationDatabase)
             );
 
         return builder
-            .AddResource(mongoDBContainer)
+            .AddResource(mongoServerResource)
             .WithEndpoint(port: port, targetPort: DefaultContainerPort, name: MongoDBServerResource.PrimaryEndpointName, isProxied: false)
             .WithImage(MongoDBContainerImageTags.Image, MongoDBContainerImageTags.Tag)
             .WithImageRegistry(MongoDBContainerImageTags.Registry)
             .WithEnvironment(context =>
             {
-                context.EnvironmentVariables[UserEnvVarName] = mongoDBContainer.UserNameReference;
-                context.EnvironmentVariables[PasswordEnvVarName] = mongoDBContainer.PasswordParameter!;
+                context.EnvironmentVariables[UserEnvVarName] = mongoServerResource.UserNameReference;
+                context.EnvironmentVariables[PasswordEnvVarName] = mongoServerResource.PasswordParameter!;
             })
             .OnConnectionStringAvailable(async (resource, @event, ct) =>
             {
-                connectionString = await mongoDBContainer.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
-                    ?? throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{mongoDBContainer.Name}' resource but the connection string was null.");
-                if (resource.Name != "mongo2")
-                {
-                    return;
-                }
-                // await Task.Delay(2_000, ct).ConfigureAwait(false);
-                // while (true)
-                // {
-                //     try
-                //     {
-                //         var client = new MongoClient(connectionString);
-                //         var foo = await client.ListDatabaseNamesAsync(ct).ConfigureAwait(false);
-                //     }
-                //     catch (Exception ex)
-                //     {
-                //         Console.WriteLine(ex);
-                //     }
-                // }
+                connectionString = await resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
+                    ?? throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{resource.Name}' resource but the connection string was null.");
             })
             .WithHealthCheck(healthCheckKey);
     }
