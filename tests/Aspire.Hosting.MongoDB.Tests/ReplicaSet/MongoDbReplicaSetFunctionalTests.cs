@@ -126,6 +126,127 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
         await app.StopAsync();
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task VerifyMongoDBMultiNodeReplicaWithDataShouldWorkAcrossUsages(bool changeTopology)
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+
+        var volumeName1 = null as string;
+        var volumeName2 = null as string;
+        var volumeName3 = null as string;
+        var volumeName4 = null as string;
+        try
+        {
+            var password = null as string;
+            using (var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper))
+            {
+                var mongo1 = builder.AddMongoDB("mongo1");
+                volumeName1 = VolumeNameGenerator.Generate(mongo1, nameof(VerifyMongoDBMultiNodeReplicaWithDataShouldWorkAcrossUsages));
+                mongo1 = mongo1.WithDataVolume(volumeName1);
+
+                var mongo2 = builder.AddMongoDB("mongo2");
+                volumeName2 = VolumeNameGenerator.Generate(mongo2, nameof(VerifyMongoDBMultiNodeReplicaWithDataShouldWorkAcrossUsages));
+                mongo2 = mongo2.WithDataVolume(volumeName2);
+
+                var mongo3 = builder.AddMongoDB("mongo3");
+                volumeName3 = VolumeNameGenerator.Generate(mongo3, nameof(VerifyMongoDBMultiNodeReplicaWithDataShouldWorkAcrossUsages));
+                mongo3 = mongo3.WithDataVolume(volumeName3);
+
+                // NOTE: If the volumes already exist (because of a crashing previous run), delete them.
+                DockerUtils.AttemptDeleteDockerVolume(volumeName1);
+                DockerUtils.AttemptDeleteDockerVolume(volumeName2);
+                DockerUtils.AttemptDeleteDockerVolume(volumeName3);
+
+                var rs = builder.AddMongoDBReplicaSet("rs0")
+                    .WithMember(mongo1)
+                    .WithMember(mongo2)
+                    .WithMember(mongo3);
+
+                password = await rs.Resource.SharedPasswordParameter.GetValueAsync(cts.Token);
+                using var app = builder.Build();
+                await app.StartAsync(cts.Token);
+
+                await app.ResourceNotifications.WaitForResourceHealthyAsync(rs.Resource.Name, cts.Token);
+
+                var connectionString = await rs.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
+                var client = new MongoClient(connectionString);
+                var db = client.GetDatabase(DbName);
+                await CreateTestDataWithReplicaSetFeaturesAsync(db, cts.Token);
+
+                await app.StopAsync();
+            }
+
+            using (var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper))
+            {
+                var passwordParameter = builder.AddParameter("mongoPassword", value: password!);
+                var mongo1 = builder.AddMongoDB("mongo1");
+                mongo1 = mongo1.WithDataVolume(volumeName1);
+
+                var mongo2 = builder.AddMongoDB("mongo2");
+                mongo2 = mongo2.WithDataVolume(volumeName2);
+
+                var mongo3 = builder.AddMongoDB("mongo3");
+                mongo3 = mongo3.WithDataVolume(volumeName3);
+
+                var rs = builder.AddMongoDBReplicaSet("rs0", password: passwordParameter)
+                    .WithMember(mongo1)
+                    .WithMember(mongo2)
+                    .WithMember(mongo3);
+
+                // NOTE: We add a new node to the replica set.
+                if (changeTopology)
+                {
+                    var mongo4 = builder.AddMongoDB("mongo4");
+                    volumeName4 = VolumeNameGenerator.Generate(mongo4, nameof(VerifyMongoDBMultiNodeReplicaWithDataShouldWorkAcrossUsages));
+                    // NOTE: If the volume already exists (because of a crashing previous run), delete it.
+                    DockerUtils.AttemptDeleteDockerVolume(volumeName4);
+                    rs = rs.WithMember(mongo4);
+                }
+
+                using var app = builder.Build();
+                await app.StartAsync(cts.Token);
+
+                await app.ResourceNotifications.WaitForResourceHealthyAsync(rs.Resource.Name, cts.Token);
+
+                var connectionString = await rs.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
+                var client = new MongoClient(connectionString);
+                var db = client.GetDatabase(DbName);
+                var moviesCollection = db.GetCollection<Movie>(CollectionNameA);
+                var data = await moviesCollection.Find(_ => true).SortBy(e => e.Name).ToListAsync(cts.Token);
+                Assert.Collection(data,
+                    item => Assert.Equal("Schindler's List", item.Name),
+                    item => Assert.Equal("The Dark Knight", item.Name),
+                    item => Assert.Equal("The Godfather", item.Name),
+                    item => Assert.Equal("The Shawshank Redemption", item.Name)
+                );
+
+                await app.StopAsync();
+            }
+        }
+        finally
+        {
+            if (volumeName1 is not null)
+            {
+                DockerUtils.AttemptDeleteDockerVolume(volumeName1);
+            }
+            if (volumeName2 is not null)
+            {
+                DockerUtils.AttemptDeleteDockerVolume(volumeName2);
+            }
+            if (volumeName3 is not null)
+            {
+                DockerUtils.AttemptDeleteDockerVolume(volumeName3);
+            }
+            if (volumeName4 is not null)
+            {
+                DockerUtils.AttemptDeleteDockerVolume(volumeName4);
+            }
+        }
+    }
+
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
     public async Task MongoDBReplicaSetWithNoMembersAssigned()
