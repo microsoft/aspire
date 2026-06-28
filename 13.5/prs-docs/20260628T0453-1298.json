@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal docs repo engineering tool (doc-pr-reviewer skill), not a product documentation PR",
+  "mergedAt": "2026-06-28T04:53:56Z",
+  "number": 1298,
+  "runDate": "2026-06-28T07:16:46Z",
+  "status": "excluded",
+  "title": "Add doc-pr-reviewer skill for single-PR docs accuracy review"
+}
