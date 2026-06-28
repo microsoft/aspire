@@ -81,7 +81,7 @@ public static class MongoDBBuilderExtensions
 
         return builder
             .AddResource(mongoServerResource)
-            .WithEndpoint(port: port, targetPort: DefaultContainerPort, name: MongoDBServerResource.PrimaryEndpointName, isProxied: false)
+            .WithEndpoint(port: port, targetPort: DefaultContainerPort, name: MongoDBServerResource.PrimaryEndpointName)
             .WithImage(MongoDBContainerImageTags.Image, MongoDBContainerImageTags.Tag)
             .WithImageRegistry(MongoDBContainerImageTags.Registry)
             .WithEnvironment(context =>
