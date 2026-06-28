@@ -100,6 +100,64 @@ public class MongoDbReplicaSetFunctionalTests(ITestOutputHelper testOutputHelper
 
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
+    public async Task VerifyMongoDBMultiNodeReplicaSetAllNodesEndUpHealthy()
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper);
+
+        var mongo1 = builder.AddMongoDB("mongo1");
+        var mongo2 = builder.AddMongoDB("mongo2");
+        var mongo3 = builder.AddMongoDB("mongo3");
+        var rs = builder.AddMongoDBReplicaSet("rs0")
+            .WithMember(mongo1)
+            .WithMember(mongo2)
+            .WithMember(mongo3);
+
+        using var app = builder.Build();
+        await app.StartAsync(cts.Token);
+
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(rs.Resource.Name, cts.Token);
+
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(mongo1.Resource.Name, cts.Token);
+        var connectionString = await mongo2.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
+        // while (true)
+        // {
+        //     try
+        //     {
+        //         var client = new MongoClient(connectionString);
+        //         using var cursor = await client.ListDatabaseNamesAsync(cts.Token);
+        //         await cursor.FirstOrDefaultAsync(cts.Token);
+        //         break;
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         Console.WriteLine(ex);
+        //     }
+        // }
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(mongo2.Resource.Name, cts.Token);
+        var connectionString3 = await mongo3.Resource.ConnectionStringExpression.GetValueAsync(cts.Token);
+        // while (true)
+        // {
+        //     try
+        //     {
+        //         var client = new MongoClient(connectionString3);
+        //         using var cursor = await client.ListDatabaseNamesAsync(cts.Token);
+        //         await cursor.FirstOrDefaultAsync(cts.Token);
+        //         break;
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         Console.WriteLine(ex);
+        //     }
+        // }
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(mongo3.Resource.Name, cts.Token);
+
+        await app.StopAsync();
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
     public async Task MongoDBReplicaSetWithNoMembersAssigned()
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));

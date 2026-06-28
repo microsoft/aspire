@@ -133,12 +133,15 @@ public class MongoDBServerResource(string name) : ContainerResource(name), IReso
             builder.AppendLiteral(PasswordParameter is not null ? "&" : "?");
             // NOTE: This is necessary when connecting to a single node that happens to be part of the replica set. Otherwise, the driver will attempt to discover other nodes in the replica set, and this would most notably fail upon attempting to `rs.initialize` since the replica set is not fully initialized at that point.
             builder.AppendLiteral("directConnection=true");
+            // NOTE: The default read preference is "primary", which means that even though we have set `directionConnection` to `true`, any read operation run against individual nodes (which is what this connection string should enable, for needs like healthchecks, because the MongoDB healthcheck in Aspire goes beyond a simple ping and runs read commands like `listDatabases`) would be rejected by the server. The way to resolve that is to set the read preference to either `secondaryPreferred`, which we do here for that reason. See https://www.mongodb.com/docs/manual/core/read-preference-use-cases/#indications-to-use-non-primary-read-preference
+            builder.AppendLiteral("&readPreference=secondaryPreferred");
         }
 
         if (TlsEnabled)
         {
             builder.AppendLiteral(PasswordParameter is not null || ReplicaSetName is not null ? "&" : "?");
             builder.AppendLiteral("tls=true");
+            builder.AppendLiteral("&tlsInsecure=true");
         }
 
         return builder.Build();

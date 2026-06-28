@@ -110,6 +110,7 @@ public static class MongoDBReplicaSetBuilderExtensions
                         ["_id"] = i,
                         // NOTE: `host` represents the host and port that should be accessible from within the MongoDB server's container.
                         ["host"] = $"{m.Name}:{m.PrimaryEndpoint.TargetPort!.Value}", // NOTE: We know this is always set.
+                        ["priority"] = m == initialPrimary ? 1 : 0,
                         // NOTE: `horizons` is a poorly-documented but quite essential MongoDB feature when it comes to clustering — see https://github.com/mongodb/mongo/tree/master/src/mongo/db/repl/split_horizon as well as https://www.percona.com/blog/using-replicasethorizons-in-mongodb/
                         ["horizons"] = new BsonDocument
                         {

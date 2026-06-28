@@ -68,15 +68,16 @@ public static class MongoDBBuilderExtensions
 
         var healthCheckKey = $"{name}_check";
         // cache the client so it is reused on subsequent calls to the health check
-        IMongoClient? client = null;
+        // IMongoClient? client = null;
         builder.Services.AddHealthChecks()
             .AddMongoDb(
-                sp => client ??= new MongoClient(connectionString ?? throw new InvalidOperationException("Connection string is unavailable")),
-                name: healthCheckKey);
+                name: healthCheckKey,
+                clientFactory: sp => new MongoClient(connectionString ?? throw new InvalidOperationException("Connection string is unavailable"))
+            );
 
         return builder
             .AddResource(mongoDBContainer)
-            .WithEndpoint(port: port, targetPort: DefaultContainerPort, name: MongoDBServerResource.PrimaryEndpointName)
+            .WithEndpoint(port: port, targetPort: DefaultContainerPort, name: MongoDBServerResource.PrimaryEndpointName, isProxied: false)
             .WithImage(MongoDBContainerImageTags.Image, MongoDBContainerImageTags.Tag)
             .WithImageRegistry(MongoDBContainerImageTags.Registry)
             .WithEnvironment(context =>
@@ -84,10 +85,27 @@ public static class MongoDBBuilderExtensions
                 context.EnvironmentVariables[UserEnvVarName] = mongoDBContainer.UserNameReference;
                 context.EnvironmentVariables[PasswordEnvVarName] = mongoDBContainer.PasswordParameter!;
             })
-            .OnConnectionStringAvailable(async (@event, r, ct) =>
+            .OnConnectionStringAvailable(async (resource, @event, ct) =>
             {
                 connectionString = await mongoDBContainer.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
                     ?? throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{mongoDBContainer.Name}' resource but the connection string was null.");
+                if (resource.Name != "mongo2")
+                {
+                    return;
+                }
+                // await Task.Delay(2_000, ct).ConfigureAwait(false);
+                // while (true)
+                // {
+                //     try
+                //     {
+                //         var client = new MongoClient(connectionString);
+                //         var foo = await client.ListDatabaseNamesAsync(ct).ConfigureAwait(false);
+                //     }
+                //     catch (Exception ex)
+                //     {
+                //         Console.WriteLine(ex);
+                //     }
+                // }
             })
             .WithHealthCheck(healthCheckKey);
     }
