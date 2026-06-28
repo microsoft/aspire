@@ -6,6 +6,7 @@ using System.Reflection;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -225,7 +226,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         Program.WaitForDebuggerIfRequested(parseResult, provider, waitAction: () => waitActionCalled = true);
 
         Assert.True(waitActionCalled);
-        var expectedStatus = string.Format(CultureInfo.CurrentCulture, "Waiting for debugger to attach to CLI process ID: {0}", Environment.ProcessId);
+        var expectedStatus = string.Format(CultureInfo.CurrentCulture, RootCommandStrings.WaitingForDebugger, Environment.ProcessId);
         Assert.Collection(testInteractionService.ShownStatuses, status => Assert.Equal(expectedStatus, status));
     }
 
