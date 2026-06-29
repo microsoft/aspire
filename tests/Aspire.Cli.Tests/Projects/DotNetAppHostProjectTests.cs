@@ -2154,6 +2154,44 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public void IsLikelyAppHost_ProjectFileContainsLowerCaseDynamicWalkUpImport_ReturnsTrue()
+    {
+        // MSBuild property function names are case-insensitive: evaluating
+        //   $([MSBuild]::getpathoffileabove('Foo.props', '$(MSBuildThisFileDirectory)../'))
+        // and
+        //   $([MSBuild]::GetPathOfFileAbove('Foo.props', '$(MSBuildThisFileDirectory)../'))
+        // produces the same resolved path. A case-sensitive pre-check would silently filter out the
+        // lower-case variant before MSBuild evaluation, leaving the same false-negative window the
+        // dynamic walk-up fallback is meant to close.
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Import Project="$([MSBuild]::getpathoffileabove('Aspire.Common.props', '$(MSBuildThisFileDirectory)../'))" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildPropsContainsMixedCaseDynamicWalkUpImport_ReturnsTrue()
+    {
+        // Mixed-case variant on an ancestor Directory.Build.props — same rationale as the
+        // project-file lower-case test, but at the ancestor level. Real-world Directory.Build files
+        // are author-controlled and a casing tweak in upstream samples must not turn the pre-check
+        // into a silent rejection path.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "MyHost", "MyHost.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.props", """
+            <Project>
+              <Import Project="$([MSBuild]::getDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)..', 'Shared.props'))/Shared.props" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
     public void IsLikelyAppHost_ProjectFileContainsUnrelatedStaticImports_ReturnsFalse()
     {
         // Symmetric negative for project-file imports: a normal-named .csproj that imports Arcade,

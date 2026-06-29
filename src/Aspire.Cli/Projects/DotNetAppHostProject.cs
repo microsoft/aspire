@@ -337,13 +337,19 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // <Import Sdk="Aspire.AppHost.Sdk" .../> is already recognized as a positive marker by
         // ContainsAppHostMarker, and any other <Import Sdk="..."> brings in an unrelated SDK whose
         // contents will not declare Aspire markers.
+        //
+        // Match case-insensitively because MSBuild property function names are themselves
+        // case-insensitive — `$([MSBuild]::getpathoffileabove(...))` and
+        // `$([MSBuild]::GetPathOfFileAbove(...))` resolve to the same path at evaluation time, so a
+        // case-sensitive substring check here would silently filter out the lower/mixed-case variants
+        // and re-open the false-negative window this fallback is meant to close.
         // Docs: https://learn.microsoft.com/visualstudio/msbuild/property-functions#msbuild-property-functions
         return root.Descendants()
             .Where(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal))
             .Select(e => e.Attribute("Project")?.Value)
             .Any(project => project is not null
-                && (project.Contains("GetPathOfFileAbove", StringComparison.Ordinal)
-                    || project.Contains("GetDirectoryNameOfFileAbove", StringComparison.Ordinal)));
+                && (project.Contains("GetPathOfFileAbove", StringComparison.OrdinalIgnoreCase)
+                    || project.Contains("GetDirectoryNameOfFileAbove", StringComparison.OrdinalIgnoreCase)));
     }
 
     private static bool ContainsAppHostMarker(XElement root)
