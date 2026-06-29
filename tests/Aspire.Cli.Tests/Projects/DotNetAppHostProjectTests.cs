@@ -2426,6 +2426,121 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
     }
 
+    [Fact]
+    public void IsLikelyAppHost_ImportProjectPathContainsCallShapedHelperNameInLiteralPath_ReturnsFalse()
+    {
+        // Even a literal path that happens to contain "GetPathOfFileAbove(...)" as text — not an
+        // MSBuild property function call — must not trigger the walk-up fallback. Only the full
+        // $([MSBuild]::GetPathOfFileAbove(...)) shape is an actual call MSBuild will evaluate.
+        // Without this strictness, an author whose static import path happens to wrap the helper
+        // name in parentheses over-promotes their ordinary project.
+        var projectFile = WriteIsLikelyAppHostProject("Library.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Import Project="build/GetPathOfFileAbove('Shared.props').props" />
+              <Import Project="../getdirectorynameoffileabove(arg).targets" />
+            </Project>
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_MalformedProjectXmlWithAncestorIsAspireHostMarker_ReturnsTrue()
+    {
+        // When the project's own XML can't be parsed, the cheap pre-check used to jump straight to
+        // the name heuristic and never consult ancestor Directory.Build.* files. That silently
+        // rejected an ordinary-named broken project whose ancestors declared the AppHost marker —
+        // exactly the case where MSBuild would still try to evaluate the project and surface a
+        // "possibly unbuildable" warning. The ancestor walk must run before falling back to the
+        // name heuristic.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "MyHost", "MyHost.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"");
+        WriteIsLikelyAppHostProject("Directory.Build.props", """
+            <Project>
+              <PropertyGroup>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_MalformedProjectXmlWithAncestorAppHostSdkImport_ReturnsTrue()
+    {
+        // Companion to the ancestor-IsAspireHost malformed-project test: an ancestor that imports
+        // Aspire.AppHost.Sdk must also keep a broken descendant project flowing to MSBuild as a
+        // candidate rather than being silently rejected on a name miss.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "MyHost", "MyHost.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\"");
+        WriteIsLikelyAppHostProject("Directory.Build.targets", """
+            <Project>
+              <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildPropsUnquotedConventionalChaining_ReturnsFalse()
+    {
+        // MSBuild property-function arguments accept unquoted scalar forms in addition to single-
+        // or double-quoted strings. Unquoted conventional chaining like
+        //   $([MSBuild]::GetPathOfFileAbove(Directory.Build.props, $(MSBuildThisFileDirectory)../))
+        // points at a file the ancestor walk already enumerates by name, so the chain delivers
+        // nothing new — it must not be treated as uncertain just because the file name is unquoted.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "Library", "Library.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject(Path.Combine("src", "Directory.Build.props"), """
+            <Project>
+              <Import Project="$([MSBuild]::GetPathOfFileAbove(Directory.Build.props, $(MSBuildThisFileDirectory)../))" />
+            </Project>
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildPropsUnquotedNonConventionalImport_ReturnsTrue()
+    {
+        // Symmetric positive for unquoted args: an unquoted non-conventional target (Shared.props)
+        // still triggers the conservative fallback because the ancestor walk does not enumerate
+        // arbitrarily-named shared files.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "Library", "Library.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject(Path.Combine("src", "Directory.Build.props"), """
+            <Project>
+              <Import Project="$([MSBuild]::GetPathOfFileAbove(Shared.props, $(MSBuildThisFileDirectory)../))" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_AncestorImportAppendsNonConventionalFileAfterGetDirectoryNameOfFileAbove_ReturnsTrue()
+    {
+        // GetDirectoryNameOfFileAbove returns a *directory* (the directory containing the named
+        // file). A real import that uses it concatenates a file name onto that directory, e.g.
+        //   $([MSBuild]::GetDirectoryNameOfFileAbove(.., 'Directory.Build.props'))/Shared.props
+        // The actual imported file is the appended segment — here Shared.props — which the
+        // ancestor walk does NOT enumerate by name. Looking only at the second function argument
+        // (Directory.Build.props) and skipping the project would silently reject a real chain
+        // pulling in arbitrary shared content.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "Library", "Library.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject(Path.Combine("src", "Directory.Build.props"), """
+            <Project>
+              <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)..', 'Directory.Build.props'))/Shared.props" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
     [Theory]
     [InlineData("src/Aspire.Hosting/Aspire.Hosting.csproj")]
     [InlineData("src/Aspire.Cli/Aspire.Cli.csproj")]

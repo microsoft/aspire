@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml;
@@ -191,8 +192,14 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     {
         if (!TryLoadProjectRoot(projectFile.FullName, out var root) || root is null)
         {
-            // The file is missing, unreadable, or not well-formed XML. Fall back to the name heuristic so a
-            // broken AppHost project is still treated as a candidate (and can later surface as unbuildable).
+            // The file is missing, unreadable, or not well-formed XML. Before falling back to the
+            // name heuristic, still consult ancestor Directory.Build.* markers — those can promote
+            // an ordinary-named broken project to a real AppHost candidate, which should flow to
+            // MSBuild as "possibly unbuildable" rather than be silently rejected here.
+            if (AncestorDirectoryContainsAppHostMarker(projectFile.Directory))
+            {
+                return true;
+            }
             return MatchesAppHostNameHeuristics(projectFile);
         }
 
@@ -391,28 +398,180 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
     private static bool TryGetWalkUpTargetFileName(string projectAttributeValue, out string targetFileName)
     {
-        // GetPathOfFileAbove signature: GetPathOfFileAbove(file [, startingDirectory]).
-        // The file name is the first argument, captured between single or double quotes.
-        var match = s_getPathOfFileAboveRegex.Match(projectAttributeValue);
-        if (match.Success)
+        // Parse one MSBuild property-function walk-up call out of the Import Project value and
+        // determine the *actual final import target file name*. The actual target may be:
+        //   * The first argument of GetPathOfFileAbove (the function returns a file path), OR
+        //   * The text appended after the closing `))` of the call when the result is concatenated
+        //     onto more path text — most commonly with GetDirectoryNameOfFileAbove, which returns
+        //     a directory and is then joined to a file name, e.g.
+        //       $([MSBuild]::GetDirectoryNameOfFileAbove(..., 'Directory.Build.props'))/Shared.props
+        //     where Shared.props is the actual imported file, not Directory.Build.props.
+        // Returns false when no walk-up call is recognized, when the call is malformed, or when
+        // the resolved target cannot be determined statically (e.g. an MSBuild expression appears
+        // where the file name would be). The caller treats false as "fall through to the fallback
+        // shape check" and ultimately as "uncertain".
+        var callMatch = s_walkUpFunctionCallStartRegex.Match(projectAttributeValue);
+        if (!callMatch.Success)
         {
-            targetFileName = match.Groups[1].Value;
-            return true;
+            targetFileName = string.Empty;
+            return false;
         }
 
-        // GetDirectoryNameOfFileAbove signature: GetDirectoryNameOfFileAbove(startingDirectory, file).
-        // The file name is the second argument; skip past the first quoted argument and capture the
-        // second. Quoted arguments may not embed unescaped quotes of the same kind, which the
-        // [^'"]+ class enforces — sufficient for the import shapes we expect to see in the wild.
-        match = s_getDirectoryNameOfFileAboveRegex.Match(projectAttributeValue);
-        if (match.Success)
+        var functionName = callMatch.Groups[1].Value;
+        var argsStart = callMatch.Index + callMatch.Length;
+
+        if (!TryParseFunctionCallArgs(projectAttributeValue, argsStart, out var args, out var afterCloseParen))
         {
-            targetFileName = match.Groups[1].Value;
-            return true;
+            targetFileName = string.Empty;
+            return false;
+        }
+
+        // Skip past the `)` that closes the surrounding $(...) expression, if present, to land on
+        // any path suffix the author appended to the function call.
+        var suffixStart = afterCloseParen;
+        if (suffixStart < projectAttributeValue.Length && projectAttributeValue[suffixStart] == ')')
+        {
+            suffixStart++;
+        }
+
+        if (suffixStart < projectAttributeValue.Length)
+        {
+            var suffixFileName = TryExtractFileNameFromSuffix(projectAttributeValue[suffixStart..]);
+            if (!string.IsNullOrEmpty(suffixFileName))
+            {
+                targetFileName = suffixFileName;
+                return true;
+            }
+        }
+
+        // No appended path: the function output itself is the import target. GetPathOfFileAbove
+        // returns the located file, so its first argument is the file name. GetDirectoryNameOfFileAbove
+        // returns only a directory and cannot determine a file on its own — leave that case to the
+        // fallback so we conservatively treat it as uncertain.
+        if (functionName.Equals("GetPathOfFileAbove", StringComparison.OrdinalIgnoreCase) && args.Count >= 1)
+        {
+            targetFileName = StripQuotes(args[0]).Trim();
+            return targetFileName.Length > 0;
         }
 
         targetFileName = string.Empty;
         return false;
+    }
+
+    private static bool TryParseFunctionCallArgs(string text, int startIndex, out List<string> args, out int afterCloseParen)
+    {
+        // Hand-rolled comma-splitter with balanced-paren and quote awareness. MSBuild property-
+        // function arguments can be:
+        //   * Single-quoted strings ('like this')
+        //   * Double-quoted strings ("like this")
+        //   * Unquoted scalars (Directory.Build.props)
+        //   * MSBuild property references that contain parens, e.g. $(MSBuildThisFileDirectory)..
+        //   * Other nested function calls
+        // We need to find the top-level commas separating arguments and the `)` that closes the
+        // call we started inside. Regex with `[^,)]` would prematurely terminate on the `)` inside
+        // a $(...) reference; a tiny state machine handles this correctly.
+        args = new List<string>();
+        var current = new StringBuilder();
+        var depth = 1;
+        var inSingleQuote = false;
+        var inDoubleQuote = false;
+
+        for (var i = startIndex; i < text.Length; i++)
+        {
+            var c = text[i];
+
+            if (inSingleQuote)
+            {
+                if (c == '\'')
+                {
+                    inSingleQuote = false;
+                }
+                current.Append(c);
+                continue;
+            }
+            if (inDoubleQuote)
+            {
+                if (c == '"')
+                {
+                    inDoubleQuote = false;
+                }
+                current.Append(c);
+                continue;
+            }
+
+            switch (c)
+            {
+                case '\'':
+                    inSingleQuote = true;
+                    current.Append(c);
+                    break;
+                case '"':
+                    inDoubleQuote = true;
+                    current.Append(c);
+                    break;
+                case '(':
+                    depth++;
+                    current.Append(c);
+                    break;
+                case ')':
+                    depth--;
+                    if (depth == 0)
+                    {
+                        args.Add(current.ToString().Trim());
+                        afterCloseParen = i + 1;
+                        return true;
+                    }
+                    current.Append(c);
+                    break;
+                case ',' when depth == 1:
+                    args.Add(current.ToString().Trim());
+                    current.Clear();
+                    break;
+                default:
+                    current.Append(c);
+                    break;
+            }
+        }
+
+        afterCloseParen = text.Length;
+        return false;
+    }
+
+    private static string TryExtractFileNameFromSuffix(string suffix)
+    {
+        // The suffix is path text appended after the closing `)` of a walk-up function. We try to
+        // recover a static file name from its last path segment. If the suffix contains MSBuild
+        // expression syntax ($ or @) we can't tell what the final file will be — return empty so
+        // the caller treats the call as having no determinable target (and the fallback regex
+        // conservatively classifies the import as uncertain).
+        var trimmed = suffix.Trim();
+        if (trimmed.Length == 0 || trimmed.Contains('$') || trimmed.Contains('@'))
+        {
+            return string.Empty;
+        }
+
+        var lastSep = Math.Max(trimmed.LastIndexOf('/'), trimmed.LastIndexOf('\\'));
+        var segment = lastSep >= 0 ? trimmed[(lastSep + 1)..] : trimmed;
+
+        // Must look like a file name (has an extension and no expression chars).
+        if (segment.Length > 0 && segment.Contains('.'))
+        {
+            return segment;
+        }
+
+        return string.Empty;
+    }
+
+    private static string StripQuotes(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length >= 2
+            && ((trimmed[0] == '\'' && trimmed[^1] == '\'')
+                || (trimmed[0] == '"' && trimmed[^1] == '"')))
+        {
+            return trimmed[1..^1];
+        }
+        return trimmed;
     }
 
     private static bool IsConventionalDirectoryBuildFileName(string fileName)
@@ -425,22 +584,21 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             || fileName.Equals(DirectoryBuildTargetsName, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static readonly Regex s_getPathOfFileAboveRegex = new(
-        @"\bGetPathOfFileAbove\s*\(\s*['""]([^'""]+)['""]",
+    // Strict MSBuild property-function call shape: the full $([MSBuild]::Function( prefix. Static
+    // import paths that merely contain the helper name as text (e.g.
+    // "build/GetPathOfFileAbove('Shared.props').props") do NOT match because they lack the
+    // $([MSBuild]::...) wrapper that MSBuild requires for property-function invocation.
+    // Docs: https://learn.microsoft.com/visualstudio/msbuild/property-functions#calling-static-methods
+    private static readonly Regex s_walkUpFunctionCallStartRegex = new(
+        @"\$\(\s*\[MSBuild\]\s*::\s*(GetPathOfFileAbove|GetDirectoryNameOfFileAbove)\s*\(",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
-    private static readonly Regex s_getDirectoryNameOfFileAboveRegex = new(
-        @"\bGetDirectoryNameOfFileAbove\s*\(\s*['""][^'""]+['""]\s*,\s*['""]([^'""]+)['""]",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
-    // Detects an MSBuild walk-up helper *call* — name followed by `(`, possibly with whitespace —
-    // regardless of how the arguments are shaped. Used to fall back conservatively when the more
-    // precise quoted-argument regexes above can't extract the target file name (e.g. when the file
-    // name argument is itself an MSBuild property expression like $(SomeFile)). The bare function
-    // name appearing in a path string (e.g. "build/GetPathOfFileAbove.props") does NOT match
-    // because there is no `(` after it.
+    // Same strict shape, used as the conservative fallback when TryGetWalkUpTargetFileName cannot
+    // determine a clean target file name (e.g. file-name argument is itself an MSBuild expression
+    // or the suffix contains a $(...) reference). Matching this still requires the full
+    // $([MSBuild]::...) prefix, so literal path text containing the helper name is excluded.
     private static readonly Regex s_walkUpHelperCallRegex = new(
-        @"\b(?:GetPathOfFileAbove|GetDirectoryNameOfFileAbove)\s*\(",
+        @"\$\(\s*\[MSBuild\]\s*::\s*(?:GetPathOfFileAbove|GetDirectoryNameOfFileAbove)\s*\(",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static bool ContainsAppHostMarker(XElement root)
