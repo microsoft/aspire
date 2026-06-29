@@ -1,4 +1,5 @@
 import { TelemetryReporter } from '@vscode/extension-telemetry';
+import * as os from 'os';
 import * as vscode from 'vscode';
 import {
     CommonTelemetryProperties,
@@ -39,15 +40,17 @@ export type {
 // the engagement reporter, the tree view, the debug session, and the
 // dashboard telemetry passthrough server.
 let reporter: TelemetryReporter | undefined;
-const defaultTelemetryReporterFactory = (aiKey: string): TelemetryReporter => new TelemetryReporter(aiKey);
+const telemetryReplacementOptions = [
+    { lookup: /(?:^|_)(?:path|message|description|args?)(?:_|$)/i, replacementString: '<redacted>' },
+];
+const defaultTelemetryReporterFactory = (aiKey: string): TelemetryReporter => new TelemetryReporter(aiKey, telemetryReplacementOptions);
 let telemetryReporterFactory = defaultTelemetryReporterFactory;
+let reporterCommonProperties: Record<string, string> = {};
 
-// Common properties merged into every event we emit. The TelemetryReporter
-// already injects extension version, OS, machine id, etc., so this map is
-// reserved for Aspire-specific cross-event signals (e.g. detected AppHost
-// language, run mode). The key set is intentionally tiny and registered in
-// `telemetryRegistry.ts` because each common property duplicates into a row
-// per event in the classification catalog.
+// Aspire-specific common properties merged into every event we emit (e.g.
+// detected AppHost language, run mode). Keep this key set intentionally tiny
+// and registered in `telemetryRegistry.ts` because each common property
+// duplicates into a row per event in the classification catalog.
 // Values are kept as strings because @vscode/extension-telemetry only supports
 // string-valued properties; numeric data must go through `measurements`.
 const commonProperties: Partial<Record<CommonTelemetryProperty, string>> = {};
@@ -68,6 +71,7 @@ export function initializeTelemetry(context: vscode.ExtensionContext): void {
     // telemetry initialization read from the same extension manifest.
     const aiKey = context.extension.packageJSON.aiKey;
     if (aiKey) {
+        reporterCommonProperties = getReporterCommonProperties(context);
         reporter = telemetryReporterFactory(aiKey);
         context.subscriptions.push({ dispose: () => reporter?.dispose() });
     }
@@ -135,7 +139,40 @@ function mergeProperties<E extends KnownTelemetryEventName>(properties?: EventPr
     // value). The result is intentionally widened to `{ [key: string]: string }`
     // because that's what the underlying TelemetryReporter expects — the
     // narrow typing is enforced at the public wrapper boundary above.
-    return { ...commonProperties, ...((properties ?? {}) as { [key: string]: string }) };
+    return sanitizeTelemetryProperties({
+        ...reporterCommonProperties,
+        ...commonProperties,
+        ...((properties ?? {}) as { [key: string]: string }),
+    });
+}
+
+function getReporterCommonProperties(context: vscode.ExtensionContext): Record<string, string> {
+    return {
+        'common.extname': context.extension.id,
+        'common.extversion': String(context.extension.packageJSON.version ?? ''),
+        'common.os': os.platform(),
+        'common.nodeArch': os.arch(),
+        'common.platformversion': os.release().replace(/^(\d+)(\.\d+)?(\.\d+)?(.*)/, '$1$2$3'),
+        'common.telemetryclientversion': '1.5.1',
+    };
+}
+
+function sanitizeTelemetryProperties(properties: Record<string, string>): Record<string, string> {
+    const sanitized: Record<string, string> = {};
+    for (const [key, value] of Object.entries(properties)) {
+        sanitized[key] = sanitizeTelemetryValue(value);
+    }
+
+    return sanitized;
+}
+
+function sanitizeTelemetryValue(value: string): string {
+    return value
+        .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<email>')
+        .replace(/\b([A-Za-z]:)\\+Users\\+[^\\\s"']+/g, (_, drive: string) => `${drive}\\Users\\<user>`)
+        .replace(/(^|[^A-Za-z0-9_/-])\/Users\/[^/\s"']+/g, '$1/Users/<user>')
+        .replace(/(^|[^A-Za-z0-9_/-])\/home\/[^/\s"']+/g, '$1/home/<user>')
+        .replace(/\b(password|passwd|pwd|token|secret|api[_-]?key|key)(\s*[:=]\s*)[^&\s"',;}]+/gi, '$1$2<redacted>');
 }
 
 /**
@@ -149,6 +186,9 @@ function mergeProperties<E extends KnownTelemetryEventName>(properties?: EventPr
  * name is what reaches the telemetry backend verbatim — VS Code's
  * `TelemetryLogger` would otherwise prepend `<extensionId>/` and turn
  * `aspire/vscode/command/invoked` into `microsoft-aspire.aspire-vscode/aspire/vscode/command/invoked`.
+ * This path intentionally bypasses `TelemetryLogger.cleanData()`, so
+ * {@link mergeProperties} applies our explicit value sanitizer before calling
+ * the dangerous API.
  * Telemetry opt-in is enforced explicitly here (the dangerous API bypasses
  * the reporter's built-in gate) so we still respect the user's
  * `telemetry.telemetryLevel` setting and live changes to it.
@@ -172,14 +212,16 @@ export function sendTelemetryEvent<E extends KnownTelemetryEventName>(
 
 /**
  * Emits an error telemetry event. Use for faults (unexpected exceptions,
- * dashboard fault posts, etc.) — the underlying reporter applies stricter
- * PII scrubbing on error events than on regular events.
+ * dashboard fault posts, etc.) so the App Insights envelope is tagged as an
+ * error while preserving the registry-declared event name verbatim.
  *
  * Routed through `sendDangerousTelemetryErrorEvent` for the same reason as
  * {@link sendTelemetryEvent}: VS Code's TelemetryLogger would otherwise add
  * an extension-id prefix to the wire event name. Error events emit when the
  * user has opted into 'error' OR 'all' (i.e. anything except 'crash' / 'off'),
- * matching the standard non-dangerous error API's gate.
+ * matching the standard non-dangerous error API's gate. This path intentionally
+ * bypasses `TelemetryLogger.cleanData()`, so {@link mergeProperties} applies
+ * our explicit value sanitizer before calling the dangerous API.
  */
 export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
     eventName: E,
@@ -304,12 +346,16 @@ function isCancellation(err: unknown): boolean {
 
 export function classifyError(err: unknown): string {
     if (err instanceof Error) {
-        return err.name || 'Error';
+        return normalizeErrorKind(err.name);
     }
     if (typeof err === 'string') {
         return 'String';
     }
     return typeof err;
+}
+
+function normalizeErrorKind(errorKind: string): string {
+    return /^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(errorKind) ? errorKind : 'Error';
 }
 
 function isHandledCommandFailure(value: unknown): value is { success: false; errorKind?: unknown } {
@@ -379,4 +425,5 @@ export function __resetCommonPropertiesForTests(): void {
     for (const key of Object.keys(commonProperties) as CommonTelemetryProperty[]) {
         delete commonProperties[key];
     }
+    reporterCommonProperties = {};
 }

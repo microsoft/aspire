@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import type { TelemetryReporter } from '@vscode/extension-telemetry';
 import * as vscode from 'vscode';
-import { __resetCommonPropertiesForTests, __resetTelemetryReporterFactoryForTests, __setReporterForTests, __setTelemetryReporterFactoryForTests, initializeTelemetry, isCommandCancellation, sendTelemetryErrorEvent, sendTelemetryEvent, setCommandInvocationListener, setCommonTelemetryProperties, withCommandTelemetry } from '../utils/telemetry';
+import { __resetCommonPropertiesForTests, __resetTelemetryReporterFactoryForTests, __setReporterForTests, __setTelemetryReporterFactoryForTests, classifyError, initializeTelemetry, isCommandCancellation, sendTelemetryErrorEvent, sendTelemetryEvent, setCommandInvocationListener, setCommonTelemetryProperties, withCommandTelemetry } from '../utils/telemetry';
 
 interface RecordedEvent {
     name: string;
@@ -131,6 +131,16 @@ suite('telemetry utilities', () => {
         assert.strictEqual(fake.events[0].isDangerous, true);
     });
 
+    test('sendTelemetryEvent sanitizes property values before the dangerous send path', () => {
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: 'cmd.leak user@example.com /Users/alice/source C:\\Users\\bob\\source --token=secret',
+        });
+
+        assert.strictEqual(
+            fake.events[0].properties?.command,
+            'cmd.leak <email> /Users/<user>/source C:\\Users\\<user>\\source --token=<redacted>');
+    });
+
     test('telemetry level "off" suppresses regular and error events', () => {
         fake.telemetryLevel = 'off';
         sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.off' });
@@ -172,6 +182,56 @@ suite('telemetry utilities', () => {
         assert.strictEqual(fake.events[0].name, 'aspire/vscode/debug/runsession/end');
     });
 
+    test('telemetry level "all" allows both regular and error events', () => {
+        fake.telemetryLevel = 'all';
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.allRegular' });
+        sendTelemetryErrorEvent('aspire/vscode/debug/runsession/end', {
+            resource_type: 'project',
+            mode: 'run',
+            exit_code_bucket: 'nonzero',
+            end_reason: 'process_exit',
+        });
+
+        assert.strictEqual(fake.events.length, 2);
+        assert.strictEqual(fake.events[0].isError, undefined);
+        assert.strictEqual(fake.events[0].isDangerous, true);
+        assert.strictEqual(fake.events[1].isError, true);
+        assert.strictEqual(fake.events[1].isDangerous, true);
+    });
+
+    test('telemetry level is consulted per emit so mid-session changes are honored immediately', () => {
+        fake.telemetryLevel = 'all';
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.beforeFlip' });
+        fake.telemetryLevel = 'off';
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.afterFlip' });
+        assert.strictEqual(fake.events.length, 1);
+        assert.strictEqual(fake.events[0].properties?.command, 'cmd.beforeFlip');
+
+        fake.telemetryLevel = 'error';
+        sendTelemetryErrorEvent('aspire/vscode/debug/runsession/end', {
+            resource_type: 'project',
+            mode: 'run',
+            exit_code_bucket: 'nonzero',
+            end_reason: 'process_exit',
+        });
+        assert.strictEqual(fake.events.length, 2);
+        assert.strictEqual(fake.events[1].isError, true);
+    });
+
+    test('uninitialized reporter drops regular and error events silently', () => {
+        restore();
+        sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.noReporter' });
+        sendTelemetryErrorEvent('aspire/vscode/debug/runsession/end', {
+            resource_type: 'project',
+            mode: 'run',
+            exit_code_bucket: 'nonzero',
+            end_reason: 'process_exit',
+        });
+        assert.strictEqual(fake.events.length, 0);
+
+        restore = __setReporterForTests(fake as unknown as Parameters<typeof __setReporterForTests>[0]);
+    });
+
     test('initializeTelemetry constructs the reporter and emits unprefixed event names', () => {
         restore();
         let createdWithKey: string | undefined;
@@ -186,7 +246,8 @@ suite('telemetry utilities', () => {
                 extension: {
                     id: 'microsoft-aspire.aspire-vscode',
                     packageJSON: {
-                        aiKey: 'test-key'
+                        aiKey: 'test-key',
+                        version: '1.2.3'
                     }
                 },
                 subscriptions
@@ -198,6 +259,9 @@ suite('telemetry utilities', () => {
             assert.strictEqual(subscriptions.length, 1);
             assert.strictEqual(fake.events[0].name, 'aspire/vscode/command/invoked');
             assert.strictEqual(fake.events[0].isDangerous, true);
+            assert.strictEqual(fake.events[0].properties?.['common.extname'], 'microsoft-aspire.aspire-vscode');
+            assert.strictEqual(fake.events[0].properties?.['common.extversion'], '1.2.3');
+            assert.strictEqual(fake.events[0].properties?.['common.telemetryclientversion'], '1.5.1');
         }
         finally {
             restoreFactory();
@@ -228,6 +292,17 @@ suite('telemetry utilities', () => {
         const event = fake.events[0];
         assert.strictEqual(event.properties?.outcome, 'error');
         assert.strictEqual(event.properties?.error_kind, 'TypeError');
+    });
+
+    test('withCommandTelemetry drops non-identifier error names', async () => {
+        const err = new Error('sensitive@example.com /Users/alice/project');
+        err.name = 'Bad Error /Users/alice/project';
+
+        await assert.rejects(withCommandTelemetry('cmd.invalidErrorName', () => { throw err; }));
+
+        assert.strictEqual(fake.events[0].properties?.outcome, 'error');
+        assert.strictEqual(fake.events[0].properties?.error_kind, 'Error');
+        assert.strictEqual(classifyError(err), 'Error');
     });
 
     test('withCommandTelemetry classifies handled unsuccessful outcomes without rethrowing', async () => {

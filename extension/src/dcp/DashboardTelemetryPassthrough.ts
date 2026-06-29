@@ -82,8 +82,9 @@ function telemetryResultLabel(value: unknown): string {
     }
     return Number.isFinite(n) ? `Unknown(${n})` : 'Unknown';
 }
-// Failure / UserFault are routed through `sendTelemetryErrorEvent` so they
-// participate in the reporter's stricter scrubbing pass.
+// Failure / UserFault are routed through `sendTelemetryErrorEvent` so App
+// Insights treats them as error telemetry. Property-level sensitivity is still
+// controlled by the explicit allowlist and sanitizers in this file.
 function isFailureResult(value: unknown): boolean {
     if (value === undefined || value === null) {
         return false;
@@ -449,9 +450,9 @@ export class DashboardTelemetryPassthrough {
             duration_ms: durationMs,
         };
 
-        // Failure results are surfaced as error events so they participate in
-        // the more aggressive error-event sanitization pass. UserCancel is
-        // routine UX and stays in the standard channel.
+        // Failure results are surfaced as error events so App Insights tags
+        // them as failures. UserCancel is routine UX and stays in the standard
+        // channel.
         if (isFailureResult(payload.result)) {
             sendTelemetryErrorEvent('aspire/dashboard/scope/end', endProperties, endMeasurements);
         }
@@ -878,8 +879,9 @@ const TRUNCATION_MARKER = '...[truncated]';
 // result summary) are dropped entirely elsewhere rather than forwarded; this
 // cap is the residual per-entry bound on every OTHER Basic-tagged bundle value
 // so a single property can't dump multi-KB workspace content into telemetry.
-// `@vscode/extension-telemetry` performs additional PII scrubbing on the
-// remainder, so this cap is defense-in-depth, not the only mitigation.
+// The telemetry wrapper applies its explicit value sanitizer on the dangerous
+// send path, but this cap is the primary defense because we intentionally
+// bypass TelemetryLogger.cleanData() to preserve dashboard wire names.
 const MAX_DIAGNOSTIC_STRING_LENGTH = 1024;
 
 // Caps on dashboard-supplied list-shaped fields. Both are formatted into a
@@ -1051,12 +1053,12 @@ function formatFlagPrefixes(prefixes: unknown): string {
  *  - Truncate to {@link MAX_DIAGNOSTIC_STRING_LENGTH} characters so a single
  *    oversized value cannot serve as a side channel for arbitrary workspace
  *    content or bloat the bundle.
- *  - Bundle values forwarded on failure events still run through
- *    `sendTelemetryErrorEvent`, which `@vscode/extension-telemetry` scrubs more
- *    aggressively (home-directory paths, emails, well-known token shapes).
+ *  - Bundle values forwarded on failure events still run through the telemetry
+ *    wrapper's value sanitizer, but they intentionally bypass
+ *    TelemetryLogger.cleanData() so dashboard wire names are preserved.
  *
  * This is intentionally not a PII filter — it is a length cap plus the
- * reporter's pattern scrubbing, applied as defense-in-depth on top of the
+ * wrapper's value sanitizer, applied as defense-in-depth on top of the
  * drop-list and the Pii-tag filter in {@link bundleDashboardData}.
  */
 function scrubFreeformDiagnosticText(text: unknown): string {
