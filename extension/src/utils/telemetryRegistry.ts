@@ -23,6 +23,15 @@
 //      `dashboard_properties` as a JSON blob), so the classification footprint
 //      stays constant as the producer adds new instrumentation upstream.
 //
+// EVENT NAMING CONVENTION:
+//   Extension-emitted events are namespaced under `aspire/vscode/...` and
+//   dashboard passthrough events are namespaced under `aspire/dashboard/...`,
+//   matching what other Aspire dashboard hosts (Visual Studio, C# Dev Kit)
+//   emit. The names here are the FINAL wire names — the helpers in
+//   `telemetry.ts` deliberately bypass VS Code's automatic
+//   `<extensionId>/<eventName>` prefix (added by `vscode.env.createTelemetryLogger`)
+//   so this convention is what reaches the telemetry backend.
+//
 // IMPORTANT for reviewers: changing the keys of this object (or the unions
 // inside each entry) requires a corresponding classification update before
 // the build ships. The build does not enforce this; reviewers do.
@@ -49,55 +58,55 @@ export type CommonTelemetryProperty = 'apphost_languages' | 'apphost_target_vers
  */
 export interface TelemetryEventSchema {
     // ── Extension-emitted events ────────────────────────────────────────────
-    'extension/activated': {
+    'aspire/vscode/extension/activated': {
         properties: 'workspace_open' | 'extension_mode';
         measurements: 'workspace_folders';
     };
-    'command/invoked': {
+    'aspire/vscode/command/invoked': {
         properties: 'command' | 'outcome' | 'source' | 'error_kind';
         measurements: 'duration_ms';
     };
-    'cli/availability': {
+    'aspire/vscode/cli/availability': {
         properties: 'available' | 'source' | 'operation';
         measurements: 'duration_ms';
     };
-    'apphost/discovery/result': {
+    'aspire/vscode/apphost/discovery/result': {
         properties: 'outcome' | 'source' | 'apphost_languages';
         measurements: 'duration_ms' | 'candidate_count' | 'buildable_candidate_count';
     };
-    'apphost/launch/result': {
+    'aspire/vscode/apphost/launch/result': {
         properties: 'mode' | 'command' | 'apphost_language' | 'outcome' | 'execution_suppressed' | 'error_kind';
         measurements: 'duration_ms';
     };
-    'engagement/active': {
+    'aspire/vscode/engagement/active': {
         properties: 'trigger' | 'has_csharp_devkit';
         measurements: 'workspace_folders';
     };
-    'runningapphostsview/shown': {
+    'aspire/vscode/runningapphostsview/shown': {
         properties: 'view_mode' | 'initial_visibility' | 'workspace_apphost_state' | 'has_error';
         measurements: 'running_apphosts' | 'total_resources' | 'workspace_apphost_candidates';
     };
-    'debug/apphost/start': {
+    'aspire/vscode/debug/apphost/start': {
         properties: 'mode' | 'apphost_language' | 'command';
         measurements: never;
     };
-    'debug/apphost/end': {
+    'aspire/vscode/debug/apphost/end': {
         properties: 'mode' | 'apphost_language' | 'apphost_target_version' | 'apphost_is_directory' | 'ended_with_error' | 'distinct_resource_types';
         measurements: 'duration_ms' | 'total_child_sessions' | 'distinct_resource_type_count';
     };
-    'debug/runsession/start': {
+    'aspire/vscode/debug/runsession/start': {
         properties: 'resource_type' | 'debugger_extension_matched' | 'mode';
         measurements: never;
     };
-    'debug/runsession/end': {
+    'aspire/vscode/debug/runsession/end': {
         properties: 'resource_type' | 'mode' | 'exit_code_bucket' | 'end_reason' | 'error_kind';
         measurements: 'duration_ms' | 'exit_code';
     };
-    'dashboard/launch/resolved': {
+    'aspire/vscode/dashboard/launch/resolved': {
         properties: 'behavior' | 'source';
         measurements: never;
     };
-    'dashboard/launch/migration': {
+    'aspire/vscode/dashboard/launch/migration': {
         properties: 'action';
         measurements: never;
     };
@@ -113,8 +122,10 @@ export interface TelemetryEventSchema {
     //
     // Net effect: the classification catalog only needs the rows listed here,
     // regardless of how many distinct events / properties the dashboard adds
-    // upstream.
-    'dashboard/operation': {
+    // upstream. The wire names use the `aspire/dashboard/` namespace so they
+    // line up with what the dashboard itself emits when hosted by Visual
+    // Studio or the C# Dev Kit extension.
+    'aspire/dashboard/operation': {
         properties:
             | 'dashboard_event_name'
             | 'dashboard_properties'
@@ -123,7 +134,7 @@ export interface TelemetryEventSchema {
             | 'result';
         measurements: never;
     };
-    'dashboard/usertask': {
+    'aspire/dashboard/usertask': {
         properties:
             | 'dashboard_event_name'
             | 'dashboard_properties'
@@ -132,7 +143,7 @@ export interface TelemetryEventSchema {
             | 'result';
         measurements: never;
     };
-    'dashboard/fault': {
+    'aspire/dashboard/fault': {
         properties:
             | 'dashboard_event_name'
             | 'dashboard_properties'
@@ -141,7 +152,7 @@ export interface TelemetryEventSchema {
             | 'fault_severity';
         measurements: never;
     };
-    'dashboard/asset': {
+    'aspire/dashboard/asset': {
         properties:
             | 'dashboard_event_name'
             | 'dashboard_properties'
@@ -151,7 +162,7 @@ export interface TelemetryEventSchema {
             | 'asset_event_version';
         measurements: never;
     };
-    'dashboard/scope/start': {
+    'aspire/dashboard/scope/start': {
         properties:
             | 'dashboard_event_name'
             | 'dashboard_properties'
@@ -161,7 +172,7 @@ export interface TelemetryEventSchema {
             | 'scope_kind';
         measurements: never;
     };
-    'dashboard/scope/end': {
+    'aspire/dashboard/scope/end': {
         properties:
             | 'dashboard_event_name'
             | 'dashboard_properties'
@@ -181,15 +192,15 @@ export interface TelemetryEventSchema {
         // meanings that downstream queries couldn't disambiguate.
         measurements: 'duration_ms';
     };
-    'dashboard/property/set': {
+    'aspire/dashboard/property/set': {
         properties: 'property_name' | 'dashboard_properties' | 'dashboard_measurements';
         measurements: never;
     };
-    'dashboard/property/recurring': {
+    'aspire/dashboard/property/recurring': {
         properties: 'property_name' | 'dashboard_properties' | 'dashboard_measurements';
         measurements: never;
     };
-    'dashboard/commandlineflags': {
+    'aspire/dashboard/commandlineflags': {
         properties: 'flag_prefixes' | 'dashboard_properties' | 'dashboard_measurements';
         measurements: never;
     };
@@ -233,3 +244,27 @@ export type EventMeasurements<E extends KnownTelemetryEventName> =
  * the classification catalog for every event.
  */
 export type CommonTelemetryProperties = Partial<Record<CommonTelemetryProperty, string | undefined>>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Dashboard event name passthrough.
+//
+// The dashboard emits a small fixed set of event names (declared in
+// `src/Aspire.Dashboard/Telemetry/TelemetryEventKeys.cs`) that other Aspire
+// dashboard hosts (Visual Studio, C# Dev Kit) recognize verbatim. The
+// passthrough preserves the raw dashboard event name as the
+// `dashboard_event_name` property on each route's fixed wire event (e.g.
+// `aspire/dashboard/operation`), so other ingestion tools can group by
+// dashboard event name without us having to add a new classification row
+// per dashboard event.
+//
+// Truncation of the raw name to a bounded length is handled by
+// `clampDashboardKey` at the call site, which is sufficient to bound the
+// classification footprint without forcing an explicit allowlist here. If we
+// ever need to fall back to a closed allowlist, the set of known names is:
+//   - aspire/dashboard/component/initialize
+//   - aspire/dashboard/component/paramsSet
+//   - aspire/dashboard/component/dispose
+//   - aspire/dashboard/error
+//   - aspire/dashboard/command
+//   - aspire/dashboard/aiassistant/feedback
+// ─────────────────────────────────────────────────────────────────────────────

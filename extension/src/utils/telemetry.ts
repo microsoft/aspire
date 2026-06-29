@@ -17,12 +17,27 @@ export type {
 } from './telemetryRegistry';
 
 // Module-private state.
-// Aspire emits all telemetry through a single TelemetryReporter (which itself
-// honors `vscode.env.isTelemetryEnabled`, including transitions between
-// "on" / "errorsOnly" / "off"). We keep it as a module singleton because the
-// reporter is created at activation time and consumed from multiple places —
-// the command wrapper, the engagement reporter, the tree view, the debug
-// session, and the dashboard telemetry passthrough server.
+// Aspire emits all telemetry through a single TelemetryReporter. We bypass
+// VS Code's automatic `<extensionId>/<eventName>` prefix (added by
+// `vscode.env.createTelemetryLogger`) by routing every event through
+// `sendDangerousTelemetryEvent` / `sendDangerousTelemetryErrorEvent`, which
+// reach the underlying sender without going through the prefix-applying
+// logger. That gives us full control over the wire event name — the
+// registry-declared names (e.g. `aspire/vscode/command/invoked`) ARE the
+// names the telemetry backend sees.
+//
+// The "dangerous" variants skip the reporter's built-in telemetry-enabled
+// gate, so we enforce it ourselves via `getCurrentTelemetryLevel()` below:
+//   - regular events emit only when telemetry level === 'all'
+//   - error events emit when level === 'all' or 'error'
+//   - nothing emits when level is 'crash' or 'off'
+// This mirrors what `@vscode/extension-telemetry` does for the non-dangerous
+// path and matches `vscode.env.isTelemetryEnabled` for the regular channel.
+//
+// We keep the reporter as a module singleton because it is created at
+// activation time and consumed from multiple places — the command wrapper,
+// the engagement reporter, the tree view, the debug session, and the
+// dashboard telemetry passthrough server.
 let reporter: TelemetryReporter | undefined;
 const defaultTelemetryReporterFactory = (aiKey: string): TelemetryReporter => new TelemetryReporter(aiKey);
 let telemetryReporterFactory = defaultTelemetryReporterFactory;
@@ -70,6 +85,25 @@ export function isExtensionTelemetryEnabled(): boolean {
 }
 
 /**
+ * Returns the reporter's currently observed telemetry level. The level is
+ * computed by `@vscode/extension-telemetry` from the VS Code user setting
+ * (`telemetry.telemetryLevel`) and reflects state transitions over time
+ * (so a user toggling telemetry off mid-session is honored immediately).
+ *
+ *  - `'all'`   → both usage and error events allowed
+ *  - `'error'` → only error events allowed (e.g. user selected "errors only")
+ *  - `'crash'` → only crash events (no usage, no errors via this API)
+ *  - `'off'`   → nothing allowed
+ *
+ * Returns `'off'` when the reporter has not been initialized (or has been
+ * disposed) so the dangerous-send path is a no-op in tests and when the
+ * extension's aiKey is absent.
+ */
+function getCurrentTelemetryLevel(): 'all' | 'error' | 'crash' | 'off' {
+    return reporter?.telemetryLevel ?? 'off';
+}
+
+/**
  * Sets one or more common properties that will be merged into every event
  * emitted via {@link sendTelemetryEvent}, {@link sendTelemetryErrorEvent}, and
  * {@link withCommandTelemetry}. Existing values for the same keys are replaced.
@@ -110,26 +144,57 @@ function mergeProperties<E extends KnownTelemetryEventName>(properties?: EventPr
  * accepted `properties` / `measurements` keys are constrained to the per-event
  * union declared there. This prevents accidental introduction of new
  * (event, property) pairs that would need data classification.
+ *
+ * Routed through `sendDangerousTelemetryEvent` so the registry-declared event
+ * name is what reaches the telemetry backend verbatim — VS Code's
+ * `TelemetryLogger` would otherwise prepend `<extensionId>/` and turn
+ * `aspire/vscode/command/invoked` into `microsoft-aspire.aspire-vscode/aspire/vscode/command/invoked`.
+ * Telemetry opt-in is enforced explicitly here (the dangerous API bypasses
+ * the reporter's built-in gate) so we still respect the user's
+ * `telemetry.telemetryLevel` setting and live changes to it.
  */
 export function sendTelemetryEvent<E extends KnownTelemetryEventName>(
     eventName: E,
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
-    reporter?.sendTelemetryEvent(eventName, mergeProperties(properties), measurements as { [key: string]: number } | undefined);
+    if (reporter === undefined) {
+        return;
+    }
+
+    // Regular (non-error) events require full telemetry. Mirrors the gate
+    // `sendTelemetryEvent` applies internally via `TelemetryLogger.logUsage`.
+    if (getCurrentTelemetryLevel() !== 'all') {
+        return;
+    }
+    reporter.sendDangerousTelemetryEvent(eventName, mergeProperties(properties), measurements as { [key: string]: number } | undefined);
 }
 
 /**
  * Emits an error telemetry event. Use for faults (unexpected exceptions,
  * dashboard fault posts, etc.) — the underlying reporter applies stricter
  * PII scrubbing on error events than on regular events.
+ *
+ * Routed through `sendDangerousTelemetryErrorEvent` for the same reason as
+ * {@link sendTelemetryEvent}: VS Code's TelemetryLogger would otherwise add
+ * an extension-id prefix to the wire event name. Error events emit when the
+ * user has opted into 'error' OR 'all' (i.e. anything except 'crash' / 'off'),
+ * matching the standard non-dangerous error API's gate.
  */
 export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
     eventName: E,
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
-    reporter?.sendTelemetryErrorEvent(eventName, mergeProperties(properties), measurements as { [key: string]: number } | undefined);
+    if (reporter === undefined) {
+        return;
+    }
+
+    const level = getCurrentTelemetryLevel();
+    if (level !== 'all' && level !== 'error') {
+        return;
+    }
+    reporter.sendDangerousTelemetryErrorEvent(eventName, mergeProperties(properties), measurements as { [key: string]: number } | undefined);
 }
 
 /**
@@ -201,7 +266,7 @@ export async function withCommandTelemetry<T>(
     }
     finally {
         const durationMs = Date.now() - startTime;
-        const properties: EventProperties<'command/invoked'> = {
+        const properties: EventProperties<'aspire/vscode/command/invoked'> = {
             command: commandName,
             outcome,
             ...(additionalProperties ?? {}),
@@ -209,7 +274,7 @@ export async function withCommandTelemetry<T>(
         if (errorKind) {
             properties.error_kind = errorKind;
         }
-        sendTelemetryEvent('command/invoked', properties, { duration_ms: durationMs });
+        sendTelemetryEvent('aspire/vscode/command/invoked', properties, { duration_ms: durationMs });
         commandInvocationEmitter.fire({
             command: commandName,
             outcome,

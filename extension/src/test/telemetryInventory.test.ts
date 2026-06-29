@@ -13,7 +13,13 @@ type TelemetryRegistryEvent = {
     entries: string[];
 };
 
-const telemetryEntityPrefix = 'microsoft-aspire.aspire-vscode/';
+// Telemetry events emit verbatim to the wire — the registry-declared name
+// (e.g. `aspire/vscode/command/invoked`, `aspire/dashboard/operation`) is
+// what appears in `extension/telemetry.json`. The extension routes every
+// event through `sendDangerousTelemetryEvent` so VS Code's automatic
+// `<extensionId>/` prefix is bypassed; the inventory file therefore stores
+// the bare wire name with no additional prefix.
+const telemetryEntityPrefix = '';
 
 function readTelemetryInventory(): TelemetryInventory {
     const inventoryPath = path.resolve(__dirname, '../../telemetry.json');

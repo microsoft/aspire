@@ -74,7 +74,7 @@ export class AppHostsViewTelemetry implements vscode.Disposable {
         const appHosts = this._dataRepository.appHosts;
         const runningAppHosts = appHosts.length;
         const totalResources = this._getDisplayedResourceCount();
-        sendTelemetryEvent('runningapphostsview/shown', {
+        sendTelemetryEvent('aspire/vscode/runningapphostsview/shown', {
             view_mode: this._dataRepository.viewMode,
             initial_visibility: initial ? 'true' : 'false',
             workspace_apphost_state: this._getWorkspaceAppHostState(),
