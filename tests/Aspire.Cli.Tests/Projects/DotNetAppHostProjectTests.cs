@@ -2261,6 +2261,64 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public void IsLikelyAppHost_ImportProjectPathContainsLiteralWalkUpHelperName_ReturnsFalse()
+    {
+        // The walk-up fallback must distinguish between an MSBuild *function call* — name followed
+        // by `(` — and a static path that merely contains the helper name as text. Authors are free
+        // to name files using the helper names; doing so does not turn the import into a dynamic
+        // walk-up. Without this distinction the cheap pre-check over-promotes ordinary projects
+        // whose csprojs reference files whose names happen to contain "GetPathOfFileAbove" or
+        // "GetDirectoryNameOfFileAbove".
+        var projectFile = WriteIsLikelyAppHostProject("Library.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Import Project="build/GetPathOfFileAbove.props" />
+              <Import Project="../getdirectorynameoffileabove.targets" />
+            </Project>
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_ProjectFileLowerCaseIsAspireHostProperty_ReturnsTrue()
+    {
+        // MSBuild property names are case-insensitive: <isaspirehost>true</isaspirehost> sets
+        // $(IsAspireHost) just as <IsAspireHost>true</IsAspireHost> does. Matching the property
+        // element case-sensitively would silently reject a real AppHost that uses lower- or
+        // mixed-case marker syntax.
+        // Docs: https://learn.microsoft.com/visualstudio/msbuild/msbuild-properties
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <isaspirehost>true</isaspirehost>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildPropsMixedCaseIsAspireHostProperty_ReturnsTrue()
+    {
+        // Ancestor analog of the lower-case marker test. Author-controlled build files can use any
+        // casing for property elements; MSBuild treats them as the same property at evaluation time,
+        // so the pre-check must as well.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "MyHost", "MyHost.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.props", """
+            <Project>
+              <PropertyGroup>
+                <ISASPIREHOST>true</ISASPIREHOST>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
     public void IsLikelyAppHost_AncestorDirectoryBuildPropsContainsUnrelatedStaticImports_ReturnsFalse()
     {
         // Real shape lifted from this repo's own root Directory.Build.props/.targets: ordinary static

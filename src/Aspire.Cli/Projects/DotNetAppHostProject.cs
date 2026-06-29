@@ -375,9 +375,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
             // We recognized the walk-up function but couldn't parse the file-name argument (for
             // example because the argument is itself an MSBuild property expression). Be
-            // conservative and treat the project as uncertain.
-            if (project.Contains("GetPathOfFileAbove", StringComparison.OrdinalIgnoreCase)
-                || project.Contains("GetDirectoryNameOfFileAbove", StringComparison.OrdinalIgnoreCase))
+            // conservative and treat the project as uncertain. Match the function-call *shape*
+            // (name followed by `(`) rather than a raw substring — a static import like
+            //   <Import Project="build/GetPathOfFileAbove.props" />
+            // contains the helper name as path text but is not a function call, and treating it
+            // as uncertain would over-promote ordinary projects.
+            if (s_walkUpHelperCallRegex.IsMatch(project))
             {
                 return true;
             }
@@ -428,6 +431,16 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
     private static readonly Regex s_getDirectoryNameOfFileAboveRegex = new(
         @"\bGetDirectoryNameOfFileAbove\s*\(\s*['""][^'""]+['""]\s*,\s*['""]([^'""]+)['""]",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    // Detects an MSBuild walk-up helper *call* — name followed by `(`, possibly with whitespace —
+    // regardless of how the arguments are shaped. Used to fall back conservatively when the more
+    // precise quoted-argument regexes above can't extract the target file name (e.g. when the file
+    // name argument is itself an MSBuild property expression like $(SomeFile)). The bare function
+    // name appearing in a path string (e.g. "build/GetPathOfFileAbove.props") does NOT match
+    // because there is no `(` after it.
+    private static readonly Regex s_walkUpHelperCallRegex = new(
+        @"\b(?:GetPathOfFileAbove|GetDirectoryNameOfFileAbove)\s*\(",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static bool ContainsAppHostMarker(XElement root)
@@ -482,8 +495,14 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         //    during evaluation, but it can also appear literally in a project or build file. Matching on the
         //    element (rather than a substring) means a consumer condition such as
         //    Condition="'$(IsAspireHost)' == 'true'" is correctly not treated as a marker.
+        //
+        //    Match the element name case-insensitively because MSBuild property names are themselves
+        //    case-insensitive — `<isaspirehost>true</isaspirehost>` sets `$(IsAspireHost)` to `true` at
+        //    evaluation time just as the PascalCase form does, so a case-sensitive comparison here would
+        //    silently reject a real AppHost using lower- or mixed-case marker syntax.
+        //    Docs: https://learn.microsoft.com/visualstudio/msbuild/msbuild-properties
         return root.Descendants()
-            .Any(e => e.Name.LocalName.Equals(IsAspireHostProperty, StringComparison.Ordinal)
+            .Any(e => e.Name.LocalName.Equals(IsAspireHostProperty, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(e.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase));
     }
 
