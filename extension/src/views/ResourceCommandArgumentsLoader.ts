@@ -13,6 +13,7 @@ import {
     ResourceCommandArgumentLoader,
     ResourceCommandArgumentValue,
 } from './ResourceCommandArguments';
+import { nonInteractiveCliEnvironment } from '../utils/environment';
 
 export interface ResourceCommandArgumentLoaderContext {
     cliExecutionProvider: AspireTerminalProvider;
@@ -46,7 +47,7 @@ async function loadResourceCommandArgumentInputs(
         async () => {
             try {
                 const cliPath = await context.cliExecutionProvider.getAspireCliExecutablePath();
-                const args = ['resource', context.resourceName, context.commandName, '--load-arguments', '--apphost', context.appHostPath!, noLogoOption];
+                const args = ['resource', context.resourceName, context.commandName, '--load-arguments', '--non-interactive', '--apphost', context.appHostPath!, noLogoOption];
                 args.push(...buildResourceCommandCliArgs(values));
 
                 const loadInputs = (runArgs: string[], allowNoLogoRetry: boolean): Promise<ResourceCommandArgumentInputJson[] | undefined> => {
@@ -63,6 +64,7 @@ async function loadResourceCommandArgumentInputs(
 
                         const child = spawnCliProcess(context.cliExecutionProvider, cliPath, runArgs, {
                             noExtensionVariables: true,
+                            env: nonInteractiveCliEnvironment,
                             stdoutCallback: data => {
                                 stdout += data;
                             },
@@ -81,7 +83,7 @@ async function loadResourceCommandArgumentInputs(
                                         return;
                                     }
 
-                                    extensionLogOutputChannel.warn(`aspire resource --load-arguments exited with code ${code}. ${stderr.trim()}`);
+                                    extensionLogOutputChannel.warn(`aspire resource --load-arguments exited with code ${code}.`);
                                     finish(undefined);
                                     return;
                                 }

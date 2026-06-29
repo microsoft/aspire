@@ -50,7 +50,7 @@ public class MissingJavaScriptToolWarningTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"bun@1.2.0\" }");
 
-        var message = MissingJavaScriptToolWarning.GetMessage(workspace.WorkspaceRoot, s_typeScriptLanguage);
+        var message = MissingJavaScriptToolWarning.GetMessage(workspace.WorkspaceRoot, s_typeScriptLanguage, new TestEnvironment());
 
         Assert.Contains("'bun install'", message, StringComparison.Ordinal);
         Assert.Contains("install Bun", message, StringComparison.Ordinal);

@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -404,7 +403,7 @@ internal sealed class DotNetCliRunner(
         var sdkInstallPath = Path.Combine(sdksDirectory, "dotnet", sdkVersion);
         var dotnetExecutablePath = Path.Combine(
             sdkInstallPath,
-            RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "dotnet.exe" : "dotnet"
+            environment.IsWindows() ? "dotnet.exe" : "dotnet"
         );
 
         if (Directory.Exists(sdkInstallPath))

@@ -131,7 +131,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
         // Fastest/strongest signal probes
         var stage1 = new List<InternalMicrosoftProbe>();
-        if (OperatingSystem.IsMacOS())
+        if (_environment.IsMacOS())
         {
             // Use the platform SSO service on MacOS as the strongest signal (indicates machine is enrolled in
             // Microsoft Intune and user has a Microsoft account in the Microsoft tenant configured in their keychain)
@@ -159,7 +159,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             new("Copilot CLI GitHub org membership", CheckCopilotCliAsync)
         };
 
-        if (OperatingSystem.IsWindows())
+        if (_environment.IsWindows())
         {
             // Stage 1
 
@@ -1059,7 +1059,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
     {
         var home = _executionContext.HomeDirectory.FullName;
 
-        if (OperatingSystem.IsWindows())
+        if (_environment.IsWindows())
         {
             var appData = GetSpecialFolderPath(Environment.SpecialFolder.ApplicationData, "APPDATA");
             if (string.IsNullOrWhiteSpace(appData))
@@ -1075,7 +1075,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             yield break;
         }
 
-        if (OperatingSystem.IsMacOS())
+        if (_environment.IsMacOS())
         {
             if (string.IsNullOrWhiteSpace(home))
             {
@@ -1111,7 +1111,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
 
     private bool IsWsl()
     {
-        if (!OperatingSystem.IsLinux())
+        if (!_environment.IsLinux())
         {
             return false;
         }
@@ -1147,7 +1147,7 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             return false;
         }
 
-        var extensions = OperatingSystem.IsWindows() && string.IsNullOrEmpty(Path.GetExtension(command))
+        var extensions = _environment.IsWindows() && string.IsNullOrEmpty(Path.GetExtension(command))
             ? (_environment.GetEnvironmentVariable("PATHEXT") ?? ".EXE;.CMD;.BAT;.COM").Split(';', StringSplitOptions.RemoveEmptyEntries)
             : [string.Empty];
 

@@ -177,14 +177,14 @@ public static class MauiAndroidExtensions
         if (!string.IsNullOrWhiteSpace(deviceId))
         {
             // Specific device - use -s prefix (no quotes around the value)
-            msBuildProperties["AdbTarget"] = $"-s {deviceId}";
+            msBuildProperties[KnownMauiMSBuildProperties.AdbTarget] = $"-s {deviceId}";
         }
         else
         {
             // No specific device ID - use -d to target the only attached device
-            msBuildProperties["AdbTarget"] = "-d";
+            msBuildProperties[KnownMauiMSBuildProperties.AdbTarget] = "-d";
         }
-        additionalArgs.Add($"-p:AdbTarget={msBuildProperties["AdbTarget"]}");
+        additionalArgs.Add($"-p:{KnownMauiMSBuildProperties.AdbTarget}={msBuildProperties[KnownMauiMSBuildProperties.AdbTarget]}");
 
         // Configure the platform resource with common settings
         // Android runs on Windows, macOS, and Linux - check for Android SDK/tooling availability is complex
@@ -381,15 +381,15 @@ public static class MauiAndroidExtensions
         var additionalArgs = new List<string>();
         if (!string.IsNullOrWhiteSpace(emulatorId))
         {
-            // Specific emulator - use -s prefix (no quotes around the value)
-            msBuildProperties["AdbTarget"] = $"-s {emulatorId}";
+            // Specific emulator - use -s prefix with the emulator serial (no quotes around the value)
+            msBuildProperties[KnownMauiMSBuildProperties.AdbTarget] = $"-s {emulatorId}";
         }
         else
         {
             // No specific emulator ID - use -e to target the only running emulator
-            msBuildProperties["AdbTarget"] = "-e";
+            msBuildProperties[KnownMauiMSBuildProperties.AdbTarget] = "-e";
         }
-        additionalArgs.Add($"-p:AdbTarget={msBuildProperties["AdbTarget"]}");
+        additionalArgs.Add($"-p:{KnownMauiMSBuildProperties.AdbTarget}={msBuildProperties[KnownMauiMSBuildProperties.AdbTarget]}");
 
         // Configure the platform resource with common settings
         // Android runs on Windows, macOS, and Linux - check for Android SDK/tooling availability is complex

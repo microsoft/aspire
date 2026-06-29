@@ -9,6 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Hosting.Dashboard.DashboardServiceData;
 
+#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "2")]
@@ -170,6 +172,8 @@ public class InteractionServiceTests
             () => interactionService.PromptNotificationAsync("Are you sure?", "Confirmation")).DefaultTimeout();
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => interactionService.PromptMessageBoxAsync("Are you sure?", "Confirmation")).DefaultTimeout();
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => interactionService.PromptProgressAsync("Please wait", "Working...")).DefaultTimeout();
     }
 
     [Fact]
@@ -1116,6 +1120,111 @@ public class InteractionServiceTests
 
         // Assert
         Assert.NotNull(ex);
+    }
+
+    [Fact]
+    public async Task PromptProgressAsync_WithWork_CompletesSuccessfully()
+    {
+        var interactionService = CreateInteractionService();
+
+        var workExecuted = false;
+        var result = await interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        {
+            Work = async ctx =>
+            {
+                await Task.Delay(10, ctx.CancellationToken);
+                workExecuted = true;
+            }
+        }).DefaultTimeout();
+
+        Assert.True(workExecuted);
+        Assert.True(result.Data);
+        Assert.False(result.Canceled);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptProgressAsync_WithWork_CancelledViaButton_ReturnsCanceled()
+    {
+        var interactionService = CreateInteractionService();
+
+        var tcs = new TaskCompletionSource();
+        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        {
+            PrimaryButtonText = "Cancel",
+            Work = async ctx =>
+            {
+                tcs.SetResult();
+                // Wait indefinitely until canceled
+                await Task.Delay(Timeout.Infinite, ctx.CancellationToken);
+            }
+        });
+
+        // Wait for work to start
+        await tcs.Task.DefaultTimeout();
+
+        // Simulate button click from dashboard
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        await CompleteInteractionAsync(interactionService, interaction.InteractionId, new InteractionCompletionState { Complete = true, State = false });
+
+        var result = await resultTask.DefaultTimeout();
+        Assert.True(result.Canceled);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptProgressAsync_WithoutWork_Cancellation_ClosesDialog()
+    {
+        var interactionService = CreateInteractionService();
+
+        var cts = new CancellationTokenSource();
+        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", cancellationToken: cts.Token);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        Assert.Equal(Interaction.InteractionState.InProgress, interaction.State);
+
+        cts.Cancel();
+
+        var result = await resultTask.DefaultTimeout();
+        Assert.True(result.Canceled);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptProgressAsync_WithoutWork_ButtonClick_ReturnsCanceled()
+    {
+        var interactionService = CreateInteractionService();
+
+        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        {
+            PrimaryButtonText = "Cancel"
+        });
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        // Simulate button click from dashboard (result = false means cancel button)
+        await CompleteInteractionAsync(interactionService, interaction.InteractionId, new InteractionCompletionState { Complete = true, State = false });
+
+        var result = await resultTask.DefaultTimeout();
+        Assert.True(result.Canceled);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
+    public async Task PromptProgressAsync_NullTitle_CreatesInteraction()
+    {
+        var interactionService = CreateInteractionService();
+
+        var cts = new CancellationTokenSource();
+        var resultTask = interactionService.PromptProgressAsync("Please wait...", cancellationToken: cts.Token);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        Assert.Equal(string.Empty, interaction.Title);
+        Assert.Equal("Please wait...", interaction.Message);
+        Assert.IsType<Interaction.ProgressInteractionInfo>(interaction.InteractionInfo);
+
+        cts.Cancel();
+        await resultTask.DefaultTimeout();
     }
 
     private static async Task CompleteInteractionAsync(InteractionService interactionService, int interactionId, InteractionCompletionState state, List<DashboardServiceData.InputDto>? inputs = null)

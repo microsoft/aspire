@@ -3017,6 +3017,7 @@ builder.Build().Run();");
     {
         var appHostCandidateFinder = new AppHostCandidateFinder(
             gitRepository ?? new TestGitRepository(),
+            environment ?? new TestEnvironment(),
             new ProfilingTelemetry(new ConfigurationBuilder().Build()),
             NullLogger<AppHostCandidateFinder>.Instance);
 

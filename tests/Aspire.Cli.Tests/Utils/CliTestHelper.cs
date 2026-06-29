@@ -36,6 +36,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Migrations;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Cli.Packaging;
@@ -286,6 +287,7 @@ internal static class CliTestHelper
         services.AddTransient<ExtensionInternalCommand>();
         services.AddTransient<WaitCommand>();
         services.AddTransient<RestoreCommand>();
+        services.AddSingleton<IMigration, TypeScriptAppHostMigration>();
         services.AddTransient<SdkCommand>();
         services.AddTransient<SdkGenerateCommand>();
         services.AddTransient<SdkDumpCommand>();
@@ -441,10 +443,10 @@ internal sealed class CliServiceCollectionTestOptions
         var sdkInstaller = serviceProvider.GetRequiredService<IDotNetSdkInstaller>();
         var gitRepository = serviceProvider.GetRequiredService<IGitRepository>();
         var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
-        var appHostCandidateFinder = serviceProvider.GetService<IAppHostCandidateFinder>()
-            ?? new AppHostCandidateFinder(gitRepository, profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
-        var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var environment = serviceProvider.GetRequiredService<IEnvironment>();
+        var appHostCandidateFinder = serviceProvider.GetService<IAppHostCandidateFinder>()
+            ?? new AppHostCandidateFinder(gitRepository, environment, profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
+        var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         return new ProjectLocator(logger, executionContext, environment, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, appHostCandidateFinder, telemetry);
     }
 
@@ -512,7 +514,7 @@ internal sealed class CliServiceCollectionTestOptions
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
         var logger = serviceProvider.GetRequiredService<ILogger<ScaffoldingService>>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new ScaffoldingService(appHostServerProjectFactory, serverSessionFactory, languageDiscovery, interactionService, logger, executionContext, serviceProvider.GetRequiredService<ProfilingTelemetry>());
+        return new ScaffoldingService(appHostServerProjectFactory, serverSessionFactory, languageDiscovery, interactionService, serviceProvider.GetRequiredService<IEnvironment>(), logger, executionContext, serviceProvider.GetRequiredService<ProfilingTelemetry>());
     };
 
     public Func<IServiceProvider, IProcessExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -599,7 +601,7 @@ internal sealed class CliServiceCollectionTestOptions
         var templateNuGetConfigService = serviceProvider.GetRequiredService<TemplateNuGetConfigService>();
         var dotNetFactory = new DotNetTemplateFactory(interactionService, runner, certificateService, prompter, executionContext, sdkInstaller, features, telemetry, hostEnvironment, templateNuGetConfigService, new HostEnvironment());
         var projectFactory = serviceProvider.GetRequiredService<IAppHostProjectFactory>();
-        var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, templateNuGetConfigService, cliTemplateLogger);
+        var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, serviceProvider.GetRequiredService<IEnvironment>(), templateNuGetConfigService, cliTemplateLogger);
         return new TemplateProvider([dotNetFactory, cliFactory]);
     };
 
@@ -645,7 +647,7 @@ internal sealed class CliServiceCollectionTestOptions
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         var logger = serviceProvider.GetRequiredService<ILogger<GitRepository>>();
         var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
-        return new GitRepository(executionContext, logger, profilingTelemetry);
+        return new GitRepository(executionContext, serviceProvider.GetRequiredService<IEnvironment>(), logger, profilingTelemetry);
     };
 
     public Func<IServiceProvider, INpmRunner> NpmRunnerFactory { get; set; } = _ => new FakeNpmRunner();

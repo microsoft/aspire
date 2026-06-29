@@ -14,6 +14,7 @@ import {
 } from '../views/ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from '../views/ResourceCommandArgumentsLoader';
 import { ResourceCommandArgumentInputJson } from '../views/AppHostDataRepository';
+import { extensionLogOutputChannel } from '../utils/logging';
 
 function makeInput(overrides: Partial<ResourceCommandArgumentInputJson> = {}): ResourceCommandArgumentInputJson {
     return {
@@ -387,9 +388,11 @@ suite('ResourceCommandArguments', () => {
 
         let capturedCommand: string | undefined;
         let capturedArgs: string[] | undefined;
+        let capturedEnv: unknown;
         const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, command, args, options) => {
             capturedCommand = command;
             capturedArgs = args;
+            capturedEnv = options?.env;
             queueMicrotask(() => {
                 options?.stdoutCallback?.('[{"name":"item","inputType":"Choice","options":{"banana":"Banana"}}]');
                 options?.exitCallback?.(0);
@@ -416,12 +419,14 @@ suite('ResourceCommandArguments', () => {
                 'argument-commands',
                 'dependent-arguments',
                 '--load-arguments',
+                '--non-interactive',
                 '--apphost',
                 '/repo/AppHost.csproj',
                 '--nologo',
                 '--',
                 '--category=fruit',
             ]);
+            assert.deepStrictEqual(capturedEnv, [{ name: 'ASPIRE_NON_INTERACTIVE', value: 'true' }]);
             assert.strictEqual(stdinEnd.calledOnce, true);
             assert.strictEqual(warningStub.called, false);
             assert.strictEqual(withProgressStub.calledOnce, true);
@@ -474,6 +479,7 @@ suite('ResourceCommandArguments', () => {
                 'argument-commands',
                 'dependent-arguments',
                 '--load-arguments',
+                '--non-interactive',
                 '--apphost',
                 '/repo/AppHost.csproj',
                 '--nologo',
@@ -485,6 +491,7 @@ suite('ResourceCommandArguments', () => {
                 'argument-commands',
                 'dependent-arguments',
                 '--load-arguments',
+                '--non-interactive',
                 '--apphost',
                 '/repo/AppHost.csproj',
                 '--',
@@ -532,6 +539,45 @@ suite('ResourceCommandArguments', () => {
         }
         finally {
             spawnStub.restore();
+            warningStub.restore();
+            withProgressStub.restore();
+        }
+    });
+
+    test('shared dynamic argument loader does not log raw failed command output', async () => {
+        const withProgressStub = sinon.stub(vscode.window, 'withProgress').callsFake((_options: any, task: any) => task(undefined, undefined));
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+        const logWarnStub = sinon.stub(extensionLogOutputChannel, 'warn');
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => 'aspire',
+        } as AspireTerminalProvider;
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+            queueMicrotask(() => {
+                options?.stderrCallback?.('secret stderr detail');
+                options?.exitCallback?.(1);
+            });
+
+            return { stdin: { end() { } } } as any;
+        });
+
+        try {
+            const loader = createResourceCommandArgumentLoader({
+                cliExecutionProvider: terminalProvider,
+                resourceName: 'argument-commands',
+                commandName: 'dependent-arguments',
+                appHostPath: '/repo/AppHost.csproj',
+            });
+
+            const loadedInputs = await loader([]);
+
+            assert.strictEqual(loadedInputs, undefined);
+            const logMessages = logWarnStub.getCalls().map(call => String(call.args[0])).join('\n');
+            assert.match(logMessages, /aspire resource --load-arguments exited with code 1/);
+            assert.doesNotMatch(logMessages, /secret stderr detail/);
+        }
+        finally {
+            spawnStub.restore();
+            logWarnStub.restore();
             warningStub.restore();
             withProgressStub.restore();
         }

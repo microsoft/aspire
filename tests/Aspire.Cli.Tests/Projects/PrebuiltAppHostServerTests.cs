@@ -959,6 +959,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             packagingService ?? MockPackagingServiceFactory.Create(),
             executionContext,
             new TestProcessExecutionFactory(),
+            new TestEnvironment(),
             NullLogger.Instance);
     }
 

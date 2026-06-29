@@ -769,5 +769,23 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LegacySettingsDetectedFix", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Legacy 'apphost.ts' layout detected at {0}.
+        /// </summary>
+        public static string LegacyTypeScriptAppHostMessageFormat {
+            get {
+                return ResourceManager.GetString("LegacyTypeScriptAppHostMessageFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Run 'aspire update --migrate' to apply the recommended migration....
+        /// </summary>
+        public static string PendingMigrationFix {
+            get {
+                return ResourceManager.GetString("PendingMigrationFix", resourceCulture);
+            }
+        }
     }
 }

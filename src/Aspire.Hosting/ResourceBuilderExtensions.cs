@@ -2937,7 +2937,7 @@ public static class ResourceBuilderExtensions
         }
 
 #pragma warning disable CS0618 // Parameter is obsolete but still flowed for compatibility.
-        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.Arguments, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility, commandOptions.ValidateArguments));
+        return builder.WithAnnotation(new ResourceCommandAnnotation(name, displayName, commandOptions.UpdateState ?? (c => ResourceCommandState.Enabled), executeCommand, commandOptions.Description, commandOptions.Parameter, commandOptions.Arguments, commandOptions.ConfirmationMessage, commandOptions.IconName, commandOptions.IconVariant, commandOptions.IsHighlighted, commandOptions.Visibility, commandOptions.ValidateArguments, commandOptions.Progress));
 #pragma warning restore CS0618
     }
 
@@ -3024,6 +3024,7 @@ public static class ResourceBuilderExtensions
         target.IconVariant = source.IconVariant;
         target.IsHighlighted = source.IsHighlighted;
         target.UpdateState = source.UpdateState;
+        target.Progress = source.Progress;
 #pragma warning restore CS0618
     }
 

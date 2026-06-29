@@ -205,6 +205,24 @@ public class MauiPlatformExtensionsTests
         var metadata = resource.Annotations.OfType<MauiProjectMetadata>().FirstOrDefault();
         Assert.NotNull(metadata);
         Assert.Equal(tempFile, metadata.ProjectPath);
+
+        var buildInfo = resource.Annotations.OfType<MauiBuildInfoAnnotation>().FirstOrDefault();
+        Assert.NotNull(buildInfo);
+        Assert.Equal(config.RequiredTfm, buildInfo.TargetFramework);
+        Assert.Equal(GetTestAssemblyConfiguration(), buildInfo.Configuration);
+        Assert.Equal(
+            config.ExpectedMsBuildProperties?.Select(property => $"-p:{property.Key}={property.Value}").ToArray() ?? [],
+            buildInfo.AdditionalBuildArguments);
+
+        var launchOverride = resource.Annotations.OfType<ProjectLaunchArgsOverrideAnnotation>().FirstOrDefault();
+        Assert.NotNull(launchOverride);
+        Assert.Collection(
+            launchOverride.Arguments,
+            arg => Assert.Equal("build", arg),
+            arg => Assert.Equal("--no-restore", arg),
+            arg => Assert.Equal("/t:Run", arg),
+            arg => Assert.Equal("-p:NoBuild=true", arg));
+        Assert.Equal("run", launchOverride.LeadingResourceArgumentToRemove);
     }
 
     [Theory]
@@ -691,6 +709,9 @@ public class MauiPlatformExtensionsTests
 
         return createMethod.Invoke(null, ["test", "dotnet"])!;
     }
+
+    private static string? GetTestAssemblyConfiguration() =>
+        typeof(MauiPlatformExtensionsTests).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
 
     private static List<T> GetLaunchConfigurations<T>(object executable)
     {

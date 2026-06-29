@@ -28,9 +28,9 @@ import { openLocalSettingsCommand, openGlobalSettingsCommand } from './commands/
 import { checkCliAvailableOrRedirect, checkForExistingAppHostPathInWorkspace } from './utils/workspace';
 import { AspireEditorCommandProvider } from './editor/AspireEditorCommandProvider';
 import { AspirePackageRestoreProvider } from './utils/AspirePackageRestoreProvider';
+import { installCliCommand, verifyCliInstalledCommand } from './commands/walkthroughCommands';
 import { AspireAppHostTreeProvider, isEnabledCommand } from './views/AspireAppHostTreeProvider';
-import { AppHostDataRepository } from './views/AppHostDataRepository';
-import { installCliStableCommand, installCliDailyCommand, verifyCliInstalledCommand } from './commands/walkthroughCommands';
+import { AppHostDataRepository, isMatchingAppHostPath } from './views/AppHostDataRepository';
 import { AspireMcpServerDefinitionProvider } from './mcp/AspireMcpServerDefinitionProvider';
 import { AspireCodeLensProvider } from './editor/AspireCodeLensProvider';
 import { AspireGutterDecorationProvider } from './editor/AspireGutterDecorationProvider';
@@ -39,6 +39,7 @@ import { getSupportedLanguageIds } from './editor/parsers/AppHostResourceParser'
 import { readGitCommitSha } from './utils/versionInfo';
 import { collectResourceCommandArguments } from './views/ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './views/ResourceCommandArgumentsLoader';
+import { executeResourceCommand } from './views/resourceCommandExecution';
 import { ResourceCommandJson } from './views/AppHostDataRepository';
 import { AppHostDiscoveryService } from './utils/appHostDiscovery';
 import { AppHostLaunchService } from './services/AppHostLaunchService';
@@ -154,9 +155,8 @@ export async function activate(context: vscode.ExtensionContext) {
   const runAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.runAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(true));
   const debugAppHostCommandRegistration = registerInstrumentedCommand('aspire-vscode.debugAppHostCommand', 'editor', () => editorCommandProvider.tryExecuteRunAppHost(false));
 
-  // Walkthrough commands (no CLI check - CLI may not be installed yet)
-  const installCliStableRegistration = registerInstrumentedCommand('aspire-vscode.installCliStable', 'walkthrough', installCliStableCommand);
-  const installCliDailyRegistration = registerInstrumentedCommand('aspire-vscode.installCliDaily', 'walkthrough', installCliDailyCommand);
+  // Walkthrough commands (no CLI check - the CLI may not be installed yet).
+  const installCliRegistration = registerInstrumentedCommand('aspire-vscode.installCli', 'walkthrough', installCliCommand);
   const verifyCliInstalledRegistration = registerInstrumentedCommand('aspire-vscode.verifyCliInstalled', 'walkthrough', verifyCliInstalledCommand);
 
   // Aspire panel - running app hosts tree view
@@ -263,12 +263,13 @@ export async function activate(context: vscode.ExtensionContext) {
   const codeLensRegistration = vscode.languages.registerCodeLensProvider(languageFilters, codeLensProvider);
   const codeLensDebugPipelineStepRegistration = registerInstrumentedCommand('aspire-vscode.codeLensDebugPipelineStep', 'codelens', (stepName: string) => editorCommandProvider.tryExecuteDoAppHost(false, stepName));
   const codeLensResourceActionRegistration = registerInstrumentedCommand('aspire-vscode.codeLensResourceAction', 'codelens', async (resourceName: string, action: string, appHostPath: string, resourceCommand?: ResourceCommandJson) => {
-    if (resourceCommand !== undefined && !isEnabledCommand(resourceCommand)) {
+    const effectiveResourceCommand = getCurrentResourceCommand(dataRepository, resourceName, action, appHostPath) ?? resourceCommand;
+    if (effectiveResourceCommand !== undefined && !isEnabledCommand(effectiveResourceCommand)) {
       extensionLogOutputChannel.warn(`Ignoring disabled CodeLens resource command '${action}' for resource '${resourceName}'.`);
       return;
     }
 
-    const commandArguments = await collectResourceCommandArguments(action, resourceCommand, {
+    const commandArguments = await collectResourceCommandArguments(action, effectiveResourceCommand, {
       secretWarningState: context.globalState,
       loadDynamicArguments: createResourceCommandArgumentLoader({
         cliExecutionProvider: terminalProvider,
@@ -281,10 +282,19 @@ export async function activate(context: vscode.ExtensionContext) {
       return;
     }
 
-    const command = appHostPath
-      ? ['resource', shellArg(resourceName), shellArg(action), '--apphost', shellArg(appHostPath)]
-      : ['resource', shellArg(resourceName), shellArg(action)];
-    terminalProvider.sendAspireCommandToAspireTerminal(command, true, commandArguments.args, { redactAdditionalArgs: commandArguments.containsSecret });
+    // Execute over the hidden CLI backchannel and surface the result inside VS Code, rather than
+    // typing `aspire resource ...` into the visible terminal. Returned values are rendered through
+    // the tree provider's read-only output document.
+    return await executeResourceCommand(
+      dataRepository,
+      (resource, command, content, outputAppHostPath) =>
+        appHostTreeProvider.showResourceCommandOutput(resource, command, content, outputAppHostPath),
+      {
+        resourceName,
+        commandName: action,
+        appHostPath: appHostPath || undefined,
+        additionalArgs: commandArguments.args,
+      });
   });
   const codeLensViewLogsRegistration = registerInstrumentedCommand('aspire-vscode.codeLensViewLogs', 'codelens', (resourceName: string, appHostPath: string) => {
     const command = appHostPath
@@ -318,7 +328,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(cliAddCommandRegistration, cliNewCommandRegistration, cliInitCommandRegistration, cliDeployCommandRegistration, cliPublishCommandRegistration, cliDoCommandRegistration, openTerminalCommandRegistration, configureLaunchJsonCommandRegistration);
   context.subscriptions.push(cliUpdateCommandRegistration, cliUpdateSelfCommandRegistration, settingsCommandRegistration, openLocalSettingsCommandRegistration, openGlobalSettingsCommandRegistration, runAppHostCommandRegistration, debugAppHostCommandRegistration);
-  context.subscriptions.push(installCliStableRegistration, installCliDailyRegistration, verifyCliInstalledRegistration);
+  context.subscriptions.push(installCliRegistration, verifyCliInstalledRegistration);
 
   const debugConfigProvider = new AspireDebugConfigurationProvider(appHostDiscoveryService);
   context.subscriptions.push(
@@ -414,6 +424,16 @@ function getExtensionModeForTelemetry(mode: vscode.ExtensionMode): string {
   }
 }
 
+function getCurrentResourceCommand(dataRepository: AppHostDataRepository, resourceName: string, commandName: string, appHostPath: string | undefined): ResourceCommandJson | undefined {
+  const resources = dataRepository.viewMode === 'workspace'
+    && (!appHostPath || isMatchingAppHostPath(dataRepository.workspaceAppHostPath, appHostPath))
+    ? dataRepository.workspaceResources
+    : dataRepository.appHosts.find(appHost => isMatchingAppHostPath(appHost.appHostPath, appHostPath))?.resources ?? [];
+  const resource = resources.find(candidate => candidate.name === resourceName || candidate.displayName === resourceName);
+
+  return resource?.commands?.[commandName] ?? undefined;
+}
+
 async function tryExecuteCommand(commandName: string, terminalProvider: AspireTerminalProvider, command: (terminalProvider: AspireTerminalProvider) => Promise<void>): Promise<void> {
   try {
     await withCommandTelemetry(commandName, async () => {
@@ -504,10 +524,10 @@ function createExtensionApi(
       return appHosts.map(appHost => cloneAppHostState(appHost, false));
     },
     async stopResource(resourceName: string, appHostPath: string): Promise<void> {
-      return dataRepository.runResourceCommand(resourceName, appHostPath, 'stop');
+      await dataRepository.runResourceCommand(resourceName, appHostPath, 'stop');
     },
     async startResource(resourceName: string, appHostPath: string): Promise<void> {
-      return dataRepository.runResourceCommand(resourceName, appHostPath, 'start');
+      await dataRepository.runResourceCommand(resourceName, appHostPath, 'start');
     },
     acquireTestRunSession: (options) => testRunSessionManager.acquireTestRunSession(options),
     releaseTestRunSession: (id) => testRunSessionManager.releaseTestRunSession(id),

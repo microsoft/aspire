@@ -26,9 +26,24 @@ internal sealed class TestEnvironment : IEnvironment
         return Variables.Select(pair => (pair.Key, pair.Value));
     }
 
-    public bool IsWindows { get; init; } = OperatingSystem.IsWindows();
+    private bool ReportIsWindows { get; init; } = OperatingSystem.IsWindows();
 
-    public bool IsLinux { get; init; } = OperatingSystem.IsLinux();
+    private bool ReportIsLinux { get; init; } = OperatingSystem.IsLinux();
 
-    public bool IsMacOS { get; init; } = OperatingSystem.IsMacOS();
+    private bool ReportIsMacOS { get; init; } = OperatingSystem.IsMacOS();
+
+    public bool IsWindows() => ReportIsWindows;
+
+    public bool IsLinux() => ReportIsLinux;
+
+    public bool IsMacOS() => ReportIsMacOS;
+
+    public static TestEnvironment CreateWindows(IReadOnlyDictionary<string, string?>? variables = null)
+        => new(variables) { ReportIsWindows = true, ReportIsLinux = false, ReportIsMacOS = false };
+
+    public static TestEnvironment CreateLinux(IReadOnlyDictionary<string, string?>? variables = null)
+        => new(variables) { ReportIsWindows = false, ReportIsLinux = true, ReportIsMacOS = false };
+
+    public static TestEnvironment CreateMacOS(IReadOnlyDictionary<string, string?>? variables = null)
+        => new(variables) { ReportIsWindows = false, ReportIsLinux = false, ReportIsMacOS = true };
 }
