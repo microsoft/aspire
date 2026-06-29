@@ -2426,6 +2426,57 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
     }
 
+    [Theory]
+    [InlineData("src/Aspire.Hosting/Aspire.Hosting.csproj")]
+    [InlineData("src/Aspire.Cli/Aspire.Cli.csproj")]
+    [InlineData("src/Aspire.Hosting.Yarp/Aspire.Hosting.Yarp.csproj")]
+    [InlineData("src/Aspire.Hosting.Azure/Aspire.Hosting.Azure.csproj")]
+    [InlineData("src/Aspire.Dashboard/Aspire.Dashboard.csproj")]
+    public void IsLikelyAppHost_OrdinaryLibraryCsprojUnderSrc_ReturnsFalse(string relativePath)
+    {
+        // Repo-level smoke probe locking in the CLI-specialist regression evidence: at a prior PR
+        // head these ordinary library projects under src/ classified as likely AppHosts because the
+        // dynamic walk-up fallback treated *any* GetPathOfFileAbove import as uncertain — including
+        // the conventional Directory.Build.props/.targets chaining in this repo's own
+        // src/Directory.Build.props and tests/Directory.Build.props. The reflection probe at that
+        // head reported 423/423 projects as likely AppHosts, 347 of them only because of ancestor
+        // dynamic imports. With the conventional-chaining bypass and the function-call-shape
+        // narrowing in place, these ordinary csprojs must classify as not-likely-AppHost. Probing
+        // real repo files rather than only synthetic shapes guards against future regressions where
+        // a refactor of ContainsDynamicWalkUpImport accidentally re-broadens the fallback.
+        var repoRoot = GetRepoRoot();
+        if (repoRoot is null)
+        {
+            // Tests can run from a packaged install where the repo layout isn't present. Skip
+            // rather than fail; the unit-test shapes above already lock in the algorithmic behavior.
+            return;
+        }
+
+        var projectFile = new FileInfo(Path.Combine(repoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+        if (!projectFile.Exists)
+        {
+            // A repo refactor moved the probed csproj. Don't fail the suite on file relocation —
+            // the algorithmic coverage above still asserts the narrowing rules.
+            return;
+        }
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile),
+            $"{relativePath} is an ordinary library and must not classify as a likely AppHost.");
+    }
+
+    private static string? GetRepoRoot()
+    {
+        // Walk up from the test assembly directory until we find Aspire.slnx (the canonical repo
+        // root marker, also used by AspireRepositoryDetector). Return null if we hit the filesystem
+        // root without finding it, which happens when these tests run from a packaged install.
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Aspire.slnx")))
+        {
+            dir = dir.Parent;
+        }
+        return dir?.FullName;
+    }
+
     private FileInfo WriteIsLikelyAppHostProject(string fileName, string content)
     {
         var path = Path.Combine(_workspace.WorkspaceRoot.FullName, fileName);
