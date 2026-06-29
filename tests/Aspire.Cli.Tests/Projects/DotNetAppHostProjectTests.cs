@@ -2502,6 +2502,24 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildPropsDifferentlyCasedConventionalChaining_ReturnsTrue()
+    {
+        // On case-sensitive filesystems, GetPathOfFileAbove('directory.build.props', ...) can resolve
+        // a different file than the exact Directory.Build.props name the ancestor walk probes. Treat
+        // the chain as uncertain so MSBuild can decide rather than silently rejecting a real AppHost.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "Library", "Library.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject(Path.Combine("src", "Directory.Build.props"), """
+            <Project>
+              <Import Project="$([MSBuild]::GetPathOfFileAbove('directory.build.props', '$(MSBuildThisFileDirectory)../'))" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
     public void IsLikelyAppHost_AncestorDirectoryBuildPropsUnquotedNonConventionalImport_ReturnsTrue()
     {
         // Symmetric positive for unquoted args: an unquoted non-conventional target (Shared.props)

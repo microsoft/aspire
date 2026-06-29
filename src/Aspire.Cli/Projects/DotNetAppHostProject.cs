@@ -352,7 +352,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // case-sensitive substring check here would silently filter out the lower/mixed-case variants
         // and re-open the false-negative window this fallback is meant to close.
         //
-        // Special-case conventional Directory.Build.props / Directory.Build.targets chaining: lines
+        // Special-case exact-cased conventional Directory.Build.props / Directory.Build.targets chaining: lines
         // such as
         //   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', ...))" />
         // appear in this repo's own src/Directory.Build.props, tests/Directory.Build.props, and
@@ -360,7 +360,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // and Directory.Build.targets at every parent level by name, so the dynamic chain delivers
         // no content we cannot already see — and treating it as uncertain over-promotes every
         // ordinary project under src/, tests/, etc. Non-conventional targets (RepoTesting.props,
-        // Shared.props, Aspire.Common.props, ...) are still treated as uncertain.
+        // Shared.props, Aspire.Common.props, ...) and differently-cased targets on case-sensitive
+        // filesystems are still treated as uncertain.
         // Docs: https://learn.microsoft.com/visualstudio/msbuild/property-functions#msbuild-property-functions
         foreach (var import in root.Descendants().Where(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal)))
         {
@@ -576,12 +577,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
     private static bool IsConventionalDirectoryBuildFileName(string fileName)
     {
-        // Conventional MSBuild walk-up files are matched by NTFS/macOS-style filesystem casing rules,
-        // and MSBuild itself is case-insensitive when resolving these by name. Compare with
-        // OrdinalIgnoreCase so a casing tweak in author-controlled build files doesn't accidentally
-        // promote ordinary projects.
-        return fileName.Equals(DirectoryBuildPropsName, StringComparison.OrdinalIgnoreCase)
-            || fileName.Equals(DirectoryBuildTargetsName, StringComparison.OrdinalIgnoreCase);
+        // Only skip dynamic walk-up imports for the exact file names the ancestor walk probes.
+        // On case-sensitive filesystems, differently-cased names can resolve to different files;
+        // keep those candidates flowing to MSBuild instead of assuming we already inspected them.
+        return fileName.Equals(DirectoryBuildPropsName, StringComparison.Ordinal)
+            || fileName.Equals(DirectoryBuildTargetsName, StringComparison.Ordinal);
     }
 
     // Strict MSBuild property-function call shape: the full $([MSBuild]::Function( prefix. Static
