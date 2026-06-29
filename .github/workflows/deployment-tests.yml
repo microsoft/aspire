@@ -314,12 +314,17 @@ jobs:
           Azure__Location: westus3
           GH_TOKEN: ${{ github.token }}
         run: |
+          # --ignore-exit-code 8: MTP returns exit code 8 ("zero tests ran") when the single
+          # matrix test is dynamically skipped (e.g. on a transient Azure regional-capacity error),
+          # which would otherwise be treated as a failure below. Treating 8 as success — the repo
+          # convention baked into MtpBaseArgs (eng/Testing.props) — keeps a skipped deploy green.
           ./dotnet.sh test --project tests/Aspire.Deployment.EndToEnd.Tests/Aspire.Deployment.EndToEnd.Tests.csproj \
             -c Release \
             --results-directory ${{ github.workspace }}/testresults \
             -- \
             --report-trx --report-trx-filename "${{ matrix.shortname }}.trx" \
             --filter-not-trait "quarantined=true" \
+            --ignore-exit-code 8 \
             ${{ matrix.extraTestArgs }} \
             || echo "test_failed=true" >> $GITHUB_OUTPUT
 
