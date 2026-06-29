@@ -384,7 +384,7 @@ suite('utils/cliPath tests', () => {
                 const result = getCliExecutionCommand('C:\\Tools\\aspire.cmd', ['--source', '%PRIVATE_FEED%']);
 
                 assert.strictEqual(result.file, process.env.ComSpec);
-                assert.deepStrictEqual(result.args, ['/d', '/v:off', '/s', '/c', 'call "C:\\Tools\\aspire.cmd" "--source" "%%%%PRIVATE_FEED%%%%"']);
+                assert.deepStrictEqual(result.args, ['/d', '/v:off', '/s', '/c', 'call "C:\\Tools\\aspire.cmd" "--source" "^%PRIVATE_FEED^%"']);
                 assert.strictEqual(result.windowsVerbatimArguments, true);
             }
             finally {
