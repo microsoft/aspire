@@ -61,20 +61,32 @@ function quoteCmdArgument(value: string): string {
     // Many .cmd shims then forward arguments to a native executable with `%*`, for example:
     //   "node.exe" "aspire.js" %*
     // Because `call` reparses the command before the target .cmd sees `%*`, percent signs must be
-    // caret-escaped at the outer cmd.exe layer. `^%PRIVATE_FEED^%` reaches the shim's `%*` as the
-    // literal `%PRIVATE_FEED%` value instead of expanding the caller's PRIVATE_FEED environment
-    // variable. Doubling percents is not enough here: in a non-batch `cmd /c` command line,
-    // `%%%%PRIVATE_FEED%%%%` still expands the middle `%PRIVATE_FEED%` and passes
-    // `%%%expanded-value%%%`.
+    // caret-escaped at the outer cmd.exe layer. Caret escapes inside quotes are preserved literally,
+    // so percent signs split the quoted token:
+    //   "--source="^%"PRIVATE_FEED"^%
+    // reaches the shim's `%*` as the single literal `--source=%PRIVATE_FEED%` value instead of
+    // expanding the caller's PRIVATE_FEED environment variable. Doubling percents is not enough
+    // here: in a non-batch `cmd /c` command line, `%%%%PRIVATE_FEED%%%%` still expands the middle
+    // `%PRIVATE_FEED%` and passes `%%%expanded-value%%%`.
     //
     // `%*` is parsed later by normal Windows argv rules, so trailing backslashes must also be
     // doubled before our closing quote (`"--path=C:\temp\\" "next"`), and backslashes before
     // embedded quotes must be doubled before cmd's doubled-quote escape.
-    const valueWithEscapedPercents = value.replace(/%/g, '^%');
+    if (value.includes('%')) {
+        return value
+            .split('%')
+            .map(segment => segment.length > 0 ? quoteCmdLiteralSegment(segment) : '')
+            .join('^%');
+    }
+
+    return quoteCmdLiteralSegment(value);
+}
+
+function quoteCmdLiteralSegment(value: string): string {
     let quotedValue = '';
     let backslashCount = 0;
 
-    for (const character of valueWithEscapedPercents) {
+    for (const character of value) {
         if (character === '\\') {
             backslashCount++;
             continue;
