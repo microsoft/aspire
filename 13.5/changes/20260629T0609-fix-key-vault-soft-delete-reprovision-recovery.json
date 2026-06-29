@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "When a Key Vault is soft-deleted, Aspire now correctly includes implicit Key Vault children (such as those created for PostgreSQL password authentication) during parent resource reprovision, avoiding ARM deleted-state conflicts and surfacing clearer diagnostics.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🗝️",
+  "firstMergedAt": "2026-06-29T06:09:27Z",
+  "lastMergedAt": "2026-06-29T06:09:27Z",
+  "name": "Fix Key Vault soft-delete conflict during Azure reprovisioning",
+  "owner": "davidfowl",
+  "prs": [
+    18465
+  ]
+}

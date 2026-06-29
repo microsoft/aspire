@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "New feature: PromptProgressAsync API and CommandProgressOptions for progress dialogs in AppHost and Dashboard",
+  "mergedAt": "2026-06-29T06:14:32Z",
+  "number": 18493,
+  "runDate": "2026-06-29T07:33:37Z",
+  "status": "included",
+  "title": "Add PromptProgressAsync API to IInteractionService"
+}

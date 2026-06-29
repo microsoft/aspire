@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only changes - fixes flaky LoggerFactoryIsUsedByRegisteredClient conformance test across Azure component tests",
+  "mergedAt": "2026-06-29T06:48:49Z",
+  "number": 18546,
+  "runDate": "2026-06-29T07:33:37Z",
+  "status": "excluded",
+  "title": "Fix flaky LoggerFactoryIsUsedByRegisteredClient conformance test"
+}

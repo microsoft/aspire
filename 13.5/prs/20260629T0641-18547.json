@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CI maintenance only - disabling flaky VS Code extension E2E tests in GitHub Actions workflow",
+  "mergedAt": "2026-06-29T06:41:35Z",
+  "number": 18547,
+  "runDate": "2026-06-29T07:33:37Z",
+  "status": "excluded",
+  "title": "Disable VS Code extension E2E tests in CI"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents icon fallback behavior for resource commands (PR microsoft/aspire#18389)",
+  "mergedAt": "2026-06-29T05:28:07Z",
+  "number": 1277,
+  "runDate": "2026-06-29T07:33:37Z",
+  "status": "included",
+  "title": "[docs] Document icon fallback behavior for resource commands"
+}

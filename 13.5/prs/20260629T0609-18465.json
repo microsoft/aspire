@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Bug fix for Key Vault soft-delete conflict during Azure resource reprovisioning",
+  "mergedAt": "2026-06-29T06:09:27Z",
+  "number": 18465,
+  "runDate": "2026-06-29T07:33:37Z",
+  "status": "included",
+  "title": "Fix Key Vault soft-delete reprovision recovery"
+}
