@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "npm dependency upgrade for docs site; no matching changelog entry",
+  "mergedAt": "2026-06-29T16:40:55Z",
+  "number": 1309,
+  "runDate": "2026-06-29T18:37:32Z",
+  "status": "excluded",
+  "title": "Upgrade all npm packages"
+}

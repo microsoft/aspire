@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "VS Code resource commands now run via CLI backchannel without opening a terminal",
+  "mergedAt": "2026-06-29T15:03:03Z",
+  "number": 18457,
+  "runDate": "2026-06-29T18:37:32Z",
+  "status": "included",
+  "title": "Execute VS Code resource commands without opening the terminal"
+}

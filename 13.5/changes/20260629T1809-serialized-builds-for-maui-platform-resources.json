@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "��",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@jfversluis"
+  ],
+  "description": "Aspire now serializes MSBuild invocations for MAUI platform resources (Android, iOS, Mac Catalyst, Windows) that share the same project file. This prevents intermittent file-locking and XamlC assembly resolution failures caused by running multiple platform builds concurrently. Build state is reflected as Queued and Building in the dashboard.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🏗️",
+  "firstMergedAt": "2026-06-29T18:09:12Z",
+  "lastMergedAt": "2026-06-29T18:09:12Z",
+  "name": "Serialized builds for MAUI platform resources",
+  "owner": "radical",
+  "prs": [
+    15958
+  ]
+}

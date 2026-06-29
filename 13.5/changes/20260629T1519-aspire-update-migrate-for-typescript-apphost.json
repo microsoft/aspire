@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The `aspire update` command now supports a `--migrate` flag that detects and automatically upgrades legacy `apphost.ts` TypeScript AppHosts to the newer `apphost.mts` format. A warning is shown when running other CLI commands against an unmigrated project. The migration system is pluggable so future format migrations can be added without new commands.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔄",
+  "firstMergedAt": "2026-06-29T15:19:08Z",
+  "lastMergedAt": "2026-06-29T15:19:08Z",
+  "name": "`aspire update --migrate` for TypeScript AppHost format",
+  "owner": "sebastienros",
+  "prs": [
+    18294
+  ]
+}

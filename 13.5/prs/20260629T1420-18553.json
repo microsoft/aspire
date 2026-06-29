@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "New aspire update --migrate command to upgrade TypeScript AppHosts from apphost.ts to apphost.mts",
+  "mergedAt": "2026-06-29T15:19:08Z",
+  "number": 18294,
+  "runDate": "2026-06-29T18:37:32Z",
+  "status": "included",
+  "title": "Add warning and `aspire update --migrate` path from apphost.ts to apphost.mts"
+}

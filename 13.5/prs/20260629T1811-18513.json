@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Internal refactoring — centralizes MAUI MSBuild property name constants; no user-visible impact",
+  "mergedAt": "2026-06-29T18:11:37Z",
+  "number": 18513,
+  "runDate": "2026-06-29T18:37:32Z",
+  "status": "excluded",
+  "title": "Centralize Maui MSBuild property names as consts"
+}

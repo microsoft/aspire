@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "aspire add and integration search now filter to polyglot-compatible integrations for non-C# AppHosts",
+  "mergedAt": "2026-06-29T15:19:26Z",
+  "number": 18293,
+  "runDate": "2026-06-29T18:37:32Z",
+  "status": "included",
+  "title": "Add polyglot-compatible integration discovery"
+}

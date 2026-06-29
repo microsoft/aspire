@@ -1,0 +1,9 @@
+{
+  "author": "jfversluis",
+  "comment": "Serializes MAUI platform builds to prevent concurrent MSBuild failures — community contribution by jfversluis",
+  "mergedAt": "2026-06-29T18:09:12Z",
+  "number": 15958,
+  "runDate": "2026-06-29T18:37:32Z",
+  "status": "included",
+  "title": "Add MAUI build queue to serialize platform builds"
+}

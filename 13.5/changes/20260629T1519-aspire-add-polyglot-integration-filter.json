@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire add` and `aspire integration list/search` now filter results to show only integrations compatible with the active AppHost language. Polyglot AppHost users (TypeScript, Python, Go, Java, Rust) no longer see C#-only packages they cannot wire up.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-06-29T15:19:26Z",
+  "lastMergedAt": "2026-06-29T15:19:26Z",
+  "name": "`aspire add` filters to polyglot-compatible integrations",
+  "owner": "sebastienros",
+  "prs": [
+    18293
+  ]
+}

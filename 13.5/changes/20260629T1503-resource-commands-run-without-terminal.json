@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "VS Code resource commands (start, stop, restart, and custom commands) now run via the CLI backchannel instead of opening a visible terminal. Results surface as notifications, preventing command output from mixing with unrelated terminal content and avoiding sensitive argument exposure in terminal scrollback.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔇",
+  "firstMergedAt": "2026-06-29T15:03:03Z",
+  "lastMergedAt": "2026-06-29T15:03:03Z",
+  "name": "Resource commands run without opening a terminal",
+  "owner": "adamint",
+  "prs": [
+    18457
+  ]
+}
