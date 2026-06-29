@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Maui;
+using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Utilities;
 
 namespace Aspire.Hosting;
@@ -397,7 +398,12 @@ public static class MauiiOSExtensions
             msBuildProperties[KnownMauiMSBuildProperties.DeviceName] = $":v2:udid={simulatorId}";
             additionalArgs.Add($"-p:{KnownMauiMSBuildProperties.DeviceName}={msBuildProperties[KnownMauiMSBuildProperties.DeviceName]}");
         }
-        // If no simulator ID specified, dotnet run will use the default simulator
+        else
+        {
+            resourceBuilder.WithAnnotation(
+                new SelectedEmulatorAnnotation(MauiTargetSelectionKind.IOSSimulator),
+                ResourceAnnotationMutationBehavior.Replace);
+        }
 
         // Configure the platform resource with common settings
         // iOS runs only on macOS - check for macOS platform

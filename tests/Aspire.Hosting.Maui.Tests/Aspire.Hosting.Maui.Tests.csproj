@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)\TestModuleInitializer.cs" />
+    <Compile Include="$(TestsSharedDir)\TestInteractionService.cs" LinkBase="shared" />
   </ItemGroup>
 
 </Project>
