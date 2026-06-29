@@ -60,10 +60,15 @@ function quoteCmdArgument(value: string): string {
     //   cmd.exe /d /v:off /s /c call "aspire.cmd" "<arg>" ...
     // Many .cmd shims then forward arguments to a native executable with `%*`, for example:
     //   "node.exe" "aspire.js" %*
-    // Because `%*` is parsed later by normal Windows argv rules, trailing backslashes must be
+    // Because `call` reparses the command before the target .cmd sees `%*`, percent signs need
+    // two rounds of batch escaping. `%%%%PRIVATE_FEED%%%%` reaches the shim as
+    // `%%PRIVATE_FEED%%`, then the shim's `%*` forwarding preserves `%PRIVATE_FEED%` literally
+    // instead of expanding the caller's PRIVATE_FEED environment variable.
+    //
+    // `%*` is parsed later by normal Windows argv rules, so trailing backslashes must also be
     // doubled before our closing quote (`"--path=C:\temp\\" "next"`), and backslashes before
     // embedded quotes must be doubled before cmd's doubled-quote escape.
-    const valueWithEscapedPercents = value.replace(/%/g, '%%');
+    const valueWithEscapedPercents = value.replace(/%/g, '%%%%');
     let quotedValue = '';
     let backslashCount = 0;
 

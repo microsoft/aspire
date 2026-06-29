@@ -80,7 +80,7 @@ suite('spawnCliProcess tests', () => {
                 '/v:off',
                 '/s',
                 '/c',
-                'call "C:\\Tools\\Aspire CLI\\aspire.cmd" "resource" "api&whoami" "echo" "--" "--message=hello & del C:\\important" "--path=%%PATH%%" "--literal=""quoted"""'
+                'call "C:\\Tools\\Aspire CLI\\aspire.cmd" "resource" "api&whoami" "echo" "--" "--message=hello & del C:\\important" "--path=%%%%PATH%%%%" "--literal=""quoted"""'
             ]);
             assert.strictEqual(result.windowsVerbatimArguments, true);
         }

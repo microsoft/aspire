@@ -375,7 +375,7 @@ suite('utils/cliPath tests', () => {
             }
         });
 
-        test('escapes percent signs for Windows cmd shim arguments', () => {
+        test('escapes percent signs for Windows cmd shim arguments across call reparsing', () => {
             const platformStub = sinon.stub(process, 'platform').value('win32');
             const originalComSpec = process.env.ComSpec;
             process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
@@ -384,7 +384,7 @@ suite('utils/cliPath tests', () => {
                 const result = getCliExecutionCommand('C:\\Tools\\aspire.cmd', ['--source', '%PRIVATE_FEED%']);
 
                 assert.strictEqual(result.file, process.env.ComSpec);
-                assert.deepStrictEqual(result.args, ['/d', '/v:off', '/s', '/c', 'call "C:\\Tools\\aspire.cmd" "--source" "%%PRIVATE_FEED%%"']);
+                assert.deepStrictEqual(result.args, ['/d', '/v:off', '/s', '/c', 'call "C:\\Tools\\aspire.cmd" "--source" "%%%%PRIVATE_FEED%%%%"']);
                 assert.strictEqual(result.windowsVerbatimArguments, true);
             }
             finally {
