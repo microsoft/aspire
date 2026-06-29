@@ -29,7 +29,7 @@ namespace Aspire.Cli.Projects;
 /// <summary>
 /// Handler for .NET AppHost projects (.csproj and single-file .cs).
 /// </summary>
-internal sealed class DotNetAppHostProject : IAppHostProject
+internal sealed partial class DotNetAppHostProject : IAppHostProject
 {
     private readonly IDotNetCliRunner _runner;
     private readonly IInteractionService _interactionService;
@@ -388,7 +388,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             //   <Import Project="build/GetPathOfFileAbove.props" />
             // contains the helper name as path text but is not a function call, and treating it
             // as uncertain would over-promote ordinary projects.
-            if (s_walkUpHelperCallRegex.IsMatch(project))
+            if (WalkUpFunctionCallStartRegex().IsMatch(project))
             {
                 return true;
             }
@@ -411,7 +411,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // the resolved target cannot be determined statically (e.g. an MSBuild expression appears
         // where the file name would be). The caller treats false as "fall through to the fallback
         // shape check" and ultimately as "uncertain".
-        var callMatch = s_walkUpFunctionCallStartRegex.Match(projectAttributeValue);
+        var callMatch = WalkUpFunctionCallStartRegex().Match(projectAttributeValue);
         if (!callMatch.Success)
         {
             targetFileName = string.Empty;
@@ -589,17 +589,10 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     // "build/GetPathOfFileAbove('Shared.props').props") do NOT match because they lack the
     // $([MSBuild]::...) wrapper that MSBuild requires for property-function invocation.
     // Docs: https://learn.microsoft.com/visualstudio/msbuild/property-functions#calling-static-methods
-    private static readonly Regex s_walkUpFunctionCallStartRegex = new(
+    [GeneratedRegex(
         @"\$\(\s*\[MSBuild\]\s*::\s*(GetPathOfFileAbove|GetDirectoryNameOfFileAbove)\s*\(",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
-    // Same strict shape, used as the conservative fallback when TryGetWalkUpTargetFileName cannot
-    // determine a clean target file name (e.g. file-name argument is itself an MSBuild expression
-    // or the suffix contains a $(...) reference). Matching this still requires the full
-    // $([MSBuild]::...) prefix, so literal path text containing the helper name is excluded.
-    private static readonly Regex s_walkUpHelperCallRegex = new(
-        @"\$\(\s*\[MSBuild\]\s*::\s*(?:GetPathOfFileAbove|GetDirectoryNameOfFileAbove)\s*\(",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex WalkUpFunctionCallStartRegex();
 
     private static bool ContainsAppHostMarker(XElement root)
     {

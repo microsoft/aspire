@@ -2223,7 +2223,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         // The ancestor walk already enumerates Directory.Build.props and Directory.Build.targets at
         // every parent level by name, so the chain delivers no content the pre-check cannot already
         // see. Treating this as "uncertain" over-promotes every ordinary project under src/, tests/,
-        // and similar repo layouts — exactly the false-positive the architectural review caught.
+        // and similar repo layouts.
         var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "Library", "Library.csproj"), """
             <Project Sdk="Microsoft.NET.Sdk" />
             """);
@@ -2325,9 +2325,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         // imports that pull in Arcade, common analyzer polyfills, or similar shared infrastructure but
         // never set IsAspireHost or import Aspire.AppHost.Sdk. Without this narrowing, the conservative
         // fallback would treat *every* descendant project as "possibly an AppHost" in a typical .NET
-        // repo, which defeats the purpose of the cheap pre-check introduced in #18436. Only genuinely
-        // unresolved/dynamic imports (e.g. <Import Project="$([MSBuild]::GetPathOfFileAbove(...))" />)
-        // should trigger the fallback; ordinary unrelated imports must not.
+        // repo, which defeats the purpose of the cheap pre-check. Only genuinely unresolved/dynamic
+        // imports (e.g. <Import Project="$([MSBuild]::GetPathOfFileAbove(...))" />) should trigger
+        // the fallback; ordinary unrelated imports must not.
         var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "Library", "Library.csproj"), """
             <Project Sdk="Microsoft.NET.Sdk" />
             """);
@@ -2559,23 +2559,21 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public void IsLikelyAppHost_AncestorImportAppendsNonConventionalFileAfterGetDirectoryNameOfFileAbove_ReturnsTrue()
+    public void IsLikelyAppHost_AncestorImportAppendsCustomFileAfterGetDirectoryNameOfFileAboveAnchor_ReturnsTrue()
     {
         // GetDirectoryNameOfFileAbove returns a *directory* (the directory containing the named
         // file). A real import that uses it concatenates a file name onto that directory, e.g.
-        //   $([MSBuild]::GetDirectoryNameOfFileAbove(.., 'Directory.Build.props'))/Shared.props
-        // The actual imported file is the appended segment — here Shared.props — which the
+        //   $([MSBuild]::GetDirectoryNameOfFileAbove(.., 'Directory.Build.props'))/Custom.props
+        // The actual imported file is the appended segment — here Custom.props — which the
         // ancestor walk does NOT enumerate by name. Looking only at the second function argument
         // (Directory.Build.props) and skipping the project would silently reject a real chain
-        // pulling in arbitrary shared content. The CLI-specialist MSBuild probe confirmed this
-        // shape evaluates IsAspireHost=true at MSBuild time, so the prefilter must keep the
-        // project as a candidate.
+        // pulling in arbitrary shared content.
         var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "Library", "Library.csproj"), """
             <Project Sdk="Microsoft.NET.Sdk" />
             """);
         WriteIsLikelyAppHostProject(Path.Combine("src", "Directory.Build.props"), """
             <Project>
-              <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)..', 'Directory.Build.props'))/Shared.props" />
+              <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)..', 'Directory.Build.props'))/Custom.props" />
             </Project>
             """);
 
@@ -2586,16 +2584,16 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     public void IsLikelyAppHost_ProjectFileImportAppendsNonConventionalFileAfterGetDirectoryNameOfFileAbove_ReturnsTrue()
     {
         // Project-file variant of the suffix-aware blocker: the same
-        //   $([MSBuild]::GetDirectoryNameOfFileAbove(..., 'Directory.Build.props'))/Shared.props
+        //   $([MSBuild]::GetDirectoryNameOfFileAbove(..., 'Directory.Build.props'))/Custom.props
         // shape can appear directly in a normal-named csproj. The captured second argument is
-        // conventional, but the actual imported file is the appended Shared.props, which the
+        // conventional, but the actual imported file is the appended Custom.props, which the
         // ancestor walk does not enumerate. Without suffix awareness the project is silently
         // rejected before MSBuild evaluation — isolated here from the ancestor-walk path so a
         // future refactor that breaks suffix extraction surfaces a clear, project-file-level
         // failure rather than only being caught at the ancestor level.
         var projectFile = WriteIsLikelyAppHostProject("Library.csproj", """
             <Project Sdk="Microsoft.NET.Sdk">
-              <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)..', 'Directory.Build.props'))/Shared.props" />
+              <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)..', 'Directory.Build.props'))/Custom.props" />
             </Project>
             """);
 
@@ -2610,16 +2608,11 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     [InlineData("src/Aspire.Dashboard/Aspire.Dashboard.csproj")]
     public void IsLikelyAppHost_OrdinaryLibraryCsprojUnderSrc_ReturnsFalse(string relativePath)
     {
-        // Repo-level smoke probe locking in the CLI-specialist regression evidence: at a prior PR
-        // head these ordinary library projects under src/ classified as likely AppHosts because the
-        // dynamic walk-up fallback treated *any* GetPathOfFileAbove import as uncertain — including
-        // the conventional Directory.Build.props/.targets chaining in this repo's own
-        // src/Directory.Build.props and tests/Directory.Build.props. The reflection probe at that
-        // head reported 423/423 projects as likely AppHosts, 347 of them only because of ancestor
-        // dynamic imports. With the conventional-chaining bypass and the function-call-shape
-        // narrowing in place, these ordinary csprojs must classify as not-likely-AppHost. Probing
-        // real repo files rather than only synthetic shapes guards against future regressions where
-        // a refactor of ContainsDynamicWalkUpImport accidentally re-broadens the fallback.
+        // These ordinary library projects sit under repo-level Directory.Build.* files that chain to
+        // parent build files. The conventional-chaining bypass and function-call-shape narrowing
+        // keep those csprojs classified as not-likely-AppHost. Probing real repo files rather than
+        // only synthetic shapes guards against future regressions where a refactor of
+        // ContainsDynamicWalkUpImport accidentally re-broadens the fallback.
         var repoRoot = GetRepoRoot();
         if (repoRoot is null)
         {
