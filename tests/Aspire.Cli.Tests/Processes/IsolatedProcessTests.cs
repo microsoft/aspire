@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Aspire.Cli.Processes;
 
 namespace Aspire.Cli.Tests.Processes;
@@ -110,6 +112,55 @@ public class IsolatedProcessTests
 
         Assert.Contains(seenLines, line => line.Contains("line-one"));
         Assert.Contains(seenLines, line => line.Contains("line-two"));
+    }
+
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public async Task Start_NonIsolatedWithJobHandle_OnWindows_AssignsChildToJob()
+    {
+        Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only behavior: kill-on-close job is a Win32 primitive.");
+
+        // Regression coverage for https://github.com/microsoft/aspire/issues/18490 — non-isolated
+        // helper children (aspire-managed.exe nuget search, dotnet package search) used to be
+        // spawned outside the CLI's kill-on-close job and survived an abnormal CLI exit (e.g.
+        // TerminateProcess from the VS Code extension), accumulating as orphans. After the fix,
+        // ProcessExecutionFactory wires JobHandle through for BindChildToCliJob=true and
+        // IsolatedProcess.StartRedirected calls AssignProcessToJobObject after Process.Start so
+        // disposing the job kills the still-running child even though IsolateConsole stayed false
+        // (no per-call conhost.exe overhead).
+        using var job = new WindowsConsoleProcessJob();
+
+        // Use the long-running ping shape from WindowsConsoleProcessJobTests so the same
+        // observable signal (process exits because the job's last handle was closed) drives this
+        // test too; the difference is that JobHandle goes through the non-isolated StartRedirected
+        // path here instead of the isolated SpawnConsoleIsolatedProcess path.
+        var startInfo = new IsolatedProcessStartInfo
+        {
+            FileName = "cmd.exe",
+            WorkingDirectory = Environment.CurrentDirectory,
+            IsolateConsole = false,
+            JobHandle = job.Handle,
+        };
+        startInfo.ArgumentList.Add("/c");
+        startInfo.ArgumentList.Add("ping");
+        startInfo.ArgumentList.Add("-n");
+        startInfo.ArgumentList.Add("60");
+        startInfo.ArgumentList.Add("127.0.0.1");
+
+        await using var child = IsolatedProcess.Start(
+            startInfo,
+            standardOutputHandler: static (_, _) => { },
+            standardErrorHandler: static (_, _) => { });
+
+        // Confirm the child actually started before disposing the job — otherwise a fast spawn
+        // failure would look identical to a successful kill-on-close.
+        Assert.False(child.HasExited);
+
+        job.Dispose();
+
+        await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
+
+        Assert.True(child.HasExited);
     }
 
     private static (string FileName, IReadOnlyList<string> Arguments) GetEchoCommand(string text)

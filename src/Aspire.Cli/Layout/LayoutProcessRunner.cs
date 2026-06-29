@@ -25,6 +25,14 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
         var options = new ProcessInvocationOptions
         {
             SuppressLogging = true,
+            // Bind aspire-managed.exe / DCP children to the CLI's kill-on-close job so that an
+            // abnormal CLI exit (e.g. TerminateProcess from the VS Code extension via Node's
+            // proc.kill(), a crash, or power loss) reliably terminates the helper. Without this
+            // the helper's only exit triggers are graceful CLI shutdown (cancellation token) and
+            // its own next stdout/stderr write hitting a broken pipe — neither of which fires
+            // while the helper is blocked on a slow NuGet HTTP request, leading to the orphan
+            // accumulation reported in https://github.com/microsoft/aspire/issues/18490.
+            BindChildToCliJob = true,
             StandardOutputCallback = line => outputBuilder.AppendLine(line),
             StandardErrorCallback = line => errorBuilder.AppendLine(line),
         };
