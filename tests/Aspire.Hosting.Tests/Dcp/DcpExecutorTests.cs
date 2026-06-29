@@ -1531,6 +1531,82 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task ResourceLogging_FollowStreamDeduplicatesOnlyPendingTerminalFlush()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        var followStdErrPipeChannel = Channel.CreateUnbounded<Pipe>();
+        var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
+        {
+            if (logStreamType == Logs.StreamTypeStdErr)
+            {
+                if (follow == true)
+                {
+                    var pipe = new Pipe();
+                    followStdErrPipeChannel.Writer.TryWrite(pipe);
+                    return pipe.Reader.AsStream();
+                }
+
+                return new MemoryStream(Encoding.UTF8.GetBytes("same" + Environment.NewLine));
+            }
+
+            return new MemoryStream();
+        });
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions { DashboardPath = "./dashboard" };
+        var resourceLoggerService = new ResourceLoggerService();
+        var logLines = new List<LogLine>();
+        var logLinesLock = new object();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions, resourceLoggerService: resourceLoggerService);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+
+        using var subscription = resourceLoggerService.Subscribe(container.Metadata.Name, batch =>
+        {
+            lock (logLinesLock)
+            {
+                logLines.AddRange(batch);
+            }
+        });
+
+        container.Status = new ContainerStatus { State = ContainerState.Running };
+        kubernetesService.PushResourceModified(container);
+
+        var followStdErrPipe = await followStdErrPipeChannel.Reader.ReadAsync().AsTask().DefaultTimeout();
+
+        container.Status = new ContainerStatus { State = ContainerState.Exited };
+        kubernetesService.PushResourceModified(container);
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(() =>
+        {
+            lock (logLinesLock)
+            {
+                return logLines.Count(l => l.Content == "same") == 1;
+            }
+        },
+        "Terminal flush should deliver the snapshot log.");
+
+        await followStdErrPipe.Writer.WriteAsync(Encoding.UTF8.GetBytes("same" + Environment.NewLine + "same" + Environment.NewLine));
+
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(() =>
+        {
+            lock (logLinesLock)
+            {
+                return logLines.Count(l => l.Content == "same") == 2;
+            }
+        },
+        "Follow stream should skip the overlapping flushed line but preserve a later identical line.");
+    }
+
+    [Fact]
     public async Task ResourceLogging_SystemStream_FormatsWithSysPrefix()
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions

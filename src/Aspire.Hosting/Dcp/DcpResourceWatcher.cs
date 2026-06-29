@@ -37,6 +37,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     private readonly ResourceSnapshotBuilder _snapshotBuilder;
 
     private readonly ConcurrentDictionary<string, (CancellationTokenSource Cancellation, Task Task)> _logStreams = new();
+    private readonly ConcurrentDictionary<string, PendingFollowLogDeduplication> _pendingFollowLogDeduplications = new();
     private Task? _resourceWatchTask;
 
     private readonly record struct LogInformationEntry(string ResourceName, bool? LogsAvailable, bool? HasSubscribers);
@@ -255,6 +256,8 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                         logStream.Cancellation.Cancel();
                     }
 
+                    _pendingFollowLogDeduplications.TryRemove(resource.Metadata.Name, out _);
+
                     // TODO: Handle resource deletion
                     if (_logger.IsEnabled(LogLevel.Trace))
                     {
@@ -340,6 +343,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             // These logs came from DCP's external log store, not in-process ILogger. Do not store
             // them as in-memory entries; otherwise GetAllAsync would replay them before querying
             // the same DCP log source again.
+            SetPendingFollowLogDeduplication(resource.Metadata.Name, logEntries);
             _loggerService.AddLogEntries(resource.Metadata.Name, logEntries, inMemorySource: false, skipExisting: true);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -476,7 +480,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
         // This does not run concurrently for the same resource so we can safely use GetOrAdd without
         // creating multiple log streams.
-        _logStreams.GetOrAdd(resource.Metadata.Name, (_) =>
+        _logStreams.GetOrAdd(resource.Metadata.Name, resourceName =>
         {
             var cancellation = new CancellationTokenSource();
 
@@ -486,34 +490,108 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                 {
                     if (_logger.IsEnabled(LogLevel.Debug))
                     {
-                        _logger.LogDebug("Starting log streaming for {ResourceName}.", resource.Metadata.Name);
+                        _logger.LogDebug("Starting log streaming for {ResourceName}.", resourceName);
                     }
 
                     await foreach (var batch in enumerable.WithCancellation(cancellation.Token).ConfigureAwait(false))
                     {
                         var logEntries = CreateLogEntries(batch).ToList();
-                        _loggerService.AddLogEntries(resource.Metadata.Name, logEntries, inMemorySource: false, skipExisting: true);
+                        logEntries = DeduplicateFollowBatch(resourceName, logEntries);
+                        _loggerService.AddLogEntries(resourceName, logEntries, inMemorySource: false, skipExisting: false);
                     }
                 }
                 catch (OperationCanceledException)
                 {
                     // Ignore
-                    _logger.LogDebug("Log streaming for {ResourceName} was cancelled.", resource.Metadata.Name);
+                    _logger.LogDebug("Log streaming for {ResourceName} was cancelled.", resourceName);
                 }
                 catch (HttpOperationException ex) when (ex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
                     // Resource was deleted — this is expected for short-lived resources like rebuilders.
-                    _logger.LogDebug("Log streaming for {ResourceName} ended because the resource was deleted.", resource.Metadata.Name);
+                    _logger.LogDebug("Log streaming for {ResourceName} ended because the resource was deleted.", resourceName);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error streaming logs for {ResourceName}.", resource.Metadata.Name);
+                    _logger.LogError(ex, "Error streaming logs for {ResourceName}.", resourceName);
+                }
+                finally
+                {
+                    _pendingFollowLogDeduplications.TryRemove(resourceName, out _);
                 }
             },
             cancellation.Token);
 
             return (cancellation, task);
         });
+    }
+
+    private void SetPendingFollowLogDeduplication(string resourceName, IReadOnlyList<LogEntry> flushedLogEntries)
+    {
+        if (flushedLogEntries.Count == 0)
+        {
+            _pendingFollowLogDeduplications.TryRemove(resourceName, out _);
+            return;
+        }
+
+        var counts = new Dictionary<(DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type), int>();
+        DateTime? latestTimestamp = null;
+        var remainingCount = 0;
+
+        foreach (var logEntry in flushedLogEntries)
+        {
+            var key = GetLogEntryKey(logEntry);
+            counts.TryGetValue(key, out var count);
+            counts[key] = count + 1;
+            remainingCount++;
+
+            if (logEntry.Timestamp is { } timestamp &&
+                (latestTimestamp is null || timestamp > latestTimestamp.Value))
+            {
+                latestTimestamp = timestamp;
+            }
+        }
+
+        _pendingFollowLogDeduplications[resourceName] = new(counts, latestTimestamp, remainingCount);
+    }
+
+    private List<LogEntry> DeduplicateFollowBatch(string resourceName, List<LogEntry> logEntries)
+    {
+        if (!_pendingFollowLogDeduplications.TryGetValue(resourceName, out var pendingDeduplication))
+        {
+            return logEntries;
+        }
+
+        List<LogEntry>? addedEntries = null;
+        foreach (var logEntry in logEntries)
+        {
+            var key = GetLogEntryKey(logEntry);
+            if (pendingDeduplication.Counts.TryGetValue(key, out var count) && count > 0)
+            {
+                pendingDeduplication.Counts[key] = count - 1;
+                pendingDeduplication.RemainingCount--;
+                continue;
+            }
+
+            addedEntries ??= [];
+            addedEntries.Add(logEntry);
+        }
+
+        // Terminal-state snapshots can overlap with the follow stream, but only around the flush.
+        // Deduplicate against the flushed snapshot itself instead of rebuilding the full backlog
+        // for every follow batch for the lifetime of a chatty resource.
+        if (pendingDeduplication.LatestTimestamp is null ||
+            pendingDeduplication.RemainingCount == 0 ||
+            logEntries.Any(entry => entry.Timestamp is null || entry.Timestamp > pendingDeduplication.LatestTimestamp.Value))
+        {
+            _pendingFollowLogDeduplications.TryRemove(resourceName, out _);
+        }
+
+        return addedEntries ?? [];
+    }
+
+    private static (DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type) GetLogEntryKey(LogEntry logEntry)
+    {
+        return (logEntry.Timestamp, logEntry.Content, logEntry.RawContent, logEntry.Type);
     }
 
     private async Task ProcessEndpointChange(WatchEventType watchEventType, Endpoint endpoint)
@@ -612,5 +690,17 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
 
         return true;
+    }
+
+    private sealed class PendingFollowLogDeduplication(
+        Dictionary<(DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type), int> counts,
+        DateTime? latestTimestamp,
+        int remainingCount)
+    {
+        public Dictionary<(DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type), int> Counts { get; } = counts;
+
+        public DateTime? LatestTimestamp { get; } = latestTimestamp;
+
+        public int RemainingCount { get; set; } = remainingCount;
     }
 }
