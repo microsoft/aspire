@@ -2528,12 +2528,34 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         // The actual imported file is the appended segment — here Shared.props — which the
         // ancestor walk does NOT enumerate by name. Looking only at the second function argument
         // (Directory.Build.props) and skipping the project would silently reject a real chain
-        // pulling in arbitrary shared content.
+        // pulling in arbitrary shared content. The CLI-specialist MSBuild probe confirmed this
+        // shape evaluates IsAspireHost=true at MSBuild time, so the prefilter must keep the
+        // project as a candidate.
         var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "Library", "Library.csproj"), """
             <Project Sdk="Microsoft.NET.Sdk" />
             """);
         WriteIsLikelyAppHostProject(Path.Combine("src", "Directory.Build.props"), """
             <Project>
+              <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)..', 'Directory.Build.props'))/Shared.props" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_ProjectFileImportAppendsNonConventionalFileAfterGetDirectoryNameOfFileAbove_ReturnsTrue()
+    {
+        // Project-file variant of the suffix-aware blocker: the same
+        //   $([MSBuild]::GetDirectoryNameOfFileAbove(..., 'Directory.Build.props'))/Shared.props
+        // shape can appear directly in a normal-named csproj. The captured second argument is
+        // conventional, but the actual imported file is the appended Shared.props, which the
+        // ancestor walk does not enumerate. Without suffix awareness the project is silently
+        // rejected before MSBuild evaluation — isolated here from the ancestor-walk path so a
+        // future refactor that breaks suffix extraction surfaces a clear, project-file-level
+        // failure rather than only being caught at the ancestor level.
+        var projectFile = WriteIsLikelyAppHostProject("Library.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
               <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)..', 'Directory.Build.props'))/Shared.props" />
             </Project>
             """);
