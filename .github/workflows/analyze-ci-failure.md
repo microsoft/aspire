@@ -7,6 +7,15 @@ description: |
   details and suggested next steps. For non-transient failures, posts a
   comment explaining the root cause.
 
+  NOTE: This workflow coexists with `auto-rerun-transient-ci-failures.yml`
+  which also triggers on CI failures. That workflow uses pattern-matching to
+  classify failures deterministically (currently in FORCE_RERUN_ALL mode).
+  This workflow uses Copilot for deeper analysis and provides richer PR
+  comments. When ENABLE_RERUN is 'false' (the default), this workflow only
+  observes and comments — it does not conflict with the existing rerun
+  workflow. Set ENABLE_RERUN to 'true' only after disabling
+  FORCE_RERUN_ALL in the other workflow to avoid duplicate reruns.
+
 on:
   workflow_run:
     workflows: ["CI"]
@@ -29,6 +38,7 @@ if: >-
     || (
       github.event.workflow_run.event == 'pull_request'
       && github.event.workflow_run.conclusion == 'failure'
+      && github.event.workflow_run.run_attempt <= 3
     )
   )
 
@@ -184,9 +194,12 @@ pre-agent-steps:
       # Find the associated PR number
       PR_NUMBERS=$(jq -r '[.pull_requests[]?.number] | join(",")' .ci-failure-data/run.json)
       if [ -z "${PR_NUMBERS}" ]; then
-        # Fallback: search for PRs by head branch
-        PR_NUMBERS=$(gh api "repos/${REPO}/pulls?state=open&head=${HEAD_BRANCH}" \
-          --jq '[.[].number] | join(",")' 2>/dev/null || echo "")
+        # Fallback: search for PRs by head branch (requires owner:branch format)
+        HEAD_OWNER=$(jq -r '.head_repository.owner.login // ""' .ci-failure-data/run.json)
+        if [ -n "${HEAD_OWNER}" ] && [ -n "${HEAD_BRANCH}" ]; then
+          PR_NUMBERS=$(gh api "repos/${REPO}/pulls?state=open&head=${HEAD_OWNER}:${HEAD_BRANCH}" \
+            --jq '[.[].number] | join(",")' 2>/dev/null || echo "")
+        fi
       fi
       echo "pr_numbers=${PR_NUMBERS}" >> "$GITHUB_OUTPUT"
 
