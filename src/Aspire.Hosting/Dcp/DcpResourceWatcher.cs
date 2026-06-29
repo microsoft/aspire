@@ -13,7 +13,6 @@ using Aspire.Hosting.Dcp.Model;
 using Aspire.Shared.ConsoleLogs;
 using k8s;
 using k8s.Autorest;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Polly;
 
@@ -25,13 +24,15 @@ namespace Aspire.Hosting.Dcp;
 /// </summary>
 internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 {
+    private static readonly TimeSpan s_defaultTerminalLogFlushTimeout = TimeSpan.FromSeconds(5);
+
     private readonly IKubernetesService _kubernetesService;
     private readonly ResourceLoggerService _loggerService;
     private readonly DcpExecutorEvents _executorEvents;
     private readonly ILogger _logger;
-    private readonly IConfiguration _configuration;
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly CancellationToken _shutdownToken;
+    private TimeSpan _terminalLogFlushTimeout = s_defaultTerminalLogFlushTimeout;
 
     private readonly DcpResourceState _resourceState;
     private readonly ResourceSnapshotBuilder _snapshotBuilder;
@@ -56,7 +57,6 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         DcpExecutorEvents executorEvents,
         DistributedApplicationModel model,
         DcpAppResourceStore appResources,
-        IConfiguration configuration,
         ProfilingTelemetry profilingTelemetry,
         CancellationToken shutdownToken)
     {
@@ -64,14 +64,22 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         _loggerService = loggerService;
         _executorEvents = executorEvents;
         _logger = logger;
-        _configuration = configuration;
         _profilingTelemetry = profilingTelemetry;
         _shutdownToken = shutdownToken;
 
         _resourceState = new(model.Resources.ToDictionary(r => r.Name), appResources.Get());
         _snapshotBuilder = new(_resourceState);
-
         WatchResourceRetryPipeline = DcpPipelineBuilder.BuildWatchResourcePipeline(logger);
+    }
+
+    // Internal for testing.
+    internal TimeSpan TerminalLogFlushTimeout
+    {
+        get => _terminalLogFlushTimeout;
+        set
+        {
+            _terminalLogFlushTimeout = value > TimeSpan.Zero ? value : s_defaultTerminalLogFlushTimeout;
+        }
     }
 
     public void Start()
@@ -328,6 +336,10 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     private async Task FlushCurrentLogsAsync<T>(T resource, ResourceStatus status, CancellationToken cancellationToken)
         where T : CustomResource, IKubernetesStaticMetadata
     {
+        var logEntries = new List<LogEntry>();
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(_terminalLogFlushTimeout);
+
         try
         {
             // Fast-failing resources can publish their terminal state before the follow stream has
@@ -340,22 +352,22 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             // state is observed, so use a current snapshot there to avoid blocking terminal state
             // publication indefinitely.
             var follow = status.State != KnownResourceStates.FailedToStart;
-            var logEntries = new List<LogEntry>();
             var logSource = new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: follow);
-            await foreach (var batch in logSource.WithCancellation(cancellationToken).ConfigureAwait(false))
+
+            // This runs under the single resource-watch semaphore. Bound the best-effort flush so
+            // a stalled DCP follow stream cannot prevent unrelated resources from publishing state.
+            await foreach (var batch in logSource.WithCancellation(timeoutCts.Token).ConfigureAwait(false))
             {
                 logEntries.AddRange(CreateLogEntries(batch));
             }
-
-            // These logs came from DCP's external log store, not in-process ILogger. Do not store
-            // them as in-memory entries; otherwise GetAllAsync would replay them before querying
-            // the same DCP log source again.
-            SetPendingFollowLogDeduplication(resource.Metadata.Name, logEntries);
-            _loggerService.AddLogEntries(resource.Metadata.Name, logEntries, inMemorySource: false, skipExisting: true);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        {
+            _logger.LogDebug("Current log flush for {ResourceName} timed out after {Timeout}.", resource.Metadata.Name, _terminalLogFlushTimeout);
         }
         catch (HttpOperationException ex) when (ex.Response.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -365,6 +377,12 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         {
             _logger.LogError(ex, "Error flushing current logs for {ResourceName}.", resource.Metadata.Name);
         }
+
+        // These logs came from DCP's external log store, not in-process ILogger. Do not store
+        // them as in-memory entries; otherwise GetAllAsync would replay them before querying
+        // the same DCP log source again.
+        SetPendingFollowLogDeduplication(resource.Metadata.Name, logEntries);
+        _loggerService.AddLogEntries(resource.Metadata.Name, logEntries, inMemorySource: false, skipExisting: true);
     }
 
     private static bool HasLogsAvailable(CustomResource resource)
@@ -540,13 +558,13 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             return;
         }
 
-        var counts = new Dictionary<(DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type), int>();
+        var counts = new Dictionary<LogEntryKey, int>();
         DateTime? latestTimestamp = null;
         var remainingCount = 0;
 
         foreach (var logEntry in flushedLogEntries)
         {
-            var key = GetLogEntryKey(logEntry);
+            var key = LogEntryKey.Create(logEntry);
             counts.TryGetValue(key, out var count);
             counts[key] = count + 1;
             remainingCount++;
@@ -571,7 +589,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         List<LogEntry>? addedEntries = null;
         foreach (var logEntry in logEntries)
         {
-            var key = GetLogEntryKey(logEntry);
+            var key = LogEntryKey.Create(logEntry);
             if (pendingDeduplication.Counts.TryGetValue(key, out var count) && count > 0)
             {
                 pendingDeduplication.Counts[key] = count - 1;
@@ -594,11 +612,6 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
 
         return addedEntries ?? [];
-    }
-
-    private static (DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type) GetLogEntryKey(LogEntry logEntry)
-    {
-        return (logEntry.Timestamp, logEntry.Content, logEntry.RawContent, logEntry.Type);
     }
 
     private async Task ProcessEndpointChange(WatchEventType watchEventType, Endpoint endpoint)
@@ -700,11 +713,11 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     }
 
     private sealed class PendingFollowLogDeduplication(
-        Dictionary<(DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type), int> counts,
+        Dictionary<LogEntryKey, int> counts,
         DateTime? latestTimestamp,
         int remainingCount)
     {
-        public Dictionary<(DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type), int> Counts { get; } = counts;
+        public Dictionary<LogEntryKey, int> Counts { get; } = counts;
 
         public DateTime? LatestTimestamp { get; } = latestTimestamp;
 

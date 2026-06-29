@@ -743,7 +743,7 @@ public class ResourceLoggerService : IDisposable
             List<LogEntry>? addedEntries = null;
             lock (_lock)
             {
-                Dictionary<(DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type), int>? existingLogCounts = null;
+                Dictionary<LogEntryKey, int>? existingLogCounts = null;
                 if (skipExisting)
                 {
                     // Terminal-state snapshots and the normal follow stream can overlap. Use
@@ -754,7 +754,7 @@ public class ResourceLoggerService : IDisposable
 
                     foreach (var existingEntry in existingEntries)
                     {
-                        IncrementCount(existingLogCounts, GetLogEntryKey(existingEntry));
+                        IncrementCount(existingLogCounts, LogEntryKey.Create(existingEntry));
                     }
                 }
 
@@ -762,7 +762,7 @@ public class ResourceLoggerService : IDisposable
                 {
                     if (existingLogCounts is not null)
                     {
-                        var key = GetLogEntryKey(logEntry);
+                        var key = LogEntryKey.Create(logEntry);
                         if (existingLogCounts.TryGetValue(key, out var count) && count > 0)
                         {
                             existingLogCounts[key] = count - 1;
@@ -800,12 +800,7 @@ public class ResourceLoggerService : IDisposable
                 _onNewLog?.Invoke(logEntry);
             }
 
-            static (DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type) GetLogEntryKey(LogEntry logEntry)
-            {
-                return (logEntry.Timestamp, logEntry.Content, logEntry.RawContent, logEntry.Type);
-            }
-
-            static void IncrementCount(Dictionary<(DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type), int> counts, (DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type) key)
+            static void IncrementCount(Dictionary<LogEntryKey, int> counts, LogEntryKey key)
             {
                 counts.TryGetValue(key, out var count);
                 counts[key] = count + 1;

@@ -1535,6 +1535,67 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task ResourceLogging_TerminalLogFlushTimeoutDoesNotBlockOtherResourceNotifications()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("blocking", "image");
+        builder.AddContainer("other", "image");
+
+        string? blockingDcpResourceName = null;
+        var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
+        {
+            if (obj.Metadata.Name == blockingDcpResourceName &&
+                obj is Container { Status.State: ContainerState.Exited } &&
+                follow == true)
+            {
+                return new Pipe().Reader.AsStream();
+            }
+
+            return new MemoryStream();
+        });
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions { DashboardPath = "./dashboard" };
+        var resourceLoggerService = new ResourceLoggerService();
+        var otherTerminalNotification = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        string? otherDcpResourceName = null;
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+        {
+            if (context.DcpResourceName == otherDcpResourceName && context.Status.State == ContainerState.Exited)
+            {
+                otherTerminalNotification.TrySetResult();
+            }
+
+            return Task.CompletedTask;
+        });
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions, resourceLoggerService: resourceLoggerService, events: events);
+        appExecutor.ResourceWatcher.TerminalLogFlushTimeout = TimeSpan.FromMilliseconds(100);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var blockingContainer = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "blocking");
+        var otherContainer = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "other");
+        blockingDcpResourceName = blockingContainer.Metadata.Name;
+        otherDcpResourceName = otherContainer.Metadata.Name;
+
+        using var subscription = resourceLoggerService.Subscribe(blockingDcpResourceName, _ => { });
+
+        blockingContainer.Status = new ContainerStatus { State = ContainerState.Exited };
+        kubernetesService.PushResourceModified(blockingContainer);
+
+        otherContainer.Status = new ContainerStatus { State = ContainerState.Exited };
+        kubernetesService.PushResourceModified(otherContainer);
+
+        await otherTerminalNotification.Task.DefaultTimeout();
+    }
+
+    [Fact]
     public async Task ResourceLogging_FollowStreamDeduplicatesOnlyPendingTerminalFlush()
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions

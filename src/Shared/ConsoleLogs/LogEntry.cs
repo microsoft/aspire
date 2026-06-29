@@ -59,6 +59,20 @@ internal sealed class LogEntry
     }
 }
 
+/// <summary>
+/// Represents the stable identity fields used to deduplicate overlapping log entries.
+/// </summary>
+internal readonly record struct LogEntryKey(DateTime? Timestamp, string? Content, string? RawContent, LogEntryType Type)
+{
+    /// <summary>
+    /// Creates a deduplication key for the specified log entry.
+    /// </summary>
+    public static LogEntryKey Create(LogEntry logEntry)
+    {
+        return new(logEntry.Timestamp, logEntry.Content, logEntry.RawContent, logEntry.Type);
+    }
+}
+
 #if ASPIRE_DASHBOARD
 public enum LogEntryType
 #else
