@@ -185,14 +185,14 @@ public static class KafkaBuilderExtensions
         var kafkaSchemaRegistryBuilder = builder.ApplicationBuilder.AddResource(kafkaSchemaRegistry)
             .WithImage(KafkaContainerImageTags.KafkaSchemaRegistryImage, KafkaContainerImageTags.KafkaSchemaRegistryTag)
             .WithImageRegistry(KafkaContainerImageTags.Registry)
-            .WithHttpEndpoint(targetPort: KafkaSchemaRegistryPort, name: "primary")
+            .WithHttpEndpoint(targetPort: KafkaSchemaRegistryPort, name: KafkaSchemaRegistryResource.PrimaryEndpointName)
             .WithEnvironment(context =>
             {
                 context.EnvironmentVariables["SCHEMA_REGISTRY_HOST_NAME"] = "localhost";
                 context.EnvironmentVariables["SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS"] = builder.Resource.InternalEndpoint.Property(EndpointProperty.HostAndPort);
                 context.EnvironmentVariables["SCHEMA_REGISTRY_LISTENERS"] = $"http://0.0.0.0:{KafkaSchemaRegistryPort}";
             })
-            .WithHttpHealthCheck("/subjects", 200, "primary")
+            .WithHttpHealthCheck("/subjects", 200, KafkaSchemaRegistryResource.PrimaryEndpointName)
             .WaitFor(builder)
             .WithParentRelationship(builder.Resource)
             .ExcludeFromManifest();
@@ -230,7 +230,7 @@ public static class KafkaBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithEndpoint("primary", endpoint =>
+        return builder.WithEndpoint(KafkaSchemaRegistryResource.PrimaryEndpointName, endpoint =>
         {
             endpoint.Port = port;
         });

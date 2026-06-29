@@ -196,9 +196,9 @@ public class AddKafkaTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var configureContainerInvocations = 0;
-        Action<IResourceBuilder<KafkaSchemaRegistryResource>> kafkaSchemaRegistryCallback = kafkaUi =>
+        Action<IResourceBuilder<KafkaSchemaRegistryResource>> kafkaSchemaRegistryCallback = registry =>
         {
-            kafkaUi.WithHostPort(port);
+            registry.WithHostPort(port);
             configureContainerInvocations++;
         };
         builder.AddKafka("kafka1")

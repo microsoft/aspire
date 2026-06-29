@@ -13,7 +13,7 @@ namespace Aspire.Hosting;
 public sealed class KafkaSchemaRegistryResource(string name, KafkaServerResource kafkaServer) : ContainerResource(name), IResourceWithConnectionString
 {
     // This endpoint is used for host processes Kafka schema registry communication.
-    private const string PrimaryEndpointName = "primary";
+    internal const string PrimaryEndpointName = "primary";
     private EndpointReference? _primaryEndpoint;
 
     /// <summary>
