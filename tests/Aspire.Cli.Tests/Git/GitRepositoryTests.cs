@@ -21,7 +21,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var executionContext = workspace.CreateExecutionContext();
         using var profilingTelemetry = CreateProfilingTelemetry();
-        var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
+        var repo = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
 
         var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
@@ -61,7 +61,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
 
         var executionContext = workspace.CreateExecutionContext();
         using var profilingTelemetry = CreateProfilingTelemetry();
-        var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
+        var repo = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
 
         var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
@@ -90,7 +90,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
 
         var executionContext = workspace.CreateExecutionContext();
         using var profilingTelemetry = CreateProfilingTelemetry();
-        var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
+        var repo = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
 
         var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
@@ -121,7 +121,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
             (ProfilingTelemetry.EnvironmentVariables.SessionId, sessionId));
         using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStarted: startedActivities.Add);
         var executionContext = workspace.CreateExecutionContext();
-        var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
+        var repo = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
 
         var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 

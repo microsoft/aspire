@@ -115,6 +115,15 @@
     <trans-unit id="aspire-vscode.strings.codespacesUrl">
       <source xml:lang="en">Codespaces: {0}</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandSucceeded">
+      <source xml:lang="en">Command &apos;{0}&apos; completed on &apos;{1}&apos;.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandFailedNoDetail">
+      <source xml:lang="en">Command &apos;{0}&apos; on &apos;{1}&apos; failed.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandFailed">
+      <source xml:lang="en">Command &apos;{0}&apos; on &apos;{1}&apos; failed: {2}</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.commandsLabel">
       <source xml:lang="en">Commands</source>
     </trans-unit>
@@ -556,6 +565,9 @@
     <trans-unit id="aspire-vscode.strings.runProject">
       <source xml:lang="en">Run {0}</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandRunning">
+      <source xml:lang="en">Running &apos;{0}&apos; on &apos;{1}&apos;...</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.runningAppHostsGroupLabel">
       <source xml:lang="en">Running AppHosts</source>
     </trans-unit>
@@ -646,6 +658,9 @@
     <trans-unit id="extension.debug.command">
       <source xml:lang="en">The Aspire CLI command to execute (run, deploy, publish, or do)</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandCliNotInstalled">
+      <source xml:lang="en">The Aspire CLI could not be started: {0}</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.installCli.description">
       <source xml:lang="en">The Aspire CLI creates, runs, and manages your applications. Choose a package manager to install it — or open the guide for every option, including the install script.&#10;&#10;[Install the Aspire CLI](command:aspire-vscode.installCli)</source>
     </trans-unit>
@@ -667,6 +682,9 @@
     <trans-unit id="aspire-vscode.strings.dashboardLaunchNoneDescription">
       <source xml:lang="en">The dashboard URL is still printed in the terminal and available from the Aspire panel.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandOutputOpenFailed">
+      <source xml:lang="en">The command completed, but its output could not be opened: {0}</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.aspireCliExecutablePath">
       <source xml:lang="en">The path to the Aspire CLI executable. If not set, the extension will attempt to use &apos;aspire&apos; from the system PATH.</source>
     </trans-unit>
@@ -677,7 +695,7 @@
       <source xml:lang="en">This command has dynamic inputs that the Aspire extension cannot prompt for yet. Run it from the Aspire Dashboard or Aspire CLI instead.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandSecretWarning">
-      <source xml:lang="en">This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI terminal and may be visible in terminal history or scrollback.</source>
+      <source xml:lang="en">This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI as command-line arguments and may briefly be visible to other processes on this machine.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.fieldRequired">
       <source xml:lang="en">This field is required.</source>
@@ -768,6 +786,9 @@
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.nextSteps.description">
       <source xml:lang="en">You&apos;re all set! Add integrations for databases, messaging, and cloud services, or deploy your app to production.&#10;&#10;[Add an integration](command:aspire-vscode.add)&#10;&#10;[Open Aspire docs](https://aspire.dev/docs/)</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.aspireCommandOutputTruncated">
+      <source xml:lang="en">[Aspire command output truncated to {0} characters. Showing the beginning and end of the output.]</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostPathMustBeNonEmptyAbsolute">
       <source xml:lang="en">appHostPath must be a non-empty absolute path</source>

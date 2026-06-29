@@ -173,7 +173,7 @@ internal static class CliPathHelper
     /// </remarks>
     internal static string NormalizePathCasing(string path, IEnvironment environment)
     {
-        return environment.IsWindows ? path.ToLowerInvariant() : path;
+        return environment.IsWindows() ? path.ToLowerInvariant() : path;
     }
 
     internal static string ResolveSymlinkOrOriginalPath(string path, ILogger? logger = null)

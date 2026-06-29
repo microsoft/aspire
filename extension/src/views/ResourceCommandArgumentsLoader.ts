@@ -12,6 +12,7 @@ import {
     ResourceCommandArgumentLoader,
     ResourceCommandArgumentValue,
 } from './ResourceCommandArguments';
+import { nonInteractiveCliEnvironment } from '../utils/environment';
 
 export interface ResourceCommandArgumentLoaderContext {
     cliExecutionProvider: AspireTerminalProvider;
@@ -45,13 +46,12 @@ async function loadResourceCommandArgumentInputs(
         async () => {
             try {
                 const cliPath = await context.cliExecutionProvider.getAspireCliExecutablePath();
-                const args = ['resource', context.resourceName, context.commandName, '--load-arguments', '--apphost', context.appHostPath!];
+                const args = ['resource', context.resourceName, context.commandName, '--load-arguments', '--non-interactive', '--apphost', context.appHostPath!];
                 args.push(...buildResourceCommandCliArgs(values));
 
                 const loadedInputs = await new Promise<ResourceCommandArgumentInputJson[] | undefined>((resolve) => {
                     let settled = false;
                     let stdout = '';
-                    let stderr = '';
                     const finish = (value: ResourceCommandArgumentInputJson[] | undefined) => {
                         if (!settled) {
                             settled = true;
@@ -61,11 +61,9 @@ async function loadResourceCommandArgumentInputs(
 
                     const child = spawnCliProcess(context.cliExecutionProvider, cliPath, args, {
                         noExtensionVariables: true,
+                        env: nonInteractiveCliEnvironment,
                         stdoutCallback: data => {
                             stdout += data;
-                        },
-                        stderrCallback: data => {
-                            stderr += data;
                         },
                         errorCallback: error => {
                             extensionLogOutputChannel.warn(`Failed to load resource command arguments: ${error.message}`);
@@ -73,7 +71,7 @@ async function loadResourceCommandArgumentInputs(
                         },
                         exitCallback: code => {
                             if (code !== 0) {
-                                extensionLogOutputChannel.warn(`aspire resource --load-arguments exited with code ${code}. ${stderr.trim()}`);
+                                extensionLogOutputChannel.warn(`aspire resource --load-arguments exited with code ${code}.`);
                                 finish(undefined);
                                 return;
                             }

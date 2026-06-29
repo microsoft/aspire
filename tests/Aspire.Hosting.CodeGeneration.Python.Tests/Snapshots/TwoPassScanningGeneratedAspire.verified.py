@@ -1789,6 +1789,12 @@ class CommandOptions(typing.TypedDict, total=False):
     IconVariant: IconVariant | None
     IsHighlighted: bool
     UpdateState: typing.Callable[[UpdateCommandStateContext], ResourceCommandState]
+    Progress: CommandProgressOptions
+
+class CommandProgressOptions(typing.TypedDict, total=False):
+    Message: str | None
+    Title: str | None
+    HideCancelButton: bool
 
 class CommandResultData(typing.TypedDict, total=False):
     Value: str
@@ -1935,6 +1941,11 @@ class InteractionNotificationOptions(typing.TypedDict, total=False):
     Intent: MessageIntent | None
     LinkText: str | None
     LinkUrl: str | None
+
+class InteractionProgressOptions(typing.TypedDict, total=False):
+    PrimaryButtonText: str | None
+    EnableMessageMarkdown: bool | None
+    Work: typing.Callable[[ProgressContext], None]
 
 class ParameterCustomInputOptions(typing.TypedDict, total=False):
     InputType: InputType | None
@@ -2991,6 +3002,22 @@ class AbstractInteractionService:
             rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
         result = self._client.invoke_capability(
             'Aspire.Hosting/promptNotification',
+            rpc_args,
+        )
+        return typing.cast(BoolInteractionResult, result)
+
+    def prompt_progress(self, message: str, *, title: str | None = None, options: InteractionProgressOptions | None = None, timeout: int | None = None) -> BoolInteractionResult:
+        """Displays a progress dialog with an indeterminate progress indicator."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['message'] = message
+        if title is not None:
+            rpc_args['title'] = title
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptProgress',
             rpc_args,
         )
         return typing.cast(BoolInteractionResult, result)
@@ -6330,6 +6357,30 @@ class PipelineSummary:
             'Aspire.Hosting/addMarkdown',
             rpc_args
         )
+
+
+class ProgressContext:
+    """Type class for ProgressContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ProgressContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting/ProgressContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
 
 
 class ProjectResourceOptions:
@@ -12824,6 +12875,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep",
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext", PipelineStepContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext", PipelineStepFactoryContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary", PipelineSummary)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ProgressContext", ProgressContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions", ProjectResourceOptions)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder", ReferenceExpressionBuilder)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext", RequiredCommandValidationContext)

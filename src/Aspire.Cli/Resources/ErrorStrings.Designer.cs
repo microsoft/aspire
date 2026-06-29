@@ -425,6 +425,15 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CodegenVersionSkewWarning", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to This project uses the legacy 'apphost.ts' layout. Run 'aspire update --migrate' to upgrade to the recommended 'apphost.mts' format. The legacy layout continues to work — this is a non-blocking warning..
+        /// </summary>
+        public static string LegacyTypeScriptAppHostWarning {
+            get {
+                return ResourceManager.GetString("LegacyTypeScriptAppHostWarning", resourceCulture);
+            }
+        }
 
         /// <summary>
         ///   Looks up a localized string similar to {0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again..

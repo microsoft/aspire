@@ -190,6 +190,7 @@ public sealed class TypeScriptAppHostToolingCheckTests(ITestOutputHelper outputH
             projectLocator,
             new TestLanguageDiscovery(s_typeScriptLanguage),
             CreateExecutionContext(workspace),
+            new TestEnvironment(),
             NullLogger<TypeScriptAppHostToolingCheck>.Instance,
             commandResolver);
     }

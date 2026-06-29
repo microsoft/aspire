@@ -26,12 +26,13 @@ public class ConformanceTests : ConformanceTests<INatsConnection, NatsClientSett
     protected override bool SupportsKeyedRegistrations => true;
     protected override ServiceLifetime ServiceLifetime => ServiceLifetime.Singleton;
     protected override string ActivitySourceName => "NATS.Net";
-    protected override string[] RequiredLogCategories => [
-        "NATS.Client.Core.Commands.CommandWriter",
-        "NATS.Client.Core.Internal.SubscriptionManager",
-        "NATS.Client.Core.Internal.InboxSubBuilder",
-        "NATS.Client.Core.NatsSubBase",
-        "NATS.Client.Core.NatsConnection",
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
+        new("NATS.Client.Core.Commands.CommandWriter"),
+        new("NATS.Client.Core.Internal.SubscriptionManager"),
+        new("NATS.Client.Core.Internal.InboxSubBuilder"),
+        new("NATS.Client.Core.NatsSubBase"),
+        new("NATS.Client.Core.NatsConnection"),
     ];
 
     protected override string? ConfigurationSectionName => "Aspire:NATS:Net";

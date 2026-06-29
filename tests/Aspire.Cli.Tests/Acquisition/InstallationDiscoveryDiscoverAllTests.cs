@@ -583,6 +583,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: new FakePeerInstallProbe(),
             executionContext: CreateExecutionContext(workspace),
+            environment: new TestEnvironment(),
             logger: capturedLog,
             candidateSources: []);
 
@@ -611,6 +612,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: new FakePeerInstallProbe(),
             executionContext: CreateExecutionContext(workspace),
+            environment: new TestEnvironment(),
             logger: capturedLog,
             candidateSources: []);
 
@@ -646,6 +648,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
                 sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
                 peerProbe: new FakePeerInstallProbe(),
                 executionContext: CreateExecutionContext(workspace),
+                environment: new TestEnvironment(),
                 logger: capturedLog,
                 candidateSources: []);
 
@@ -688,6 +691,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
                 sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
                 peerProbe: new FakePeerInstallProbe(),
                 executionContext: CreateExecutionContext(workspace),
+                environment: new TestEnvironment(),
                 logger: capturedLog,
                 candidateSources: []);
 
@@ -817,6 +821,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: probe,
             executionContext: context,
+            environment: new TestEnvironment(),
             logger: NullLogger<InstallationDiscovery>.Instance,
             candidateSources: []);
 
@@ -926,6 +931,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: probe,
             executionContext: CreateExecutionContext(workspace),
+            environment: new TestEnvironment(),
             logger: NullLogger<InstallationDiscovery>.Instance,
             candidateSources: [hintSource]);
 
@@ -964,6 +970,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: probe,
             executionContext: CreateExecutionContext(workspace),
+            environment: new TestEnvironment(),
             logger: NullLogger<InstallationDiscovery>.Instance,
             candidateSources: []);
     }

@@ -88,6 +88,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             serverSessionFactory: new FakeAppHostServerSessionFactory(),
             languageDiscovery: new TestLanguageDiscovery(language),
             interactionService: new TestInteractionService(),
+            environment: new TestEnvironment(),
             logger: NullLogger<ScaffoldingService>.Instance,
             executionContext: workspace.CreateExecutionContext(),
             profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));
@@ -120,6 +121,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             serverSessionFactory: new FakeAppHostServerSessionFactory(),
             languageDiscovery: new TestLanguageDiscovery(s_testLanguage),
             interactionService: new TestInteractionService(),
+            environment: new TestEnvironment(),
             logger: NullLogger<ScaffoldingService>.Instance,
             executionContext: workspace.CreateExecutionContext(),
             profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));

@@ -202,6 +202,8 @@ internal sealed class DashboardServiceData : IDisposable
                         return new InteractionCompletionState { Complete = true, State = request.MessageBox.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.Notification:
                         return new InteractionCompletionState { Complete = true, State = request.Notification.Result };
+                    case WatchInteractionsRequestUpdate.KindOneofCase.PromptProgress:
+                        return new InteractionCompletionState { Complete = true, State = request.PromptProgress.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.InputsDialog:
                         var inputsInfo = (Interaction.InputsInteractionInfo)interaction.InteractionInfo;
                         var options = (InputsDialogInteractionOptions)interaction.Options;

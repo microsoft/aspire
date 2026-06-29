@@ -8,6 +8,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Migrations;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -880,6 +881,227 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateCommand_WhenProjectUpdatedSuccessfully_AndMigrationPending_DisplaysAdvisory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var descriptor = new MigrationDescriptor
+        {
+            Title = "Migrate 'apphost.ts' to 'apphost.mts'",
+            Detail = "The legacy AppHost needs migrating"
+        };
+        var pendingMigration = new TestMigration("test-pending-migration", 100, descriptor);
+
+        var subtleMessages = new List<string>();
+        var interactionService = new TestInteractionService()
+        {
+            DisplaySubtleMessageCallback = subtleMessages.Add
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")));
+                }
+            };
+
+            options.InteractionServiceFactory = _ => interactionService;
+
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            {
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
+                {
+                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = true });
+                }
+            };
+
+            // Use a PR channel (no CLI download URL) so the CLI self-update prompt path is skipped
+            // and the test focuses purely on the post-update migration advisory.
+            options.PackagingServiceFactory = _ => new TestPackagingService()
+            {
+                GetChannelsAsyncCallback = (cancellationToken) =>
+                {
+                    var prChannel = PackageChannel.CreateExplicitChannel(
+                        "pr-12658",
+                        PackageChannelQuality.Prerelease,
+                        new[] { new PackageMapping("Aspire*", "/path/to/pr/hive") },
+                        null!,
+                        features: new TestFeatures(),
+                        NullLogger.Instance,
+                        configureGlobalPackagesFolder: false,
+                        cliDownloadBaseUrl: null);
+                    return Task.FromResult<IEnumerable<PackageChannel>>(new[] { prChannel });
+                }
+            };
+        });
+
+        services.AddSingleton<IMigration>(pendingMigration);
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost AppHost.csproj");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message == UpdateCommandStrings.PendingMigrationsHeader);
+        Assert.Contains($"  - {descriptor.Title}", subtleMessages);
+        Assert.Contains(UpdateCommandStrings.PendingMigrationsHint, subtleMessages);
+
+        // The advisory is non-destructive: `update` points at `aspire update --migrate` rather
+        // than applying the migration itself.
+        Assert.NotNull(pendingMigration.DetectedContext?.AppHostFile);
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"), pendingMigration.DetectedContext.AppHostFile.FullName);
+        Assert.False(pendingMigration.ApplyInvoked);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_WithMigrateFlagAndYes_AppliesPendingMigration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var descriptor = new MigrationDescriptor
+        {
+            Title = "Migrate 'apphost.ts' to 'apphost.mts'",
+            Detail = "The legacy AppHost needs migrating"
+        };
+        var pendingMigration = new TestMigration("test-pending-migration", 100, descriptor);
+
+        var interactionService = new TestInteractionService();
+        var services = CreateMigrationUpdateServices(workspace, interactionService, pendingMigration);
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost AppHost.csproj --migrate --yes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(pendingMigration.DetectedContext?.AppHostFile);
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"), pendingMigration.DetectedContext.AppHostFile.FullName);
+        Assert.NotNull(pendingMigration.AppliedContext?.AppHostFile);
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"), pendingMigration.AppliedContext.AppHostFile.FullName);
+        Assert.True(pendingMigration.ApplyInvoked);
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message == MigrationStrings.AvailableMigrationsHeader);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_WithMigrateFlag_WhenDeclined_DoesNotApplyMigration()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var descriptor = new MigrationDescriptor
+        {
+            Title = "Migrate 'apphost.ts' to 'apphost.mts'",
+            Detail = "The legacy AppHost needs migrating"
+        };
+        var pendingMigration = new TestMigration("test-pending-migration", 100, descriptor);
+
+        var subtleMessages = new List<string>();
+        var interactionService = new TestInteractionService()
+        {
+            ConfirmCallback = (_, _) => false,
+            DisplaySubtleMessageCallback = subtleMessages.Add
+        };
+        var services = CreateMigrationUpdateServices(workspace, interactionService, pendingMigration);
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost AppHost.csproj --migrate");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(pendingMigration.ApplyInvoked);
+        Assert.Contains(MigrationStrings.MigrationCancelled, subtleMessages);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_WithMigrateFlag_AndNothingPending_ReportsNothingToMigrate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Detection returns null, so there is nothing to migrate.
+        var migration = new TestMigration("test-no-pending-migration", 100, descriptor: null);
+
+        var subtleMessages = new List<string>();
+        var interactionService = new TestInteractionService()
+        {
+            DisplaySubtleMessageCallback = subtleMessages.Add
+        };
+        var services = CreateMigrationUpdateServices(workspace, interactionService, migration);
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost AppHost.csproj --migrate --yes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(migration.ApplyInvoked);
+        Assert.Contains(MigrationStrings.NothingToMigrate, subtleMessages);
+    }
+
+    private IServiceCollection CreateMigrationUpdateServices(
+        TemporaryWorkspace workspace,
+        TestInteractionService interactionService,
+        IMigration migration)
+    {
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")));
+                }
+            };
+
+            options.InteractionServiceFactory = _ => interactionService;
+
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            {
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
+                {
+                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = true });
+                }
+            };
+
+            // Use a PR channel (no CLI download URL) so the CLI self-update prompt path is skipped
+            // and the test focuses purely on the post-update migration handling.
+            options.PackagingServiceFactory = _ => new TestPackagingService()
+            {
+                GetChannelsAsyncCallback = (cancellationToken) =>
+                {
+                    var prChannel = PackageChannel.CreateExplicitChannel(
+                        "pr-12658",
+                        PackageChannelQuality.Prerelease,
+                        new[] { new PackageMapping("Aspire*", "/path/to/pr/hive") },
+                        null!,
+                        features: new TestFeatures(),
+                        NullLogger.Instance,
+                        configureGlobalPackagesFolder: false,
+                        cliDownloadBaseUrl: null);
+                    return Task.FromResult<IEnumerable<PackageChannel>>(new[] { prChannel });
+                }
+            };
+        });
+
+        services.AddSingleton<IMigration>(migration);
+        return services;
+    }
+
+    [Fact]
     public async Task UpdateCommand_SelfUpdate_WhenRunningAsNativeAotDotnetTool_DisplaysDotnetToolUpdateCommand()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -979,7 +1201,14 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         using var tempDirectory = new TestTempDirectory();
         var processPath = CreateNixInstall(tempDirectory);
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
-        File.WriteAllText(appHostPath, "// test apphost");
+
+        // Only the TypeScript (BeforeGuestProjectUpdate) case needs a real apphost.ts on disk.
+        // For the C# AppHost.csproj (AfterProjectUpdate) case, a sibling apphost.ts is an unrealistic
+        // layout that would also trip the legacy-apphost migration advisory and pollute the assertions.
+        if (entryPoint == NixSelfUpdateEntryPoint.BeforeGuestProjectUpdate)
+        {
+            File.WriteAllText(appHostPath, "// test apphost");
+        }
 
         var updateProjectInvoked = false;
         var downloaderInvoked = false;

@@ -204,7 +204,6 @@ suite('Aspire package contribution surface E2E', function () {
             { commandId: 'aspire-vscode.updateSelf', expectedSubcommand: 'update --self' },
             { commandId: 'aspire-vscode.codeLensViewLogs', args: ['e2e-worker', appHostPath], expectedSubcommand: `logs ${quoteExpectedShellArg('e2e-worker')}` },
             { commandId: 'aspire-vscode.codeLensViewAppHostLogs', args: [appHostPath], expectedSubcommand: 'logs' },
-            { commandId: 'aspire-vscode.codeLensResourceAction', args: ['e2e-worker', 'restart', appHostPath], expectedSubcommand: `resource ${quoteExpectedShellArg('e2e-worker')} ${quoteExpectedShellArg('restart')}` },
         ];
 
         for (const item of cases) {

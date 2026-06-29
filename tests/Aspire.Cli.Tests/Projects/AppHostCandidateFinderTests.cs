@@ -583,15 +583,15 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
 
     private static AppHostCandidateFinder CreateFinder(TestGitRepository? gitRepository = null, ProfilingTelemetry? profilingTelemetry = null)
     {
-        return new AppHostCandidateFinder(gitRepository ?? new TestGitRepository(), profilingTelemetry ?? CreateProfilingTelemetry(), NullLogger<AppHostCandidateFinder>.Instance);
+        return new AppHostCandidateFinder(gitRepository ?? new TestGitRepository(), new TestEnvironment(), profilingTelemetry ?? CreateProfilingTelemetry(), NullLogger<AppHostCandidateFinder>.Instance);
     }
 
     private static AppHostCandidateFinder CreateFinderWithRealGit(DirectoryInfo workingDirectory)
     {
         var executionContext = CreateExecutionContext(workingDirectory);
         var profilingTelemetry = CreateProfilingTelemetry();
-        var gitRepository = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
-        return new AppHostCandidateFinder(gitRepository, profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
+        var gitRepository = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
+        return new AppHostCandidateFinder(gitRepository, new TestEnvironment(), profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
     }
 
     private static TestGitRepository CreateGitRepository(params string[] includedPaths)

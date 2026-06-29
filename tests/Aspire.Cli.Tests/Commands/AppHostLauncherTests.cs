@@ -714,7 +714,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 new FixedLayoutDiscovery(),
                 new NullBundleService(),
                 new LayoutProcessRunner(new TestProcessExecutionFactory()),
-                executionContext,
+                executionContext, new TestEnvironment(),
                 NullLogger<ProcessTreeGracefulShutdownService>.Instance,
                 TimeProvider.System);
             var launcher = new AppHostLauncher(
