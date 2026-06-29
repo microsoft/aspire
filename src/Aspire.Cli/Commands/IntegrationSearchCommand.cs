@@ -10,6 +10,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Commands;
@@ -21,6 +22,10 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
     private readonly Option<OutputFormat> _formatOption = new("--format")
     {
         Description = AddCommandStrings.FormatOptionDescription
+    };
+    private readonly Option<string?> _discoveryScopeOption = new("--discovery-scope")
+    {
+        Description = AddCommandStrings.DiscoveryScopeOptionDescription
     };
 
     protected IntegrationDiscoveryCommand(
@@ -34,6 +39,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
 
         Options.Add(_appHostOption);
         Options.Add(_formatOption);
+        Options.Add(_discoveryScopeOption);
     }
 
     protected abstract string? GetSearchTerm(ParseResult parseResult);
@@ -47,6 +53,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             var searchTerm = GetSearchTerm(parseResult);
             var passedAppHostProjectFile = parseResult.GetValue(_appHostOption);
             var format = parseResult.GetValue(_formatOption);
+            var requestedDiscoveryScope = parseResult.GetValue(_discoveryScopeOption);
 
             var (workingDirectory, configuredChannel, contextExitCode) = await _integrationPackageSearchService.GetPackageSearchContextAsync(passedAppHostProjectFile, cancellationToken);
             if (contextExitCode is { } exitCode)
@@ -54,14 +61,24 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 return CommandResult.FromExitCode(exitCode);
             }
 
+            var discoveryScope = IntegrationDiscoveryScopeHelpers.GetConfiguredScope(workingDirectory);
+            if (!string.IsNullOrWhiteSpace(requestedDiscoveryScope))
+            {
+                if (!IntegrationDiscoveryScopeHelpers.TryParse(requestedDiscoveryScope, out discoveryScope))
+                {
+                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.InvalidDiscoveryScope, requestedDiscoveryScope));
+                    return CommandResult.FromExitCode(CliExitCodes.FailedToSearchIntegrations);
+                }
+            }
+
             var packagesWithChannels = (await InteractionService.ShowStatusAsync(
                 AddCommandStrings.SearchingForAspirePackages,
-                async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, cancellationToken)))
+                async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, discoveryScope, cancellationToken: cancellationToken)))
                 .ToArray();
 
             var packagesWithShortName = packagesWithChannels
                 .Select(IntegrationPackageSearchService.GenerateFriendlyName)
-                .OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer())
+                .OrderBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
             return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format));
@@ -91,21 +108,29 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             .Select(IntegrationPackageSearchService.SelectPreferredIntegrationPackage);
 
         var orderedMatches = searchTerm is null
-            ? matches.OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer()).ThenBy(p => p.Package.Id, StringComparer.OrdinalIgnoreCase)
+            ? matches.OrderBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase).ThenBy(p => p.Package.Id, StringComparer.OrdinalIgnoreCase)
             : matches;
 
         var results = orderedMatches
-            .Select(p => new IntegrationSearchResult
+            .Select(p => new IntegrationSearchDisplayResult
             {
                 Name = p.FriendlyName,
                 Package = p.Package.Id,
-                Version = p.Package.Version
+                Version = p.Package.Version,
+                Group = IntegrationDisplayHelpers.GetIntegrationGroup(p.Package.Id)
             })
             .ToArray();
 
         if (format is OutputFormat.Json)
         {
-            var json = JsonSerializer.Serialize(results, JsonSourceGenerationContext.RelaxedEscaping.IntegrationSearchResultArray);
+            var json = JsonSerializer.Serialize(
+                results.Select(static result => new IntegrationSearchResult
+                {
+                    Name = result.Name,
+                    Package = result.Package,
+                    Version = result.Version
+                }).ToArray(),
+                JsonSourceGenerationContext.RelaxedEscaping.IntegrationSearchResultArray);
             InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
             return CliExitCodes.Success;
         }
@@ -133,22 +158,49 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.FoundIntegrationPackages, results.Length));
         }
 
-        var table = new Table();
-        table.AddBoldColumn(AddCommandStrings.HeaderName);
-        table.AddBoldColumn(AddCommandStrings.HeaderPackage);
-        table.AddBoldColumn(AddCommandStrings.HeaderVersion);
-
-        foreach (var result in results)
+        var rows = new List<IRenderable>();
+        foreach (var group in results
+            .GroupBy(static result => result.Group)
+            .OrderBy(static group => group.Key))
         {
-            table.AddRow(
-                Markup.Escape(result.Name),
-                Markup.Escape(result.Package),
-                Markup.Escape(result.Version));
+            if (rows.Count > 0)
+            {
+                rows.Add(Text.Empty);
+            }
+
+            rows.Add(new Markup($"[bold]{Markup.Escape(IntegrationDisplayHelpers.GetIntegrationGroupTitle(group.Key))}[/] [dim]({group.Count().ToString(CultureInfo.CurrentCulture)})[/]"));
+
+            var table = new Table();
+            table.AddBoldColumn(AddCommandStrings.HeaderName);
+            table.AddBoldColumn(AddCommandStrings.HeaderPackage);
+            table.AddBoldColumn(AddCommandStrings.HeaderVersion);
+
+            foreach (var result in group.OrderBy(static result => result.Name, StringComparer.OrdinalIgnoreCase).ThenBy(static result => result.Package, StringComparer.OrdinalIgnoreCase))
+            {
+                table.AddRow(
+                    Markup.Escape(result.Name),
+                    Markup.Escape(result.Package),
+                    Markup.Escape(result.Version));
+            }
+
+            rows.Add(table);
         }
 
-        InteractionService.DisplayRenderable(table);
+        InteractionService.DisplayRenderable(new Rows(rows));
         return CliExitCodes.Success;
     }
+
+}
+
+// `aspire integration list --format json` and `aspire integration search --format json`
+// use this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
+internal sealed class IntegrationSearchResult
+{
+    public required string Name { get; init; }
+
+    public required string Package { get; init; }
+
+    public required string Version { get; init; }
 }
 
 internal sealed class IntegrationListCommand : IntegrationDiscoveryCommand
@@ -180,15 +232,4 @@ internal sealed class IntegrationSearchCommand : IntegrationDiscoveryCommand
     }
 
     protected override string? GetSearchTerm(ParseResult parseResult) => parseResult.GetValue(_queryArgument);
-}
-
-// `aspire integration list --format json` and `aspire integration search --format json`
-// use this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
-internal sealed class IntegrationSearchResult
-{
-    public required string Name { get; init; }
-
-    public required string Package { get; init; }
-
-    public required string Version { get; init; }
 }

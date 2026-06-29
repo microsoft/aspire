@@ -119,7 +119,9 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
                     "IsAspireHost": "{{(isAspireHost ? "true" : "false")}}",
                     "AspireHostingSDKVersion": {{versionJson}}
                   },
-                  "Items": {}
+                  "Items": {
+                    "PackageReference": []
+                  }
                 }
                 """;
             return Task.FromResult<(int, JsonDocument?)>((exitCode, JsonDocument.Parse(json)));
@@ -134,7 +136,9 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
                 "IsAspireHost": "true",
                 "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}"
               },
-              "Items": {}
+              "Items": {
+                "PackageReference": []
+              }
             }
             """;
         return Task.FromResult<(int, JsonDocument?)>((0, JsonDocument.Parse(defaultJson)));

@@ -9,6 +9,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -16,6 +17,8 @@ namespace Aspire.Cli.Packaging;
 
 internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger logger, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, string? currentCliVersion = null)
 {
+    private static readonly IFeatures s_defaultFeatures = new DisabledFeatures();
+
     // Threaded so the local-folder integration listing can honor the same
     // ShowDeprecatedPackages flag that NuGetPackageCache honors on the feed-based path.
     // Without this, flipping the flag silently has no effect on local hive / PR hive listings
@@ -29,6 +32,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     private readonly string? _currentCliVersion = currentCliVersion;
 
     private const string GuestAppHostSdkPackageId = "Aspire.Hosting";
+
+    internal PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+        : this(name, quality, mappings, nuGetPackageCache, s_defaultFeatures, logger ?? NullLogger.Instance, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion)
+    {
+    }
 
     public string Name { get; } = name;
     public PackageChannelQuality Quality { get; } = quality;
@@ -125,7 +133,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         var packages = packageResults
             .SelectMany(p => p)
-            .DistinctBy(p => $"{p.Id}-{p.Version}");
+            .DistinctBy(p => $"{p.Id}\0{p.Version}");
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
         // prerelease packages. Keep the current CLI/SDK version so shipped CLIs can resolve their
@@ -171,17 +179,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         var packages = packageResults
             .SelectMany(p => p)
-            .DistinctBy(p => $"{p.Id}-{p.Version}");
+            .DistinctBy(p => $"{p.Id}\0{p.Version}");
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
         // prerelease packages. This filters out this noise.
-        var filteredPackages = packages.Where(p => new { SemVer = SemVersion.Parse(p.Version), Quality = Quality } switch
-        {
-            { Quality: PackageChannelQuality.Both } => true,
-            { Quality: PackageChannelQuality.Stable, SemVer: { IsPrerelease: false } } => true,
-            { Quality: PackageChannelQuality.Prerelease, SemVer: { IsPrerelease: true } } => true,
-            _ => false
-        });
+        var filteredPackages = packages.Where(p => MatchesRequestedQuality(p.Version, Quality));
 
         // When pinned to a specific version, override the version on each discovered package
         // so the correct version gets installed regardless of what the feed reports as latest.
@@ -255,6 +257,54 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         };
     }
 
+    public async Task<IEnumerable<NuGetPackage>> SearchPackagesAsync(string query, DirectoryInfo workingDirectory, Func<string, bool>? filter, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+
+        var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
+
+        using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
+
+        if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
+        {
+            tasks.Add(nuGetPackageCache.GetPackagesAsync(
+                workingDirectory: workingDirectory,
+                packageId: query,
+                filter: filter,
+                prerelease: false,
+                nugetConfigFile: tempNuGetConfig?.ConfigFile,
+                useCache: true,
+                cancellationToken: cancellationToken));
+        }
+
+        if (Quality is PackageChannelQuality.Prerelease || Quality is PackageChannelQuality.Both)
+        {
+            tasks.Add(nuGetPackageCache.GetPackagesAsync(
+                workingDirectory: workingDirectory,
+                packageId: query,
+                filter: filter,
+                prerelease: true,
+                nugetConfigFile: tempNuGetConfig?.ConfigFile,
+                useCache: true,
+                cancellationToken: cancellationToken));
+        }
+
+        var packageResults = await Task.WhenAll(tasks);
+
+        var packages = packageResults
+            .SelectMany(p => p)
+            .DistinctBy(p => $"{p.Id}\0{p.Version}");
+
+        var filteredPackages = packages.Where(p => MatchesRequestedQuality(p.Version, Quality));
+
+        if (PinnedVersion is not null)
+        {
+            return filteredPackages.Select(p => new NuGetPackage { Id = p.Id, Version = PinnedVersion, Source = p.Source });
+        }
+
+        return filteredPackages;
+    }
+
     public async Task<IEnumerable<NuGetPackage>> GetPackagesAsync(string packageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
         if (PinnedVersion is not null)
@@ -294,7 +344,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         var packages = packageResults
             .SelectMany(p => p)
-            .DistinctBy(p => $"{p.Id}-{p.Version}");
+            .DistinctBy(p => $"{p.Id}\0{p.Version}");
 
         // In the event that we have no stable packages we fallback to
         // returning prerelease packages. Example a package that is currently
@@ -315,13 +365,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
         // prerelease packages. This filters out this noise.
-        var filteredPackages = packages.Where(p => new { SemVer = SemVersion.Parse(p.Version), Quality = Quality } switch
-        {
-            { Quality: PackageChannelQuality.Both } => true,
-            { Quality: PackageChannelQuality.Stable, SemVer: { IsPrerelease: false } } => true,
-            { Quality: PackageChannelQuality.Prerelease, SemVer: { IsPrerelease: true } } => true,
-            _ => false
-        });
+        var filteredPackages = packages.Where(p => MatchesRequestedQuality(p.Version, Quality));
 
         return filteredPackages;
     }
@@ -383,7 +427,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         var packages = packageResults
             .SelectMany(p => p)
-            .DistinctBy(p => $"{p.Id}-{p.Version}");
+            .DistinctBy(p => $"{p.Id}\0{p.Version}");
 
         // In the event that we have no stable packages we fallback to
         // returning prerelease packages. Example a package that is currently
@@ -403,13 +447,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
         // prerelease packages. This filters out this noise.
-        var filteredPackages = packages.Where(p => new { SemVer = SemVersion.Parse(p.Version), Quality = Quality } switch
-        {
-            { Quality: PackageChannelQuality.Both } => true,
-            { Quality: PackageChannelQuality.Stable, SemVer: { IsPrerelease: false } } => true,
-            { Quality: PackageChannelQuality.Prerelease, SemVer: { IsPrerelease: true } } => true,
-            _ => false
-        });
+        var filteredPackages = packages.Where(p => MatchesRequestedQuality(p.Version, Quality));
 
         return filteredPackages;
     }
@@ -575,6 +613,17 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return null;
     }
 
+    private static bool MatchesRequestedQuality(string version, PackageChannelQuality quality)
+    {
+        return SemVersion.TryParse(version, SemVersionStyles.Strict, out var semVersion) && quality switch
+        {
+            PackageChannelQuality.Both => true,
+            PackageChannelQuality.Stable => !semVersion.IsPrerelease,
+            PackageChannelQuality.Prerelease => semVersion.IsPrerelease,
+            _ => false
+        };
+    }
+
     private readonly record struct PackageFileMetadata(string PackageId, SemVersion Version, string PackageFilePath);
 
     private static bool IsScopedAspireMapping(PackageMapping mapping)
@@ -620,5 +669,34 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         // version. Not really an issue for template selection though (unless we start allowing)
         // for broader templating options.
         return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, features, logger, currentCliVersion: currentCliVersion);
+    }
+
+    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+    {
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, logger ?? NullLogger.Instance, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion);
+    }
+
+    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+    {
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, s_defaultFeatures, logger ?? NullLogger.Instance, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion);
+    }
+
+    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger? logger = null)
+    {
+        return CreateImplicitChannel(nuGetPackageCache, features, logger ?? NullLogger.Instance, currentCliVersion: null);
+    }
+
+    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, ILogger? logger = null)
+    {
+        return CreateImplicitChannel(nuGetPackageCache, s_defaultFeatures, logger ?? NullLogger.Instance, currentCliVersion: null);
+    }
+
+    private sealed class DisabledFeatures : IFeatures
+    {
+        public bool IsFeatureEnabled(string featureFlag, bool defaultValue) => defaultValue;
+
+        public void LogFeatureState()
+        {
+        }
     }
 }

@@ -112,6 +112,105 @@ internal class NuGetConfigMerger
         File.Copy(tmpConfig.ConfigFile.FullName, targetPath, overwrite: true);
     }
 
+    /// <summary>
+    /// Adds a package source and an additive package source mapping without changing existing mappings.
+    /// </summary>
+    public static async Task AddPackageSourceMappingAsync(DirectoryInfo targetDirectory, PackageMapping mapping, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(targetDirectory);
+        ArgumentNullException.ThrowIfNull(mapping);
+
+        if (!targetDirectory.Exists)
+        {
+            targetDirectory.Create();
+        }
+
+        var nugetConfigFile = TryFindNuGetConfigInDirectory(targetDirectory, out var existingNuGetConfigFile)
+            ? existingNuGetConfigFile
+            : new FileInfo(Path.Combine(targetDirectory.FullName, "nuget.config"));
+
+        XDocument document;
+        XElement configuration;
+
+        if (nugetConfigFile.Exists)
+        {
+            await using var stream = nugetConfigFile.OpenRead();
+            document = XDocument.Load(stream);
+            configuration = document.Root ?? new XElement("configuration");
+            if (document.Root is null)
+            {
+                document.Add(configuration);
+            }
+        }
+        else
+        {
+            configuration = new XElement("configuration");
+            document = new XDocument(configuration);
+        }
+
+        var packageSources = configuration.Element("packageSources");
+        if (packageSources is null)
+        {
+            packageSources = new XElement("packageSources");
+            configuration.Add(packageSources);
+        }
+
+        var sourceKey = AddPackageSource(packageSources, mapping.Source);
+        AddPackageSourceMapping(configuration, sourceKey, mapping.PackageFilter);
+
+        cancellationToken.ThrowIfCancellationRequested();
+        await SaveConfigAsync(nugetConfigFile, document);
+    }
+
+    private static string AddPackageSource(XElement packageSources, string source)
+    {
+        var existingAdd = packageSources.Elements("add")
+            .FirstOrDefault(add => string.Equals((string?)add.Attribute("value"), source, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals((string?)add.Attribute("key"), source, StringComparison.OrdinalIgnoreCase));
+
+        if (existingAdd is not null)
+        {
+            return (string?)existingAdd.Attribute("key") ?? source;
+        }
+
+        var add = new XElement("add");
+        add.SetAttributeValue("key", source);
+        add.SetAttributeValue("value", source);
+        packageSources.Add(add);
+
+        return source;
+    }
+
+    private static void AddPackageSourceMapping(XElement configuration, string sourceKey, string packageFilter)
+    {
+        var packageSourceMapping = configuration.Element("packageSourceMapping");
+        if (packageSourceMapping is null)
+        {
+            packageSourceMapping = new XElement("packageSourceMapping");
+            configuration.Add(packageSourceMapping);
+        }
+
+        var packageSource = packageSourceMapping.Elements("packageSource")
+            .FirstOrDefault(packageSource => string.Equals((string?)packageSource.Attribute("key"), sourceKey, StringComparison.OrdinalIgnoreCase));
+
+        if (packageSource is null)
+        {
+            packageSource = new XElement("packageSource");
+            packageSource.SetAttributeValue("key", sourceKey);
+            packageSourceMapping.Add(packageSource);
+        }
+
+        var existingPackage = packageSource.Elements("package")
+            .FirstOrDefault(package => string.Equals((string?)package.Attribute("pattern"), packageFilter, StringComparison.OrdinalIgnoreCase));
+
+        if (existingPackage is null)
+        {
+            var package = new XElement("package");
+            package.SetAttributeValue("pattern", packageFilter);
+            packageSource.Add(package);
+        }
+    }
+
     private static async Task UpdateExistingNuGetConfigAsync(FileInfo nugetConfigFile, PackageMapping[] mappings, bool configureGlobalPackagesFolder, Func<FileInfo, XmlDocument?, XmlDocument, CancellationToken, Task<bool>>? confirmationCallback, CancellationToken cancellationToken)
     {
         if (mappings.Length == 0)

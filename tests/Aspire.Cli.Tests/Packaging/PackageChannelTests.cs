@@ -7,6 +7,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Packaging;
@@ -440,5 +441,53 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         };
 
         return PackageChannel.CreateExplicitChannel("local", quality, mappings, cache, features ?? new TestFeatures(), NullLogger.Instance);
+    }
+
+    [Fact]
+    public async Task SearchPackagesAsync_IgnoresPackagesWithInvalidVersions()
+    {
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, _, _, prerelease, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(prerelease
+                ? [CreatePackage("Contoso.Hosting.MongoDB", "1.0.0-preview.1"), CreatePackage("Contoso.Hosting.InvalidPreview", "preview-build")]
+                : [CreatePackage("Contoso.Hosting.Redis", "1.0.0"), CreatePackage("Contoso.Hosting.InvalidStable", "not-a-version")])
+        };
+        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures());
+
+        var packages = (await channel.SearchPackagesAsync("hosting", new DirectoryInfo(Environment.CurrentDirectory), static _ => true, CancellationToken.None)).ToArray();
+
+        Assert.Collection(
+            packages,
+            package => Assert.Equal("1.0.0", package.Version),
+            package => Assert.Equal("1.0.0-preview.1", package.Version));
+    }
+
+    [Fact]
+    public async Task GetIntegrationPackagesAsync_IgnoresPackagesWithInvalidVersions()
+    {
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(prerelease
+                ? [CreatePackage("Contoso.Hosting.MongoDB", "1.0.0-preview.1"), CreatePackage("Contoso.Hosting.InvalidPreview", "preview-build")]
+                : [CreatePackage("Contoso.Hosting.Redis", "1.0.0"), CreatePackage("Contoso.Hosting.InvalidStable", "not-a-version")])
+        };
+        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures());
+
+        var packages = (await channel.GetIntegrationPackagesAsync(new DirectoryInfo(Environment.CurrentDirectory), CancellationToken.None)).ToArray();
+
+        Assert.Collection(
+            packages,
+            package => Assert.Equal("1.0.0", package.Version),
+            package => Assert.Equal("1.0.0-preview.1", package.Version));
+    }
+
+    private static NuGetPackage CreatePackage(string id, string version)
+    {
+        return new NuGetPackage
+        {
+            Id = id,
+            Version = version,
+            Source = "test"
+        };
     }
 }

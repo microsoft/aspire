@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
@@ -12,6 +14,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.AspNetCore.InternalTesting;
@@ -20,6 +23,14 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 {
+    private static HttpResponseMessage CreateJsonResponse(string json)
+    {
+        return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+    }
+
     [Fact]
     public async Task UpdateProjectFileAsync_DoesAttemptToUpdateIfNoUpdatesRequired()
     {
@@ -683,6 +694,323 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 && w.Message is not null
                 && w.Message.Contains("Aspire.Hosting.ThirdParty")
                 && w.Message.Contains("daily"));
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_UpdatesVerifiedThirdPartyHostingPackagesFromMetadata()
+    {
+        const string source = "https://example.test/v3/index.json";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+        var nugetConfigFile = new FileInfo(Path.Combine(appHostFolder.FullName, "NuGet.Config"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """);
+        await File.WriteAllTextAsync(
+            nugetConfigFile.FullName,
+            $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="test" value="{{source}}" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var packagesAddsExecuted = new List<(FileInfo ProjectFile, string PackageId, string PackageVersion, string? PackageSource, bool NoRestore)>();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var packages = query switch
+                        {
+                            "Aspire.AppHost.Sdk" => new[] { new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = "default" } },
+                            "Contoso.Hosting.Redis" => new[] { new NuGetPackageCli { Id = "Contoso.Hosting.Redis", Version = "1.1.0", Source = "default" } },
+                            "Fabrikam.Hosting.Postgres" => new[] { new NuGetPackageCli { Id = "Fabrikam.Hosting.Postgres", Version = "2.1.0", Source = "default" } },
+                            _ => throw new InvalidOperationException($"Unexpected package query: {query}."),
+                        };
+
+                        return (0, packages);
+                    },
+                    GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0, [nugetConfigFile.FullName]),
+
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        if (projectFile.FullName != appHostProjectFile.FullName)
+                        {
+                            throw new InvalidOperationException("Unexpected project file.");
+                        }
+
+                        var itemsAndProperties = new JsonObject();
+                        itemsAndProperties.WithSdkVersion("9.4.1");
+                        itemsAndProperties.WithPackageReference("Aspire.Hosting.AppHost", "9.4.1");
+                        itemsAndProperties.WithPackageReference("Contoso.Hosting.Redis", "1.0.0");
+                        itemsAndProperties.WithPackageReference("Fabrikam.Hosting.Postgres", "2.0.0");
+                        itemsAndProperties.WithPackageReference("ThirdParty.NotHosting", "3.0.0");
+
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    },
+                    AddPackageAsyncCallback = (projectFile, packageId, packageVersion, source, noRestore, _, _) =>
+                    {
+                        packagesAddsExecuted.Add((projectFile, packageId, packageVersion, source!, noRestore));
+                        return 0;
+                    }
+                };
+            };
+        });
+        using var handler = new MockHttpMessageHandler(request => request.RequestUri?.AbsoluteUri switch
+        {
+            source => CreateJsonResponse("""
+                {
+                  "resources": [
+                    {
+                      "@id": "https://example.test/v3/registration-semver2/",
+                      "@type": "RegistrationsBaseUrl/Versioned"
+                    }
+                  ]
+                }
+                """),
+            "https://example.test/v3/registration-semver2/contoso.hosting.redis/index.json" => CreateJsonResponse("""
+                {
+                  "items": [
+                    {
+                      "items": [
+                        {
+                          "catalogEntry": {
+                            "version": "1.0.0",
+                            "tags": "redis aspire-hosting aspire",
+                            "dependencyGroups": [
+                              {
+                                "targetFramework": "net10.0",
+                                "dependencies": [
+                                  { "id": "Aspire.Hosting.AppHost", "range": "[9.0.0, )" }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """),
+            "https://example.test/v3/registration-semver2/fabrikam.hosting.postgres/index.json" => CreateJsonResponse("""
+                {
+                  "items": [
+                    {
+                      "items": [
+                        {
+                          "catalogEntry": {
+                            "version": "2.0.0",
+                            "tags": "postgres aspire-hosting aspire",
+                            "dependencyGroups": [
+                              {
+                                "targetFramework": "net10.0",
+                                "dependencies": [
+                                  { "id": "Aspire.Hosting.AppHost", "range": "[9.0.0, )" }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """),
+            "https://example.test/v3/registration-semver2/thirdparty.nothosting/index.json" => CreateJsonResponse("""
+                {
+                  "items": [
+                    {
+                      "items": [
+                        {
+                          "catalogEntry": {
+                            "version": "3.0.0",
+                            "tags": "database"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """),
+            _ => new HttpResponseMessage(System.Net.HttpStatusCode.NotFound)
+        });
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+        using var provider = services.BuildServiceProvider();
+
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var selectedChannel = channels.Single(c => c.Name == "default");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+        Assert.Collection(
+            packagesAddsExecuted,
+            item =>
+            {
+                Assert.Equal(appHostProjectFile.FullName, item.ProjectFile.FullName);
+                Assert.Equal("Contoso.Hosting.Redis", item.PackageId);
+                Assert.Equal("1.1.0", item.PackageVersion);
+                Assert.Null(item.PackageSource);
+            },
+            item =>
+            {
+                Assert.Equal(appHostProjectFile.FullName, item.ProjectFile.FullName);
+                Assert.Equal("Fabrikam.Hosting.Postgres", item.PackageId);
+                Assert.Equal("2.1.0", item.PackageVersion);
+                Assert.Null(item.PackageSource);
+            });
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_CentralPackageManagement_UsesCurrentVersionForThirdPartyMetadataLookup()
+    {
+        const string source = "https://example.test/v3/index.json";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+        var directoryPackagesPropsFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Packages.props"));
+        var nugetConfigFile = new FileInfo(Path.Combine(appHostFolder.FullName, "NuGet.Config"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            """
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+                <ItemGroup>
+                    <PackageReference Include="Contoso.Hosting.Redis" />
+                </ItemGroup>
+            </Project>
+            """);
+        await File.WriteAllTextAsync(
+            directoryPackagesPropsFile.FullName,
+            """
+            <Project>
+                <PropertyGroup>
+                    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+                </PropertyGroup>
+                <ItemGroup>
+                    <PackageVersion Include="Contoso.Hosting.Redis" Version="1.0.0" />
+                </ItemGroup>
+            </Project>
+            """);
+        await File.WriteAllTextAsync(
+            nugetConfigFile.FullName,
+            $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="test" value="{{source}}" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var packages = query switch
+                        {
+                            "Aspire.AppHost.Sdk" => new[] { new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.4.1", Source = "default" } },
+                            "Contoso.Hosting.Redis" => new[] { new NuGetPackageCli { Id = "Contoso.Hosting.Redis", Version = "1.1.0", Source = "default" } },
+                            _ => throw new InvalidOperationException($"Unexpected package query: {query}."),
+                        };
+
+                        return (0, packages);
+                    },
+                    GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0, [nugetConfigFile.FullName]),
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        if (projectFile.FullName != appHostProjectFile.FullName)
+                        {
+                            throw new InvalidOperationException("Unexpected project file.");
+                        }
+
+                        var itemsAndProperties = new JsonObject();
+                        itemsAndProperties.WithSdkVersion("9.4.1");
+                        itemsAndProperties.WithPackageReferenceWithoutVersion("Contoso.Hosting.Redis");
+
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    }
+                };
+            };
+        });
+        using var handler = new MockHttpMessageHandler(request => request.RequestUri?.AbsoluteUri switch
+        {
+            source => CreateJsonResponse("""
+                {
+                  "resources": [
+                    {
+                      "@id": "https://example.test/v3/registration-semver2/",
+                      "@type": "RegistrationsBaseUrl/Versioned"
+                    }
+                  ]
+                }
+                """),
+            "https://example.test/v3/registration-semver2/contoso.hosting.redis/index.json" => CreateJsonResponse("""
+                {
+                  "items": [
+                    {
+                      "items": [
+                        {
+                          "catalogEntry": {
+                            "version": "1.0.0",
+                            "tags": "redis aspire-hosting aspire",
+                            "dependencyGroups": [
+                              {
+                                "targetFramework": "net10.0",
+                                "dependencies": [
+                                  { "id": "Aspire.Hosting.AppHost", "range": "[9.0.0, )" }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """),
+            _ => new HttpResponseMessage(System.Net.HttpStatusCode.NotFound)
+        });
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+        using var provider = services.BuildServiceProvider();
+
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var selectedChannel = channels.Single(c => c.Name == "default");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+        var content = await File.ReadAllTextAsync(directoryPackagesPropsFile.FullName);
+        Assert.Contains("<PackageVersion Include=\"Contoso.Hosting.Redis\" Version=\"1.1.0\" />", content);
     }
 
     [Fact]
@@ -1761,6 +2089,98 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateContext_GetOrAddThirdPartyPackageEligibilityAsync_ConcurrentCallersShareSingleFactoryInvocation()
+    {
+        var context = new UpdateContext(
+            new FileInfo("C:\\repo\\AppHost.csproj"),
+            new PackageChannel("default", PackageChannelQuality.Stable, null, null!));
+        var factoryStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var factoryCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var invocationCount = 0;
+
+        Task<bool> ValueFactory()
+        {
+            Interlocked.Increment(ref invocationCount);
+            factoryStarted.TrySetResult();
+            return factoryCompletion.Task;
+        }
+
+        var tasks = Enumerable.Range(0, 16)
+            .Select(_ => context.GetOrAddThirdPartyPackageEligibilityAsync("ThirdParty.Package", "1.0.0", ValueFactory))
+            .ToArray();
+
+        await factoryStarted.Task.DefaultTimeout();
+        factoryCompletion.SetResult(true);
+
+        var results = await Task.WhenAll(tasks).DefaultTimeout();
+
+        Assert.All(results, Assert.True);
+        Assert.Equal(1, invocationCount);
+    }
+
+    [Fact]
+    public async Task UpdateContext_GetOrAddThirdPartyPackageEligibilityAsync_FaultedEntryCanBeRetried()
+    {
+        var context = new UpdateContext(
+            new FileInfo("C:\\repo\\AppHost.csproj"),
+            new PackageChannel("default", PackageChannelQuality.Stable, null, null!));
+        var invocationCount = 0;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            context.GetOrAddThirdPartyPackageEligibilityAsync(
+                "ThirdParty.Package",
+                "1.0.0",
+                () =>
+                {
+                    Interlocked.Increment(ref invocationCount);
+                    throw new InvalidOperationException("boom");
+                })).DefaultTimeout();
+
+        var result = await context.GetOrAddThirdPartyPackageEligibilityAsync(
+            "ThirdParty.Package",
+            "1.0.0",
+            () =>
+            {
+                Interlocked.Increment(ref invocationCount);
+                return Task.FromResult(true);
+            }).DefaultTimeout();
+
+        Assert.True(result);
+        Assert.Equal(2, invocationCount);
+    }
+
+    [Fact]
+    public async Task UpdateContext_GetOrAddThirdPartyPackageEligibilityAsync_DoesNotShareResultsAcrossVersions()
+    {
+        var context = new UpdateContext(
+            new FileInfo("C:\\repo\\AppHost.csproj"),
+            new PackageChannel("default", PackageChannelQuality.Stable, null, null!));
+        var invocationCount = 0;
+
+        var firstVersion = await context.GetOrAddThirdPartyPackageEligibilityAsync(
+            "ThirdParty.Package",
+            "1.0.0",
+            () =>
+            {
+                Interlocked.Increment(ref invocationCount);
+                return Task.FromResult(false);
+            }).DefaultTimeout();
+
+        var secondVersion = await context.GetOrAddThirdPartyPackageEligibilityAsync(
+            "ThirdParty.Package",
+            "2.0.0",
+            () =>
+            {
+                Interlocked.Increment(ref invocationCount);
+                return Task.FromResult(true);
+            }).DefaultTimeout();
+
+        Assert.False(firstVersion);
+        Assert.True(secondVersion);
+        Assert.Equal(2, invocationCount);
+    }
+
+    [Fact]
     public async Task UpdateProjectFileAsync_CentralPackageManagement_ResolvesAspireVersionProperty()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -2304,12 +2724,13 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var cache = provider.GetRequiredService<IMemoryCache>();
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var fallbackParser = provider.GetRequiredService<FallbackProjectParser>();
+        var packageTagMetadataService = provider.GetRequiredService<IPackageTagMetadataService>();
         var packagingService = provider.GetRequiredService<IPackagingService>();
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, packageTagMetadataService);
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         // Should not throw ProjectUpdaterException; should produce update steps including AppHost SDK
@@ -2406,12 +2827,13 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var cache = provider.GetRequiredService<IMemoryCache>();
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var fallbackParser = provider.GetRequiredService<FallbackProjectParser>();
+        var packageTagMetadataService = provider.GetRequiredService<IPackageTagMetadataService>();
         var packagingService = provider.GetRequiredService<IPackagingService>();
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, packageTagMetadataService);
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         // Should discover package reference (version may be absent) and not crash
@@ -2485,12 +2907,13 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var cache = provider.GetRequiredService<IMemoryCache>();
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var fallbackParser = provider.GetRequiredService<FallbackProjectParser>();
+        var packageTagMetadataService = provider.GetRequiredService<IPackageTagMetadataService>();
         var packagingService = provider.GetRequiredService<IPackagingService>();
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, packageTagMetadataService);
 
         // Should throw ProjectUpdaterException due to invalid XML
         await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
@@ -2567,12 +2990,13 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var cache = provider.GetRequiredService<IMemoryCache>();
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var fallbackParser = provider.GetRequiredService<FallbackProjectParser>();
+        var packageTagMetadataService = provider.GetRequiredService<IPackageTagMetadataService>();
         var packagingService = provider.GetRequiredService<IPackagingService>();
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, packageTagMetadataService);
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         // Normal path unaffected - no updates needed since version is already current
@@ -2646,12 +3070,13 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var cache = provider.GetRequiredService<IMemoryCache>();
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var fallbackParser = provider.GetRequiredService<FallbackProjectParser>();
+        var packageTagMetadataService = provider.GetRequiredService<IPackageTagMetadataService>();
         var packagingService = provider.GetRequiredService<IPackagingService>();
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, packageTagMetadataService);
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
@@ -2909,12 +3334,13 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var cache = provider.GetRequiredService<IMemoryCache>();
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var fallbackParser = provider.GetRequiredService<FallbackProjectParser>();
+        var packageTagMetadataService = provider.GetRequiredService<IPackageTagMetadataService>();
         var packagingService = provider.GetRequiredService<IPackagingService>();
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, packageTagMetadataService);
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
@@ -2997,12 +3423,13 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var cache = provider.GetRequiredService<IMemoryCache>();
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var fallbackParser = provider.GetRequiredService<FallbackProjectParser>();
+        var packageTagMetadataService = provider.GetRequiredService<IPackageTagMetadataService>();
         var packagingService = provider.GetRequiredService<IPackagingService>();
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser);
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, packageTagMetadataService);
 
         // This should not throw and should handle the * version gracefully
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();

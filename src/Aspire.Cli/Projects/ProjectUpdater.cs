@@ -9,13 +9,14 @@ using System.Xml;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
-using Aspire.Shared;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Semver;
 using Spectre.Console;
+using NuGetPackageCli = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Projects;
 
@@ -24,7 +25,7 @@ internal interface IProjectUpdater
     Task<ProjectUpdateResult> UpdateProjectAsync(UpdatePackagesContext context, CancellationToken cancellationToken = default);
 }
 
-internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDotNetCliRunner runner, IInteractionService interactionService, IMemoryCache cache, CliExecutionContext executionContext, FallbackProjectParser fallbackParser) : IProjectUpdater
+internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDotNetCliRunner runner, IInteractionService interactionService, IMemoryCache cache, CliExecutionContext executionContext, FallbackProjectParser fallbackParser, IPackageTagMetadataService packageTagMetadataService) : IProjectUpdater
 {
     public async Task<ProjectUpdateResult> UpdateProjectAsync(UpdatePackagesContext context, CancellationToken cancellationToken = default)
     {
@@ -220,7 +221,6 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     private async Task<(IEnumerable<UpdateStep> UpdateSteps, bool FallbackUsed)> GetUpdateStepsAsync(FileInfo projectFile, PackageChannel channel, CancellationToken cancellationToken)
     {
         var context = new UpdateContext(projectFile, channel);
-
         var appHostAnalyzeStep = new AnalyzeStep(UpdateCommandStrings.AnalyzeAppHost, () => AnalyzeAppHostAsync(context, cancellationToken));
         context.AnalyzeSteps.Enqueue(appHostAnalyzeStep);
 
@@ -961,41 +961,54 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             foreach (var packageReference in packageReferencesElement.EnumerateArray())
             {
                 var packageId = packageReference.GetProperty("Identity").GetString() ?? throw new ProjectUpdaterException(UpdateCommandStrings.PackageReferenceNoIdentity);
+                var packageVersion = packageReference.TryGetProperty("Version", out var versionElement)
+                    ? versionElement.GetString()
+                    : null;
 
-                if (!IsUpdatablePackage(packageId))
+                string? currentVersion = packageVersion;
+                if (cpmInfo.UsesCentralPackageManagement)
+                {
+                    currentVersion = await GetPackageVersionFromDirectoryPackagesPropsAsync(packageId, cpmInfo.DirectoryPackagesPropsFile!, projectFile, cancellationToken);
+                    if (currentVersion is null)
+                    {
+                        logger.LogInformation("Package '{PackageId}' not found in Directory.Packages.props, skipping.", packageId);
+                        continue;
+                    }
+                }
+
+                if (!await IsUpdatablePackageAsync(packageId, NormalizePackageVersionForMetadataLookup(currentVersion), projectFile.Directory!, context, cancellationToken))
                 {
                     continue;
                 }
 
                 if (cpmInfo.UsesCentralPackageManagement)
                 {
-                    await AnalyzePackageForCentralPackageManagementAsync(packageId, projectFile, cpmInfo.DirectoryPackagesPropsFile!, context, cancellationToken);
+                    await AnalyzePackageForCentralPackageManagementAsync(packageId, currentVersion!, projectFile, cpmInfo.DirectoryPackagesPropsFile!, context, cancellationToken);
                 }
                 else
                 {
-                    // Traditional package management - Version should be in PackageReference
-                    if (!packageReference.TryGetProperty("Version", out var versionElement))
+                    if (string.IsNullOrEmpty(packageVersion) || packageVersion == "*")
                     {
-                        // Version attribute is missing - treat as wildcard
-                        var packageVersion = "*";
-                        await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, context, cancellationToken);
+                        packageVersion = "*";
                     }
-                    else
-                    {
-                        var packageVersion = versionElement.GetString();
-                        if (string.IsNullOrEmpty(packageVersion) || packageVersion == "*")
-                        {
-                            // Version is * or empty - treat as wildcard
-                            packageVersion = "*";
-                        }
-                        await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, context, cancellationToken);
-                    }
+
+                    await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, context, cancellationToken);
                 }
             }
         }
     }
 
-    private static bool IsUpdatablePackage(string packageId)
+    private static string? NormalizePackageVersionForMetadataLookup(string? packageVersion)
+    {
+        if (string.IsNullOrWhiteSpace(packageVersion) || packageVersion == "*")
+        {
+            return null;
+        }
+
+        return IsValidSemanticVersion(packageVersion) ? packageVersion : null;
+    }
+
+    private async Task<bool> IsUpdatablePackageAsync(string packageId, string? packageVersion, DirectoryInfo workingDirectory, UpdateContext context, CancellationToken cancellationToken)
     {
         // Skip Aspire.Hosting.AppHost - it's removed during SDK update (no longer needed with new SDK format)
         if (string.Equals(packageId, "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase))
@@ -1003,7 +1016,20 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             return false;
         }
 
-        return packageId.StartsWith("Aspire.", StringComparison.Ordinal);
+        if (packageId.StartsWith("Aspire.", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return await context.GetOrAddThirdPartyPackageEligibilityAsync(
+            packageId,
+            packageVersion,
+            () => IsThirdPartyHostingPackageAsync(context.Channel, workingDirectory, packageId, packageVersion, cancellationToken));
+    }
+
+    private async Task<bool> IsThirdPartyHostingPackageAsync(PackageChannel channel, DirectoryInfo workingDirectory, string packageId, string? packageVersion, CancellationToken cancellationToken)
+    {
+        return await packageTagMetadataService.HasAnyDependencyAsync(channel, workingDirectory, packageId, packageVersion, HostingIntegrationMetadata.HostingDependencyPackageIds, cancellationToken);
     }
 
     private static CentralPackageManagementInfo DetectCentralPackageManagement(FileInfo projectFile)
@@ -1049,16 +1075,8 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         context.UpdateSteps.Enqueue(updateStep);
     }
 
-    private async Task AnalyzePackageForCentralPackageManagementAsync(string packageId, FileInfo projectFile, FileInfo directoryPackagesPropsFile, UpdateContext context, CancellationToken cancellationToken)
+    private async Task AnalyzePackageForCentralPackageManagementAsync(string packageId, string currentVersion, FileInfo projectFile, FileInfo directoryPackagesPropsFile, UpdateContext context, CancellationToken cancellationToken)
     {
-        var currentVersion = await GetPackageVersionFromDirectoryPackagesPropsAsync(packageId, directoryPackagesPropsFile, projectFile, cancellationToken);
-
-        if (currentVersion is null)
-        {
-            logger.LogInformation("Package '{PackageId}' not found in Directory.Packages.props, skipping.", packageId);
-            return;
-        }
-
         var latestPackage = await GetLatestVersionOfPackageAsync(context, packageId, throwIfNotFound: false, cancellationToken: cancellationToken);
 
         if (latestPackage is null)
@@ -1459,12 +1477,32 @@ internal sealed class ProjectUpdateResult
 
 internal sealed class UpdateContext(FileInfo appHostProjectFile, PackageChannel channel)
 {
+    private readonly ConcurrentDictionary<string, Lazy<Task<bool>>> _thirdPartyPackageEligibility = new(StringComparer.OrdinalIgnoreCase);
+
     public FileInfo AppHostProjectFile { get; } = appHostProjectFile;
     public PackageChannel Channel { get; } = channel;
     public ConcurrentQueue<UpdateStep> UpdateSteps { get; } = new();
     public ConcurrentQueue<AnalyzeStep> AnalyzeSteps { get; } = new();
     public HashSet<string> VisitedProjects { get; } = new();
     public bool FallbackParsing { get; set; }
+
+    public async Task<bool> GetOrAddThirdPartyPackageEligibilityAsync(string packageId, string? packageVersion, Func<Task<bool>> valueFactory)
+    {
+        var cacheKey = $"{packageId}\0{packageVersion ?? "*"}";
+        var eligibility = _thirdPartyPackageEligibility.GetOrAdd(
+            cacheKey,
+            _ => new Lazy<Task<bool>>(valueFactory, LazyThreadSafetyMode.ExecutionAndPublication));
+
+        try
+        {
+            return await eligibility.Value;
+        }
+        catch
+        {
+            _thirdPartyPackageEligibility.TryRemove(new KeyValuePair<string, Lazy<Task<bool>>>(cacheKey, eligibility));
+            throw;
+        }
+    }
 }
 
 internal abstract record UpdateStep(string Description, Func<Task> Callback)

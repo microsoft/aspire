@@ -11,6 +11,23 @@ internal class PackageMapping(string PackageFilter, string source)
     public string PackageFilter { get; } = PackageFilter;
     public string Source { get; } = source;
 
+    public bool MatchesPackageId(string packageId) => MatchesPackageId(PackageFilter, packageId);
+
+    public static bool MatchesPackageId(string packageFilter, string packageId)
+    {
+        if (string.Equals(packageFilter, AllPackages, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (packageFilter.EndsWith('*'))
+        {
+            return packageId.StartsWith(packageFilter[..^1], StringComparisons.NuGetPackageId);
+        }
+
+        return string.Equals(packageFilter, packageId, StringComparisons.NuGetPackageId);
+    }
+
     /// <summary>
     /// Whether this mapping routes Aspire.* packages to an existing local directory of
     /// <c>.nupkg</c> files rather than a remote feed. True when the filter targets Aspire
