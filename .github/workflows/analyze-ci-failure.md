@@ -51,11 +51,11 @@ jobs:
       checks: read
       pull-requests: read
     outputs:
-      has-work: ${{ steps.resolve.outputs.has_work == 'true' && (steps.cache.outputs.cache-hit == 'true' || steps.collect.outputs.has_work != 'false') }}
-      run_id: ${{ steps.resolve.outputs.run_id }}
-      run_attempt: ${{ steps.resolve.outputs.run_attempt }}
-      run_url: ${{ steps.resolve.outputs.run_url }}
-      pr_numbers: ${{ steps.resolve.outputs.pr_numbers }}
+      has-work: ${{ steps.collect.outputs.has_work }}
+      run_id: ${{ steps.collect.outputs.run_id }}
+      run_attempt: ${{ steps.collect.outputs.run_attempt }}
+      run_url: ${{ steps.collect.outputs.run_url }}
+      pr_numbers: ${{ steps.collect.outputs.pr_numbers }}
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -64,8 +64,8 @@ jobs:
         with:
           sparse-checkout: eng/test-retry-patterns.json
           sparse-checkout-cone-mode: false
-      - name: Resolve run metadata
-        id: resolve
+      - name: Collect CI failure data
+        id: collect
         env:
           REPO: ${{ github.repository }}
           MANUAL_RUN_ID: ${{ inputs.run_id }}
@@ -114,27 +114,6 @@ jobs:
             echo "has_work=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
-          echo "has_work=true" >> "$GITHUB_OUTPUT"
-
-      - name: Restore cached failure data
-        if: steps.resolve.outputs.has_work == 'true'
-        id: cache
-        uses: actions/cache/restore@v5.0.5
-        with:
-          path: .ci-failure-data/
-          key: ci-failure-data-${{ steps.resolve.outputs.run_id }}
-
-      - name: Collect CI failure data
-        id: collect
-        if: steps.resolve.outputs.has_work == 'true' && steps.cache.outputs.cache-hit != 'true'
-        env:
-          REPO: ${{ github.repository }}
-          RUN_ID: ${{ steps.resolve.outputs.run_id }}
-          RUN_ATTEMPT: ${{ steps.resolve.outputs.run_attempt }}
-          PR_NUMBERS: ${{ steps.resolve.outputs.pr_numbers }}
-        run: |
-          set -euo pipefail
 
           # Fetch all jobs for this run attempt
           gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}/jobs" \
@@ -232,12 +211,12 @@ jobs:
           echo "Data collection complete."
 
       - name: Create analysis summary
-        if: steps.resolve.outputs.has_work == 'true' && steps.cache.outputs.cache-hit != 'true'
+        if: steps.collect.outputs.has_work == 'true'
         env:
-          RUN_ID: ${{ steps.resolve.outputs.run_id }}
-          RUN_ATTEMPT: ${{ steps.resolve.outputs.run_attempt }}
-          RUN_URL: ${{ steps.resolve.outputs.run_url }}
-          PR_NUMBERS: ${{ steps.resolve.outputs.pr_numbers }}
+          RUN_ID: ${{ steps.collect.outputs.run_id }}
+          RUN_ATTEMPT: ${{ steps.collect.outputs.run_attempt }}
+          RUN_URL: ${{ steps.collect.outputs.run_url }}
+          PR_NUMBERS: ${{ steps.collect.outputs.pr_numbers }}
         run: |
           set -euo pipefail
 
@@ -327,15 +306,8 @@ jobs:
 
           echo "Analysis summary written to .ci-failure-data/analysis-summary.md"
 
-      - name: Save failure data to cache
-        if: steps.resolve.outputs.has_work == 'true' && steps.cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v5.0.5
-        with:
-          path: .ci-failure-data/
-          key: ci-failure-data-${{ steps.resolve.outputs.run_id }}
-
       - uses: actions/upload-artifact@v4
-        if: steps.resolve.outputs.has_work == 'true'
+        if: steps.collect.outputs.has_work == 'true'
         with:
           name: ci-failure-data
           path: .ci-failure-data/
