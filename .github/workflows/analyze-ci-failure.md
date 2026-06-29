@@ -419,21 +419,35 @@ safe-outputs:
         - name: Rerun failed jobs
           uses: actions/github-script@v9
           env:
-            RUN_ID: ${{ jobs.rerun-failed-jobs.inputs.run_id }}
-            PR_NUMBERS: ${{ jobs.rerun-failed-jobs.inputs.pr_numbers }}
-            REASON: ${{ jobs.rerun-failed-jobs.inputs.reason }}
             ENABLE_RERUN: ${{ env.ENABLE_RERUN }}
           with:
             script: |
+              const fs = require('fs');
+              const path = require('path');
+
+              // Read inputs from the agent output artifact
+              const outputFile = process.env.GH_AW_AGENT_OUTPUT;
+              if (!outputFile || !fs.existsSync(outputFile)) {
+                core.setFailed('Agent output file not found');
+                return;
+              }
+              const agentOutput = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+              const items = agentOutput.rerun_failed_jobs || [];
+              if (items.length === 0) {
+                core.info('No rerun_failed_jobs items in agent output.');
+                return;
+              }
+              const item = items[0];
+
               const owner = context.repo.owner;
               const repo = context.repo.repo;
-              const runId = Number(process.env.RUN_ID);
-              const prNumbers = process.env.PR_NUMBERS.split(',').map(Number).filter(n => n > 0);
-              const reason = process.env.REASON;
+              const runId = Number(item.run_id);
+              const prNumbers = String(item.pr_numbers).split(',').map(Number).filter(n => n > 0);
+              const reason = item.reason || '';
               const enableRerun = String(process.env.ENABLE_RERUN).toLowerCase() === 'true';
 
               if (!Number.isInteger(runId) || runId <= 0) {
-                core.setFailed(`Invalid run_id: ${process.env.RUN_ID}`);
+                core.setFailed(`Invalid run_id: ${item.run_id}`);
                 return;
               }
 
