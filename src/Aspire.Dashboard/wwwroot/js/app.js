@@ -398,6 +398,13 @@ window.initializeAspirePopupKeyboardNavigation = function (anchorId, popupId, do
         }
 
         if (ev.shiftKey) {
+            // Shift+Tab on the anchor: let the browser move focus back to the previous
+            // page element and close the popup. We intentionally do NOT preventDefault
+            // here (the native focus shift is the desired behavior), but we still stop
+            // propagation so Fluent UI's own keyboard helper doesn't also fire and
+            // calculate the previous element from the wrong (shadow DOM) starting point.
+            ev.stopPropagation();
+            ev.stopImmediatePropagation();
             dotNetHelper.invokeMethodAsync("CloseAsync");
             return;
         }
@@ -504,7 +511,11 @@ function isAspireFocusableElement(element, focusableSelector) {
         return false;
     }
 
-    if (!isFluentInteractiveElement && element.tabIndex < 0) {
+    // A negative tabIndex always opts an element out of sequential focus navigation,
+    // including Fluent custom elements. Without this check, a fluent-button with
+    // tabindex="-1" (e.g. an item that's only programmatically focused) would still
+    // be picked up by Tab navigation through the popup.
+    if (element.tabIndex < 0) {
         return false;
     }
 
@@ -547,17 +558,35 @@ function focusNextElementAfterAnchor(anchorElement, popupElement) {
     const root = anchorElement.getRootNode() instanceof Document
         ? anchorElement.getRootNode().body
         : document.body;
-    const focusableElements = getAspireFocusableElements(root, popupElement);
-    const anchorIndex = focusableElements.indexOf(anchorElement);
+    const focusableSelector = "input, select, textarea, button, object, a[href], area[href], iframe, summary, [tabindex], [contenteditable='true']";
 
-    if (anchorIndex >= 0) {
-        (focusableElements[anchorIndex + 1] ?? anchorElement).focus();
-        return;
+    // Walk the document in source order and stop at the first focusable element that
+    // comes after the anchor. Building the full focusable list (the previous approach)
+    // is wasteful when the page has many controls and the answer is usually a sibling
+    // of the anchor a few nodes away. Elements inside the popup are skipped because Tab
+    // is supposed to land *after* the popup, not back inside it.
+    let foundAnchor = false;
+    for (const element of root.querySelectorAll("*")) {
+        if (popupElement?.contains(element)) {
+            continue;
+        }
+
+        if (!foundAnchor) {
+            if (element === anchorElement) {
+                foundAnchor = true;
+            }
+            continue;
+        }
+
+        if (isAspireFocusableElement(element, focusableSelector)) {
+            element.focus();
+            return;
+        }
     }
 
-    const nextElement = focusableElements.find(element =>
-        (anchorElement.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0);
-    (nextElement ?? anchorElement).focus();
+    // No focusable element follows the anchor. Keep focus on the anchor so the user
+    // doesn't get warped to the top of the page.
+    anchorElement.focus();
 }
 
 window.getWindowDimensions = function() {

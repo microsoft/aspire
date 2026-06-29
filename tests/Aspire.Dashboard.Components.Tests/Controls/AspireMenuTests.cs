@@ -5,6 +5,7 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Bunit;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -128,6 +129,97 @@ public class AspireMenuTests : DashboardTestContext
                     argument => Assert.Equal("view-options-button", Assert.IsType<string>(argument)),
                     argument => Assert.Equal(menuId, Assert.IsType<string>(argument)));
             });
+    }
+
+    [Fact]
+    public async Task OpenMenu_DisposesKeyboardNavigationWhenAnchoredBecomesFalse()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        JSInterop.SetupVoid("initializeAspirePopupKeyboardNavigation", _ => true);
+        JSInterop.SetupVoid("disposeAspirePopupKeyboardNavigation", _ => true);
+
+        var items = new List<MenuButtonItem>
+        {
+            new()
+            {
+                Text = "Show hidden resources",
+                OnClick = () => Task.CompletedTask
+            }
+        };
+
+        var cut = RenderComponent<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "view-options-button");
+            builder.Add(p => p.Anchored, true);
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, items);
+        });
+        await Task.Yield();
+
+        var menuId = Assert.IsType<string>(JSInterop.Invocations.Single(i => i.Identifier == "initializeAspirePopupKeyboardNavigation").Arguments[1]);
+
+        // Flip Anchored from true to false while Open stays true. This happens when callers
+        // switch a menu between anchored and context-menu modes on the same instance; the
+        // keyboard navigation registered for the original anchor must be torn down because
+        // a context menu has no stable anchor element for the popup listeners to bind to.
+        cut.SetParametersAndRender(builder =>
+        {
+            builder.Add(p => p.Anchor, "view-options-button");
+            builder.Add(p => p.Anchored, false);
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, items);
+        });
+        await Task.Yield();
+
+        Assert.Collection(JSInterop.Invocations.Where(i => i.Identifier == "disposeAspirePopupKeyboardNavigation"),
+            invocation =>
+            {
+                Assert.Collection(invocation.Arguments,
+                    argument => Assert.Equal("view-options-button", Assert.IsType<string>(argument)),
+                    argument => Assert.Equal(menuId, Assert.IsType<string>(argument)));
+            });
+    }
+
+    [Fact]
+    public async Task DisposeAsync_ReleasesDotNetReferenceWhenJSDisposeThrows()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+        JSInterop.SetupVoid("initializeAspirePopupKeyboardNavigation", _ => true);
+
+        // Simulate the browser-side dispose failing with something other than JSDisconnectedException
+        // (for example, a transient JS error during teardown). DisposeAsync must still release the
+        // DotNetObjectReference, otherwise the GC root keeps the component alive after disposal.
+        JSInterop.SetupVoid("disposeAspirePopupKeyboardNavigation", _ => true).SetException(new JSException("dispose failed"));
+
+        var items = new List<MenuButtonItem>
+        {
+            new()
+            {
+                Text = "Show hidden resources",
+                OnClick = () => Task.CompletedTask
+            }
+        };
+
+        var cut = RenderComponent<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "view-options-button");
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, items);
+        });
+        await Task.Yield();
+
+        var initInvocation = JSInterop.Invocations.Single(i => i.Identifier == "initializeAspirePopupKeyboardNavigation");
+        var dotNetRef = Assert.IsType<DotNetObjectReference<AspireMenu>>(initInvocation.Arguments[2]);
+
+        await Assert.ThrowsAsync<JSException>(async () => await cut.Instance.DisposeAsync());
+
+        Assert.Throws<ObjectDisposedException>(() => dotNetRef.Value);
     }
 
     private static bool GetTabExitsAlways(object options)

@@ -48,7 +48,10 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_registeredAnchorId is not null && (!Open || _registeredAnchorId != Anchor))
+        // Tear down the keyboard navigation when the menu closes, when the anchor element
+        // changes, OR when the consumer switches the menu out of anchored mode while it stays
+        // open (context-menu mode has no stable anchor for the popup listeners to bind to).
+        if (_registeredAnchorId is not null && (!Open || !Anchored || _registeredAnchorId != Anchor))
         {
             await DisposeKeyboardNavigationAsync();
         }
@@ -166,7 +169,17 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await DisposeKeyboardNavigationAsync();
-        _menuReference?.Dispose();
+        // Use try/finally so the DotNetObjectReference is always released, even if the
+        // browser-side dispose call throws something other than JSDisconnectedException
+        // (a transient JS error during teardown otherwise keeps this component rooted by
+        // the DotNetObjectReference table for the lifetime of the circuit).
+        try
+        {
+            await DisposeKeyboardNavigationAsync();
+        }
+        finally
+        {
+            _menuReference?.Dispose();
+        }
     }
 }

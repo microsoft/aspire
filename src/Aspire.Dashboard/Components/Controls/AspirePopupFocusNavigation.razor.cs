@@ -75,7 +75,17 @@ public partial class AspirePopupFocusNavigation : ComponentBase, IAsyncDisposabl
 
     public async ValueTask DisposeAsync()
     {
-        await DisposeKeyboardNavigationAsync();
-        _popupReference?.Dispose();
+        // Use try/finally so the DotNetObjectReference is always released, even if the
+        // browser-side dispose call throws something other than JSDisconnectedException
+        // (a transient JS error during teardown otherwise keeps this component rooted by
+        // the DotNetObjectReference table for the lifetime of the circuit).
+        try
+        {
+            await DisposeKeyboardNavigationAsync();
+        }
+        finally
+        {
+            _popupReference?.Dispose();
+        }
     }
 }
