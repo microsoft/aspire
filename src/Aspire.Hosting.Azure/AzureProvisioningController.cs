@@ -1196,7 +1196,7 @@ internal sealed class AzureProvisioningController(
     private static List<(IResource Resource, IAzureResource AzureResource)> GetTargetAzureResources(
         DistributedApplicationModel model,
         string resourceName,
-        bool includeAnnotationParentRelationships = true)
+        bool includeAnnotationParentRelationships)
     {
         var azureResources = GetProvisionableAzureResources(model);
         var targetResource = azureResources.SingleOrDefault(resource =>
@@ -1709,7 +1709,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<object?> ExecuteForgetResourceStateAsync(DistributedApplicationModel model, ForgetResourceStateIntent intent, CancellationToken cancellationToken)
     {
-        var targetResources = GetTargetAzureResources(model, intent.ResourceName);
+        var targetResources = GetTargetAzureResources(model, intent.ResourceName, includeAnnotationParentRelationships: true);
         // Forgetting state is local-only. It deliberately does not call ARM delete; users choose the
         // Delete command when they want Aspire to remove live Azure resources.
         await ResetResourcesAsync(model, targetResources, preserveOverrides: false, cancellationToken).ConfigureAwait(false);
@@ -1889,7 +1889,7 @@ internal sealed class AzureProvisioningController(
     private async Task<bool> ExecuteReprovisionResourceAsync(DistributedApplicationModel model, ReprovisionResourceIntent intent, CancellationToken cancellationToken)
     {
         UpdateActiveOperationPhase(intent, AzureProvisioningStrings.OperationPhaseReprovisioning);
-        var targetResources = GetTargetAzureResources(model, intent.ResourceName);
+        var targetResources = GetTargetAzureResources(model, intent.ResourceName, includeAnnotationParentRelationships: true);
         var effectiveLocation = await GetEffectiveResourceLocationAsync(GetDeploymentStateResourceName(targetResources[0]), cancellationToken).ConfigureAwait(false);
         var currentContext = await GetCurrentAzureContextAsync(cancellationToken).ConfigureAwait(false);
         await ResetResourcesAsync(model, targetResources, preserveOverrides: true, cancellationToken).ConfigureAwait(false);
@@ -1930,7 +1930,7 @@ internal sealed class AzureProvisioningController(
                     keyVaultResourceIdentifier.Name,
                     keyVaultResourceId,
                     GetKeyVaultPurgeLocations(effectiveLocation, currentContext.Location));
-                await PublishProvisioningFailureAsync(model, targetResources, failureDetails).ConfigureAwait(false);
+                await PublishSyntheticProvisioningFailureAsync(model, targetResources, failureDetails).ConfigureAwait(false);
                 throw new AzureProvisioningFailureException(failureDetails, ex);
             }
 
@@ -1974,7 +1974,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task CancelResourceCoreAsync(DistributedApplicationModel model, string resourceName, CancellationToken cancellationToken)
     {
-        var targetResources = GetTargetAzureResources(model, resourceName);
+        var targetResources = GetTargetAzureResources(model, resourceName, includeAnnotationParentRelationships: true);
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
 
         ActiveAzureOperation? activeOperation = null;
@@ -2040,7 +2040,7 @@ internal sealed class AzureProvisioningController(
     private async Task<DeleteAzureResourceResult> ExecuteDeleteAzureResourceAsync(DistributedApplicationModel model, DeleteAzureResourceIntent intent, CancellationToken cancellationToken)
     {
         UpdateActiveOperationPhase(intent, AzureProvisioningStrings.OperationPhaseDeletingAzureResource);
-        var targetResources = GetTargetAzureResources(model, intent.ResourceName);
+        var targetResources = GetTargetAzureResources(model, intent.ResourceName, includeAnnotationParentRelationships: true);
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
 
         foreach (var resource in targetResources)
@@ -2427,7 +2427,7 @@ internal sealed class AzureProvisioningController(
 
     private async Task<CommandResultData> CreateAzureResourceInfoCommandResultDataAsync(DistributedApplicationModel model, string resourceName, CancellationToken cancellationToken)
     {
-        var targetResources = GetTargetAzureResources(model, resourceName);
+        var targetResources = GetTargetAzureResources(model, resourceName, includeAnnotationParentRelationships: true);
 
         // Targeting a parent Azure resource can include children and role assignments that must
         // be reprovisioned together. The info command, however, reports the resource the user
@@ -2967,6 +2967,9 @@ internal sealed class AzureProvisioningController(
                 if (await armClient.PurgeDeletedKeyVaultAsync(resourceId, keyVaultLocation, cancellationToken).ConfigureAwait(false))
                 {
                     _logger.LogInformation("Purged deleted Azure Key Vault {ResourceId} in {Location} for {ResourceName}.", resourceId, keyVaultLocation, resourceName);
+                    // The locations are candidates for the same recoverable vault tombstone. Once
+                    // Azure finds and accepts the purge in one location, there is no second
+                    // tombstone to purge.
                     return true;
                 }
 
@@ -3675,11 +3678,14 @@ internal sealed class AzureProvisioningController(
         }
     }
 
-    private async Task PublishProvisioningFailureAsync(
+    private async Task PublishSyntheticProvisioningFailureAsync(
         DistributedApplicationModel model,
         IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> targetResources,
         AzureProvisioningFailureDetails failureDetails)
     {
+        // This is only for synthetic reprovision failures raised outside the normal per-resource
+        // provisioning task. Exceptions observed by AfterProvisionAsync keep their existing path so
+        // ARM-specific terminal states are not replaced with a generic provisioning failure.
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
         foreach (var targetResource in targetResources)
         {
