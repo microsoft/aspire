@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Maui;
@@ -11,6 +10,7 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -676,217 +676,187 @@ public class MauiPlatformExtensionsTests
     [Fact]
     public async Task WithOtlpDevTunnel_AllocatesStubFromDynamicDashboardOtlpEndpoint()
     {
-        var projectContent = CreateProjectContent("net10.0-ios");
-        var tempFile = CreateTempProjectFile(projectContent);
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
 
-            var dashboard = appBuilder.AddResource(new ContainerResource(KnownResourceNames.AspireDashboard));
-            dashboard.Resource.Annotations.Add(new EndpointAnnotation(
-                ProtocolType.Tcp,
-                name: KnownEndpointNames.OtlpGrpcEndpointName,
-                uriScheme: "http",
-                isProxied: true,
-                transport: "http2"));
+        var dashboard = appBuilder.AddResource(new ContainerResource(KnownResourceNames.AspireDashboard));
+        dashboard.Resource.Annotations.Add(new EndpointAnnotation(
+            ProtocolType.Tcp,
+            name: KnownEndpointNames.OtlpGrpcEndpointName,
+            uriScheme: "http",
+            isProxied: true,
+            transport: "http2"));
 
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var iosSimulator = maui.AddiOSSimulator()
-                .WithOtlpDevTunnel();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var iosSimulator = maui.AddiOSSimulator()
+            .WithOtlpDevTunnel();
 
-            var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
-            var stubEndpoint = tunnelConfig.OtlpStub.OtlpEndpoint;
+        var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
+        var stubEndpoint = tunnelConfig.OtlpStub.OtlpEndpoint;
 
-            Assert.Null(stubEndpoint.Port);
-            Assert.Null(stubEndpoint.TargetPort);
-            Assert.Null(stubEndpoint.AllocatedEndpoint);
+        Assert.Null(stubEndpoint.Port);
+        Assert.Null(stubEndpoint.TargetPort);
+        Assert.Null(stubEndpoint.AllocatedEndpoint);
 
-            await using var app = appBuilder.Build();
+        await using var app = appBuilder.Build();
 
-            var dashboardEndpoint = dashboard.Resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
-            dashboardEndpoint.AllocatedEndpoint = new AllocatedEndpoint(dashboardEndpoint, "localhost", 55075);
-            await appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services), CancellationToken.None);
+        var dashboardEndpoint = dashboard.Resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        dashboardEndpoint.AllocatedEndpoint = new AllocatedEndpoint(dashboardEndpoint, "localhost", 55075);
+        await appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services), CancellationToken.None);
 
-            Assert.Equal("http", stubEndpoint.UriScheme);
-            Assert.Equal(55075, stubEndpoint.Port);
-            Assert.Equal(55075, stubEndpoint.TargetPort);
-            Assert.Equal("http://localhost:55075", stubEndpoint.AllocatedEndpoint?.UriString);
+        Assert.Equal("http", stubEndpoint.UriScheme);
+        Assert.Equal(55075, stubEndpoint.Port);
+        Assert.Equal(55075, stubEndpoint.TargetPort);
+        Assert.Equal("http://localhost:55075", stubEndpoint.AllocatedEndpoint?.UriString);
 
-            var tunnelEndpoint = tunnelConfig.DevTunnel.GetEndpoint(tunnelConfig.OtlpStub, "otlp");
-            tunnelEndpoint.EndpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(tunnelEndpoint.EndpointAnnotation, "mobile-otlp.devtunnels.ms", 443);
+        var tunnelEndpoint = tunnelConfig.DevTunnel.GetEndpoint(tunnelConfig.OtlpStub, "otlp");
+        tunnelEndpoint.EndpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(tunnelEndpoint.EndpointAnnotation, "mobile-otlp.devtunnels.ms", 443);
 
-            var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-                iosSimulator.Resource,
-                DistributedApplicationOperation.Run,
-                app.Services);
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            iosSimulator.Resource,
+            DistributedApplicationOperation.Run,
+            app.Services);
 
-            Assert.Equal("https://mobile-otlp.devtunnels.ms:443", envVars[KnownOtelConfigNames.ExporterOtlpEndpoint]);
-            Assert.Equal("grpc", envVars[KnownOtelConfigNames.ExporterOtlpProtocol]);
-        }
-        finally
-        {
-            CleanupTempFile(tempFile);
-        }
+        Assert.Equal("https://mobile-otlp.devtunnels.ms:443", envVars[KnownOtelConfigNames.ExporterOtlpEndpoint]);
+        Assert.Equal("grpc", envVars[KnownOtelConfigNames.ExporterOtlpProtocol]);
     }
 
     [Fact]
     public async Task WithOtlpDevTunnel_AllocatesStubFromConfiguredOtlpEndpoint()
     {
-        var projectContent = CreateProjectContent("net10.0-android");
-        var tempFile = CreateTempProjectFile(projectContent);
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
-        try
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+        appBuilder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://localhost:18889";
+
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var androidEmulator = maui.AddAndroidEmulator()
+            .WithOtlpDevTunnel();
+        var dashboard = appBuilder.AddResource(new ContainerResource(KnownResourceNames.AspireDashboard));
+        var dashboardEndpoint = new EndpointAnnotation(
+            ProtocolType.Tcp,
+            name: KnownEndpointNames.OtlpGrpcEndpointName,
+            uriScheme: "https",
+            isProxied: true,
+            transport: "http2");
+        dashboard.Resource.Annotations.Add(dashboardEndpoint);
+
+        var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
+        var stubEndpoint = tunnelConfig.OtlpStub.OtlpEndpoint;
+        var stubEndpointEventPublished = false;
+        appBuilder.Eventing.Subscribe<ResourceEndpointsAllocatedEvent>((evt, _) =>
         {
-            using var appBuilder = TestDistributedApplicationBuilder.Create();
-            appBuilder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://localhost:18889";
-
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var androidEmulator = maui.AddAndroidEmulator()
-                .WithOtlpDevTunnel();
-            var dashboard = appBuilder.AddResource(new ContainerResource(KnownResourceNames.AspireDashboard));
-            var dashboardEndpoint = new EndpointAnnotation(
-                ProtocolType.Tcp,
-                name: KnownEndpointNames.OtlpGrpcEndpointName,
-                uriScheme: "https",
-                isProxied: true,
-                transport: "http2");
-            dashboard.Resource.Annotations.Add(dashboardEndpoint);
-
-            var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
-            var stubEndpoint = tunnelConfig.OtlpStub.OtlpEndpoint;
-            var stubEndpointEventPublished = false;
-            appBuilder.Eventing.Subscribe<ResourceEndpointsAllocatedEvent>((evt, _) =>
+            if (ReferenceEquals(evt.Resource, tunnelConfig.OtlpStub))
             {
-                if (ReferenceEquals(evt.Resource, tunnelConfig.OtlpStub))
-                {
-                    stubEndpointEventPublished = true;
-                }
+                stubEndpointEventPublished = true;
+            }
 
-                return Task.CompletedTask;
-            });
+            return Task.CompletedTask;
+        });
 
-            Assert.Equal("http", stubEndpoint.UriScheme);
-            Assert.Equal(18889, stubEndpoint.Port);
-            Assert.Equal(18889, stubEndpoint.TargetPort);
-            Assert.Equal("http://localhost:18889", stubEndpoint.AllocatedEndpoint?.UriString);
+        Assert.Equal("http", stubEndpoint.UriScheme);
+        Assert.Equal(18889, stubEndpoint.Port);
+        Assert.Equal(18889, stubEndpoint.TargetPort);
+        Assert.Equal("http://localhost:18889", stubEndpoint.AllocatedEndpoint?.UriString);
 
-            await using var app = appBuilder.Build();
+        await using var app = appBuilder.Build();
 
-            await appBuilder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()), CancellationToken.None);
-            Assert.True(stubEndpointEventPublished);
+        await appBuilder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()), CancellationToken.None);
+        Assert.True(stubEndpointEventPublished);
 
-            dashboardEndpoint.AllocatedEndpoint = new AllocatedEndpoint(dashboardEndpoint, "localhost", 55075);
-            await appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services), CancellationToken.None);
+        dashboardEndpoint.AllocatedEndpoint = new AllocatedEndpoint(dashboardEndpoint, "localhost", 55075);
+        await appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services), CancellationToken.None);
 
-            Assert.Equal("http", stubEndpoint.UriScheme);
-            Assert.Equal(18889, stubEndpoint.Port);
-            Assert.Equal(18889, stubEndpoint.TargetPort);
-            Assert.Equal("http://localhost:18889", stubEndpoint.AllocatedEndpoint?.UriString);
+        Assert.Equal("http", stubEndpoint.UriScheme);
+        Assert.Equal(18889, stubEndpoint.Port);
+        Assert.Equal(18889, stubEndpoint.TargetPort);
+        Assert.Equal("http://localhost:18889", stubEndpoint.AllocatedEndpoint?.UriString);
 
-            var tunnelEndpoint = tunnelConfig.DevTunnel.GetEndpoint(tunnelConfig.OtlpStub, "otlp");
-            tunnelEndpoint.EndpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(tunnelEndpoint.EndpointAnnotation, "mobile-otlp.devtunnels.ms", 443);
+        var tunnelEndpoint = tunnelConfig.DevTunnel.GetEndpoint(tunnelConfig.OtlpStub, "otlp");
+        tunnelEndpoint.EndpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(tunnelEndpoint.EndpointAnnotation, "mobile-otlp.devtunnels.ms", 443);
 
-            var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-                androidEmulator.Resource,
-                DistributedApplicationOperation.Run,
-                app.Services);
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            androidEmulator.Resource,
+            DistributedApplicationOperation.Run,
+            app.Services);
 
-            Assert.Equal("https://mobile-otlp.devtunnels.ms:443", envVars[KnownOtelConfigNames.ExporterOtlpEndpoint]);
-        }
-        finally
-        {
-            CleanupTempFile(tempFile);
-        }
+        Assert.Equal("https://mobile-otlp.devtunnels.ms:443", envVars[KnownOtelConfigNames.ExporterOtlpEndpoint]);
     }
 
     [Fact]
     public async Task WithOtlpDevTunnel_ThrowsWhenDashboardDisabledAndNoConfiguredOtlpEndpoint()
     {
-        var projectContent = CreateProjectContent("net10.0-android");
-        var tempFile = CreateTempProjectFile(projectContent);
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions { DisableDashboard = true });
-            ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions { DisableDashboard = true });
+        ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
 
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            maui.AddAndroidEmulator()
-                .WithOtlpDevTunnel();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        maui.AddAndroidEmulator()
+            .WithOtlpDevTunnel();
 
-            var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
+        var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
 
-            await using var app = appBuilder.Build();
+        await using var app = appBuilder.Build();
 
-            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
-                appBuilder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services), CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            appBuilder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services), CancellationToken.None));
 
-            Assert.Contains("requires the Aspire dashboard", exception.Message);
-        }
-        finally
-        {
-            CleanupTempFile(tempFile);
-        }
+        Assert.Contains("requires the Aspire dashboard", exception.Message);
     }
 
     [Fact]
     public async Task WithOtlpDevTunnel_ThrowsWhenDashboardHasNoAllocatedOtlpEndpoint()
     {
-        var projectContent = CreateProjectContent("net10.0-android");
-        var tempFile = CreateTempProjectFile(projectContent);
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
-            appBuilder.AddResource(new ContainerResource(KnownResourceNames.AspireDashboard));
+        var appBuilder = DistributedApplication.CreateBuilder();
+        ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
+        appBuilder.AddResource(new ContainerResource(KnownResourceNames.AspireDashboard));
 
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            maui.AddAndroidEmulator()
-                .WithOtlpDevTunnel();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        maui.AddAndroidEmulator()
+            .WithOtlpDevTunnel();
 
-            var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
+        var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
 
-            await using var app = appBuilder.Build();
+        await using var app = appBuilder.Build();
 
-            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
-                appBuilder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services), CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            appBuilder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services), CancellationToken.None));
 
-            Assert.Contains("does not have an allocated OTLP endpoint", exception.Message);
-            Assert.Contains(KnownEndpointNames.OtlpGrpcEndpointName, exception.Message);
-            Assert.Contains(KnownEndpointNames.OtlpHttpEndpointName, exception.Message);
-        }
-        finally
-        {
-            CleanupTempFile(tempFile);
-        }
+        Assert.Contains("does not have an allocated OTLP endpoint", exception.Message);
+        Assert.Contains(KnownEndpointNames.OtlpGrpcEndpointName, exception.Message);
+        Assert.Contains(KnownEndpointNames.OtlpHttpEndpointName, exception.Message);
     }
 
     [Fact]
     public void WithOtlpDevTunnel_ThrowsForInvalidConfiguredOtlpEndpoint()
     {
-        var projectContent = CreateProjectContent("net10.0-android");
-        var tempFile = CreateTempProjectFile(projectContent);
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            appBuilder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "not a url";
+        var appBuilder = DistributedApplication.CreateBuilder();
+        appBuilder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "not a url";
 
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var androidEmulator = maui.AddAndroidEmulator();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var androidEmulator = maui.AddAndroidEmulator();
 
-            var exception = Assert.Throws<DistributedApplicationException>(() => androidEmulator.WithOtlpDevTunnel());
+        var exception = Assert.Throws<DistributedApplicationException>(() => androidEmulator.WithOtlpDevTunnel());
 
-            Assert.Contains(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, exception.Message);
-            Assert.Contains("not a url", exception.Message);
-        }
-        finally
-        {
-            CleanupTempFile(tempFile);
-        }
+        Assert.Contains(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, exception.Message);
+        Assert.Contains("not a url", exception.Message);
     }
 
     // Helper methods
