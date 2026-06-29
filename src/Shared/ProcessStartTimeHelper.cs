@@ -9,13 +9,6 @@ using System.Globalization;
 /// Dependency-free helpers for identifying a process by PID plus its start time, used by the
 /// various orphan/parent-liveness watchdogs that must survive PID reuse.
 /// </summary>
-/// <remarks>
-/// Lives in the global namespace (like <c>ProcessSignaler</c>) and takes no logging or
-/// P/Invoke dependency so it can be linked into assemblies that cannot reference the richer
-/// <c>ProcessSignaler</c> (for example <c>Aspire.Hosting.RemoteHost</c> and the
-/// <c>aspire-managed</c> host). It is the single source of truth for the "±tolerance start-time
-/// match" comparison; <c>ProcessSignaler.AreClose</c> delegates here.
-/// </remarks>
 internal static class ProcessStartTimeHelper
 {
     // Process start times reported by the OS have sub-second precision, while the values we
