@@ -1570,7 +1570,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('multiple running AppHosts each get a describe before workspace discovery completes', async () => {
+    test('fans out one describe stream per running AppHost before workspace discovery completes', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -1638,7 +1638,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('collapsing from two running AppHosts to one tears down the leftover describe stream', async () => {
+    test('stopping one of two running AppHosts tears down its leftover describe stream', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -1702,7 +1702,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('a parked idle workspace describe restarts only when its AppHost starts running', async () => {
+    test('idle-parked workspace describe restarts only when its AppHost starts running', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -1765,7 +1765,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('a projected describe that exits without data while its AppHost is running parks and does not restart-loop', async () => {
+    test('running workspace describe that empty-exits parks instead of restart-looping', async () => {
         const workspaceFolder = {
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -1811,7 +1811,7 @@ suite('AppHostDataRepository', () => {
             await waitForCondition(() => describeSpawns.filter(p => p === runningPath).length === 1, 'a describe stream did not start for the running workspace target');
 
             // The projected describe exits without ever producing data WHILE the host is running. It must
-            // park as `parkedWhileRunning` so it cannot restart-loop every poll, rather than respawn.
+            // park as `parked-active` so it cannot restart-loop every poll, rather than respawn.
             describeOptions.get(runningPath)!.exitCallback(0);
 
             // Further reconciles while the host stays running must leave the parked stream alone — a host
@@ -4088,7 +4088,7 @@ suite('AppHostDataRepository AppHost-file gate', () => {
         repository.dispose();
     });
 
-    test('single-file describe that exits without data parks and is not respawned by reconcile', async () => {
+    test('single-file describe that empty-exits parks and is not respawned by reconcile', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
         try {

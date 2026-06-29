@@ -126,12 +126,12 @@ export class AspireCliParseError extends Error {
 
 export type ViewMode = 'workspace' | 'global';
 
-// Sentinel describe-stream key for single-file mode: an AppHost file is open in workspace view but
-// there is no workspace folder to anchor `aspire ls` discovery, so no AppHost path can be resolved.
-// The stream runs path-less (no `--apphost`) under this key and projects onto the workspace pane.
-// It never collides with a real key: real keys are `.csproj`/`.cs` files with a real directory, but
-// this normalizes to dirname '.', so `isMatchingAppHostPath` only ever matches it against itself.
+// Describe-stream key for single-file mode: an AppHost file is open but no workspace folder anchors
+// discovery, so the stream runs path-less (no `--apphost`). Normalizes to dirname '.', so
+// `isMatchingAppHostPath` only matches it against itself — never against a real `.csproj`/`.cs` key.
 const SINGLE_FILE_DESCRIBE_KEY = '<single-file>';
+
+type DescribeParkedState = 'not-parked' | 'parked-idle' | 'parked-active';
 
 interface DescribeStream {
     appHostPath: string;
@@ -143,15 +143,14 @@ interface DescribeStream {
     restartDelay: number;
     version: number;
     receivedData: boolean;
-    // Set when a projected stream parks (exited with no data): false = parked while its host was idle,
-    // true = parked while its host was active, undefined = never parked. Reconcile restarts an
-    // idle-parked stream once its host becomes active (see `_isDescribeHostActive`).
-    parkedWhileRunning: boolean | undefined;
+    parkedState: DescribeParkedState;
 }
 
-interface DescribeNoDataError {
+type ErrorSource = 'describe' | 'ps';
+
+interface ErrorState {
     message: string | undefined;
-    isCompatibilityError: boolean;
+    isCompatibility: boolean;
 }
 
 interface PostStopRefreshTimer {
@@ -188,11 +187,9 @@ export class AppHostDataRepository {
     private _hasEverBeenDataActive = false;
 
     // ── Describe state ──
-    // Whether `aspire describe` accepts the hidden `--include-disabled-commands` flag. Resolved
-    // lazily from the CLI's advertised capabilities (`aspire config info --json`) so we don't pass
-    // the flag to an older CLI that would reject it and emit no resource data. Starts optimistic so
-    // that, if capability resolution fails (e.g. a CLI too old to support `config info`), we still
-    // attempt the flag and rely on the locale-independent no-data fallback below.
+    // Whether `aspire describe` accepts the hidden `--include-disabled-commands` flag. Resolved lazily
+    // from CLI capabilities; starts optimistic so that if resolution fails we still attempt the flag
+    // and rely on the locale-independent no-data fallback. Older CLIs reject it and emit no data.
     private _includeDisabledCommandsSupported = true;
     private readonly _configInfoProvider: ConfigInfoProvider;
 
@@ -218,11 +215,10 @@ export class AppHostDataRepository {
     private _activeAuthoritativeSnapshotRequestId: number | undefined;
 
     // ── Describe streams (shared workspace + global) ──
-    // A single per-AppHost `aspire describe --follow --apphost <path>` stream set drives BOTH modes.
-    // In global mode every running AppHost gets a stream and its resources are attached onto the
-    // matching `_appHosts` entry. In workspace mode the same map serves every running workspace
-    // AppHost; the SELECTED workspace AppHost's stream is the projection behind `workspaceResources`
-    // and the workspace loading/error UX. Keyed by appHostPath.
+    // One per-AppHost `aspire describe --follow --apphost <path>` stream set drives BOTH modes. Global:
+    // every running AppHost gets a stream, resources attached onto its `_appHosts` entry. Workspace:
+    // the SELECTED host's stream is the projection behind `workspaceResources` and the loading/error
+    // UX. Keyed by appHostPath.
     private _describeStreams = new Map<string, DescribeStream>();
 
     // ── Workspace app host (from aspire ls) ──
@@ -234,15 +230,13 @@ export class AppHostDataRepository {
     private _workspaceAppHostCandidatePaths: string[] = [];
     private _workspaceAppHostDescription: string | undefined;
     private _workspaceAppHostDiscoveryComplete = false;
-    // False until discovery runs against a workspace root folder. It stays false in single-file mode
-    // (an AppHost file open with no workspace folder), which has no root to anchor `aspire ls` and so
-    // needs the path-less describe watch instead of a resolved-path stream.
+    // False until discovery runs against a workspace root folder. Stays false in single-file mode (no
+    // root to anchor `aspire ls`), which uses the path-less describe watch instead of a resolved path.
     private _workspaceUsesWorkspaceRoot = false;
 
     // ── Describe-target coordinator input state ──
-    // `ps` (running) and `ls` (idle/configured) feed these inputs; `_updateWorkspaceSelection`
-    // turns them into the selected describe target, and `_reconcileDescribeStreams` is the sole
-    // authority that starts/stops the underlying streams
+    // `ps` (running) and `ls` (idle/configured) feed these; `_updateWorkspaceSelection` turns them
+    // into the selected describe target. `_reconcileDescribeStreams` is the sole start/stop authority.
     private _runningWorkspaceAppHosts: readonly AppHostDisplayInfo[] = [];
     private _configuredWorkspaceAppHostPath: string | undefined;
     private _workspaceAppHostDiscoveryVersion = 0;
@@ -255,11 +249,13 @@ export class AppHostDataRepository {
     private readonly _ownsAppHostDiscoveryService: boolean;
 
     // ── Error state ──
-    private _describeErrorMessage: string | undefined;
-    private _describeErrorIsCompatibility = false;
-    private _psErrorMessage: string | undefined;
-    private _errorMessage: string | undefined;
-    private _errorIsCompatibility = false;
+    // Per-source error inputs. `describe` only surfaces in workspace mode; `ps` surfaces in both.
+    private readonly _errors: Record<ErrorSource, ErrorState> = {
+        describe: { message: undefined, isCompatibility: false },
+        ps: { message: undefined, isCompatibility: false },
+    };
+    // Effective error rendered by the tree, derived from `_errors` + view mode.
+    private _effectiveError: ErrorState = { message: undefined, isCompatibility: false };
 
     // ── Loading state ──
     private _loadingWorkspace = true;
@@ -346,11 +342,11 @@ export class AppHostDataRepository {
     }
 
     get errorMessage(): string | undefined {
-        return this._errorMessage;
+        return this._effectiveError.message;
     }
 
     get hasError(): boolean {
-        return this._errorMessage !== undefined;
+        return this._effectiveError.message !== undefined;
     }
 
     // ── Mode / panel control ──
@@ -585,19 +581,15 @@ export class AppHostDataRepository {
         }
 
         if (this._shouldPoll) {
-            // `_syncPolling` reconciles from many paths, so it must be idempotent for the ps stream.
-            // `aspire ps --follow` is a global running-AppHosts stream that is never targeted at a
-            // specific AppHost, so restarting it can never change its output — yet `_startPsPolling`
-            // tears down and respawns it. Only (re)start ps when it is not already running.
+            // `aspire ps --follow` is a global stream never targeted at a specific AppHost, so
+            // restarting it can't change its output — only (re)start when not already running.
             const pollingActive = this._pollingInterval !== undefined
                 || this._psProcesses.size > 0
                 || this._fetchInProgress;
             if (!pollingActive) {
                 this._startPsPolling();
-                // On resume from inactive, immediately reconcile against an authoritative
-                // `aspire ps` snapshot so the pane reflects AppHosts that started or stopped
-                // while we were not following. Only meaningful when we just (re)started the
-                // stream — a healthy stream is already current.
+                // On resume from inactive, reconcile against an authoritative `aspire ps` snapshot to
+                // catch AppHosts that started/stopped while we weren't following.
                 if (refreshBeforeFollowOnResume && this._supportsPsFollow && this._appHosts.length > 0) {
                     this._refreshAppHostsFromAuthoritativeSnapshot();
                 }
@@ -606,42 +598,36 @@ export class AppHostDataRepository {
             this._stopPolling();
         }
 
-        // Single authority for describe streams in both modes: starts streams for the desired set
-        // (the selected workspace host plus other running workspace hosts, or every global AppHost)
-        // and tears them down when we leave the mode, hide the panel, or data goes inactive.
         this._reconcileDescribeStreams();
     }
 
     // ── Describe-target coordinator ──
 
-    // Decides which workspace AppHost the `describe --follow` stream should target from the three
-    // coordinator inputs (running set from `aspire ps`, configured selection + idle candidate list
-    // from `aspire ls`). A running AppHost wins over a configured-but-idle selection — that is the
-    // whole point of decoupling `ps` (running) from `ls` (idle), and it is what stops `ls`
-    // completion from retargeting describe away from the AppHost the user actually started.
+    // Decides which workspace AppHost `describe --follow` targets from the coordinator inputs (running
+    // set from `aspire ps`, configured selection + idle candidates from `aspire ls`). A running
+    // AppHost wins over a configured-but-idle selection, so `ls` completion can't retarget describe
+    // away from the AppHost the user actually started.
     private _resolveWorkspaceDescribeTarget(): string | undefined {
         const running = this._runningWorkspaceAppHosts;
         const configured = this._configuredWorkspaceAppHostPath;
 
-        // A configured selection that is actually running is unambiguous — honor it outright.
+        // Configured selection that is actually running — honor it outright.
         if (configured && running.some(a => isMatchingAppHostPath(a.appHostPath, configured))) {
             return configured;
         }
 
-        // A single running workspace AppHost is a strong, correct signal; adopt it even over a
-        // configured-but-idle selection.
+        // A single running AppHost is a strong signal; adopt it even over a configured-but-idle selection.
         if (running.length === 1) {
             return running[0].appHostPath;
         }
 
-        // While idle discovery is still streaming, never fall back to an idle/configured selection;
-        // wait for `ps` (above) or completion (below) so we don't briefly target a non-running host.
+        // While idle discovery is still streaming, don't fall back to an idle selection; wait for `ps`
+        // (above) or completion (below) so we don't briefly target a non-running host.
         if (!this._workspaceAppHostDiscoveryComplete) {
             return undefined;
         }
 
-        // Configured/selected idle AppHost is honored even when it sits outside the ls candidate
-        // list (e.g. a configured path under a parent of the workspace root).
+        // Configured idle AppHost, honored even when it sits outside the ls candidate list.
         if (configured) {
             return configured;
         }
@@ -725,7 +711,7 @@ export class AppHostDataRepository {
             extensionLogOutputChannel.warn(`Failed to fetch workspace apphost: ${error}`);
             this._clearWorkspaceAppHostDiscovery();
             this._clearWorkspaceAppHostData();
-            this._setDescribeError(errorFetchingAppHosts(String(error)));
+            this._setError('describe', errorFetchingAppHosts(String(error)));
             this._updateWorkspaceContext({ clearLoading: true });
             this._syncPolling();
         }).finally(() => {
@@ -875,9 +861,9 @@ export class AppHostDataRepository {
             : [];
     }
 
-    // Unified NDJSON line handler for both modes. A line either parses to a resource (merge it into
-    // the stream's resource map) or is non-JSON noise. When the stream is the projected workspace
-    // selection it drives the workspace error/loading UX; otherwise it attaches onto `_appHosts`.
+    // NDJSON line handler for both modes: a line either parses to a resource (merge it into the
+    // stream's resource map) or is non-JSON noise. A projected workspace stream drives the error/
+    // loading UX; others attach onto `_appHosts`.
     private _handleDescribeLine(stream: DescribeStream, line: string): boolean {
         const trimmed = line.trim();
         if (!trimmed) {
@@ -889,9 +875,10 @@ export class AppHostDataRepository {
             if (resource.name) {
                 stream.resources.set(resource.name, resource);
                 stream.receivedData = true;
+                stream.parkedState = 'not-parked';
                 stream.restartDelay = 5000; // Reset backoff on successful data
                 if (this._isProjectedWorkspaceStream(stream.appHostPath)) {
-                    this._setDescribeError(undefined);
+                    this._setError('describe', undefined);
                     this._updateWorkspaceContext();
                 } else {
                     this._attachResourcesToAppHosts();
@@ -906,41 +893,10 @@ export class AppHostDataRepository {
         return false;
     }
 
-    private _getDescribeNoDataError(exitCode: number | null, nonJsonLines: readonly string[], stderr: string): DescribeNoDataError {
-        if (isDescribeUnsupportedOutput(nonJsonLines, stderr)) {
-            return {
-                message: aspireCliDescribeNotSupported(aspireDescribeMinimumVersion),
-                isCompatibilityError: true,
-            };
-        }
-
-        if (this._workspaceAppHostPath && exitCode !== 0) {
-            return {
-                message: errorFetchingAppHosts(stderr || `exit code ${exitCode ?? 1}`),
-                isCompatibilityError: false,
-            };
-        }
-
-        // A clean exit before `ps` observes the AppHost can happen while the app is still starting.
-        // Once `ps` reports the workspace AppHost as running, an empty successful describe stream means
-        // the AppHost cannot serve workspace resources even though the CLI command itself was accepted.
-        if (this._workspaceAppHostPath && this._workspaceAppHost !== undefined) {
-            return {
-                message: appHostDescribeMayNotBeSupported(aspireDescribeMinimumVersion),
-                isCompatibilityError: true,
-            };
-        }
-
-        return {
-            message: undefined,
-            isCompatibilityError: false,
-        };
-    }
-
     // ── Describe stream reconciliation ──
-    // `_reconcileDescribeStreams` is the SOLE authority that starts/stops describe streams. It
-    // computes the desired AppHost path set for the current mode, tears down streams outside it,
-    // starts streams for newly desired hosts, and re-attaches resources onto `_appHosts`.
+    // `_reconcileDescribeStreams` is the SOLE authority that starts/stops describe streams: computes
+    // the desired path set, tears down streams outside it, starts newly-desired hosts, re-attaches
+    // resources.
 
     private _reconcileDescribeStreams(): void {
         if (this._disposed) {
@@ -949,10 +905,10 @@ export class AppHostDataRepository {
 
         const desiredPaths = Array.from(this._computeDesiredDescribePaths());
 
-        // Match paths via `isMatchingAppHostPath`, not raw key identity: the same AppHost can surface
-        // under equivalent spellings (e.g. `My.AppHost.csproj` from get-apphosts vs `apphost.cs` from
-        // `aspire ps`). A raw comparison would stop a live stream the moment the reported spelling
-        // flips on the idle->running edge, flickering the pane and respawning an identical stream.
+        // Match by `isMatchingAppHostPath`, not raw key identity: the same AppHost can surface under
+        // equivalent spellings (`My.AppHost.csproj` from get-apphosts vs `apphost.cs` from `aspire ps`).
+        // A raw compare would stop a live stream when the spelling flips on the idle->running edge,
+        // flickering the pane and respawning an identical stream.
         for (const key of Array.from(this._describeStreams.keys())) {
             if (!desiredPaths.some(d => isMatchingAppHostPath(key, d))) {
                 this._stopDescribe(key);
@@ -966,15 +922,13 @@ export class AppHostDataRepository {
                 continue;
             }
 
-            // A stream that parked while its host was idle must restart now that the host is running.
-            // If it still produces no data it re-parks as `parkedWhileRunning: true`, so this fires
-            // exactly once on the idle->running edge instead of looping every poll. The active check is
-            // mode-correct (`_isDescribeHostActive`): in global mode the workspace running set is stale,
-            // so we gate on membership in the global tree instead.
+            // A stream parked while idle restarts now that the host is running. If it still produces no
+            // data it re-parks as `parked-active`, so this fires once on the idle->running edge instead
+            // of looping. Pass `existingKey`: the live entry may be filed under a different spelling, so
+            // `_restartDescribe` re-keys it.
             const stream = this._describeStreams.get(key)!;
-            if (stream.parkedWhileRunning === false && this._isDescribeHostActive(path)) {
-                this._stopDescribe(key);
-                this._startDescribe(path);
+            if (stream.parkedState === 'parked-idle' && this._isDescribeHostActive(path)) {
+                this._restartDescribe(path, { existingKey: key });
             }
         }
         this._attachResourcesToAppHosts();
@@ -984,58 +938,45 @@ export class AppHostDataRepository {
         return this._runningWorkspaceAppHosts.some(a => isMatchingAppHostPath(a.appHostPath, path));
     }
 
-    // "Is the host backing this stream currently active?" — the recovery signal for an idle-parked
-    // stream, and the value recorded as `parkedWhileRunning` at park time. It is mode-correct:
-    //  - The path-less single-file sentinel has no host lifecycle; while single-file mode is active its
-    //    only "host" is the open file, so it is always active. A no-data park therefore records
-    //    `parkedWhileRunning: true` (recovered via refresh/reactivate) instead of a misleading idle tag
-    //    that the idle->running gate could never restart.
-    //  - Global mode does not maintain `_runningWorkspaceAppHosts` (only the workspace ps handler writes
-    //    it), so that set is stale here; a host is active when it is present in the global tree.
-    //  - Workspace mode uses the running set from `aspire ps`.
-    private _isDescribeHostActive(path: string): boolean {
-        if (path === SINGLE_FILE_DESCRIBE_KEY) {
-            return this._isSingleFileDescribeMode();
-        }
+    // The set of AppHost paths that should have a live describe stream in the current view mode.
+    private _activeDescribeHostPaths(): readonly string[] {
         if (this._viewMode === 'global') {
-            return this._appHosts.some(a => isMatchingAppHostPath(a.appHostPath, path));
+            return this._appHosts.map(a => a.appHostPath);
         }
-        return this._isRunningWorkspaceHost(path);
+        if (this._isSingleFileDescribeMode()) {
+            return [SINGLE_FILE_DESCRIBE_KEY];
+        }
+        return this._runningWorkspaceAppHosts.map(a => a.appHostPath);
     }
 
-    // The set of AppHost paths that should have a live describe stream right now. Global mode follows
-    // every AppHost in the tree; workspace mode follows every running workspace AppHost plus the
-    // selected target. A selected-but-idle target is added ONLY when it has no stream that already
-    // streamed data — a stream that ran and then stopped (`receivedData`) is parked, not re-described.
+    private _isDescribeHostActive(path: string): boolean {
+        return this._activeDescribeHostPaths().some(d => isMatchingAppHostPath(path, d));
+    }
+
     private _computeDesiredDescribePaths(): Set<string> {
         if (!this._dataActive) {
             return new Set();
         }
 
-        if (this._viewMode === 'global') {
-            return new Set(this._appHosts.map(a => a.appHostPath));
-        }
+        const desired = new Set(this._activeDescribeHostPaths());
 
-        // Single-file mode has no resolvable AppHost path, so follow a single path-less describe
-        // stream under the sentinel key (restored from the pre-unification path-less watch).
-        if (this._isSingleFileDescribeMode()) {
-            return new Set([SINGLE_FILE_DESCRIBE_KEY]);
-        }
-
-        const desired = new Set(this._runningWorkspaceAppHosts.map(a => a.appHostPath));
-        const target = this._resolveWorkspaceDescribeTarget();
-        if (target !== undefined && !this._isRunningWorkspaceHost(target)) {
-            const existing = this._findDescribeStream(target);
-            if (!(existing && existing.receivedData)) {
-                desired.add(target);
+        // Single-file's only desired path is the sentinel (already included), so the idle-target
+        // exception applies to real workspace targets only.
+        if (this._viewMode === 'workspace' && !this._isSingleFileDescribeMode()) {
+            const target = this._resolveWorkspaceDescribeTarget();
+            if (target !== undefined && !this._isRunningWorkspaceHost(target)) {
+                const existing = this._findDescribeStream(target);
+                if (!(existing && existing.receivedData)) {
+                    desired.add(target);
+                }
             }
         }
         return desired;
     }
 
-    // Attaches each stream's resources onto its matching `_appHosts` entry. The projected workspace
-    // selection is skipped (resources set to null) because the pane renders it via `workspaceResources`
-    // (the stream projection), so attaching here too would double-render the same resources.
+    // Attach each stream's resources onto its `_appHosts` entry. The projected workspace selection is
+    // skipped (resources = null) because the pane renders it via `workspaceResources`, so attaching
+    // here too would double-render.
     private _attachResourcesToAppHosts(): void {
         for (const appHost of this._appHosts) {
             if (this._isProjectedWorkspaceStream(appHost.appHostPath)) {
@@ -1047,9 +988,8 @@ export class AppHostDataRepository {
         }
     }
 
-    // The describe stream that drives the workspace pane (resources, loading, error). Normally the
-    // selected workspace AppHost; in single-file mode there is no resolved path, so the path-less
-    // sentinel stream drives the pane instead.
+    // The describe stream that drives the workspace pane. Normally the selected AppHost; in single-file
+    // mode there is no resolved path, so the sentinel stream drives the pane.
     private _projectedDescribeKey(): string | undefined {
         if (this._viewMode !== 'workspace') {
             return undefined;
@@ -1068,9 +1008,8 @@ export class AppHostDataRepository {
             && !this._workspaceUsesWorkspaceRoot;
     }
 
-    // True when `path` is the AppHost the workspace pane is currently focused on. Evaluated lazily at
-    // line/exit time (not captured at start) so a selection change mid-stream is honored — the current
-    // selection decides whether a stream drives the workspace UX or attaches onto `_appHosts`.
+    // True when `path` is the AppHost the workspace pane is focused on. Evaluated lazily (not captured
+    // at start) so a mid-stream selection change is honored.
     private _isProjectedWorkspaceStream(path: string): boolean {
         const key = this._projectedDescribeKey();
         return key !== undefined && isMatchingAppHostPath(path, key);
@@ -1113,6 +1052,10 @@ export class AppHostDataRepository {
         return false;
     }
 
+    private _isCurrentStream(appHostPath: string, stream: DescribeStream, childProcess: ChildProcessWithoutNullStreams): boolean {
+        return this._describeStreams.get(appHostPath) === stream && stream.process === childProcess;
+    }
+
     private _startDescribe(appHostPath: string): void {
         if (this._disposed) {
             return;
@@ -1128,7 +1071,7 @@ export class AppHostDataRepository {
             restartDelay: 5000,
             version: 0,
             receivedData: false,
-            parkedWhileRunning: undefined,
+            parkedState: 'not-parked',
         };
         this._describeStreams.set(appHostPath, stream);
         const startVersion = ++stream.version;
@@ -1163,7 +1106,7 @@ export class AppHostDataRepository {
             const childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                 noExtensionVariables: true,
                 lineCallback: (line) => {
-                    if (this._describeStreams.get(appHostPath) !== stream || stream.process !== childProcess) {
+                    if (!this._isCurrentStream(appHostPath, stream, childProcess)) {
                         return;
                     }
                     if (!this._handleDescribeLine(stream, line) && stream.nonJsonLines.length < 20) {
@@ -1171,10 +1114,10 @@ export class AppHostDataRepository {
                     }
                 },
                 stderrCallback: (data) => {
-                    // Non-selected describe errors should not pollute the workspace error banner, but
-                    // they MUST be logged so users can diagnose missing resources (e.g., a CLI too old
-                    // to support `describe --apphost`). The projected selection surfaces errors through
-                    // the no-data exit path instead, so only log here when NOT projected.
+                    // Non-selected describe errors must not pollute the workspace error banner, but
+                    // MUST be logged so users can diagnose missing resources (e.g. a CLI too old for
+                    // `describe --apphost`). The projected selection surfaces errors via the no-data
+                    // exit path, so only log here when NOT projected.
                     if (!this._isProjectedWorkspaceStream(appHostPath)) {
                         extensionLogOutputChannel.warn(`aspire describe --follow stderr for ${appHostPath}: ${data}`);
                     }
@@ -1183,126 +1126,149 @@ export class AppHostDataRepository {
                     }
                 },
                 exitCallback: (code) => {
-                    if (this._describeStreams.get(appHostPath) !== stream || stream.process !== childProcess) {
+                    if (!this._isCurrentStream(appHostPath, stream, childProcess)) {
                         return;
                     }
-                    this._handleDescribeExit(stream, code, includeDisabledCommands);
+                    stream.process = undefined;
+                    extensionLogOutputChannel.info(`aspire describe --follow for ${appHostPath} exited with code ${code}`);
+                    if (this._disposed) {
+                        return;
+                    }
+                    // A no-data exit while `--include-disabled-commands` was passed usually means the CLI is
+                    // too old to accept that flag; disable it and retry once so older CLIs still get resources.
+                    if (includeDisabledCommands && !stream.receivedData
+                        && isIncludeDisabledCommandsUnsupportedOutput(stream.nonJsonLines, stream.stderr)) {
+                        this._includeDisabledCommandsSupported = false;
+                        this._restartDescribe(appHostPath);
+                        return;
+                    }
+                    if (!this._isProjectedWorkspaceStream(appHostPath)) {
+                        // Non-projected (global or non-selected workspace) stream. Drop it if its host is no
+                        // longer active (gone from the tree, or no longer running in workspace mode);
+                        // otherwise clear its resources and retry with backoff.
+                        if (!this._isDescribeHostActive(appHostPath)) {
+                            this._describeStreams.delete(appHostPath);
+                            return;
+                        }
+                        this._clearNonProjectedStreamResources(stream);
+                        this._scheduleDescribeRestart(stream);
+                        return;
+                    }
+
+                    // Projected workspace selection — preserves the original main-pipeline UX.
+                    if (!stream.receivedData) {
+                        // Never produced data. Surface a compatibility hint when we have context, but do not
+                        // auto-restart on a 5s loop forever — park the entry so reconcile does not respawn it.
+                        this._parkStream(stream);
+                        extensionLogOutputChannel.warn(`aspire describe --follow exited (code ${code}) without producing data; not auto-restarting.`);
+
+                        let message: string | undefined;
+                        let compatibility = false;
+                        if (isDescribeUnsupportedOutput(stream.nonJsonLines, stream.stderr)) {
+                            message = aspireCliDescribeNotSupported(aspireDescribeMinimumVersion);
+                            compatibility = true;
+                        } else if (this._workspaceAppHostPath && code !== 0) {
+                            message = errorFetchingAppHosts(stream.stderr || `exit code ${code ?? 1}`);
+                        } else if (this._workspaceAppHostPath && this._workspaceAppHost !== undefined) {
+                            // A clean exit before `ps` observes the AppHost can happen while the app is still
+                            // starting. Once `ps` reports the workspace AppHost as running, an empty successful
+                            // describe stream means the AppHost cannot serve workspace resources even though the
+                            // CLI command itself was accepted.
+                            message = appHostDescribeMayNotBeSupported(aspireDescribeMinimumVersion);
+                            compatibility = true;
+                        }
+
+                        this._setError('describe', message, compatibility);
+                        this._updateWorkspaceContext({ clearLoading: true });
+                        return;
+                    }
+
+                    // We had a working stream that ended (apphost shut down). Reset and retry once with backoff
+                    // in case the apphost is restarting; a second no-data exit falls into the park branch above.
+                    stream.resources.clear();
+                    this._clearStoppedWorkspaceAppHost();
+                    this._setError('describe', undefined);
+                    this._updateWorkspaceContext();
+                    this._scheduleDescribeRestart(stream);
                 },
                 errorCallback: (error) => {
-                    if (this._describeStreams.get(appHostPath) !== stream || stream.process !== childProcess) {
+                    if (!this._isCurrentStream(appHostPath, stream, childProcess)) {
                         return;
                     }
-                    this._handleDescribeError(stream, error);
+                    stream.process = undefined;
+                    // A Node spawn `error` (e.g. ENOENT) fires without any subsequent `exit`, so it cannot
+                    // drive the restart loop. Drop the dead entry; the next reconcile recreates it.
+                    const message = errorFetchingAppHosts(error.message);
+                    extensionLogOutputChannel.warn(`aspire describe --follow for ${appHostPath} error: ${message}`);
+                    if (this._disposed) {
+                        return;
+                    }
+                    this._describeStreams.delete(appHostPath);
+                    if (this._isProjectedWorkspaceStream(appHostPath)) {
+                        this._loadingWorkspace = false;
+                        this._updateLoadingContext();
+                        this._setError('describe', message, false);
+                    } else {
+                        this._clearNonProjectedStreamResources(stream);
+                    }
                 }
             });
             stream.process = childProcess;
         }).catch(error => {
             extensionLogOutputChannel.warn(`Failed to start describe for ${appHostPath}: ${error}`);
-            // Same hazard as errorCallback below: getAspireCliExecutablePath() can reject
-            // (CLI missing, permission denied, etc.) without ever firing the spawn error/exit
-            // callbacks that would normally clean up. Drop the dead entry so the next
-            // reconcile recreates it instead of leaving a zombie that blocks reconcile
-            // from re-starting the stream.
+            // Same hazard as errorCallback below: getAspireCliExecutablePath() can reject (CLI missing,
+            // permission denied) without firing the spawn error/exit callbacks that normally clean up.
+            // Drop the dead entry so the next reconcile recreates it instead of leaving a zombie.
             if (this._describeStreams.get(appHostPath) === stream && startVersion === stream.version) {
                 this._describeStreams.delete(appHostPath);
                 if (this._isProjectedWorkspaceStream(appHostPath)) {
                     this._loadingWorkspace = false;
                     this._updateLoadingContext();
-                    this._setDescribeError(errorFetchingAppHosts(String(error)));
+                    this._setError('describe', errorFetchingAppHosts(String(error)));
                 }
             }
         });
     }
 
-    private _handleDescribeExit(stream: DescribeStream, code: number | null, includeDisabledCommands: boolean): void {
-        const appHostPath = stream.appHostPath;
-        extensionLogOutputChannel.info(`aspire describe --follow for ${appHostPath} exited with code ${code}`);
-        stream.process = undefined;
-        if (this._disposed) {
-            return;
+    // "Park" a stream: keep its map entry but drop resources and any pending restart timer so the
+    // reconciler does not immediately respawn it. Records `parked-idle` vs `parked-active` from whether
+    // the host was active at park time: reconcile restarts an idle-parked stream once its host becomes
+    // active, but leaves an active-parked one alone so it cannot restart-loop. The single-file sentinel
+    // has no idle state, so it parks as active (recovered via an explicit refresh).
+    private _parkStream(stream: DescribeStream): void {
+        stream.parkedState = this._isDescribeHostActive(stream.appHostPath) ? 'parked-active' : 'parked-idle';
+        stream.resources.clear();
+        if (stream.restartTimer) {
+            clearTimeout(stream.restartTimer);
+            stream.restartTimer = undefined;
         }
+    }
 
-        // A no-data exit while `--include-disabled-commands` was passed usually means the CLI is too
-        // old to accept that flag; disable it and retry once so older CLIs still get resources.
-        if (includeDisabledCommands && !stream.receivedData && isIncludeDisabledCommandsUnsupportedOutput(stream.nonJsonLines, stream.stderr)) {
-            this._includeDisabledCommandsSupported = false;
-            this._describeStreams.delete(appHostPath);
-            this._startDescribe(appHostPath);
-            return;
-        }
-
-        if (this._isProjectedWorkspaceStream(appHostPath)) {
-            this._handleProjectedDescribeExit(stream, code);
-            return;
-        }
-
-        // Non-projected (global or non-selected workspace) stream. If the AppHost is gone, drop the
-        // stream entirely; otherwise clear its resources and retry with backoff.
-        if (!this._appHosts.some(a => isMatchingAppHostPath(a.appHostPath, appHostPath))) {
-            this._describeStreams.delete(appHostPath);
-            return;
-        }
-
+    // Clear a non-projected (global / non-selected workspace) stream's resources and refresh the tree.
+    // Projected streams drive the workspace pane through a different update path.
+    private _clearNonProjectedStreamResources(stream: DescribeStream): void {
         stream.resources.clear();
         this._attachResourcesToAppHosts();
         this._onDidChangeData.fire();
-        this._scheduleDescribeRestart(stream);
     }
 
-    // Exit handling for the projected workspace selection — preserves the original main-pipeline UX.
-    private _handleProjectedDescribeExit(stream: DescribeStream, code: number | null): void {
-        if (!stream.receivedData) {
-            // Never produced data. Surface a compatibility hint when we have enough context, but do
-            // not auto-restart on a 5s loop forever. Park the entry (keep it in the map with no
-            // process/timer/data) so reconcile does not immediately respawn it. Record whether the host
-            // was active at park time: reconcile restarts a stream parked while idle once the host
-            // becomes active, but leaves one parked while active alone so it cannot restart-loop. The
-            // single-file sentinel has no idle state, so it parks as active (recovered via refresh).
-            stream.parkedWhileRunning = this._isDescribeHostActive(stream.appHostPath);
-            extensionLogOutputChannel.warn(`aspire describe --follow exited (code ${code}) without producing data; not auto-restarting.`);
-            stream.resources.clear();
-            if (stream.restartTimer) {
-                clearTimeout(stream.restartTimer);
-                stream.restartTimer = undefined;
-            }
-            const noDataError = this._getDescribeNoDataError(code, stream.nonJsonLines, stream.stderr);
-            this._setDescribeError(noDataError.message, { compatibility: noDataError.isCompatibilityError });
-            this._updateWorkspaceContext({ clearLoading: true });
+    // Tear down the existing map entry and start a fresh stream for `appHostPath`, guaranteeing the new
+    // stream begins from a clean entry (no stale process/timer/version). The live entry can be filed
+    // under a different path spelling than `appHostPath` (e.g. `My.AppHost.csproj` from get-apphosts vs
+    // `apphost.cs` from `aspire ps`); callers that resolved the live key pass it as `existingKey` so the
+    // old entry is removed rather than left as a duplicate. When `onlyIfDesired` is set, skip the
+    // restart if the path has dropped out of the desired set.
+    private _restartDescribe(appHostPath: string, options?: { onlyIfDesired?: boolean; existingKey?: string }): void {
+        this._stopDescribe(options?.existingKey ?? appHostPath);
+        if (options?.onlyIfDesired && !this._isDescribePathDesired(appHostPath)) {
             return;
         }
-
-        // We had a working stream that ended (apphost shut down). Reset and try once more with
-        // backoff in case the apphost is restarting; if that attempt also produces no data we fall
-        // into the no-data branch above (which parks it).
-        stream.resources.clear();
-        this._clearStoppedWorkspaceAppHost();
-        this._setDescribeError(undefined);
-        this._updateWorkspaceContext();
-        this._scheduleDescribeRestart(stream);
-    }
-
-    private _handleDescribeError(stream: DescribeStream, error: Error): void {
-        const appHostPath = stream.appHostPath;
-        extensionLogOutputChannel.warn(`aspire describe --follow for ${appHostPath} error: ${error.message}`);
-        stream.process = undefined;
-        // Node's `spawn` can fire `error` (e.g., ENOENT when the CLI binary is missing) without a
-        // subsequent `exit`, which would normally drive the restart loop. Drop the dead entry so the
-        // next reconcile recreates it instead of leaving a zombie that blocks reconcile.
-        this._describeStreams.delete(appHostPath);
-        if (this._isProjectedWorkspaceStream(appHostPath)) {
-            this._loadingWorkspace = false;
-            this._updateLoadingContext();
-            this._setDescribeError(errorFetchingAppHosts(error.message));
-            return;
-        }
-
-        stream.resources.clear();
-        this._attachResourcesToAppHosts();
-        this._onDidChangeData.fire();
+        this._startDescribe(appHostPath);
     }
 
     private _scheduleDescribeRestart(stream: DescribeStream): void {
         const appHostPath = stream.appHostPath;
+        stream.parkedState = 'not-parked';
         const delay = stream.restartDelay;
         stream.restartDelay = Math.min(stream.restartDelay * 2, this._getPollingIntervalMs());
         extensionLogOutputChannel.info(`Restarting describe --follow for ${appHostPath} in ${delay}ms`);
@@ -1311,13 +1277,7 @@ export class AppHostDataRepository {
             if (this._disposed || this._describeStreams.get(appHostPath) !== stream) {
                 return;
             }
-            // Delete then re-create so the new stream starts from a clean entry; only do so when the
-            // path is still in the desired set (a still-desired host comes back, an undesired one stays
-            // torn down).
-            this._describeStreams.delete(appHostPath);
-            if (this._isDescribePathDesired(appHostPath)) {
-                this._startDescribe(appHostPath);
-            }
+            this._restartDescribe(appHostPath, { onlyIfDesired: true });
         }, delay);
     }
 
@@ -1506,7 +1466,7 @@ export class AppHostDataRepository {
             if (this._isCurrentPsFetch(fetchVersion)) {
                 const errorMessage = errorFetchingAppHosts(String(error));
                 extensionLogOutputChannel.warn(errorMessage);
-                this._setPsError(errorMessage);
+                this._setError('ps', errorMessage);
                 this._clearLoadingForCurrentView();
                 this._supportsPsFollow = false;
                 this._startPsIntervalPolling(false);
@@ -1537,7 +1497,7 @@ export class AppHostDataRepository {
                     return;
                 }
 
-                this._setPsError(undefined);
+                this._setError('ps', undefined);
                 this._handlePsOutput(line);
             },
             exitCallback: (code) => {
@@ -1597,11 +1557,11 @@ export class AppHostDataRepository {
         const args = ['ps', '--format', 'json'];
         this._runPsCommand(args, (code, stdout, stderr) => {
             if (code === 0) {
-                this._setPsError(undefined);
+                this._setError('ps', undefined);
                 this._handlePsOutput(stdout);
             } else {
                 this._clearLoadingForCurrentView();
-                this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
+                this._setError('ps', errorFetchingAppHosts(stderr || `exit code ${code}`));
             }
             this._fetchInProgress = false;
         }, { fetchVersion });
@@ -1635,11 +1595,11 @@ export class AppHostDataRepository {
 
             if (!this._disposed && this._shouldPoll) {
                 if (code === 0) {
-                    this._setPsError(undefined);
+                    this._setError('ps', undefined);
                     this._handlePsOutput(stdout);
                 } else {
                     this._clearLoadingForCurrentView();
-                    this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
+                    this._setError('ps', errorFetchingAppHosts(stderr || `exit code ${code}`));
                 }
             }
 
@@ -1671,49 +1631,40 @@ export class AppHostDataRepository {
     }
 
     private _clearErrors(): void {
-        this._describeErrorMessage = undefined;
-        this._describeErrorIsCompatibility = false;
-        this._psErrorMessage = undefined;
-        this._updateErrorMessage();
+        this._errors.describe = { message: undefined, isCompatibility: false };
+        this._errors.ps = { message: undefined, isCompatibility: false };
+        this._recomputeEffectiveError();
     }
 
-    private _setDescribeError(message: string | undefined, options?: { compatibility?: boolean }): void {
-        const compatibility = message !== undefined && (options?.compatibility ?? false);
-        if (this._describeErrorMessage !== message || this._describeErrorIsCompatibility !== compatibility) {
-            this._describeErrorMessage = message;
-            this._describeErrorIsCompatibility = compatibility;
-            this._updateErrorMessage();
+    private _setError(source: ErrorSource, message: string | undefined, isCompatibility = false): void {
+        // Compatibility is only meaningful when there's an actual message to flag.
+        const normalized = message !== undefined && isCompatibility;
+        const current = this._errors[source];
+        if (current.message === message && current.isCompatibility === normalized) {
+            return;
         }
+        this._errors[source] = { message, isCompatibility: normalized };
+        this._recomputeEffectiveError();
     }
 
-    private _setPsError(message: string | undefined): void {
-        if (this._psErrorMessage !== message) {
-            this._psErrorMessage = message;
-            this._updateErrorMessage();
-        }
-    }
-
-    private _updateErrorMessage(): void {
+    private _recomputeEffectiveError(): void {
+        // Workspace mode prefers the describe error (discovery + describe-stream failures) and falls
+        // back to ps; global mode only ever surfaces ps, which is never a compatibility error.
         const workspaceMode = this._viewMode === 'workspace';
-        const message = workspaceMode
-            ? this._describeErrorMessage ?? this._psErrorMessage
-            : this._psErrorMessage;
-        const isCompatibilityError = workspaceMode
-            ? (this._describeErrorMessage !== undefined
-                ? this._describeErrorIsCompatibility
-                : false)
-            : false;
-        const hasError = message !== undefined;
-        if (this._errorMessage !== message || this._errorIsCompatibility !== isCompatibilityError) {
-            this._errorMessage = message;
-            this._errorIsCompatibility = isCompatibilityError;
-            if (message) {
-                extensionLogOutputChannel.warn(message);
-            }
-            vscode.commands.executeCommand('setContext', 'aspire.fetchAppHostsError', hasError);
-            vscode.commands.executeCommand('setContext', 'aspire.fetchAppHostsCompatibilityError', hasError && isCompatibilityError);
-            this._onDidChangeData.fire();
+        const { describe, ps } = this._errors;
+        const message = workspaceMode ? describe.message ?? ps.message : ps.message;
+        const isCompatibility = workspaceMode && describe.message !== undefined ? describe.isCompatibility : false;
+        if (this._effectiveError.message === message && this._effectiveError.isCompatibility === isCompatibility) {
+            return;
         }
+        this._effectiveError = { message, isCompatibility };
+        if (message) {
+            extensionLogOutputChannel.warn(message);
+        }
+        const hasError = message !== undefined;
+        vscode.commands.executeCommand('setContext', 'aspire.fetchAppHostsError', hasError);
+        vscode.commands.executeCommand('setContext', 'aspire.fetchAppHostsCompatibilityError', hasError && isCompatibility);
+        this._onDidChangeData.fire();
     }
 
     private _handlePsOutput(stdout: string): void {
@@ -1728,12 +1679,10 @@ export class AppHostDataRepository {
                 return;
             }
 
-            // Compare against the previous post-reconcile snapshot rather than the
-            // raw ps payload. `appHosts` here lacks the `resources` field (ps no longer
-            // emits it after #17479), while `this._appHosts` was mutated by the prior
-            // _attachResourcesToAppHosts call to include resources — a direct
-            // JSON.stringify compare would always report `changed` once any stream
-            // produced resources, triggering spurious _onDidChangeData.fire() calls.
+            // Compare against the previous post-reconcile snapshot, not the raw ps payload. `appHosts`
+            // here lacks the `resources` field (ps no longer emits it after #17479), while `_appHosts`
+            // was mutated by the prior _attachResourcesToAppHosts to include resources — a direct
+            // compare would always report `changed` once any stream produced resources.
             const previousSnapshot = this._appHostsSnapshot;
             this._appHosts = appHosts;
             this._reconcileDescribeStreams();
@@ -1779,9 +1728,8 @@ export class AppHostDataRepository {
             workspaceAppHosts = [];
         }
 
-        // Feed the running set into the coordinator and let it (re)target describe. `_reconcileDescribeStreams`
-        // is the sole authority that starts/stops describe streams, so ps and ls completion can never
-        // clobber each other's describe target.
+        // Feed the running set into the coordinator and let it (re)target describe.
+        // `_reconcileDescribeStreams` is the sole authority that starts/stops describe streams.
         this._runningWorkspaceAppHosts = workspaceAppHosts;
         this._updateWorkspaceSelection();
 
