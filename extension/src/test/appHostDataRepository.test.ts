@@ -1765,6 +1765,72 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('a projected describe that exits without data while its AppHost is running parks and does not restart-loop', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        const runningPath = '/workspace/apps/Store/AppHost.csproj';
+        const describeSpawns: string[] = [];
+        const describeOptions = new Map<string, any>();
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider: any, _command: any, args: string[], options: any) => {
+            if (args[0] === 'describe') {
+                const targetPath = args[args.indexOf('--apphost') + 1];
+                describeSpawns.push(targetPath);
+                describeOptions.set(targetPath, options);
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'workspace ps watch did not start');
+
+            discovery.resolve([{ path: runningPath, language: 'csharp', status: 'buildable' }]);
+            await waitForCondition(() => repository.isWorkspaceAppHostDiscoveryComplete, 'workspace discovery did not complete');
+
+            // The selected workspace target is already running, so its projected describe stream starts
+            // immediately (the running host wins over the idle candidate).
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: runningPath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+            ]));
+            await waitForCondition(() => describeSpawns.filter(p => p === runningPath).length === 1, 'a describe stream did not start for the running workspace target');
+
+            // The projected describe exits without ever producing data WHILE the host is running. It must
+            // park as `parkedWhileRunning` so it cannot restart-loop every poll, rather than respawn.
+            describeOptions.get(runningPath)!.exitCallback(0);
+
+            // Further reconciles while the host stays running must leave the parked stream alone — a host
+            // that keeps empty-exiting while running would otherwise hammer the CLI every poll.
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: runningPath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+            ]));
+            await waitForAppHostDiscovery();
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: runningPath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+            ]));
+            await waitForAppHostDiscovery();
+            assert.strictEqual(describeSpawns.filter(p => p === runningPath).length, 1, 'a describe parked while running must not restart-loop while its host stays running');
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('configured AppHost outside aspire ls candidates remains selected in workspace view', async () => {
         const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-extension-workspace-'));
         const configuredAppHostPath = path.join(path.dirname(workspaceRoot), 'external', 'AppHost.csproj');
@@ -4020,6 +4086,33 @@ suite('AppHostDataRepository AppHost-file gate', () => {
         assert.strictEqual(spawnStub.calledOnce, true);
 
         repository.dispose();
+    });
+
+    test('single-file describe that exits without data parks and is not respawned by reconcile', async () => {
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setAppHostFileOpen(true);
+            await waitForMicrotasks();
+
+            const describeCalls = () => spawnStub.getCalls().filter(call => call.args[2][0] === 'describe');
+            assert.strictEqual(describeCalls().length, 1, 'the single-file describe watch did not start');
+
+            // The path-less single-file describe exits without ever producing data. There is no resolved
+            // AppHost path and no running workspace host backing the sentinel, so it parks (kept in the
+            // map with no process/timer/data) instead of restart-looping.
+            describeCalls()[0].args[3].exitCallback(0);
+
+            // Toggling panel visibility re-runs reconcile while single-file mode is still active. The
+            // parked sentinel must be left alone — it is not respawned by reconcile.
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            assert.strictEqual(describeCalls().length, 1, 'a parked single-file describe stream must not be respawned by reconcile');
+        } finally {
+            repository.dispose();
+        }
     });
 });
 
