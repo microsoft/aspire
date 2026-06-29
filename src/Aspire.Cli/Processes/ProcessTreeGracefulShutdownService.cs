@@ -20,6 +20,7 @@ internal sealed class ProcessTreeGracefulShutdownService(
     IBundleService bundleService,
     LayoutProcessRunner layoutProcessRunner,
     CliExecutionContext executionContext,
+    IEnvironment environment,
     ILogger<ProcessTreeGracefulShutdownService> logger,
     TimeProvider timeProvider) : IProcessTreeGracefulShutdownSignaler
 {
@@ -103,7 +104,7 @@ internal sealed class ProcessTreeGracefulShutdownService(
         // this escalation is a guaranteed teardown, so we tree-kill on Windows too; otherwise the
         // root PID dies while orphaned descendants (DCP, tsx/node, the guest) keep running. On Unix
         // we always tree-kill.
-        var killEntireProcessTree = afterTimeout || !OperatingSystem.IsWindows();
+        var killEntireProcessTree = afterTimeout || !environment.IsWindows();
 
         foreach (var process in processes.Distinct())
         {
@@ -128,7 +129,7 @@ internal sealed class ProcessTreeGracefulShutdownService(
         Func<CancellationToken, Task<bool>>? requestRpcStopAsync,
         CancellationToken cancellationToken)
     {
-        if (!OperatingSystem.IsWindows())
+        if (!environment.IsWindows())
         {
             // Signal the AppHost directly with SIGTERM. The AppHost catches SIGTERM via
             // Microsoft.Extensions.Hosting and invokes IHostApplicationLifetime.StopApplication,
@@ -216,7 +217,7 @@ internal sealed class ProcessTreeGracefulShutdownService(
             return true;
         }
 
-        if (OperatingSystem.IsWindows())
+        if (environment.IsWindows())
         {
             return await TryStopProcessTreeWithDcpAsync(pid, startTime, includeStartTimeForDcp, cancellationToken).ConfigureAwait(false);
         }

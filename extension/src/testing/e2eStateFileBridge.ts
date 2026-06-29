@@ -436,6 +436,17 @@ async function executeE2eControlCommand(
       markStarted();
       return await commandPromise;
     }
+    case 'executeCodeLensResourceAction': {
+      const element = getResourceCommandElement(appHostTreeProvider, command);
+      const commandPromise = vscode.commands.executeCommand(
+        'aspire-vscode.codeLensResourceAction',
+        element.resourceItem.resource.name,
+        element.commandName,
+        command.appHostPath ?? element.resourceItem.appHostPath ?? '',
+        element.commandJson);
+      markStarted();
+      return await commandPromise;
+    }
     case 'executeAspireCommand': {
       const commandId = getE2eAspireCommandId(command.commandId);
       const args = getE2eCommandArguments(command.args);
@@ -1174,8 +1185,12 @@ function hasEndpointUrl(element: unknown): element is { url: string } {
 
 function getResourceCommandElement(
   appHostTreeProvider: AspireAppHostTreeProvider,
-  command: Extract<AspireExtensionE2EControlCommand, { name: 'executeResourceCommandItem' }>
-): unknown {
+  command: Extract<AspireExtensionE2EControlCommand, { name: 'executeResourceCommandItem' | 'executeCodeLensResourceAction' }>
+): {
+  commandName: string;
+  commandJson: unknown;
+  resourceItem: { resource: { name: string }; appHostPath?: string };
+} {
   if (typeof command.resourceName !== 'string' || command.resourceName.length === 0) {
     throw new Error('Aspire extension E2E resource command item requires resourceName.');
   }
@@ -1193,7 +1208,31 @@ function getResourceCommandElement(
     throw new Error(`Aspire extension E2E resource command item could not find command '${command.commandName}' on resource '${command.resourceName}'.`);
   }
 
+  if (!hasResourceCommandShape(element)) {
+    throw new Error(`Aspire extension E2E resource command item '${command.commandName}' on resource '${command.resourceName}' has an unexpected shape.`);
+  }
+
   return element;
+}
+
+function hasResourceCommandShape(element: unknown): element is {
+  commandName: string;
+  commandJson: unknown;
+  resourceItem: { resource: { name: string }; appHostPath?: string };
+} {
+  return typeof element === 'object'
+    && element !== null
+    && 'commandName' in element
+    && typeof element.commandName === 'string'
+    && 'commandJson' in element
+    && 'resourceItem' in element
+    && typeof element.resourceItem === 'object'
+    && element.resourceItem !== null
+    && 'resource' in element.resourceItem
+    && typeof element.resourceItem.resource === 'object'
+    && element.resourceItem.resource !== null
+    && 'name' in element.resourceItem.resource
+    && typeof element.resourceItem.resource.name === 'string';
 }
 
 function getLogFileElement(appHostTreeProvider: AspireAppHostTreeProvider, appHostPath?: string): unknown {
@@ -1205,11 +1244,12 @@ function getLogFileElement(appHostTreeProvider: AspireAppHostTreeProvider, appHo
   return element;
 }
 
-function getActiveEditorInfo(): { uri?: string; fileName?: string } {
+function getActiveEditorInfo(): { uri?: string; fileName?: string; text?: string } {
   const document = vscode.window.activeTextEditor?.document;
   return {
     uri: document?.uri.toString(),
     fileName: document?.fileName,
+    text: document?.getText(),
   };
 }
 

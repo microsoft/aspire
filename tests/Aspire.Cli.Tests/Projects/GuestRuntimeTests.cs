@@ -8,6 +8,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Tests;
 using Aspire.TypeSystem;
@@ -29,7 +30,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
             fileLoggerProvider: fileLoggerProvider,
             commandResolver: commandResolver ?? PathLookupHelper.FindFullPathFromPath,
-            processExecutionFactory: new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance));
+            processExecutionFactory: new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance));
 
     private GuestRuntime CreateRuntime(
         RuntimeSpec? spec = null,
@@ -40,6 +41,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             spec ?? CreateTestSpec(),
             _loggerFactory.CreateLogger<GuestRuntime>(),
             commandResolver ?? PathLookupHelper.FindFullPathFromPath,
+            new TestEnvironment(),
             profilingTelemetry ?? new ProfilingTelemetry(new ConfigurationBuilder().Build()));
     }
 

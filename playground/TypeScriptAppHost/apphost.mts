@@ -151,6 +151,58 @@ await cache.withProcessCommandFactory(
         },
         maxOutputLineCount: 10
     });
+await cache.withCommand(
+    "show-progress",
+    "Show progress",
+    async (context: ExecuteCommandContext) => {
+        const interactionService = await context.services().getInteractionService();
+
+        if (!(await interactionService.isAvailable())) {
+            return { success: true, message: "Interaction service is not available." };
+        }
+
+        const result = await interactionService.promptProgress(
+            "Please wait while data is being processed...",
+            {
+                title: "Processing",
+                options: {
+                    primaryButtonText: "Cancel",
+                    work: async () => {
+                        // Simulate a long-running operation.
+                        await new Promise<void>(resolve => setTimeout(resolve, 10000));
+                    }
+                }
+            });
+
+        if (result.canceled) {
+            return { success: false, message: "Operation was canceled by the user." };
+        }
+
+        return { success: true, message: "Processing complete!" };
+    },
+    {
+        commandOptions: {
+            description: "Shows a progress dialog with a cancel button that completes after 10 seconds.",
+            iconName: "ArrowSync"
+        }
+    });
+await cache.withCommand(
+    "auto-progress",
+    "Auto progress",
+    async() => {
+        await new Promise<void>(resolve => setTimeout(resolve, 10000));
+        return { success: true, message: "Done!" };
+    },
+    {
+        commandOptions: {
+            description: "Automatically shows a progress dialog via CommandProgressOptions.",
+            iconName: "ArrowSync",
+            progress: {
+                message: "Running automated task...",
+                title: "Auto Progress"
+            }
+        }
+    });
 
 console.log("Added Redis cache");
 

@@ -31,17 +31,17 @@ internal static class MissingJavaScriptToolWarning
         return false;
     }
 
-    public static string GetMessage(DirectoryInfo directory, LanguageInfo? language)
+    public static string GetMessage(DirectoryInfo directory, LanguageInfo? language, IEnvironment environment)
     {
-        var (installCommand, installDisplayName) = GetMessageParts(directory, language);
+        var (installCommand, installDisplayName) = GetMessageParts(directory, language, environment);
         return string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFilesCreatedButNodeToolsNotFound, installCommand, installDisplayName);
     }
 
-    private static (string InstallCommand, string InstallDisplayName) GetMessageParts(DirectoryInfo directory, LanguageInfo? language)
+    private static (string InstallCommand, string InstallDisplayName) GetMessageParts(DirectoryInfo directory, LanguageInfo? language, IEnvironment environment)
     {
         if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(language))
         {
-            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, logger: null);
+            var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, environment, logger: null);
             return (TypeScriptAppHostToolchainResolver.GetInstallCommand(toolchain), TypeScriptAppHostToolchainResolver.GetDisplayName(toolchain));
         }
 

@@ -108,6 +108,7 @@ public class PrebuiltAppHostServerChannelResolutionTests(ITestOutputHelper outpu
             MockPackagingServiceFactory.Create(),
             TestExecutionContextFactory.CreateTestContext(),
             new TestProcessExecutionFactory(),
+            new TestEnvironment(),
             NullLogger.Instance);
     }
 }

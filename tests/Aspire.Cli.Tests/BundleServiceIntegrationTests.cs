@@ -429,7 +429,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     }
 
     /// <summary>
-    /// Verifies that the static <see cref="BundleService.ExtractPayloadAsync(Stream, string, CancellationToken)"/>
+    /// Verifies that the static <see cref="BundleService.ExtractPayloadAsync(Stream, string, IEnvironment, CancellationToken)"/>
     /// overload correctly extracts a tar.gz stream with strip-components=1 behavior.
     /// </summary>
     [Fact]
@@ -440,7 +440,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         var payload = CreateFakeBundlePayload("test-content");
 
         using var stream = new MemoryStream(payload);
-        await BundleService.ExtractPayloadAsync(stream, dest, CancellationToken.None);
+        await BundleService.ExtractPayloadAsync(stream, dest, new TestEnvironment(), CancellationToken.None);
 
         // Verify strip-components=1 removed the wrapper directory.
         var managedExe = Path.Combine(dest, BundleDiscovery.ManagedDirectoryName,
@@ -548,7 +548,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
 
     private static BundleService CreateService(TestBundlePayloadProvider provider, ILayoutDiscovery layoutDiscovery, string? processPathOverride = null)
     {
-        return new BundleService(provider, layoutDiscovery, NullLogger<BundleService>.Instance)
+        return new BundleService(provider, layoutDiscovery, new TestEnvironment(), NullLogger<BundleService>.Instance)
         {
             ProcessPathOverride = processPathOverride
         };

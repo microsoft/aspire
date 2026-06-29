@@ -1037,6 +1037,11 @@ public class GuestAppHostProjectTests : IDisposable
             },
             m =>
             {
+                Assert.Equal("warning", m.Emoji.Name);
+                Assert.Equal(ErrorStrings.LegacyTypeScriptAppHostWarning, Markup.Remove(m.Message));
+            },
+            m =>
+            {
                 Assert.Equal("package", m.Emoji.Name);
                 Assert.Equal(UpdateCommandStrings.RegeneratedSdkCode, m.Message);
             });
@@ -1130,6 +1135,11 @@ public class GuestAppHostProjectTests : IDisposable
             },
             m =>
             {
+                Assert.Equal("warning", m.Emoji.Name);
+                Assert.Equal(ErrorStrings.LegacyTypeScriptAppHostWarning, Markup.Remove(m.Message));
+            },
+            m =>
+            {
                 Assert.Equal("package", m.Emoji.Name);
                 Assert.Equal(UpdateCommandStrings.RegeneratedSdkCode, m.Message);
             });
@@ -1191,6 +1201,7 @@ public class GuestAppHostProjectTests : IDisposable
             features: new Features(_configuration, NullLogger<Features>.Instance),
             languageDiscovery: new TestLanguageDiscovery(),
             executionContext: executionContext,
+            environment: new TestEnvironment(),
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
             profilingTelemetry: _profilingTelemetry,

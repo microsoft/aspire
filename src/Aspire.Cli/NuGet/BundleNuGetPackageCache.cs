@@ -269,7 +269,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
                 return filter(p.Id);
             }
 
-            var isOfficialPackage = IsOfficialOrCommunityToolkitPackage(p.Id);
+            var isOfficialPackage = PackageIdFilters.IsOfficialOrCommunityToolkitPackage(p.Id);
 
             // Apply deprecated package filter unless the user wants to show deprecated packages
             if (isOfficialPackage && !showDeprecatedPackages)
@@ -281,22 +281,6 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         };
 
         return packages.Where(effectiveFilter);
-    }
-
-    private static bool IsOfficialOrCommunityToolkitPackage(string packageName)
-    {
-        var isHostingOrCommunityToolkitNamespaced = packageName.StartsWith("Aspire.Hosting.", StringComparison.Ordinal) ||
-               packageName.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.Ordinal) ||
-               packageName.Equals("Aspire.ProjectTemplates", StringComparison.Ordinal) ||
-               packageName.Equals("Aspire.Cli", StringComparison.Ordinal);
-
-        var isExcluded = packageName.StartsWith("Aspire.Hosting.AppHost", StringComparison.Ordinal) ||
-                         packageName.StartsWith("Aspire.Hosting.Sdk", StringComparison.Ordinal) ||
-                         packageName.StartsWith("Aspire.Hosting.Orchestration", StringComparison.Ordinal) ||
-                         packageName.StartsWith("Aspire.Hosting.Testing", StringComparison.Ordinal) ||
-                         packageName.StartsWith("Aspire.Hosting.Msi", StringComparison.Ordinal);
-
-        return isHostingOrCommunityToolkitNamespaced && !isExcluded;
     }
 }
 
@@ -327,4 +311,3 @@ internal sealed partial class BundleSearchJsonContext : JsonSerializerContext
 }
 
 #endregion
-

@@ -99,7 +99,7 @@ public class CertificatesCommandTests(ITestOutputHelper outputHelper)
             {
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
-                return new CertificateService(toolRunner, interactionService, telemetry, hostEnvironment, new TestEnvironment { IsLinux = true });
+                return new CertificateService(toolRunner, interactionService, telemetry, hostEnvironment, TestEnvironment.CreateLinux());
             };
         });
         using var provider = services.BuildServiceProvider();

@@ -10,7 +10,6 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.TestUtilities;
 using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -207,7 +206,6 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/18476")]
     public async Task LsCommand_JsonFormat_OnlyJsonOnStdout_StatusMessagesOnStderr()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

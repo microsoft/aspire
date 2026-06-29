@@ -360,7 +360,7 @@ suite('utils/cliPath tests', () => {
                 const result = getCliExecutionCommand(shimPath, ['--version']);
 
                 assert.strictEqual(result.file, process.env.ComSpec);
-                assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"C:\\Users\\user\\cli^ tools^ ^&^ shims\\aspire.cmd ^"--version^""']);
+                assert.deepStrictEqual(result.args, ['/d', '/v:off', '/s', '/c', 'call "C:\\Users\\user\\cli tools & shims\\aspire.cmd" "--version"']);
                 assert.strictEqual(result.windowsVerbatimArguments, true);
             }
             finally {
@@ -384,7 +384,7 @@ suite('utils/cliPath tests', () => {
                 const result = getCliExecutionCommand('C:\\Tools\\aspire.cmd', ['--source', '%PRIVATE_FEED%']);
 
                 assert.strictEqual(result.file, process.env.ComSpec);
-                assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"C:\\Tools\\aspire.cmd ^"--source^" ^"^%PRIVATE_FEED^%^""']);
+                assert.deepStrictEqual(result.args, ['/d', '/v:off', '/s', '/c', 'call "C:\\Tools\\aspire.cmd" "--source" "%%PRIVATE_FEED%%"']);
                 assert.strictEqual(result.windowsVerbatimArguments, true);
             }
             finally {
@@ -408,7 +408,7 @@ suite('utils/cliPath tests', () => {
                 const result = getCliExecutionCommand('C:\\Tools\\aspire.cmd', ['--path=C:\\out\\']);
 
                 assert.strictEqual(result.file, process.env.ComSpec);
-                assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"C:\\Tools\\aspire.cmd ^"--path=C:\\out\\\\^""']);
+                assert.deepStrictEqual(result.args, ['/d', '/v:off', '/s', '/c', String.raw`call "C:\Tools\aspire.cmd" "--path=C:\out\\"`]);
                 assert.strictEqual(result.windowsVerbatimArguments, true);
             }
             finally {

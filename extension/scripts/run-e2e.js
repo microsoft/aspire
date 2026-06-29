@@ -828,7 +828,7 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
     .WithCommand(
         "echo-arguments",
         "echo-arguments",
-        static _ => Task.FromResult(CommandResults.Success()),
+        static context => Task.FromResult(CommandResults.Success("Echo arguments completed.", context.Arguments.GetString("message")!)),
         new CommandOptions
         {
             Arguments =

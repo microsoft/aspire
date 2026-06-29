@@ -703,6 +703,54 @@ public class AzureEnvironmentResourceExtensionsTests
     }
 
     [Fact]
+    public async Task ChangeLocationCommand_IsEnabledForResourcesWithImplicitKeyVaultChildren()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var deploymentStateManager = new TestDeploymentStateManager();
+        var testBicepProvisioner = new TestBicepProvisioner();
+
+        builder.Configuration["Azure:SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
+        builder.Configuration["Azure:Location"] = "eastus";
+        builder.Configuration["Azure:ResourceGroup"] = "test-rg";
+        AddTestAzureProvisioning(builder, bicepProvisioner: testBicepProvisioner, deploymentStateManager: deploymentStateManager);
+
+        var postgres = builder.AddAzurePostgresFlexibleServer("pg")
+            .WithPasswordAuthentication();
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+        await notifications.PublishUpdateAsync(postgres.Resource, state => state with { State = KnownResourceStates.Running });
+
+        Assert.True(notifications.TryGetCurrentState(postgres.Resource.Name, out var postgresEvent));
+        AssertCommandState(postgresEvent.Snapshot, AzureProvisioningController.ChangeResourceLocationCommandName, ResourceCommandState.Enabled);
+
+        var changeLocationCommand = Assert.Single(postgres.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.ChangeResourceLocationCommandName);
+
+        var result = await changeLocationCommand.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = postgres.Resource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = CreateArguments((AzureBicepResource.KnownParameters.Location, "West US 3"))
+        });
+
+        Assert.True(result.Success);
+        Assert.Equal("westus3", testBicepProvisioner.ProvisionedLocations["pg"]);
+        Assert.DoesNotContain("pg-kv", testBicepProvisioner.ProvisionedLocations.Keys);
+
+        var data = AssertCommandJsonData(result);
+        Assert.Equal(1, data["resourceCount"]?.GetValue<int>());
+    }
+
+    [Fact]
     public async Task GetAzureResourceCommand_ReturnsCachedDeploymentStateAndLiveStatus()
     {
         var builder = CreateBuilder(isRunMode: true);
@@ -875,6 +923,7 @@ public class AzureEnvironmentResourceExtensionsTests
 
     [Theory]
     [InlineData(AzureProvisioningFailureDetails.MissingLiveResourceReason, "reprovision-or-forget-state")]
+    [InlineData(AzureProvisioningFailureDetails.KeyVaultDeletedStateTombstoneNotFoundReason, "retry-reprovision")]
     [InlineData(AzureProvisioningFailureDetails.ResourceGroupBeingDeletedErrorCode, "change-resource-group")]
     [InlineData(AzureProvisioningFailureDetails.SubscriptionNotFoundErrorCode, "change-subscription")]
     [InlineData(AzureProvisioningFailureDetails.ServiceModelDeprecatedErrorCode, "choose-supported-model-version")]
@@ -3670,6 +3719,7 @@ public class AzureEnvironmentResourceExtensionsTests
         const string subscriptionId = "12345678-1234-1234-1234-123456789012";
         const string resourceGroup = "test-rg";
         const string keyVaultResourceId = $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.KeyVault/vaults/kv-test";
+        var deletedResourceIds = new List<string>();
         var purgedDeletedKeyVaults = new List<(string ResourceId, string Location)>();
         var testBicepProvisioner = new KeyVaultSoftDeleteConflictThenSuccessProvisioner(keyVaultResourceId);
 
@@ -3681,7 +3731,7 @@ public class AzureEnvironmentResourceExtensionsTests
         builder.Services.RemoveAll<IArmClientProvider>();
         builder.Services.AddSingleton<IArmClientProvider>(ProvisioningTestHelpers.CreateArmClientProvider(
             existingResourceIds: [],
-            deletedResourceIds: null,
+            deletedResourceIds: deletedResourceIds,
             deploymentTargetResourceIds: null,
             canceledDeploymentIds: null,
             purgedDeletedKeyVaults: purgedDeletedKeyVaults));
@@ -3730,12 +3780,172 @@ public class AzureEnvironmentResourceExtensionsTests
 
         Assert.True(result.Success);
         Assert.Equal(2, testBicepProvisioner.GetOrCreateResourceCallCount);
+        Assert.Empty(deletedResourceIds);
         var purgedDeletedKeyVault = Assert.Single(purgedDeletedKeyVaults);
         Assert.Equal(keyVaultResourceId, purgedDeletedKeyVault.ResourceId);
         Assert.Equal("ukwest", purgedDeletedKeyVault.Location);
 
         Assert.True(notifications.TryGetCurrentState(keyVault.Resource.Name, out var keyVaultEvent));
         Assert.Equal("Running", keyVaultEvent.Snapshot.State?.Text);
+    }
+
+    [Fact]
+    public async Task ReprovisionResourceCommand_FailsWithDiagnosticWhenSoftDeleteConflictTombstoneIsNotDiscoverable()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var deploymentStateManager = new TestDeploymentStateManager();
+        var testProvisioningContextProvider = new TestProvisioningContextProvider();
+        const string subscriptionId = "12345678-1234-1234-1234-123456789012";
+        const string resourceGroup = "test-rg";
+        const string keyVaultResourceId = $"/subscriptions/{subscriptionId}/resourceGroups/{resourceGroup}/providers/Microsoft.KeyVault/vaults/kv-test";
+        var deletedResourceIds = new List<string>();
+        var purgedDeletedKeyVaults = new List<(string ResourceId, string Location)>();
+        var testBicepProvisioner = new KeyVaultSoftDeleteConflictThenSuccessProvisioner(keyVaultResourceId);
+
+        builder.Configuration["Azure:SubscriptionId"] = subscriptionId;
+        builder.Configuration["Azure:Location"] = "westus2";
+        builder.Configuration["Azure:ResourceGroup"] = resourceGroup;
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentStateManager);
+        builder.AddAzureProvisioning();
+        builder.Services.RemoveAll<IArmClientProvider>();
+        builder.Services.AddSingleton<IArmClientProvider>(ProvisioningTestHelpers.CreateArmClientProvider(
+            existingResourceIds: [],
+            deletedResourceIds: deletedResourceIds,
+            deploymentTargetResourceIds: null,
+            canceledDeploymentIds: null,
+            purgedDeletedKeyVaults: purgedDeletedKeyVaults,
+            purgeDeletedKeyVaultResult: false));
+        builder.Services.RemoveAll<AzureProvisioningController>();
+        builder.Services.AddSingleton(sp => new AzureProvisioningController(
+            sp.GetRequiredService<IConfiguration>(),
+            sp.GetRequiredService<IOptions<AzureProvisionerOptions>>(),
+            sp,
+            testBicepProvisioner,
+            deploymentStateManager,
+            sp.GetRequiredService<IDistributedApplicationEventing>(),
+            testProvisioningContextProvider,
+            sp.GetRequiredService<IAzureProvisioningOptionsManager>(),
+            sp.GetRequiredService<ResourceNotificationService>(),
+            sp.GetRequiredService<ResourceLoggerService>(),
+            sp.GetRequiredService<ILogger<AzureProvisioningController>>()));
+
+        var keyVault = builder.AddBicepTemplateString("kv3", "resource kv 'Microsoft.KeyVault/vaults@2024-11-01' = {}");
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+
+        var keyVaultSection = await deploymentStateManager.AcquireSectionAsync("Azure:Deployments:kv3");
+        keyVaultSection.Data[AzureProvisioningController.LocationOverrideKey] = "ukwest";
+        await deploymentStateManager.SaveSectionAsync(keyVaultSection);
+
+        await notifications.PublishUpdateAsync(keyVault.Resource, state => state with { State = new("Canceled", KnownResourceStateStyles.Info) });
+
+        var reprovisionCommand = Assert.Single(keyVault.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.ReprovisionResourceCommandName);
+
+        var result = await reprovisionCommand.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = keyVault.Resource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = new InteractionInputCollection([])
+        });
+
+        Assert.False(result.Success);
+        Assert.False(result.Canceled);
+        Assert.Equal(1, testBicepProvisioner.GetOrCreateResourceCallCount);
+        Assert.Empty(deletedResourceIds);
+        Assert.Collection(
+            purgedDeletedKeyVaults,
+            purgedDeletedKeyVault =>
+            {
+                Assert.Equal(keyVaultResourceId, purgedDeletedKeyVault.ResourceId);
+                Assert.Equal("ukwest", purgedDeletedKeyVault.Location);
+            },
+            purgedDeletedKeyVault =>
+            {
+                Assert.Equal(keyVaultResourceId, purgedDeletedKeyVault.ResourceId);
+                Assert.Equal("westus2", purgedDeletedKeyVault.Location);
+            });
+
+        var data = AssertCommandJsonData(result);
+        Assert.False(data["success"]?.GetValue<bool>());
+        var diagnostics = Assert.IsType<JsonArray>(data["diagnostics"]);
+        var diagnostic = Assert.IsType<JsonObject>(Assert.Single(diagnostics));
+        Assert.Equal("Microsoft.KeyVault", diagnostic["provider"]?.GetValue<string>());
+        Assert.Equal("Microsoft.KeyVault/vaults", diagnostic["resourceType"]?.GetValue<string>());
+        Assert.Equal("kv-test", diagnostic["resourceName"]?.GetValue<string>());
+        Assert.Equal(keyVaultResourceId, diagnostic["targetResourceId"]?.GetValue<string>());
+        Assert.Equal(AzureProvisioningFailureDetails.KeyVaultDeletedStateTombstoneNotFoundReason, diagnostic["errorCode"]?.GetValue<string>());
+        Assert.Equal(409, diagnostic["httpStatus"]?.GetValue<int>());
+        Assert.Contains("deleted vault was not found", diagnostic["errorMessage"]?.GetValue<string>(), StringComparison.Ordinal);
+        var recommendedActions = Assert.IsType<JsonArray>(diagnostic["recommendedActions"]);
+        Assert.Contains(recommendedActions, action => action?["code"]?.GetValue<string>() == "retry-reprovision");
+
+        Assert.True(notifications.TryGetCurrentState(keyVault.Resource.Name, out var keyVaultEvent));
+        Assert.Equal("Failed to Provision", keyVaultEvent.Snapshot.State?.Text);
+        Assert.Equal(AzureProvisioningFailureDetails.KeyVaultDeletedStateTombstoneNotFoundReason, keyVaultEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.code").Value?.ToString());
+        var snapshotRecommendedActions = Assert.IsType<string[]>(keyVaultEvent.Snapshot.Properties.Single(p => p.Name == "azure.provisioning.error.recommendedActions").Value);
+        Assert.Contains(snapshotRecommendedActions, action => action.Contains("deleted Key Vault tombstone", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ReprovisionResourceCommand_ProvisionsImplicitKeyVaultBeforePasswordAuthenticatedPostgres()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var testBicepProvisioner = new ParentChildOrderingBicepProvisioner("pg-kv", "pg");
+
+        builder.Configuration["Azure:SubscriptionId"] = "12345678-1234-1234-1234-123456789012";
+        builder.Configuration["Azure:Location"] = "westus2";
+        builder.Configuration["Azure:ResourceGroup"] = "test-rg";
+        AddTestAzureProvisioning(builder, bicepProvisioner: testBicepProvisioner);
+
+        var postgres = builder.AddAzurePostgresFlexibleServer("pg")
+            .WithPasswordAuthentication();
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        var preparer = new AzureResourcePreparer(
+            app.Services.GetRequiredService<IOptions<AzureProvisioningOptions>>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>());
+
+        await preparer.OnBeforeStartAsync(new BeforeStartEvent(app.Services, model), CancellationToken.None);
+        await notifications.PublishUpdateAsync(postgres.Resource, state => state with { State = KnownResourceStates.Running });
+
+        var reprovisionCommand = Assert.Single(postgres.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == AzureProvisioningController.ReprovisionResourceCommandName);
+
+        var commandTask = reprovisionCommand.ExecuteCommand(new ExecuteCommandContext
+        {
+            Services = app.Services,
+            ResourceName = postgres.Resource.Name,
+            CancellationToken = CancellationToken.None,
+            Logger = NullLogger.Instance,
+            Arguments = new InteractionInputCollection([])
+        });
+
+        await testBicepProvisioner.ChildProvisionStarted.Task.WaitAsync(s_testSynchronizationTimeout);
+        Assert.DoesNotContain("pg", testBicepProvisioner.ProvisionedResources);
+
+        testBicepProvisioner.AllowChildProvisionToComplete.TrySetResult();
+        var result = await commandTask.WaitAsync(s_testSynchronizationTimeout);
+
+        Assert.True(result.Success);
+        Assert.False(testBicepProvisioner.ParentStartedBeforeChildCompleted);
+        var provisionedResources = testBicepProvisioner.ProvisionedResources.ToArray();
+        var childIndex = Array.IndexOf(provisionedResources, "pg-kv");
+        var parentIndex = Array.IndexOf(provisionedResources, "pg");
+        Assert.Equal(0, childIndex);
+        Assert.NotEqual(-1, parentIndex);
+        Assert.True(childIndex < parentIndex);
     }
 
     [Fact]
@@ -5378,6 +5588,71 @@ public class AzureEnvironmentResourceExtensionsTests
 
             resource.Outputs["id"] = keyVaultResourceId;
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ParentChildOrderingBicepProvisioner(string childResourceName, string parentResourceName) : IBicepProvisioner
+    {
+        private readonly object _lock = new();
+        private readonly List<string> _provisionedResources = [];
+        private int _childCompleted;
+        private int _parentStartedBeforeChildCompleted;
+
+        public TaskCompletionSource ChildProvisionStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource AllowChildProvisionToComplete { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool ParentStartedBeforeChildCompleted => Volatile.Read(ref _parentStartedBeforeChildCompleted) == 1;
+
+        public IReadOnlyList<string> ProvisionedResources
+        {
+            get
+            {
+                lock (_lock)
+                {
+                    return [.. _provisionedResources];
+                }
+            }
+        }
+
+        public Task<bool> ConfigureResourceAsync(AzureBicepResource resource, CancellationToken cancellationToken)
+            => Task.FromResult(false);
+
+        public Task<bool> ReconcileDeploymentStateAsync(AzureBicepResource resource, ProvisioningContext context, CancellationToken cancellationToken)
+            => Task.FromResult(false);
+
+        public async Task GetOrCreateResourceAsync(AzureBicepResource resource, ProvisioningContext context, CancellationToken cancellationToken)
+        {
+            if (string.Equals(resource.Name, childResourceName, StringComparison.Ordinal))
+            {
+                AddProvisionedResource(resource);
+                ChildProvisionStarted.TrySetResult();
+                await AllowChildProvisionToComplete.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                Volatile.Write(ref _childCompleted, 1);
+                return;
+            }
+
+            if (string.Equals(resource.Name, parentResourceName, StringComparison.Ordinal) &&
+                Volatile.Read(ref _childCompleted) == 0)
+            {
+                Volatile.Write(ref _parentStartedBeforeChildCompleted, 1);
+            }
+
+            AddProvisionedResource(resource);
+        }
+
+        private void AddProvisionedResource(AzureBicepResource resource)
+        {
+            lock (_lock)
+            {
+                _provisionedResources.Add(resource.Name);
+            }
+
+            resource.Outputs["id"] = $"/subscriptions/12345678-1234-1234-1234-123456789012/resourceGroups/test-rg/providers/Microsoft.Test/resources/{resource.Name}";
+            resource.Outputs["name"] = resource.Name;
+            resource.Outputs["vaultUri"] = $"https://{resource.Name}.vault.azure.net/";
+            resource.Outputs["connectionString"] = $"Host={resource.Name}.postgres.database.azure.com";
+            resource.Outputs["hostName"] = $"{resource.Name}.postgres.database.azure.com";
         }
     }
 

@@ -4,6 +4,7 @@
 using System.Text.Json.Nodes;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Scaffolding;
 
@@ -145,6 +146,7 @@ public class ScaffoldingServiceTests
                 scripts,
                 appHostDirectory,
                 ScaffoldingService.BrownfieldTypeScriptAppHostDirectoryName,
+                new TestEnvironment(),
                 logger: null);
 
             Assert.Empty(preservedScriptNames);

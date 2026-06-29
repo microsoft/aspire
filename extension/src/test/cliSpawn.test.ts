@@ -1,8 +1,9 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
 import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment, spawnCliProcess } from '../debugger/languages/cli';
-import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { terminalCommandArgumentControlCharacters } from '../loc/strings';
 import { EnvironmentVariables } from '../utils/environment';
+import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 
 suite('spawnCliProcess tests', () => {
@@ -16,7 +17,10 @@ suite('spawnCliProcess tests', () => {
 
             assert.strictEqual(result.command, 'aspire');
             assert.deepStrictEqual(result.args, ['config', 'info']);
-            assert.strictEqual(result.windowsVerbatimArguments, false);
+            // Bare commands (no .cmd/.bat) must not be routed through the cmd.exe wrapper so that
+            // an unresolvable shim does not get re-launched through cmd.exe and accidentally pick
+            // up a workspace-local aspire.cmd or aspire.bat on the current directory.
+            assert.ok(!result.windowsVerbatimArguments);
         }
         finally {
             platformStub.restore();
@@ -39,7 +43,7 @@ suite('spawnCliProcess tests', () => {
             const result = getCliSpawnCommand('C:\\Tools\\Aspire CLI\\aspire.cmd', ['config', 'info']);
 
             assert.strictEqual(result.command, process.env.ComSpec);
-            assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"C:\\Tools\\Aspire^ CLI\\aspire.cmd ^"config^" ^"info^""']);
+            assert.deepStrictEqual(result.args, ['/d', '/v:off', '/s', '/c', 'call "C:\\Tools\\Aspire CLI\\aspire.cmd" "config" "info"']);
             assert.strictEqual(result.windowsVerbatimArguments, true);
         }
         finally {
@@ -54,16 +58,30 @@ suite('spawnCliProcess tests', () => {
         }
     });
 
-    test('escapes percent signs for Windows cmd wrapper arguments', () => {
+    test('quotes hostile arguments when running Windows cmd wrappers', () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
         const originalComSpec = process.env.ComSpec;
         process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
 
         try {
-            const result = getCliSpawnCommand('C:\\Tools\\aspire.cmd', ['resource', 'exec', '%PRIVATE_FEED%']);
+            const result = getCliSpawnCommand('C:\\Tools\\Aspire CLI\\aspire.cmd', [
+                'resource',
+                'api&whoami',
+                'echo',
+                '--',
+                '--message=hello & del C:\\important',
+                '--path=%PATH%',
+                '--literal="quoted"',
+            ]);
 
             assert.strictEqual(result.command, process.env.ComSpec);
-            assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"C:\\Tools\\aspire.cmd ^"resource^" ^"exec^" ^"^%PRIVATE_FEED^%^""']);
+            assert.deepStrictEqual(result.args, [
+                '/d',
+                '/v:off',
+                '/s',
+                '/c',
+                'call "C:\\Tools\\Aspire CLI\\aspire.cmd" "resource" "api&whoami" "echo" "--" "--message=hello & del C:\\important" "--path=%%PATH%%" "--literal=""quoted"""'
+            ]);
             assert.strictEqual(result.windowsVerbatimArguments, true);
         }
         finally {
@@ -78,16 +96,105 @@ suite('spawnCliProcess tests', () => {
         }
     });
 
-    test('escapes trailing backslashes for Windows cmd wrapper arguments', () => {
+    test('rejects control characters when running Windows cmd wrappers', () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
         const originalComSpec = process.env.ComSpec;
         process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
 
         try {
-            const result = getCliSpawnCommand('C:\\Tools\\aspire.cmd', ['resource', 'exec', '--path=C:\\out\\']);
+            const cases = [
+                {
+                    name: 'command path',
+                    command: 'C:\\Tools\\Aspire\nCLI\\aspire.cmd',
+                    args: ['resource', 'api', 'restart'],
+                },
+                {
+                    name: 'resource name',
+                    command: 'C:\\Tools\\Aspire CLI\\aspire.cmd',
+                    args: ['resource', 'api\r\nwhoami', 'restart'],
+                },
+                {
+                    name: 'command name',
+                    command: 'C:\\Tools\\Aspire CLI\\aspire.bat',
+                    args: ['resource', 'api', 'restart\x1b[31m'],
+                },
+                {
+                    name: 'resource command argument',
+                    command: 'C:\\Tools\\Aspire CLI\\aspire.cmd',
+                    args: ['resource', 'api', 'echo-arguments', '--', '--message=hello\x03world'],
+                },
+            ];
+
+            for (const { name, command, args } of cases) {
+                assert.throws(
+                    () => getCliSpawnCommand(command, args),
+                    { message: terminalCommandArgumentControlCharacters },
+                    name);
+            }
+        }
+        finally {
+            platformStub.restore();
+
+            if (originalComSpec === undefined) {
+                delete process.env.ComSpec;
+            }
+            else {
+                process.env.ComSpec = originalComSpec;
+            }
+        }
+    });
+
+    test('doubles trailing backslashes when quoting Windows cmd wrapper arguments', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const originalComSpec = process.env.ComSpec;
+        process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+        try {
+            const result = getCliSpawnCommand('C:\\Tools\\Aspire CLI\\aspire.cmd', [
+                '--path=C:\\temp\\',
+                'next',
+            ]);
 
             assert.strictEqual(result.command, process.env.ComSpec);
-            assert.deepStrictEqual(result.args, ['/d', '/s', '/c', '"C:\\Tools\\aspire.cmd ^"resource^" ^"exec^" ^"--path=C:\\out\\\\^""']);
+            assert.deepStrictEqual(result.args, [
+                '/d',
+                '/v:off',
+                '/s',
+                '/c',
+                String.raw`call "C:\Tools\Aspire CLI\aspire.cmd" "--path=C:\temp\\" "next"`
+            ]);
+            assert.strictEqual(result.windowsVerbatimArguments, true);
+        }
+        finally {
+            platformStub.restore();
+
+            if (originalComSpec === undefined) {
+                delete process.env.ComSpec;
+            }
+            else {
+                process.env.ComSpec = originalComSpec;
+            }
+        }
+    });
+
+    test('doubles backslashes before embedded quotes when quoting Windows cmd wrapper arguments', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const originalComSpec = process.env.ComSpec;
+        process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe';
+
+        try {
+            const result = getCliSpawnCommand('C:\\Tools\\Aspire CLI\\aspire.cmd', [
+                String.raw`--literal=C:\temp\"quoted"`,
+            ]);
+
+            assert.strictEqual(result.command, process.env.ComSpec);
+            assert.deepStrictEqual(result.args, [
+                '/d',
+                '/v:off',
+                '/s',
+                '/c',
+                String.raw`call "C:\Tools\Aspire CLI\aspire.cmd" "--literal=C:\temp\\""quoted"""`
+            ]);
             assert.strictEqual(result.windowsVerbatimArguments, true);
         }
         finally {
@@ -135,43 +242,6 @@ suite('spawnCliProcess tests', () => {
         assert.strictEqual(message.includes('s3cr3t'), false);
     });
 
-    test('redacts original command arguments from Windows cmd wrapper spawn diagnostics', () => {
-        const actualPlatform = process.platform;
-        const platformStub = sinon.stub(process, 'platform').value('win32');
-        const originalComSpec = process.env.ComSpec;
-        process.env.ComSpec = actualPlatform === 'win32' ? originalComSpec ?? 'C:\\Windows\\System32\\cmd.exe' : '/bin/echo';
-
-        const infoStub = sinon.stub(extensionLogOutputChannel, 'info');
-        const terminalProvider = {
-            createEnvironment: () => ({}),
-        } as AspireTerminalProvider;
-
-        try {
-            spawnCliProcess(
-                terminalProvider,
-                'C:\\Tools\\aspire.cmd',
-                ['resource', 'database', 'reset-password', '--load-arguments', '--', '--password=s3cr3t'],
-                { workingDirectory: 'C:\\workspace' });
-
-            const message = infoStub.firstCall.args[0];
-            assert.strictEqual(
-                message,
-                'Spawning Aspire CLI process: C:\\Tools\\aspire.cmd resource database reset-password --load-arguments -- <redacted>; cwd=C:\\workspace; noDebug=undefined; debugSessionId=undefined; ASPIRE_CLI_START_TIMEOUT=undefined');
-            assert.strictEqual(message.includes('s3cr3t'), false);
-        }
-        finally {
-            infoStub.restore();
-            platformStub.restore();
-
-            if (originalComSpec === undefined) {
-                delete process.env.ComSpec;
-            }
-            else {
-                process.env.ComSpec = originalComSpec;
-            }
-        }
-    });
-
     test('merges caller env case-insensitively on Windows', () => {
         const platformStub = sinon.stub(process, 'platform').value('win32');
         const env: Record<string, string | undefined> = {
@@ -209,6 +279,47 @@ suite('spawnCliProcess tests', () => {
         }
         finally {
             platformStub.restore();
+        }
+    });
+
+    test('redacts original command arguments from Windows cmd wrapper spawn diagnostics', () => {
+        // spawnCliProcess logs through the cmd.exe wrapper on Windows, but the wrapped /c
+        // command line embeds resource command secrets (e.g. password args after `--`) verbatim.
+        // The diagnostic log must use diagnosticArgs (the original CLI argv) so that the same
+        // redaction-after-`--` rule applies as on macOS/Linux direct spawning.
+        const actualPlatform = process.platform;
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const originalComSpec = process.env.ComSpec;
+        process.env.ComSpec = actualPlatform === 'win32' ? originalComSpec ?? 'C:\\Windows\\System32\\cmd.exe' : '/bin/echo';
+
+        const infoStub = sinon.stub(extensionLogOutputChannel, 'info');
+        const terminalProvider = {
+            createEnvironment: () => ({}),
+        } as AspireTerminalProvider;
+
+        try {
+            spawnCliProcess(
+                terminalProvider,
+                'C:\\Tools\\aspire.cmd',
+                ['resource', 'database', 'reset-password', '--load-arguments', '--', '--password=s3cr3t'],
+                { workingDirectory: 'C:\\workspace' });
+
+            const message = infoStub.firstCall.args[0];
+            assert.strictEqual(
+                message,
+                'Spawning Aspire CLI process: C:\\Tools\\aspire.cmd resource database reset-password --load-arguments -- <redacted>; cwd=C:\\workspace; noDebug=undefined; debugSessionId=undefined; ASPIRE_CLI_START_TIMEOUT=undefined');
+            assert.strictEqual(message.includes('s3cr3t'), false);
+        }
+        finally {
+            infoStub.restore();
+            platformStub.restore();
+
+            if (originalComSpec === undefined) {
+                delete process.env.ComSpec;
+            }
+            else {
+                process.env.ComSpec = originalComSpec;
+            }
         }
     });
 });

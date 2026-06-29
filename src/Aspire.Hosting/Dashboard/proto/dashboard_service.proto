@@ -363,6 +363,7 @@ message WatchInteractionsRequestUpdate {
         InteractionMessageBox message_box = 3;
         InteractionInputsDialog inputs_dialog = 4;
         InteractionNotification notification = 5;
+        InteractionPromptProgress prompt_progress = 7;
     }
 
     // A flag indicating that the message is an update and shouldn't complete the interaction.
@@ -387,6 +388,7 @@ message WatchInteractionsResponseUpdate {
         InteractionMessageBox message_box = 17;
         InteractionInputsDialog inputs_dialog = 18;
         InteractionNotification notification = 19;
+        InteractionPromptProgress prompt_progress = 20;
     }
 }
 // Represents the completion of an interaction.
@@ -403,6 +405,10 @@ message InteractionNotification {
     optional bool result = 2;
     string link_text = 3;
     string link_url = 4;
+}
+// Represents a progress interaction, which is a modal dialog with an indeterminate progress indicator.
+message InteractionPromptProgress {
+    optional bool result = 1;
 }
 // Represents a dialog that collects inputs from the user.
 message InteractionInputsDialog {

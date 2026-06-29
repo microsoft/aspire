@@ -4,8 +4,8 @@ import { extensionLogOutputChannel } from "../../utils/logging";
 import { AspireTerminalProvider } from "../../utils/AspireTerminalProvider";
 import * as readline from 'readline';
 import * as vscode from 'vscode';
-import { getCliExecutionCommand } from "../../utils/cliExecution";
 import { EnvironmentVariables } from "../../utils/environment";
+import { getCliExecutionCommand } from "../../utils/cliExecution";
 
 export interface SpawnProcessOptions {
     stdoutCallback?: (data: string) => void;
@@ -20,12 +20,23 @@ export interface SpawnProcessOptions {
     noExtensionVariables?: boolean;
 }
 
-export function getCliSpawnCommand(command: string, args?: string[]): { command: string; args: string[]; windowsVerbatimArguments: boolean } {
-    const executionCommand = getCliExecutionCommand(command, args ?? []);
+export interface CliSpawnCommand {
+    command: string;
+    args: string[];
+    diagnosticArgs?: string[];
+    windowsVerbatimArguments?: boolean;
+}
 
+export function getCliSpawnCommand(command: string, args?: string[]): CliSpawnCommand {
+    // Delegate Windows .cmd/.bat shim wrapping to the shared cliExecution helper so that the
+    // wrapping rules (cmd.exe /d /v:off /s /c, windowsVerbatimArguments, control-character
+    // rejection, percent/quote escaping) stay identical between debug-launch spawning here and
+    // CLI validation/execution paths in utils/cliPath.ts.
+    const executionCommand = getCliExecutionCommand(command, args ?? []);
     return {
         command: executionCommand.file,
         args: executionCommand.args,
+        diagnosticArgs: executionCommand.diagnosticArgs,
         windowsVerbatimArguments: executionCommand.windowsVerbatimArguments,
     };
 }
@@ -61,13 +72,15 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
     Object.assign(env, terminalProvider.createEnvironment(options?.debugSessionId, options?.noDebug, options?.noExtensionVariables));
     mergeCliSpawnEnvironment(env, options?.env);
 
+    // Log the original CLI command and argv (not the cmd.exe wrapper) so that diagnostics show
+    // what the user actually invoked. redactCliSpawnArgs still strips anything after `--`.
     extensionLogOutputChannel.info(getCliSpawnDiagnostics(command, args, workingDirectory, options?.noDebug, options?.debugSessionId, env));
 
     const child = spawn(spawnCommand.command, spawnCommand.args, {
         cwd: workingDirectory,
         env: env,
         shell: false,
-        windowsVerbatimArguments: spawnCommand.windowsVerbatimArguments
+        windowsVerbatimArguments: spawnCommand.windowsVerbatimArguments,
     });
 
     // Set UTF-8 encoding so Node reassembles multi-byte characters across chunk boundaries instead of yielding broken bytes.

@@ -131,6 +131,10 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                             var inputInstances = inputs.Inputs.Select(input => CreateInteractionInputDto(input, updateStateOnChangeInputs)).ToList();
                             change.InputsDialog.InputItems.AddRange(inputInstances);
                         }
+                        else if (interaction.InteractionInfo is ProgressInteractionInfo)
+                        {
+                            change.PromptProgress = new InteractionPromptProgress();
+                        }
 
                         await responseStream.WriteAsync(change, cts.Token).ConfigureAwait(false);
                     }

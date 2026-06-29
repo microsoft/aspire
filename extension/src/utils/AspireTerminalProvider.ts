@@ -45,6 +45,32 @@ export interface AspireTerminalCommandEvent {
     executionMode: 'suppressed' | 'shellIntegration' | 'sendText';
 }
 
+const noExtensionVariablesScrubbedEnvironmentVariables = [
+    'ASPIRE_BACKCHANNEL_PATH',
+    'ASPIRE_CLI_LOG_FILE',
+    'ASPIRE_CLI_PID',
+    'ASPIRE_CLI_STARTED',
+    'ASPIRE_EXTENSION_CAPABILITIES',
+    'ASPIRE_EXTENSION_CERT',
+    'ASPIRE_EXTENSION_DEBUG_RUN_MODE',
+    'ASPIRE_EXTENSION_DEBUG_SESSION_ID',
+    'ASPIRE_EXTENSION_ENDPOINT',
+    'ASPIRE_EXTENSION_PROMPT_ENABLED',
+    'ASPIRE_EXTENSION_TOKEN',
+    'ASPIRE_NON_INTERACTIVE',
+    'ASPIRE_SUPPRESS_CLI_RUN_HOOK',
+    'DCP_INSTANCE_ID_PREFIX',
+    'DEBUG_SESSION_INFO',
+    'DEBUG_SESSION_PORT',
+    'DEBUG_SESSION_RUN_MODE',
+    'DEBUG_SESSION_SERVER_CERTIFICATE',
+    'DEBUG_SESSION_TOKEN',
+] as const;
+
+const noExtensionVariablesScrubbedEnvironmentVariablePrefixes = [
+    'ASPIRE_TERMINAL_HOST_',
+] as const;
+
 /**
  * Quotes a single argument for safe interpolation into a shell command line.
  *
@@ -271,7 +297,18 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
     createEnvironment(debugSessionId?: string, noDebug?: boolean, noExtensionVariables?: boolean): any {
         if (noExtensionVariables) {
-            return getEnvironmentWithoutE2EBridgeVariables();
+            const env: any = {
+                ...getEnvironmentWithoutE2EBridgeVariables(),
+
+                // Hidden CLI processes still render status/error text that VS Code shows to the user.
+                // Keep those messages aligned with the VS Code UI language without enabling the
+                // extension RPC/DCP backchannels that noExtensionVariables intentionally suppresses.
+                ASPIRE_LOCALE_OVERRIDE: vscode.env.language,
+            };
+
+            scrubNoExtensionVariablesEnvironment(env);
+
+            return env;
         }
 
         const env: any = {
@@ -331,7 +368,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         // debug console, which is not an interactive terminal. Keep prompts routed
         // through the extension backchannel while disabling Spectre live output
         // such as the first-run banner and spinners.
-        env.ASPIRE_NON_INTERACTIVE = 'true';
+        env[EnvironmentVariables.ASPIRE_NON_INTERACTIVE] = 'true';
 
         // While debugging, the developer can pause on a breakpoint (e.g. before builder.Build())
         // for an arbitrarily long time. Use a very long startup timeout (86400s = 24h) so the parent
@@ -441,6 +478,38 @@ function hasConfiguredEnvironmentVariable(env: Record<string, string | undefined
     return Object.entries(env).some(([key, value]) => key.toUpperCase() === name && !!value);
 }
 
+function scrubNoExtensionVariablesEnvironment(env: Record<string, string | undefined>): void {
+    for (const key of noExtensionVariablesScrubbedEnvironmentVariables) {
+        deleteEnvironmentVariable(env, key);
+    }
+
+    for (const key of Object.keys(env)) {
+        if (noExtensionVariablesScrubbedEnvironmentVariablePrefixes.some(prefix => isEnvironmentVariablePrefixMatch(key, prefix))) {
+            delete env[key];
+        }
+    }
+}
+
+function deleteEnvironmentVariable(env: Record<string, string | undefined>, name: string): void {
+    if (process.platform === 'win32') {
+        for (const key of Object.keys(env)) {
+            if (key.toUpperCase() === name) {
+                delete env[key];
+            }
+        }
+
+        return;
+    }
+
+    delete env[name];
+}
+
+function isEnvironmentVariablePrefixMatch(key: string, prefix: string): boolean {
+    return process.platform === 'win32'
+        ? key.toUpperCase().startsWith(prefix)
+        : key.startsWith(prefix);
+}
+
 function isE2eTerminalCommandExecutionSuppressed(): boolean {
     return process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE === 'true' &&
         !!process.env.ASPIRE_EXTENSION_E2E_STATE_FILE &&
@@ -448,7 +517,7 @@ function isE2eTerminalCommandExecutionSuppressed(): boolean {
         process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_TERMINAL_COMMAND_EXECUTION === 'true';
 }
 
-function assertNoTerminalControlCharacters(value: string): void {
+export function assertNoTerminalControlCharacters(value: string): void {
     // Shell quoting protects shell metacharacters after the command reaches the
     // shell. C0 controls are terminal input first: in sendText fallback, ETX can
     // abort the current line and CR/LF can submit following text as another

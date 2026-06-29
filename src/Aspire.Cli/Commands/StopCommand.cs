@@ -22,6 +22,7 @@ internal sealed class StopCommand : BaseCommand
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<StopCommand> _logger;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly IEnvironment _environment;
     private readonly ProcessTreeGracefulShutdownService _processShutdownService;
     private readonly ProfilingTelemetry _profilingTelemetry;
 
@@ -35,6 +36,7 @@ internal sealed class StopCommand : BaseCommand
     public StopCommand(
         AppHostConnectionResolver connectionResolver,
         ICliHostEnvironment hostEnvironment,
+        IEnvironment environment,
         ProcessTreeGracefulShutdownService processShutdownService,
         ILogger<StopCommand> logger,
         ProfilingTelemetry profilingTelemetry,
@@ -43,6 +45,7 @@ internal sealed class StopCommand : BaseCommand
     {
         _connectionResolver = connectionResolver;
         _hostEnvironment = hostEnvironment;
+        _environment = environment;
         _processShutdownService = processShutdownService;
         _logger = logger;
         _profilingTelemetry = profilingTelemetry;
@@ -160,7 +163,7 @@ internal sealed class StopCommand : BaseCommand
         var connections = allConnections.Select(connectionResult => connectionResult.Connection!).ToArray();
         var appHostPaths = connections.Select(GetAppHostPath).ToArray();
         var appHostPathComparer = GetAppHostPathComparer();
-        var displayPaths = FileSystemHelper.ShortenPaths(appHostPaths);
+        var displayPaths = FileSystemHelper.ShortenPaths(appHostPaths, _environment);
         var appHostPathCounts = appHostPaths
             .GroupBy(path => path, appHostPathComparer)
             .ToDictionary(group => group.Key, group => group.Count(), appHostPathComparer);
@@ -253,9 +256,9 @@ internal sealed class StopCommand : BaseCommand
             : connection.AppHostInfo.AppHostPath;
     }
 
-    private static StringComparer GetAppHostPathComparer()
+    private StringComparer GetAppHostPathComparer()
     {
-        return OperatingSystem.IsWindows()
+        return _environment.IsWindows()
             ? StringComparer.OrdinalIgnoreCase
             : StringComparer.Ordinal;
     }
