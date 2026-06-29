@@ -141,6 +141,25 @@ suite('telemetry utilities', () => {
             'cmd.leak <email> /Users/<user>/source C:\\Users\\<user>\\source --token=<redacted>');
     });
 
+    test('sendTelemetryEvent sanitizes JSON-encoded dashboard bundle values without corrupting JSON', () => {
+        sendTelemetryEvent('aspire/dashboard/operation', {
+            dashboard_event_name: 'aspire/dashboard/component/open',
+            result: 'success',
+            dashboard_properties: JSON.stringify({
+                v: {
+                    'Aspire.Dashboard.UserAgent': 'Browser C:\\Users\\bob\\workspace',
+                },
+            }),
+        });
+
+        const dashboardProperties = fake.events[0].properties?.dashboard_properties;
+        if (dashboardProperties === undefined) {
+            assert.fail('Expected dashboard_properties to be emitted.');
+        }
+        const parsed = JSON.parse(dashboardProperties);
+        assert.strictEqual(parsed.v['Aspire.Dashboard.UserAgent'], 'Browser C:\\Users\\<user>\\workspace');
+    });
+
     test('telemetry level "off" suppresses regular and error events', () => {
         fake.telemetryLevel = 'off';
         sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.off' });
@@ -313,6 +332,17 @@ suite('telemetry utilities', () => {
         const event = fake.events[0];
         assert.strictEqual(event.properties?.outcome, 'error');
         assert.strictEqual(event.properties?.error_kind, 'HandledError');
+    });
+
+    test('withCommandTelemetry normalizes caller-provided handled error kind', async () => {
+        const result = await withCommandTelemetry('cmd.invalidHandledErrorKind', () => ({
+            success: false,
+            errorKind: 'Bad Error C:\\Users\\bob',
+        }));
+
+        assert.deepStrictEqual(result, { success: false, errorKind: 'Bad Error C:\\Users\\bob' });
+        assert.strictEqual(fake.events[0].properties?.outcome, 'error');
+        assert.strictEqual(fake.events[0].properties?.error_kind, 'Error');
     });
 
     test('withCommandTelemetry classifies cancellations and does not record error_kind', async () => {

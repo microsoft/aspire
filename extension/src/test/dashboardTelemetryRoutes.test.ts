@@ -136,6 +136,25 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         assert.strictEqual(event.isError, undefined);
     });
 
+    test('POST /telemetry/operation keeps sanitized dashboard_properties parseable', async () => {
+        const { status } = await postJson(h.baseUrl, '/telemetry/operation', {
+            eventName: 'aspire/dashboard/component/open',
+            properties: {
+                'Aspire.Dashboard.UserAgent': { value: 'Browser C:\\Users\\bob\\workspace', propertyType: 1 },
+            },
+            result: 1,
+        });
+
+        assert.strictEqual(status, 200);
+        assert.strictEqual(h.fake.events.length, 1);
+        const dashboardProperties = h.fake.events[0].properties?.dashboard_properties;
+        if (dashboardProperties === undefined) {
+            assert.fail('Expected dashboard_properties to be emitted.');
+        }
+        const parsed = JSON.parse(dashboardProperties);
+        assert.strictEqual(parsed.v['Aspire.Dashboard.UserAgent'], 'Browser C:\\Users\\<user>\\workspace');
+    });
+
     test('POST /telemetry/userTask emits dashboard/usertask, not the raw dashboard name', async () => {
         const { status } = await postJson(h.baseUrl, '/telemetry/userTask', {
             eventName: 'aspire/dashboard/mcp/toolcall',
@@ -150,8 +169,8 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
 
     test('POST /telemetry/fault always routes through the error channel', async () => {
         // Faults are the dashboard's exception telemetry channel; they MUST
-        // go through sendTelemetryErrorEvent so the reporter applies its
-        // stricter scrubbing pass.
+        // go through sendTelemetryErrorEvent so they are tagged as errors in
+        // the telemetry pipeline.
         const { status } = await postJson(h.baseUrl, '/telemetry/fault', {
             eventName: 'aspire/dashboard/error',
             description: 'short fault description',

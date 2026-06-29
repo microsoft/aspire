@@ -25,10 +25,12 @@
 //
 // EVENT NAMING CONVENTION:
 //   Extension-emitted events are namespaced under `aspire/vscode/...` and
-//   dashboard passthrough events are namespaced under `aspire/dashboard/...`,
-//   matching what other Aspire dashboard hosts (Visual Studio, C# Dev Kit)
-//   emit. The names here are the FINAL wire names — the helpers in
-//   `telemetry.ts` deliberately bypass VS Code's automatic
+//   dashboard passthrough route buckets are namespaced under
+//   `aspire/dashboard/...`. The original dashboard event name is preserved in
+//   `dashboard_event_name`, so events like `aspire/dashboard/command` stay
+//   queryable without creating a new VS Code wire entity per upstream event.
+//   The names here are the FINAL wire names — the helpers in `telemetry.ts`
+//   deliberately bypass VS Code's automatic
 //   `<extensionId>/<eventName>` prefix (added by `vscode.env.createTelemetryLogger`)
 //   so this convention is what reaches the telemetry backend.
 //
@@ -122,9 +124,9 @@ export interface TelemetryEventSchema {
     //
     // Net effect: the classification catalog only needs the rows listed here,
     // regardless of how many distinct events / properties the dashboard adds
-    // upstream. The wire names use the `aspire/dashboard/` namespace so they
-    // line up with what the dashboard itself emits when hosted by Visual
-    // Studio or the C# Dev Kit extension.
+    // upstream. The wire names use the `aspire/dashboard/` namespace because
+    // these are VS Code's dashboard-route buckets; the dashboard's native
+    // `aspire/dashboard/...` event name stays in `dashboard_event_name`.
     'aspire/dashboard/operation': {
         properties:
             | 'dashboard_event_name'

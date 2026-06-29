@@ -169,7 +169,9 @@ function sanitizeTelemetryProperties(properties: Record<string, string>): Record
 function sanitizeTelemetryValue(value: string): string {
     return value
         .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<email>')
-        .replace(/\b([A-Za-z]:)\\+Users\\+[^\\\s"']+/g, (_, drive: string) => `${drive}\\Users\\<user>`)
+        // Preserve the original backslash run length so JSON-encoded values
+        // like `"C:\\Users\\alice\\repo"` remain valid JSON after redaction.
+        .replace(/\b([A-Za-z]:)(\\+)Users(\\+)[^\\\s"']+/g, (_, drive: string, usersSeparator: string, nameSeparator: string) => `${drive}${usersSeparator}Users${nameSeparator}<user>`)
         .replace(/(^|[^A-Za-z0-9_/-])\/Users\/[^/\s"']+/g, '$1/Users/<user>')
         .replace(/(^|[^A-Za-z0-9_/-])\/home\/[^/\s"']+/g, '$1/home/<user>')
         .replace(/\b(password|passwd|pwd|token|secret|api[_-]?key|key)(\s*[:=]\s*)[^&\s"',;}]+/gi, '$1$2<redacted>');
@@ -370,7 +372,7 @@ function isHandledCommandFailure(value: unknown): value is { success: false; err
 
 function getHandledCommandFailureKind(value: { errorKind?: unknown }): string {
     return typeof value.errorKind === 'string' && value.errorKind.length > 0
-        ? value.errorKind
+        ? normalizeErrorKind(value.errorKind)
         : 'HandledError';
 }
 

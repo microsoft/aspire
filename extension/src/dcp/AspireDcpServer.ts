@@ -12,7 +12,7 @@ import { timingSafeEqual, randomBytes } from 'crypto';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { authorizationAndDcpHeadersRequired, authorizationHeaderMustStartWithBearer, authorizationHeaderRequired, encounteredErrorStartingResource, invalidOrMissingToken, invalidTokenLength } from '../loc/strings';
 import { DashboardTelemetryPassthrough } from './DashboardTelemetryPassthrough';
-import { sendTelemetryErrorEvent, sendTelemetryEvent } from '../utils/telemetry';
+import { classifyError, sendTelemetryErrorEvent, sendTelemetryEvent } from '../utils/telemetry';
 
 /**
  * Callbacks the DCP server invokes for cross-cutting telemetry concerns.
@@ -422,7 +422,7 @@ export default class AspireDcpServer {
                     // Synchronous launch failure — emit the matching end event and update
                     // aggregate stats via the shared helper before responding so the eventual
                     // `debug/apphost/end` summary reflects the failure.
-                    emitRunSessionFailureEnd('launch_failed', err instanceof Error ? err.name || 'Error' : typeof err);
+                    emitRunSessionFailureEnd('launch_failed', classifyError(err));
 
                     // Clean up any processes associated with this run (registered by resource-type extensions)
                     cleanupRun(runId);
@@ -575,10 +575,9 @@ export default class AspireDcpServer {
                 const durationMs = Date.now() - entry.startTimeMs;
                 const exitCode = sessionTerminated.exit_code;
                 const exitBucket = exitCode === 0 ? 'success' : exitCode === -1 ? 'canceled' : 'nonzero';
-                // Route non-zero exits through the error-event channel so they get the
-                // reporter's stricter scrubbing pass and are surfaced as errors in the
-                // telemetry pipeline (consistent with the synchronous launch-failure path
-                // above and the dashboard fault path in DashboardTelemetryPassthrough).
+                // Route non-zero exits through the error-event channel so they are surfaced
+                // as errors in the telemetry pipeline, consistent with the synchronous
+                // launch-failure path above and the dashboard fault path.
                 const emitEnd = exitBucket === 'nonzero' ? sendTelemetryErrorEvent : sendTelemetryEvent;
                 emitEnd('aspire/vscode/debug/runsession/end', {
                     resource_type: entry.resourceType,
