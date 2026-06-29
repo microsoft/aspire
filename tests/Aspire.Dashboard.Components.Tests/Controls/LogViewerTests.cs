@@ -191,6 +191,129 @@ public class LogViewerTests : DashboardTestContext
         });
     }
 
+    [Fact]
+    public void LogViewer_FilterText_MatchesAnsiStrippedContent()
+    {
+        SetupLogViewerServices();
+
+        // Default .NET console output colors the level prefix, so ANSI escape sequences sit between
+        // "info" and ":" in the raw content. The user only sees "info: Application started", so a
+        // filter of "info:" must match even though the raw content is
+        // "info\x1b[39m\x1b[22m\x1b[49m: Application started".
+        const string rawContent = "info\x1b[39m\x1b[22m\x1b[49m: Application started";
+
+        var logEntries = new LogEntries(maximumEntryCount: int.MaxValue) { BaseLineNumber = 1 };
+        logEntries.InsertSorted(LogEntry.Create(
+            timestamp: new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            logMessage: "info: Application started",
+            rawLogContent: rawContent,
+            isErrorMessage: false,
+            resourcePrefix: null));
+
+        var cut = RenderComponent<LogViewer>(builder =>
+        {
+            builder.Add(p => p.LogEntries, logEntries);
+            builder.Add(p => p.FilterText, "info:");
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var content = Assert.Single(cut.FindAll(".log-content"));
+            Assert.Contains("Application started", content.TextContent);
+        });
+    }
+
+    [Fact]
+    public void LogViewer_FilterText_ChangingFilterUpdatesVisibleEntries()
+    {
+        SetupLogViewerServices();
+
+        var logEntries = CreateLogEntries("apple log", "banana log", "cherry log");
+
+        var cut = RenderComponent<LogViewer>(builder =>
+        {
+            builder.Add(p => p.LogEntries, logEntries);
+            builder.Add(p => p.FilterText, "apple");
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var content = Assert.Single(cut.FindAll(".log-content"));
+            Assert.Contains("apple log", content.TextContent);
+        });
+
+        // Changing the filter on an already-rendered component must invalidate the cached filtered
+        // view and re-query Virtualize through the deferred RefreshDataAsync in OnAfterRenderAsync.
+        cut.SetParametersAndRender(builder => builder.Add(p => p.FilterText, "cherry"));
+
+        cut.WaitForAssertion(() =>
+        {
+            var content = Assert.Single(cut.FindAll(".log-content"));
+            Assert.Contains("cherry log", content.TextContent);
+        });
+    }
+
+    [Fact]
+    public void LogViewer_FilterText_ClearingFilterShowsAllEntries()
+    {
+        SetupLogViewerServices();
+
+        var logEntries = CreateLogEntries("apple log", "banana log", "cherry log");
+
+        var cut = RenderComponent<LogViewer>(builder =>
+        {
+            builder.Add(p => p.LogEntries, logEntries);
+            builder.Add(p => p.FilterText, "banana");
+        });
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".log-content")));
+
+        // A whitespace-only filter is treated as empty and must short-circuit back to showing every
+        // entry, restoring the unfiltered (live buffer) view.
+        cut.SetParametersAndRender(builder => builder.Add(p => p.FilterText, "   "));
+
+        cut.WaitForAssertion(() =>
+        {
+            var contents = cut.FindAll(".log-content").Select(e => e.TextContent.Trim()).ToList();
+            Assert.Equal(3, contents.Count);
+        });
+    }
+
+    [Fact]
+    public async Task LogViewer_FilterText_RefreshAfterAppendShowsNewMatchingEntries()
+    {
+        SetupLogViewerServices();
+
+        var logEntries = CreateLogEntries("apple log", "banana log");
+
+        var cut = RenderComponent<LogViewer>(builder =>
+        {
+            builder.Add(p => p.LogEntries, logEntries);
+            builder.Add(p => p.FilterText, "banana");
+        });
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".log-content")));
+
+        // Simulate streaming: a new matching entry is appended to the existing buffer (same reference,
+        // so no parameter change fires), then the parent calls RefreshDataAsync. The cached filtered
+        // snapshot must be dropped so the newly appended entry becomes visible.
+        logEntries.InsertSorted(LogEntry.Create(
+            timestamp: new DateTime(2024, 1, 1, 0, 0, 5, DateTimeKind.Utc),
+            logMessage: "another banana log",
+            rawLogContent: "another banana log",
+            isErrorMessage: false,
+            resourcePrefix: null));
+
+        await cut.InvokeAsync(cut.Instance.RefreshDataAsync);
+
+        cut.WaitForAssertion(() =>
+        {
+            var contents = cut.FindAll(".log-content").Select(e => e.TextContent.Trim()).ToList();
+            Assert.Equal(2, contents.Count);
+            Assert.Contains(contents, c => c.Contains("another banana log", StringComparison.Ordinal));
+        });
+    }
+
     private static LogEntries CreateLogEntries(params string[] messages)
     {
         var logEntries = new LogEntries(maximumEntryCount: int.MaxValue) { BaseLineNumber = 1 };

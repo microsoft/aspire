@@ -141,14 +141,16 @@ public sealed partial class LogViewer
         return _visibleEntriesCache = entries.Where(e => MatchesFilter(e, filterText)).ToList();
     }
 
-    // Filter on RawContent rather than Content. Content contains embedded HTML links and other
-    // markup added during ANSI conversion, so matching against it would match the markup rather
-    // than the visible text. RawContent is the plain text the user sees (it also includes the
-    // timestamp). Pause markers aren't log content, so they're hidden while a filter is active.
+    // Filter on the ANSI-stripped raw content, which is the plain text the user actually sees
+    // (including the timestamp). Content can't be used because it contains embedded HTML links and
+    // other markup added during ANSI conversion, and the unstripped RawContent still contains raw
+    // ANSI escape sequences - matching against either produces false negatives when the search term
+    // spans markup or a color boundary. Pause markers aren't log content, so they're hidden while a
+    // filter is active.
     private static bool MatchesFilter(LogEntry entry, string filterText)
         => entry.Type != LogEntryType.Pause
-            && entry.RawContent is { } raw
-            && raw.Contains(filterText, StringComparison.OrdinalIgnoreCase);
+            && entry.GetStrippedRawContent() is { } stripped
+            && stripped.Contains(filterText, StringComparison.OrdinalIgnoreCase);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
