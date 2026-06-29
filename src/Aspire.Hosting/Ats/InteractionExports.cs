@@ -99,6 +99,23 @@ internal static class InteractionExports
     }
 
     /// <summary>
+    /// Displays a progress dialog with an indeterminate progress indicator.
+    /// </summary>
+    [AspireExport]
+    public static async Task<BoolInteractionResult> PromptProgress(
+        this IInteractionService interactionService,
+        string message,
+        string? title = null,
+        InteractionProgressOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(interactionService);
+
+        var result = await interactionService.PromptProgressAsync(message, title, options?.ToOptions(), cancellationToken).ConfigureAwait(false);
+        return BoolInteractionResult.From(result);
+    }
+
+    /// <summary>
     /// Prompts the user for a single input.
     /// </summary>
     // Prompts can invoke dynamic-loading and validation callbacks that re-enter the remote host through ATS, so the
@@ -680,6 +697,40 @@ internal sealed class InteractionInputsDialogOptions
             ShowDismiss = ShowDismiss,
             EnableMessageMarkdown = EnableMessageMarkdown,
             ValidationCallback = ValidationCallback,
+        };
+    }
+}
+
+/// <summary>
+/// Options for progress dialog prompts.
+/// </summary>
+[AspireDto]
+internal sealed class InteractionProgressOptions
+{
+    /// <summary>
+    /// Gets or sets the primary button text (e.g. "Cancel").
+    /// </summary>
+    public string? PrimaryButtonText { get; init; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether Markdown in the message is rendered.
+    /// </summary>
+    public bool? EnableMessageMarkdown { get; init; }
+
+    /// <summary>
+    /// Gets or sets an optional asynchronous work callback to execute while the progress dialog is displayed.
+    /// When provided, the progress dialog remains open while this callback executes and closes automatically
+    /// when the callback completes.
+    /// </summary>
+    public Func<ProgressContext, Task>? Work { get; init; }
+
+    internal ProgressInteractionOptions ToOptions()
+    {
+        return new ProgressInteractionOptions
+        {
+            PrimaryButtonText = PrimaryButtonText,
+            EnableMessageMarkdown = EnableMessageMarkdown,
+            Work = Work,
         };
     }
 }

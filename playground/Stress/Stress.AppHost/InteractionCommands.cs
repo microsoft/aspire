@@ -960,6 +960,22 @@ internal static class InteractionCommands
                 Description = "Shows a progress dialog that only closes when the cancel button is clicked.",
                 IconName = "BuildingFactory",
                 IconVariant = IconVariant.Regular
+            })
+            .WithCommand("auto-progress", "Auto progress (CommandProgressOptions)", executeCommand: async commandContext =>
+            {
+                // The progress dialog is shown automatically via CommandProgressOptions.
+                // No explicit IInteractionService usage is needed.
+                await Task.Delay(10000, commandContext.CancellationToken);
+                return CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Automatically shows a progress dialog via CommandProgressOptions without explicit IInteractionService usage.",
+                IconName = "ArrowSync",
+                IconVariant = IconVariant.Regular,
+                Progress = new CommandProgressOptions
+                {
+                    Message = "Running automated task..."
+                }
             });
 
         return resource;
