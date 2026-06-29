@@ -26,7 +26,7 @@ internal static class ParentProcessWatchdog
     /// process force-exits as a backstop). Returns a handle that stops the watchdog when disposed, or
     /// <see langword="null"/> when no parent is configured (the helper was invoked directly).
     /// </summary>
-    public static IDisposable? Start(CancellationTokenSource operationCts)
+    public static IAsyncDisposable? Start(CancellationTokenSource operationCts)
     {
         if (!int.TryParse(Environment.GetEnvironmentVariable(KnownConfigNames.CliProcessId), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parentPid))
         {
@@ -36,23 +36,11 @@ internal static class ParentProcessWatchdog
         var expectedStartTimeUnix = ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(
             Environment.GetEnvironmentVariable(KnownConfigNames.CliProcessStarted));
 
-        var stopCts = new CancellationTokenSource();
-        _ = MonitorAsync(parentPid, expectedStartTimeUnix, operationCts, stopCts.Token);
-        return new Stopper(stopCts);
-    }
-
-    private static async Task MonitorAsync(int parentPid, long? expectedStartTimeUnix, CancellationTokenSource operationCts, CancellationToken stopToken)
-    {
-        try
-        {
-            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
-            while (await timer.WaitForNextTickAsync(stopToken).ConfigureAwait(false))
+        return ParentProcessLivenessMonitor.Start(
+            parentPid,
+            expectedStartTimeUnix,
+            async stopToken =>
             {
-                if (ProcessStartTimeHelper.IsProcessRunning(parentPid, expectedStartTimeUnix))
-                {
-                    continue;
-                }
-
                 // Parent is gone: ask the in-flight operation to stop, then hard-exit if it doesn't.
                 if (!operationCts.IsCancellationRequested)
                 {
@@ -61,20 +49,6 @@ internal static class ParentProcessWatchdog
 
                 await Task.Delay(s_forceExitGracePeriod, stopToken).ConfigureAwait(false);
                 Environment.Exit(TerminatedExitCode);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Stopped normally (operation completed and the watchdog was disposed).
-        }
-    }
-
-    private sealed class Stopper(CancellationTokenSource stopCts) : IDisposable
-    {
-        public void Dispose()
-        {
-            stopCts.Cancel();
-            stopCts.Dispose();
-        }
+            });
     }
 }

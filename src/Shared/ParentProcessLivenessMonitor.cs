@@ -1,0 +1,95 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+/// <summary>
+/// Watches a parent process (by PID plus start time) and invokes a caller-supplied action once when that
+/// parent is no longer running. Shared by the CLI's launcher monitor and the <c>aspire-managed</c> parent
+/// watchdog so both get the same poll loop and teardown semantics.
+/// </summary>
+internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
+{
+    // The poll interval is intentionally coarse: this is a backstop for a parent that died abnormally, so
+    // a one-second granularity is plenty and keeps the wakeups cheap.
+    private static readonly TimeSpan s_pollInterval = TimeSpan.FromSeconds(1);
+
+    private readonly CancellationTokenSource _stopCts = new();
+    private readonly Task _monitorTask;
+    private int _disposed;
+
+    private ParentProcessLivenessMonitor(
+        int parentPid,
+        long? parentStartedUnixSeconds,
+        Func<CancellationToken, Task> onParentExited,
+        TimeProvider timeProvider)
+    {
+        _monitorTask = MonitorAsync(parentPid, parentStartedUnixSeconds, onParentExited, timeProvider, _stopCts.Token);
+    }
+
+    /// <summary>
+    /// Starts polling the parent identified by <paramref name="parentPid"/> (and, when supplied,
+    /// <paramref name="parentStartedUnixSeconds"/> to guard against PID reuse). When the parent is gone,
+    /// <paramref name="onParentExited"/> is invoked exactly once. The token passed to that callback is
+    /// cancelled when this monitor is disposed, so any grace delay inside the callback is unwound if the
+    /// caller disarms first.
+    /// </summary>
+    public static ParentProcessLivenessMonitor Start(
+        int parentPid,
+        long? parentStartedUnixSeconds,
+        Func<CancellationToken, Task> onParentExited,
+        TimeProvider? timeProvider = null)
+    {
+        return new ParentProcessLivenessMonitor(parentPid, parentStartedUnixSeconds, onParentExited, timeProvider ?? TimeProvider.System);
+    }
+
+    private static async Task MonitorAsync(
+        int parentPid,
+        long? parentStartedUnixSeconds,
+        Func<CancellationToken, Task> onParentExited,
+        TimeProvider timeProvider,
+        CancellationToken stopToken)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(s_pollInterval, timeProvider);
+            while (await timer.WaitForNextTickAsync(stopToken).ConfigureAwait(false))
+            {
+                if (ProcessStartTimeHelper.IsProcessRunning(parentPid, parentStartedUnixSeconds))
+                {
+                    continue;
+                }
+
+                // Pass stopToken through so a callback that waits (e.g. a force-exit grace period) is
+                // cancelled if the caller disposes the monitor while the callback is running.
+                await onParentExited(stopToken).ConfigureAwait(false);
+                return;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Disarmed (stopped/disposed) before the parent exited — the expected, common case.
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // Idempotent: callers may dispose on a happy path and again from an outer finally backstop.
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        _stopCts.Cancel();
+        try
+        {
+            await _monitorTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when stopping the monitor loop.
+        }
+        finally
+        {
+            _stopCts.Dispose();
+        }
+    }
+}

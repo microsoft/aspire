@@ -23,18 +23,11 @@ namespace Aspire.Cli.Processes;
 /// </remarks>
 internal sealed class LauncherLivenessMonitor : IAsyncDisposable
 {
-    private readonly CancellationTokenSource _stopCts = new();
-    private readonly Task _monitorTask;
-    private int _disposed;
+    private readonly ParentProcessLivenessMonitor _monitor;
 
-    private LauncherLivenessMonitor(
-        int launcherPid,
-        long? launcherStartedUnix,
-        CancellationTokenSource cancelOnLauncherExit,
-        TimeProvider timeProvider,
-        ILogger logger)
+    private LauncherLivenessMonitor(ParentProcessLivenessMonitor monitor)
     {
-        _monitorTask = MonitorAsync(launcherPid, launcherStartedUnix, cancelOnLauncherExit, timeProvider, logger, _stopCts.Token);
+        _monitor = monitor;
     }
 
     /// <summary>
@@ -54,27 +47,12 @@ internal sealed class LauncherLivenessMonitor : IAsyncDisposable
 
         var launcherStartedUnix = ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(configuration[KnownConfigNames.CliLauncherProcessStarted]);
         logger.LogDebug("Detached child: watching launcher process {LauncherPid} until the AppHost is ready.", launcherPid);
-        return new LauncherLivenessMonitor(launcherPid, launcherStartedUnix, cancelOnLauncherExit, timeProvider, logger);
-    }
 
-    private static async Task MonitorAsync(
-        int launcherPid,
-        long? launcherStartedUnix,
-        CancellationTokenSource cancelOnLauncherExit,
-        TimeProvider timeProvider,
-        ILogger logger,
-        CancellationToken stopToken)
-    {
-        try
-        {
-            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1), timeProvider);
-            while (await timer.WaitForNextTickAsync(stopToken).ConfigureAwait(false))
+        var monitor = ParentProcessLivenessMonitor.Start(
+            launcherPid,
+            launcherStartedUnix,
+            _ =>
             {
-                if (ProcessStartTimeHelper.IsProcessRunning(launcherPid, launcherStartedUnix))
-                {
-                    continue;
-                }
-
                 logger.LogWarning(
                     "Launcher process {LauncherPid} exited before the AppHost reached readiness. Shutting the detached AppHost down to avoid leaking it.",
                     launcherPid);
@@ -91,36 +69,12 @@ internal sealed class LauncherLivenessMonitor : IAsyncDisposable
                     // The run already completed and disposed its cancellation source; nothing to do.
                 }
 
-                return;
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Disarmed because the app reached readiness (the expected, common case).
-        }
+                return Task.CompletedTask;
+            },
+            timeProvider);
+
+        return new LauncherLivenessMonitor(monitor);
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        // Idempotent: the run command's happy path disposes once at readiness and the outer finally is a
-        // backstop, so guard against a second Cancel on an already-disposed source.
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-        {
-            return;
-        }
-
-        _stopCts.Cancel();
-        try
-        {
-            await _monitorTask.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected when stopping the monitor loop.
-        }
-        finally
-        {
-            _stopCts.Dispose();
-        }
-    }
+    public ValueTask DisposeAsync() => _monitor.DisposeAsync();
 }
