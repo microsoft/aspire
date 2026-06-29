@@ -208,7 +208,15 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         //    element is detected while a mere *consumer* of the property
         //    (Condition="'$(IsAspireHost)' == 'true'") is ignored. A loose substring match would instead
         //    over-promote every sibling that only reads the property.
-        if (DirectoryContainsAppHostMarker(projectFile.Directory))
+        //
+        //    MSBuild walks up the directory tree to import Directory.Build.props/.targets from the nearest
+        //    ancestor that has one (see
+        //    https://learn.microsoft.com/visualstudio/msbuild/customize-by-directory#search-scope), and that
+        //    ancestor commonly chains to further parents via $(DirectoryBuildPropsPath)-style imports. Walk
+        //    *all* ancestors here rather than stopping at the project's own directory: missing an ancestor
+        //    marker would falsely reject a legal AppHost before MSBuild ever runs, which is the exact failure
+        //    mode that broke `aspire run` against explicit/settings AppHost paths.
+        if (AncestorDirectoryContainsAppHostMarker(projectFile.Directory))
         {
             return true;
         }
@@ -231,24 +239,28 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
     }
 
-    private static bool DirectoryContainsAppHostMarker(DirectoryInfo? directory)
+    private static bool AncestorDirectoryContainsAppHostMarker(DirectoryInfo? directory)
     {
-        if (directory is null)
+        // Walk from the project's own directory up to the filesystem root. Stopping at the first
+        // Directory.Build.props/.targets we *find* (matching MSBuild's "nearest wins" rule exactly) would
+        // miss the common case where that nearest file does nothing more than chain to a shared parent that
+        // contains the actual marker. A false negative here silently rejects a real AppHost, so we err the
+        // other way and check every ancestor — finding any setter is treated as "plausibly an AppHost", and
+        // MSBuild evaluation remains the authoritative confirmation downstream.
+        for (var current = directory; current is not null; current = current.Parent)
         {
-            return false;
-        }
-
-        foreach (var fileName in new[] { DirectoryBuildPropsName, DirectoryBuildTargetsName })
-        {
-            var filePath = Path.Combine(directory.FullName, fileName);
-            if (!File.Exists(filePath))
+            foreach (var fileName in new[] { DirectoryBuildPropsName, DirectoryBuildTargetsName })
             {
-                continue;
-            }
+                var filePath = Path.Combine(current.FullName, fileName);
+                if (!File.Exists(filePath))
+                {
+                    continue;
+                }
 
-            if (TryLoadProjectRoot(filePath, out var root) && root is not null && ContainsAppHostMarker(root))
-            {
-                return true;
+                if (TryLoadProjectRoot(filePath, out var root) && root is not null && ContainsAppHostMarker(root))
+                {
+                    return true;
+                }
             }
         }
 
@@ -288,7 +300,22 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return true;
         }
 
-        // 3) Explicit <IsAspireHost>true</IsAspireHost> property element. The Aspire.AppHost.Sdk sets this
+        // 3) <Import> form of an SDK reference, e.g.:
+        //      <Import Project="Sdk.props" Sdk="Aspire.AppHost.Sdk" Version="9.0.0" />
+        //      <Import Project="Sdk.targets" Sdk="Aspire.AppHost.Sdk" />
+        //    This is functionally equivalent to the previous two forms — it lets a project import an SDK's
+        //    Sdk.props/Sdk.targets at a specific point in the file. Missing it means an AppHost using this
+        //    form is silently rejected by the cheap pre-check. See:
+        //    https://learn.microsoft.com/visualstudio/msbuild/how-to-use-project-sdk#import-an-sdk-into-your-project
+        var hasImportSdk = root.Descendants()
+            .Any(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal)
+                && string.Equals(e.Attribute("Sdk")?.Value, AspireAppHostSdkName, StringComparison.OrdinalIgnoreCase));
+        if (hasImportSdk)
+        {
+            return true;
+        }
+
+        // 4) Explicit <IsAspireHost>true</IsAspireHost> property element. The Aspire.AppHost.Sdk sets this
         //    during evaluation, but it can also appear literally in a project or build file. Matching on the
         //    element (rather than a substring) means a consumer condition such as
         //    Condition="'$(IsAspireHost)' == 'true'" is correctly not treated as a marker.

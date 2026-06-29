@@ -2058,9 +2058,109 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
     }
 
+    [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildPropsSetsIsAspireHost_ReturnsTrue()
+    {
+        // Real-world regression scenario: MSBuild walks up the directory tree to import
+        // Directory.Build.props from the *nearest* ancestor that has one (not just the project's
+        // own directory). A repo can park <IsAspireHost>true</IsAspireHost> in a parent
+        // Directory.Build.props and ship multiple AppHost csprojs underneath it. The cheap
+        // pre-check must not reject those AppHosts before MSBuild even gets a chance to evaluate
+        // them, or `aspire run` against a settings/explicit path will silently fail.
+        // See https://learn.microsoft.com/visualstudio/msbuild/customize-by-directory#search-scope
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "MyHost", "MyHost.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.props", """
+            <Project>
+              <PropertyGroup>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildTargetsImportsAppHostSdk_ReturnsTrue()
+    {
+        // Same MSBuild walk-up applies to Directory.Build.targets: a parent file importing
+        // Aspire.AppHost.Sdk must promote the descendant project to an AppHost candidate.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "MyHost", "MyHost.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.targets", """
+            <Project>
+              <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_ImportElementWithAppHostSdkAttribute_ReturnsTrue()
+    {
+        // The "Import an SDK into your project" form is another supported way to bring in an
+        // MSBuild SDK and is functionally equivalent to <Sdk Name="..."/>. Documented at:
+        // https://learn.microsoft.com/visualstudio/msbuild/how-to-use-project-sdk#import-an-sdk-into-your-project
+        // A project using this form is a real AppHost and must survive the cheap pre-check.
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Import Project="Sdk.props" Sdk="Aspire.AppHost.Sdk" Version="9.5.0" />
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+              <Import Project="Sdk.targets" Sdk="Aspire.AppHost.Sdk" Version="9.5.0" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_ImportElementWithUnrelatedSdkAttribute_ReturnsFalse()
+    {
+        // Imports that pull in unrelated SDKs (e.g. AOT publishing extensions) are not AppHost
+        // markers. Match on the SDK identifier rather than the mere presence of an <Import Sdk=...>
+        // attribute so non-AppHost projects with custom imports are still cheaply rejected.
+        var projectFile = WriteIsLikelyAppHostProject("Library.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Import Project="Sdk.props" Sdk="Some.Other.Sdk" Version="1.0.0" />
+            </Project>
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildFileOnlyConsumesIsAspireHost_ReturnsFalse()
+    {
+        // Mirrors the co-located negative case: an ancestor file that merely reads $(IsAspireHost)
+        // in a Condition is not a setter and must not over-promote every descendant project.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "Library", "Library.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.targets", """
+            <Project>
+              <PropertyGroup Condition="'$(IsAspireHost)' == 'true'">
+                <SomeSetting>value</SomeSetting>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
     private FileInfo WriteIsLikelyAppHostProject(string fileName, string content)
     {
         var path = Path.Combine(_workspace.WorkspaceRoot.FullName, fileName);
+        var directory = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
         File.WriteAllText(path, content);
         return new FileInfo(path);
     }
