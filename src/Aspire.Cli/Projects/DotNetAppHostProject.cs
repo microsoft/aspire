@@ -201,6 +201,20 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return true;
         }
 
+        // 1b) The project file itself can also pull in a marker via a dynamic walk-up Import — for
+        //     example
+        //       <Import Project="$([MSBuild]::GetPathOfFileAbove('Aspire.Common.props', ...))" />
+        //     where the resolved file sets <IsAspireHost>true</IsAspireHost> or imports
+        //     Aspire.AppHost.Sdk. The same fragility that prevents us from following these statically
+        //     in ancestor Directory.Build.* files applies here, so apply the same narrow fallback:
+        //     dynamic walk-up imports → candidate, ordinary static or unrelated-SDK imports → still
+        //     filtered out by the cheap pre-check. Skipping this check leaves a regression hole where
+        //     a normal-named project gets silently rejected before MSBuild evaluation runs.
+        if (ContainsDynamicWalkUpImport(root))
+        {
+            return true;
+        }
+
         // 2) A co-located Directory.Build.props/.targets can promote an otherwise ordinary-looking project to
         //    an Aspire AppHost during MSBuild evaluation (for example by setting
         //    <IsAspireHost>true</IsAspireHost> or importing the Aspire.AppHost.Sdk). Tests in this repo do

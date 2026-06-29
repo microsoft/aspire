@@ -2135,6 +2135,47 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public void IsLikelyAppHost_ProjectFileContainsDynamicWalkUpImport_ReturnsTrue()
+    {
+        // Project-file analog of AncestorDirectoryBuildPropsContainsImportButNoMarker: a normal-named
+        // .csproj whose only AppHost signal is a dynamic walk-up Import — for example
+        //   <Import Project="$([MSBuild]::GetPathOfFileAbove('Aspire.Common.props', ...))" />
+        // pointing at a shared file that sets <IsAspireHost>true</IsAspireHost> or imports
+        // Aspire.AppHost.Sdk. The cheap pre-check cannot statically resolve where the import lands,
+        // so we must treat the project as a candidate and let MSBuild's authoritative evaluation
+        // decide rather than silently rejecting it before ValidateAppHostAsync ever consults MSBuild.
+        var projectFile = WriteIsLikelyAppHostProject("MyHost.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Import Project="$([MSBuild]::GetPathOfFileAbove('Aspire.Common.props', '$(MSBuildThisFileDirectory)../'))" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_ProjectFileContainsUnrelatedStaticImports_ReturnsFalse()
+    {
+        // Symmetric negative for project-file imports: a normal-named .csproj that imports Arcade,
+        // a common analyzer polyfill, and a relative Versions.props (all statically-named) has no
+        // plausible path to declaring an Aspire marker and must NOT be promoted. Without this guard
+        // the project-level dynamic-import fallback would over-promote ordinary library projects in
+        // this repo, whose csprojs frequently look exactly like this.
+        var projectFile = WriteIsLikelyAppHostProject("Library.csproj", """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Import Project="Sdk.props" Sdk="Microsoft.DotNet.Arcade.Sdk" />
+              <Import Project="NullablePolyfill.targets" />
+              <Import Project="../Versions.props" />
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
     public void IsLikelyAppHost_AncestorDirectoryBuildFileOnlyConsumesIsAspireHost_ReturnsFalse()
     {
         // Mirrors the co-located negative case: an ancestor file that merely reads $(IsAspireHost)
