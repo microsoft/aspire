@@ -24,12 +24,12 @@ class FakeTelemetryReporter {
     public events: RecordedEvent[] = [];
     public telemetryLevel: TelemetryLevel = 'all';
 
-    sendTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
-        this.events.push({ name, properties, measurements, isDangerous: false });
+    sendTelemetryEvent(): void {
+        throw new Error('Telemetry must use sendDangerousTelemetryEvent so VS Code does not add the extension-id prefix.');
     }
 
-    sendTelemetryErrorEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
-        this.events.push({ name, properties, measurements, isError: true, isDangerous: false });
+    sendTelemetryErrorEvent(): void {
+        throw new Error('Telemetry must use sendDangerousTelemetryErrorEvent so VS Code does not add the extension-id prefix.');
     }
 
     sendDangerousTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
@@ -274,4 +274,3 @@ suite('telemetry utilities', () => {
         assert.strictEqual(isCommandCancellation(undefined), false);
     });
 });
-
