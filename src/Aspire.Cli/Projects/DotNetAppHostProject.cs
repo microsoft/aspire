@@ -273,15 +273,22 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 }
 
                 // Real-world Directory.Build.* files in this repo (tests/Aspire.Hosting.TestUtilities,
-                // playground/...) chain to shared parents using
+                // playground/...) chain to shared parents via tree-walking MSBuild helpers like
                 //   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', ...))" />
-                // and an AppHost marker can live in the file behind that import. Following imports
-                // statically here is fragile (variable-based paths, conditional Imports, SDK resolution),
-                // so when an ancestor build file has *any* <Import> we cannot recognize as a non-AppHost
-                // marker, treat the project as a candidate and let MSBuild evaluation decide. This is the
-                // intentional "conservatively fall back when relevant parent build files exist" stance: an
-                // extra MSBuild evaluation is acceptable; a silently rejected AppHost is not.
-                if (ContainsImportElement(root))
+                // and an AppHost marker can live in the file behind that import (for example a
+                // RepoTesting.props that sets <IsAspireHost>true</IsAspireHost> or imports
+                // Aspire.AppHost.Sdk). Following these statically is fragile — they use property
+                // expressions and walk-up resolution that only MSBuild can compute — so when an
+                // ancestor build file uses GetPathOfFileAbove / GetDirectoryNameOfFileAbove, treat the
+                // project as a candidate and let MSBuild evaluation decide.
+                //
+                // Ordinary static imports (e.g. <Import Project="NullablePolyfill.targets" />) and
+                // non-Aspire SDK imports (e.g. Sdk="Microsoft.DotNet.Arcade.Sdk") are NOT treated as
+                // uncertain. Doing so would over-promote essentially every project in a typical .NET
+                // repo, because root-level Directory.Build.props/.targets routinely import Arcade,
+                // common analyzer polyfills, and similar shared infrastructure that does not declare
+                // Aspire markers.
+                if (ContainsDynamicWalkUpImport(root))
                 {
                     return true;
                 }
@@ -302,12 +309,27 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         return false;
     }
 
-    private static bool ContainsImportElement(XElement root)
+    private static bool ContainsDynamicWalkUpImport(XElement root)
     {
-        // Only consider <Import> children of the <Project> root. Match on Name.LocalName so this works
-        // for both SDK-style projects and legacy projects declaring the MSBuild XML namespace.
+        // Match <Import Project="..."> values that use MSBuild's tree-walking path helpers:
+        //   $([MSBuild]::GetPathOfFileAbove('<filename>', '<starting-dir>'))
+        //   $([MSBuild]::GetDirectoryNameOfFileAbove('<starting-dir>', '<filename>'))
+        // These resolve at evaluation time by walking parent directories, and they routinely point at
+        // files (RepoTesting.props, custom shared targets) that we do not enumerate by name in the
+        // ancestor walk. A statically-named Import like <Import Project="NullablePolyfill.targets" />
+        // does NOT match — it points at a fixed file the project author already named, and treating
+        // those as uncertain would over-promote every project in a repo whose root Directory.Build.*
+        // imports Arcade or common polyfills. The Sdk attribute is intentionally not consulted here:
+        // <Import Sdk="Aspire.AppHost.Sdk" .../> is already recognized as a positive marker by
+        // ContainsAppHostMarker, and any other <Import Sdk="..."> brings in an unrelated SDK whose
+        // contents will not declare Aspire markers.
+        // Docs: https://learn.microsoft.com/visualstudio/msbuild/property-functions#msbuild-property-functions
         return root.Descendants()
-            .Any(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal));
+            .Where(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal))
+            .Select(e => e.Attribute("Project")?.Value)
+            .Any(project => project is not null
+                && (project.Contains("GetPathOfFileAbove", StringComparison.Ordinal)
+                    || project.Contains("GetDirectoryNameOfFileAbove", StringComparison.Ordinal)));
     }
 
     private static bool ContainsAppHostMarker(XElement root)

@@ -2154,6 +2154,34 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildPropsContainsUnrelatedStaticImports_ReturnsFalse()
+    {
+        // Real shape lifted from this repo's own root Directory.Build.props/.targets: ordinary static
+        // imports that pull in Arcade, common analyzer polyfills, or similar shared infrastructure but
+        // never set IsAspireHost or import Aspire.AppHost.Sdk. Without this narrowing, the conservative
+        // fallback would treat *every* descendant project as "possibly an AppHost" in a typical .NET
+        // repo, which defeats the purpose of the cheap pre-check introduced in #18436. Only genuinely
+        // unresolved/dynamic imports (e.g. <Import Project="$([MSBuild]::GetPathOfFileAbove(...))" />)
+        // should trigger the fallback; ordinary unrelated imports must not.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "Library", "Library.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.props", """
+            <Project>
+              <Import Project="Sdk.props" Sdk="Microsoft.DotNet.Arcade.Sdk" />
+              <Import Project="NullablePolyfill.targets" />
+              <Import Project="../Versions.props" />
+              <PropertyGroup>
+                <LangVersion>preview</LangVersion>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
     public void IsLikelyAppHost_AncestorDirectoryBuildPropsContainsImportButNoMarker_ReturnsTrue()
     {
         // Real-world shape from playground/Directory.Build.targets and
@@ -2168,6 +2196,24 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         WriteIsLikelyAppHostProject("Directory.Build.props", """
             <Project>
               <Import Project="$([MSBuild]::GetPathOfFileAbove('Shared.props', '$(MSBuildThisFileDirectory)../'))" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildPropsContainsGetDirectoryNameOfFileAboveImport_ReturnsTrue()
+    {
+        // GetDirectoryNameOfFileAbove is the directory-returning sibling of GetPathOfFileAbove and is
+        // equally tree-walking. Treat imports that use it the same way: we cannot resolve the target
+        // file statically, so let MSBuild be authoritative.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "MyHost", "MyHost.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.props", """
+            <Project>
+              <Import Project="$([MSBuild]::GetDirectoryNameOfFileAbove('$(MSBuildThisFileDirectory)..', 'Shared.props'))/Shared.props" />
             </Project>
             """);
 
