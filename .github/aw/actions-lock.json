@@ -15,6 +15,11 @@
       "version": "v6.0.2",
       "sha": "de0fac2e4500dabe0009e67214ff5f5447ce83dd"
     },
+    "actions/checkout@v6.0.3": {
+      "repo": "actions/checkout",
+      "version": "v6.0.3",
+      "sha": "df4cb1c069e1874edd31b4311f1884172cec0e10"
+    },
     "actions/create-github-app-token@v3.1.1": {
       "repo": "actions/create-github-app-token",
       "version": "v3.1.1",
@@ -55,10 +60,10 @@
       "version": "v7.0.1",
       "sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
     },
-    "github/gh-aw-actions/setup@v0.77.5": {
+    "github/gh-aw-actions/setup@v0.79.8": {
       "repo": "github/gh-aw-actions/setup",
-      "version": "v0.77.5",
-      "sha": "3ea13c02d765410340d533515cb31a7eef2baaf0"
+      "version": "v0.79.8",
+      "sha": "c0338fef4749d08c21f8f975fb0e37efa17dda47"
     }
   },
   "containers": {
