@@ -17,13 +17,14 @@ description: |
   FORCE_RERUN_ALL in the other workflow to avoid duplicate reruns.
 
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types:
-      - completed
-    branches:
-      - main
-      - 'release/**'
+  # TODO: Enable automatic trigger after testing is complete
+  # workflow_run:
+  #   workflows: ["CI"]
+  #   types:
+  #     - completed
+  #   branches:
+  #     - main
+  #     - 'release/**'
   workflow_dispatch:
     inputs:
       run_id:
@@ -196,28 +197,21 @@ jobs:
               unzip -q -o .ci-failure-data/test-results.zip -d .ci-failure-data/test-results 2>/dev/null || true
 
               # Parse TRX files for failed tests (TRX is XML with UnitTestResult elements)
-              {
-                echo "["
-                FIRST_ENTRY=true
-                find .ci-failure-data/test-results -name "*.trx" -type f | while read -r TRX_FILE; do
-                  # Extract failed test results: testName, outcome=Failed, and the error message
-                  # TRX format: <UnitTestResult testName="..." outcome="Failed"><Output><ErrorInfo><Message>...</Message></ErrorInfo></Output></UnitTestResult>
-                  grep -oP '<UnitTestResult[^>]*testName="\K[^"]+(?="[^>]*outcome="Failed")' "${TRX_FILE}" 2>/dev/null | while read -r TEST_NAME; do
-                    if [ "${FIRST_ENTRY}" = "true" ]; then
-                      FIRST_ENTRY=false
-                    else
-                      echo ","
-                    fi
-                    # Extract a brief error message for this test (first 200 chars)
-                    ERROR_MSG=$(grep -A5 "testName=\"${TEST_NAME}\".*outcome=\"Failed\"" "${TRX_FILE}" 2>/dev/null \
-                      | grep -oP '<Message>\K[^<]+' 2>/dev/null | head -1 | cut -c1-200 || echo "")
-                    printf '{"test":"%s","error":"%s"}' \
-                      "$(echo "${TEST_NAME}" | sed 's/"/\\"/g')" \
-                      "$(echo "${ERROR_MSG}" | sed 's/"/\\"/g' | tr '\n' ' ')"
-                  done
-                done
-                echo "]"
-              } > .ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > .ci-failure-data/test-failures.json
+              # Produce one JSON object per line using jq for proper escaping, then
+              # combine into an array. This avoids pipe-subshell variable propagation
+              # issues and handles all JSON special characters correctly.
+              # TRX format: <UnitTestResult testName="..." outcome="Failed"><Output><ErrorInfo><Message>...</Message></ErrorInfo></Output></UnitTestResult>
+              > .ci-failure-data/test-failures.jsonl
+              while IFS= read -r TRX_FILE; do
+                while IFS= read -r TEST_NAME; do
+                  ERROR_MSG=$(grep -A5 "testName=\"${TEST_NAME}\".*outcome=\"Failed\"" "${TRX_FILE}" 2>/dev/null \
+                    | grep -oP '<Message>\K[^<]+' 2>/dev/null | head -1 | cut -c1-200 || echo "")
+                  jq -n --arg test "${TEST_NAME}" --arg error "${ERROR_MSG}" \
+                    '{test: $test, error: $error}' >> .ci-failure-data/test-failures.jsonl
+                done < <(grep -oP '<UnitTestResult[^>]*testName="\K[^"]+(?="[^>]*outcome="Failed")' "${TRX_FILE}" 2>/dev/null || true)
+              done < <(find .ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null)
+              jq -s '.' .ci-failure-data/test-failures.jsonl > .ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > .ci-failure-data/test-failures.json
+              rm -f .ci-failure-data/test-failures.jsonl
 
               # Clean up the extracted files to save space in artifact
               rm -rf .ci-failure-data/test-results
