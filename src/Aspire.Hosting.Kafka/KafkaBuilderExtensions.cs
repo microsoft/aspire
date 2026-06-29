@@ -158,9 +158,11 @@ public static class KafkaBuilderExtensions
     /// This version of the package defaults to the <inheritdoc cref="KafkaContainerImageTags.KafkaSchemaRegistryTag"/> tag of the <inheritdoc cref="KafkaContainerImageTags.KafkaSchemaRegistryImage"/> container image.
     /// </remarks>
     /// <param name="builder">The Kafka server resource builder.</param>
-    /// <param name="configureContainer">Configuration callback for KafkaUI container resource.</param>
+    /// <param name="configureContainer">Configuration callback for Kafka Schema Registry container resource.</param>
     /// <param name="containerName">The name of the container (Optional).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KafkaSchemaRegistryResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<KafkaSchemaRegistryResource> WithKafkaSchemaRegistry(this IResourceBuilder<KafkaServerResource> builder, Action<IResourceBuilder<KafkaSchemaRegistryResource>>? configureContainer = null, string? containerName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -175,7 +177,8 @@ public static class KafkaBuilderExtensions
             {
                 context.EnvironmentVariables["SCHEMA_REGISTRY_HOST_NAME"] = "localhost";
                 context.EnvironmentVariables["SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS"] = builder.Resource.InternalEndpoint.Property(EndpointProperty.HostAndPort);
-                context.EnvironmentVariables["SCHEMA_REGISTRY_LISTENERS"] = $"http://0.0.0.0:{KafkaSchemaRegistryPort}"; })
+                context.EnvironmentVariables["SCHEMA_REGISTRY_LISTENERS"] = $"http://0.0.0.0:{KafkaSchemaRegistryPort}";
+            })
             .WithHttpHealthCheck("/subjects", 200, "primary")
             .WaitFor(builder)
             .ExcludeFromManifest();
@@ -208,6 +211,7 @@ public static class KafkaBuilderExtensions
     /// <param name="builder">The resource builder for Kafka Schema Registry.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
     /// <returns>The resource builder for Kafka Schema Registry.</returns>
+    [AspireExport("withKafkaSchemaRegistryHostPort", MethodName = "withHostPort")]
     public static IResourceBuilder<KafkaSchemaRegistryResource> WithHostPort(this IResourceBuilder<KafkaSchemaRegistryResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
