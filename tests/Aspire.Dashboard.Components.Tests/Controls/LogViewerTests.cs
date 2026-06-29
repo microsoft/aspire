@@ -89,6 +89,126 @@ public class LogViewerTests : DashboardTestContext
         });
     }
 
+    [Fact]
+    public void LogViewer_FilterText_ShowsOnlyMatchingEntries()
+    {
+        SetupLogViewerServices();
+
+        var logEntries = CreateLogEntries("apple log", "banana log", "cherry log");
+
+        var cut = RenderComponent<LogViewer>(builder =>
+        {
+            builder.Add(p => p.LogEntries, logEntries);
+            builder.Add(p => p.FilterText, "banana");
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var contents = cut.FindAll(".log-content").Select(e => e.TextContent.Trim()).ToList();
+            var content = Assert.Single(contents);
+            Assert.Contains("banana log", content);
+        });
+    }
+
+    [Fact]
+    public void LogViewer_FilterText_IsCaseInsensitive()
+    {
+        SetupLogViewerServices();
+
+        var logEntries = CreateLogEntries("Error connecting", "Information ready");
+
+        var cut = RenderComponent<LogViewer>(builder =>
+        {
+            builder.Add(p => p.LogEntries, logEntries);
+            builder.Add(p => p.FilterText, "ERROR");
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var contents = cut.FindAll(".log-content").Select(e => e.TextContent.Trim()).ToList();
+            var content = Assert.Single(contents);
+            Assert.Contains("Error connecting", content);
+        });
+    }
+
+    [Fact]
+    public void LogViewer_FilterText_NoMatch_ShowsNoMatchMessage()
+    {
+        SetupLogViewerServices();
+
+        var logEntries = CreateLogEntries("apple log", "banana log");
+
+        var cut = RenderComponent<LogViewer>(builder =>
+        {
+            builder.Add(p => p.LogEntries, logEntries);
+            builder.Add(p => p.FilterText, "no-such-text");
+        });
+
+        var loc = Services.GetRequiredService<IStringLocalizer<Resources.ConsoleLogs>>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll(".log-content"));
+            var message = Assert.Single(cut.FindAll(".console-empty-message"));
+            Assert.Contains(loc[nameof(Resources.ConsoleLogs.ConsoleLogsNoLogsMatchFilter)].Value, message.TextContent);
+        });
+    }
+
+    [Fact]
+    public void LogViewer_FilterText_ExcludesPauseEntries()
+    {
+        SetupLogViewerServices();
+
+        var pauseStart = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var pauseEnd = pauseStart.AddSeconds(1);
+
+        var logEntries = new LogEntries(maximumEntryCount: int.MaxValue) { BaseLineNumber = 1 };
+
+        // A completed pause that captured filtered lines renders as a pause marker (EndTime set,
+        // FilteredCount > 0). With a filter active it must be hidden because it isn't log content.
+        var pauseEntry = LogEntry.CreatePause("resource", pauseStart, pauseEnd);
+        pauseEntry.Pause!.FilteredCount = 2;
+        logEntries.InsertSorted(pauseEntry);
+
+        logEntries.InsertSorted(LogEntry.Create(
+            timestamp: pauseStart.AddSeconds(2),
+            logMessage: "matching banana log",
+            rawLogContent: "matching banana log",
+            isErrorMessage: false,
+            resourcePrefix: null));
+
+        var cut = RenderComponent<LogViewer>(builder =>
+        {
+            builder.Add(p => p.LogEntries, logEntries);
+            builder.Add(p => p.FilterText, "banana");
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindAll(".log-pause"));
+            var content = Assert.Single(cut.FindAll(".log-content"));
+            Assert.Contains("matching banana log", content.TextContent);
+        });
+    }
+
+    private static LogEntries CreateLogEntries(params string[] messages)
+    {
+        var logEntries = new LogEntries(maximumEntryCount: int.MaxValue) { BaseLineNumber = 1 };
+        var timestamp = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        foreach (var message in messages)
+        {
+            logEntries.InsertSorted(LogEntry.Create(
+                timestamp: timestamp,
+                logMessage: message,
+                rawLogContent: message,
+                isErrorMessage: false,
+                resourcePrefix: null));
+            timestamp = timestamp.AddSeconds(1);
+        }
+
+        return logEntries;
+    }
+
     private static string GetBackgroundAccentVariableName(string style)
     {
         var background = GetCssPropertyValue(style, "background");

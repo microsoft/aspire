@@ -23,6 +23,10 @@ public sealed partial class LogViewer
     private LogEntries? _logEntries;
     private bool _logsChanged;
 
+    private IList<LogEntry>? _visibleEntriesCache;
+    private string? _appliedFilterText;
+    private bool _filterChanged;
+
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
 
@@ -50,6 +54,9 @@ public sealed partial class LogViewer
     [Parameter]
     public bool ShowNoLogsMessage { get; set; }
 
+    [Parameter]
+    public string? FilterText { get; set; }
+
     private Virtualize<LogEntry>? VirtualizeRef
     {
         get => field;
@@ -72,6 +79,10 @@ public sealed partial class LogViewer
             return;
         }
 
+        // Entries may have been appended or evicted (circular buffer) since the last render, so drop
+        // the cached filtered view before Virtualize re-queries through GetItems.
+        _visibleEntriesCache = null;
+
         await VirtualizeRef.RefreshDataAsync();
         StateHasChanged();
     }
@@ -84,6 +95,19 @@ public sealed partial class LogViewer
 
             _logsChanged = true;
             _logEntries = LogEntries;
+            _visibleEntriesCache = null;
+        }
+
+        if (!string.Equals(_appliedFilterText, FilterText, StringComparison.Ordinal))
+        {
+            _appliedFilterText = FilterText;
+            _visibleEntriesCache = null;
+
+            // Virtualize caches the items it last fetched and only re-queries GetItems on an explicit
+            // RefreshDataAsync. The filter is applied inside GetItems, so the refresh must run after
+            // FilterText has been assigned here (in OnAfterRenderAsync) - refreshing earlier, e.g. from
+            // the parent's bind handler, would re-query with the previous filter value.
+            _filterChanged = true;
         }
 
         base.OnParametersSet();
@@ -91,14 +115,40 @@ public sealed partial class LogViewer
 
     private ValueTask<ItemsProviderResult<LogEntry>> GetItems(ItemsProviderRequest r)
     {
-        var entries = _logEntries?.GetEntries();
-        if (entries == null)
-        {
-            return ValueTask.FromResult(new ItemsProviderResult<LogEntry>(Enumerable.Empty<LogEntry>(), 0));
-        }
-
+        var entries = GetVisibleEntries();
         return ValueTask.FromResult(new ItemsProviderResult<LogEntry>(entries.Skip(r.StartIndex).Take(r.Count), entries.Count));
     }
+
+    private IList<LogEntry> GetVisibleEntries()
+    {
+        if (_visibleEntriesCache is { } cached)
+        {
+            return cached;
+        }
+
+        var entries = _logEntries?.GetEntries();
+        if (entries is null)
+        {
+            return _visibleEntriesCache = Array.Empty<LogEntry>();
+        }
+
+        var filterText = FilterText;
+        if (string.IsNullOrWhiteSpace(filterText))
+        {
+            return _visibleEntriesCache = entries;
+        }
+
+        return _visibleEntriesCache = entries.Where(e => MatchesFilter(e, filterText)).ToList();
+    }
+
+    // Filter on RawContent rather than Content. Content contains embedded HTML links and other
+    // markup added during ANSI conversion, so matching against it would match the markup rather
+    // than the visible text. RawContent is the plain text the user sees (it also includes the
+    // timestamp). Pause markers aren't log content, so they're hidden while a filter is active.
+    private static bool MatchesFilter(LogEntry entry, string filterText)
+        => entry.Type != LogEntryType.Pause
+            && entry.RawContent is { } raw
+            && raw.Contains(filterText, StringComparison.OrdinalIgnoreCase);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -106,6 +156,11 @@ public sealed partial class LogViewer
         {
             await JS.InvokeVoidAsync("resetContinuousScrollPosition");
             _logsChanged = false;
+        }
+        if (_filterChanged)
+        {
+            _filterChanged = false;
+            await RefreshDataAsync();
         }
         if (firstRender)
         {

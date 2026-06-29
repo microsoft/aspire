@@ -183,6 +183,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private bool _isTimestampUtc;
     private bool _noWrapLogs;
     private bool _showNoLogsMessage;
+    private string _logFilter = string.Empty;
     public ConsoleLogsViewModel PageViewModel { get; set; } = null!;
     private IDisposable? _consoleLogsFiltersChangedSubscription;
 
