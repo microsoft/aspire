@@ -123,7 +123,15 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   }
 
   async stopDebugging(): Promise<void> {
-    await vscode.debug.stopDebugging(this._session);
+    // Global/E2E stop requests target the synthetic Aspire session. Stop the real
+    // AppHost session explicitly first so we do not rely on VS Code cascading
+    // termination from the parent session before the AppHost registry refresh runs.
+    try {
+      await this._appHostDebugSession?.stopSession();
+    }
+    finally {
+      await vscode.debug.stopDebugging(this._session);
+    }
   }
 
   handleMessage(message: any): void {
@@ -571,10 +579,12 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
           const disposalFunction = () => {
             extensionLogOutputChannel.info(`Stopping debug session: ${session.name} (run id: ${session.configuration.runId})`);
-            vscode.debug.stopDebugging(session);
+            const stopDebugging = vscode.debug.stopDebugging(session);
 
             // Run any cleanup registered by resource-type extensions (e.g. func host for Azure Functions)
             cleanupRun(debugConfig.runId);
+
+            return stopDebugging;
           };
 
           const vsCodeDebugSession: AspireResourceDebugSession = {
