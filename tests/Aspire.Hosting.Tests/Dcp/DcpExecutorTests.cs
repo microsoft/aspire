@@ -1460,7 +1460,7 @@ public class DcpExecutorTests
     }
 
     [Fact]
-    public async Task ResourceLogging_TerminalStateFlushesSnapshotBeforeNotification()
+    public async Task ResourceLogging_TerminalStateFollowsLogsBeforeNotification()
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
         {
@@ -1470,10 +1470,13 @@ public class DcpExecutorTests
         builder.AddContainer("database", "image");
 
         const string terminalLogMessage = "crash before terminal notification";
+        bool? terminalStdErrFollow = null;
         var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
         {
-            if (follow == false && logStreamType == Logs.StreamTypeStdErr)
+            if (obj is Container { Status.State: ContainerState.Exited } &&
+                logStreamType == Logs.StreamTypeStdErr)
             {
+                terminalStdErrFollow = follow;
                 return new MemoryStream(Encoding.UTF8.GetBytes("2024-08-19T06:10:33.473275911Z " + terminalLogMessage + Environment.NewLine));
             }
 
@@ -1523,6 +1526,7 @@ public class DcpExecutorTests
         kubernetesService.PushResourceModified(container);
 
         Assert.Equal(1, await terminalLogCountAtNotification.Task.DefaultTimeout());
+        Assert.True(terminalStdErrFollow == true);
 
         lock (logLinesLock)
         {
@@ -1541,18 +1545,24 @@ public class DcpExecutorTests
         builder.AddContainer("database", "image");
 
         var followStdErrPipeChannel = Channel.CreateUnbounded<Pipe>();
+        var followStdErrStreamCount = 0;
         var kubernetesService = new TestKubernetesService(startStreamWithFollow: (obj, logStreamType, follow) =>
         {
             if (logStreamType == Logs.StreamTypeStdErr)
             {
                 if (follow == true)
                 {
-                    var pipe = new Pipe();
-                    followStdErrPipeChannel.Writer.TryWrite(pipe);
-                    return pipe.Reader.AsStream();
+                    if (Interlocked.Increment(ref followStdErrStreamCount) == 1)
+                    {
+                        var pipe = new Pipe();
+                        followStdErrPipeChannel.Writer.TryWrite(pipe);
+                        return pipe.Reader.AsStream();
+                    }
+
+                    return new MemoryStream(Encoding.UTF8.GetBytes("same" + Environment.NewLine));
                 }
 
-                return new MemoryStream(Encoding.UTF8.GetBytes("same" + Environment.NewLine));
+                return new MemoryStream();
             }
 
             return new MemoryStream();

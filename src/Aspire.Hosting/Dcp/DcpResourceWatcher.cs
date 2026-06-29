@@ -284,7 +284,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                         KnownResourceStates.TerminalStates.Contains(status.State) &&
                         _loggerService.HasActiveSubscribers(resource.Metadata.Name))
                     {
-                        await FlushCurrentLogsAsync(resource, _shutdownToken).ConfigureAwait(false);
+                        await FlushCurrentLogsAsync(resource, status, _shutdownToken).ConfigureAwait(false);
                     }
 
                     await _executorEvents.PublishAsync(new OnResourceChangedContext(_shutdownToken, resourceType, appModelResource, resource.Metadata.Name, status, s => snapshotFactory(resource, s))).ConfigureAwait(false);
@@ -325,16 +325,23 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
     }
 
-    private async Task FlushCurrentLogsAsync<T>(T resource, CancellationToken cancellationToken)
+    private async Task FlushCurrentLogsAsync<T>(T resource, ResourceStatus status, CancellationToken cancellationToken)
         where T : CustomResource, IKubernetesStaticMetadata
     {
         try
         {
             // Fast-failing resources can publish their terminal state before the follow stream has
-            // drained stderr/stdout. Flush a snapshot first so tests waiting on terminal states see
-            // the logs from the same startup attempt without adding sleeps.
+            // drained stderr/stdout. Open a follow stream before publishing the terminal state
+            // because DCP only completes follow streams after all logs for the resource are known
+            // to have been delivered.
+            //
+            // FailedToStart is different: the process never starts, so there may be no completing
+            // process log stream to follow. DCP emits the system failure logs before the FailedToStart
+            // state is observed, so use a current snapshot there to avoid blocking terminal state
+            // publication indefinitely.
+            var follow = status.State != KnownResourceStates.FailedToStart;
             var logEntries = new List<LogEntry>();
-            var logSource = new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: false);
+            var logSource = new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: follow);
             await foreach (var batch in logSource.WithCancellation(cancellationToken).ConfigureAwait(false))
             {
                 logEntries.AddRange(CreateLogEntries(batch));
