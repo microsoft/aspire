@@ -18,11 +18,10 @@ public class DotNetRuntimeSelectorTests
     {
         var logger = NullLogger<DotNetRuntimeSelector>.Instance;
         var configuration = new ConfigurationBuilder().Build();
-        var sdkInstaller = new TestSdkInstaller();
         var interactionService = new TestInteractionService();
         var console = new TestAnsiConsole();
 
-        var selector = new DotNetRuntimeSelector(logger, configuration, sdkInstaller, interactionService, console);
+        var selector = new DotNetRuntimeSelector(logger, configuration, interactionService, console);
 
         Assert.Equal(DotNetRuntimeMode.System, selector.Mode);
         Assert.Equal("dotnet", selector.DotNetExecutablePath);
@@ -32,12 +31,17 @@ public class DotNetRuntimeSelectorTests
     public async Task InitializeAsync_WithAvailableSystemSdk_ReturnsTrue()
     {
         var logger = NullLogger<DotNetRuntimeSelector>.Instance;
-        var configuration = new ConfigurationBuilder().Build();
-        var sdkInstaller = new TestSdkInstaller { CheckResult = true };
+        // Use a version that's very likely available in any test environment
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new[]
+            {
+                new KeyValuePair<string, string?>("overrideMinimumSdkVersion", "1.0.0")
+            })
+            .Build();
         var interactionService = new TestInteractionService();
         var console = new TestAnsiConsole();
 
-        var selector = new DotNetRuntimeSelector(logger, configuration, sdkInstaller, interactionService, console);
+        var selector = new DotNetRuntimeSelector(logger, configuration, interactionService, console);
 
         var result = await selector.InitializeAsync();
 
@@ -47,20 +51,21 @@ public class DotNetRuntimeSelectorTests
     }
 
     [Fact]
-    public async Task InitializeAsync_WithDisablePrivateSdkEnvVar_StopsAtSystemCheck()
+    public async Task InitializeAsync_WithDisablePrivateSdkAndMissingSdk_ReturnsFalse()
     {
         var logger = NullLogger<DotNetRuntimeSelector>.Instance;
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new[]
             {
-                new KeyValuePair<string, string?>("ASPIRE_DISABLE_PRIVATE_SDK", "1")
+                new KeyValuePair<string, string?>("ASPIRE_DISABLE_PRIVATE_SDK", "1"),
+                // Use an unreasonably high version that won't be on any system
+                new KeyValuePair<string, string?>("overrideMinimumSdkVersion", "99.0.0")
             })
             .Build();
-        var sdkInstaller = new TestSdkInstaller { CheckResult = false };
         var interactionService = new TestInteractionService();
         var console = new TestAnsiConsole();
 
-        var selector = new DotNetRuntimeSelector(logger, configuration, sdkInstaller, interactionService, console);
+        var selector = new DotNetRuntimeSelector(logger, configuration, interactionService, console);
 
         var result = await selector.InitializeAsync();
 
@@ -71,58 +76,56 @@ public class DotNetRuntimeSelectorTests
     public async Task InitializeAsync_WithVersionOverride_UsesOverrideVersion()
     {
         var logger = NullLogger<DotNetRuntimeSelector>.Instance;
+        // Use a version that should be available in the test environment
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new[]
             {
-                new KeyValuePair<string, string?>("overrideMinimumSdkVersion", "8.0.100")
+                new KeyValuePair<string, string?>("overrideMinimumSdkVersion", "1.0.0")
             })
             .Build();
-        
-        var sdkInstaller = new TestSdkInstaller { CheckResult = true };
         var interactionService = new TestInteractionService();
         var console = new TestAnsiConsole();
 
-        var selector = new DotNetRuntimeSelector(logger, configuration, sdkInstaller, interactionService, console);
+        var selector = new DotNetRuntimeSelector(logger, configuration, interactionService, console);
 
         var result = await selector.InitializeAsync();
 
+        // Should succeed with an old version override since we have dotnet installed
         Assert.True(result);
-        Assert.Equal("8.0.100", sdkInstaller.LastCheckedVersion);
     }
 
     [Fact]
-    public async Task InitializeAsync_ConfigurationTakesPrecedenceOverEnvironment()
+    public async Task InitializeAsync_ConfigurationVersionTakesPrecedenceOverEnvironment()
     {
         var logger = NullLogger<DotNetRuntimeSelector>.Instance;
+        // Config says use a very low version (should pass)
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new[]
             {
-                new KeyValuePair<string, string?>("ASPIRE_DOTNET_SDK_VERSION", "9.0.100"),
-                new KeyValuePair<string, string?>("ASPIRE_AUTO_INSTALL", "1")
+                new KeyValuePair<string, string?>("ASPIRE_DOTNET_SDK_VERSION", "1.0.0")
             })
             .Build();
-        var sdkInstaller = new TestSdkInstaller { CheckResult = true };
         var interactionService = new TestInteractionService();
         var console = new TestAnsiConsole();
 
-        // Set different values in environment variables
-        Environment.SetEnvironmentVariable("ASPIRE_DOTNET_SDK_VERSION", "8.0.100");
-        Environment.SetEnvironmentVariable("ASPIRE_AUTO_INSTALL", "0");
+        // Environment says use a very high version that would fail
+        Environment.SetEnvironmentVariable("ASPIRE_DOTNET_SDK_VERSION", "99.0.0");
+        Environment.SetEnvironmentVariable("ASPIRE_DISABLE_PRIVATE_SDK", "1");
 
         try
         {
-            var selector = new DotNetRuntimeSelector(logger, configuration, sdkInstaller, interactionService, console);
+            var selector = new DotNetRuntimeSelector(logger, configuration, interactionService, console);
 
             var result = await selector.InitializeAsync();
 
+            // Config value (1.0.0) should take precedence over env var (99.0.0)
+            // So initialization should succeed since dotnet 1.0.0+ is definitely available
             Assert.True(result);
-            // Verify the configuration value was used, not the environment variable
-            Assert.Equal("9.0.100", sdkInstaller.LastCheckedVersion);
         }
         finally
         {
             Environment.SetEnvironmentVariable("ASPIRE_DOTNET_SDK_VERSION", null);
-            Environment.SetEnvironmentVariable("ASPIRE_AUTO_INSTALL", null);
+            Environment.SetEnvironmentVariable("ASPIRE_DISABLE_PRIVATE_SDK", null);
         }
     }
 
@@ -131,37 +134,14 @@ public class DotNetRuntimeSelectorTests
     {
         var logger = NullLogger<DotNetRuntimeSelector>.Instance;
         var configuration = new ConfigurationBuilder().Build();
-        var sdkInstaller = new TestSdkInstaller();
         var interactionService = new TestInteractionService();
         var console = new TestAnsiConsole();
 
-        var selector = new DotNetRuntimeSelector(logger, configuration, sdkInstaller, interactionService, console);
+        var selector = new DotNetRuntimeSelector(logger, configuration, interactionService, console);
 
         var envVars = selector.GetEnvironmentVariables();
 
         Assert.Empty(envVars);
-    }
-
-    private sealed class TestSdkInstaller : IDotNetSdkInstaller
-    {
-        public bool CheckResult { get; set; } = true;
-        public string? LastCheckedVersion { get; private set; }
-
-        public Task<bool> CheckAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(CheckResult);
-        }
-
-        public Task<bool> CheckAsync(string minimumVersion, CancellationToken cancellationToken = default)
-        {
-            LastCheckedVersion = minimumVersion;
-            return Task.FromResult(CheckResult);
-        }
-
-        public Task InstallAsync(CancellationToken cancellationToken = default)
-        {
-            throw new NotImplementedException();
-        }
     }
 
     private sealed class TestInteractionService : IInteractionService

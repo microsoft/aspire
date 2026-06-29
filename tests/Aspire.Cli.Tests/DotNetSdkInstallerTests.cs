@@ -12,7 +12,7 @@ public class DotNetSdkInstallerTests
     [Fact]
     public async Task CheckAsync_WhenDotNetIsAvailable_ReturnsTrue()
     {
-        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration());
+        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration(), new SystemDotNetRuntimeSelector());
 
         // This test assumes the test environment has .NET SDK installed
         var result = await installer.CheckAsync();
@@ -23,7 +23,7 @@ public class DotNetSdkInstallerTests
     [Fact]
     public async Task CheckAsync_WithMinimumVersion_WhenDotNetIsAvailable_ReturnsTrue()
     {
-        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration());
+        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration(), new SystemDotNetRuntimeSelector());
 
         // This test assumes the test environment has .NET SDK installed with a version >= 8.0.0
         var result = await installer.CheckAsync("8.0.0");
@@ -34,7 +34,7 @@ public class DotNetSdkInstallerTests
     [Fact]
     public async Task CheckAsync_WithActualMinimumVersion_BehavesCorrectly()
     {
-        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration());
+        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration(), new SystemDotNetRuntimeSelector());
 
         // Use the actual minimum version constant and check the behavior
         // Since this test environment has 8.0.117, it should return false for 9.0.302
@@ -48,7 +48,7 @@ public class DotNetSdkInstallerTests
     [Fact]
     public async Task CheckAsync_WithHighMinimumVersion_ReturnsFalse()
     {
-        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration());
+        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration(), new SystemDotNetRuntimeSelector());
 
         // Use an unreasonably high version that should not exist
         var result = await installer.CheckAsync("99.0.0");
@@ -59,7 +59,7 @@ public class DotNetSdkInstallerTests
     [Fact]
     public async Task CheckAsync_WithInvalidMinimumVersion_ReturnsFalse()
     {
-        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration());
+        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration(), new SystemDotNetRuntimeSelector());
 
         // Use an invalid version string
         var result = await installer.CheckAsync("invalid.version");
@@ -70,7 +70,7 @@ public class DotNetSdkInstallerTests
     [Fact]
     public async Task InstallAsync_ThrowsNotImplementedException()
     {
-        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration());
+        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration(), new SystemDotNetRuntimeSelector());
 
         await Assert.ThrowsAsync<NotImplementedException>(() => installer.InstallAsync());
     }
@@ -78,7 +78,7 @@ public class DotNetSdkInstallerTests
     [Fact]
     public async Task CheckReturnsTrueIfFeatureDisabled()
     {
-        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(false), CreateEmptyConfiguration());
+        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(false), CreateEmptyConfiguration(), new SystemDotNetRuntimeSelector());
 
         // Use an invalid version string
         var result = await installer.CheckAsync("invalid.version");
@@ -89,7 +89,7 @@ public class DotNetSdkInstallerTests
     [Fact]
     public async Task CheckAsync_UsesArchitectureSpecificCommand()
     {
-        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration());
+        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration(), new SystemDotNetRuntimeSelector());
 
         // This test verifies that the architecture-specific command is used
         // Since the implementation adds --arch flag, it should still work correctly
@@ -103,7 +103,7 @@ public class DotNetSdkInstallerTests
     public async Task CheckAsync_UsesOverrideMinimumSdkVersion_WhenConfigured()
     {
         var configuration = CreateConfigurationWithOverride("8.0.0");
-        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), configuration);
+        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), configuration, new SystemDotNetRuntimeSelector());
 
         // The installer should use the override version instead of the constant
         var result = await installer.CheckAsync();
@@ -115,7 +115,7 @@ public class DotNetSdkInstallerTests
     [Fact]
     public async Task CheckAsync_UsesDefaultMinimumSdkVersion_WhenNotConfigured()
     {
-        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration());
+        var installer = new DotNetSdkInstaller(new MinimumSdkCheckFeature(), CreateEmptyConfiguration(), new SystemDotNetRuntimeSelector());
 
         // Call the parameterless method that should use the default constant
         var result = await installer.CheckAsync();
@@ -137,6 +137,17 @@ public class DotNetSdkInstallerTests
                 new KeyValuePair<string, string?>("overrideMinimumSdkVersion", overrideVersion)
             })
             .Build();
+    }
+
+    /// <summary>
+    /// A simple <see cref="IDotNetRuntimeSelector"/> that always uses the system "dotnet" executable.
+    /// </summary>
+    private sealed class SystemDotNetRuntimeSelector : IDotNetRuntimeSelector
+    {
+        public string DotNetExecutablePath => "dotnet";
+        public DotNetRuntimeMode Mode => DotNetRuntimeMode.System;
+        public Task<bool> InitializeAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
+        public IDictionary<string, string> GetEnvironmentVariables() => new Dictionary<string, string>();
     }
 }
 

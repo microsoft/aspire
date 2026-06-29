@@ -9,6 +9,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.DotNet;
@@ -19,7 +20,6 @@ namespace Aspire.Cli.DotNet;
 internal sealed class DotNetRuntimeSelector(
     ILogger<DotNetRuntimeSelector> logger,
     IConfiguration configuration,
-    IDotNetSdkInstaller sdkInstaller,
     IInteractionService interactionService,
     IAnsiConsole console) : IDotNetRuntimeSelector
 {
@@ -55,7 +55,7 @@ internal sealed class DotNetRuntimeSelector(
         var preferredMode = DetermineModeFromSettings(settings, disablePrivateSdk);
 
         // Check if system SDK meets requirements
-        var systemSdkAvailable = await sdkInstaller.CheckAsync(requiredVersion, cancellationToken);
+        var systemSdkAvailable = await CheckSystemSdkAsync(requiredVersion, cancellationToken);
 
         switch (preferredMode)
         {
@@ -114,6 +114,71 @@ internal sealed class DotNetRuntimeSelector(
     public IDictionary<string, string> GetEnvironmentVariables()
     {
         return new Dictionary<string, string>(_environmentVariables);
+    }
+
+    private static async Task<bool> CheckSystemSdkAsync(string minimumVersion, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!SemVersion.TryParse(minimumVersion, SemVersionStyles.Strict, out var minVersion))
+            {
+                return false;
+            }
+
+            var currentArch = RuntimeInformation.ProcessArchitecture switch
+            {
+                Architecture.X64 => "x64",
+                Architecture.X86 => "x86",
+                Architecture.Arm64 => "arm64",
+                Architecture.Arm => "arm",
+                _ => "x64"
+            };
+
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "dotnet",
+                    Arguments = $"--list-sdks --arch {currentArch}",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                }
+            };
+
+            process.Start();
+            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
+            await process.WaitForExitAsync(cancellationToken);
+
+            if (process.ExitCode != 0)
+            {
+                return false;
+            }
+
+            var lines = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            foreach (var line in lines)
+            {
+                var spaceIndex = line.IndexOf(' ');
+                if (spaceIndex > 0)
+                {
+                    var versionString = line[..spaceIndex];
+                    if (SemVersion.TryParse(versionString, SemVersionStyles.Strict, out var sdkVersion))
+                    {
+                        if (SemVersion.ComparePrecedence(sdkVersion, minVersion) >= 0)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task<AspireSettings?> LoadSettingsAsync()
