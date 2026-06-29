@@ -126,6 +126,13 @@ export class AspireCliParseError extends Error {
 
 export type ViewMode = 'workspace' | 'global';
 
+// Sentinel describe-stream key for single-file mode: an AppHost file is open in workspace view but
+// there is no workspace folder to anchor `aspire ls` discovery, so no AppHost path can be resolved.
+// The stream runs path-less (no `--apphost`) under this key and projects onto the workspace pane.
+// It never collides with a real key: real keys are `.csproj`/`.cs` files with a real directory, but
+// this normalizes to dirname '.', so `isMatchingAppHostPath` only ever matches it against itself.
+const SINGLE_FILE_DESCRIBE_KEY = '<single-file>';
+
 interface DescribeStream {
     appHostPath: string;
     process: ChildProcessWithoutNullStreams | undefined;
@@ -228,6 +235,10 @@ export class AppHostDataRepository {
     private _workspaceAppHostCandidatePaths: string[] = [];
     private _workspaceAppHostDescription: string | undefined;
     private _workspaceAppHostDiscoveryComplete = false;
+    // False until discovery runs against a workspace root folder. It stays false in single-file mode
+    // (an AppHost file open with no workspace folder), which has no root to anchor `aspire ls` and so
+    // needs the path-less describe watch instead of a resolved-path stream.
+    private _workspaceUsesWorkspaceRoot = false;
 
     // ── Describe-target coordinator input state ──
     // `ps` (running) and `ls` (idle/configured) feed these inputs; `_updateWorkspaceSelection`
@@ -676,6 +687,7 @@ export class AppHostDataRepository {
         const discoveryVersion = ++this._workspaceAppHostDiscoveryVersion;
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {
+            this._workspaceUsesWorkspaceRoot = false;
             this._workspaceAppHostDiscoveryComplete = true;
             this._clearWorkspaceAppHostDiscovery();
             this._clearWorkspaceAppHostData();
@@ -685,6 +697,7 @@ export class AppHostDataRepository {
             return;
         }
         const rootFolder = workspaceFolders[0];
+        this._workspaceUsesWorkspaceRoot = true;
 
         extensionLogOutputChannel.info('Fetching workspace apphost via shared AppHost discovery');
 
@@ -983,6 +996,12 @@ export class AppHostDataRepository {
             return new Set(this._appHosts.map(a => a.appHostPath));
         }
 
+        // Single-file mode has no resolvable AppHost path, so follow a single path-less describe
+        // stream under the sentinel key (restored from the pre-unification path-less watch).
+        if (this._isSingleFileDescribeMode()) {
+            return new Set([SINGLE_FILE_DESCRIBE_KEY]);
+        }
+
         const desired = new Set(this._runningWorkspaceAppHosts.map(a => a.appHostPath));
         const target = this._resolveWorkspaceDescribeTarget();
         if (target !== undefined && !this._isRunningWorkspaceHost(target)) {
@@ -1008,21 +1027,38 @@ export class AppHostDataRepository {
         }
     }
 
+    // The describe stream that drives the workspace pane (resources, loading, error). Normally the
+    // selected workspace AppHost; in single-file mode there is no resolved path, so the path-less
+    // sentinel stream drives the pane instead.
+    private _projectedDescribeKey(): string | undefined {
+        if (this._viewMode !== 'workspace') {
+            return undefined;
+        }
+        if (this._workspaceAppHostPath !== undefined) {
+            return this._workspaceAppHostPath;
+        }
+        return this._isSingleFileDescribeMode() ? SINGLE_FILE_DESCRIBE_KEY : undefined;
+    }
+
+    // Single-file mode: workspace view is active with data flowing but no workspace folder anchors
+    // discovery, so the describe watch runs path-less under the sentinel key.
+    private _isSingleFileDescribeMode(): boolean {
+        return this._dataActive
+            && this._viewMode === 'workspace'
+            && !this._workspaceUsesWorkspaceRoot;
+    }
+
     // True when `path` is the AppHost the workspace pane is currently focused on. Evaluated lazily at
     // line/exit time (not captured at start) so a selection change mid-stream is honored — the current
     // selection decides whether a stream drives the workspace UX or attaches onto `_appHosts`.
     private _isProjectedWorkspaceStream(path: string): boolean {
-        return this._viewMode === 'workspace'
-            && this._workspaceAppHostPath !== undefined
-            && isMatchingAppHostPath(path, this._workspaceAppHostPath);
+        const key = this._projectedDescribeKey();
+        return key !== undefined && isMatchingAppHostPath(path, key);
     }
 
     private _selectedDescribeStream(): DescribeStream | undefined {
-        if (this._viewMode !== 'workspace' || this._workspaceAppHostPath === undefined) {
-            return undefined;
-        }
-
-        return this._findDescribeStream(this._workspaceAppHostPath);
+        const key = this._projectedDescribeKey();
+        return key !== undefined ? this._findDescribeStream(key) : undefined;
     }
 
     private _workspaceResourceList(): readonly ResourceJson[] {
@@ -1097,8 +1133,13 @@ export class AppHostDataRepository {
             if (includeDisabledCommands) {
                 args.push('--include-disabled-commands');
             }
-            args.push('--apphost', appHostPath);
-            extensionLogOutputChannel.info(`Starting aspire describe --follow for AppHost ${appHostPath}`);
+            // The single-file watch has no AppHost path to target, so it omits `--apphost` and lets the
+            // CLI resolve the AppHost from the current directory, exactly as the old path-less watch did.
+            const isSingleFile = appHostPath === SINGLE_FILE_DESCRIBE_KEY;
+            if (!isSingleFile) {
+                args.push('--apphost', appHostPath);
+            }
+            extensionLogOutputChannel.info(`Starting aspire describe --follow for AppHost ${isSingleFile ? '(single file)' : appHostPath}`);
 
             const childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                 noExtensionVariables: true,
