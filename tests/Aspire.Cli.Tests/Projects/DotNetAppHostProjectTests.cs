@@ -2520,6 +2520,27 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildPropsUnquotedDirectoryPackagesChaining_ReturnsTrue()
+    {
+        // Locks in the exact real-world shape from this repo's tests/Directory.Packages.props:2:
+        //   <Import Project="$([MSBuild]::GetPathOfFileAbove(Directory.Packages.props, $(MSBuildThisFileDirectory)..))" />
+        // The unquoted file name is Directory.Packages.props, which is NOT one of the conventional
+        // Directory.Build.* files the ancestor walk enumerates. Even though the file looks
+        // "infrastructure-like", the prefilter cannot read it, so an AppHost marker could legally
+        // live there — fall back to MSBuild evaluation.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "Library", "Library.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject(Path.Combine("src", "Directory.Build.props"), """
+            <Project>
+              <Import Project="$([MSBuild]::GetPathOfFileAbove(Directory.Packages.props, $(MSBuildThisFileDirectory)..))" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
     public void IsLikelyAppHost_AncestorImportAppendsNonConventionalFileAfterGetDirectoryNameOfFileAbove_ReturnsTrue()
     {
         // GetDirectoryNameOfFileAbove returns a *directory* (the directory containing the named
