@@ -2153,6 +2153,68 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
     }
 
+    [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildPropsContainsImportButNoMarker_ReturnsTrue()
+    {
+        // Real-world shape from playground/Directory.Build.targets and
+        // tests/Aspire.Hosting.TestUtilities/Directory.Build.props: the file chains to a shared parent
+        // with <Import Project="$([MSBuild]::GetPathOfFileAbove(...))" />. We can't follow that import
+        // statically (variable-based path, conditional Imports, SDK resolution), so an AppHost marker
+        // could legally live in the imported file. Conservatively treat the project as a candidate and
+        // let MSBuild be authoritative rather than silently rejecting a real AppHost.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "MyHost", "MyHost.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.props", """
+            <Project>
+              <Import Project="$([MSBuild]::GetPathOfFileAbove('Shared.props', '$(MSBuildThisFileDirectory)../'))" />
+            </Project>
+            """);
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildPropsUnreadable_ReturnsTrue()
+    {
+        // A relevant parent build file that exists but is malformed XML is still consumed by MSBuild
+        // during evaluation, where it could declare the marker. Falling through to "no marker, return
+        // false" would silently reject the project; conservatively keep it as a candidate so MSBuild's
+        // evaluation surfaces the authoritative result.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "MyHost", "MyHost.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.props", "<Project");
+
+        Assert.True(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
+    public void IsLikelyAppHost_AncestorWalkStopsAtGitBoundary_ReturnsFalse()
+    {
+        // The ancestor walk terminates at a .git directory or file (matching AppHostInfoDiskCache's
+        // walk-up bounds, Caching/AppHostInfoDiskCache.cs), so a Directory.Build.props above the .git
+        // boundary must not promote a descendant project. Without this bound, an unrelated file in the
+        // user's home or organization-wide profile could over-promote every project. The marker file
+        // is placed in the workspace root (one level above the .git boundary in this layout) and the
+        // .git marker sits next to the project's nearest parent.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("repo", "src", "MyHost", "MyHost.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject("Directory.Build.props", """
+            <Project>
+              <PropertyGroup>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+        // Create a .git directory at the simulated repo root so the walk stops there before reaching
+        // the marker file at the workspace root above it.
+        Directory.CreateDirectory(Path.Combine(_workspace.WorkspaceRoot.FullName, "repo", ".git"));
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
     private FileInfo WriteIsLikelyAppHostProject(string fileName, string content)
     {
         var path = Path.Combine(_workspace.WorkspaceRoot.FullName, fileName);

@@ -241,12 +241,13 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
     private static bool AncestorDirectoryContainsAppHostMarker(DirectoryInfo? directory)
     {
-        // Walk from the project's own directory up to the filesystem root. Stopping at the first
+        // Walk from the project's own directory up to the filesystem root (or a .git boundary, matching
+        // AppHostInfoDiskCache's walk-up — see Caching/AppHostInfoDiskCache.cs). Stopping at the first
         // Directory.Build.props/.targets we *find* (matching MSBuild's "nearest wins" rule exactly) would
-        // miss the common case where that nearest file does nothing more than chain to a shared parent that
+        // miss the common case where the nearest file does nothing more than chain to a shared parent that
         // contains the actual marker. A false negative here silently rejects a real AppHost, so we err the
-        // other way and check every ancestor — finding any setter is treated as "plausibly an AppHost", and
-        // MSBuild evaluation remains the authoritative confirmation downstream.
+        // other way and check every ancestor up to the .git boundary — finding any setter is treated as
+        // "plausibly an AppHost", and MSBuild evaluation remains the authoritative confirmation downstream.
         for (var current = directory; current is not null; current = current.Parent)
         {
             foreach (var fileName in new[] { DirectoryBuildPropsName, DirectoryBuildTargetsName })
@@ -257,14 +258,56 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                     continue;
                 }
 
-                if (TryLoadProjectRoot(filePath, out var root) && root is not null && ContainsAppHostMarker(root))
+                if (!TryLoadProjectRoot(filePath, out var root) || root is null)
+                {
+                    // A relevant parent build file exists but we can't read/parse it. MSBuild would still
+                    // try to evaluate it, and it could legally set <IsAspireHost>true</IsAspireHost> or
+                    // import Aspire.AppHost.Sdk. Treat the project as a candidate so the authoritative
+                    // MSBuild evaluation gets to weigh in rather than silently rejecting it.
+                    return true;
+                }
+
+                if (ContainsAppHostMarker(root))
+                {
+                    return true;
+                }
+
+                // Real-world Directory.Build.* files in this repo (tests/Aspire.Hosting.TestUtilities,
+                // playground/...) chain to shared parents using
+                //   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', ...))" />
+                // and an AppHost marker can live in the file behind that import. Following imports
+                // statically here is fragile (variable-based paths, conditional Imports, SDK resolution),
+                // so when an ancestor build file has *any* <Import> we cannot recognize as a non-AppHost
+                // marker, treat the project as a candidate and let MSBuild evaluation decide. This is the
+                // intentional "conservatively fall back when relevant parent build files exist" stance: an
+                // extra MSBuild evaluation is acceptable; a silently rejected AppHost is not.
+                if (ContainsImportElement(root))
                 {
                     return true;
                 }
             }
+
+            // Stop at a .git boundary to avoid walking the entire user profile (matches the bounds
+            // AppHostInfoDiskCache uses for cache-fingerprint walk-ups). In a regular checkout `.git`
+            // is a directory; in a worktree, submodule, or certain tool-managed setups it is a regular
+            // file that points at the real git dir. Check both so the walk terminates in those layouts.
+            // https://git-scm.com/docs/git-worktree#_details
+            var gitMarker = Path.Combine(current.FullName, ".git");
+            if (Directory.Exists(gitMarker) || File.Exists(gitMarker))
+            {
+                break;
+            }
         }
 
         return false;
+    }
+
+    private static bool ContainsImportElement(XElement root)
+    {
+        // Only consider <Import> children of the <Project> root. Match on Name.LocalName so this works
+        // for both SDK-style projects and legacy projects declaring the MSBuild XML namespace.
+        return root.Descendants()
+            .Any(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal));
     }
 
     private static bool ContainsAppHostMarker(XElement root)
