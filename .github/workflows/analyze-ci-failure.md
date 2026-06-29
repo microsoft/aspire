@@ -51,12 +51,11 @@ jobs:
       checks: read
       pull-requests: read
     outputs:
-      has-work: ${{ steps.collect.outputs.has_work }}
-      run_id: ${{ steps.collect.outputs.run_id }}
-      run_attempt: ${{ steps.collect.outputs.run_attempt }}
-      run_url: ${{ steps.collect.outputs.run_url }}
-      pr_numbers: ${{ steps.collect.outputs.pr_numbers }}
-      use_cache: ${{ steps.collect.outputs.use_cache }}
+      has-work: ${{ steps.resolve.outputs.has_work == 'true' && (steps.cache.outputs.cache-hit == 'true' || steps.collect.outputs.has_work != 'false') }}
+      run_id: ${{ steps.resolve.outputs.run_id }}
+      run_attempt: ${{ steps.resolve.outputs.run_attempt }}
+      run_url: ${{ steps.resolve.outputs.run_url }}
+      pr_numbers: ${{ steps.resolve.outputs.pr_numbers }}
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -65,8 +64,8 @@ jobs:
         with:
           sparse-checkout: eng/test-retry-patterns.json
           sparse-checkout-cone-mode: false
-      - name: Collect CI failure data
-        id: collect
+      - name: Resolve run metadata
+        id: resolve
         env:
           REPO: ${{ github.repository }}
           MANUAL_RUN_ID: ${{ inputs.run_id }}
@@ -116,15 +115,26 @@ jobs:
             exit 0
           fi
 
-          # On retry attempts (run_attempt > 1), skip expensive data collection.
-          # The agent will use the cached classification from the first attempt.
-          if [ "${RUN_ATTEMPT}" -gt 1 ]; then
-            echo "Run attempt ${RUN_ATTEMPT} > 1. Skipping log collection; agent will use cached analysis."
-            echo "use_cache=true" >> "$GITHUB_OUTPUT"
-            echo "has_work=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "use_cache=false" >> "$GITHUB_OUTPUT"
+          echo "has_work=true" >> "$GITHUB_OUTPUT"
+
+      - name: Restore cached failure data
+        if: steps.resolve.outputs.has_work == 'true'
+        id: cache
+        uses: actions/cache/restore@v5.0.5
+        with:
+          path: .ci-failure-data/
+          key: ci-failure-data-${{ steps.resolve.outputs.run_id }}
+
+      - name: Collect CI failure data
+        id: collect
+        if: steps.resolve.outputs.has_work == 'true' && steps.cache.outputs.cache-hit != 'true'
+        env:
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ steps.resolve.outputs.run_id }}
+          RUN_ATTEMPT: ${{ steps.resolve.outputs.run_attempt }}
+          PR_NUMBERS: ${{ steps.resolve.outputs.pr_numbers }}
+        run: |
+          set -euo pipefail
 
           # Fetch all jobs for this run attempt
           gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}/jobs" \
@@ -222,12 +232,12 @@ jobs:
           echo "Data collection complete."
 
       - name: Create analysis summary
-        if: steps.collect.outputs.has_work == 'true' && steps.collect.outputs.use_cache != 'true'
+        if: steps.resolve.outputs.has_work == 'true' && steps.cache.outputs.cache-hit != 'true'
         env:
-          RUN_ID: ${{ steps.collect.outputs.run_id }}
-          RUN_ATTEMPT: ${{ steps.collect.outputs.run_attempt }}
-          RUN_URL: ${{ steps.collect.outputs.run_url }}
-          PR_NUMBERS: ${{ steps.collect.outputs.pr_numbers }}
+          RUN_ID: ${{ steps.resolve.outputs.run_id }}
+          RUN_ATTEMPT: ${{ steps.resolve.outputs.run_attempt }}
+          RUN_URL: ${{ steps.resolve.outputs.run_url }}
+          PR_NUMBERS: ${{ steps.resolve.outputs.pr_numbers }}
         run: |
           set -euo pipefail
 
@@ -317,37 +327,15 @@ jobs:
 
           echo "Analysis summary written to .ci-failure-data/analysis-summary.md"
 
-      - name: Write cache-hit summary for retry attempts
-        if: steps.collect.outputs.has_work == 'true' && steps.collect.outputs.use_cache == 'true'
-        env:
-          RUN_ID: ${{ steps.collect.outputs.run_id }}
-          RUN_ATTEMPT: ${{ steps.collect.outputs.run_attempt }}
-          RUN_URL: ${{ steps.collect.outputs.run_url }}
-          PR_NUMBERS: ${{ steps.collect.outputs.pr_numbers }}
-        run: |
-          set -euo pipefail
-
-          mkdir -p .ci-failure-data
-          {
-            echo "# CI Failure — Retry Attempt"
-            echo ""
-            echo "## Run Information"
-            echo "- **Run ID**: ${RUN_ID}"
-            echo "- **Run Attempt**: ${RUN_ATTEMPT}"
-            echo "- **Run URL**: ${RUN_URL}"
-            echo "- **Associated PRs**: ${PR_NUMBERS}"
-            echo ""
-            echo "## Cache Mode"
-            echo ""
-            echo "This is run attempt ${RUN_ATTEMPT} (not the first attempt)."
-            echo "Use the **cache-memory** tool to read the cached analysis from key \`ci-failure-analysis-${RUN_ID}\`."
-            echo "Apply the cached classification without re-analyzing the logs."
-          } > .ci-failure-data/analysis-summary.md
-
-          echo "Cache-hit summary written."
+      - name: Save failure data to cache
+        if: steps.resolve.outputs.has_work == 'true' && steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5.0.5
+        with:
+          path: .ci-failure-data/
+          key: ci-failure-data-${{ steps.resolve.outputs.run_id }}
 
       - uses: actions/upload-artifact@v4
-        if: steps.collect.outputs.has_work == 'true'
+        if: steps.resolve.outputs.has_work == 'true'
         with:
           name: ci-failure-data
           path: .ci-failure-data/
