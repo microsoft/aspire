@@ -143,7 +143,6 @@ interface DescribeStream {
     restartDelay: number;
     version: number;
     receivedData: boolean;
-    startPending: boolean;
     // Set when a projected stream parks (exited with no data): false = parked while idle, true =
     // parked while running, undefined = never parked. Reconcile restarts an idle-parked stream once
     // its host starts.
@@ -1108,7 +1107,6 @@ export class AppHostDataRepository {
             restartDelay: 5000,
             version: 0,
             receivedData: false,
-            startPending: true,
             parkedWhileRunning: undefined,
         };
         this._describeStreams.set(appHostPath, stream);
@@ -1191,10 +1189,6 @@ export class AppHostDataRepository {
                     this._updateLoadingContext();
                     this._setDescribeError(errorFetchingAppHosts(String(error)));
                 }
-            }
-        }).finally(() => {
-            if (this._describeStreams.get(appHostPath) === stream && startVersion === stream.version) {
-                stream.startPending = false;
             }
         });
     }
@@ -1389,7 +1383,6 @@ export class AppHostDataRepository {
         }
         this._describeStreams.delete(appHostPath);
         stream.version++;
-        stream.startPending = false;
         if (stream.restartTimer) {
             clearTimeout(stream.restartTimer);
             stream.restartTimer = undefined;
