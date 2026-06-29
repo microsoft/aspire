@@ -746,8 +746,13 @@ public class ResourceLoggerService : IDisposable
                 Dictionary<LogEntryKey, int>? existingLogCounts = null;
                 if (skipExisting)
                 {
-                    // Terminal-state snapshots and the normal follow stream can overlap. Use
-                    // occurrence counts instead of a set so repeated identical log lines are
+                    // This path is intentionally reserved for one-shot replay sources, such as
+                    // terminal-state log snapshots, that can overlap with entries already observed
+                    // from another source. It rebuilds counts from the replay target, so steady-state
+                    // follow streams should avoid skipExisting and deduplicate only against the small
+                    // overlap window tracked by DcpResourceWatcher.
+                    //
+                    // Use occurrence counts instead of a set so repeated identical log lines are
                     // preserved while only overlapping copies from the later source are skipped.
                     var existingEntries = HasSubscribers ? _backlog.GetEntries() : _inMemoryEntries;
                     existingLogCounts = [];

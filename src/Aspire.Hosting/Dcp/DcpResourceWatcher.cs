@@ -283,10 +283,16 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
                     var status = GetResourceStatus(resource);
                     AddDcpResourceObservedEvent(resource, appModelResource, resourceKind, status);
 
-                    // Publishing the terminal state unblocks WaitForResourceAsync. For fast-failing
-                    // resources, DCP can report Exited/FailedToStart before the follow log stream
-                    // has delivered stderr/stdout. Flush only when a subscriber is active so normal
-                    // dashboard-less runs do not pay for an extra snapshot read.
+                    // DCP resource watches and DCP log streams are independent. For a fast-failing
+                    // resource the terminal resource event can arrive before the existing follow log
+                    // stream has delivered the final stderr/stdout batches. Publishing that terminal
+                    // state unblocks WaitForResourceAsync, and tests often inspect forwarded ILogger
+                    // output immediately after the wait completes. Flush here to create a best-effort
+                    // happens-before edge between terminal notification and synchronous log subscribers.
+                    //
+                    // Only do this when a subscriber is active. Without subscribers there is no caller
+                    // depending on the ordering, and GetAllAsync can still query DCP's external log
+                    // store later without this extra read on every terminal transition.
                     if (HasLogsAvailable(resource) &&
                         status.State is not null &&
                         KnownResourceStates.TerminalStates.Contains(status.State) &&
@@ -337,6 +343,10 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         where T : CustomResource, IKubernetesStaticMetadata
     {
         var logEntries = new List<LogEntry>();
+        // The resource watcher serializes all resource-change handling through one semaphore in
+        // Start(). A follow stream gives the strongest DCP guarantee for terminal logs, but it is
+        // still an external stream: if DCP stalls or the resource disappears mid-stream, waiting
+        // forever would block unrelated Container/Executable/Service/Endpoint notifications.
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutCts.CancelAfter(_terminalLogFlushTimeout);
 
@@ -345,7 +355,8 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             // Fast-failing resources can publish their terminal state before the follow stream has
             // drained stderr/stdout. Open a follow stream before publishing the terminal state
             // because DCP only completes follow streams after all logs for the resource are known
-            // to have been delivered.
+            // to have been delivered. A non-follow stream is only a point-in-time snapshot and can
+            // race with DCP's own cleanup/log-drain work.
             //
             // FailedToStart is different: the process never starts, so there may be no completing
             // process log stream to follow. DCP emits the system failure logs before the FailedToStart
@@ -354,8 +365,8 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             var follow = status.State != KnownResourceStates.FailedToStart;
             var logSource = new ResourceLogSource<T>(_logger, _kubernetesService, resource, follow: follow);
 
-            // This runs under the single resource-watch semaphore. Bound the best-effort flush so
-            // a stalled DCP follow stream cannot prevent unrelated resources from publishing state.
+            // Treat the flush as best-effort: logs collected before the timeout are still forwarded
+            // below, then the terminal notification is allowed to proceed.
             await foreach (var batch in logSource.WithCancellation(timeoutCts.Token).ConfigureAwait(false))
             {
                 logEntries.AddRange(CreateLogEntries(batch));
@@ -558,6 +569,10 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             return;
         }
 
+        // The terminal flush reads from the same external DCP log store as the normal follow stream.
+        // The next follow batch can therefore replay entries that were just flushed. Keep occurrence
+        // counts for the flushed entries only; using counts rather than a set preserves legitimate
+        // repeated lines while skipping only the overlapping copies.
         var counts = new Dictionary<LogEntryKey, int>();
         DateTime? latestTimestamp = null;
         var remainingCount = 0;
@@ -589,6 +604,9 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         List<LogEntry>? addedEntries = null;
         foreach (var logEntry in logEntries)
         {
+            // Consume at most one pending occurrence per matching entry. If a flushed snapshot
+            // contained the same line twice, the follow stream must replay it twice before both
+            // copies are treated as overlap.
             var key = LogEntryKey.Create(logEntry);
             if (pendingDeduplication.Counts.TryGetValue(key, out var count) && count > 0)
             {
@@ -603,7 +621,11 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
         // Terminal-state snapshots can overlap with the follow stream, but only around the flush.
         // Deduplicate against the flushed snapshot itself instead of rebuilding the full backlog
-        // for every follow batch for the lifetime of a chatty resource.
+        // for every follow batch for the lifetime of a chatty resource. DCP log timestamps are
+        // monotonic enough for this boundary: once the follow stream yields a newer timestamp, it
+        // has moved past the overlap window. Timestamp-less entries cannot establish that boundary,
+        // so drop the pending state after the first such batch to avoid suppressing future repeated
+        // messages that happen to have the same content.
         if (pendingDeduplication.LatestTimestamp is null ||
             pendingDeduplication.RemainingCount == 0 ||
             logEntries.Any(entry => entry.Timestamp is null || entry.Timestamp > pendingDeduplication.LatestTimestamp.Value))
