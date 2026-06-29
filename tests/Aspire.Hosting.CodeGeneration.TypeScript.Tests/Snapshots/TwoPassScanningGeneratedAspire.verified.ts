@@ -452,6 +452,9 @@ type PipelineStepFactoryContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Pi
  */
 type PipelineSummaryHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary'>;
 
+/** Provides context to the work callback of a progress interaction. */
+type ProgressContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ProgressContext'>;
+
 /** Various properties to modify the behavior of the project resource. */
 type ProjectResourceOptionsHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions'>;
 
@@ -1157,6 +1160,16 @@ export interface InteractionNotificationOptions {
     linkUrl?: string | null;
 }
 
+/** Options for progress dialog prompts. */
+export interface InteractionProgressOptions {
+    /** Gets or sets the primary button text (e.g. "Cancel"). */
+    primaryButtonText?: string | null;
+    /** Gets or sets a value indicating whether Markdown in the message is rendered. */
+    enableMessageMarkdown?: boolean | null;
+    /** Gets or sets an optional asynchronous work callback to execute while the progress dialog is displayed. When provided, the progress dialog remains open while this callback executes and closes automatically when the callback completes. */
+    work?: (arg: ProgressContext) => Promise<void>;
+}
+
 /** Options for customizing parameter inputs from polyglot app hosts. */
 export interface ParameterCustomInputOptions {
     /** Gets or sets the type of the input. */
@@ -1610,6 +1623,12 @@ export interface GetStatusAsyncOptions {
 
 export interface GetValueAsyncOptions {
     /** The cancellation token. */
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface PromptProgressOptions {
+    title?: string;
+    options?: InteractionProgressOptions;
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
@@ -8310,6 +8329,64 @@ class PipelineSummaryPromiseImpl implements PipelineSummaryPromise {
 }
 
 // ============================================================================
+// ProgressContext
+// ============================================================================
+
+/** Provides context to the work callback of a progress interaction. */
+export interface ProgressContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled. */
+    cancellationToken(): Promise<CancellationToken>;
+}
+
+export interface ProgressContextPromise extends PromiseLike<ProgressContext> {
+    /** Gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled. */
+    cancellationToken(): Promise<CancellationToken>;
+}
+
+// ============================================================================
+// ProgressContextImpl
+// ============================================================================
+
+/** Provides context to the work callback of a progress interaction. */
+class ProgressContextImpl implements ProgressContext {
+    constructor(private _handle: ProgressContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting/ProgressContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
+
+}
+
+/**
+ * Thenable wrapper for ProgressContext that enables fluent chaining.
+ */
+class ProgressContextPromiseImpl implements ProgressContextPromise {
+    constructor(private _promise: Promise<ProgressContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ProgressContext, TResult2 = never>(
+        onfulfilled?: ((value: ProgressContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
+    }
+
+}
+
+// ============================================================================
 // ProjectResourceOptions
 // ============================================================================
 
@@ -12648,6 +12725,11 @@ export interface InteractionService {
      */
     promptNotification(title: string, message: string, options?: InteractionNotificationOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
     /**
+     * Displays a progress dialog with an indeterminate progress indicator.
+     * @param options Additional options.
+     */
+    promptProgress(message: string, options?: PromptProgressOptions): Promise<BoolInteractionResult>;
+    /**
      * Prompts the user for a single input.
      * @param options Additional options.
      */
@@ -12706,6 +12788,11 @@ export interface InteractionServicePromise extends PromiseLike<InteractionServic
      * @param options Additional options.
      */
     promptNotification(title: string, message: string, options?: InteractionNotificationOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
+    /**
+     * Displays a progress dialog with an indeterminate progress indicator.
+     * @param options Additional options.
+     */
+    promptProgress(message: string, options?: PromptProgressOptions): Promise<BoolInteractionResult>;
     /**
      * Prompts the user for a single input.
      * @param options Additional options.
@@ -12805,6 +12892,37 @@ class InteractionServiceImpl implements InteractionService {
         if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
         return await this._client.invokeCapability<BoolInteractionResult>(
             'Aspire.Hosting/promptNotification',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Displays a progress dialog with an indeterminate progress indicator.
+     * @param optionsBag Additional options.
+     */
+    async promptProgress(message: string, optionsBag?: PromptProgressOptions): Promise<BoolInteractionResult> {
+        const title = optionsBag?.title;
+        const options = optionsBag?.options;
+        const cancellationToken = optionsBag?.cancellationToken;
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcWork = __optionsForRpc.work;
+            if (____optionsForRpcWork !== undefined) {
+                const ____optionsForRpcWorkId = ____optionsForRpcWork ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ProgressContextHandle;
+                    const arg = new ProgressContextImpl(argHandle, this._client);
+                    await ____optionsForRpcWork(arg);
+                }) : undefined;
+                __optionsForRpcData["work"] = ____optionsForRpcWorkId;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, message };
+        if (title !== undefined) rpcArgs.title = title;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<BoolInteractionResult>(
+            'Aspire.Hosting/promptProgress',
             rpcArgs
         );
     }
@@ -13000,6 +13118,10 @@ class InteractionServicePromiseImpl implements InteractionServicePromise {
 
     promptNotification(title: string, message: string, options?: InteractionNotificationOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult> {
         return this._promise.then(obj => obj.promptNotification(title, message, options, cancellationToken));
+    }
+
+    promptProgress(message: string, options?: PromptProgressOptions): Promise<BoolInteractionResult> {
+        return this._promise.then(obj => obj.promptProgress(message, options));
     }
 
     promptInput(title: string, message: string, input: Awaitable<InteractionInputBuilder>, options?: InteractionInputsDialogOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<InputInteractionResult> {
@@ -61095,6 +61217,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep', (h
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext', (handle, client) => new PipelineStepContextImpl(handle as PipelineStepContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext', (handle, client) => new PipelineStepFactoryContextImpl(handle as PipelineStepFactoryContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary', (handle, client) => new PipelineSummaryImpl(handle as PipelineSummaryHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ProgressContext', (handle, client) => new ProgressContextImpl(handle as ProgressContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions', (handle, client) => new ProjectResourceOptionsImpl(handle as ProjectResourceOptionsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder', (handle, client) => new ReferenceExpressionBuilderImpl(handle as ReferenceExpressionBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext', (handle, client) => new RequiredCommandValidationContextImpl(handle as RequiredCommandValidationContextHandle, client));

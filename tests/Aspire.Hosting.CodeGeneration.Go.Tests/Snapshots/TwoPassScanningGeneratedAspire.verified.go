@@ -573,6 +573,28 @@ func (d *InteractionInputsDialogOptions) ToMap() map[string]any {
 	return m
 }
 
+// InteractionProgressOptions represents InteractionProgressOptions.
+type InteractionProgressOptions struct {
+	PrimaryButtonText *string `json:"PrimaryButtonText,omitempty"`
+	EnableMessageMarkdown *bool `json:"EnableMessageMarkdown,omitempty"`
+	Work func(arg ProgressContext) `json:"Work,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *InteractionProgressOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if d.PrimaryButtonText != nil { m["PrimaryButtonText"] = serializeValue(d.PrimaryButtonText) }
+	if d.EnableMessageMarkdown != nil { m["EnableMessageMarkdown"] = serializeValue(d.EnableMessageMarkdown) }
+	if d.Work != nil {
+		cb := d.Work
+		m["Work"] = func(args ...any) any {
+			cb(callbackArg[ProgressContext](args, 0))
+			return nil
+		}
+	}
+	return m
+}
+
 // BoolInteractionResult represents BoolInteractionResult.
 type BoolInteractionResult struct {
 	Canceled bool `json:"Canceled,omitempty"`
@@ -17990,6 +18012,7 @@ type InteractionService interface {
 	PromptInputs(title string, message string, inputs []InteractionInputBuilder, options ...*PromptInputsOptions) InputsInteractionResult
 	PromptMessageBox(title string, message string, options ...*PromptMessageBoxOptions) (*BoolInteractionResult, error)
 	PromptNotification(title string, message string, options ...*PromptNotificationOptions) (*BoolInteractionResult, error)
+	PromptProgress(message string, options ...*PromptProgressOptions) (*BoolInteractionResult, error)
 	Err() error
 }
 
@@ -18303,6 +18326,35 @@ func (s *interactionService) PromptNotification(title string, message string, op
 		}
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/promptNotification", reqArgs)
+	if err != nil {
+		var zero *BoolInteractionResult
+		return zero, err
+	}
+	return decodeAs[*BoolInteractionResult](result)
+}
+
+// PromptProgress displays a progress dialog with an indeterminate progress indicator.
+func (s *interactionService) PromptProgress(message string, options ...*PromptProgressOptions) (*BoolInteractionResult, error) {
+	if s.err != nil { var zero *BoolInteractionResult; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	reqArgs["message"] = serializeValue(message)
+	if len(options) > 0 {
+		merged := &PromptProgressOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.CancellationToken != nil {
+			ctx = merged.CancellationToken.Context()
+			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
+				reqArgs["cancellationToken"] = id
+			}
+		}
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/promptProgress", reqArgs)
 	if err != nil {
 		var zero *BoolInteractionResult
 		return zero, err
@@ -20196,6 +20248,38 @@ func (s *pipelineSummary) AddMarkdown(key string, markdownString string) error {
 	reqArgs["markdownString"] = serializeValue(markdownString)
 	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addMarkdown", reqArgs)
 	return err
+}
+
+// ProgressContext is the public interface for handle type ProgressContext.
+type ProgressContext interface {
+	handleReference
+	CancellationToken() (*CancellationToken, error)
+	Err() error
+}
+
+// progressContext is the unexported impl of ProgressContext.
+type progressContext struct {
+	*resourceBuilderBase
+}
+
+// newProgressContextFromHandle wraps an existing handle as ProgressContext.
+func newProgressContextFromHandle(h *handle, c *client) ProgressContext {
+	return &progressContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// CancellationToken gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled.
+func (s *progressContext) CancellationToken() (*CancellationToken, error) {
+	if s.err != nil { var zero *CancellationToken; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/ProgressContext.cancellationToken", reqArgs)
+	if err != nil {
+		var zero *CancellationToken
+		return zero, err
+	}
+	return decodeAs[*CancellationToken](result)
 }
 
 // ProjectResource is the public interface for handle type ProjectResource.
@@ -29179,6 +29263,21 @@ func (o *PromptNotificationOptions) ToMap() map[string]any {
 	return m
 }
 
+// PromptProgressOptions carries optional parameters for PromptProgress.
+type PromptProgressOptions struct {
+	Title *string `json:"title,omitempty"`
+	Options *InteractionProgressOptions `json:"options,omitempty"`
+	CancellationToken *CancellationToken `json:"-"`
+}
+
+func (o *PromptProgressOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Title != nil { m["title"] = serializeValue(o.Title) }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
 // PromptInputOptions carries optional parameters for PromptInput.
 type PromptInputOptions struct {
 	Options *InteractionInputsDialogOptions `json:"options,omitempty"`
@@ -29911,6 +30010,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary", func(h *handle, c *client) any {
 		return newPipelineSummaryFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ProgressContext", func(h *handle, c *client) any {
+		return newProgressContextFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", func(h *handle, c *client) any {
 		return newProjectResourceFromHandle(h, c)
