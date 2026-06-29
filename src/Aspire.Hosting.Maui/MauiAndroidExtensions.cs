@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Maui;
+using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Utilities;
 
 namespace Aspire.Hosting;
@@ -383,13 +384,14 @@ public static class MauiAndroidExtensions
         {
             // Specific emulator - use -s prefix with the emulator serial (no quotes around the value)
             msBuildProperties[KnownMauiMSBuildProperties.AdbTarget] = $"-s {emulatorId}";
+            additionalArgs.Add($"-p:{KnownMauiMSBuildProperties.AdbTarget}={msBuildProperties[KnownMauiMSBuildProperties.AdbTarget]}");
         }
         else
         {
-            // No specific emulator ID - use -e to target the only running emulator
-            msBuildProperties[KnownMauiMSBuildProperties.AdbTarget] = "-e";
+            resourceBuilder.WithAnnotation(
+                new SelectedEmulatorAnnotation(MauiTargetSelectionKind.AndroidEmulator),
+                ResourceAnnotationMutationBehavior.Replace);
         }
-        additionalArgs.Add($"-p:{KnownMauiMSBuildProperties.AdbTarget}={msBuildProperties[KnownMauiMSBuildProperties.AdbTarget]}");
 
         // Configure the platform resource with common settings
         // Android runs on Windows, macOS, and Linux - check for Android SDK/tooling availability is complex
@@ -410,7 +412,7 @@ public static class MauiAndroidExtensions
             "android",
             "emulator",
             emulatorId,
-            msBuildProperties: msBuildProperties);
+            msBuildProperties: msBuildProperties.Count > 0 ? msBuildProperties : null);
 
         return resourceBuilder;
     }

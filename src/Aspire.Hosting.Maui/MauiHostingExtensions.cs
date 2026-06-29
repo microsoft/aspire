@@ -16,6 +16,10 @@ internal static class MauiHostingExtensions
     [AspireExportIgnore(Reason = "Use AddMauiProject() instead.")]
     public static void AddMauiHostingServices(this IDistributedApplicationBuilder builder)
     {
+        // Selection must run before the build queue so the serialized build and the
+        // DCP launch path receive the same selected emulator/simulator MSBuild property.
+        builder.Services.TryAddEventingSubscriber<MauiEmulatorSelectionEventSubscriber>();
+
         // Register the build queue subscriber to serialize builds per-project
         builder.Services.TryAddEventingSubscriber<MauiBuildQueueEventSubscriber>();
 
