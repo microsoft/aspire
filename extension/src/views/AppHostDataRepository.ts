@@ -143,9 +143,9 @@ interface DescribeStream {
     restartDelay: number;
     version: number;
     receivedData: boolean;
-    // Set when a projected stream parks (exited with no data): false = parked while idle, true =
-    // parked while running, undefined = never parked. Reconcile restarts an idle-parked stream once
-    // its host starts.
+    // Set when a projected stream parks (exited with no data): false = parked while its host was idle,
+    // true = parked while its host was active, undefined = never parked. Reconcile restarts an
+    // idle-parked stream once its host becomes active (see `_isDescribeHostActive`).
     parkedWhileRunning: boolean | undefined;
 }
 
@@ -968,9 +968,11 @@ export class AppHostDataRepository {
 
             // A stream that parked while its host was idle must restart now that the host is running.
             // If it still produces no data it re-parks as `parkedWhileRunning: true`, so this fires
-            // exactly once on the idle->running edge instead of looping every poll.
+            // exactly once on the idle->running edge instead of looping every poll. The active check is
+            // mode-correct (`_isDescribeHostActive`): in global mode the workspace running set is stale,
+            // so we gate on membership in the global tree instead.
             const stream = this._describeStreams.get(key)!;
-            if (stream.parkedWhileRunning === false && this._isRunningWorkspaceHost(path)) {
+            if (stream.parkedWhileRunning === false && this._isDescribeHostActive(path)) {
                 this._stopDescribe(key);
                 this._startDescribe(path);
             }
@@ -980,6 +982,25 @@ export class AppHostDataRepository {
 
     private _isRunningWorkspaceHost(path: string): boolean {
         return this._runningWorkspaceAppHosts.some(a => isMatchingAppHostPath(a.appHostPath, path));
+    }
+
+    // "Is the host backing this stream currently active?" — the recovery signal for an idle-parked
+    // stream, and the value recorded as `parkedWhileRunning` at park time. It is mode-correct:
+    //  - The path-less single-file sentinel has no host lifecycle; while single-file mode is active its
+    //    only "host" is the open file, so it is always active. A no-data park therefore records
+    //    `parkedWhileRunning: true` (recovered via refresh/reactivate) instead of a misleading idle tag
+    //    that the idle->running gate could never restart.
+    //  - Global mode does not maintain `_runningWorkspaceAppHosts` (only the workspace ps handler writes
+    //    it), so that set is stale here; a host is active when it is present in the global tree.
+    //  - Workspace mode uses the running set from `aspire ps`.
+    private _isDescribeHostActive(path: string): boolean {
+        if (path === SINGLE_FILE_DESCRIBE_KEY) {
+            return this._isSingleFileDescribeMode();
+        }
+        if (this._viewMode === 'global') {
+            return this._appHosts.some(a => isMatchingAppHostPath(a.appHostPath, path));
+        }
+        return this._isRunningWorkspaceHost(path);
     }
 
     // The set of AppHost paths that should have a live describe stream right now. Global mode follows
@@ -1234,9 +1255,10 @@ export class AppHostDataRepository {
             // Never produced data. Surface a compatibility hint when we have enough context, but do
             // not auto-restart on a 5s loop forever. Park the entry (keep it in the map with no
             // process/timer/data) so reconcile does not immediately respawn it. Record whether the host
-            // was running at park time: reconcile restarts a stream parked while idle once the host
-            // starts, but leaves one parked while running alone so it cannot restart-loop.
-            stream.parkedWhileRunning = this._isRunningWorkspaceHost(stream.appHostPath);
+            // was active at park time: reconcile restarts a stream parked while idle once the host
+            // becomes active, but leaves one parked while active alone so it cannot restart-loop. The
+            // single-file sentinel has no idle state, so it parks as active (recovered via refresh).
+            stream.parkedWhileRunning = this._isDescribeHostActive(stream.appHostPath);
             extensionLogOutputChannel.warn(`aspire describe --follow exited (code ${code}) without producing data; not auto-restarting.`);
             stream.resources.clear();
             if (stream.restartTimer) {
