@@ -74,7 +74,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          mkdir -p .ci-failure-data
+          mkdir -p ci-failure-data
 
           # Resolve the run ID
           if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
@@ -87,21 +87,29 @@ jobs:
           echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
 
           # Fetch the workflow run metadata
-          gh api "repos/${REPO}/actions/runs/${RUN_ID}" > .ci-failure-data/run.json
+          gh api "repos/${REPO}/actions/runs/${RUN_ID}" > ci-failure-data/run.json
 
-          RUN_ATTEMPT=$(jq -r '.run_attempt // 1' .ci-failure-data/run.json)
-          HEAD_SHA=$(jq -r '.head_sha // ""' .ci-failure-data/run.json)
-          HEAD_BRANCH=$(jq -r '.head_branch // ""' .ci-failure-data/run.json)
-          RUN_URL=$(jq -r '.html_url // ""' .ci-failure-data/run.json)
+          RUN_ATTEMPT=$(jq -r '.run_attempt // 1' ci-failure-data/run.json)
+          HEAD_SHA=$(jq -r '.head_sha // ""' ci-failure-data/run.json)
+          HEAD_BRANCH=$(jq -r '.head_branch // ""' ci-failure-data/run.json)
+          RUN_URL=$(jq -r '.html_url // ""' ci-failure-data/run.json)
+          CONCLUSION=$(jq -r '.conclusion // ""' ci-failure-data/run.json)
           echo "run_attempt=${RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
           echo "head_sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
           echo "run_url=${RUN_URL}" >> "$GITHUB_OUTPUT"
 
+          # Skip analysis if the run succeeded (e.g. manual dispatch on a passing run)
+          if [ "${CONCLUSION}" = "success" ]; then
+            echo "Run concluded with success. Nothing to analyze."
+            echo "has_work=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           # Find the associated PR number
-          PR_NUMBERS=$(jq -r '[.pull_requests[]?.number] | join(",")' .ci-failure-data/run.json)
+          PR_NUMBERS=$(jq -r '[.pull_requests[]?.number] | join(",")' ci-failure-data/run.json)
           if [ -z "${PR_NUMBERS}" ]; then
             # Fallback: search for PRs by head branch (requires owner:branch format)
-            HEAD_OWNER=$(jq -r '.head_repository.owner.login // ""' .ci-failure-data/run.json)
+            HEAD_OWNER=$(jq -r '.head_repository.owner.login // ""' ci-failure-data/run.json)
             if [ -n "${HEAD_OWNER}" ] && [ -n "${HEAD_BRANCH}" ]; then
               PR_NUMBERS=$(gh api "repos/${REPO}/pulls?state=open&head=${HEAD_OWNER}:${HEAD_BRANCH}" \
                 --jq '[.[].number] | join(",")' 2>/dev/null || echo "")
@@ -115,15 +123,17 @@ jobs:
             exit 0
           fi
 
-          # Fetch all jobs for this run attempt
+          # Fetch all jobs for this run attempt.
+          # Use --jq '.jobs[]' to emit individual job objects (handles pagination
+          # correctly) then jq -s collects them into a single JSON array.
           gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}/jobs" \
-            --jq '.jobs' > .ci-failure-data/all-jobs.json
+            --jq '.jobs[]' | jq -s '.' > ci-failure-data/all-jobs.json
 
           # Extract failed jobs
           jq '[.[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")]' \
-            .ci-failure-data/all-jobs.json > .ci-failure-data/failed-jobs.json
+            ci-failure-data/all-jobs.json > ci-failure-data/failed-jobs.json
 
-          FAILED_COUNT=$(jq 'length' .ci-failure-data/failed-jobs.json)
+          FAILED_COUNT=$(jq 'length' ci-failure-data/failed-jobs.json)
           echo "Failed jobs: ${FAILED_COUNT}"
 
           if [ "${FAILED_COUNT}" -eq 0 ]; then
@@ -135,26 +145,26 @@ jobs:
           echo "has_work=true" >> "$GITHUB_OUTPUT"
 
           # Fetch logs for each failed job (last 64KB of each, enough for analysis)
-          jq -r '.[].id' .ci-failure-data/failed-jobs.json | while read -r JOB_ID; do
-            JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" .ci-failure-data/failed-jobs.json)
+          jq -r '.[].id' ci-failure-data/failed-jobs.json | while read -r JOB_ID; do
+            JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" ci-failure-data/failed-jobs.json)
             echo "Fetching logs for job: ${JOB_NAME} (${JOB_ID})"
-            gh api "repos/${REPO}/actions/jobs/${JOB_ID}/logs" > ".ci-failure-data/job-${JOB_ID}.log" 2>/dev/null || \
-              echo "(Failed to fetch logs for job ${JOB_ID})" > ".ci-failure-data/job-${JOB_ID}.log"
+            gh api "repos/${REPO}/actions/jobs/${JOB_ID}/logs" > "ci-failure-data/job-${JOB_ID}.log" 2>/dev/null || \
+              echo "(Failed to fetch logs for job ${JOB_ID})" > "ci-failure-data/job-${JOB_ID}.log"
             # Trim to last 64KB to keep context manageable
-            tail -c 65536 ".ci-failure-data/job-${JOB_ID}.log" > ".ci-failure-data/job-${JOB_ID}-trimmed.log"
-            mv ".ci-failure-data/job-${JOB_ID}-trimmed.log" ".ci-failure-data/job-${JOB_ID}.log"
+            tail -c 65536 "ci-failure-data/job-${JOB_ID}.log" > "ci-failure-data/job-${JOB_ID}-trimmed.log"
+            mv "ci-failure-data/job-${JOB_ID}-trimmed.log" "ci-failure-data/job-${JOB_ID}.log"
           done
 
           # Fetch annotations for each failed job
-          jq -r '.[].id' .ci-failure-data/failed-jobs.json | while read -r JOB_ID; do
-            CHECK_RUN_ID=$(jq -r ".[] | select(.id == ${JOB_ID}) | .check_run_url" .ci-failure-data/failed-jobs.json \
+          jq -r '.[].id' ci-failure-data/failed-jobs.json | while read -r JOB_ID; do
+            CHECK_RUN_ID=$(jq -r ".[] | select(.id == ${JOB_ID}) | .check_run_url" ci-failure-data/failed-jobs.json \
               | grep -oP '\d+$' || echo "")
             if [ -n "${CHECK_RUN_ID}" ]; then
               gh api --paginate "repos/${REPO}/check-runs/${CHECK_RUN_ID}/annotations" \
-                > ".ci-failure-data/annotations-${JOB_ID}.json" 2>/dev/null || \
-                echo "[]" > ".ci-failure-data/annotations-${JOB_ID}.json"
+                > "ci-failure-data/annotations-${JOB_ID}.json" 2>/dev/null || \
+                echo "[]" > "ci-failure-data/annotations-${JOB_ID}.json"
             else
-              echo "[]" > ".ci-failure-data/annotations-${JOB_ID}.json"
+              echo "[]" > "ci-failure-data/annotations-${JOB_ID}.json"
             fi
           done
 
@@ -162,13 +172,13 @@ jobs:
           FIRST_PR=$(echo "${PR_NUMBERS}" | cut -d',' -f1)
           if [ -n "${FIRST_PR}" ]; then
             gh api "repos/${REPO}/pulls/${FIRST_PR}/files" --paginate \
-              --jq '[.[] | {filename, status, additions, deletions, changes}]' \
-              > .ci-failure-data/pr-files.json 2>/dev/null || echo "[]" > .ci-failure-data/pr-files.json
+              --jq '.[]' | jq -s '[.[] | {filename, status, additions, deletions, changes}]' \
+              > ci-failure-data/pr-files.json 2>/dev/null || echo "[]" > ci-failure-data/pr-files.json
           fi
 
           # Load the known transient failure patterns for reference
           if [ -f "eng/test-retry-patterns.json" ]; then
-            cp eng/test-retry-patterns.json .ci-failure-data/retry-patterns.json
+            cp eng/test-retry-patterns.json ci-failure-data/retry-patterns.json
           fi
 
           # Fetch test results artifact if available and extract test failure info
@@ -178,33 +188,33 @@ jobs:
             ARTIFACT_ID=$(echo "${ARTIFACT}" | jq -r '.id')
             echo "Downloading test results artifact ${ARTIFACT_ID}..."
             gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts/${ARTIFACT_ID}/zip" \
-              > .ci-failure-data/test-results.zip 2>/dev/null || true
+              > ci-failure-data/test-results.zip 2>/dev/null || true
 
             # Extract failed test names and error messages from TRX files
-            if [ -f ".ci-failure-data/test-results.zip" ] && [ -s ".ci-failure-data/test-results.zip" ]; then
-              mkdir -p .ci-failure-data/test-results
-              unzip -q -o .ci-failure-data/test-results.zip -d .ci-failure-data/test-results 2>/dev/null || true
+            if [ -f "ci-failure-data/test-results.zip" ] && [ -s "ci-failure-data/test-results.zip" ]; then
+              mkdir -p ci-failure-data/test-results
+              unzip -q -o ci-failure-data/test-results.zip -d ci-failure-data/test-results 2>/dev/null || true
 
               # Parse TRX files for failed tests (TRX is XML with UnitTestResult elements)
               # Produce one JSON object per line using jq for proper escaping, then
               # combine into an array. This avoids pipe-subshell variable propagation
               # issues and handles all JSON special characters correctly.
               # TRX format: <UnitTestResult testName="..." outcome="Failed"><Output><ErrorInfo><Message>...</Message></ErrorInfo></Output></UnitTestResult>
-              > .ci-failure-data/test-failures.jsonl
+              > ci-failure-data/test-failures.jsonl
               while IFS= read -r TRX_FILE; do
                 while IFS= read -r TEST_NAME; do
                   ERROR_MSG=$(grep -A5 "testName=\"${TEST_NAME}\".*outcome=\"Failed\"" "${TRX_FILE}" 2>/dev/null \
                     | grep -oP '<Message>\K[^<]+' 2>/dev/null | head -1 | cut -c1-200 || echo "")
                   jq -n --arg test "${TEST_NAME}" --arg error "${ERROR_MSG}" \
-                    '{test: $test, error: $error}' >> .ci-failure-data/test-failures.jsonl
+                    '{test: $test, error: $error}' >> ci-failure-data/test-failures.jsonl
                 done < <(grep -oP '<UnitTestResult[^>]*testName="\K[^"]+(?="[^>]*outcome="Failed")' "${TRX_FILE}" 2>/dev/null || true)
-              done < <(find .ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null)
-              jq -s '.' .ci-failure-data/test-failures.jsonl > .ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > .ci-failure-data/test-failures.json
-              rm -f .ci-failure-data/test-failures.jsonl
+              done < <(find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null)
+              jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > ci-failure-data/test-failures.json
+              rm -f ci-failure-data/test-failures.jsonl
 
               # Clean up the extracted files to save space in artifact
-              rm -rf .ci-failure-data/test-results
-              rm -f .ci-failure-data/test-results.zip
+              rm -rf ci-failure-data/test-results
+              rm -f ci-failure-data/test-results.zip
             fi
           fi
 
@@ -234,14 +244,14 @@ jobs:
             echo "## Failed Jobs"
             echo ""
             jq -r '.[] | "### Job: \(.name)\n- **ID**: \(.id)\n- **Conclusion**: \(.conclusion)\n- **URL**: \(.html_url // "N/A")\n- **Failed Steps**: \([.steps[]? | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | .name] | join(", "))\n"' \
-              .ci-failure-data/failed-jobs.json
+              ci-failure-data/failed-jobs.json
 
             echo "## Job Logs (Trimmed)"
             echo ""
-            for LOG_FILE in .ci-failure-data/job-*.log; do
+            for LOG_FILE in ci-failure-data/job-*.log; do
               if [ -f "${LOG_FILE}" ]; then
                 JOB_ID=$(basename "${LOG_FILE}" | sed 's/job-\(.*\)\.log/\1/')
-                JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" .ci-failure-data/failed-jobs.json 2>/dev/null || echo "Unknown")
+                JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" ci-failure-data/failed-jobs.json 2>/dev/null || echo "Unknown")
                 echo "### Logs: ${JOB_NAME} (${JOB_ID})"
                 echo '```'
                 # Show last 200 lines to keep within context limits
@@ -253,10 +263,10 @@ jobs:
 
             echo "## Job Annotations"
             echo ""
-            for ANN_FILE in .ci-failure-data/annotations-*.json; do
+            for ANN_FILE in ci-failure-data/annotations-*.json; do
               if [ -f "${ANN_FILE}" ]; then
                 JOB_ID=$(basename "${ANN_FILE}" | sed 's/annotations-\(.*\)\.json/\1/')
-                JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" .ci-failure-data/failed-jobs.json 2>/dev/null || echo "Unknown")
+                JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" ci-failure-data/failed-jobs.json 2>/dev/null || echo "Unknown")
                 ANN_COUNT=$(jq 'length' "${ANN_FILE}" 2>/dev/null || echo "0")
                 if [ "${ANN_COUNT}" -gt 0 ]; then
                   echo "### Annotations: ${JOB_NAME} (${JOB_ID})"
@@ -268,10 +278,10 @@ jobs:
 
             echo "## Test Failures (from TRX artifacts)"
             echo ""
-            if [ -f ".ci-failure-data/test-failures.json" ]; then
-              FAILURE_COUNT=$(jq 'length' .ci-failure-data/test-failures.json 2>/dev/null || echo "0")
+            if [ -f "ci-failure-data/test-failures.json" ]; then
+              FAILURE_COUNT=$(jq 'length' ci-failure-data/test-failures.json 2>/dev/null || echo "0")
               if [ "${FAILURE_COUNT}" -gt 0 ]; then
-                jq -r '.[] | "- `\(.test)`: \(.error)"' .ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
+                jq -r '.[] | "- `\(.test)`: \(.error)"' ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
               else
                 echo "No test failures extracted from TRX artifacts."
               fi
@@ -282,8 +292,8 @@ jobs:
 
             echo "## PR Changed Files"
             echo ""
-            if [ -f ".ci-failure-data/pr-files.json" ]; then
-              jq -r '.[] | "- \(.filename) (\(.status), +\(.additions)/-\(.deletions))"' .ci-failure-data/pr-files.json 2>/dev/null || echo "No file data available."
+            if [ -f "ci-failure-data/pr-files.json" ]; then
+              jq -r '.[] | "- \(.filename) (\(.status), +\(.additions)/-\(.deletions))"' ci-failure-data/pr-files.json 2>/dev/null || echo "No file data available."
             else
               echo "No PR file data available."
             fi
@@ -291,26 +301,26 @@ jobs:
 
             echo "## Known Transient Failure Patterns"
             echo ""
-            if [ -f ".ci-failure-data/retry-patterns.json" ]; then
+            if [ -f "ci-failure-data/retry-patterns.json" ]; then
               echo "### Test Failure Patterns"
               jq -r '.testFailurePatterns[]? | "- \(.reason // "unnamed"): \(if .output | type == "string" then .output else .output.regex end)"' \
-                .ci-failure-data/retry-patterns.json 2>/dev/null || echo "None loaded."
+                ci-failure-data/retry-patterns.json 2>/dev/null || echo "None loaded."
               echo ""
               echo "### Job Failure Patterns"
               jq -r '.jobFailurePatterns[]? | "- \(.reason // "unnamed"): \(if .output | type == "string" then .output else .output.regex end)"' \
-                .ci-failure-data/retry-patterns.json 2>/dev/null || echo "None loaded."
+                ci-failure-data/retry-patterns.json 2>/dev/null || echo "None loaded."
             else
               echo "No retry patterns file found."
             fi
-          } > .ci-failure-data/analysis-summary.md
+          } > ci-failure-data/analysis-summary.md
 
-          echo "Analysis summary written to .ci-failure-data/analysis-summary.md"
+          echo "Analysis summary written to ci-failure-data/analysis-summary.md"
 
       - uses: actions/upload-artifact@v4
         if: steps.collect.outputs.has_work == 'true'
         with:
           name: ci-failure-data
-          path: .ci-failure-data/
+          path: ci-failure-data/
 
 if: needs.collect-data.outputs.has-work == 'true'
 
@@ -448,7 +458,7 @@ steps:
   - uses: actions/download-artifact@v4
     with:
       name: ci-failure-data
-      path: .ci-failure-data/
+      path: ci-failure-data/
 ---
 
 # Analyze CI Failure
@@ -461,7 +471,7 @@ The analysis should only be performed on the **first run attempt**. Subsequent a
 
 ### Step 0: Read the summary file
 
-Read `.ci-failure-data/analysis-summary.md`. It contains the run ID, run attempt, and either full failure data (first attempt) or instructions to read cached results (retry attempt).
+Read `ci-failure-data/analysis-summary.md`. It contains the run ID, run attempt, and either full failure data (first attempt) or instructions to read cached results (retry attempt).
 
 ### Step 1: Check for cached analysis
 
@@ -507,7 +517,7 @@ Then proceed to the **Actions** section.
 
 ## Input Data (first attempt only)
 
-The file `.ci-failure-data/analysis-summary.md` contains the full failure data:
+The file `ci-failure-data/analysis-summary.md` contains the full failure data:
 - The failed workflow run information
 - Failed jobs and their failed steps
 - Job logs (last 200 lines per job)
@@ -553,7 +563,7 @@ The failure was directly caused by changes in the PR. Indicators:
 
 ## Analysis Process (first attempt only)
 
-1. Read `.ci-failure-data/analysis-summary.md`
+1. Read `ci-failure-data/analysis-summary.md`
 2. For each failed job, examine:
    - The failed step names
    - The job log output for error messages
