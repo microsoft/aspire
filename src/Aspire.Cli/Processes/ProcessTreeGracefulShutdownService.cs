@@ -138,7 +138,7 @@ internal sealed class ProcessTreeGracefulShutdownService(
             // Routing the graceful signal through the launcher CLI (CliProcessId) cascades via
             // `dotnet run`'s child kill. That walk depends on the AppHost being visible in /proc
             // as a descendant of the `dotnet` process at the moment of the walk, and on the
-            // AppHost being observed as exited by its parent rather than orphaned. When either of those races
+            // AppHost being reaped by its parent rather than orphaned. When either of those races
             // misfires the AppHost is left running (or lingering as a zombie reparented to PID 1)
             // and the StopCommand monitor then times out reporting "Failed to stop apphost".
             // Targeting the AppHost PID directly avoids the cascade entirely.
