@@ -48,6 +48,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly IGracefulShutdownWindow _shutdownService;
     private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
     private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
     private const string DirectLaunchDisabledConfigKey = "dotnetAppHostDirectLaunchDisabled";
@@ -78,6 +79,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         IProjectUpdater projectUpdater,
         IDotNetSdkInstaller sdkInstaller,
         IBundleService bundleService,
+        IEnvironment environment,
         ILogger<DotNetAppHostProject> logger,
         Diagnostics.FileLoggerProvider fileLoggerProvider,
         Program.CliLoggingOptions loggingOptions,
@@ -97,6 +99,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _projectUpdater = projectUpdater;
         _sdkInstaller = sdkInstaller;
         _bundleService = bundleService;
+        _environment = environment;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _loggingOptions = loggingOptions;
@@ -519,7 +522,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             StandardErrorCallback = runOutputCollector.AppendError,
             StartDebugSession = context.StartDebugSession,
             Debug = context.Debug,
-            KillEntireProcessTreeOnCancel = ShouldKillEntireProcessTreeOnCancel(OperatingSystem.IsWindows()),
+            KillEntireProcessTreeOnCancel = ShouldKillEntireProcessTreeOnCancel(_environment.IsWindows()),
             // Run path opts into the shared shutdown ladder so pure .NET AppHosts get the
             // same graceful-then-tree-kill semantics as TypeScript AppHosts (which already
             // route through AppHostServerSession/ProcessGuestLauncher). Build, restore,

@@ -319,4 +319,12 @@
     <value>Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
 The legacy file continues to work — this is a non-blocking warning.</value>
   </data>
+  <data name="LegacyTypeScriptAppHostMessageFormat" xml:space="preserve">
+    <value>Legacy 'apphost.ts' layout detected at {0}</value>
+    <comment>{0} is the full path to the legacy apphost.ts file.</comment>
+  </data>
+  <data name="PendingMigrationFix" xml:space="preserve">
+    <value>Run 'aspire update --migrate' to apply the recommended migration.
+The current layout continues to work — this is a non-blocking warning.</value>
+  </data>
 </root>

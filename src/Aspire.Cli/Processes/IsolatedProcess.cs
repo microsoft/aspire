@@ -50,7 +50,8 @@ internal sealed class IsolatedProcessStartInfo
     /// returns (best-effort — the targeted helpers don't fork further children, so the post-spawn
     /// race window is empty in practice). Set to <see cref="WindowsConsoleProcessJob.Handle"/>
     /// from <see cref="WindowsConsoleProcessJob.Shared"/> on Windows hosts; <see langword="null"/>
-    /// on non-Windows hosts (Unix process-group semantics cover the equivalent case).
+    /// on non-Windows hosts, where the CLI's normal SIGINT/SIGTERM signalling covers graceful
+    /// shutdown but a portable kill-on-parent-exit primitive is not available.
     /// </summary>
     public SafeFileHandle? JobHandle { get; init; }
 
@@ -290,8 +291,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     /// <see cref="IsolatedProcessStartInfo.JobHandle"/> is set the child is best-effort-bound to
     /// the job immediately after spawn so an abnormal CLI exit (e.g. <c>TerminateProcess</c> from
     /// a parent harness) tears the helper down with us instead of orphaning it (see
-    /// https://github.com/microsoft/aspire/issues/18490). On Unix, <c>JobHandle</c> is ignored —
-    /// process-group reparenting + signal delivery cover the equivalent case.
+    /// https://github.com/microsoft/aspire/issues/18490). On Unix, <c>JobHandle</c> is ignored:
+    /// process-group signal delivery covers graceful shutdown, but not abrupt parent death.
     /// </summary>
     /// <param name="startInfo">Process launch parameters.</param>
     /// <param name="standardOutputHandler">Per-line callback for stdout; receives the wrapper as sender.</param>
@@ -357,9 +358,10 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         // accepted for the short-lived helper subprocesses this targets (aspire-managed.exe nuget
         // search / restore, dotnet package search) — they do not fork further children, so the
         // window between Process.Start returning and the assign succeeding is empty in practice.
-        // A failed assignment (already-exited process, already-assigned process) is logged and
-        // swallowed: the helper still runs and the worst case is the same orphan we are trying to
-        // prevent. See https://github.com/microsoft/aspire/issues/18490.
+        // The same caveat applies to grandchildren that explicitly break away from the job; these
+        // targeted helpers do not create any. A failed assignment (already-exited process,
+        // already-assigned process) is swallowed: the helper still runs and the worst case is the
+        // same orphan we are trying to prevent. See https://github.com/microsoft/aspire/issues/18490.
         if (startInfo.JobHandle is not null && !startInfo.IsolateConsole && OperatingSystem.IsWindows())
         {
             TryAssignNonIsolatedChildToJob(process, startInfo.JobHandle);
@@ -380,9 +382,9 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     {
         try
         {
-            // Process.SafeHandle is the kept CreateProcess handle the BCL opened internally; it
-            // has PROCESS_SET_QUOTA | PROCESS_TERMINATE access, which is the minimum AssignProcess-
-            // ToJobObject requires. Going through this property avoids re-opening the handle.
+            // Process.SafeHandle is the kept CreateProcess handle the BCL opened internally, which
+            // satisfies the PROCESS_SET_QUOTA | PROCESS_TERMINATE minimum AssignProcessToJobObject
+            // requires. Going through this property avoids re-opening the handle.
             // See https://learn.microsoft.com/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject
             // for the required access rights.
             if (!WindowsProcessInterop.AssignProcessToJobObject(jobHandle, process.SafeHandle.DangerousGetHandle()))

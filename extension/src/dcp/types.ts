@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import type { AspireDebugSession, DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
 
 export interface ErrorResponse {
     error: ErrorDetails;
@@ -204,8 +204,10 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
     program: string;
     debuggers?: AspireDebuggersConfiguration;
     command?: AspireCommandType;
+    dashboardBrowser?: DashboardLaunchBehavior;
     args?: string[];
     step?: string;
+    skipCliAvailabilityCheck?: boolean;
     env?: { [key: string]: string };
 }
 

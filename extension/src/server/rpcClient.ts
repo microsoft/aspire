@@ -1,4 +1,5 @@
 import { MessageConnection } from 'vscode-jsonrpc';
+import * as vscode from 'vscode';
 import { extensionLogOutputChannel, logAsyncOperation } from '../utils/logging';
 import { IInteractionService, InteractionService } from './interactionService';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
@@ -24,11 +25,11 @@ export class RpcClient implements ICliRpcClient {
     public debugSessionId: string | null;
     public interactionService: IInteractionService;
 
-    constructor(messageConnection: MessageConnection, debugSessionId: string | null, getAspireDebugSession: () => AspireDebugSession | null) {
+    constructor(messageConnection: MessageConnection, debugSessionId: string | null, getAspireDebugSession: () => AspireDebugSession | null, globalState?: vscode.Memento) {
         this._messageConnection = messageConnection;
         this._connectionClosed = false;
         this.debugSessionId = debugSessionId;
-        this.interactionService = new InteractionService(getAspireDebugSession, this);
+        this.interactionService = new InteractionService(getAspireDebugSession, this, globalState);
 
         this._messageConnection.onClose(() => {
             this._connectionClosed = true;

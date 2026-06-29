@@ -141,9 +141,9 @@ internal static class FileSystemHelper
     /// added until unique. Non-project files (e.g. single-file AppHosts like
     /// AppHost.cs) always include at least the parent folder to provide context.
     /// </summary>
-    internal static Dictionary<string, string> ShortenPaths(IReadOnlyList<string> paths)
+    internal static Dictionary<string, string> ShortenPaths(IReadOnlyList<string> paths, IEnvironment environment)
     {
-        var comparer = OperatingSystem.IsWindows()
+        var comparer = environment.IsWindows()
             ? StringComparer.OrdinalIgnoreCase
             : StringComparer.Ordinal;
         var result = new Dictionary<string, string>(comparer);

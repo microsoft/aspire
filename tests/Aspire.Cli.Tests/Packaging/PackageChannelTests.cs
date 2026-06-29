@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Compression;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
@@ -121,7 +122,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         // Dropped — outside the integration namespace.
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.ProjectTemplates.{pinnedVersion}.nupkg"), string.Empty);
 
-        // Dropped — internal Aspire framework packages (AppHost, Sdk, Orchestration.*, Testing, Msi).
+        // Dropped — internal Aspire framework packages (AppHost, Sdk, Orchestration.*, Testing, Msi, Integration.Analyzers).
         // Orchestration is seeded with a RID-suffixed shape because no bare
         // Aspire.Hosting.Orchestration nupkg is produced by the build; the exclusion is a
         // prefix rule, so one RID variant exercises the rule against a realistic package name
@@ -131,6 +132,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.Orchestration.linux-arm64.{pinnedVersion}.nupkg"), string.Empty);
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.Testing.{pinnedVersion}.nupkg"), string.Empty);
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.Msi.{pinnedVersion}.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.Integration.Analyzers.{pinnedVersion}.nupkg"), string.Empty);
 
         // Dropped — deprecated packages enumerated in DeprecatedPackages.
         File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.Dapr.{pinnedVersion}.nupkg"), string.Empty);
@@ -171,6 +173,37 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
                 Assert.Equal(pinnedVersion, package.Version);
                 Assert.Equal(packageSource, package.Source);
             });
+    }
+
+    [Fact]
+    public async Task GetPolyglotCompatiblePackageIdsAsync_WithPinnedLocalSource_ReturnsOnlyTaggedIntegrationPackageIds()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        const string pinnedVersion = "13.4.0-pr.16820.gabcdef";
+
+        CreatePackageWithTags(packagesDirectory, "Aspire.Hosting.Redis", pinnedVersion, "aspire integration hosting cache polyglot");
+        CreatePackageWithTags(packagesDirectory, "Aspire.Hosting.PostgreSQL", pinnedVersion, "aspire integration hosting database");
+        CreatePackageWithTags(packagesDirectory, "Aspire.Hosting.MongoDB", pinnedVersion, "aspire integration hosting notpolyglot polyglotted");
+        CreatePackageWithTags(packagesDirectory, "Aspire.ProjectTemplates", pinnedVersion, "aspire templates polyglot");
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, _, _, _, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+        };
+        var packageSource = packagesDirectory.FullName.Replace('\\', '/');
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", packageSource),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        };
+        var channel = PackageChannel.CreateExplicitChannel("local", PackageChannelQuality.Both, mappings, cache, new TestFeatures(), NullLogger.Instance, pinnedVersion: pinnedVersion);
+
+        var packageIds = (await channel.GetPolyglotCompatiblePackageIdsAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout())
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["Aspire.Hosting.Redis"], packageIds);
     }
 
     [Fact]
@@ -440,5 +473,25 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         };
 
         return PackageChannel.CreateExplicitChannel("local", quality, mappings, cache, features ?? new TestFeatures(), NullLogger.Instance);
+    }
+
+    private static void CreatePackageWithTags(DirectoryInfo packagesDirectory, string packageId, string version, string tags)
+    {
+        var packagePath = Path.Combine(packagesDirectory.FullName, $"{packageId}.{version}.nupkg");
+        using var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create);
+        var entry = archive.CreateEntry($"{packageId}.nuspec");
+        using var writer = new StreamWriter(entry.Open());
+        writer.Write($"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+              <metadata>
+                <id>{packageId}</id>
+                <version>{version}</version>
+                <authors>Aspire</authors>
+                <description>Test package</description>
+                <tags>{tags}</tags>
+              </metadata>
+            </package>
+            """);
     }
 }

@@ -24,6 +24,7 @@ internal sealed class DcpConnectionChecker(
     CertificateManager certificateManager,
     IProcessExecutionFactory processExecutionFactory,
     CliExecutionContext executionContext,
+    IEnvironment environment,
     ILogger<DcpConnectionChecker> logger) : IDcpConnectionChecker
 {
     private static readonly TimeSpan s_connectionTimeout = TimeSpan.FromSeconds(20);
@@ -42,6 +43,7 @@ internal sealed class DcpConnectionChecker(
                 certificateManager,
                 processExecutionFactory,
                 executionContext,
+                environment,
                 logger,
                 timeoutCts.Token).ConfigureAwait(false);
 
@@ -219,6 +221,7 @@ internal sealed class DcpConnectionChecker(
             CertificateManager certificateManager,
             IProcessExecutionFactory processExecutionFactory,
             CliExecutionContext executionContext,
+            IEnvironment environment,
             ILogger logger,
             CancellationToken cancellationToken)
         {
@@ -239,7 +242,7 @@ internal sealed class DcpConnectionChecker(
 
                 if (useDeveloperCertificate)
                 {
-                    AddDeveloperCertificateArguments(arguments, certificateManager);
+                    AddDeveloperCertificateArguments(arguments, certificateManager, environment);
                 }
 
                 var environmentVariables = new Dictionary<string, string>();
@@ -402,7 +405,7 @@ internal sealed class DcpConnectionChecker(
             return lines.Length == 0 ? DoctorCommandStrings.DcpNoOutputDetails : string.Join(Environment.NewLine, lines);
         }
 
-        private static void AddDeveloperCertificateArguments(List<string> arguments, CertificateManager certificateManager)
+        private static void AddDeveloperCertificateArguments(List<string> arguments, CertificateManager certificateManager, IEnvironment environment)
         {
             var certificates = certificateManager.ListCertificates(StoreName.My, StoreLocation.CurrentUser, isValid: true);
             try
@@ -424,7 +427,7 @@ internal sealed class DcpConnectionChecker(
                 arguments.Add("--tls-cert-thumbprint");
                 arguments.Add(certificate.Thumbprint);
 
-                if (OperatingSystem.IsWindows())
+                if (environment.IsWindows())
                 {
                     return;
                 }

@@ -31,6 +31,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private readonly IAppHostServerProject _project;
     private readonly Dictionary<string, string>? _callerEnvironmentVariables;
     private readonly bool _debug;
+    private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly ProfilingTelemetry? _profilingTelemetry;
     private readonly string _authenticationToken;
@@ -61,6 +62,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         IAppHostServerProject project,
         Dictionary<string, string>? environmentVariables,
         bool debug,
+        IEnvironment environment,
         ILogger logger,
         ProfilingTelemetry? profilingTelemetry,
         IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler,
@@ -71,6 +73,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _project = project ?? throw new ArgumentNullException(nameof(project));
         _callerEnvironmentVariables = environmentVariables;
         _debug = debug;
+        _environment = environment;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _profilingTelemetry = profilingTelemetry;
         _authenticationToken = TokenGenerator.GenerateToken();
@@ -303,7 +306,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         // GetProcessById-derived and its lifetime getters are unreliable — the completion is
         // tripped from the IsolatedProcess wrapper that holds the original CreateProcess handle.
         using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var connectTask = AppHostRpcClient.ConnectAsync(socketPath, _authenticationToken, _profilingTelemetry, connectCts.Token);
+        var connectTask = AppHostRpcClient.ConnectAsync(socketPath, _authenticationToken, _environment, _profilingTelemetry, connectCts.Token);
         var completedTask = await Task.WhenAny(connectTask, serverExitTask).ConfigureAwait(false);
 
         if (completedTask == connectTask)
@@ -458,11 +461,13 @@ internal sealed class AppHostServerSession : IAppHostServerSession
 /// </summary>
 internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
 {
+    private readonly IEnvironment _environment;
     private readonly ILogger<AppHostServerSession> _logger;
     private readonly ProfilingTelemetry _profilingTelemetry;
 
-    public AppHostServerSessionFactory(ILogger<AppHostServerSession> logger, ProfilingTelemetry profilingTelemetry)
+    public AppHostServerSessionFactory(IEnvironment environment, ILogger<AppHostServerSession> logger, ProfilingTelemetry profilingTelemetry)
     {
+        _environment = environment;
         _logger = logger;
         _profilingTelemetry = profilingTelemetry;
     }
@@ -479,6 +484,7 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
             appHostServerProject,
             environmentVariables,
             debug,
+            _environment,
             _logger,
             _profilingTelemetry,
             gracefulShutdownSignaler,

@@ -22,7 +22,7 @@ internal sealed class StackExchangeRedisConnectionInstrumentation : IDisposable
     internal static readonly Version SemanticConventionsVersion = new(1, 23, 0);
     internal static readonly ActivitySource ActivitySource = ActivitySourceFactory.Create(typeof(StackExchangeRedisConnectionInstrumentation), SemanticConventionsVersion, name: ActivitySourceName);
 
-    internal static readonly Version SemanticConventionsVersionNew = new(1, 28, 0);
+    internal static readonly Version SemanticConventionsVersionNew = new(1, 42, 0);
     internal static readonly ActivitySource ActivitySourceNew = ActivitySourceFactory.Create(typeof(StackExchangeRedisConnectionInstrumentation), SemanticConventionsVersionNew, name: ActivitySourceName);
 
     internal static readonly ActivitySource ActivitySourceBoth = ActivitySourceFactory.Create(typeof(StackExchangeRedisConnectionInstrumentation), null, name: ActivitySourceName);
@@ -37,6 +37,12 @@ internal sealed class StackExchangeRedisConnectionInstrumentation : IDisposable
     internal static readonly IEnumerable<KeyValuePair<string, object?>> NewCreationTags =
     [
         new(SemanticConventions.AttributeDbSystemName, "redis")
+    ];
+
+    internal static readonly IEnumerable<KeyValuePair<string, object?>> BothCreationTags =
+    [
+        new(SemanticConventions.AttributeDbSystem, "redis"),
+        new(SemanticConventions.AttributeDbSystemName, "redis"),
     ];
 
     internal readonly ConcurrentDictionary<(ActivityTraceId TraceId, ActivitySpanId SpanId), (Activity Activity, ProfilingSession Session)> Cache

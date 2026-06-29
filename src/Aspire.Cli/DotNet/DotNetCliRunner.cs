@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -87,8 +86,8 @@ internal sealed class ProcessInvocationOptions
     /// When <see langword="true"/>, on Windows the spawned process is assigned to the CLI's
     /// kill-on-close job object after start so it dies with the CLI even if the CLI exits
     /// abnormally (e.g. <c>TerminateProcess</c> from the VS Code extension, a crash, or a
-    /// power loss). No-op on Unix where process-group reparenting + the CLI's normal
-    /// SIGINT/SIGTERM signalling cover the equivalent case.
+    /// power loss). No-op on Unix, where the CLI's normal SIGINT/SIGTERM signalling
+    /// covers graceful shutdown; a portable kill-on-parent-exit primitive is not available.
     /// </summary>
     /// <remarks>
     /// Use for short-lived helper subprocesses that must never outlive the CLI — e.g.
@@ -425,7 +424,7 @@ internal sealed class DotNetCliRunner(
         var sdkInstallPath = Path.Combine(sdksDirectory, "dotnet", sdkVersion);
         var dotnetExecutablePath = Path.Combine(
             sdkInstallPath,
-            RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "dotnet.exe" : "dotnet"
+            environment.IsWindows() ? "dotnet.exe" : "dotnet"
         );
 
         if (Directory.Exists(sdkInstallPath))

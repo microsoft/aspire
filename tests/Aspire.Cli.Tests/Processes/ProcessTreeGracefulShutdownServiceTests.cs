@@ -163,7 +163,7 @@ public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHel
             new FixedLayoutDiscovery(dcpDirectory),
             bundleService ?? new NullBundleService(),
             new LayoutProcessRunner(executionFactory),
-            executionContext,
+            executionContext, new TestEnvironment(),
             NullLogger<ProcessTreeGracefulShutdownService>.Instance,
             timeProvider ?? TimeProvider.System);
     }

@@ -206,6 +206,39 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AnalyzerPackageIsFilteredFromDefaultPackageSearch()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                {
+                    return (0, [
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "13.4.0", Source = "nuget.org" },
+                        new NuGetPackage { Id = "Aspire.Hosting.Integration.Analyzers", Version = "13.4.0", Source = "nuget.org" },
+                        new NuGetPackage { Id = "Aspire.Hosting.PostgreSQL", Version = "13.4.0", Source = "nuget.org" }
+                    ]);
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
+        var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", filter: null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
+
+        Assert.Collection(
+            packages.Select(p => p.Id),
+            id => Assert.Equal("Aspire.Hosting.Redis", id),
+            id => Assert.Equal("Aspire.Hosting.PostgreSQL", id));
+    }
+
+    [Fact]
     public async Task GetPackageVersionsAsync_UsesExactMatchSearch()
     {
         bool? observedExactMatch = null;

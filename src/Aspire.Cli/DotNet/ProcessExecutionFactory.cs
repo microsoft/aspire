@@ -11,6 +11,7 @@ namespace Aspire.Cli.DotNet;
 /// Creates process executions backed by real OS processes.
 /// </summary>
 internal sealed class ProcessExecutionFactory(
+    IEnvironment environment,
     ILogger<ProcessExecutionFactory> logger) : IProcessExecutionFactory
 {
     public IProcessExecution CreateExecution(string fileName, string[] args, IDictionary<string, string>? env, DirectoryInfo workingDirectory, ProcessInvocationOptions options)
@@ -32,16 +33,13 @@ internal sealed class ProcessExecutionFactory(
             FileName = fileName,
             WorkingDirectory = workingDirectory.FullName,
             IsolateConsole = options.IsolateConsole,
-            // Only the isolated path on Windows uses the kill-on-close job; the non-isolated path
-            // and every Unix path leave it null. The job is the process-wide singleton, created on
-            // demand the first time an isolated child needs it.
-            //
+            // IsolateConsole uses the kill-on-close job through the suspended CreateProcess path.
             // BindChildToCliJob is a non-isolated opt-in for the same job: short-lived helpers
-            // (e.g. aspire-managed.exe nuget search) want the kill-on-close safety net without
-            // the per-call conhost.exe overhead of CREATE_NEW_CONSOLE. The actual post-spawn
+            // (e.g. aspire-managed.exe nuget search) want the safety net without the per-call
+            // conhost.exe overhead of CREATE_NEW_CONSOLE. The actual post-spawn
             // AssignProcessToJobObject runs from IsolatedProcess.StartRedirected when JobHandle
             // is non-null. See https://github.com/microsoft/aspire/issues/18490.
-            JobHandle = (options.IsolateConsole || options.BindChildToCliJob) && OperatingSystem.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
+            JobHandle = (options.IsolateConsole || options.BindChildToCliJob) && environment.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
         };
 
         foreach (var a in args)
@@ -61,7 +59,7 @@ internal sealed class ProcessExecutionFactory(
             }
         }
 
-        return Build(startInfo, fileName, effectiveLogger, options);
+        return Build(startInfo, fileName, effectiveLogger, options, environment);
     }
 
     public IProcessExecution CreateExecution(System.Diagnostics.ProcessStartInfo startInfo, ProcessInvocationOptions options)
@@ -77,7 +75,7 @@ internal sealed class ProcessExecutionFactory(
             IsolateConsole = options.IsolateConsole,
             // See the JobHandle comment in the other CreateExecution overload for the rationale
             // behind the (IsolateConsole || BindChildToCliJob) gate.
-            JobHandle = (options.IsolateConsole || options.BindChildToCliJob) && OperatingSystem.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
+            JobHandle = (options.IsolateConsole || options.BindChildToCliJob) && environment.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
         };
 
         foreach (var arg in startInfo.ArgumentList)
@@ -110,7 +108,7 @@ internal sealed class ProcessExecutionFactory(
         // other overload — see StripIdentityEnvVars.
         StripIdentityEnvVars(isolatedStartInfo);
 
-        return Build(isolatedStartInfo, startInfo.FileName, effectiveLogger, options);
+        return Build(isolatedStartInfo, startInfo.FileName, effectiveLogger, options, environment);
     }
 
     // Strip ASPIRE_CLI_* identity overrides from every spawned process — both the isolated AppHost
@@ -130,7 +128,7 @@ internal sealed class ProcessExecutionFactory(
         }
     }
 
-    private static ProcessExecution Build(IsolatedProcessStartInfo startInfo, string fileName, ILogger logger, ProcessInvocationOptions options)
+    private static ProcessExecution Build(IsolatedProcessStartInfo startInfo, string fileName, ILogger logger, ProcessInvocationOptions options, IEnvironment environment)
     {
         // Snapshot args + env now so the IProcessExecution surfaces them before Start() spawns the
         // child. The extension-host launch path reads Arguments / EnvironmentVariables and returns
@@ -138,6 +136,6 @@ internal sealed class ProcessExecutionFactory(
         var argsSnapshot = startInfo.ArgumentList.ToArray();
         var envSnapshot = new Dictionary<string, string?>(startInfo.Environment, StringComparer.OrdinalIgnoreCase);
 
-        return new ProcessExecution(startInfo, fileName, argsSnapshot, envSnapshot, logger, options);
+        return new ProcessExecution(startInfo, fileName, argsSnapshot, envSnapshot, logger, options, environment);
     }
 }
