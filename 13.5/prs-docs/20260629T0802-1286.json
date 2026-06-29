@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Aspire CLI Nix installation path (microsoft/aspire#18410) - matches changelog entry for Aspire CLI available via Nix",
+  "mergedAt": "2026-06-29T08:02:31Z",
+  "number": 1286,
+  "runDate": "2026-06-29T13:22:25Z",
+  "status": "included",
+  "title": "[docs] Add Nix installation path for Aspire CLI"
+}

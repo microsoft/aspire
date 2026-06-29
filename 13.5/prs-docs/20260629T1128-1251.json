@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal aspire.dev website infrastructure fix: stable hash-free og:image URLs for sample detail pages. Not documenting an Aspire product feature.",
+  "mergedAt": "2026-06-29T11:28:52Z",
+  "number": 1251,
+  "runDate": "2026-06-29T13:22:25Z",
+  "status": "excluded",
+  "title": "Fix sample page og:image to use stable, hash-free URLs"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Debug-only (#if DEBUG) thread-safety fix: moved CLI debugger wait option validator to avoid concurrent List<T>.Add on shared static. All changed code is #if DEBUG only and not present in released builds. Also removes quarantine from a flaky test.",
+  "mergedAt": "2026-06-29T08:01:34Z",
+  "number": 18535,
+  "runDate": "2026-06-29T13:22:25Z",
+  "status": "excluded",
+  "title": "Fix thread-safety race in RootCommand causing flaky NRE in LsCommandTests"
+}

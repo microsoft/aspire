@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "NixOS and Nix users can now install and run the official Aspire CLI directly from the first-party Nix flake without building from source. Use `nix run github:microsoft/aspire#aspire-cli` to run the CLI, or add it to a dev shell via the flake's package output or overlay.",
-  "docsPrs": [],
+  "docsPrs": [
+    1286
+  ],
   "docsRequired": true,
   "emoji": "🐧",
   "firstMergedAt": "2026-06-23T08:16:49Z",
