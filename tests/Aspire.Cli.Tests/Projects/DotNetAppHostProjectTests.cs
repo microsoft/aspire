@@ -2214,6 +2214,34 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public void IsLikelyAppHost_AncestorDirectoryBuildPropsConventionalChainingNoMarker_ReturnsFalse()
+    {
+        // Real shape lifted from this repo's own src/Directory.Build.props, tests/Directory.Build.props
+        // and tests/Directory.Build.targets: conventional Directory.Build.* chaining via
+        //   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props',  ...))" />
+        //   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', ...))" />
+        // The ancestor walk already enumerates Directory.Build.props and Directory.Build.targets at
+        // every parent level by name, so the chain delivers no content the pre-check cannot already
+        // see. Treating this as "uncertain" over-promotes every ordinary project under src/, tests/,
+        // and similar repo layouts — exactly the false-positive the architectural review caught.
+        var projectFile = WriteIsLikelyAppHostProject(Path.Combine("src", "Library", "Library.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk" />
+            """);
+        WriteIsLikelyAppHostProject(Path.Combine("src", "Directory.Build.props"), """
+            <Project>
+              <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+            </Project>
+            """);
+        WriteIsLikelyAppHostProject(Path.Combine("src", "Directory.Build.targets"), """
+            <Project>
+              <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', '$(MSBuildThisFileDirectory)../'))" />
+            </Project>
+            """);
+
+        Assert.False(DotNetAppHostProject.IsLikelyAppHost(projectFile));
+    }
+
+    [Fact]
     public void IsLikelyAppHost_AncestorDirectoryBuildFileOnlyConsumesIsAspireHost_ReturnsFalse()
     {
         // Mirrors the co-located negative case: an ancestor file that merely reads $(IsAspireHost)

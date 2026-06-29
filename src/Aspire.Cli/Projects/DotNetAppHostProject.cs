@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using Aspire.Cli.Backchannel;
@@ -343,14 +344,91 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // `$([MSBuild]::GetPathOfFileAbove(...))` resolve to the same path at evaluation time, so a
         // case-sensitive substring check here would silently filter out the lower/mixed-case variants
         // and re-open the false-negative window this fallback is meant to close.
+        //
+        // Special-case conventional Directory.Build.props / Directory.Build.targets chaining: lines
+        // such as
+        //   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', ...))" />
+        // appear in this repo's own src/Directory.Build.props, tests/Directory.Build.props, and
+        // tests/Directory.Build.targets. The ancestor walk already enumerates Directory.Build.props
+        // and Directory.Build.targets at every parent level by name, so the dynamic chain delivers
+        // no content we cannot already see — and treating it as uncertain over-promotes every
+        // ordinary project under src/, tests/, etc. Non-conventional targets (RepoTesting.props,
+        // Shared.props, Aspire.Common.props, ...) are still treated as uncertain.
         // Docs: https://learn.microsoft.com/visualstudio/msbuild/property-functions#msbuild-property-functions
-        return root.Descendants()
-            .Where(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal))
-            .Select(e => e.Attribute("Project")?.Value)
-            .Any(project => project is not null
-                && (project.Contains("GetPathOfFileAbove", StringComparison.OrdinalIgnoreCase)
-                    || project.Contains("GetDirectoryNameOfFileAbove", StringComparison.OrdinalIgnoreCase)));
+        foreach (var import in root.Descendants().Where(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal)))
+        {
+            var project = import.Attribute("Project")?.Value;
+            if (project is null)
+            {
+                continue;
+            }
+
+            if (TryGetWalkUpTargetFileName(project, out var targetFileName))
+            {
+                if (IsConventionalDirectoryBuildFileName(targetFileName))
+                {
+                    continue;
+                }
+
+                return true;
+            }
+
+            // We recognized the walk-up function but couldn't parse the file-name argument (for
+            // example because the argument is itself an MSBuild property expression). Be
+            // conservative and treat the project as uncertain.
+            if (project.Contains("GetPathOfFileAbove", StringComparison.OrdinalIgnoreCase)
+                || project.Contains("GetDirectoryNameOfFileAbove", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
+
+    private static bool TryGetWalkUpTargetFileName(string projectAttributeValue, out string targetFileName)
+    {
+        // GetPathOfFileAbove signature: GetPathOfFileAbove(file [, startingDirectory]).
+        // The file name is the first argument, captured between single or double quotes.
+        var match = s_getPathOfFileAboveRegex.Match(projectAttributeValue);
+        if (match.Success)
+        {
+            targetFileName = match.Groups[1].Value;
+            return true;
+        }
+
+        // GetDirectoryNameOfFileAbove signature: GetDirectoryNameOfFileAbove(startingDirectory, file).
+        // The file name is the second argument; skip past the first quoted argument and capture the
+        // second. Quoted arguments may not embed unescaped quotes of the same kind, which the
+        // [^'"]+ class enforces — sufficient for the import shapes we expect to see in the wild.
+        match = s_getDirectoryNameOfFileAboveRegex.Match(projectAttributeValue);
+        if (match.Success)
+        {
+            targetFileName = match.Groups[1].Value;
+            return true;
+        }
+
+        targetFileName = string.Empty;
+        return false;
+    }
+
+    private static bool IsConventionalDirectoryBuildFileName(string fileName)
+    {
+        // Conventional MSBuild walk-up files are matched by NTFS/macOS-style filesystem casing rules,
+        // and MSBuild itself is case-insensitive when resolving these by name. Compare with
+        // OrdinalIgnoreCase so a casing tweak in author-controlled build files doesn't accidentally
+        // promote ordinary projects.
+        return fileName.Equals(DirectoryBuildPropsName, StringComparison.OrdinalIgnoreCase)
+            || fileName.Equals(DirectoryBuildTargetsName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static readonly Regex s_getPathOfFileAboveRegex = new(
+        @"\bGetPathOfFileAbove\s*\(\s*['""]([^'""]+)['""]",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex s_getDirectoryNameOfFileAboveRegex = new(
+        @"\bGetDirectoryNameOfFileAbove\s*\(\s*['""][^'""]+['""]\s*,\s*['""]([^'""]+)['""]",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static bool ContainsAppHostMarker(XElement root)
     {
