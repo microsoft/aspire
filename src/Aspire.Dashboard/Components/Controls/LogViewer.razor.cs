@@ -148,7 +148,7 @@ public sealed partial class LogViewer
     // spans markup or a color boundary. Pause markers aren't log content, so they're hidden while a
     // filter is active.
     private static bool MatchesFilter(LogEntry entry, string filterText)
-        => entry.Type != LogEntryType.Pause
+        => entry.Type is not LogEntryType.Pause
             && entry.GetStrippedRawContent() is { } stripped
             && stripped.Contains(filterText, StringComparison.OrdinalIgnoreCase);
 
