@@ -88,8 +88,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsViewConsoleOption">
-        <source>Console</source>
-        <target state="new">Console</target>
+        <source>Console logs</source>
+        <target state="new">Console logs</target>
         <note>Option in the View dropdown that shows the resource's console logs.</note>
       </trans-unit>
       <trans-unit id="ConsoleLogsViewSelectorLabel">
