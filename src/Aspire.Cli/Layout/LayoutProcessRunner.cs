@@ -62,7 +62,13 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
         var args = arguments.ToArray();
         var workDir = new DirectoryInfo(workingDirectory ?? Directory.GetCurrentDirectory());
 
-        var execution = executionFactory.CreateExecution(toolPath, args, environmentVariables, workDir, options ?? new ProcessInvocationOptions());
+        // Stamp the launching CLI's identity onto the child (same as RunAsync) so long-lived layout
+        // processes started here — notably aspire-managed dashboard for `aspire dashboard run` and the
+        // profiling collector — can run a parent-liveness watchdog and self-terminate if the CLI is
+        // hard-killed, preventing leaked aspire-managed processes. Does not override caller-set values.
+        var effectiveEnvironment = WithOrphanDetectionEnvironment(environmentVariables);
+
+        var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, options ?? new ProcessInvocationOptions());
 
         if (!execution.Start())
         {

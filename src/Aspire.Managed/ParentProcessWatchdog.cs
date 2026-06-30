@@ -4,19 +4,21 @@
 using System.Globalization;
 using Aspire.Hosting;
 
-namespace Aspire.Managed.NuGet;
+namespace Aspire.Managed;
 
 /// <summary>
 /// Watches the launching CLI process and tears this <c>aspire-managed</c> helper down if the parent
-/// disappears. Long-running NuGet search/restore operations would otherwise linger as orphaned
-/// processes when the CLI is killed (for example a test runner timeout sending SIGKILL), which is one
-/// of the ways <c>aspire-managed</c> processes accumulate over time.
+/// disappears. Long-running operations — a NuGet search/restore, or the standalone dashboard started
+/// by <c>aspire dashboard run</c> — would otherwise linger as orphaned processes when the CLI is killed
+/// (for example a test runner timeout sending SIGKILL), which is one of the ways <c>aspire-managed</c>
+/// processes accumulate over time.
 /// </summary>
 internal static class ParentProcessWatchdog
 {
     // If the operation ignores the cancellation token (e.g. a NuGet network call already issued with
-    // CancellationToken.None), force the process to exit after a short grace period so it cannot
-    // outlive its parent. 124 mirrors the conventional "terminated by timeout" exit code.
+    // CancellationToken.None, or a dashboard host that is slow to shut down), force the process to exit
+    // after a short grace period so it cannot outlive its parent. 124 mirrors the conventional
+    // "terminated by timeout" exit code.
     private const int TerminatedExitCode = 124;
     private static readonly TimeSpan s_forceExitGracePeriod = TimeSpan.FromSeconds(5);
 

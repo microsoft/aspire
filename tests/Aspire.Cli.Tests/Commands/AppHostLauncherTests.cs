@@ -448,6 +448,21 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void DetachedChildEnvironment_StampsLauncherIdentityForLivenessMonitor()
+    {
+        // The detached child's LauncherLivenessMonitor watches this launcher identity (PID + start time)
+        // to tear the AppHost down if the foreground launcher dies before readiness. Without it the child
+        // cannot detect a dead launcher and the AppHost + dashboard leak as orphaned processes.
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null);
+
+        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
+        Assert.Equal(
+            Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
+            environment[KnownConfigNames.CliLauncherProcessId]);
+        Assert.NotNull(ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(environment[KnownConfigNames.CliLauncherProcessStarted]));
+    }
+
+    [Fact]
     public void DetachedChildEnvironment_IncludesProfilingTelemetryContextFromActiveProfilingSpan()
     {
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(

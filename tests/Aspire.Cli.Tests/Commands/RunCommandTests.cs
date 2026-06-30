@@ -192,6 +192,88 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_DetachedChild_WhenLauncherDiesBeforeReadiness_CancelsRun()
+    {
+        // End-to-end coverage for the detached launcher-death wiring: a detached child CLI
+        // (ASPIRE_CLI_RUN_DETACHED) must watch the foreground launcher (ASPIRE_LAUNCHER_PID/STARTED) and,
+        // if the launcher dies before the AppHost reaches readiness, cancel the run so the AppHost tree is
+        // torn down instead of leaking. This exercises IsDetachedStartChild() ->
+        // LauncherLivenessMonitor.StartIfConfigured -> run cancellation that the isolated monitor unit
+        // tests do not cover.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var runCancellationObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var buildCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, ct) =>
+            {
+                context.BuildCompletionSource?.TrySetResult(true);
+                buildCompleted.SetResult();
+
+                try
+                {
+                    // Block during startup without ever signaling the backchannel, so the only thing that
+                    // can end the run is the launcher-death watchdog cancelling the run token.
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    runCancellationObserved.SetResult();
+                    throw;
+                }
+
+                return 0;
+            }
+        };
+
+        // A real, short-lived process stands in for the foreground launcher that spawned this detached
+        // child. The child watches it via ASPIRE_LAUNCHER_PID/STARTED and must react to its death.
+        using var launcher = TestProcesses.StartLongRunning();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.ConfigurationCallback += config =>
+            {
+                config[KnownConfigNames.CliRunDetached] = "true";
+                config[KnownConfigNames.CliLauncherProcessId] = launcher.Id.ToString(CultureInfo.InvariantCulture);
+                config[KnownConfigNames.CliLauncherProcessStarted] = ((DateTimeOffset)launcher.StartTime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var pendingRun = result.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        // Once build completes the child is in the startup window with the launcher watchdog armed.
+        // Killing the launcher now must cancel the run rather than leak the AppHost.
+        await buildCompleted.Task.DefaultTimeout();
+        launcher.Kill(entireProcessTree: true);
+        launcher.WaitForExit();
+
+        // The monitor polls roughly once a second; allow generous margin for CI contention.
+        await runCancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.True(runCancellationObserved.Task.IsCompletedSuccessfully);
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+    }
+
+    [Fact]
     public async Task RunCommand_StartupTimeoutBudgetIncludesBuildAndBackchannelWaits()
     {
         var interactionService = new TestInteractionService();

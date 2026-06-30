@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Processes;
+using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -103,15 +104,5 @@ public class LauncherLivenessMonitorTests
             .Build();
     }
 
-    private static Process StartLongRunningProcess()
-    {
-        // Mirrors CliOrphanDetectorTests' cross-platform process choice for CI reliability.
-        var psi = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo("ping", "-t localhost") { CreateNoWindow = true }
-            : new ProcessStartInfo("tail", "-f /dev/null") { CreateNoWindow = true };
-
-        var process = Process.Start(psi);
-        Assert.NotNull(process);
-        return process;
-    }
+    private static Process StartLongRunningProcess() => TestProcesses.StartLongRunning();
 }
