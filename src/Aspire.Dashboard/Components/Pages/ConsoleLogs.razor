@@ -8,7 +8,7 @@
 <PageTitle>
     <ApplicationName
         AdditionalText="@PageViewModel.SelectedResource.Id?.ReplicaSetName"
-        ResourceName="@(_selectedResourceHasTerminal ? nameof(Dashboard.Resources.ConsoleLogs.TerminalPageTitle) : nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsPageTitle))"
+        ResourceName="@(_activeView == ConsoleLogsView.Terminal ? nameof(Dashboard.Resources.ConsoleLogs.TerminalPageTitle) : nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsPageTitle))"
         Loc="@Loc"/>
 </PageTitle>
 
@@ -18,7 +18,7 @@
                              MainContentStyle="margin-top: 10px;"
                              MobileToolbarButtonText="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSelectResourceToolbar)]">
         <PageTitleSection>
-            <h1 class="page-header">@Loc[_selectedResourceHasTerminal ? nameof(Dashboard.Resources.ConsoleLogs.TerminalHeader) : nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsHeader)]</h1>
+            <h1 class="page-header">@Loc[_activeView == ConsoleLogsView.Terminal ? nameof(Dashboard.Resources.ConsoleLogs.TerminalHeader) : nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsHeader)]</h1>
         </PageTitleSection>
         <ToolbarSection>
             <ResourceSelect Resources="_resources"
@@ -27,7 +27,24 @@
                             @bind-SelectedResource:after="HandleSelectedOptionChangedAsync"
                             LabelClass="toolbar-left" />
 
-            @if (!_selectedResourceHasTerminal)
+            @if (_selectedResourceHasTerminal)
+            {
+                // View toggle: only meaningful for terminal-enabled resources.
+                // For non-terminal resources Console is the only thing to look
+                // at, so the dropdown stays hidden — keeping the toolbar
+                // identical to today for the common case.
+                <FluentSelect TOption="string"
+                              Items="@s_viewSelectOptions"
+                              OptionValue="@(o => o)"
+                              OptionText="@(o => string.Equals(o, nameof(ConsoleLogsView.Terminal), StringComparison.Ordinal) ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)].Value : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewConsoleOption)].Value)"
+                              Value="@_activeView.ToString()"
+                              ValueChanged="HandleViewChangedAsync"
+                              Width="120px"
+                              Style="min-width: auto; margin-left: 10px;"
+                              AriaLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewSelectorLabel)]" />
+            }
+
+            @if (_activeView == ConsoleLogsView.Console)
             {
                 <SignalsActionsDisplay HandleClearSignal="@ClearConsoleLogs"
                                       IsPaused="@PauseManager.ConsoleLogsPaused"
@@ -63,7 +80,7 @@
                 }
             }
 
-            @if (_selectedResourceHasTerminal && _terminalToolbarState is { } terminalState)
+            @if (_activeView == ConsoleLogsView.Terminal && _terminalToolbarState is { } terminalState)
             {
                 <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
 
@@ -111,7 +128,7 @@
             @if (ViewportInformation.IsDesktop)
             {
                 // This takes up too much horizontal space on mobile, so show on a new line on mobile
-                @if (!_selectedResourceHasTerminal)
+                @if (_activeView == ConsoleLogsView.Console)
                 {
                     <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]" slot="end">@PageViewModel.Status</FluentLabel>
 
@@ -123,7 +140,7 @@
                         slot="end"/>
                 }
             }
-            else if (!_selectedResourceHasTerminal)
+            else if (_activeView == ConsoleLogsView.Console)
             {
                 <AspireMenuButton
                     Icon="@(new Icons.Regular.Size20.Options())"
@@ -135,7 +152,7 @@
         </ToolbarSection>
 
         <MobilePageTitleToolbarSection>
-            @if (!_selectedResourceHasTerminal)
+            @if (_activeView == ConsoleLogsView.Console)
             {
                 <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]">
                     @if (PageViewModel.SelectedResource?.Id is not null)
@@ -151,24 +168,45 @@
         </MobilePageTitleToolbarSection>
 
         <MainSection>
+            @* For terminal-enabled resources we keep BOTH views mounted and
+               flip visibility via CSS. Unmounting TerminalView on every flip
+               would tear down xterm.js, the WebSocket, and the PTY consumer
+               session — destroying scrollback and forcing an HMP1
+               StateSync round-trip on every toggle. Unmounting LogViewer
+               would drop the rendered log buffer for the same reason.
+               `display:none` keeps the DOM, JS state, and Blazor component
+               state alive while only one view is visible at a time. *@
             @if (_selectedResourceHasTerminal && _terminalResourceName is not null)
             {
-                <TerminalView
-                    @ref="_terminalViewRef"
-                    ResourceName="@_terminalResourceName"
-                    ReplicaIndex="@_terminalReplicaIndex"
-                    OnToolbarStateChanged="OnTerminalToolbarStateChangedAsync" />
+                <div style="@(_activeView == ConsoleLogsView.Console ? "display: contents;" : "display: none;")">
+                    <LogViewer
+                        @ref="_logViewerRef"
+                        LogEntries="@_logEntries"
+                        ShowTimestamp="@_showTimestamp"
+                        IsTimestampUtc="@_isTimestampUtc"
+                        NoWrapLogs="@_noWrapLogs"
+                        ShowNoLogsMessage="@_showNoLogsMessage"
+                        ShowResourcePrefix="@_isSubscribedToAll"/>
+                </div>
+                <div style="@(_activeView == ConsoleLogsView.Terminal ? "display: contents;" : "display: none;")">
+                    <TerminalView
+                        @ref="_terminalViewRef"
+                        ResourceName="@_terminalResourceName"
+                        ReplicaIndex="@_terminalReplicaIndex"
+                        OnToolbarStateChanged="OnTerminalToolbarStateChangedAsync"
+                        OnExited="OnTerminalExitedAsync" />
+                </div>
             }
             else
             {
                 <LogViewer
-                @ref="_logViewerRef"
-                LogEntries="@_logEntries"
-                ShowTimestamp="@_showTimestamp"
-                IsTimestampUtc="@_isTimestampUtc"
-                NoWrapLogs="@_noWrapLogs"
-                ShowNoLogsMessage="@_showNoLogsMessage"
-                ShowResourcePrefix="@_isSubscribedToAll"/>
+                    @ref="_logViewerRef"
+                    LogEntries="@_logEntries"
+                    ShowTimestamp="@_showTimestamp"
+                    IsTimestampUtc="@_isTimestampUtc"
+                    NoWrapLogs="@_noWrapLogs"
+                    ShowNoLogsMessage="@_showNoLogsMessage"
+                    ShowResourcePrefix="@_isSubscribedToAll"/>
             }
         </MainSection>
     </AspirePageContentLayout>

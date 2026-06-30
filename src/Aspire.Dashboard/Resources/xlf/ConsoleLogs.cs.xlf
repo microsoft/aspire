@@ -87,6 +87,21 @@
         <target state="translated">Neznámý stav</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsViewConsoleOption">
+        <source>Console</source>
+        <target state="new">Console</target>
+        <note>Option in the View dropdown that shows the resource's console logs.</note>
+      </trans-unit>
+      <trans-unit id="ConsoleLogsViewSelectorLabel">
+        <source>View</source>
+        <target state="new">View</target>
+        <note>Label for the dropdown that selects between Console logs and Terminal views.</note>
+      </trans-unit>
+      <trans-unit id="ConsoleLogsViewTerminalOption">
+        <source>Terminal</source>
+        <target state="new">Terminal</target>
+        <note>Option in the View dropdown that shows the resource's interactive terminal.</note>
+      </trans-unit>
       <trans-unit id="ConsoleLogsWatchingLogs">
         <source>Watching logs...</source>
         <target state="translated">Sledují se protokoly...</target>

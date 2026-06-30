@@ -116,6 +116,37 @@ to connect to an arbitrary local socket — it can only ask for
 `(resource, replica)` pairs that are present in the resource snapshot
 stream.
 
+### Console / Terminal view toggle
+
+For a terminal-enabled resource the dashboard `ConsoleLogs` page mounts
+**both** `LogViewer` (the resource's standard log stream) and
+`TerminalView` (the interactive xterm.js terminal) at the same time and
+flips between them via a small "View" `FluentSelect` in the toolbar:
+
+- The page defaults to **Console** on resource selection so any pre-PTY
+  hosting messages — `WaitFor` notifications, startup failures, image
+  pull progress — are visible immediately.
+- The page **auto-switches to Terminal** the first time the JS terminal
+  reports a non-`connecting` toolbar status (PTY attached). Reconnects do
+  not re-trigger the auto-switch.
+- The page **auto-switches back to Console** when the JS terminal raises
+  `client.onExit` (PTY exited), so the user sees the final log lines
+  including the hosting exit message.
+- Once the user manually picks a view from the dropdown the page
+  **latches** their choice for the rest of that resource's session and
+  ignores subsequent auto-switch triggers. The latch resets when a
+  different resource is selected.
+- Both views stay mounted across flips (visibility is toggled with
+  `display:none` on a wrapper `<div>`); the log subscription and the
+  xterm/HMP1 consumer session are kept alive so neither view loses
+  scrollback or has to re-handshake on toggle. After a `display:none →
+  visible` transition the page calls `refreshLayout` on the JS terminal
+  to guarantee xterm rebinds to the new available space.
+
+The console log stream is now subscribed to for terminal-enabled
+resources too (previously it was suppressed), which is what makes the
+Console view non-empty for a `WithTerminal()` resource.
+
 ## CLI
 
 `aspire terminal <resource> [--replica N]` (`Aspire.Cli/Commands/TerminalCommand.cs`)

@@ -1079,6 +1079,19 @@ function connectClient(state, wsUrl) {
         try {
             state.term?.write(`\r\n[workload exited with code ${code}]\r\n`);
         } catch { /* ignore */ }
+        // Notify the .NET host that the workload (PTY) has exited so the
+        // page can flip back to the Console logs view. We deliberately use
+        // a separate JSInvokable rather than overloading the toolbar
+        // snapshot because the toolbar status (connecting/primary/viewer/
+        // no-primary) describes the consumer-side WebSocket and primary
+        // ownership — it doesn't directly signal producer exit.
+        if (state.dotNetRef) {
+            try {
+                state.dotNetRef.invokeMethodAsync('OnTerminalExited', state.id, code ?? -1);
+            } catch (e) {
+                dbg(state, 'client.onExit: dotNet invoke failed', { error: e?.message });
+            }
+        }
     };
 
     client.onClose = (ev) => {
@@ -1263,4 +1276,17 @@ export function refreshToolbarState(id) {
     if (!state) return;
     state._lastToolbarJson = null;
     flushToolbarState(state);
+}
+
+// Triggers a layout recompute on demand. Called by the .NET host after the
+// terminal element becomes visible again following a Console/Terminal view
+// flip — the wrapper goes from display:none to visible, which may or may
+// not trigger ResizeObserver depending on the browser's box-tree timing.
+// Forcing applyRoleAwareLayout here guarantees xterm rebinds to the new
+// available space immediately rather than waiting for the next external
+// resize event.
+export function refreshLayout(id) {
+    const state = terminals.get(id);
+    if (!state) return;
+    applyRoleAwareLayout(state);
 }

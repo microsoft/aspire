@@ -260,5 +260,23 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TerminalPageTitle", resourceCulture);
             }
         }
+        
+        public static string ConsoleLogsViewSelectorLabel {
+            get {
+                return ResourceManager.GetString("ConsoleLogsViewSelectorLabel", resourceCulture);
+            }
+        }
+        
+        public static string ConsoleLogsViewConsoleOption {
+            get {
+                return ResourceManager.GetString("ConsoleLogsViewConsoleOption", resourceCulture);
+            }
+        }
+        
+        public static string ConsoleLogsViewTerminalOption {
+            get {
+                return ResourceManager.GetString("ConsoleLogsViewTerminalOption", resourceCulture);
+            }
+        }
     }
 }

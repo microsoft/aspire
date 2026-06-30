@@ -170,6 +170,37 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private Controls.TerminalToolbarState? _terminalToolbarState;
     private IReadOnlyList<Controls.TerminalSizePreset> _terminalSizePresets = Array.Empty<Controls.TerminalSizePreset>();
 
+    // View toggle for terminal resources. The page surfaces both LogViewer
+    // and TerminalView in MainSection (both stay mounted so flipping does
+    // not tear down the PTY or the log subscription) and uses CSS to hide
+    // the inactive one. For non-terminal resources only LogViewer is shown
+    // and these fields are unused.
+    private ConsoleLogsView _activeView = ConsoleLogsView.Console;
+    // Set true the first time the user explicitly picks a view from the
+    // dropdown. Once true we suppress all auto-switching (PTY attach / exit)
+    // so we never yank the user away from a view they're actively reading.
+    // Reset on resource change.
+    private bool _userPickedView;
+    // Set true the first time the JS terminal reports a non-`connecting`
+    // status for the current resource. We auto-switch to Terminal on that
+    // first transition; subsequent status changes (viewer/primary toggles,
+    // reconnects) must not re-trigger the switch.
+    private bool _terminalAttachedOnce;
+    // Tracks the view that was rendered to the DOM on the previous render
+    // pass. When the active view flips back to Terminal we need to nudge
+    // xterm.js to relayout because the wrapper's display:none → visible
+    // transition may not trigger ResizeObserver in every browser.
+    private ConsoleLogsView? _lastRenderedView;
+
+    // Static option list for the View dropdown. The text comes from the
+    // resource manager at render time so it stays in sync with the page's
+    // current culture; the underlying values are the enum names.
+    private static readonly string[] s_viewSelectOptions =
+    [
+        nameof(ConsoleLogsView.Console),
+        nameof(ConsoleLogsView.Terminal),
+    ];
+
     // UI
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
     private AspirePageContentLayout? _contentLayout;
@@ -427,6 +458,21 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         {
             await terminalView.RefreshToolbarStateAsync();
         }
+
+        // Detect a view-flip TO Terminal and prod xterm to relayout. The
+        // wrapper element transitions from display:none to visible on this
+        // render and ResizeObserver is not guaranteed to fire for that
+        // box-tree change. Without this nudge xterm can stay sized to its
+        // pre-hide dimensions until the next external resize.
+        if (_selectedResourceHasTerminal &&
+            _activeView == ConsoleLogsView.Terminal &&
+            _lastRenderedView != ConsoleLogsView.Terminal &&
+            _terminalViewRef is { } terminalForLayout)
+        {
+            await terminalForLayout.RefreshLayoutAsync();
+        }
+
+        _lastRenderedView = _activeView;
     }
 
     private async Task SubscribeAsync(bool isAllSelected, string? selectedResourceName)
@@ -442,6 +488,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // the wrong badge/dims/dropdown for the new resource while the JS
         // terminal is initializing and pushing its first snapshot.
         _terminalToolbarState = null;
+        // Reset the view-toggle latch for the new resource so the next
+        // PTY-attach can auto-switch and the user has a fresh slate to
+        // pick a view. Default the view to Console so any pre-PTY hosting
+        // messages (e.g. WaitFor) are visible immediately on selection.
+        _userPickedView = false;
+        _terminalAttachedOnce = false;
+        _activeView = ConsoleLogsView.Console;
 
         if (!isAllSelected && selectedResourceName is not null &&
             _resourceByName.TryGetValue(selectedResourceName, out var selectedResource) &&
@@ -452,12 +505,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             _terminalResourceName = selectedResource.DisplayName;
             _terminalReplicaIndex = replicaIndex;
             Logger.LogDebug("Resource '{ResourceName}' has terminal at replica {ReplicaIndex}", selectedResourceName, replicaIndex);
-
-            // Don't subscribe to console logs for terminal resources —
-            // the terminal view replaces the log viewer.
-            await CancelAllSubscriptionsAsync();
-            _isSubscribedToAll = false;
-            return;
+            // Intentionally fall through to the normal subscription path so
+            // the resource's console log stream is collected even while the
+            // user is on the Terminal view. The Console view in the View
+            // dropdown shows these logs and they're needed for pre-PTY
+            // hosting messages (WaitFor, startup failures) and post-PTY
+            // exit messages — flipping to the Terminal view should never
+            // cause us to miss anything from the console stream.
         }
 
         // Cancel all existing subscriptions
@@ -1198,8 +1252,75 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 .ToList();
         }
 
+        // Auto-switch to the Terminal view the *first* time the PTY attaches
+        // (status moves off "connecting"). The page starts on Console so
+        // WaitFor / hosting messages stay visible until there's actually
+        // something to look at in the terminal. Skip the auto-switch if the
+        // user has already picked a view manually — flipping their view out
+        // from under them is hostile. Also skip on subsequent attach events
+        // (e.g. WebSocket reconnects) so a transient network blip during a
+        // user's deliberate Console session does not snap them to Terminal.
+        if (_selectedResourceHasTerminal &&
+            !_terminalAttachedOnce &&
+            !_userPickedView &&
+            !string.Equals(state.Status, "connecting", StringComparison.Ordinal))
+        {
+            _terminalAttachedOnce = true;
+            _activeView = ConsoleLogsView.Terminal;
+        }
+
         StateHasChanged();
     }
+
+    private Task OnTerminalExitedAsync(Controls.TerminalExitInfo info)
+    {
+        Logger.LogDebug("Terminal for resource '{ResourceName}' exited with code {ExitCode}.", _terminalResourceName, info.ExitCode);
+
+        // PTY closed — flip back to Console so the user sees the resource's
+        // final log lines (including the hosting "exited" message and any
+        // tail-end output). Respect the user's manual choice if they have
+        // already picked a view since this session started.
+        if (_selectedResourceHasTerminal &&
+            !_userPickedView &&
+            _activeView == ConsoleLogsView.Terminal)
+        {
+            _activeView = ConsoleLogsView.Console;
+            StateHasChanged();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleViewChangedAsync(string? newView)
+    {
+        if (newView is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        // Parse defensively: FluentSelect always echoes one of the option
+        // values we provided, but we don't want a bad value to throw and
+        // tear down the page.
+        if (!Enum.TryParse<ConsoleLogsView>(newView, ignoreCase: true, out var parsed))
+        {
+            return Task.CompletedTask;
+        }
+
+        // Latch the user's choice so neither the PTY-attached nor PTY-exited
+        // auto-switch can override it for the rest of this resource session.
+        _userPickedView = true;
+        _activeView = parsed;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    // Test-only accessors. The view-toggle latch and auto-switch behavior
+    // are reachable from bUnit only by inspecting the internal state — the
+    // user-visible signal (display:none on a wrapper div) is awkward to
+    // assert against in bUnit. These mirror existing internal hooks (e.g.
+    // _logEntries) used by ConsoleLogsTests.
+    internal ConsoleLogsView ActiveViewForTest => _activeView;
+    internal Task HandleViewChangedForTestAsync(string? newView) => HandleViewChangedAsync(newView);
 
     private Task TerminalTakeControlAsync()
         => _terminalViewRef?.TakePrimaryAsync() ?? Task.CompletedTask;
@@ -1266,4 +1387,17 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             new ComponentTelemetryProperty(TelemetryPropertyKeys.ConsoleLogsShowTimestamp, new AspireTelemetryProperty(_showTimestamp, AspireTelemetryPropertyType.UserSetting))
         ], Logger);
     }
+}
+
+/// <summary>
+/// The two MainSection contents the <see cref="ConsoleLogs"/> page can show
+/// for a resource that has <c>WithTerminal()</c> applied. Non-terminal
+/// resources implicitly always show <see cref="Console"/>.
+/// </summary>
+public enum ConsoleLogsView
+{
+    /// <summary>The resource's standard log stream (LogViewer).</summary>
+    Console,
+    /// <summary>The interactive xterm.js terminal (TerminalView).</summary>
+    Terminal,
 }

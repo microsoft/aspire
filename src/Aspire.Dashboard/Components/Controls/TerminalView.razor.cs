@@ -45,6 +45,16 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [Parameter]
     public EventCallback<TerminalToolbarState> OnToolbarStateChanged { get; set; }
 
+    /// <summary>
+    /// Raised when the JS side reports that the workload (PTY) has exited.
+    /// The host page subscribes so it can auto-switch the view back to the
+    /// resource's console logs — the workload has stopped producing
+    /// terminal bytes and the final exit code / hosting messages live in
+    /// the console log stream.
+    /// </summary>
+    [Parameter]
+    public EventCallback<TerminalExitInfo> OnExited { get; set; }
+
     [Inject]
     public required IJSRuntime JS { get; init; }
 
@@ -155,6 +165,26 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         {
             // Component disposed mid-call; nothing to do.
         }
+    }
+
+    /// <summary>
+    /// Invoked by the JS terminal when the workload (PTY) exits. The JS side
+    /// also writes a "[workload exited with code N]" line into the xterm
+    /// buffer; this callback exists so the host page can react beyond the
+    /// in-terminal message (e.g. flip the visible view back to console logs).
+    /// </summary>
+    [JSInvokable]
+    public Task OnTerminalExited(int terminalId, int exitCode)
+    {
+        // Drop stale notifications that arrive after this view was rebound to
+        // a different resource/replica — the previous JS terminal id is no
+        // longer relevant to the currently displayed resource.
+        if (_terminalId != 0 && terminalId != _terminalId)
+        {
+            return Task.CompletedTask;
+        }
+
+        return OnExited.InvokeAsync(new TerminalExitInfo { TerminalId = terminalId, ExitCode = exitCode });
     }
 
     /// <summary>
@@ -279,6 +309,29 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Asks the JS terminal to recompute its layout. Called by the host
+    /// page when the terminal element transitions from hidden back to
+    /// visible (e.g. the user flips the page-level View dropdown from
+    /// Console back to Terminal) — display:none → visible does not always
+    /// trigger ResizeObserver, so forcing a relayout here guarantees the
+    /// terminal fills the available space immediately.
+    /// </summary>
+    public async Task RefreshLayoutAsync()
+    {
+        if (_jsModule is null || _terminalId == 0)
+        {
+            return;
+        }
+        try
+        {
+            await _jsModule.InvokeVoidAsync("refreshLayout", _terminalId);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
     private string BuildWebSocketUrl(string resource, int replica)
     {
         var baseUri = new Uri(NavigationManager.BaseUri);
@@ -364,3 +417,15 @@ public sealed record TerminalToolbarState
 /// host page's size dropdown).
 /// </summary>
 public sealed record TerminalSizePreset(string Value, string Label, int Cols, int Rows);
+
+/// <summary>
+/// Payload pushed up from the JS terminal when the workload (PTY) exits.
+/// </summary>
+public sealed record TerminalExitInfo
+{
+    /// <summary>The JS-side terminal id that emitted the exit notification.</summary>
+    public int TerminalId { get; init; }
+
+    /// <summary>The workload's exit code, or <c>-1</c> when the JS side did not receive one.</summary>
+    public int ExitCode { get; init; }
+}

@@ -3,6 +3,7 @@
 
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
@@ -18,8 +19,9 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 
 // Focused bUnit coverage for the central user-visible render branch in
 // ConsoleLogs.razor: when the selected resource has WithTerminal() applied,
-// the page must mount TerminalView instead of LogViewer (and restore LogViewer
-// when switching back to a non-terminal resource). The HasTerminal()
+// the page must mount BOTH TerminalView and LogViewer (the two are toggled
+// via the View dropdown; both stay mounted so neither tears down on flips).
+// For non-terminal resources only LogViewer is mounted. The HasTerminal()
 // predicate itself has unit coverage in ResourceViewModelExtensionsTerminalTests,
 // but only a component-level test proves the page actually re-evaluates the
 // flag on selection change and that the render branch wires the correct
@@ -35,7 +37,7 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class ConsoleLogsTests
 {
     [Fact]
-    public async Task TerminalResource_Selected_RendersTerminalView_NotLogViewer()
+    public async Task TerminalResource_Selected_RendersBothViews_DefaultsToConsole()
     {
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -65,17 +67,18 @@ public partial class ConsoleLogsTests
         var instance = cut.Instance;
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
         // Page wires _selectedResourceHasTerminal in SubscribeAsync after the
-        // selection update; wait for that to flip true before asserting the
-        // rendered tree, otherwise we can race the initial render.
+        // selection update; wait for the dual-mount branch to take effect.
         cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
 
-        var terminalViews = cut.FindComponents<TerminalView>();
-        var logViewers = cut.FindComponents<LogViewer>();
+        // Both views are mounted concurrently for terminal-enabled resources
+        // so the View dropdown can flip between them without tearing down
+        // the JS terminal or the LogViewer subscription. The initial active
+        // view is Console — that way any pre-PTY hosting messages (WaitFor)
+        // are visible immediately.
+        Assert.Single(cut.FindComponents<TerminalView>());
+        Assert.Single(cut.FindComponents<LogViewer>());
 
-        Assert.Single(terminalViews);
-        Assert.Empty(logViewers);
-
-        var terminalView = terminalViews[0].Instance;
+        var terminalView = cut.FindComponents<TerminalView>()[0].Instance;
         Assert.Equal(terminalResource.DisplayName, terminalView.ResourceName);
         Assert.Equal(0, terminalView.ReplicaIndex);
 
@@ -83,7 +86,7 @@ public partial class ConsoleLogsTests
     }
 
     [Fact]
-    public async Task SwitchingFromTerminalToNonTerminalResource_RestoresLogViewer()
+    public async Task SwitchingFromTerminalToNonTerminalResource_TearsDownTerminalView()
     {
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -115,9 +118,9 @@ public partial class ConsoleLogsTests
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
         cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
 
-        // Sanity: starting state is TerminalView, no LogViewer.
+        // Sanity: terminal resource mounts both views.
         Assert.Single(cut.FindComponents<TerminalView>());
-        Assert.Empty(cut.FindComponents<LogViewer>());
+        Assert.Single(cut.FindComponents<LogViewer>());
 
         // Switch to the plain resource. Use the same ResourceSelect-driven
         // path as ResourceName_SubscribeOnLoadAndChange_* so we exercise the
@@ -134,13 +137,172 @@ public partial class ConsoleLogsTests
         innerSelect.Change("plain-resource");
 
         cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == plainResource.Name);
-        // LogViewer should be restored and TerminalView torn down.
-        cut.WaitForState(() => cut.FindComponents<LogViewer>().Count > 0);
+        // For a non-terminal resource the TerminalView is not mounted at all
+        // (only LogViewer is needed), so the dual-mount branch is skipped.
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count == 0);
 
         Assert.Empty(cut.FindComponents<TerminalView>());
         Assert.Single(cut.FindComponents<LogViewer>());
 
         await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task TerminalResource_PtyAttaches_AutoSwitchesToTerminalView()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // Starting state: page is on Console even though the resource has a
+        // terminal — the PTY hasn't attached yet, so pre-PTY hosting messages
+        // stay visible.
+        Assert.Equal(ConsoleLogsView.Console, instance.ActiveViewForTest);
+
+        // Simulate the JS terminal pushing a toolbar snapshot once the PTY
+        // attaches (status moves off "connecting"). The page should auto-flip
+        // to the Terminal view because the user hasn't manually picked one.
+        var terminalView = cut.FindComponent<TerminalView>().Instance;
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Terminal);
+        Assert.Equal(ConsoleLogsView.Terminal, instance.ActiveViewForTest);
+    }
+
+    [Fact]
+    public async Task TerminalResource_UserPicksConsole_PtyAttachDoesNotOverride()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // User explicitly latches on Console. Even though they were already
+        // viewing Console, the explicit pick must latch _userPickedView so
+        // subsequent auto-switch attempts are ignored.
+        await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogsView.Console)));
+
+        // PTY attaches.
+        var terminalView = cut.FindComponent<TerminalView>().Instance;
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+
+        // Page must stay on Console because the user already picked it.
+        Assert.Equal(ConsoleLogsView.Console, instance.ActiveViewForTest);
+    }
+
+    [Fact]
+    public async Task TerminalResource_PtyExits_AutoSwitchesBackToConsole()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // PTY attaches → page flips to Terminal.
+        var terminalView = cut.FindComponent<TerminalView>().Instance;
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Terminal);
+
+        // PTY exits → page flips back to Console so the final log lines and
+        // hosting exit messages are visible.
+        await cut.InvokeAsync(() => terminalView.OnTerminalExited(terminalId: 1, exitCode: 0));
+
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Console);
+        Assert.Equal(ConsoleLogsView.Console, instance.ActiveViewForTest);
     }
 
     private void SetupTerminalViewJsInterop()
@@ -156,6 +318,8 @@ public partial class ConsoleLogsTests
         var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
         module.Setup<int>("initTerminal", _ => true).SetResult(1);
         module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
+        module.SetupVoid("refreshLayout", _ => true).SetVoidResult();
+        module.SetupVoid("refreshToolbarState", _ => true).SetVoidResult();
         module.Setup<TerminalSizePreset[]>("getSizePresets").SetResult([]);
     }
 
