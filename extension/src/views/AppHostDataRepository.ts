@@ -90,6 +90,7 @@ export interface AppHostDisplayInfo {
     dashboardUrl: string | null;
     logFilePath?: string | null;
     resources: ResourceJson[] | null | undefined;
+    inWorkspace?: boolean;
 }
 
 interface DescribeSnapshotJson {
@@ -239,9 +240,6 @@ export class AppHostDataRepository {
     private _workspaceUsesWorkspaceRoot = false;
 
     // ── Describe-target coordinator input state ──
-    // `ps` (running) and `ls` (idle/configured) feed these; `_updateWorkspaceSelection` turns them
-    // into the selected describe target. `_reconcileDescribeStreams` is the sole start/stop authority.
-    private _runningWorkspaceAppHosts: readonly AppHostDisplayInfo[] = [];
     private _configuredWorkspaceAppHostPath: string | undefined;
     private _workspaceAppHostDiscoveryVersion = 0;
     private _workspaceAppHostDiscoveryInProgress = false;
@@ -311,7 +309,7 @@ export class AppHostDataRepository {
     }
 
     get appHosts(): readonly AppHostDisplayInfo[] {
-        return this._appHosts;
+        return this._viewMode === 'workspace' ? this._appHosts.filter(appHost => appHost.inWorkspace) : this._appHosts;
     }
 
     get workspaceAppHost(): AppHostDisplayInfo | undefined {
@@ -610,7 +608,7 @@ export class AppHostDataRepository {
     // AppHost wins over a configured-but-idle selection, so `ls` completion can't retarget describe
     // away from the AppHost the user actually started.
     private _resolveWorkspaceDescribeTarget(): string | undefined {
-        const running = this._runningWorkspaceAppHosts;
+        const running = this.appHosts;
         const configured = this._configuredWorkspaceAppHostPath;
 
         // Configured selection that is actually running — honor it outright.
@@ -814,15 +812,19 @@ export class AppHostDataRepository {
         this._workspaceAppHostCandidatePaths = [];
         this._workspaceAppHostDescription = undefined;
         this._configuredWorkspaceAppHostPath = undefined;
-        // Reset the running set too so a stale entry can't make the reconciler briefly target an
+        // Clear workspace membership so a stale entry can't make the reconciler briefly target an
         // unvalidated host after a refresh re-runs discovery.
-        this._runningWorkspaceAppHosts = [];
+        for (const appHost of this._appHosts) {
+            appHost.inWorkspace = false;
+        }
     }
 
     private _clearWorkspaceAppHostData(): void {
         this._workspaceAppHost = undefined;
         if (this._viewMode === 'workspace') {
-            this._appHosts = [];
+            for (const appHost of this._appHosts) {
+                appHost.inWorkspace = false;
+            }
             this._appHostsSnapshot = '[]';
         }
     }
@@ -925,7 +927,7 @@ export class AppHostDataRepository {
                 continue;
             }
 
-            if (this._isRunningWorkspaceHost(path)) {
+            if (this.appHosts.some(a => isMatchingAppHostPath(a.appHostPath, path))) {
                 stream.observedRunning = true;
             }
 
@@ -939,19 +941,12 @@ export class AppHostDataRepository {
         this._attachResourcesToAppHosts();
     }
 
-    private _isRunningWorkspaceHost(path: string): boolean {
-        return this._runningWorkspaceAppHosts.some(a => isMatchingAppHostPath(a.appHostPath, path));
-    }
-
     // The set of AppHost paths that should have a live describe stream in the current view mode.
     private _activeDescribeHostPaths(): readonly string[] {
-        if (this._viewMode === 'global') {
-            return this._appHosts.map(a => a.appHostPath);
-        }
         if (this._isSingleFileDescribeMode()) {
             return [SINGLE_FILE_DESCRIBE_KEY];
         }
-        return this._runningWorkspaceAppHosts.map(a => a.appHostPath);
+        return this.appHosts.map(a => a.appHostPath);
     }
 
     private _isDescribeHostActive(path: string): boolean {
@@ -965,16 +960,9 @@ export class AppHostDataRepository {
 
         const desired = new Set(this._activeDescribeHostPaths());
 
-        // Single-file's only desired path is the sentinel (already included), so the idle-target
-        // exception applies to real workspace targets only. Keep the target desired until `ps` has
-        // confirmed it running at least once: describe data does NOT promote the host into
-        // `_runningWorkspaceAppHosts` (only `ps` does), so before that first confirmation an empty poll
-        // is just `ps` lag — dropping the live stream would let the stop-loop tear down the child and
-        // respawn it every poll. Once `ps` HAS confirmed it running, a later empty poll means the host
-        // stopped, so let the target fall out of the desired set to tear down and clear stale resources.
         if (this._viewMode === 'workspace' && !this._isSingleFileDescribeMode()) {
             const target = this._resolveWorkspaceDescribeTarget();
-            if (target !== undefined && !this._isRunningWorkspaceHost(target)) {
+            if (target !== undefined && !this.appHosts.some(appHost => isMatchingAppHostPath(appHost.appHostPath, target))) {
                 const existing = this._findDescribeStream(target);
                 if (!(existing && existing.observedRunning)) {
                     desired.add(target);
@@ -1171,11 +1159,16 @@ export class AppHostDataRepository {
                             compatibility = true;
                         } else if (this._workspaceAppHostPath && code !== 0) {
                             message = errorFetchingAppHosts(stream.stderr || `exit code ${code ?? 1}`);
-                        } else if (this._workspaceAppHostPath && this._workspaceAppHost !== undefined) {
+                        } else if (this._workspaceAppHostPath && stream.observedRunning) {
                             // A clean exit before `ps` observes the AppHost can happen while the app is still
-                            // starting. Once `ps` reports the workspace AppHost as running, an empty successful
-                            // describe stream means the AppHost cannot serve workspace resources even though the
-                            // CLI command itself was accepted.
+                            // starting, or when discovery resolves a describe target before `ps` reports which
+                            // host is actually running. Gate on THIS stream's `observedRunning` (set only once
+                            // `ps` reports this host in the rendered workspace set) rather than the
+                            // repository-wide `_workspaceAppHost` flag: that flag can already be set for a
+                            // different host, so keying off it surfaces a misleading "upgrade your AppHost"
+                            // warning for a target `ps` has not yet confirmed. Once `ps` HAS confirmed this
+                            // host running, an empty successful describe stream means the AppHost cannot serve
+                            // workspace resources even though the CLI command itself was accepted.
                             message = appHostDescribeMayNotBeSupported(aspireDescribeMinimumVersion);
                             compatibility = true;
                         }
@@ -1380,10 +1373,10 @@ export class AppHostDataRepository {
         const hasWorkspaceAppHost = this._workspaceAppHost !== undefined;
         const workspaceResources = this._workspaceResourceList();
         const hasResources = workspaceResources.length > 0;
-        const hasRunningAppHosts = this._appHosts.length > 0;
+        const hasRunningAppHosts = this.appHosts.length > 0;
         const hasDashboardUrl = Boolean(this._workspaceAppHost?.dashboardUrl)
             || workspaceResources.some(resource => Boolean(resource.dashboardUrl))
-            || this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
+            || this.appHosts.some(appHost => Boolean(appHost.dashboardUrl));
         const hasWorkspaceCandidates = this._workspaceAppHostCandidatePaths.length > 0;
         vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts && !hasWorkspaceCandidates);
         // Keep this distinct from `noAppHosts`, which also considers discovered idle
@@ -1711,38 +1704,55 @@ export class AppHostDataRepository {
         ];
     }
 
-    private _handleWorkspacePsOutput(appHosts: readonly AppHostDisplayInfo[]): void {
-        const discoveryPending = !this._workspaceAppHostDiscoveryComplete;
-        let workspaceAppHosts: AppHostDisplayInfo[];
+    private _isWorkspaceMember(appHostPath: string, discoveryPending: boolean): boolean {
         if (discoveryPending && this._workspaceAppHostCandidatePaths.length === 0) {
-            workspaceAppHosts = appHosts.filter(appHost => isPathInWorkspace(appHost.appHostPath));
-        } else if (this._workspaceAppHostCandidatePaths.length > 0) {
-            workspaceAppHosts = appHosts.filter(appHost => this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHost.appHostPath, candidatePath)));
-        } else {
-            workspaceAppHosts = [];
+            return isPathInWorkspace(appHostPath);
         }
+        if (this._workspaceAppHostCandidatePaths.length > 0) {
+            return this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHostPath, candidatePath));
+        }
+        return false;
+    }
+
+    private _handleWorkspacePsOutput(appHosts: AppHostDisplayInfo[]): void {
+        const discoveryPending = !this._workspaceAppHostDiscoveryComplete;
+
+        for (const appHost of appHosts) {
+            appHost.inWorkspace = this._isWorkspaceMember(appHost.appHostPath, discoveryPending);
+        }
+        this._appHosts = appHosts;
 
         // Feed the running set into the coordinator and let it (re)target describe.
         // `_reconcileDescribeStreams` is the sole authority that starts/stops describe streams.
-        this._runningWorkspaceAppHosts = workspaceAppHosts;
         this._updateWorkspaceSelection();
 
         const workspaceAppHostPath = this._workspaceAppHostPath;
         const workspaceAppHost = workspaceAppHostPath
-            ? workspaceAppHosts.find(appHost => isMatchingAppHostPath(appHost.appHostPath, workspaceAppHostPath))
+            ? this.appHosts.find(appHost => isMatchingAppHostPath(appHost.appHostPath, workspaceAppHostPath))
             : undefined;
-        const changed = JSON.stringify(workspaceAppHosts) !== JSON.stringify(this._appHosts)
-            || JSON.stringify(workspaceAppHost) !== JSON.stringify(this._workspaceAppHost);
 
-        // Update `_appHosts`/`_workspaceAppHost` BEFORE reconciling: the reconcile computes the desired
-        // set and attaches resources from `_appHosts`, so it must see the new running set.
-        this._appHosts = workspaceAppHosts;
-        this._appHostsSnapshot = JSON.stringify(this._appHosts);
+        // Detect a selection change before `_workspaceAppHost` is overwritten below. Comparing the path is
+        // resources-insensitive: `_workspaceAppHost` is a reference into `_appHosts`, so once
+        // `_attachResourcesToAppHosts` mutates it a raw JSON compare would be dominated by the `resources`
+        // field rather than the selection actually moving (including to/from `undefined`).
+        const selectionChanged = workspaceAppHost?.appHostPath !== this._workspaceAppHost?.appHostPath;
+
+        // Compare post-reconcile snapshots of the workspace SUBSET, mirroring the global path. A raw compare
+        // of the fresh ps payload would always report `changed`: ps no longer emits `resources` (#17479),
+        // while the subset entries are mutated by `_attachResourcesToAppHosts` to include resources.
+        // Snapshotting the subset (not the full set) also keeps non-workspace host churn from needlessly
+        // refreshing the workspace context.
+        const previousSnapshot = this._appHostsSnapshot;
+
         this._workspaceAppHost = workspaceAppHost;
         this._reconcileDescribeStreams();
 
+        const nextSnapshot = JSON.stringify(this.appHosts);
+        this._appHostsSnapshot = nextSnapshot;
+        const changed = nextSnapshot !== previousSnapshot || selectionChanged;
+
         if (changed || this._loadingWorkspace) {
-            this._updateWorkspaceContext({ clearLoading: !discoveryPending || workspaceAppHosts.length > 0 });
+            this._updateWorkspaceContext({ clearLoading: !discoveryPending || appHosts.length > 0 });
         }
     }
 
