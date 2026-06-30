@@ -253,12 +253,10 @@ export class AppHostDataRepository {
     private readonly _ownsAppHostDiscoveryService: boolean;
 
     // ── Error state ──
-    // Per-source error inputs. `describe` only surfaces in workspace mode; `ps` surfaces in both.
     private readonly _errors: Record<ErrorSource, ErrorState> = {
         describe: { message: undefined, isCompatibility: false },
         ps: { message: undefined, isCompatibility: false },
     };
-    // Effective error rendered by the tree, derived from `_errors` + view mode.
     private _effectiveError: ErrorState = { message: undefined, isCompatibility: false };
 
     // ── Loading state ──
@@ -742,6 +740,8 @@ export class AppHostDataRepository {
     }
 
     private _handleWorkspaceAppHostCandidates(appHostCandidates: readonly AppHostCandidate[], selectedAppHostPath: string | null): void {
+        this._setError('describe', undefined);
+
         const buildableAppHostCandidates = appHostCandidates.filter(isBuildableAppHostCandidate);
 
         if (buildableAppHostCandidates.length === 0) {
@@ -1035,31 +1035,17 @@ export class AppHostDataRepository {
         return stream ? Array.from(stream.resources.values()) : [];
     }
 
-    private _findDescribeStreamKey(path: string): string | undefined {
+    private _findDescribeStream(path: string): DescribeStream | undefined {
         if (this._describeStreams.has(path)) {
-            return path;
+            return this._describeStreams.get(path); 
         }
 
         for (const key of this._describeStreams.keys()) {
             if (isMatchingAppHostPath(key, path)) {
-                return key;
+                return this._describeStreams.get(key);
             }
         }
         return undefined;
-    }
-
-    private _findDescribeStream(path: string): DescribeStream | undefined {
-        const key = this._findDescribeStreamKey(path);
-        return key !== undefined ? this._describeStreams.get(key) : undefined;
-    }
-
-    private _isDescribePathDesired(path: string): boolean {
-        for (const desired of this._computeDesiredDescribePaths()) {
-            if (isMatchingAppHostPath(desired, path)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private _isCurrentStream(appHostPath: string, stream: DescribeStream, childProcess: ChildProcessWithoutNullStreams): boolean {
@@ -1170,7 +1156,12 @@ export class AppHostDataRepository {
                     if (!stream.receivedData) {
                         // Never produced data. Surface a compatibility hint when we have context, but do not
                         // auto-restart on a 5s loop forever — park the entry so reconcile does not respawn it.
-                        this._parkStream(stream);
+                        stream.parkedState = this._isDescribeHostActive(stream.appHostPath) ? 'parked-active' : 'parked-idle';
+                        stream.resources.clear();
+                        if (stream.restartTimer) {
+                            clearTimeout(stream.restartTimer);
+                            stream.restartTimer = undefined;
+                        }
                         extensionLogOutputChannel.warn(`aspire describe --follow exited (code ${code}) without producing data; not auto-restarting.`);
 
                         let message: string | undefined;
@@ -1243,20 +1234,6 @@ export class AppHostDataRepository {
         return stream;
     }
 
-    // "Park" a stream: keep its map entry but drop resources and any pending restart timer so the
-    // reconciler does not immediately respawn it. Records `parked-idle` vs `parked-active` from whether
-    // the host was active at park time: reconcile restarts an idle-parked stream once its host becomes
-    // active, but leaves an active-parked one alone so it cannot restart-loop. The single-file sentinel
-    // has no idle state, so it parks as active (recovered via an explicit refresh).
-    private _parkStream(stream: DescribeStream): void {
-        stream.parkedState = this._isDescribeHostActive(stream.appHostPath) ? 'parked-active' : 'parked-idle';
-        stream.resources.clear();
-        if (stream.restartTimer) {
-            clearTimeout(stream.restartTimer);
-            stream.restartTimer = undefined;
-        }
-    }
-
     // Clear a non-projected (global / non-selected workspace) stream's resources and refresh the tree.
     // Projected streams drive the workspace pane through a different update path.
     private _clearNonProjectedStreamResources(stream: DescribeStream): void {
@@ -1273,8 +1250,12 @@ export class AppHostDataRepository {
     // restart if the path has dropped out of the desired set.
     private _restartDescribe(appHostPath: string, options?: { onlyIfDesired?: boolean; existingKey?: string }): void {
         this._stopDescribe(options?.existingKey ?? appHostPath);
-        if (options?.onlyIfDesired && !this._isDescribePathDesired(appHostPath)) {
-            return;
+        if (options?.onlyIfDesired) {
+            for (const desired of this._computeDesiredDescribePaths()) {
+                if (isMatchingAppHostPath(desired, appHostPath)) {
+                    return;
+                }
+            }
         }
         this._startDescribe(appHostPath);
     }
