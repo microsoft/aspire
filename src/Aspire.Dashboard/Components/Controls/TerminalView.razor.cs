@@ -20,6 +20,19 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private int _terminalId;
     private string? _connectedResourceName;
     private int _connectedReplicaIndex = -1;
+    // Guards against concurrent or re-entrant initialization. OnAfterRenderAsync
+    // can fire again while the first InitializeTerminalAsync await is still in
+    // flight (Blazor does not serialize OnAfterRenderAsync calls when re-renders
+    // happen during awaits). Without this latch, the non-firstRender branch
+    // below would see _connectedResourceName == null, mistake that for "rebind
+    // needed", call ReconnectAsync, and — because _terminalId is also still 0
+    // — fall through to InitializeTerminalAsync a second time. Each
+    // initTerminal call appends a brand-new xterm host element to the same
+    // Blazor container, leaving multiple stacked terminals in the DOM that
+    // mirror the same input/output stream. This pattern is easy to trigger
+    // on a resource stop+restart where the dashboard fires a burst of
+    // resource-snapshot-driven re-renders right after the page mounts.
+    private bool _initStarted;
 
     /// <summary>
     /// Gets or sets the user-facing display name of the resource that owns the
@@ -70,9 +83,22 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
         if (firstRender)
         {
+            _initStarted = true;
             await InitializeTerminalAsync();
             _connectedResourceName = ResourceName;
             _connectedReplicaIndex = ReplicaIndex;
+            return;
+        }
+
+        // If a re-render fires while the very first initTerminal call is still
+        // in flight, do nothing here. Once that call completes the firstRender
+        // path will set _connectedResourceName / _connectedReplicaIndex and
+        // any future rebind needed will be caught on the next render after
+        // that. Without this guard the rebind branch below would re-enter
+        // initialization and stack a second xterm onto the same container —
+        // see the comment on _initStarted.
+        if (_initStarted && _terminalId == 0)
+        {
             return;
         }
 

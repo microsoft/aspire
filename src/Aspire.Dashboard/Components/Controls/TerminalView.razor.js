@@ -387,6 +387,20 @@ function buildChrome(state) {
     const blazorElement = state.element;
     if (!blazorElement) return;
 
+    // Defense in depth: never leave a previous terminal's chrome attached to
+    // the Blazor container element. The .NET-side OnAfterRenderAsync guard
+    // is the primary protection against re-entrant initialization, but if
+    // anything ever calls initTerminal twice against the same element
+    // (resource stop+restart bursts, lifecycle bugs, future hot-reload, …)
+    // appending another host on top of an existing one leaves multiple
+    // stacked xterm instances all wired to the same WebSocket — input
+    // echoes everywhere and the terminals can render at different sizes.
+    // Clearing the element first means worst-case we drop the previous
+    // (now-orphaned) chrome instead of duplicating it.
+    while (blazorElement.firstChild) {
+        blazorElement.removeChild(blazorElement.firstChild);
+    }
+
     // The Blazor element already has inline width/height: 100%. Wrap
     // it with our own host so we can apply our flex column layout
     // without disturbing whatever else the parent has set on it.

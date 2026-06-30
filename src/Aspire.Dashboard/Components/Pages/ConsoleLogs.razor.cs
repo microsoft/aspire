@@ -185,7 +185,12 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // status for the current resource. We auto-switch to Terminal on that
     // first transition; subsequent status changes (viewer/primary toggles,
     // reconnects) must not re-trigger the switch.
-    private bool _terminalAttachedOnce;
+    // Tracks the last toolbar status seen for the current terminal so we can
+    // detect the connecting → connected transition. That transition is the
+    // unambiguous "PTY attached" edge that drives the auto-switch to the
+    // Terminal view, and it works for both initial connect and the WS
+    // reconnect that follows a resource stop+start cycle.
+    private string? _lastTerminalStatus;
     // Tracks the view that was rendered to the DOM on the previous render
     // pass. When the active view flips back to Terminal we need to nudge
     // xterm.js to relayout because the wrapper's display:none → visible
@@ -493,7 +498,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // pick a view. Default the view to Console so any pre-PTY hosting
         // messages (e.g. WaitFor) are visible immediately on selection.
         _userPickedView = false;
-        _terminalAttachedOnce = false;
+        _lastTerminalStatus = null;
         _activeView = ConsoleLogsView.Console;
 
         if (!isAllSelected && selectedResourceName is not null &&
@@ -1252,20 +1257,37 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 .ToList();
         }
 
-        // Auto-switch to the Terminal view the *first* time the PTY attaches
-        // (status moves off "connecting"). The page starts on Console so
-        // WaitFor / hosting messages stay visible until there's actually
-        // something to look at in the terminal. Skip the auto-switch if the
-        // user has already picked a view manually — flipping their view out
-        // from under them is hostile. Also skip on subsequent attach events
-        // (e.g. WebSocket reconnects) so a transient network blip during a
-        // user's deliberate Console session does not snap them to Terminal.
+        // Auto-switch to the Terminal view on the rising edge of "connected"
+        // — i.e. when status moves FROM connecting TO any other value. That
+        // edge fires both on initial WebSocket connect and on the WS
+        // reconnect that follows a resource stop+start cycle (the terminal
+        // host process restarts with the replica, so the consumer WS goes
+        // down and comes back up). Triggering on the edge rather than on
+        // any non-connecting snapshot avoids two failure modes:
+        //   1. A stale post-onExit snapshot still showing primary/no-primary
+        //      would otherwise immediately undo the PTY-exit auto-switch
+        //      back to Console.
+        //   2. Routine reconnect-after-network-blip snapshots would
+        //      otherwise re-snap the user to Terminal even though they
+        //      have been reading Console logs the whole time.
+        // We still respect the user's manual pick — once they choose a view
+        // the latch in _userPickedView suppresses all auto-switching.
+        var previousStatus = _lastTerminalStatus;
+        _lastTerminalStatus = state.Status;
+
+        // The initial JS-side snapshot may already report a non-connecting
+        // status if the WebSocket handshake completes before the first
+        // notifyToolbar fires. Treat the "no prior status" case the same as
+        // "connecting" so the initial-attach edge still triggers.
+        var wasConnecting = previousStatus is null
+            || string.Equals(previousStatus, "connecting", StringComparison.Ordinal);
+        var isConnected = !string.Equals(state.Status, "connecting", StringComparison.Ordinal);
+
         if (_selectedResourceHasTerminal &&
-            !_terminalAttachedOnce &&
             !_userPickedView &&
-            !string.Equals(state.Status, "connecting", StringComparison.Ordinal))
+            wasConnecting &&
+            isConnected)
         {
-            _terminalAttachedOnce = true;
             _activeView = ConsoleLogsView.Terminal;
         }
 
@@ -1275,6 +1297,14 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private Task OnTerminalExitedAsync(Controls.TerminalExitInfo info)
     {
         Logger.LogDebug("Terminal for resource '{ResourceName}' exited with code {ExitCode}.", _terminalResourceName, info.ExitCode);
+
+        // Force the next snapshot to look like a fresh attach: the WebSocket
+        // will go through `connecting` again when the resource restarts and
+        // the terminal host process is recreated. Setting the cached status
+        // back to `connecting` here means that reconnect's first non-
+        // connecting snapshot will trigger the auto-switch back to Terminal,
+        // matching the behavior on initial connect.
+        _lastTerminalStatus = "connecting";
 
         // PTY closed — flip back to Console so the user sees the resource's
         // final log lines (including the hosting "exited" message and any

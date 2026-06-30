@@ -305,6 +305,85 @@ public partial class ConsoleLogsTests
         Assert.Equal(ConsoleLogsView.Console, instance.ActiveViewForTest);
     }
 
+    [Fact]
+    public async Task TerminalResource_PtyExitsThenReattaches_AutoSwitchesBackToTerminal()
+    {
+        // Regression for the "stop → start" cycle in a WithTerminal resource:
+        // after the PTY exits and the user restarts the resource, the WS
+        // reconnects and a fresh "connecting → connected" edge fires. The
+        // page should follow that edge back to the Terminal view, matching
+        // the behaviour on the very first attach.
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        var terminalView = cut.FindComponent<TerminalView>().Instance;
+
+        // Initial PTY attach.
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Terminal);
+
+        // Resource stops → PTY exits → flip back to Console.
+        await cut.InvokeAsync(() => terminalView.OnTerminalExited(terminalId: 1, exitCode: 0));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Console);
+
+        // Resource restarts: the terminal host process is recreated, so the
+        // consumer WS goes through `connecting` again before the new PTY
+        // reports primary. The JS-side terminal id stays the same — the
+        // same Hmp1Client instance reconnects under the existing id.
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "connecting",
+            Connected = false,
+            IsPrimary = false,
+            FontPx = 14,
+        }));
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Terminal);
+        Assert.Equal(ConsoleLogsView.Terminal, instance.ActiveViewForTest);
+    }
+
     private void SetupTerminalViewJsInterop()
     {
         // TerminalView.OnAfterRenderAsync does:
