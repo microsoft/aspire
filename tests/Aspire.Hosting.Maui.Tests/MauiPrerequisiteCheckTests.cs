@@ -77,8 +77,8 @@ public class MauiPrerequisiteCheckTests
 
         Assert.Contains(".NET MAUI workload", exception.Message);
         Assert.Contains("dotnet workload install maui", exception.Message);
-        Assert.Equal(1, env.InteractionService.NotificationCount);
-        Assert.Contains(".NET MAUI workload", env.InteractionService.LastNotificationMessage);
+        var notification = await env.ReadNotificationAsync();
+        Assert.Contains(".NET MAUI workload", notification.Message);
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class MauiPrerequisiteCheckTests
 
         await env.PublishBeforeResourceStartedAsync(env.Android);
 
-        Assert.Equal(0, env.InteractionService.NotificationCount);
+        Assert.False(env.TryCompletePendingInteraction());
     }
 
     [Fact]
@@ -252,7 +252,7 @@ public class MauiPrerequisiteCheckTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => publishTask.WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.Equal(0, env.InteractionService.NotificationCount);
+        Assert.False(env.TryCompletePendingInteraction());
     }
 
     [Fact]
@@ -530,6 +530,25 @@ public class MauiPrerequisiteCheckTests
             return Eventing.PublishAsync(new BeforeResourceStartedEvent(resource, App.Services), cancellationToken);
         }
 
+        public async Task<InteractionData> ReadNotificationAsync()
+        {
+            var interaction = await InteractionService.Interactions.Reader.ReadAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal(InteractionType.Notification, interaction.Type);
+            interaction.CompletionTcs.TrySetResult(InteractionResult.Ok(false));
+            return interaction;
+        }
+
+        public bool TryCompletePendingInteraction()
+        {
+            if (!InteractionService.Interactions.Reader.TryRead(out var interaction))
+            {
+                return false;
+            }
+
+            interaction.CompletionTcs.TrySetResult(InteractionResult.Ok(false));
+            return true;
+        }
+
         public static async Task<PrerequisiteTestEnvironment> CreateAsync(IEnumerable<IMauiPrerequisiteChecker> checkers, bool subscribe = true)
         {
             var appBuilder = DistributedApplication.CreateBuilder();
@@ -676,51 +695,4 @@ public class MauiPrerequisiteCheckTests
         }
     }
 
-    private sealed class TestInteractionService : IInteractionService
-    {
-        private int _notificationCount;
-
-        public bool IsAvailable => true;
-
-        public int NotificationCount => _notificationCount;
-
-        public string LastNotificationMessage { get; private set; } = string.Empty;
-
-        public Task<InteractionResult<bool>> PromptNotificationAsync(string title, string message, NotificationInteractionOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            Interlocked.Increment(ref _notificationCount);
-            LastNotificationMessage = message;
-            return Task.FromResult(InteractionResult.Ok(false));
-        }
-
-        public Task<InteractionResult<bool>> PromptConfirmationAsync(string title, string message, MessageBoxInteractionOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task<InteractionResult<bool>> PromptMessageBoxAsync(string title, string message, MessageBoxInteractionOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task<InteractionResult<InteractionInput>> PromptInputAsync(string title, string? message, string inputLabel, string placeHolder, InputsDialogInteractionOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task<InteractionResult<InteractionInput>> PromptInputAsync(string title, string? message, InteractionInput input, InputsDialogInteractionOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task<InteractionResult<InteractionInputCollection>> PromptInputsAsync(string title, string? message, IReadOnlyList<InteractionInput> inputs, InputsDialogInteractionOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            throw new NotSupportedException();
-        }
-
-        public Task<InteractionResult<bool>> PromptProgressAsync(string message, string? title = null, ProgressInteractionOptions? options = null, CancellationToken cancellationToken = default)
-        {
-            throw new NotSupportedException();
-        }
-    }
 }
