@@ -250,7 +250,14 @@ internal static class ResourceExtensions
                     break;
 
                 case "pvc":
-                    _ = CreatePersistentVolume(context, volume);
+                    // Only emit a PersistentVolumeClaim — the cluster's StorageClass
+                    // (named by DefaultStorageClassName or the cluster default) drives
+                    // dynamic provisioning of the backing PersistentVolume. Statically
+                    // pre-provisioned PVs are only emitted by the first-class
+                    // KubernetesPersistentVolumeResource path above; emitting a bare PV
+                    // here would be missing a PersistentVolumeSource (csi/hostPath/local
+                    // /nfs/...) and would be rejected by `kubectl apply`. See
+                    // https://kubernetes.io/docs/concepts/storage/persistent-volumes/#dynamic.
                     var pvc = CreatePersistentVolumeClaim(context, volume);
                     podVolume.PersistentVolumeClaim = new()
                     {
@@ -432,50 +439,6 @@ internal static class ResourceExtensions
         return container;
     }
 #pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
-    private static PersistentVolume CreatePersistentVolume(KubernetesResource context, VolumeMountV1 volume)
-    {
-        var pvName = context.TargetResource.Name.ToPvName(volume.Name);
-
-        if (context.PersistentVolumes.FirstOrDefault(pv => pv.Metadata.Name == pvName) is { } existingVolume)
-        {
-            return existingVolume;
-        }
-
-        var newPv = new PersistentVolume
-        {
-            Metadata =
-            {
-                Name = pvName,
-                Labels = context.Labels.ToDictionary(),
-            },
-            Spec = new()
-            {
-                Capacity = new()
-                {
-                    ["storage"] = context.Parent.DefaultStorageSize,
-                },
-                AccessModes = { context.Parent.DefaultStorageReadWritePolicy },
-            },
-        };
-
-        if (!string.IsNullOrEmpty(context.Parent.DefaultStorageClassName))
-        {
-            newPv.Spec.StorageClassName = context.Parent.DefaultStorageClassName;
-        }
-
-        if (context.Parent.DefaultStorageType.Equals("hostpath", StringComparison.OrdinalIgnoreCase))
-        {
-            newPv.Spec.HostPath = new()
-            {
-                Path = volume.Name,
-            };
-        }
-
-        context.PersistentVolumes.Add(newPv);
-
-        return newPv;
-    }
 
     private static PersistentVolumeClaim CreatePersistentVolumeClaim(KubernetesResource context, VolumeMountV1 volume)
     {

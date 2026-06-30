@@ -760,14 +760,18 @@ public class KubernetesPublisherTests()
     }
 
     [Fact]
-    public async Task PublishAsync_WithPvcStorageType_GeneratesValidPersistentVolumeAndClaim()
+    public async Task PublishAsync_WithPvcStorageType_GeneratesValidPersistentVolumeClaim()
     {
-        // Regression test for https://github.com/microsoft/aspire/issues/14096 (PV emits empty
-        // claimRef/hostPath/local/nodeAffinity blocks) and
-        // https://github.com/microsoft/aspire/issues/16504 (PVC emits empty
-        // dataSource/dataSourceRef/selector blocks). Both are caused by eager `= new()`
-        // initialization of complex sub-properties on V1 spec types; once those properties are
-        // nullable the YAML serializer's OmitNull configuration suppresses the empty mappings.
+        // Regression test for https://github.com/microsoft/aspire/issues/16504 (PVC emits empty
+        // dataSource/dataSourceRef/selector blocks) caused by eager `= new()` initialization of
+        // complex sub-properties on V1 spec types; once those properties are nullable the YAML
+        // serializer's OmitNull configuration suppresses the empty mappings.
+        //
+        // Also asserts that the publisher does NOT emit a bare PersistentVolume manifest for
+        // DefaultStorageType = "pvc": dynamic provisioning is driven by the storageClassName on
+        // the PVC, and a PV without a PersistentVolumeSource (csi/hostPath/local/nfs/...) is
+        // rejected by `kubectl apply`. See
+        // https://kubernetes.io/docs/concepts/storage/persistent-volumes/#dynamic.
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
@@ -789,7 +793,6 @@ public class KubernetesPublisherTests()
         var expectedFiles = new[]
         {
             "templates/service/deployment.yaml",
-            "templates/service/data-pv.yaml",
             "templates/service/data-pvc.yaml",
         };
 
@@ -811,16 +814,21 @@ public class KubernetesPublisherTests()
                 : settingsTask.AppendContentAsFile(content, "yaml");
         }
 
+        // The bare PV manifest (data-pv.yaml) must NOT be emitted — see method comment.
+        var legacyPv = Path.Combine(tempDir.Path, "templates", "service", "data-pv.yaml");
+        Assert.False(File.Exists(legacyPv), "DefaultStorageType=\"pvc\" must not emit a bare PV; dynamic provisioning is driven by the PVC's storageClassName.");
+
         await settingsTask;
     }
 
     [Fact]
-    public async Task PublishAsync_WithHostPathStorageType_GeneratesValidPersistentVolumeAndClaim()
+    public async Task PublishAsync_WithHostPathStorageType_EmitsHostPathVolumeOnPodSpec()
     {
-        // Regression test that exercises the hostPath emission path of
-        // CreatePersistentVolume in addition to the PVC path. With the bug fixes the rendered
-        // PV correctly contains a populated `hostPath` mapping while still omitting the empty
-        // `claimRef`/`local`/`nodeAffinity` blocks that previously broke `kubectl apply`.
+        // Regression test for the hostPath emission path in WithPodSpecVolumes. When
+        // DefaultStorageType = "hostpath" the publisher renders the volume directly as a
+        // pod hostPath volume (no PV/PVC objects are emitted — only the Deployment manifest
+        // is produced). The original bug emitted empty `{}` mappings on the hostPath
+        // sub-properties; with the nullable-property fixes those are now suppressed.
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
@@ -908,7 +916,7 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_WithFirstClassPersistentVolume_OnProject_BindsViaMountPathOverload()
     {
-        // Closes https://github.com/dotnet/aspire/issues/9430 — projects can bind a
+        // Closes https://github.com/microsoft/aspire/issues/9430 — projects can bind a
         // persistent volume via the (volume, mountPath) overload, which adds the
         // ContainerMountAnnotation itself.
         using var tempDir = new TestTempDirectory();
