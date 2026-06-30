@@ -14,6 +14,8 @@ internal sealed record ProcessResult(int ExitCode, string StandardOutput, string
 
 internal sealed class ProcessRunner : IProcessRunner
 {
+    private static readonly TimeSpan s_outputDrainTimeout = TimeSpan.FromSeconds(5);
+
     public async Task<ProcessResult> RunAsync(string fileName, IReadOnlyList<string> arguments, string? workingDirectory, TimeSpan timeout, CancellationToken cancellationToken)
     {
         var psi = new ProcessStartInfo(fileName)
@@ -65,9 +67,12 @@ internal sealed class ProcessRunner : IProcessRunner
     {
         try
         {
-            await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+            await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(s_outputDrainTimeout).ConfigureAwait(false);
         }
         catch (IOException)
+        {
+        }
+        catch (TimeoutException)
         {
         }
         catch (ObjectDisposedException)
