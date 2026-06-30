@@ -25,6 +25,12 @@ on:
             {"os": "macos-latest", "runner": "macos-latest", "rids": "osx-arm64"}
           ]
 
+env:
+  # Arcade sets NuGet's enhanced retry defaults to 6 tries with a 1s base delay in CI; these
+  # restore-heavy jobs need more room to retry individual package downloads without rerunning.
+  NUGET_ENHANCED_MAX_NETWORK_TRY_COUNT: 10
+  NUGET_ENHANCED_NETWORK_RETRY_DELAY_MILLISECONDS: 2000
+
 jobs:
 
   build_cli_archives:

@@ -12,6 +12,12 @@
 #
 name: Deployment E2E Tests
 
+env:
+  # Arcade sets NuGet's enhanced retry defaults to 6 tries with a 1s base delay in CI; these
+  # restore-heavy jobs need more room to retry individual package downloads without rerunning.
+  NUGET_ENHANCED_MAX_NETWORK_TRY_COUNT: 10
+  NUGET_ENHANCED_NETWORK_RETRY_DELAY_MILLISECONDS: 2000
+
 on:
   workflow_dispatch:
     inputs:
@@ -95,7 +101,7 @@ jobs:
 
       - name: Build solution and pack CLI
         run: |
-          # Build the full solution and pack CLI for local testing
+          # Build the full solution and pack CLI for local testing.
           ./build.sh --build --pack -c Release
         env:
           # Skip native build to save time - we'll use the non-native CLI
@@ -296,6 +302,7 @@ jobs:
 
       - name: Upload test results
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: deployment-test-results-${{ matrix.shortname }}
@@ -305,6 +312,7 @@ jobs:
 
       - name: Upload recordings
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: deployment-test-recordings-${{ matrix.shortname }}
