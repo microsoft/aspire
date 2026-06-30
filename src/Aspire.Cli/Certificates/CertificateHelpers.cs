@@ -17,6 +17,11 @@ namespace Aspire.Cli.Certificates;
 internal static partial class CertificateHelpers
 {
     /// <summary>
+    /// The command used to query and update NSS certificate databases.
+    /// </summary>
+    internal const string CertUtilCommand = "certutil";
+
+    /// <summary>
     /// The environment variable name for overriding the dev-certs OpenSSL certificate directory.
     /// </summary>
     internal const string DevCertsOpenSslCertDirEnvVar = "DOTNET_DEV_CERTS_OPENSSL_CERTIFICATE_DIRECTORY";
@@ -94,6 +99,41 @@ internal static partial class CertificateHelpers
             or EnsureCertificateResult.ValidCertificatePresent
             or EnsureCertificateResult.ExistingHttpsCertificateTrusted
             or EnsureCertificateResult.NewHttpsCertificateTrusted;
+
+    /// <summary>
+    /// Determines whether the specified command can be found in <c>PATH</c>.
+    /// </summary>
+    /// <param name="command">The command name to locate.</param>
+    /// <param name="environment">The environment abstraction for reading <c>PATH</c>.</param>
+    /// <returns><see langword="true"/> if the command was found; otherwise, <see langword="false"/>.</returns>
+    internal static bool IsCommandAvailable(string command, IEnvironment environment)
+    {
+        var searchPath = environment.GetEnvironmentVariable("PATH");
+
+        if (searchPath is null)
+        {
+            return false;
+        }
+
+        var searchFolders = searchPath.Split(Path.PathSeparator);
+
+        foreach (var searchFolder in searchFolders)
+        {
+            try
+            {
+                if (File.Exists(Path.Combine(searchFolder, command)))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                // It's not interesting to report (e.g.) permission errors here.
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Tries to detect the OpenSSL directory by running 'openssl version -d'.

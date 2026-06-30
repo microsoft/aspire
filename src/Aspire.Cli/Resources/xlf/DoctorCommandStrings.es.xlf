@@ -222,6 +222,21 @@
         <target state="new">Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</target>
         <note>{0} is the aspire certs clean command, {1} is the aspire certs trust command (not localizable)</note>
       </trans-unit>
+      <trans-unit id="DevCertsMissingCertUtilDetails">
+        <source>Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</source>
+        <target state="new">Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsMissingCertUtilFix">
+        <source>Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</source>
+        <target state="new">Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsMissingCertUtilMessage">
+        <source>certutil is not available; browser certificate trust may be incomplete</source>
+        <target state="new">certutil is not available; browser certificate trust may be incomplete</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DevCertsMultipleNoneTrustedDetailsFormat">
         <source>Found certificates: {0}. Having multiple certificates can cause confusion.</source>
         <target state="new">Found certificates: {0}. Having multiple certificates can cause confusion.</target>

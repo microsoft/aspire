@@ -17,6 +17,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
 {
     internal const string CheckName = "dev-certs";
     internal const string VersionCheckName = "dev-certs-version";
+    internal const string CertUtilCheckName = "dev-certs-certutil";
 
     public int Order => 35; // After SDK check (30), before container checks (40+)
 
@@ -29,6 +30,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         {
             var trustResult = certificateToolRunner.CheckHttpCertificate();
             var results = EvaluateCertificateResults(trustResult.Certificates, environment);
+            AddLinuxCertificateToolWarnings(results, environment);
 
             return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>(results);
         }
@@ -199,6 +201,25 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         }
 
         return results;
+    }
+
+    private static void AddLinuxCertificateToolWarnings(List<EnvironmentCheckResult> results, IEnvironment environment)
+    {
+        if (!environment.IsLinux() || CertificateHelpers.IsCommandAvailable(CertificateHelpers.CertUtilCommand, environment))
+        {
+            return;
+        }
+
+        results.Add(new EnvironmentCheckResult
+        {
+            Category = EnvironmentCheckCategories.Environment,
+            Name = CertUtilCheckName,
+            Status = EnvironmentCheckStatus.Warning,
+            Message = DoctorCommandStrings.DevCertsMissingCertUtilMessage,
+            Details = DoctorCommandStrings.DevCertsMissingCertUtilDetails,
+            Fix = DoctorCommandStrings.DevCertsMissingCertUtilFix,
+            Link = "https://aka.ms/aspire-prerequisites#dev-certs"
+        });
     }
 
     /// <summary>

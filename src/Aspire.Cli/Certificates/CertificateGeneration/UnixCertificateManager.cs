@@ -8,6 +8,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using Aspire.Cli;
+using Aspire.Cli.Certificates;
 using Microsoft.Extensions.Logging;
 
 namespace Microsoft.AspNetCore.Certificates.Generation;
@@ -39,8 +40,6 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     private const string WslFriendlyName = AspNetHttpsOidFriendlyName + " (WSL)";
 
     private const string OpenSslCommand = "openssl";
-    private const string CertUtilCommand = "certutil";
-
     private const int MaxHashCollisions = 10; // Something is going badly wrong if we have this many dev certs with the same hash
 
     private HashSet<string>? _availableCommands;
@@ -140,11 +139,11 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         var nssDbs = GetNssDbs(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
         if (nssDbs.Count > 0)
         {
-            if (!IsCommandAvailable(CertUtilCommand))
+            if (!IsCommandAvailable(CertificateHelpers.CertUtilCommand))
             {
                 // If there are browsers but we don't have certutil, we can't check trust and,
                 // in all probability, we can't have previously established it.
-                Log.UnixMissingCertUtilCommand(CertUtilCommand);
+                Log.UnixMissingCertUtilCommand(CertificateHelpers.CertUtilCommand);
                 sawTrustFailure = true;
             }
             else
@@ -308,10 +307,10 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         var nssDbs = GetNssDbs(homeDirectory);
         if (nssDbs.Count > 0)
         {
-            var isCertUtilAvailable = IsCommandAvailable(CertUtilCommand);
+            var isCertUtilAvailable = IsCommandAvailable(CertificateHelpers.CertUtilCommand);
             if (!isCertUtilAvailable)
             {
-                Log.UnixMissingCertUtilCommand(CertUtilCommand);
+                Log.UnixMissingCertUtilCommand(CertificateHelpers.CertUtilCommand);
                 // We'll loop over the nssdbs anyway so they'll be listed
             }
 
@@ -509,23 +508,24 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         var nssDbs = GetNssDbs(homeDirectory);
         if (nssDbs.Count > 0)
         {
-            var isCertUtilAvailable = IsCommandAvailable(CertUtilCommand);
+            var isCertUtilAvailable = IsCommandAvailable(CertificateHelpers.CertUtilCommand);
             if (!isCertUtilAvailable)
             {
-                Log.UnixMissingCertUtilCommand(CertUtilCommand);
-                // We'll loop over the nssdbs anyway so they'll be listed
+                Log.UnixMissingCertUtilCommand(CertificateHelpers.CertUtilCommand);
             }
-
-            foreach (var nssDb in nssDbs)
+            else
             {
-                if (isCertUtilAvailable && TryRemoveCertificateFromNssDb(nickname, nssDb))
+                foreach (var nssDb in nssDbs)
                 {
-                    Log.UnixNssDbUntrustSucceeded(nssDb.Path);
-                }
-                else
-                {
-                    Log.UnixNssDbUntrustFailed(nssDb.Path);
-                    sawUntrustFailure = true;
+                    if (TryRemoveCertificateFromNssDb(nickname, nssDb))
+                    {
+                        Log.UnixNssDbUntrustSucceeded(nssDb.Path);
+                    }
+                    else
+                    {
+                        Log.UnixNssDbUntrustFailed(nssDb.Path);
+                        sawUntrustFailure = true;
+                    }
                 }
             }
         }
@@ -592,7 +592,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
         // We need OpenSSL 1.1.1h or newer (to pick up https://github.com/openssl/openssl/pull/12357),
         // but, given that all of v1 is EOL, it doesn't seem worthwhile to check the version.
-        var commands = new[] { OpenSslCommand, CertUtilCommand };
+        var commands = new[] { OpenSslCommand, CertificateHelpers.CertUtilCommand };
 
         var searchPath = _environment.GetEnvironmentVariable("PATH");
 
@@ -702,7 +702,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     }
 
     /// <remarks>
-    /// It is the caller's responsibility to ensure that <see cref="CertUtilCommand"/> is available.
+    /// It is the caller's responsibility to ensure that <see cref="CertificateHelpers.CertUtilCommand"/> is available.
     /// </remarks>
     private bool IsCertificateInNssDb(string nickname, NssDb nssDb)
     {
@@ -711,7 +711,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         // (The docs suggest that "-V -u A" should do this, but it seems to accept all certs.)
         var operation = nssDb.IsFirefox ? "-L" : "-V -u V";
 
-        var startInfo = new ProcessStartInfo(CertUtilCommand, $"-d sql:{nssDb.Path} -n {nickname} {operation}")
+        var startInfo = new ProcessStartInfo(CertificateHelpers.CertUtilCommand, $"-d sql:{nssDb.Path} -n {nickname} {operation}")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -732,7 +732,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     }
 
     /// <remarks>
-    /// It is the caller's responsibility to ensure that <see cref="CertUtilCommand"/> is available.
+    /// It is the caller's responsibility to ensure that <see cref="CertificateHelpers.CertUtilCommand"/> is available.
     /// </remarks>
     private bool TryAddCertificateToNssDb(string certificatePath, string nickname, NssDb nssDb)
     {
@@ -740,7 +740,7 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         var usage = nssDb.IsFirefox ? "C" : "P";
 
         // This silently clobbers an existing entry, so there's no need to check for existence first.
-        var startInfo = new ProcessStartInfo(CertUtilCommand, $"-d sql:{nssDb.Path} -n {nickname} -A -i {certificatePath} -t \"{usage},,\"")
+        var startInfo = new ProcessStartInfo(CertificateHelpers.CertUtilCommand, $"-d sql:{nssDb.Path} -n {nickname} -A -i {certificatePath} -t \"{usage},,\"")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -760,11 +760,11 @@ internal sealed partial class UnixCertificateManager : CertificateManager
     }
 
     /// <remarks>
-    /// It is the caller's responsibility to ensure that <see cref="CertUtilCommand"/> is available.
+    /// It is the caller's responsibility to ensure that <see cref="CertificateHelpers.CertUtilCommand"/> is available.
     /// </remarks>
     private bool TryRemoveCertificateFromNssDb(string nickname, NssDb nssDb)
     {
-        var startInfo = new ProcessStartInfo(CertUtilCommand, $"-d sql:{nssDb.Path} -D -n {nickname}")
+        var startInfo = new ProcessStartInfo(CertificateHelpers.CertUtilCommand, $"-d sql:{nssDb.Path} -D -n {nickname}")
         {
             RedirectStandardOutput = true,
             RedirectStandardError = true,
