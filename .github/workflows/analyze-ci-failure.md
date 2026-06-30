@@ -509,39 +509,60 @@ safe-outputs:
 
             # ── 2. Create or update issues for each cause ──
             if [ -d "$CAUSES_DIR" ]; then
+              # Fetch labeled issues once so individual cause lookups don't each
+              # call `gh issue list` (which fetches full bodies of up to 500 issues).
+              OPEN_ISSUES_CACHE=$(mktemp)
+              CLOSED_ISSUES_CACHE=$(mktemp)
+              gh issue list --repo "$REPO" --label "ci-failure-cause" --state open --limit 500 --json number,body \
+                > "$OPEN_ISSUES_CACHE" 2>/dev/null || echo '[]' > "$OPEN_ISSUES_CACHE"
+              gh issue list --repo "$REPO" --label "ci-failure-cause" --state closed --limit 500 --json number,body \
+                > "$CLOSED_ISSUES_CACHE" 2>/dev/null || echo '[]' > "$CLOSED_ISSUES_CACHE"
+
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
                 jq empty "$CAUSE_FILE" 2>/dev/null || continue
 
                 CAUSE_ID=$(jq -r '.id' "$CAUSE_FILE")
+
+                # Validate CAUSE_ID is a safe slug (lowercase alphanumeric + hyphens)
+                # to prevent HTML comment injection via the marker.
+                if ! echo "$CAUSE_ID" | grep -qP '^[a-z0-9][a-z0-9-]*$'; then
+                  echo "::warning::Invalid cause ID '${CAUSE_ID}', skipping"
+                  continue
+                fi
+
                 CAUSE_TYPE=$(jq -r '.type' "$CAUSE_FILE")
-                CAUSE_TITLE=$(jq -r '.title' "$CAUSE_FILE")
                 MARKER="<!-- ci-failure-cause:${CAUSE_ID} -->"
 
-                # Build new occurrence lines from the cause file
-                NEW_OCCURRENCES=$(jq -r '.occurrences[] | "- **" + (.observed_at | split("T")[0]) + "** \u2014 Run [#" + (.run_id | tostring) + "](" + .run_url + ") on PR #" + (.pr_number | tostring) + " in job `" + .job + "`"' "$CAUSE_FILE")
+                # Build new occurrence table rows from the cause file.
+                # Each row: | date | build link | job | PR |
+                NEW_OCCURRENCES=$(jq -r '.occurrences[] | "| " + (.observed_at | split("T")[0]) + " | [" + (.run_id | tostring) + "](" + .run_url + ") | " + .job + " | #" + (.pr_number | tostring) + " |"' "$CAUSE_FILE")
 
                 # Search for an existing open issue with this cause marker
-                EXISTING_ISSUE=$(gh issue list --repo "$REPO" --label "ci-failure-cause" --state open --limit 500 --json number,body \
-                  | jq -r --arg marker "$MARKER" '.[] | select(.body | contains($marker)) | .number' | head -1 || true)
+                EXISTING_ISSUE=$(jq -r --arg marker "$MARKER" '.[] | select(.body | contains($marker)) | .number' "$OPEN_ISSUES_CACHE" | head -1 || true)
 
                 # If not found open, check closed issues (cause may have recurred)
                 REOPEN="false"
                 if [ -z "$EXISTING_ISSUE" ]; then
-                  EXISTING_ISSUE=$(gh issue list --repo "$REPO" --label "ci-failure-cause" --state closed --limit 500 --json number,body \
-                    | jq -r --arg marker "$MARKER" '.[] | select(.body | contains($marker)) | .number' | head -1 || true)
+                  EXISTING_ISSUE=$(jq -r --arg marker "$MARKER" '.[] | select(.body | contains($marker)) | .number' "$CLOSED_ISSUES_CACHE" | head -1 || true)
                   if [ -n "$EXISTING_ISSUE" ]; then
                     REOPEN="true"
                   fi
                 fi
 
                 if [ -n "$EXISTING_ISSUE" ]; then
-                  # Append new occurrences to the existing issue body
-                  CURRENT_BODY=$(gh api "repos/${REPO}/issues/${EXISTING_ISSUE}" --jq '.body')
-                  BODY_FILE=$(mktemp)
-                  printf '%s\n%s\n' "$CURRENT_BODY" "$NEW_OCCURRENCES" > "$BODY_FILE"
-                  gh issue edit "$EXISTING_ISSUE" --repo "$REPO" --body-file "$BODY_FILE"
-                  rm -f "$BODY_FILE"
+                  # Append new occurrence rows to the existing issue body, skipping
+                  # if this run_id is already recorded (avoids duplicates on re-runs).
+                  # The table row format is `| date | [run_id](url) | job | PR |`.
+                  CURRENT_BODY=$(gh api "repos/${REPO}/issues/${EXISTING_ISSUE}" --jq '.body // ""')
+                  if echo "$CURRENT_BODY" | grep -qF "[${RUN_ID}]"; then
+                    echo "Occurrence for run ${RUN_ID} already recorded in issue #${EXISTING_ISSUE}. Skipping."
+                  else
+                    BODY_FILE=$(mktemp)
+                    printf '%s\n%s\n' "$CURRENT_BODY" "$NEW_OCCURRENCES" > "$BODY_FILE"
+                    gh issue edit "$EXISTING_ISSUE" --repo "$REPO" --body-file "$BODY_FILE"
+                    rm -f "$BODY_FILE"
+                  fi
 
                   if [ "$REOPEN" = "true" ]; then
                     gh issue reopen "$EXISTING_ISSUE" --repo "$REPO"
@@ -552,21 +573,40 @@ safe-outputs:
                 else
                   # Create a new issue for this cause
                   BODY_FILE=$(mktemp)
+                  FIRST_OCC=$(jq '.occurrences[0]' "$CAUSE_FILE")
+                  FIRST_RUN_URL=$(echo "$FIRST_OCC" | jq -r '.run_url')
+                  FIRST_JOB=$(echo "$FIRST_OCC" | jq -r '.job')
+                  FIRST_PR_NUM=$(echo "$FIRST_OCC" | jq -r '.pr_number')
+                  TEST_NAME=$(jq -r '.test_name // empty' "$CAUSE_FILE")
                   {
                     echo "${MARKER}"
                     echo ""
-                    echo "**Type**: ${CAUSE_TYPE}"
-                    TEST_NAME=$(jq -r '.test_name // empty' "$CAUSE_FILE")
+                    echo "## Build Information"
+                    echo ""
+                    echo "Build: ${FIRST_RUN_URL}"
                     if [ -n "$TEST_NAME" ]; then
-                      echo "**Test**: \`${TEST_NAME}\`"
+                      echo "Build error leg or test failing: ${FIRST_JOB} / \`${TEST_NAME}\`"
+                    else
+                      echo "Build error leg: ${FIRST_JOB}"
                     fi
-                    echo "**Error pattern**:"
+                    echo "Pull request: #${FIRST_PR_NUM}"
+                    echo ""
+                    echo "## Error Message"
+                    echo ""
                     echo '```'
                     jq -r '.error_pattern' "$CAUSE_FILE"
                     echo '```'
                     echo ""
+                    echo "## Description"
+                    echo ""
+                    jq -r '.title' "$CAUSE_FILE"
+                    echo ""
+                    echo "**Type**: ${CAUSE_TYPE}"
+                    echo ""
                     echo "## Occurrences"
                     echo ""
+                    echo "| Date | Build | Job | PR |"
+                    echo "|------|-------|-----|----|"
                     echo "$NEW_OCCURRENCES"
                   } > "$BODY_FILE"
 
@@ -575,14 +615,18 @@ safe-outputs:
                     LABELS="ci-failure-cause,test-failure"
                   fi
 
+                  # Build the title via jq to avoid shell metacharacter issues
+                  # with agent-generated cause titles.
+                  ISSUE_TITLE=$(jq -r '"[CI Failure] " + .title' "$CAUSE_FILE")
                   gh issue create --repo "$REPO" \
-                    --title "[CI Failure] ${CAUSE_TITLE}" \
+                    --title "$ISSUE_TITLE" \
                     --label "$LABELS" \
                     --body-file "$BODY_FILE"
                   rm -f "$BODY_FILE"
                   echo "Created issue for cause: ${CAUSE_ID}"
                 fi
               done
+              rm -f "$OPEN_ISSUES_CACHE" "$CLOSED_ISSUES_CACHE"
             fi
 
             # ── 3. Post PR comment using the analysis JSON ──
