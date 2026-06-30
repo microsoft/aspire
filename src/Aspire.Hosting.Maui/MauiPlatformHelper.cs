@@ -89,14 +89,13 @@ internal static class MauiPlatformHelper
         // Check if the project has the platform TFM and get the actual TFM value
         var platformTfm = ProjectFileReader.GetPlatformTargetFramework(projectPath, platformName);
 
-        // Override the default DCP launch command from 'dotnet run' to 'dotnet build --no-restore /t:Run'.
+        // Override DCP's default launch command from 'dotnet run' to 'dotnet run --no-build --project'.
         // The Build target is run separately by MauiBuildQueueEventSubscriber before DCP starts
         // the process, giving reliable exit-code-based build completion detection and allowing
-        // the "Building" state to persist in the dashboard. DCP still invokes the MAUI Run target,
-        // so disable restore work there to avoid repeating package resolution. Do not set
-        // NoBuild=true here: the .NET SDK rejects that property when the Build target is invoked
-        // as part of the MAUI Run target graph.
-        resourceBuilder.WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["build", "--no-restore", "/t:Run"], leadingResourceArgumentToRemove: "run"));
+        // the "Building" state to persist in the dashboard. Use dotnet run's native --no-build
+        // switch for the launch phase; `dotnet build /t:Run -p:NoBuild=true` is rejected by the
+        // SDK because the Build target is still in the target graph.
+        resourceBuilder.WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["run", "--no-build", "--project"], leadingResourceArgumentToRemove: "run"));
 
         // Store build parameters so the event subscriber can run 'dotnet build' before launch.
         // The annotation captures the same target framework, configuration, and MSBuild properties

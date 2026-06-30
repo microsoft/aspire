@@ -101,11 +101,11 @@ internal class MauiBuildQueueEventSubscriber(
 
             await RunBuildAsync(resource, logger, resourceCts.Token).ConfigureAwait(false);
 
-            // Build succeeded. Keep the semaphore held until DCP's launch process exits.
-            // After this handler returns, DCP invokes `dotnet build --no-restore /t:Run`
-            // with the same configuration used here. The pre-build is still important:
-            // DCP may report Running as soon as the process starts, so the queue lock is held
-            // until the launch process exits and no more MSBuild work can overlap the next build.
+            // Build succeeded. Keep the semaphore held until DCP starts the no-build launch.
+            // After this handler returns, DCP invokes `dotnet run --no-build --project` with
+            // the same configuration used here, so the launch phase must not compile the project
+            // again. Once DCP reports Running, the process is past the serialized build phase and
+            // long-lived app processes should not block other platform resources indefinitely.
             releaseInFinally = false;
             _ = ReleaseSemaphoreAfterLaunchAsync(resource, semaphore, s_buildingState.Text, logger, cancellationToken);
         }
@@ -262,7 +262,7 @@ internal class MauiBuildQueueEventSubscriber(
     }
 
     /// <summary>
-    /// Releases the build semaphore after DCP's app launch process exits.
+    /// Releases the build semaphore after DCP starts the no-build app launch process.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -272,10 +272,9 @@ internal class MauiBuildQueueEventSubscriber(
     /// Without this guard a restart could match on a stale snapshot.
     /// </para>
     /// <para>
-    /// The predicate intentionally excludes "Running" because DCP can report that state when the
-    /// launch process starts. The MAUI <c>Run</c> target can still execute MSBuild work after that,
-    /// so releasing on "Running" would allow another platform for the same project to build
-    /// concurrently. Wait for the process to exit or fail instead.
+    /// The launch command uses <c>dotnet run --no-build --project</c>, so a transition to
+    /// "Running" means DCP has moved past the serialized build phase. Terminal states are also
+    /// accepted so failed or short-lived launches do not hold the lock.
     /// </para>
     /// </remarks>
     internal virtual async Task ReleaseSemaphoreAfterLaunchAsync(
@@ -297,7 +296,8 @@ internal class MauiBuildQueueEventSubscriber(
                         return false;
                     }
 
-                    return text == KnownResourceStates.FailedToStart
+                    return text == KnownResourceStates.Running
+                        || text == KnownResourceStates.FailedToStart
                         || text == KnownResourceStates.Exited
                         || text == KnownResourceStates.Finished;
                 },

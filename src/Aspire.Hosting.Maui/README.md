@@ -213,7 +213,7 @@ The build queue is implemented via:
 - **`MauiBuildQueueAnnotation`**: Added to the parent `MauiProjectResource`, holds a `SemaphoreSlim(1,1)` and per-resource cancellation tokens
 - **`MauiBuildQueueEventSubscriber`**: Subscribes to `BeforeResourceStartedEvent`, manages the queue, runs `dotnet build` as a subprocess, and replaces the default Stop command with a queue-aware version
 - **`MauiBuildInfoAnnotation`**: Attached to each platform resource with the project path, working directory, target framework, configuration, and platform MSBuild properties used for the build subprocess
-- **`ProjectLaunchArgsOverrideAnnotation`**: A core `Aspire.Hosting` annotation that overrides DCP's default `dotnet run` args, enabling `dotnet build --no-restore /t:Run` for MAUI projects after the serialized pre-build
+- **`ProjectLaunchArgsOverrideAnnotation`**: A core `Aspire.Hosting` annotation that overrides DCP's default `dotnet run` args, enabling `dotnet run --no-build --project` for MAUI projects after the serialized pre-build
 
 ## Requirements
 

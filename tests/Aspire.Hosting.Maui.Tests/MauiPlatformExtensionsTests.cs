@@ -221,9 +221,9 @@ public class MauiPlatformExtensionsTests
         Assert.NotNull(launchOverride);
         Assert.Collection(
             launchOverride.Arguments,
-            arg => Assert.Equal("build", arg),
-            arg => Assert.Equal("--no-restore", arg),
-            arg => Assert.Equal("/t:Run", arg));
+            arg => Assert.Equal("run", arg),
+            arg => Assert.Equal("--no-build", arg),
+            arg => Assert.Equal("--project", arg));
         Assert.Equal("run", launchOverride.LeadingResourceArgumentToRemove);
     }
 

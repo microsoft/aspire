@@ -14,10 +14,11 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <para>
 /// When this annotation is present on a <see cref="ProjectResource"/>, DCP will use the provided
 /// arguments as the base command (e.g., <c>build /t:Run</c>) instead of the default <c>run</c> verb.
-/// DCP still appends the project path positionally and appends <c>--configuration</c> automatically;
-/// only the verb and its options are overridden. This annotation is intended for verbs like
-/// <c>build</c> that accept the project path as a positional argument. The <c>--no-launch-profile</c>
-/// flag is omitted when this annotation is present.
+/// DCP still appends the project path after these arguments and appends <c>--configuration</c>
+/// automatically; only the verb and its options are overridden. This annotation is intended for
+/// commands that accept a project path either positionally (for example, <c>build</c>) or as the value
+/// for a final option in <paramref name="arguments"/> (for example, <c>run --project</c>). The
+/// <c>--no-launch-profile</c> flag is omitted when this annotation is present.
 /// </para>
 /// </remarks>
 /// <example>

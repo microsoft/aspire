@@ -631,7 +631,7 @@ public class MauiBuildQueueTests
     }
 
     [Fact]
-    public async Task ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState()
+    public async Task ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnRunning()
     {
         await using var env = await BuildQueueTestEnvironment.CreateAsync();
         Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
@@ -658,15 +658,6 @@ public class MauiBuildQueueTests
         await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
         {
             State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
-        });
-
-        await Task.Delay(500);
-        Assert.False(releaseTask.IsCompleted, "Running is published when the launch process starts, before MAUI/MSBuild launch work is complete.");
-        Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
-
-        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
-        {
-            State = new ResourceStateSnapshot(KnownResourceStates.Finished, KnownResourceStateStyles.Success)
         });
 
         await releaseTask.WaitAsync(TimeSpan.FromSeconds(30));
