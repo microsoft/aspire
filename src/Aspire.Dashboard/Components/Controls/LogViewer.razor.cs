@@ -74,14 +74,19 @@ public sealed partial class LogViewer
 
     public async Task RefreshDataAsync()
     {
+        // Entries may have been appended or evicted (circular buffer) since the last render, so drop
+        // the cached filtered view before Virtualize re-queries through GetItems.
+        _visibleEntriesCache = null;
+
+        await RefreshVirtualizeAsync();
+    }
+
+    private async Task RefreshVirtualizeAsync()
+    {
         if (VirtualizeRef == null)
         {
             return;
         }
-
-        // Entries may have been appended or evicted (circular buffer) since the last render, so drop
-        // the cached filtered view before Virtualize re-queries through GetItems.
-        _visibleEntriesCache = null;
 
         await VirtualizeRef.RefreshDataAsync();
         StateHasChanged();
@@ -104,9 +109,10 @@ public sealed partial class LogViewer
             _visibleEntriesCache = null;
 
             // Virtualize caches the items it last fetched and only re-queries GetItems on an explicit
-            // RefreshDataAsync. The filter is applied inside GetItems, so the refresh must run after
-            // FilterText has been assigned here (in OnAfterRenderAsync) - refreshing earlier, e.g. from
-            // the parent's bind handler, would re-query with the previous filter value.
+            // RefreshDataAsync. The filter is applied inside GetItems, so we record the new filter here
+            // and defer the Virtualize refresh to OnAfterRenderAsync: observe the parameter, let the
+            // component render, then refresh Virtualize. Refreshing earlier, e.g. from the parent's bind
+            // handler before this assignment, would re-query with the previous filter value.
             _filterChanged = true;
         }
 
@@ -162,7 +168,12 @@ public sealed partial class LogViewer
         if (_filterChanged)
         {
             _filterChanged = false;
-            await RefreshDataAsync();
+
+            // The filtered view was already rebuilt for the new filter during this render pass
+            // (GetVisibleEntries runs from the markup to decide the "no logs match" message), so just
+            // re-query Virtualize. Calling the public RefreshDataAsync here would null the cache and
+            // force a second full scan of the log buffer.
+            await RefreshVirtualizeAsync();
         }
         if (firstRender)
         {
