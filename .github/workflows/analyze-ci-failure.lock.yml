@@ -1,5 +1,5 @@
-# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"f96eafc74fbeec9afac5833a8186ba0e3aed222b12bfd89b49f1924627b94993","body_hash":"0af2bebdc7a4e3d2d95c308a8d461566165cbb35048f62f25f38b6f03a5fa961","compiler_version":"v0.79.8","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.60"}}
-# gh-aw-manifest: {"version":1,"secrets":["GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/cache/restore","sha":"27d5ce7f107fe9357f9df03efb73ab90386fccae","version":"v5.0.5"},{"repo":"actions/cache/save","sha":"27d5ce7f107fe9357f9df03efb73ab90386fccae","version":"v5.0.5"},{"repo":"actions/checkout","sha":"34e114876b0b11c390a56381ad16ebd13914f8d5","version":"v4"},{"repo":"actions/checkout","sha":"df4cb1c069e1874edd31b4311f1884172cec0e10","version":"v6.0.3"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/download-artifact","sha":"d3f86a106a0bac45b974a628896c90dbdf5c8093","version":"v4"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e","version":"v6.4.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"actions/upload-artifact","sha":"ea165f8d65b6e75b540449e92b4886f43607fa02","version":"v4"},{"repo":"github/gh-aw-actions/setup","sha":"c0338fef4749d08c21f8f975fb0e37efa17dda47","version":"v0.79.8"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.27.2","digest":"sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.27.2@sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.2","digest":"sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.2@sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.27.2","digest":"sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.27.2@sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.3.25","digest":"sha256:c10331ad17668ef89f38f5e356678788a40b0cd5fef96e8f92e1d9c1de47cbaa","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.3.25@sha256:c10331ad17668ef89f38f5e356678788a40b0cd5fef96e8f92e1d9c1de47cbaa"},{"image":"ghcr.io/github/github-mcp-server:v1.1.2","digest":"sha256:30197479d8036c7811892bc07e06f9a05c9ef3cdd79bc59f256d50647f95788c","pinned_image":"ghcr.io/github/github-mcp-server:v1.1.2@sha256:30197479d8036c7811892bc07e06f9a05c9ef3cdd79bc59f256d50647f95788c"}]}
+# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"d95b58c978b5361803dba1537ca379495a1f2c50a47b9a8ee29a49a408979652","body_hash":"c4893b121adb5574ae842e03c4af16d0323bf58c1658308674b115c6e1697cba","compiler_version":"v0.79.8","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.60"}}
+# gh-aw-manifest: {"version":1,"secrets":["GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/checkout","sha":"34e114876b0b11c390a56381ad16ebd13914f8d5","version":"v4"},{"repo":"actions/checkout","sha":"df4cb1c069e1874edd31b4311f1884172cec0e10","version":"v6.0.3"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/download-artifact","sha":"d3f86a106a0bac45b974a628896c90dbdf5c8093","version":"v4"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e","version":"v6.4.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"actions/upload-artifact","sha":"ea165f8d65b6e75b540449e92b4886f43607fa02","version":"v4"},{"repo":"github/gh-aw-actions/setup","sha":"c0338fef4749d08c21f8f975fb0e37efa17dda47","version":"v0.79.8"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.27.2","digest":"sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.27.2@sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.2","digest":"sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.2@sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.27.2","digest":"sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.27.2@sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.3.25","digest":"sha256:c10331ad17668ef89f38f5e356678788a40b0cd5fef96e8f92e1d9c1de47cbaa","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.3.25@sha256:c10331ad17668ef89f38f5e356678788a40b0cd5fef96e8f92e1d9c1de47cbaa"},{"image":"ghcr.io/github/github-mcp-server:v1.1.2","digest":"sha256:30197479d8036c7811892bc07e06f9a05c9ef3cdd79bc59f256d50647f95788c","pinned_image":"ghcr.io/github/github-mcp-server:v1.1.2@sha256:30197479d8036c7811892bc07e06f9a05c9ef3cdd79bc59f256d50647f95788c"}]}
 # This file was automatically generated by gh-aw (v0.79.8). DO NOT EDIT. To debug this workflow, load the skill at https://github.com/github/gh-aw/blob/main/debug.md
 #
 #    ___                   _   _      
@@ -48,8 +48,6 @@
 #   - GITHUB_TOKEN
 #
 # Custom actions used:
-#   - actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-#   - actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
 #   - actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 #   - actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 #   - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -232,21 +230,20 @@ jobs:
         run: |
           bash "${RUNNER_TEMP}/gh-aw/actions/create_prompt_first.sh"
           {
-          cat << 'GH_AW_PROMPT_598a190c447a7622_EOF'
+          cat << 'GH_AW_PROMPT_2b0d782f4c030037_EOF'
           <system>
-          GH_AW_PROMPT_598a190c447a7622_EOF
+          GH_AW_PROMPT_2b0d782f4c030037_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/xpia.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/temp_folder_prompt.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/markdown.md"
-          cat "${RUNNER_TEMP}/gh-aw/prompts/cache_memory_prompt.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/safe_outputs_prompt.md"
-          cat << 'GH_AW_PROMPT_598a190c447a7622_EOF'
+          cat << 'GH_AW_PROMPT_2b0d782f4c030037_EOF'
           <safe-output-tools>
           Tools: add_comment, missing_tool, missing_data, noop, rerun_failed_jobs
           </safe-output-tools>
-          GH_AW_PROMPT_598a190c447a7622_EOF
+          GH_AW_PROMPT_2b0d782f4c030037_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/mcp_cli_tools_prompt.md"
-          cat << 'GH_AW_PROMPT_598a190c447a7622_EOF'
+          cat << 'GH_AW_PROMPT_2b0d782f4c030037_EOF'
           <github-context>
           The following GitHub context information is available for this workflow:
           {{#if github.actor}}
@@ -275,12 +272,12 @@ jobs:
           {{/if}}
           </github-context>
           
-          GH_AW_PROMPT_598a190c447a7622_EOF
+          GH_AW_PROMPT_2b0d782f4c030037_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/github_mcp_tools_with_safeoutputs_prompt.md"
-          cat << 'GH_AW_PROMPT_598a190c447a7622_EOF'
+          cat << 'GH_AW_PROMPT_2b0d782f4c030037_EOF'
           </system>
           {{#runtime-import .github/workflows/analyze-ci-failure.md}}
-          GH_AW_PROMPT_598a190c447a7622_EOF
+          GH_AW_PROMPT_2b0d782f4c030037_EOF
           } > "$GH_AW_PROMPT"
       - name: Interpolate variables and render templates
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -297,9 +294,6 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
-          GH_AW_ALLOWED_EXTENSIONS: ''
-          GH_AW_CACHE_DESCRIPTION: ''
-          GH_AW_CACHE_DIR: '/tmp/gh-aw/cache-memory/'
           GH_AW_EXPR_1A3A194A: ${{ github.event.discussion.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'discussion' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
           GH_AW_EXPR_463A214A: ${{ github.event.pull_request.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'pull_request' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
           GH_AW_EXPR_802A9F6A: ${{ github.event.issue.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'issue' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
@@ -320,9 +314,6 @@ jobs:
             return await substitutePlaceholders({
               file: process.env.GH_AW_PROMPT,
               substitutions: {
-                GH_AW_ALLOWED_EXTENSIONS: process.env.GH_AW_ALLOWED_EXTENSIONS,
-                GH_AW_CACHE_DESCRIPTION: process.env.GH_AW_CACHE_DESCRIPTION,
-                GH_AW_CACHE_DIR: process.env.GH_AW_CACHE_DIR,
                 GH_AW_EXPR_1A3A194A: process.env.GH_AW_EXPR_1A3A194A,
                 GH_AW_EXPR_463A214A: process.env.GH_AW_EXPR_463A214A,
                 GH_AW_EXPR_802A9F6A: process.env.GH_AW_EXPR_802A9F6A,
@@ -439,21 +430,6 @@ jobs:
           name: ci-failure-data
           path: ci-failure-data/
 
-      # Cache memory file share configuration from frontmatter processed below
-      - name: Create cache-memory directory
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/create_cache_memory_dir.sh"
-      - name: Restore cache-memory file share data
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          key: memory-none-nopolicy-${{ env.GH_AW_WORKFLOW_ID_SANITIZED }}-${{ github.run_id }}
-          path: /tmp/gh-aw/cache-memory
-          restore-keys: |
-            memory-none-nopolicy-${{ env.GH_AW_WORKFLOW_ID_SANITIZED }}-
-      - name: Setup cache-memory git repository
-        env:
-          GH_AW_CACHE_DIR: /tmp/gh-aw/cache-memory
-          GH_AW_MIN_INTEGRITY: none
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/setup_cache_memory_git.sh"
       - name: Configure Git credentials
         env:
           REPO_NAME: ${{ github.repository }}
@@ -847,7 +823,7 @@ jobs:
           fi
           # shellcheck disable=SC1003
           sudo -E awf --config "${RUNNER_TEMP}/gh-aw/awf-config.json" --container-workdir "${GITHUB_WORKSPACE}" --mount "${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro" --mount "${RUNNER_TEMP}/gh-aw:/host${RUNNER_TEMP}/gh-aw:ro" ${GH_AW_TOOL_CACHE_MOUNT:+--mount "$GH_AW_TOOL_CACHE_MOUNT"} ${GH_AW_DOCKER_HOST_PATH_PREFIX_ARGS} --env-all --exclude-env COPILOT_GITHUB_TOKEN --exclude-env GITHUB_MCP_SERVER_TOKEN --exclude-env MCP_GATEWAY_API_KEY --log-level info --proxy-logs-dir /tmp/gh-aw/sandbox/firewall/logs --audit-dir /tmp/gh-aw/sandbox/firewall/audit --enable-host-access --allow-host-ports 80,443,8080 --skip-pull \
-            -- /bin/bash -c 'set +o histexpand; export PATH="${RUNNER_TEMP}/gh-aw/mcp-cli/bin:$PATH" && GH_AW_TOOL_CACHE="${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}"; export PATH="$(find "$GH_AW_TOOL_CACHE" /opt/hostedtoolcache /home/runner/work/_tool -maxdepth 5 -type d -name bin 2>/dev/null | tr '\''\n'\'' '\'':'\'')$PATH"; [ -n "$GOROOT" ] && export PATH="$GOROOT/bin:$PATH" || true && GH_AW_NODE_EXEC="${GH_AW_NODE_BIN:-}"; if [ -z "$GH_AW_NODE_EXEC" ] || [ ! -x "$GH_AW_NODE_EXEC" ]; then GH_AW_NODE_EXEC="$(command -v node 2>/dev/null || true)"; fi; if [ -z "$GH_AW_NODE_EXEC" ]; then echo "node runtime missing on this runner — check runtimes.node in workflow YAML" >&2; exit 127; fi; GH_AW_NPM_GLOBAL_ROOT="$(npm root -g 2>/dev/null || true)"; if [ -n "$GH_AW_NPM_GLOBAL_ROOT" ]; then export NODE_PATH="${GH_AW_NPM_GLOBAL_ROOT}${NODE_PATH:+:${NODE_PATH}}"; fi; "$GH_AW_NODE_EXEC" ${RUNNER_TEMP}/gh-aw/actions/copilot_harness.cjs /usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --disable-builtin-mcps --no-ask-user --allow-all-tools --add-dir /tmp/gh-aw/cache-memory/ --allow-all-paths --add-dir "${GITHUB_WORKSPACE}" --prompt-file /tmp/gh-aw/aw-prompts/prompt.txt' 2>&1 | tee -a /tmp/gh-aw/agent-stdio.log
+            -- /bin/bash -c 'set +o histexpand; export PATH="${RUNNER_TEMP}/gh-aw/mcp-cli/bin:$PATH" && GH_AW_TOOL_CACHE="${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}"; export PATH="$(find "$GH_AW_TOOL_CACHE" /opt/hostedtoolcache /home/runner/work/_tool -maxdepth 5 -type d -name bin 2>/dev/null | tr '\''\n'\'' '\'':'\'')$PATH"; [ -n "$GOROOT" ] && export PATH="$GOROOT/bin:$PATH" || true && GH_AW_NODE_EXEC="${GH_AW_NODE_BIN:-}"; if [ -z "$GH_AW_NODE_EXEC" ] || [ ! -x "$GH_AW_NODE_EXEC" ]; then GH_AW_NODE_EXEC="$(command -v node 2>/dev/null || true)"; fi; if [ -z "$GH_AW_NODE_EXEC" ]; then echo "node runtime missing on this runner — check runtimes.node in workflow YAML" >&2; exit 127; fi; GH_AW_NPM_GLOBAL_ROOT="$(npm root -g 2>/dev/null || true)"; if [ -n "$GH_AW_NPM_GLOBAL_ROOT" ]; then export NODE_PATH="${GH_AW_NPM_GLOBAL_ROOT}${NODE_PATH:+:${NODE_PATH}}"; fi; "$GH_AW_NODE_EXEC" ${RUNNER_TEMP}/gh-aw/actions/copilot_harness.cjs /usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --disable-builtin-mcps --no-ask-user --allow-all-tools --allow-all-paths --add-dir "${GITHUB_WORKSPACE}" --prompt-file /tmp/gh-aw/aw-prompts/prompt.txt' 2>&1 | tee -a /tmp/gh-aw/agent-stdio.log
         env:
           AWF_REFLECT_ENABLED: 1
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
@@ -1007,24 +983,6 @@ jobs:
           if [ ! -f /tmp/gh-aw/agent_output.json ]; then
             echo '{"items":[]}' > /tmp/gh-aw/agent_output.json
           fi
-      - name: Commit cache-memory changes
-        if: always()
-        env:
-          GH_AW_CACHE_DIR: /tmp/gh-aw/cache-memory
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/commit_cache_memory_git.sh"
-      - name: Check cache-memory git integrity
-        if: always()
-        continue-on-error: true
-        env:
-          GH_AW_CACHE_DIR: /tmp/gh-aw/cache-memory
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/check_cache_memory_git_integrity.sh"
-      - name: Upload cache-memory data as artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
-        with:
-          name: cache-memory
-          include-hidden-files: true
-          path: /tmp/gh-aw/cache-memory
       - name: Upload agent artifacts
         if: always()
         continue-on-error: true
@@ -1405,7 +1363,6 @@ jobs:
       - detection
       - rerun_failed_jobs
       - safe_outputs
-      - update_cache_memory
     if: >
       always() && (needs.agent.result != 'skipped' || needs.activation.outputs.lockdown_check_failed == 'true' ||
       needs.activation.outputs.stale_lock_file_failed == 'true' || needs.activation.outputs.daily_ai_credits_exceeded == 'true')
@@ -1591,7 +1548,6 @@ jobs:
           GH_AW_MISSING_TOOL_REPORT_AS_FAILURE: "true"
           GH_AW_MISSING_DATA_REPORT_AS_FAILURE: "true"
           GH_AW_TIMEOUT_MINUTES: "20"
-          GH_AW_CACHE_MEMORY_ENABLED: "true"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -2030,52 +1986,4 @@ jobs:
             /tmp/gh-aw/safe-output-items.jsonl
             /tmp/gh-aw/temporary-id-map.json
           if-no-files-found: ignore
-
-  update_cache_memory:
-    needs:
-      - activation
-      - agent
-      - detection
-    if: always() && needs.detection.result == 'success' && needs.agent.result == 'success'
-    runs-on: ubuntu-slim
-    permissions: {}
-    env:
-      GH_AW_WORKFLOW_ID_SANITIZED: analyzecifailure
-    steps:
-      - name: Setup Scripts
-        id: setup
-        uses: github/gh-aw-actions/setup@c0338fef4749d08c21f8f975fb0e37efa17dda47 # v0.79.8
-        with:
-          destination: ${{ runner.temp }}/gh-aw/actions
-          job-name: ${{ github.job }}
-          trace-id: ${{ needs.activation.outputs.setup-trace-id }}
-          parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
-        env:
-          GH_AW_SETUP_WORKFLOW_NAME: "Analyze CI Failure"
-          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/analyze-ci-failure.lock.yml@${{ github.ref }}
-          GH_AW_INFO_VERSION: "1.0.60"
-          GH_AW_INFO_AWF_VERSION: "v0.27.2"
-          GH_AW_INFO_ENGINE_ID: "copilot"
-      - name: Download cache-memory artifact (default)
-        id: download_cache_default
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        continue-on-error: true
-        with:
-          name: cache-memory
-          path: /tmp/gh-aw/cache-memory
-      - name: Check if cache-memory folder has content (default)
-        id: check_cache_default
-        shell: bash
-        run: |
-          if [ -d "/tmp/gh-aw/cache-memory" ] && [ "$(ls -A /tmp/gh-aw/cache-memory 2>/dev/null)" ]; then
-            echo "has_content=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_content=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Save cache-memory to cache (default)
-        if: steps.check_cache_default.outputs.has_content == 'true'
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          key: memory-none-nopolicy-${{ env.GH_AW_WORKFLOW_ID_SANITIZED }}-${{ github.run_id }}
-          path: /tmp/gh-aw/cache-memory
 

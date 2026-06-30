@@ -398,9 +398,6 @@ network:
     - defaults
     - github
 
-tools:
-  cache-memory:
-
 safe-outputs:
   add-comment:
     max: 1
@@ -510,57 +507,21 @@ steps:
 
 You are analyzing a failed CI build for a pull request in the **microsoft/aspire** repository. Your job is to determine the root cause of the failure and take the appropriate action.
 
-## Cache-First Workflow
+## Workflow
 
-The analysis should only be performed on the **first run attempt**. Subsequent attempts reuse the cached classification.
+### Step 1: Read the summary file
 
-### Step 0: Read the summary file
+Read `ci-failure-data/analysis-summary.md`. It contains the run information, PR metadata, failed jobs, error-focused logs, annotations, test failures, PR changed files, and known transient failure patterns.
 
-Read `ci-failure-data/analysis-summary.md`. It contains the run ID, run attempt, and either full failure data (first attempt) or instructions to read cached results (retry attempt).
+### Step 2: Analyze
 
-### Step 1: Check for cached analysis
+Analyze all of the data to classify each failed job (see **Classification Rules** below).
 
-Using the **cache-memory** tool, try to read the key `ci-failure-analysis-<RUN_ID>` (where `<RUN_ID>` is the run ID from the summary).
+### Step 3: Take action
 
-- **If a cached value exists**: This is a retry. Parse the cached JSON and skip directly to the **Actions** section below using the cached `classification` and `details`. Do NOT re-analyze the logs.
-- **If no cached value exists**: This is the first attempt. Proceed to Step 2.
+Determine the overall verdict and proceed to the **Actions** section.
 
-### Step 2: Full analysis (first attempt only)
-
-The analysis summary file contains:
-- Failed jobs and their failed steps
-- Job logs (last 200 lines per job)
-- Job annotations
-- Test failures from TRX artifacts (fully qualified test names and error messages)
-- PR changed files
-- Known transient failure patterns from `eng/test-retry-patterns.json`
-
-Analyze all of this data to classify each failed job (see **Classification Rules** below).
-
-### Step 3: Cache the classification
-
-After completing the analysis, store the result using the **cache-memory** tool with key `ci-failure-analysis-<RUN_ID>`. The value must be a JSON object:
-
-```json
-{
-  "classification": "transient-infrastructure" | "flaky-test" | "code-issue" | "mixed",
-  "details": [
-    {
-      "job": "<job name>",
-      "category": "transient-infrastructure" | "flaky-test" | "code-issue",
-      "reason": "<brief explanation>",
-      "error": "<key error message>"
-    }
-  ],
-  "run_id": "<run id>",
-  "run_url": "<run url>",
-  "pr_numbers": "<comma-separated PR numbers>"
-}
-```
-
-Then proceed to the **Actions** section.
-
-## Input Data (first attempt only)
+## Input Data
 
 The file `ci-failure-data/analysis-summary.md` contains the full failure data:
 - The failed workflow run information
@@ -607,7 +568,7 @@ The failure was directly caused by changes in the PR. Indicators:
 - **API compatibility failures**: public API surface changes that break compatibility
 - **Lint/format errors**: code style violations in PR-changed files
 
-## Analysis Process (first attempt only)
+## Analysis Process
 
 1. Read `ci-failure-data/analysis-summary.md`
 2. For each failed job, examine:
@@ -618,8 +579,7 @@ The failure was directly caused by changes in the PR. Indicators:
    - The known transient failure patterns
    - The PR changed files list
 4. Classify each failed job
-5. Cache the classification using `cache-memory` (see Step 3 above)
-6. Determine the overall verdict and proceed to **Actions**
+5. Determine the overall verdict and proceed to **Actions**
 
 ## Actions
 
