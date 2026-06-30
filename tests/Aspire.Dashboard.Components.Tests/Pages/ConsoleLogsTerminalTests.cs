@@ -455,6 +455,92 @@ public partial class ConsoleLogsTests
         Assert.Equal(ConsoleLogsView.Console, instance.ActiveViewForTest);
     }
 
+    [Fact]
+    public async Task TerminalResource_ManuallyStopped_StaleToolbarSnapshotDoesNotFlipBack()
+    {
+        // Regression: after manual Stop the JS side may still have an in-
+        // flight toolbar snapshot reporting `primary` (the WS close has
+        // not propagated yet, or the snapshot was queued before close).
+        // Earlier the page synthetically re-armed _lastTerminalStatus to
+        // "connecting" inside the stopped-edge handler, which made that
+        // stale `primary` snapshot look like a fresh attach edge and
+        // immediately snapped the user back to Terminal. The fix is to
+        // gate the auto-switch on the resource not currently being
+        // stopped, so stale snapshots that arrive after Stop are
+        // ignored until the resource actually transitions back out of
+        // a stopped state.
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // PTY attaches → page flips to Terminal.
+        var terminalView = cut.FindComponent<TerminalView>().Instance;
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Terminal);
+
+        // Resource manually stopped.
+        var stoppedTerminalResource = ModelTestHelpers.CreateResource(
+            resourceName: "terminal-resource",
+            state: KnownResourceState.Exited,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Terminal.Enabled] = StringProperty(KnownProperties.Terminal.Enabled, "true"),
+                [KnownProperties.Terminal.ReplicaIndex] = StringProperty(KnownProperties.Terminal.ReplicaIndex, "0"),
+                [KnownProperties.Terminal.ReplicaCount] = StringProperty(KnownProperties.Terminal.ReplicaCount, "1"),
+            });
+
+        resourceChannel.Writer.TryWrite([
+            new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, stoppedTerminalResource)
+        ]);
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Console);
+
+        // Now a stale toolbar push from the JS side arrives reporting the
+        // pre-stop primary state. With the gate in place this must NOT
+        // flip the view back to Terminal.
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+
+        Assert.Equal(ConsoleLogsView.Console, instance.ActiveViewForTest);
+    }
+
     private void SetupTerminalViewJsInterop()
     {
         // TerminalView.OnAfterRenderAsync does:

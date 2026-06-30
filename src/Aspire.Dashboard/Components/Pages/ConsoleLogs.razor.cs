@@ -1056,12 +1056,18 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
                 if (!wasStopped && isStopped)
                 {
-                    // Re-arm the PTY-attach edge so that when the user
-                    // restarts the resource the next connecting → connected
-                    // transition triggers the auto-switch back to Terminal,
-                    // matching the behaviour after a clean exit.
-                    _lastTerminalStatus = "connecting";
-
+                    // Flip back to Console. We deliberately do NOT
+                    // synthetically set _lastTerminalStatus to "connecting"
+                    // here: the JS side may still have an in-flight
+                    // `primary` snapshot, and pretending we just saw
+                    // "connecting" would make that next snapshot look
+                    // like a fresh attach edge and yank the user straight
+                    // back to Terminal. The real WS will go through close
+                    // → connecting → connected naturally on restart, so
+                    // the genuine edge fires then. The
+                    // _selectedTerminalResourceStopped gate in the auto-
+                    // switch logic suppresses any spurious edges in the
+                    // meantime.
                     if (!_userPickedView && _activeView == ConsoleLogsView.Terminal)
                     {
                         _activeView = ConsoleLogsView.Console;
@@ -1305,13 +1311,18 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // reconnect that follows a resource stop+start cycle (the terminal
         // host process restarts with the replica, so the consumer WS goes
         // down and comes back up). Triggering on the edge rather than on
-        // any non-connecting snapshot avoids two failure modes:
+        // any non-connecting snapshot avoids three failure modes:
         //   1. A stale post-onExit snapshot still showing primary/no-primary
         //      would otherwise immediately undo the PTY-exit auto-switch
         //      back to Console.
         //   2. Routine reconnect-after-network-blip snapshots would
         //      otherwise re-snap the user to Terminal even though they
         //      have been reading Console logs the whole time.
+        //   3. On manual Stop the JS side may still have an in-flight
+        //      `primary` snapshot. The _selectedTerminalResourceStopped
+        //      gate below suppresses the auto-switch while the resource
+        //      is stopped so that stale snapshot can't drag the user back
+        //      to a now-defunct Terminal view.
         // We still respect the user's manual pick — once they choose a view
         // the latch in _userPickedView suppresses all auto-switching.
         var previousStatus = _lastTerminalStatus;
@@ -1326,6 +1337,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         var isConnected = !string.Equals(state.Status, "connecting", StringComparison.Ordinal);
 
         if (_selectedResourceHasTerminal &&
+            !_selectedTerminalResourceStopped &&
             !_userPickedView &&
             wasConnecting &&
             isConnected)
