@@ -197,9 +197,6 @@ public sealed class KubernetesDeployWithProjectPersistentVolumeTests(ITestOutput
             await KillBackgroundJobAsync(auto, counter);
 
             await auto.CleanupKubernetesDeploymentAsync(counter, clusterName);
-
-            await auto.TypeAsync("exit");
-            await auto.EnterAsync();
         }
         finally
         {

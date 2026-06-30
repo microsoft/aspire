@@ -280,9 +280,6 @@ app.get("/health", (_req, res) => {
             // =====================================================================
 
             await auto.CleanupKubernetesDeploymentAsync(counter, clusterName);
-
-            await auto.TypeAsync("exit");
-            await auto.EnterAsync();
         }
         finally
         {
