@@ -89,17 +89,17 @@ internal static class MauiPlatformHelper
         // Check if the project has the platform TFM and get the actual TFM value
         var platformTfm = ProjectFileReader.GetPlatformTargetFramework(projectPath, platformName);
 
-        // Override DCP's default launch command from 'dotnet run' to 'dotnet run --no-build --project'.
+        // Override the default DCP launch command from 'dotnet run' to 'dotnet build --no-restore /t:Run -p:NoBuild=true'.
         // The Build target is run separately by MauiBuildQueueEventSubscriber before DCP starts
         // the process, giving reliable exit-code-based build completion detection and allowing
-        // the "Building" state to persist in the dashboard. Use dotnet run's native --no-build
-        // switch for the launch phase; `dotnet build /t:Run -p:NoBuild=true` is rejected by the
-        // SDK because the Build target is still in the target graph.
-        resourceBuilder.WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["run", "--no-build", "--project"], leadingResourceArgumentToRemove: "run"));
+        // the "Building" state to persist in the dashboard. DCP only needs to launch the
+        // already-built app, so disable restore/build work in the Run target to avoid concurrent
+        // MSBuild output writes after the queue lock is released.
+        resourceBuilder.WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["build", "--no-restore", "/t:Run", "-p:NoBuild=true"], leadingResourceArgumentToRemove: "run"));
 
         // Store build parameters so the event subscriber can run 'dotnet build' before launch.
         // The annotation captures the same target framework, configuration, and MSBuild properties
-        // that DCP later passes to the Run target.
+        // that DCP later passes to the no-build Run target.
         var workingDir = Path.GetDirectoryName(projectPath)
             ?? throw new InvalidOperationException($"Unable to determine directory from project path: {projectPath}");
         var configuration = resourceBuilder.ApplicationBuilder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;

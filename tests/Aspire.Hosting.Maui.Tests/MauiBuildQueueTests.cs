@@ -631,7 +631,7 @@ public class MauiBuildQueueTests
     }
 
     [Fact]
-    public async Task ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnRunning()
+    public async Task ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState()
     {
         await using var env = await BuildQueueTestEnvironment.CreateAsync();
         Assert.True(env.Parent.TryGetLastAnnotation<MauiBuildQueueAnnotation>(out var annotation));
@@ -660,7 +660,7 @@ public class MauiBuildQueueTests
             State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
         });
 
-        await releaseTask.WaitAsync(TimeSpan.FromSeconds(30));
+        await releaseTask.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
     }
 

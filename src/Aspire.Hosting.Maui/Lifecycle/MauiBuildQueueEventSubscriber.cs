@@ -101,11 +101,11 @@ internal class MauiBuildQueueEventSubscriber(
 
             await RunBuildAsync(resource, logger, resourceCts.Token).ConfigureAwait(false);
 
-            // Build succeeded. Keep the semaphore held until DCP starts the no-build launch.
-            // After this handler returns, DCP invokes `dotnet run --no-build --project` with
-            // the same configuration used here, so the launch phase must not compile the project
-            // again. Once DCP reports Running, the process is past the serialized build phase and
-            // long-lived app processes should not block other platform resources indefinitely.
+            // Build succeeded. Keep the semaphore held until DCP starts the launch process.
+            // After this handler returns, DCP invokes `dotnet build --no-restore /t:Run -p:NoBuild=true`
+            // with the same configuration used here. The no-build/no-restore flags are important:
+            // DCP may report Running as soon as the process starts, so the launch path must not perform
+            // additional restore/build work after the next queued resource is allowed to build.
             releaseInFinally = false;
             _ = ReleaseSemaphoreAfterLaunchAsync(resource, semaphore, s_buildingState.Text, logger, cancellationToken);
         }
@@ -142,8 +142,8 @@ internal class MauiBuildQueueEventSubscriber(
                 "Cannot proceed with build — the semaphore would be held indefinitely.");
         }
 
-        // Match DCP's launch configuration so the Run target starts the exact outputs produced
-        // by this serialized build.
+        // Match DCP's launch configuration so the no-build Run target starts the exact outputs
+        // produced by this serialized build.
         var args = new List<string> { "build", buildInfo.ProjectPath };
 
         if (!string.IsNullOrEmpty(buildInfo.TargetFramework))
@@ -262,7 +262,7 @@ internal class MauiBuildQueueEventSubscriber(
     }
 
     /// <summary>
-    /// Releases the build semaphore after DCP starts the no-build app launch process.
+    /// Releases the build semaphore after DCP starts the no-build/no-restore app launch process.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -272,9 +272,11 @@ internal class MauiBuildQueueEventSubscriber(
     /// Without this guard a restart could match on a stale snapshot.
     /// </para>
     /// <para>
-    /// The launch command uses <c>dotnet run --no-build --project</c>, so a transition to
-    /// "Running" means DCP has moved past the serialized build phase. Terminal states are also
-    /// accepted so failed or short-lived launches do not hold the lock.
+    /// Including "Running" in the predicate is intentional: the pre-build step already compiled
+    /// the project for the same configuration that DCP will pass to the launch command, and DCP's
+    /// <c>dotnet build --no-restore /t:Run -p:NoBuild=true</c> launch command is configured not to
+    /// restore or build. Waiting for a terminal state would hold the semaphore for the entire app
+    /// lifetime, blocking other platforms from starting.
     /// </para>
     /// </remarks>
     internal virtual async Task ReleaseSemaphoreAfterLaunchAsync(
