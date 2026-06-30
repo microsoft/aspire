@@ -208,8 +208,16 @@ internal sealed class RunCommand : BaseCommand
         AppHostProjectContext? context = null;
         Activity? runActivity = null;
         // Hoisted so the outer finally can guarantee disposal on every failure/cancellation path. The
-        // happy path disposes (and nulls) it earlier, once startup succeeds.
+        // monitor is disarmed early (once the AppHost backchannel is established); the finally is an
+        // idempotent backstop for paths that never reach that point.
         LauncherLivenessMonitor? launcherMonitor = null;
+        // Hoisted so the outer finally can tear down the AppHost (dotnet run) before a detached child
+        // process exits. A cancellation/failure during startup can otherwise return while the AppHost
+        // shutdown ladder is still running, orphaning a dotnet run process that aspire ps cannot see
+        // (its backchannel never came up). The CTS is hoisted (instead of `using var`) for the same
+        // reason: the finally needs it to cancel the run, so it cannot be scoped to the try block.
+        Task<int>? pendingRun = null;
+        CancellationTokenSource? runCancellationTokenSource = null;
 
         try
         {
@@ -296,18 +304,25 @@ internal sealed class RunCommand : BaseCommand
             }
 
             // Start the project run as a pending task - we'll handle UX while it runs
-            Task<int> pendingRun;
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
             var startupStartTimestamp = _timeProvider.GetTimestamp();
-            using var runCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            runCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
             // When this is a detached child, watch the foreground launcher during startup. If the launcher
-            // is killed before the app is ready, cancel the run so the AppHost tree is torn down instead of leaking. 
-            // The monitor is disarmed once startup succeeds (see below); from that point the child
-            // is intentionally independent and the launcher's normal exit must not affect it.
+            // is killed before the app is ready, cancel the run so the AppHost tree is torn down instead of leaking.
+            // The monitor is disarmed as soon as the AppHost backchannel is established (see
+            // onBackchannelEstablished below); from that point the AppHost's own orphan detector anchors to
+            // this child, so the launcher's normal exit after observing readiness must not affect us.
+            Func<ValueTask>? onBackchannelEstablished = null;
             if (IsDetachedStartChild())
             {
                 launcherMonitor = LauncherLivenessMonitor.StartIfConfigured(_configuration, runCancellationTokenSource, _timeProvider, _logger);
+                if (launcherMonitor is { } armedMonitor)
+                {
+                    // Disarm at the earliest safe point. DisposeAsync is idempotent, so the outer finally
+                    // can still dispose it as a backstop for paths that never establish the backchannel.
+                    onBackchannelEstablished = () => armedMonitor.DisposeAsync();
+                }
             }
 
             using (_profilingTelemetry.StartRunAppHostStartProject(project.LanguageId, noBuild, waitForDebugger))
@@ -361,6 +376,7 @@ internal sealed class RunCommand : BaseCommand
                     startup = await WaitForAppHostStartupAsync(
                         pendingRun,
                         backchannelCompletionSource,
+                        onBackchannelEstablished,
                         logCaptureCancellationSource,
                         context.OutputCollector,
                         appHostStartupOutputStartIndex,
@@ -378,15 +394,6 @@ internal sealed class RunCommand : BaseCommand
                 var backchannel = startup.Backchannel;
                 var dashboardUrls = startup.DashboardUrls;
                 pendingLogCapture = startup.PendingLogCapture;
-
-                // Startup succeeded and the app is ready. Disarm the launcher watchdog: from here the
-                // detached child is independent, and the foreground launcher is expected to exit normally
-                // once it has observed readiness, so it must no longer trigger a shutdown.
-                if (launcherMonitor is not null)
-                {
-                    await launcherMonitor.DisposeAsync().ConfigureAwait(false);
-                    launcherMonitor = null;
-                }
 
                 if (dashboardUrls.DashboardHealthy is false)
                 {
@@ -618,11 +625,34 @@ internal sealed class RunCommand : BaseCommand
         }
         finally
         {
+            // A detached child supervises the AppHost (dotnet run) for its whole lifetime, so it must
+            // not return while that process tree is still being torn down. Several early-exit paths above
+            // (a termination signal or other cancellation arriving before the backchannel is established)
+            // unwind without awaiting pendingRun, which only *starts* the AppHost shutdown ladder; if we
+            // returned now the CLI process would exit and orphan a dotnet run process that aspire ps cannot
+            // even see (its backchannel never came up). Cancel the run (already cancelled on the signal
+            // path) and wait, bounded, for the ladder to finish the kill. CancellationToken.None is
+            // deliberate: on the leak path the root token is already cancelled, so passing it would
+            // short-circuit the wait and re-introduce the leak.
+            if (IsDetachedStartChild() && pendingRun is { IsCompleted: false } detachedAppHostRun)
+            {
+                try
+                {
+                    runCancellationTokenSource?.Cancel();
+                    await detachedAppHostRun.WaitAsync(s_appHostStartupCancellationTimeout, _timeProvider, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Detached child timed out or failed while awaiting AppHost teardown during early exit.");
+                }
+            }
+
             if (launcherMonitor is not null)
             {
                 await launcherMonitor.DisposeAsync().ConfigureAwait(false);
             }
 
+            runCancellationTokenSource?.Dispose();
             runActivity?.Dispose();
         }
     }
@@ -724,6 +754,7 @@ internal sealed class RunCommand : BaseCommand
     private async Task<AppHostStartupResult> WaitForAppHostStartupAsync(
         Task<int> pendingRun,
         TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource,
+        Func<ValueTask>? onBackchannelEstablished,
         CancellationTokenSource logCaptureCancellationSource,
         OutputCollector? outputCollector,
         int appHostStartupOutputStartIndex,
@@ -732,7 +763,7 @@ internal sealed class RunCommand : BaseCommand
         CancellationToken cancellationToken)
     {
         using var startupCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var happyPathTask = RunStartupHappyPathAsync(backchannelCompletionSource, logCaptureCancellationSource, pendingRun, startupStartTimestamp, startupTimeout, startupCts.Token);
+        var happyPathTask = RunStartupHappyPathAsync(backchannelCompletionSource, onBackchannelEstablished, logCaptureCancellationSource, pendingRun, startupStartTimestamp, startupTimeout, startupCts.Token);
 
         // Race the startup readiness signal against the AppHost system task. The AppHost
         // system is owned by the project and tears itself down (via an internal escalation
@@ -811,6 +842,7 @@ internal sealed class RunCommand : BaseCommand
 
     private async Task<AppHostStartupResult> RunStartupHappyPathAsync(
         TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource,
+        Func<ValueTask>? onBackchannelEstablished,
         CancellationTokenSource logCaptureCancellationSource,
         Task<int> pendingRun,
         long startupStartTimestamp,
@@ -824,6 +856,17 @@ internal sealed class RunCommand : BaseCommand
                 RunCommandStrings.ConnectingToAppHost,
                 async () => await backchannelCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), _timeProvider, cancellationToken).ConfigureAwait(false));
             waitForBackchannelActivity.SetAppHostBackchannelConnected(true);
+        }
+
+        // The child<->AppHost backchannel now exists, which is the earliest point at which the AppHost is
+        // self-anchored: its orphan detector watches THIS child via ASPIRE_CLI_PID, and aspire ps/stop can
+        // discover it. Disarm the launcher watchdog here so the foreground launcher's normal exit (right
+        // after it observes readiness over the auxiliary backchannel) cannot be mistaken for an early death
+        // and tear the AppHost down. Doing this before GetDashboardUrlsAsync / the early-exit observation
+        // window closes the race that otherwise shuts down a healthy detached start.
+        if (onBackchannelEstablished is not null)
+        {
+            await onBackchannelEstablished().ConfigureAwait(false);
         }
 
         // Start log capture early so any output produced while we wait for dashboard URLs is

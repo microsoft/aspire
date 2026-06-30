@@ -274,6 +274,182 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_DetachedChild_WhenLauncherDiesAfterBackchannelEstablished_DoesNotCancelRun()
+    {
+        // Regression test for the detached-start happy-path race (PR #18566 scenario 2): once the
+        // child<->AppHost backchannel is established the launcher watchdog must be disarmed, so the
+        // foreground launcher exiting normally (right after it observes readiness) does NOT tear the
+        // detached AppHost down. Before the fix the monitor was only disarmed after full readiness, so a
+        // launcher exit during GetDashboardUrlsAsync / the early-exit observation window cancelled a
+        // healthy run.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var dashboardRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dashboardCanReturn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var appHostReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var appHostCanExit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                context.BuildCompletionSource?.TrySetResult(true);
+                context.BackchannelCompletionSource?.TrySetResult(new TestAppHostBackchannel
+                {
+                    NotifyAppHostReadyAsyncCalled = appHostReady,
+                    GetDashboardUrlsAsyncCallback = async ct =>
+                    {
+                        // The backchannel is established and the launcher watchdog has already been
+                        // disarmed by the time GetDashboardUrlsAsync runs. Signal the test so it can kill
+                        // the launcher, then wait for the test to confirm the run survived before returning
+                        // healthy dashboard URLs so startup can proceed to readiness.
+                        dashboardRequested.TrySetResult();
+                        await dashboardCanReturn.Task.WaitAsync(ct);
+                        return new DashboardUrlsState { DashboardHealthy = true };
+                    }
+                });
+
+                // Keep the AppHost "running" until the test allows it to exit, so the run stays alive after
+                // readiness instead of completing during the early-exit observation window.
+                await appHostCanExit.Task.WaitAsync(cancellationToken);
+                return CliExitCodes.Success;
+            }
+        };
+
+        // A real, short-lived process stands in for the foreground launcher. The child watches it via
+        // ASPIRE_LAUNCHER_PID/STARTED and must stop reacting to its death once the backchannel is up.
+        using var launcher = TestProcesses.StartLongRunning();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.ConfigurationCallback += config =>
+            {
+                config[KnownConfigNames.CliRunDetached] = "true";
+                config[KnownConfigNames.CliLauncherProcessId] = launcher.Id.ToString(CultureInfo.InvariantCulture);
+                config[KnownConfigNames.CliLauncherProcessStarted] = ((DateTimeOffset)launcher.StartTime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var pendingCommand = result.InvokeAsync(cancellationToken: TestContext.Current.CancellationToken);
+
+        // Wait until startup has established the backchannel and is fetching dashboard URLs; the monitor
+        // is disarmed before this point.
+        await dashboardRequested.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // Kill the launcher and give the monitor's ~1s poll generous time to (incorrectly) fire. With the
+        // fix the monitor is already disarmed, so the run must survive and reach readiness.
+        launcher.Kill(entireProcessTree: true);
+        launcher.WaitForExit();
+        await Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+
+        dashboardCanReturn.SetResult();
+        await appHostReady.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // Tear down cleanly and confirm the run completed successfully rather than being cancelled by the
+        // dead launcher.
+        appHostCanExit.SetResult();
+        var exitCode = await pendingCommand.DefaultTimeout();
+
+        Assert.True(appHostReady.Task.IsCompletedSuccessfully);
+        Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task RunCommand_DetachedChild_WhenSignaledBeforeReadiness_AwaitsAppHostTeardownBeforeExit()
+    {
+        // Regression test for the detached-start teardown leak (PR #18566 scenario 3): when a termination
+        // signal cancels the run before the AppHost backchannel is established, the detached child must wait
+        // for the AppHost (dotnet run) shutdown to finish before the CLI process exits. Before the fix the
+        // child returned immediately, abandoning the in-flight teardown and orphaning a dotnet run process
+        // that aspire ps could not even see (its backchannel never came up).
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var startupReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var teardownCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                // Report a successful build but never establish the backchannel, mirroring an AppHost that
+                // is still in a long startup delay when the termination signal arrives.
+                context.BuildCompletionSource?.TrySetResult(true);
+                startupReached.TrySetResult();
+
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Stand in for the dotnet run shutdown ladder, which takes real time to kill the process
+                    // tree. The CLI must not exit until this has finished. CancellationToken.None is
+                    // deliberate: this represents teardown work that the same signal cannot itself cancel.
+                    await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+                    teardownCompleted.TrySetResult();
+                }
+
+                return CliExitCodes.Cancelled;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.ConfigurationCallback += config => config[KnownConfigNames.CliRunDetached] = "true";
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var pendingCommand = result.InvokeAsync(cancellationToken: cts.Token);
+
+        // Once the run is in the startup window (no backchannel yet), deliver the termination signal.
+        await startupReached.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        cts.Cancel();
+
+        var exitCode = await pendingCommand.DefaultTimeout();
+
+        // The command must not have returned until the AppHost teardown finished; otherwise the real
+        // dotnet run process would be orphaned below the backchannel-ready point.
+        Assert.True(teardownCompleted.Task.IsCompletedSuccessfully, "Detached child exited before the AppHost teardown completed.");
+        Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Fact]
     public async Task RunCommand_StartupTimeoutBudgetIncludesBuildAndBackchannelWaits()
     {
         var interactionService = new TestInteractionService();
