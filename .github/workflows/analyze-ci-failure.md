@@ -182,9 +182,9 @@ jobs:
               "ci-failure-data/job-${JOB_ID}-raw.log" 2>/dev/null \
               | head -150 > "ci-failure-data/job-${JOB_ID}.log" || true
 
-            # If grep found nothing, fall back to last 30 lines (job may have unusual errors)
+            # If grep found nothing, fall back to last 200 lines (job may have unusual errors)
             if [ ! -s "ci-failure-data/job-${JOB_ID}.log" ]; then
-              tail -30 "ci-failure-data/job-${JOB_ID}-raw.log" > "ci-failure-data/job-${JOB_ID}.log"
+              tail -200 "ci-failure-data/job-${JOB_ID}-raw.log" > "ci-failure-data/job-${JOB_ID}.log"
             fi
             rm -f "ci-failure-data/job-${JOB_ID}-raw.log"
           done
@@ -208,6 +208,12 @@ jobs:
             gh api "repos/${REPO}/pulls/${FIRST_PR}/files" --paginate \
               --jq '.[]' | jq -s '[.[] | {filename, status, additions, deletions, changes}]' \
               > ci-failure-data/pr-files.json 2>/dev/null || echo "[]" > ci-failure-data/pr-files.json
+
+            # Fetch PR metadata (state, title, author) so the agent doesn't need
+            # to make MCP pull_request_read calls at runtime.
+            gh api "repos/${REPO}/pulls/${FIRST_PR}" \
+              --jq '{number, title, state, user: .user.login, head_branch: .head.ref, base_branch: .base.ref, html_url}' \
+              > ci-failure-data/pr-metadata.json 2>/dev/null || echo "{}" > ci-failure-data/pr-metadata.json
           fi
 
           # Load the known transient failure patterns for reference
@@ -323,6 +329,15 @@ jobs:
             fi
             echo ""
 
+            echo "## Pull Request"
+            echo ""
+            if [ -f "ci-failure-data/pr-metadata.json" ]; then
+              jq -r '"- **PR**: #\(.number) \(.title)\n- **Author**: @\(.user)\n- **State**: \(.state)\n- **Branch**: \(.head_branch) → \(.base_branch)\n- **URL**: \(.html_url)"' ci-failure-data/pr-metadata.json 2>/dev/null || echo "No PR metadata available."
+            else
+              echo "No PR metadata available."
+            fi
+            echo ""
+
             echo "## PR Changed Files"
             echo ""
             if [ -f "ci-failure-data/pr-files.json" ]; then
@@ -384,9 +399,6 @@ network:
     - github
 
 tools:
-  github:
-    toolsets: [repos, issues, pull_requests]
-    min-integrity: approved
   cache-memory:
 
 safe-outputs:
@@ -552,8 +564,9 @@ Then proceed to the **Actions** section.
 
 The file `ci-failure-data/analysis-summary.md` contains the full failure data:
 - The failed workflow run information
+- PR metadata (number, title, author, state, branch)
 - Failed jobs and their failed steps
-- Job logs (last 200 lines per job)
+- Job logs (error-focused extracts)
 - Job annotations
 - Test failures extracted from TRX artifacts (test name and error message)
 - PR changed files
@@ -701,4 +714,5 @@ If there are both transient and non-transient failures, treat the overall result
 4. **Cross-reference PR files** — always check whether the failing test is in an area modified by the PR.
 5. **One comment per analysis** — post exactly one comment summarizing all findings.
 6. **Use HTML comments as markers** — include the `<!-- analyze-ci-failure:... -->` marker so duplicate comments can be detected and collapsed.
-7. **PR must be open** — verify the PR is still open before posting a comment. If all associated PRs are closed/merged, skip the analysis.
+7. **PR must be open** — check the PR state from the "Pull Request" section in the summary file. If the state is not "open", skip the analysis and call `noop`.
+8. **Do NOT use MCP to query GitHub** — all needed data (PR metadata, changed files, job logs, annotations) is already in the summary file. No GitHub API tools are available.
