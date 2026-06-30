@@ -277,8 +277,10 @@ builder.Build().Run();
                 // Restore the dev CLI binary and hive that we backed up before GA install, then
                 // re-extract its embedded bundle (managed + dcp). The dev CLI is self-extracting,
                 // so the bundle lives inside the binary — restoring the binary and running
-                // 'aspire setup' rebuilds ~/.aspire/versions/<id>/ for the dev build.
-                await auto.TypeAsync("cp -f /tmp/aspire-dev-backup ~/.aspire/bin/aspire && cp -rf /tmp/aspire-hives-backup/* ~/.aspire/hives/ 2>/dev/null && ~/.aspire/bin/aspire setup --force; echo 'dev CLI restored'");
+                // 'aspire setup' rebuilds ~/.aspire/versions/<id>/ for the dev build. The hive copy
+                // is non-fatal (';') so an empty glob can't short-circuit 'aspire setup', and the
+                // success echo is gated ('&&') on setup so the prompt reflects a setup failure.
+                await auto.TypeAsync("cp -f /tmp/aspire-dev-backup ~/.aspire/bin/aspire && cp -rf /tmp/aspire-hives-backup/* ~/.aspire/hives/ 2>/dev/null; ~/.aspire/bin/aspire setup --force && echo 'dev CLI restored'");
                 await auto.EnterAsync();
                 await auto.WaitForSuccessPromptAsync(counter);
 
