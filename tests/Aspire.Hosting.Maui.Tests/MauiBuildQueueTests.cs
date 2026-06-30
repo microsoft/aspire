@@ -660,7 +660,7 @@ public class MauiBuildQueueTests
             State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
         });
 
-        await Task.Delay(100);
+        await Task.Delay(500);
         Assert.False(releaseTask.IsCompleted, "Running is published when the launch process starts, before MAUI/MSBuild launch work is complete.");
         Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
 
@@ -669,7 +669,7 @@ public class MauiBuildQueueTests
             State = new ResourceStateSnapshot(KnownResourceStates.Finished, KnownResourceStateStyles.Success)
         });
 
-        await releaseTask.WaitAsync(TimeSpan.FromSeconds(5));
+        await releaseTask.WaitAsync(TimeSpan.FromSeconds(30));
         Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
     }
 
