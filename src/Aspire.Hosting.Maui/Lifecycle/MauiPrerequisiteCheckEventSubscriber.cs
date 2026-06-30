@@ -79,7 +79,7 @@ internal sealed class MauiPrerequisiteCheckEventSubscriber(
                 continue;
             }
 
-            var cacheKey = checker.GetCacheKey(resource);
+            var cacheKey = GetScopedCacheKey(checker, resource);
             if (_successfulChecks.ContainsKey(cacheKey))
             {
                 continue;
@@ -122,6 +122,12 @@ internal sealed class MauiPrerequisiteCheckEventSubscriber(
         {
             _inflightChecks.TryRemove(new KeyValuePair<string, Lazy<Task<MauiPrerequisiteCheckResult>>>(cacheKey, lazyCheck));
         }
+    }
+
+    private static string GetScopedCacheKey(IMauiPrerequisiteChecker checker, IResource resource)
+    {
+        var checkerType = checker.GetType();
+        return $"{checkerType.FullName ?? checkerType.Name}:{checker.GetCacheKey(resource)}";
     }
 
     private void ShowNotification(IResource resource, IReadOnlyList<MissingMauiPrerequisite> missingPrerequisites, CancellationToken cancellationToken)
