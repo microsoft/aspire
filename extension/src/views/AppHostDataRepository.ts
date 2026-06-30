@@ -143,6 +143,10 @@ interface DescribeStream {
     restartDelay: number;
     version: number;
     receivedData: boolean;
+    // True once `aspire ps` has confirmed this stream's host running at least once. Distinguishes a
+    // genuine stop (was running, now gone) from the pre-confirmation streaming window (never running
+    // yet) when deciding whether to keep an idle workspace target's stream alive.
+    observedRunning: boolean;
     parkedState: DescribeParkedState;
 }
 
@@ -916,19 +920,20 @@ export class AppHostDataRepository {
         }
 
         for (const path of desiredPaths) {
-            const key = this._findDescribeStreamKey(path);
-            if (key === undefined) {
-                this._startDescribe(path);
+            const stream = this._findDescribeStream(path) ?? this._startDescribe(path);
+            if (stream === undefined) {
                 continue;
+            }
+
+            if (this._isRunningWorkspaceHost(path)) {
+                stream.observedRunning = true;
             }
 
             // A stream parked while idle restarts now that the host is running. If it still produces no
             // data it re-parks as `parked-active`, so this fires once on the idle->running edge instead
-            // of looping. Pass `existingKey`: the live entry may be filed under a different spelling, so
-            // `_restartDescribe` re-keys it.
-            const stream = this._describeStreams.get(key)!;
+            // of looping.
             if (stream.parkedState === 'parked-idle' && this._isDescribeHostActive(path)) {
-                this._restartDescribe(path, { existingKey: key });
+                this._restartDescribe(path, { existingKey: stream.appHostPath });
             }
         }
         this._attachResourcesToAppHosts();
@@ -961,12 +966,17 @@ export class AppHostDataRepository {
         const desired = new Set(this._activeDescribeHostPaths());
 
         // Single-file's only desired path is the sentinel (already included), so the idle-target
-        // exception applies to real workspace targets only.
+        // exception applies to real workspace targets only. Keep the target desired until `ps` has
+        // confirmed it running at least once: describe data does NOT promote the host into
+        // `_runningWorkspaceAppHosts` (only `ps` does), so before that first confirmation an empty poll
+        // is just `ps` lag — dropping the live stream would let the stop-loop tear down the child and
+        // respawn it every poll. Once `ps` HAS confirmed it running, a later empty poll means the host
+        // stopped, so let the target fall out of the desired set to tear down and clear stale resources.
         if (this._viewMode === 'workspace' && !this._isSingleFileDescribeMode()) {
             const target = this._resolveWorkspaceDescribeTarget();
             if (target !== undefined && !this._isRunningWorkspaceHost(target)) {
                 const existing = this._findDescribeStream(target);
-                if (!(existing && existing.receivedData)) {
+                if (!(existing && existing.observedRunning)) {
                     desired.add(target);
                 }
             }
@@ -1056,9 +1066,9 @@ export class AppHostDataRepository {
         return this._describeStreams.get(appHostPath) === stream && stream.process === childProcess;
     }
 
-    private _startDescribe(appHostPath: string): void {
+    private _startDescribe(appHostPath: string): DescribeStream | undefined {
         if (this._disposed) {
-            return;
+            return undefined;
         }
 
         const stream: DescribeStream = {
@@ -1071,6 +1081,7 @@ export class AppHostDataRepository {
             restartDelay: 5000,
             version: 0,
             receivedData: false,
+            observedRunning: false,
             parkedState: 'not-parked',
         };
         this._describeStreams.set(appHostPath, stream);
@@ -1228,6 +1239,8 @@ export class AppHostDataRepository {
                 }
             }
         });
+
+        return stream;
     }
 
     // "Park" a stream: keep its map entry but drop resources and any pending restart timer so the
