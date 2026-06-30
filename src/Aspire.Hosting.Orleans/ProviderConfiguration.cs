@@ -12,7 +12,7 @@ internal sealed class ProviderConfiguration(string providerType, string? service
 {
     private const string AdoNetProviderType = "AdoNet";
     private readonly string _providerType = ValidateProviderType(providerType);
-    private readonly string? _invariant = providerType.Equals(AdoNetProviderType, StringComparison.Ordinal) ? ValidateInvariant(invariant) : invariant;
+    private readonly string? _invariant = providerType.Equals(AdoNetProviderType, StringComparison.Ordinal) ? ValidateInvariant(invariant) : null;
 
     private static string GetProviderType(IResourceBuilder<IResourceWithConnectionString> resourceBuilder)
     {
@@ -36,7 +36,7 @@ internal sealed class ProviderConfiguration(string providerType, string? service
 
     private static string ValidateInvariant(string? invariant)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(invariant);
+        ArgumentException.ThrowIfNullOrWhiteSpace(invariant, "ADO.NET Invariant");
 
         return invariant;
     }
