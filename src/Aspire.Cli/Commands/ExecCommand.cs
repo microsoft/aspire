@@ -26,6 +26,7 @@ internal class ExecCommand : BaseCommand
     private readonly IAnsiConsole _ansiConsole;
     private readonly AspireCliTelemetry _telemetry;
     private readonly IDotNetSdkInstaller _sdkInstaller;
+    private readonly IDotNetRuntimeSelector _runtimeSelector;
 
     public ExecCommand(
         IDotNetCliRunner runner,
@@ -36,7 +37,8 @@ internal class ExecCommand : BaseCommand
         AspireCliTelemetry telemetry,
         IDotNetSdkInstaller sdkInstaller,
         IFeatures features,
-        ICliUpdateNotifier updateNotifier)
+        ICliUpdateNotifier updateNotifier,
+        IDotNetRuntimeSelector runtimeSelector)
         : base("exec", ExecCommandStrings.Description, features, updateNotifier)
     {
         ArgumentNullException.ThrowIfNull(runner);
@@ -46,6 +48,7 @@ internal class ExecCommand : BaseCommand
         ArgumentNullException.ThrowIfNull(ansiConsole);
         ArgumentNullException.ThrowIfNull(telemetry);
         ArgumentNullException.ThrowIfNull(sdkInstaller);
+        ArgumentNullException.ThrowIfNull(runtimeSelector);
 
         _runner = runner;
         _interactionService = interactionService;
@@ -54,6 +57,7 @@ internal class ExecCommand : BaseCommand
         _ansiConsole = ansiConsole;
         _telemetry = telemetry;
         _sdkInstaller = sdkInstaller;
+        _runtimeSelector = runtimeSelector;
 
         var projectOption = new Option<FileInfo?>("--project");
         projectOption.Description = ExecCommandStrings.ProjectArgumentDescription;
@@ -82,7 +86,7 @@ internal class ExecCommand : BaseCommand
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // Check if the .NET SDK is available
-        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, _interactionService, cancellationToken))
+        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, _interactionService, _runtimeSelector, cancellationToken))
         {
             return ExitCodeConstants.SdkNotInstalled;
         }

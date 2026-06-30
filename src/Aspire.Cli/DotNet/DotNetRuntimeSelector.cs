@@ -26,6 +26,7 @@ internal sealed class DotNetRuntimeSelector(
     private string? _dotNetExecutablePath;
     private DotNetRuntimeMode _mode = DotNetRuntimeMode.System;
     private readonly Dictionary<string, string> _environmentVariables = new();
+    private bool? _initializationResult;
 
     /// <inheritdoc />
     public string DotNetExecutablePath => _dotNetExecutablePath ?? "dotnet";
@@ -35,6 +36,18 @@ internal sealed class DotNetRuntimeSelector(
 
     /// <inheritdoc />
     public async Task<bool> InitializeAsync(CancellationToken cancellationToken = default)
+    {
+        // Return cached result if already initialized
+        if (_initializationResult.HasValue)
+        {
+            return _initializationResult.Value;
+        }
+
+        _initializationResult = await InitializeCoreAsync(cancellationToken);
+        return _initializationResult.Value;
+    }
+
+    private async Task<bool> InitializeCoreAsync(CancellationToken cancellationToken)
     {
         // Check configuration first, then environment variables
         var disablePrivateSdk = configuration["ASPIRE_DISABLE_PRIVATE_SDK"] == "1" 
