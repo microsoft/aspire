@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.DevTunnels;
+using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Maui;
 using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Otlp;
@@ -221,7 +222,7 @@ public static class MauiOtlpExtensions
         OtlpLoopbackResource stubResource,
         OtlpEndpointTarget target,
         IServiceProvider services,
-        Aspire.Hosting.Eventing.IDistributedApplicationEventing eventing,
+        IDistributedApplicationEventing eventing,
         CancellationToken cancellationToken)
     {
         var endpoint = stubResource.OtlpEndpoint;
