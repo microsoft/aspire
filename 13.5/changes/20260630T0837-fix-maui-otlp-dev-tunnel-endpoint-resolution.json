@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@jfversluis"
+  ],
+  "description": "Fixes MAUI OTLP dev tunnel endpoint resolution when the Aspire dashboard uses dynamically allocated ports. Previously, the tunnel could fall back to the stale default port 18889, causing telemetry from MAUI apps to not appear in the dashboard.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📡",
+  "firstMergedAt": "2026-06-30T08:37:33Z",
+  "lastMergedAt": "2026-06-30T08:37:33Z",
+  "name": "Fix MAUI OTLP dev tunnel endpoint for dynamic dashboard ports",
+  "owner": "JamesNK",
+  "prs": [
+    18053
+  ]
+}

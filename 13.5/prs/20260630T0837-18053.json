@@ -1,0 +1,9 @@
+{
+  "author": "jfversluis",
+  "comment": "Bug fix for MAUI OTLP dev tunnel resolving to stale default port when dashboard uses dynamic OTLP endpoints",
+  "mergedAt": "2026-06-30T08:37:33Z",
+  "number": 18053,
+  "runDate": "2026-06-30T12:37:04Z",
+  "status": "included",
+  "title": "Fix MAUI OTLP dev tunnel endpoint resolution"
+}
