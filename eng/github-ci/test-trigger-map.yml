@@ -263,6 +263,15 @@ path_rules:
     targets: [test:Aspire.Acquisition.Tests]
     reason: Aspire.Acquisition.Tests/Scripts/VerifyCliArchivePowerShellTests invokes eng/scripts/verify-cli-archive.ps1
   - paths:
+      - eng/scripts/*aspire-skills-bundle*.ps1
+    targets: [test:Infrastructure.Tests]
+    reason: agent-skills-bundle packaging/validation scripts (update-/verify-/common); Infrastructure.Tests/PowerShellScripts is the unit home for eng/scripts PowerShell validation, and verify-aspire-skills-bundle.ps1 is additionally exercised by the standalone verify-aspire-skills-bundle.yml PR workflow (self-triggers on these paths) -> route to the unit suite, not run-all
+  - paths:
+      - eng/scripts/verify-cli-npm-package.ps1
+      - eng/scripts/verify-cli-tool-nupkg.ps1
+    targets: [test:Aspire.Cli.EndToEnd.Tests]
+    reason: structural verifiers run inside build-cli-native-archives.yml (called by tests.yml) against the packaged CLI archive; no unit test parses them, and the CLI-archive build self-gates on tests_matrix_requires_cli_archive (Aspire.Cli.EndToEnd.Tests, the sole RequiresCliArchive=true project), so routing there builds+verifies the archive without forcing ALL -- mirrors the build-cli-e2e-image.yml route above
+  - paths:
       - eng/winget/**
     targets: [test:Aspire.Acquisition.Tests, job:winget-installer]
     reason: WinGet manifest generation; prepare_winget_installer_artifacts builds from eng/winget, Acquisition.Tests exercises installer-mode
