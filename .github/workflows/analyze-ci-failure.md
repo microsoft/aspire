@@ -1,4 +1,6 @@
 ---
+engine:
+  model: mai-code
 description: |
   Analyzes failed PR CI builds using Copilot to determine whether the failure
   is transient (flaky test, infrastructure issue) or caused by the PR changes
