@@ -1,0 +1,9 @@
+{
+  "author": "askpt",
+  "comment": "Documents OFREP provider for flagd integration; no matching flagd/openfeature product PR in milestone 13.5",
+  "mergedAt": "2026-06-30T13:15:24Z",
+  "number": 656,
+  "runDate": "2026-06-30T18:34:16Z",
+  "status": "excluded",
+  "title": "Add OFREP provider integration details to flagd documentation"
+}

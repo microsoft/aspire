@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site infrastructure fix (OOM in build hook); not Aspire product documentation",
+  "mergedAt": "2026-06-30T15:31:25Z",
+  "number": 1318,
+  "runDate": "2026-06-30T18:34:16Z",
+  "status": "excluded",
+  "title": "Fix OOM in aspire-version-placeholders build hook"
+}

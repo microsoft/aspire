@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site infrastructure migration (markdown renderer); not Aspire product documentation",
+  "mergedAt": "2026-06-30T16:47:51Z",
+  "number": 1311,
+  "runDate": "2026-06-30T18:34:16Z",
+  "status": "excluded",
+  "title": "Migrate sample-README rendering from marked to Sätteri (markdownToMdast)"
+}
