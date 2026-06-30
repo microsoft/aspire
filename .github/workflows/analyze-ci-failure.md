@@ -435,21 +435,21 @@ safe-outputs:
           with:
             script: |
               const fs = require('fs');
-              const path = require('path');
 
-              // Read inputs from the agent output artifact
+              // Read inputs from the agent output artifact.
+              // gh-aw writes { "items": [ { "type": "rerun_failed_jobs", ... } ] }.
               const outputFile = process.env.GH_AW_AGENT_OUTPUT;
               if (!outputFile || !fs.existsSync(outputFile)) {
                 core.setFailed('Agent output file not found');
                 return;
               }
-              const agentOutput = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
-              const items = agentOutput.rerun_failed_jobs || [];
-              if (items.length === 0) {
+              const payload = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+              const items = (payload && Array.isArray(payload.items)) ? payload.items : [];
+              const item = items.find(i => i && i.type === 'rerun_failed_jobs');
+              if (!item) {
                 core.info('No rerun_failed_jobs items in agent output.');
                 return;
               }
-              const item = items[0];
 
               const owner = context.repo.owner;
               const repo = context.repo.repo;
