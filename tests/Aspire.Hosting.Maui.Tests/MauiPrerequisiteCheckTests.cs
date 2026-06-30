@@ -23,8 +23,9 @@ public class MauiPrerequisiteCheckTests
     [InlineData("maui", true)]
     [InlineData("maui-android", true)]
     [InlineData("MAUI", true)]
+    [InlineData("maui-ios", false)]
     [InlineData("wasm-tools", false)]
-    public void ParseWorkloadOutput_DetectsMauiWorkloads(string workloadId, bool expected)
+    public void IsRequiredWorkloadInstalled_DetectsRequiredWorkloadForAndroid(string workloadId, bool expected)
     {
         var output = $$"""
             Workload version: 10.0.100-preview.1.12345
@@ -32,8 +33,9 @@ public class MauiPrerequisiteCheckTests
             --------------------------------------------------------------------
             {{workloadId}}             10.0.0/10.0.100        SDK 10.0.100
             """;
+        var resource = new MauiAndroidEmulatorResource("android", new MauiProjectResource("app", "app.csproj"));
 
-        Assert.Equal(expected, MauiWorkloadChecker.ParseWorkloadOutput(output));
+        Assert.Equal(expected, MauiWorkloadChecker.IsRequiredWorkloadInstalled(output, resource));
     }
 
     [Fact]

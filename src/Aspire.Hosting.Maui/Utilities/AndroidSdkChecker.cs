@@ -59,7 +59,7 @@ internal sealed class AndroidSdkChecker(
             }
         }
 
-        var adbPath = FindFullPathFromPath(GetExecutableName("adb"));
+        var adbPath = PathLookupHelper.FindFullPathFromPath("adb");
         if (adbPath is null)
         {
             return null;
@@ -92,7 +92,7 @@ internal sealed class AndroidSdkChecker(
     internal static bool HasEmulatorTool(string sdkPath)
     {
         return File.Exists(Path.Combine(sdkPath, "emulator", GetExecutableName("emulator"))) ||
-            FindFullPathFromPath(GetExecutableName("emulator")) is not null;
+            PathLookupHelper.FindFullPathFromPath("emulator") is not null;
     }
 
     internal static IEnumerable<string> GetCandidateSdkPaths()
@@ -147,23 +147,4 @@ internal sealed class AndroidSdkChecker(
         return OperatingSystem.IsWindows() ? $"{name}.exe" : name;
     }
 
-    private static string? FindFullPathFromPath(string fileName)
-    {
-        var path = Environment.GetEnvironmentVariable("PATH");
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return null;
-        }
-
-        foreach (var directory in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
-        {
-            var candidate = Path.Combine(directory.Trim().Trim('"'), fileName);
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
-        }
-
-        return null;
-    }
 }

@@ -87,13 +87,6 @@ internal sealed class MauiWorkloadChecker(IProcessRunner processRunner) : IMauiP
         }
     }
 
-    internal static bool ParseWorkloadOutput(string output)
-    {
-        return ParseInstalledWorkloadIds(output).Any(static workloadId =>
-            string.Equals(workloadId, "maui", StringComparison.OrdinalIgnoreCase) ||
-            workloadId.StartsWith("maui-", StringComparison.OrdinalIgnoreCase));
-    }
-
     internal static bool IsRequiredWorkloadInstalled(string output, IResource resource)
     {
         var installedWorkloads = ParseInstalledWorkloadIds(output);
