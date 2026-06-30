@@ -208,3 +208,44 @@ jobs:
         run: |
           echo "One or more dependent jobs failed."
           exit 1
+
+  # Track red-main: file/update one deduplicated issue per branch when a push to a
+  # protected branch (main, release/**) is red, and close it when a later push to
+  # the same branch is green. One job handles both — it runs on every push
+  # (if: always()) and the script opens or closes based on the aggregate CI result
+  # passed in CI_RED / CI_GREEN. Runs only on push; PR failures live in the PR's own
+  # checks and are owned by the author.
+  #
+  # CI_RED / CI_GREEN are derived from explicit needs.*.result checks rather than
+  # failure()/success() because tests/stabilization_check are *skipped* on the
+  # no-relevant-changes path (skip_workflow): a skipped run is neither red nor green,
+  # so the script leaves any open issue untouched (no CI signal). Requiring all
+  # three to have *succeeded* for CI_GREEN means a docs-only push never closes a
+  # still-red issue without actually re-running CI.
+  ci_failure_tracker:
+    name: Track CI Failure
+    needs: [prepare_for_ci, tests, stabilization_check]
+    if: ${{ always() && github.event_name == 'push' && github.repository_owner == 'microsoft' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # checkout to require the local .js modules
+      issues: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: File or close the red-main issue
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          REF: ${{ github.ref_name }}
+          CI_RED: ${{ contains(needs.*.result, 'failure') }}
+          CI_GREEN: >-
+            ${{ needs.prepare_for_ci.result == 'success' &&
+                needs.tests.result == 'success' &&
+                needs.stabilization_check.result == 'success' }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await require('./.github/workflows/report-ci-failure.js').track({ github, context, core });
