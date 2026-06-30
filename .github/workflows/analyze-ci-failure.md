@@ -129,8 +129,17 @@ jobs:
           gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}/jobs" \
             --jq '.jobs[]' | jq -s '.' > ci-failure-data/all-jobs.json
 
-          # Extract failed jobs
-          jq '[.[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")]' \
+          # Extract failed jobs, excluding "gate" jobs that just check dependency status.
+          # Gate jobs (e.g. "Final Results", "Final Test Results") only echo "dependent jobs
+          # failed" and provide zero diagnostic value — they just inflate the logs.
+          jq '[.[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")
+               | select(
+                   (.steps // [] | map(select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")) | length) > 0
+                   and (
+                     (.steps // [] | map(select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")) | .[0].name)
+                     | test("^(Fail if|Check ).*(depend|failed)"; "i") | not
+                   )
+                 )]' \
             ci-failure-data/all-jobs.json > ci-failure-data/failed-jobs.json
 
           FAILED_COUNT=$(jq 'length' ci-failure-data/failed-jobs.json)
@@ -144,15 +153,40 @@ jobs:
 
           echo "has_work=true" >> "$GITHUB_OUTPUT"
 
-          # Fetch logs for each failed job (last 64KB of each, enough for analysis)
+          # Fetch logs for each failed job and extract only error-relevant lines.
+          # Raw logs are huge (64KB+). Instead of blindly taking the last N lines,
+          # we grep for error indicators with context to produce a focused extract.
           jq -r '.[].id' ci-failure-data/failed-jobs.json | while read -r JOB_ID; do
             JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" ci-failure-data/failed-jobs.json)
             echo "Fetching logs for job: ${JOB_NAME} (${JOB_ID})"
-            gh api "repos/${REPO}/actions/jobs/${JOB_ID}/logs" > "ci-failure-data/job-${JOB_ID}.log" 2>/dev/null || \
-              echo "(Failed to fetch logs for job ${JOB_ID})" > "ci-failure-data/job-${JOB_ID}.log"
-            # Trim to last 64KB to keep context manageable
-            tail -c 65536 "ci-failure-data/job-${JOB_ID}.log" > "ci-failure-data/job-${JOB_ID}-trimmed.log"
-            mv "ci-failure-data/job-${JOB_ID}-trimmed.log" "ci-failure-data/job-${JOB_ID}.log"
+            gh api "repos/${REPO}/actions/jobs/${JOB_ID}/logs" > "ci-failure-data/job-${JOB_ID}-raw.log" 2>/dev/null || \
+              echo "(Failed to fetch logs for job ${JOB_ID})" > "ci-failure-data/job-${JOB_ID}-raw.log"
+
+            # Extract error-relevant lines with 3 lines of context before and 5 after.
+            # Patterns: compiler errors, build failures, test failures, runtime errors,
+            # infrastructure errors, and GitHub Actions error annotations.
+            grep -n -i -B3 -A5 \
+              -e 'error [A-Z]\{2,\}[0-9]' \
+              -e '##\[error\]' \
+              -e '\bFAILED\b' \
+              -e '\bfailed!\b' \
+              -e 'Build FAILED' \
+              -e 'ECONNRESET\|ECONNREFUSED\|ENOTFOUND' \
+              -e 'Connection reset by peer' \
+              -e 'Could not resolve host' \
+              -e 'Operation timed out' \
+              -e 'The SSL connection could not be established' \
+              -e '403 Forbidden' \
+              -e 'exit code [1-9]' \
+              -e 'Process completed with exit code' \
+              "ci-failure-data/job-${JOB_ID}-raw.log" 2>/dev/null \
+              | head -150 > "ci-failure-data/job-${JOB_ID}.log" || true
+
+            # If grep found nothing, fall back to last 30 lines (job may have unusual errors)
+            if [ ! -s "ci-failure-data/job-${JOB_ID}.log" ]; then
+              tail -30 "ci-failure-data/job-${JOB_ID}-raw.log" > "ci-failure-data/job-${JOB_ID}.log"
+            fi
+            rm -f "ci-failure-data/job-${JOB_ID}-raw.log"
           done
 
           # Fetch annotations for each failed job
@@ -246,7 +280,7 @@ jobs:
             jq -r '.[] | "### Job: \(.name)\n- **ID**: \(.id)\n- **Conclusion**: \(.conclusion)\n- **URL**: \(.html_url // "N/A")\n- **Failed Steps**: \([.steps[]? | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | .name] | join(", "))\n"' \
               ci-failure-data/failed-jobs.json
 
-            echo "## Job Logs (Trimmed)"
+            echo "## Job Logs (Error-Focused)"
             echo ""
             for LOG_FILE in ci-failure-data/job-*.log; do
               if [ -f "${LOG_FILE}" ]; then
@@ -254,8 +288,7 @@ jobs:
                 JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" ci-failure-data/failed-jobs.json 2>/dev/null || echo "Unknown")
                 echo "### Logs: ${JOB_NAME} (${JOB_ID})"
                 echo '```'
-                # Show last 200 lines to keep within context limits
-                tail -200 "${LOG_FILE}"
+                cat "${LOG_FILE}"
                 echo '```'
                 echo ""
               fi
