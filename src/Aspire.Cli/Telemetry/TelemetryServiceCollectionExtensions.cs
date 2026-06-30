@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Runtime.InteropServices;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Cli.Telemetry;
@@ -18,25 +17,31 @@ internal static class TelemetryServiceCollectionExtensions
     /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
     public static IServiceCollection AddTelemetryServices(this IServiceCollection services)
     {
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        services.AddSingleton<IMachineInformationProvider>(sp =>
         {
-            services.AddSingleton<IMachineInformationProvider, WindowsMachineInformationProvider>();
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-        {
-            services.AddSingleton<IMachineInformationProvider, MacOSXMachineInformationProvider>();
-        }
-        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-        {
-            services.AddSingleton<IMachineInformationProvider, LinuxMachineInformationProvider>();
-        }
-        else
-        {
-            services.AddSingleton<IMachineInformationProvider, DefaultMachineInformationProvider>();
-        }
+            var environment = sp.GetRequiredService<IEnvironment>();
+            if (environment.IsWindows())
+            {
+                return ActivatorUtilities.CreateInstance<WindowsMachineInformationProvider>(sp);
+            }
+            else if (environment.IsMacOS())
+            {
+                return ActivatorUtilities.CreateInstance<MacOSXMachineInformationProvider>(sp);
+            }
+            else if (environment.IsLinux())
+            {
+                return ActivatorUtilities.CreateInstance<LinuxMachineInformationProvider>(sp);
+            }
+            else
+            {
+                return ActivatorUtilities.CreateInstance<DefaultMachineInformationProvider>(sp);
+            }
+        });
 
         services.AddSingleton<ICIEnvironmentDetector, CIEnvironmentDetector>();
         services.AddSingleton<ICodingAgentDetector, CodingAgentDetector>();
+        services.AddSingleton<IInternalMicrosoftDetector, InternalMicrosoftDetector>();
+        services.AddSingleton<TelemetryTagsSource>();
         services.AddSingleton<AspireCliTelemetry>();
         services.AddSingleton<ProfilingTelemetry>();
         services.AddHostedService(sp => sp.GetRequiredService<AspireCliTelemetry>());

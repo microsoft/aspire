@@ -101,6 +101,83 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task FindCandidateFilesAsync_DefaultFiltered_GitMode_ExcludesAgentSkillSnippets()
+    {
+        // Skills under .agents/skills and .claude/skills ship apphost.ts files as code samples, not
+        // runnable AppHosts. See https://github.com/microsoft/aspire/issues/18398.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var agentSkillSnippetAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".agents/skills/demo/snippets/apphost.ts");
+        var claudeSkillSnippetAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".claude/skills/demo/snippets/apphost.ts");
+        var gitRepository = CreateGitRepository(agentSkillSnippetAppHost.FullName, claudeSkillSnippetAppHost.FullName);
+        var finder = CreateFinder(gitRepository);
+
+        var result = await finder.FindCandidateFilesAsync(workspace.WorkspaceRoot, ["apphost.ts"], nugetCachePath: null, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        Assert.Empty(result.Files);
+        Assert.Equal(0, result.CountsByPattern["apphost.ts"]);
+    }
+
+    [Fact]
+    public async Task FindCandidateFilesAsync_DefaultFiltered_GitMode_ExcludesPathScopedSkillSnippets()
+    {
+        // .github and .opencode hold more than skills, so only the .github/skills and .opencode/skill
+        // subpaths are excluded; a real AppHost elsewhere under .github is still discovered.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var gitHubSkillSnippetAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".github/skills/demo/snippets/apphost.ts");
+        var openCodeSkillSnippetAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".opencode/skill/demo/snippets/apphost.ts");
+        var gitHubNonSkillAppHost = await WriteFileAsync(workspace.WorkspaceRoot, ".github/AppHost/apphost.ts");
+        var gitRepository = CreateGitRepository(gitHubSkillSnippetAppHost.FullName, openCodeSkillSnippetAppHost.FullName, gitHubNonSkillAppHost.FullName);
+        var finder = CreateFinder(gitRepository);
+
+        var result = await finder.FindCandidateFilesAsync(workspace.WorkspaceRoot, ["apphost.ts"], nugetCachePath: null, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        var path = Assert.Single(result.Files).FullName;
+        Assert.Equal(gitHubNonSkillAppHost.FullName, path);
+        Assert.Equal(1, result.CountsByPattern["apphost.ts"]);
+    }
+
+    [Fact]
+    public async Task FindCandidateFilesAsync_FilesystemFallback_ExcludesPathScopedSkillSnippets()
+    {
+        // The filesystem-walk fallback (no git repository) applies the same subpath exclusions as git mode.
+        // The kept AppHost lives under a non-hidden directory ("src"): on Unix, .NET reports dot-prefixed
+        // directories (.github/.opencode/.agents/.claude) as FileAttributes.Hidden, and the walk's
+        // enumeration skips hidden directories by default, so an AppHost under a dot-directory would not be
+        // discovered there regardless of the skip-list. Git mode (which enumerates tracked dot-directories
+        // on every platform) covers keeping a non-skill AppHost under .github.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        await WriteFileAsync(workspace.WorkspaceRoot, ".github/skills/demo/snippets/apphost.ts");
+        await WriteFileAsync(workspace.WorkspaceRoot, ".opencode/skill/demo/snippets/apphost.ts");
+        var nonSkillAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "src/AppHost/apphost.ts");
+        var finder = CreateFinder();
+
+        var result = await finder.FindCandidateFilesAsync(workspace.WorkspaceRoot, ["apphost.ts"], nugetCachePath: null, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        var paths = result.Files.Select(file => file.FullName).ToHashSet();
+        var path = Assert.Single(paths);
+        Assert.Equal(nonSkillAppHost.FullName, path);
+        Assert.Equal(1, result.CountsByPattern["apphost.ts"]);
+    }
+
+    [Fact]
+    public async Task FindCandidateFilesAsync_DefaultFiltered_GitMode_DoesNotPruneWhenSearchRootIsNamedLikeExcludedDirectory()
+    {
+        // The skip-list matches only segments below the search root, so a repo checked out under a
+        // folder named like an excluded directory (here the root itself is "obj") keeps its AppHosts.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var searchRoot = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "obj"));
+        var appHost = await WriteFileAsync(searchRoot, "AppHost/apphost.ts");
+        var gitRepository = CreateGitRepository(appHost.FullName);
+        var finder = CreateFinder(gitRepository);
+
+        var result = await finder.FindCandidateFilesAsync(searchRoot, ["apphost.ts"], nugetCachePath: null, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        var path = Assert.Single(result.Files).FullName;
+        Assert.Equal(appHost.FullName, path);
+        Assert.Equal(1, result.CountsByPattern["apphost.ts"]);
+    }
+
+    [Fact]
     public async Task FindCandidateFilesAsync_DefaultFiltered_GitMode_DoesNotApplySkipListToFileName()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -506,15 +583,15 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
 
     private static AppHostCandidateFinder CreateFinder(TestGitRepository? gitRepository = null, ProfilingTelemetry? profilingTelemetry = null)
     {
-        return new AppHostCandidateFinder(gitRepository ?? new TestGitRepository(), profilingTelemetry ?? CreateProfilingTelemetry(), NullLogger<AppHostCandidateFinder>.Instance);
+        return new AppHostCandidateFinder(gitRepository ?? new TestGitRepository(), new TestEnvironment(), profilingTelemetry ?? CreateProfilingTelemetry(), NullLogger<AppHostCandidateFinder>.Instance);
     }
 
     private static AppHostCandidateFinder CreateFinderWithRealGit(DirectoryInfo workingDirectory)
     {
         var executionContext = CreateExecutionContext(workingDirectory);
         var profilingTelemetry = CreateProfilingTelemetry();
-        var gitRepository = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
-        return new AppHostCandidateFinder(gitRepository, profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
+        var gitRepository = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
+        return new AppHostCandidateFinder(gitRepository, new TestEnvironment(), profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
     }
 
     private static TestGitRepository CreateGitRepository(params string[] includedPaths)

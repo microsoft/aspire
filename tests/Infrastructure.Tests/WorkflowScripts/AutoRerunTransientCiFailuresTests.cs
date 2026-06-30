@@ -237,6 +237,23 @@ public sealed class AutoRerunTransientCiFailuresTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task AllowsLogBasedOverrideForConnectionResetByPeerInBuildSteps()
+    {
+        WorkflowJob job = CreateJob(failedSteps: ["Build RID-specific packages"]);
+
+        AnalyzeFailedJobsResult result = await AnalyzeSingleJobAsync(
+            job,
+            "Process completed with exit code 1.",
+            "Unhandled exception: Unable to read data from the transport connection: Connection reset by peer.");
+
+        Assert.Single(result.RetryableJobs);
+        Assert.Equal(
+            "Failed step 'Build RID-specific packages' will be retried because the job log shows a likely transient infrastructure network failure. Matched pattern: `/Unable to read data from the transport connection: Connection reset by peer/i`.",
+            result.RetryableJobs[0].Reason);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task UsesLongerMarkdownFenceWhenMatchedPatternContainsBackticks()
     {
         string result = await InvokeHarnessAsync<string>(

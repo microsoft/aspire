@@ -133,6 +133,16 @@ suite('telemetry utilities', () => {
         assert.strictEqual(event.properties?.error_kind, 'TypeError');
     });
 
+    test('withCommandTelemetry classifies handled unsuccessful outcomes without rethrowing', async () => {
+        const result = await withCommandTelemetry('cmd.handledError', () => ({ success: false, hadOutput: false }));
+
+        assert.deepStrictEqual(result, { success: false, hadOutput: false });
+        assert.strictEqual(fake.events.length, 1);
+        const event = fake.events[0];
+        assert.strictEqual(event.properties?.outcome, 'error');
+        assert.strictEqual(event.properties?.error_kind, 'HandledError');
+    });
+
     test('withCommandTelemetry classifies cancellations and does not record error_kind', async () => {
         const err = new Error('Canceled');
         err.name = 'Canceled';

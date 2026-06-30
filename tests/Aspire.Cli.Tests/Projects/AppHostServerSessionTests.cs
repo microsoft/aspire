@@ -488,7 +488,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
         };
 
-        return new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance)
+        return new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance)
             .CreateExecution(startInfo, options);
     }
 
@@ -551,6 +551,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             project,
             environmentVariables,
             debug,
+            new TestEnvironment(),
             NullLogger<AppHostServerSession>.Instance,
             profilingTelemetry,
             gracefulShutdownSignaler,
@@ -575,6 +576,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             nugetService,
             new TestDotNetSdkInstaller(),
             executionContext,
+            new TestEnvironment(),
             new TestProcessExecutionFactory(),
             NullLoggerFactory.Instance);
     }

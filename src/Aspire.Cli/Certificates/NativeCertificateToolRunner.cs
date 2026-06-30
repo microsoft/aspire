@@ -73,7 +73,7 @@ internal sealed class NativeCertificateToolRunner(CertificateManager certificate
 
     public EnsureCertificateResult TrustHttpCertificate()
     {
-        if (environment.IsLinux)
+        if (environment.IsLinux())
         {
             var availableCertificates = certificateManager.ListCertificates(
                 StoreName.My, StoreLocation.CurrentUser, isValid: true);

@@ -37,6 +37,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     private readonly IPackagingService _packagingService;
     private readonly CliExecutionContext _executionContext;
     private readonly IProcessExecutionFactory _processExecutionFactory;
+    private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly BundleLayoutLease? _layoutLease;
     private readonly string _workingDirectory;
@@ -60,6 +61,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     /// <param name="packagingService">The packaging service for channel resolution.</param>
     /// <param name="executionContext">The CLI execution context providing identity channel information.</param>
     /// <param name="processExecutionFactory">The factory used to spawn and manage the AppHost server child process.</param>
+    /// <param name="environment">The environment abstraction for OS detection.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
     /// <param name="layoutLease">The active bundle layout lease, if this server is running from a versioned bundle.</param>
     public PrebuiltAppHostServer(
@@ -72,6 +74,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         IPackagingService packagingService,
         CliExecutionContext executionContext,
         IProcessExecutionFactory processExecutionFactory,
+        IEnvironment environment,
         ILogger logger,
         BundleLayoutLease? layoutLease = null)
     {
@@ -84,6 +87,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         _packagingService = packagingService;
         _executionContext = executionContext;
         _processExecutionFactory = processExecutionFactory;
+        _environment = environment;
         _logger = logger;
         _layoutLease = layoutLease;
 
@@ -669,7 +673,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             IsolateConsole = runControl?.IsolateConsole ?? false,
             GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
             ShutdownService = runControl?.ShutdownService,
-            KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
+            KillEntireProcessTreeOnCancel = !_environment.IsWindows(),
         };
 
         execution = _processExecutionFactory.CreateExecution(startInfo, options);

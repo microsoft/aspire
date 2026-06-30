@@ -52,11 +52,11 @@ internal abstract class CertificateManager
 
     public const int RSAMinimumKeySizeInBits = 2048;
 
-    public static CertificateManager Create(ILogger logger, IEnvironment environment) => OperatingSystem.IsWindows() ?
+    public static CertificateManager Create(ILogger logger, IEnvironment environment) => environment.IsWindows() ?
 #pragma warning disable CA1416 // Validate platform compatibility
             new WindowsCertificateManager(logger) :
 #pragma warning restore CA1416 // Validate platform compatibility
-            OperatingSystem.IsMacOS() ?
+            environment.IsMacOS() ?
             new MacOSCertificateManager(logger) as CertificateManager :
             new UnixCertificateManager(logger, environment);
 

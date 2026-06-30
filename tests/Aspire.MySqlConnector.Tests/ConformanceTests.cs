@@ -21,12 +21,13 @@ public class ConformanceTests : ConformanceTests<MySqlDataSource, MySqlConnector
     // https://github.com/mysql-net/MySqlConnector/blob/d895afc013a5849d33a123a7061442e2cbb9ce76/src/MySqlConnector/Utilities/ActivitySourceHelper.cs#L61
     protected override string ActivitySourceName => "MySqlConnector";
 
-    protected override string[] RequiredLogCategories => [
-        "MySqlConnector.ConnectionPool",
-        "MySqlConnector.MySqlBulkCopy",
-        "MySqlConnector.MySqlCommand",
-        "MySqlConnector.MySqlConnection",
-        "MySqlConnector.MySqlDataSource",
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
+        new("MySqlConnector.ConnectionPool"),
+        new("MySqlConnector.MySqlBulkCopy"),
+        new("MySqlConnector.MySqlCommand"),
+        new("MySqlConnector.MySqlConnection"),
+        new("MySqlConnector.MySqlDataSource"),
     ];
 
     protected override bool SupportsKeyedRegistrations => true;

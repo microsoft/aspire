@@ -181,18 +181,18 @@ public static class MauiiOSExtensions
         var runtimeIdentifier = "ios-arm64";
         var msBuildProperties = new Dictionary<string, string>
         {
-            ["RuntimeIdentifier"] = runtimeIdentifier
+            [KnownMauiMSBuildProperties.RuntimeIdentifier] = runtimeIdentifier
         };
         var additionalArgs = new List<string>();
 
         // iOS devices always need RuntimeIdentifier=ios-arm64
-        additionalArgs.Add($"-p:RuntimeIdentifier={runtimeIdentifier}");
+        additionalArgs.Add($"-p:{KnownMauiMSBuildProperties.RuntimeIdentifier}={runtimeIdentifier}");
 
         if (!string.IsNullOrWhiteSpace(deviceId))
         {
             // Specific device - use the UDID directly (no :v2:udid= prefix for devices)
-            msBuildProperties["_DeviceName"] = deviceId;
-            additionalArgs.Add($"-p:_DeviceName={deviceId}");
+            msBuildProperties[KnownMauiMSBuildProperties.DeviceName] = deviceId;
+            additionalArgs.Add($"-p:{KnownMauiMSBuildProperties.DeviceName}={deviceId}");
         }
         // If no device ID specified, dotnet run will use the only attached device
 
@@ -394,8 +394,8 @@ public static class MauiiOSExtensions
         if (!string.IsNullOrWhiteSpace(simulatorId))
         {
             // Specific simulator - use :v2:udid= prefix (note: no quotes around the value to avoid Android issue)
-            msBuildProperties["_DeviceName"] = $":v2:udid={simulatorId}";
-            additionalArgs.Add($"-p:_DeviceName={msBuildProperties["_DeviceName"]}");
+            msBuildProperties[KnownMauiMSBuildProperties.DeviceName] = $":v2:udid={simulatorId}";
+            additionalArgs.Add($"-p:{KnownMauiMSBuildProperties.DeviceName}={msBuildProperties[KnownMauiMSBuildProperties.DeviceName]}");
         }
         // If no simulator ID specified, dotnet run will use the default simulator
 

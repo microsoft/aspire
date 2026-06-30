@@ -36,7 +36,7 @@
  * catalog tracks (event, property) pairs — every common property duplicates
  * into a row for every event. The set is deliberately tiny.
  */
-export type CommonTelemetryProperty = 'apphost_languages' | 'apphost_present';
+export type CommonTelemetryProperty = 'apphost_languages' | 'apphost_target_versions' | 'apphost_present';
 
 /**
  * Per-event schema. Each entry lists the event-specific properties and
@@ -49,8 +49,24 @@ export type CommonTelemetryProperty = 'apphost_languages' | 'apphost_present';
  */
 export interface TelemetryEventSchema {
     // ── Extension-emitted events ────────────────────────────────────────────
+    'extension/activated': {
+        properties: 'workspace_open' | 'extension_mode';
+        measurements: 'workspace_folders';
+    };
     'command/invoked': {
         properties: 'command' | 'outcome' | 'source' | 'error_kind';
+        measurements: 'duration_ms';
+    };
+    'cli/availability': {
+        properties: 'available' | 'source' | 'operation';
+        measurements: 'duration_ms';
+    };
+    'apphost/discovery/result': {
+        properties: 'outcome' | 'source' | 'apphost_languages';
+        measurements: 'duration_ms' | 'candidate_count' | 'buildable_candidate_count';
+    };
+    'apphost/launch/result': {
+        properties: 'mode' | 'command' | 'apphost_language' | 'outcome' | 'execution_suppressed' | 'error_kind';
         measurements: 'duration_ms';
     };
     'engagement/active': {
@@ -58,15 +74,15 @@ export interface TelemetryEventSchema {
         measurements: 'workspace_folders';
     };
     'runningapphostsview/shown': {
-        properties: 'view_mode' | 'initial_visibility';
-        measurements: 'running_apphosts' | 'total_resources';
+        properties: 'view_mode' | 'initial_visibility' | 'workspace_apphost_state' | 'has_error';
+        measurements: 'running_apphosts' | 'total_resources' | 'workspace_apphost_candidates';
     };
     'debug/apphost/start': {
-        properties: 'mode' | 'apphost_language' | 'apphost_is_directory' | 'command';
+        properties: 'mode' | 'apphost_language' | 'command';
         measurements: never;
     };
     'debug/apphost/end': {
-        properties: 'mode' | 'apphost_language' | 'ended_with_error' | 'distinct_resource_types';
+        properties: 'mode' | 'apphost_language' | 'apphost_target_version' | 'apphost_is_directory' | 'ended_with_error' | 'distinct_resource_types';
         measurements: 'duration_ms' | 'total_child_sessions' | 'distinct_resource_type_count';
     };
     'debug/runsession/start': {
@@ -76,6 +92,14 @@ export interface TelemetryEventSchema {
     'debug/runsession/end': {
         properties: 'resource_type' | 'mode' | 'exit_code_bucket' | 'end_reason' | 'error_kind';
         measurements: 'duration_ms' | 'exit_code';
+    };
+    'dashboard/launch/resolved': {
+        properties: 'behavior' | 'source';
+        measurements: never;
+    };
+    'dashboard/launch/migration': {
+        properties: 'action';
+        measurements: never;
     };
 
     // ── Dashboard passthrough events ────────────────────────────────────────

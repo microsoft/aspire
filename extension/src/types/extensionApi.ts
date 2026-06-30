@@ -104,6 +104,7 @@ export interface AspireExtensionE2EStateFile {
     terminalCommands: readonly AspireExtensionE2ETerminalCommand[];
     debugLaunches: readonly AspireExtensionE2EDebugLaunch[];
     debugConsoleOutputs: readonly AspireExtensionE2EDebugConsoleOutput[];
+    stoppingPathEvents: readonly AspireExtensionE2EStoppingPathEvent[];
     control?: AspireExtensionE2EControlStatus;
 }
 
@@ -119,6 +120,11 @@ export type AspireExtensionE2EDebugLaunch = AppHostLaunchRequestedEvent & Aspire
 
 export type AspireExtensionE2EDebugConsoleOutput = AspireDebugConsoleOutputEvent & AspireExtensionE2ESequence;
 
+export interface AspireExtensionE2EStoppingPathEvent extends AspireExtensionE2ESequence {
+    appHostPath: string;
+    state: 'entered' | 'left';
+}
+
 export interface AspireDebugConsoleOutputEvent {
     debugSessionId: string;
     appHostPath: string | undefined;
@@ -129,6 +135,7 @@ export interface AspireDebugConsoleOutputEvent {
 export interface AspireExtensionE2EControlStatus {
     revision: number;
     status: 'started' | 'applied' | 'error';
+    startedObserved?: boolean;
     errorMessage?: string;
     result?: unknown;
 }
@@ -141,6 +148,7 @@ export interface AspireExtensionE2EControlPayload {
     suppressTerminalCommandExecution?: boolean;
     suppressDebugLaunch?: boolean;
     showStatusDelayMs?: number | null;
+    resetDashboardDefaultChangedNotification?: boolean;
     command?: AspireExtensionE2EControlCommand;
 }
 
@@ -169,6 +177,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'restartResource'; appHostPath?: string; resourceName: string }
     | { name: 'executeResourceCommand'; appHostPath?: string; resourceName: string }
     | { name: 'executeResourceCommandItem'; appHostPath?: string; resourceName: string; commandName: string }
+    | { name: 'executeCodeLensResourceAction'; appHostPath?: string; resourceName: string; commandName: string }
     | { name: 'executeAspireCommand'; commandId: string; args?: readonly unknown[] }
     | { name: 'setSourceBreakpoint'; filePath: string; line: number; clearExisting?: boolean }
     | { name: 'clearBreakpoints' }

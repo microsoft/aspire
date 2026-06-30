@@ -3002,6 +3002,41 @@ builder.Build().Run();");
         Assert.Single(found);
     }
 
+    [Fact]
+    public async Task FindAppHostProjectsAsync_DefaultFiltered_IncludesSettingsCandidateUnderSkippedDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configuredAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "node_modules", "Configured", "AppHost.csproj"));
+        Directory.CreateDirectory(configuredAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(configuredAppHost.FullName, "Not a real project file.");
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, configuredAppHost.FullName).Replace(Path.DirectorySeparatorChar, '/')
+            }
+        }));
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        // DefaultFiltered discovery skips node_modules, so this candidate is included only
+        // through the configured settings path.
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        var candidate = Assert.Single(found);
+        Assert.Equal(configuredAppHost.FullName, candidate.AppHostFile.FullName);
+        Assert.Equal(AppHostProjectCandidateStatus.Buildable, candidate.Status);
+    }
+
     private static ProjectLocator CreateProjectLocator(
         CliExecutionContext executionContext,
         IInteractionService? interactionService = null,
@@ -3016,6 +3051,7 @@ builder.Build().Run();");
     {
         var appHostCandidateFinder = new AppHostCandidateFinder(
             gitRepository ?? new TestGitRepository(),
+            environment ?? new TestEnvironment(),
             new ProfilingTelemetry(new ConfigurationBuilder().Build()),
             NullLogger<AppHostCandidateFinder>.Instance);
 

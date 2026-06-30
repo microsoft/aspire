@@ -30,9 +30,6 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGenerator
 {
-    private const string TypeScriptAppHostFileName = "apphost.ts";
-    private const string TypeScriptMtsAppHostFileName = "apphost.mts";
-
     private readonly IInteractionService _interactionService;
     private readonly IAppHostCliBackchannel _backchannel;
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
@@ -51,6 +48,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
     private readonly IGracefulShutdownWindow _shutdownService;
     private readonly IAppHostServerSessionFactory _serverSessionFactory;
+    private readonly IEnvironment _environment;
 
     // Language is always resolved via constructor
     private readonly LanguageInfo _resolvedLanguage;
@@ -68,6 +66,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IFeatures features,
         ILanguageDiscovery languageDiscovery,
         CliExecutionContext executionContext,
+        IEnvironment environment,
         ILogger<GuestAppHostProject> logger,
         FileLoggerProvider fileLoggerProvider,
         ProfilingTelemetry profilingTelemetry,
@@ -87,6 +86,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _features = features;
         _languageDiscovery = languageDiscovery;
         _executionContext = executionContext;
+        _environment = environment;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _profilingTelemetry = profilingTelemetry;
@@ -927,7 +927,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             if (profileElement.Value.TryGetProperty("applicationUrl", out var appUrl) &&
                 appUrl.ValueKind == JsonValueKind.String)
             {
-                result["ASPNETCORE_URLS"] = appUrl.GetString()!;
+                result[KnownAspNetCoreConfigNames.Urls] = appUrl.GetString()!;
             }
 
             // Read environment variables
@@ -980,7 +980,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         if (!string.IsNullOrEmpty(profile.ApplicationUrl))
         {
-            result["ASPNETCORE_URLS"] = profile.ApplicationUrl;
+            result[KnownAspNetCoreConfigNames.Urls] = profile.ApplicationUrl;
         }
 
         if (profile.EnvironmentVariables is not null)
@@ -1298,7 +1298,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             catch (SocketException ex) when (serverSession.HasServerExited == true && !cancellationToken.IsCancellationRequested)
             {
                 var exitCode = serverSession.TryGetServerExitCode() ?? -1;
-                _logger.LogError("AppHost server process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", exitCode, socketPath);
+                // Log at Debug level - this is expected when AppHost crashes during startup.
+                // The real error is in the AppHost output, not this connection-level detail.
+                _logger.LogDebug("AppHost server process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", exitCode, socketPath);
                 var message = exitCode == CliExitCodes.Success
                     ? "AppHost server process has exited"
                     : "AppHost server process has exited unexpectedly";
@@ -1603,6 +1605,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             files = ConvertGeneratedFilesForLegacyTypeScriptAppHost(files);
             outputPath = Path.Combine(appPath, LanguageInfo.LegacyGeneratedFolderName);
+
+            // Nudge the user toward the modern `apphost.mts` layout. The legacy layout keeps
+            // working, so this is a single, non-blocking warning that points at `aspire update --migrate`.
+            _interactionService.DisplayMessage(
+                KnownEmojis.Warning,
+                $"[yellow]{Markup.Escape(ErrorStrings.LegacyTypeScriptAppHostWarning)}[/]",
+                allowMarkup: true);
         }
 
         // Write generated files to the output directory
@@ -1660,9 +1669,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         }
 
         return appHostFile is not null
-            ? appHostFile.Name.Equals(TypeScriptAppHostFileName, StringComparison.OrdinalIgnoreCase)
-            : File.Exists(Path.Combine(appPath, TypeScriptAppHostFileName)) &&
-                !File.Exists(Path.Combine(appPath, TypeScriptMtsAppHostFileName));
+            ? LegacyTypeScriptAppHost.IsLegacyAppHostFile(appHostFile)
+            : LegacyTypeScriptAppHost.IsLegacyLayout(appPath);
     }
 
     /// <summary>
@@ -1865,11 +1873,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             var runtimeSpec = await rpcClient.GetRuntimeSpecAsync(_resolvedLanguage.LanguageId, cancellationToken);
             if (TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_resolvedLanguage))
             {
-                var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _logger);
+                var toolchain = TypeScriptAppHostToolchainResolver.Resolve(directory, _environment, _logger);
                 runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
             }
 
-            _guestRuntime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _profilingTelemetry, _fileLoggerProvider);
+            _guestRuntime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _environment, _profilingTelemetry, _fileLoggerProvider);
 
             _logger.LogDebug("Created GuestRuntime for {RuntimeDisplayName}: Execute={Command} {Args}",
                 runtimeSpec.DisplayName,
@@ -1929,7 +1937,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             if (treatMissingJavaScriptToolAsWarning && MissingJavaScriptToolWarning.IsMatch(lines))
             {
-                _interactionService.DisplayMessage(KnownEmojis.Warning, MissingJavaScriptToolWarning.GetMessage(directory, _resolvedLanguage));
+                _interactionService.DisplayMessage(KnownEmojis.Warning, MissingJavaScriptToolWarning.GetMessage(directory, _resolvedLanguage, _environment));
                 return 0;
             }
         }

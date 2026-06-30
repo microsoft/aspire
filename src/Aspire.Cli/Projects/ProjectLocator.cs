@@ -32,7 +32,7 @@ internal interface IProjectLocator
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Streams candidate AppHost projects as validation completes.
+    /// Streams candidate AppHost projects as discovery/validation completes.
     /// </summary>
     /// <param name="searchDirectory">The directory to search recursively.</param>
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
@@ -42,7 +42,7 @@ internal interface IProjectLocator
     /// <see cref="IAppHostCandidateFinder.FindCandidateFilesAsync"/> for caller obligations.
     /// </param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>An async stream of candidate AppHost projects in validation-completion order.</returns>
+    /// <returns>An async stream of candidate AppHost projects in completion order.</returns>
     async IAsyncEnumerable<AppHostProjectCandidate> FindAppHostProjectsStreamAsync(
         DirectoryInfo searchDirectory,
         AppHostDiscoveryScope scope,
@@ -457,7 +457,7 @@ internal sealed class ProjectLocator(
                 // Windows and default macOS APFS volumes are case-insensitive, so a
                 // differently-cased settings path can still refer to the same file found
                 // by the discovery walk. See https://github.com/microsoft/aspire/issues/17635.
-                var pathComparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+                var pathComparison = environment.IsWindows() || environment.IsMacOS()
                     ? StringComparison.OrdinalIgnoreCase
                     : StringComparison.Ordinal;
 
@@ -998,7 +998,7 @@ internal sealed class ProjectLocator(
             // Check if a previously-selected apphost is cached in settings and
             // is still among the discovered candidates. If so, reuse it to avoid
             // prompting the user every time when nothing has changed.
-            var pathComparison = OperatingSystem.IsWindows()
+            var pathComparison = environment.IsWindows()
                 ? StringComparison.OrdinalIgnoreCase
                 : StringComparison.Ordinal;
 
@@ -1032,7 +1032,7 @@ internal sealed class ProjectLocator(
         // the discovered candidate set (e.g. parent directory or excluded by enumeration).
         var allCandidates = results.BuildableAppHost.Select(c => c.AppHostFile).ToList();
         if (selectedAppHost is not null
-            && !allCandidates.Any(f => string.Equals(f.FullName, selectedAppHost.FullName, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+            && !allCandidates.Any(f => string.Equals(f.FullName, selectedAppHost.FullName, environment.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
         {
             allCandidates = [.. allCandidates, selectedAppHost];
         }

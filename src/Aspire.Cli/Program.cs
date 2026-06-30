@@ -29,6 +29,7 @@ using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
+using Aspire.Cli.Migrations;
 using Aspire.Cli.Npm;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
@@ -351,7 +352,8 @@ public class Program
         // - Azure Monitor provider with filtering (only exports activities with EXTERNAL_TELEMETRY=true)
         // - Profiling provider for explicit startup profiling OTLP export
         // - Diagnostic provider for DEBUG-only diagnostics
-        builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
+        builder.Services.AddSingleton(sp => TelemetryConfiguration.Create(sp.GetRequiredService<IConfiguration>(), args));
+        builder.Services.AddSingleton<TelemetryManager>();
 
         // Shared services.
         builder.Services.AddSingleton<IProcessPathProvider, EnvironmentProcessPathProvider>();
@@ -362,14 +364,13 @@ public class Program
         // powers `CliExecutionContext` identity population.
         builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
         builder.Services.AddSingleton<IEnvironment, HostEnvironment>();
-        if (OperatingSystem.IsWindows())
+        builder.Services.AddSingleton<IWindowsRegistryReader>(sp =>
         {
-            builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
-        }
-        else
-        {
-            builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
-        }
+            var environment = sp.GetRequiredService<IEnvironment>();
+            return environment.IsWindows()
+                ? new WindowsRegistryReader()
+                : new NullWindowsRegistryReader();
+        });
         builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton<IIdentityResolver>(sp =>
         {
@@ -583,6 +584,7 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, DcpConnectionHealthCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, LegacySettingsFileCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, PendingMigrationsCheck>();
         builder.Services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 
         // MCP server transport factory - creates transport only when needed to avoid
@@ -656,6 +658,7 @@ public class Program
         builder.Services.AddTransient<SdkGenerateCommand>();
         builder.Services.AddTransient<SdkDumpCommand>();
         builder.Services.AddTransient<RestoreCommand>();
+        builder.Services.AddSingleton<IMigration, TypeScriptAppHostMigration>();
         builder.Services.AddTransient<SetupCommand>();
 #if DEBUG
         builder.Services.AddTransient<RenderCommand>();
@@ -1047,6 +1050,10 @@ public class Program
                 logger.LogDebug("Parsing arguments: {Args}", string.Join(" ", args));
                 var parseResult = rootCommand.Parse(args);
 
+#if DEBUG
+                WaitForDebuggerIfRequested(parseResult, app.Services, WaitForDebugger);
+#endif
+
                 var commandName = GetCommandName(parseResult);
                 logger.LogDebug("Executing command: {CommandName}", commandName);
 
@@ -1154,6 +1161,42 @@ public class Program
         parentNames.Reverse();
         return string.Join(' ', parentNames);
     }
+
+#if DEBUG
+    /// <summary>
+    /// Waits for a debugger to attach if --cli-wait-for-debugger was passed.
+    /// </summary>
+    /// <remarks>
+    /// This is handled here rather than as an option or command validator because:
+    /// (1) adding a validator to the static CliWaitForDebuggerOption causes a thread-safety
+    ///     race (concurrent List&lt;T&gt;.Add from parallel test classes that each construct a
+    ///     Transient RootCommand), and
+    /// (2) command-level validators only run for the innermost command — not for RootCommand
+    ///     when a subcommand is invoked (e.g. "aspire run --cli-wait-for-debugger").
+    /// </remarks>
+    internal static void WaitForDebuggerIfRequested(ParseResult parseResult, IServiceProvider services, Action waitAction)
+    {
+        if (!parseResult.GetValue(RootCommand.CliWaitForDebuggerOption))
+        {
+            return;
+        }
+
+        var interactionService = services.GetRequiredService<IInteractionService>();
+        interactionService.ShowStatus(
+            string.Format(CultureInfo.CurrentCulture, RootCommandStrings.WaitingForDebugger, Environment.ProcessId),
+            waitAction, emoji: KnownEmojis.Bug);
+    }
+
+    private static void WaitForDebugger()
+    {
+        while (!Debugger.IsAttached)
+        {
+            Thread.Sleep(1000);
+        }
+
+        Debugger.Break();
+    }
+#endif
 
     private static void AddInteractionServices(HostApplicationBuilder builder)
     {

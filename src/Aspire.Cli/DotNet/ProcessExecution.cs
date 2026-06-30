@@ -27,6 +27,7 @@ internal sealed class ProcessExecution : IProcessExecution
     private readonly IReadOnlyDictionary<string, string?> _environment;
     private readonly ILogger _logger;
     private readonly ProcessInvocationOptions _options;
+    private readonly IEnvironment _hostEnvironment;
     private IsolatedProcess? _process;
     private long _lastActivityTimestamp = Stopwatch.GetTimestamp();
     private int _disposed;
@@ -37,7 +38,8 @@ internal sealed class ProcessExecution : IProcessExecution
         IReadOnlyList<string> arguments,
         IReadOnlyDictionary<string, string?> environment,
         ILogger logger,
-        ProcessInvocationOptions options)
+        ProcessInvocationOptions options,
+        IEnvironment hostEnvironment)
     {
         _startInfo = startInfo;
         _fileName = fileName;
@@ -45,6 +47,7 @@ internal sealed class ProcessExecution : IProcessExecution
         _environment = environment;
         _logger = logger;
         _options = options;
+        _hostEnvironment = hostEnvironment;
     }
 
     /// <inheritdoc />
@@ -275,7 +278,7 @@ internal sealed class ProcessExecution : IProcessExecution
                 return;
             }
 
-            if (!OperatingSystem.IsWindows())
+            if (!_hostEnvironment.IsWindows())
             {
                 ProcessSignaler.RequestGracefulShutdown(process.Id, expectedStartTime: null, _logger);
 

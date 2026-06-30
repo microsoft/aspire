@@ -58,7 +58,7 @@ internal sealed class CertificateService(
         using var activity = telemetry.StartDiagnosticActivity(kind: ActivityKind.Client);
 
         var environmentVariables = new Dictionary<string, string>();
-        var isLinux = environment.IsLinux;
+        var isLinux = environment.IsLinux();
 
         // In non-interactive environments on macOS and Windows we can't successfully
         // prompt for trust (macOS Keychain password, Windows trust dialog).

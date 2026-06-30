@@ -1171,13 +1171,17 @@ internal static class CliE2ETestHelpers
         return destFile;
     }
 
-    private static string GetCaptureRootDirectory(string testName)
+    internal static string GetCaptureRootDirectory(string testName)
     {
-        return Path.Combine(
-            AppContext.BaseDirectory,
-            "TestResults",
-            "workspaces",
-            testName);
+        // In CI, write to $GITHUB_WORKSPACE/testresults/workspaces/ which is included
+        // in the artifact upload glob (testresults/**). AppContext.BaseDirectory is the
+        // test binary's output directory, which is NOT uploaded.
+        var githubWorkspace = Environment.GetEnvironmentVariable("GITHUB_WORKSPACE");
+        var baseDir = !string.IsNullOrEmpty(githubWorkspace)
+            ? Path.Combine(githubWorkspace, "testresults")
+            : Path.Combine(AppContext.BaseDirectory, "TestResults");
+
+        return Path.Combine(baseDir, "workspaces", testName);
     }
 
     private static void CopyDirectory(string sourceDir, string destDir, Action<string>? log)

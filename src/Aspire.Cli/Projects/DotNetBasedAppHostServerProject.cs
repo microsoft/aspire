@@ -38,6 +38,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     private readonly IDotNetCliRunner _dotNetCliRunner;
     private readonly IPackagingService _packagingService;
     private readonly IProcessExecutionFactory _processExecutionFactory;
+    private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly string? _logFilePath;
 
@@ -48,6 +49,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         IDotNetCliRunner dotNetCliRunner,
         IPackagingService packagingService,
         IProcessExecutionFactory processExecutionFactory,
+        IEnvironment environment,
         ILogger<DotNetBasedAppHostServerProject> logger,
         string? projectModelPath = null,
         string? logFilePath = null)
@@ -60,6 +62,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         _dotNetCliRunner = dotNetCliRunner;
         _packagingService = packagingService;
         _processExecutionFactory = processExecutionFactory;
+        _environment = environment;
         _logger = logger;
         _logFilePath = logFilePath;
 
@@ -119,7 +122,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     private CSharpProjectFile CreateProjectFile(IEnumerable<IntegrationReference> integrations)
     {
         // Determine OS/architecture for DCP package name
-        var (buildOs, buildArch) = GetBuildPlatform();
+        var (buildOs, buildArch) = GetBuildPlatform(_environment);
         var dcpPackageName = $"microsoft.developercontrolplane.{buildOs}-{buildArch}";
         var dcpVersion = GetDcpVersionFromRepo(_repoRoot, buildOs, buildArch);
 
@@ -413,7 +416,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         AppHostServerRunControl? runControl)
     {
         var assemblyPath = Path.Combine(BuildPath, ProjectDllName);
-        var dotnetExe = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
+        var dotnetExe = _environment.IsWindows() ? "dotnet.exe" : "dotnet";
 
         // Build the canonical ProcessStartInfo first, then translate to IsolatedProcessStartInfo
         // only if the isolated path is requested. Sharing the env/arg construction avoids drift
@@ -444,7 +447,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         // Dev mode uses debug builds which require Development environment
         // for the dashboard to resolve static web assets correctly
-        startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+        startInfo.Environment[KnownAspNetCoreConfigNames.Environment] = "Development";
 
         // Wire WithTerminal() for guest/polyglot AppHosts running from the repo. The
         // generated AppHostServer references Aspire.Hosting from the repo and DCP resolves
@@ -510,7 +513,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             // The graceful ladder always tree-kills on escalation; this fallback only matters when
             // graceful services were not wired (non-Run callers), where it preserves the old session
             // behavior of force-killing the tree on Unix but only the root on Windows.
-            KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
+            KillEntireProcessTreeOnCancel = !_environment.IsWindows(),
         };
 
         execution = _processExecutionFactory.CreateExecution(startInfo, options);
@@ -586,10 +589,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         }
     }
 
-    internal static (string Os, string Arch) GetBuildPlatform()
+    internal static (string Os, string Arch) GetBuildPlatform(IEnvironment environment)
     {
-        var os = OperatingSystem.IsLinux() ? "linux"
-            : OperatingSystem.IsMacOS() ? "darwin"
+        var os = environment.IsLinux() ? "linux"
+            : environment.IsMacOS() ? "darwin"
             : "windows";
 
         var arch = RuntimeInformation.OSArchitecture switch

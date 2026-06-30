@@ -23,7 +23,7 @@ public class ConformanceTests : ConformanceTests<IConnectionMultiplexer, StackEx
 
     protected override bool SupportsKeyedRegistrations => true;
 
-    protected override string[] RequiredLogCategories => ["StackExchange.Redis.ConnectionMultiplexer"];
+    protected override RequiredLogCategory[] RequiredLogCategories => [new("StackExchange.Redis.ConnectionMultiplexer")];
 
     protected override string? ConfigurationSectionName => "Aspire:StackExchange:Redis";
 

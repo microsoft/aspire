@@ -218,10 +218,18 @@
                                 }
                             </div>
                         }
+                        var copyButtonLabel = ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)];
+                        var copyButtonAttributes = FluentUIExtensions.GetClipboardCopyAdditionalAttributes(
+                            string.Join(Environment.NewLine + Environment.NewLine, selectedItem.ItemParts.Select(p => p.TextVisualizerViewModel?.FormattedText ?? string.Empty)),
+                            copyButtonLabel,
+                            ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)]);
+                        copyButtonAttributes["aria-label"] = copyButtonLabel;
+
                         <FluentButton Id="@_copyButtonId"
                                       Class="message-copy-button"
                                       Appearance="Appearance.Stealth"
-                                      AdditionalAttributes="@FluentUIExtensions.GetClipboardCopyAdditionalAttributes(string.Join(Environment.NewLine + Environment.NewLine, selectedItem.ItemParts.Select(p => p.TextVisualizerViewModel?.FormattedText ?? string.Empty)), ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)], ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)])">
+                                      Title="@copyButtonLabel"
+                                      AdditionalAttributes="@copyButtonAttributes">
                             <span slot="start">
                                 <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
                                 <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" />

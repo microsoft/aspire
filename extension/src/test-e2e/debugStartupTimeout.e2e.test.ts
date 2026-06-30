@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCommandInvocationCount, waitForCommandOutcome, waitForDebugDashboardUrl, waitForDebugSessionStartup, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForWorkspaceAppHost } from './helpers/assertions';
+import { getCommandInvocationCount, waitForCommandOutcome, waitForDebugConsoleOutput, waitForDebugSessionStartup, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, stopPrimaryAppHostIfRunning, writeFileWithRetry } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getRunRoot } from './helpers/paths';
 import { openAspireView } from './helpers/vscode';
@@ -50,7 +50,7 @@ suite('Aspire debug startup timeout E2E', function () {
             await waitForCommandOutcome('aspire-vscode.debugAppHost', 'success', 60000, beforeDebug);
 
             await waitForDebugSessionStartup(appHostPath, 240000);
-            await waitForDebugDashboardUrl(appHostPath, 240000);
+            await waitForDebugConsoleOutput('/login?t=', appHostPath, 240000);
 
             const evidence = await waitForStartupDelayEvidence(delayStartMarker, delayEndMarker, 120000);
             assert.ok(evidence.delayMs >= 60000, `Expected AppHost delay to cross the old 60 second backchannel timeout. Actual delay: ${evidence.delayMs}ms.`);

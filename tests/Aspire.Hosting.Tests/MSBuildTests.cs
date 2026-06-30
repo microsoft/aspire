@@ -1067,6 +1067,10 @@ public class MSBuildTests
                 <ImplicitUsings>enable</ImplicitUsings>
                 <Nullable>enable</Nullable>
                 <RestoreConfigFile>{nuGetConfigPath}</RestoreConfigFile>
+                <!-- The synthetic fixture intentionally exposes no [AspireExport] surface (it only exercises
+                     ASPIREEXPORT008), so opt out of polyglot compatibility to avoid the assembly-level
+                     ASPIREEXPORT017 error that otherwise fires for an integration with no export coverage. -->
+                <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
               </PropertyGroup>
 
               <ItemGroup>
@@ -1109,6 +1113,10 @@ public class MSBuildTests
         <Project>
           <PropertyGroup>
             <EnableAspireIntegrationAnalyzers>{enableAspireIntegrationAnalyzers.ToString().ToLowerInvariant()}</EnableAspireIntegrationAnalyzers>
+            <!-- The synthetic fixture intentionally exposes no [AspireExport] surface (it only exercises
+                 ASPIREEXPORT008), so opt out of polyglot compatibility to avoid the assembly-level
+                 ASPIREEXPORT017 error that otherwise fires for an integration with no export coverage. -->
+            <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
           </PropertyGroup>
         </Project>
         """);

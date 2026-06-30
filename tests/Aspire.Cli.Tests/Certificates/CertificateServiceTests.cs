@@ -86,7 +86,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 return EnsureCertificateResult.PartiallyFailedToTrustTheCertificate;
             },
             CheckHttpCertificateCallback = () => CreateTrustResult(CertificateManager.TrustLevel.Partial)
-        }, nonInteractive: false, environment: new TestEnvironment { IsLinux = true });
+        }, nonInteractive: false, environment: TestEnvironment.CreateLinux());
 
         var cs = sp.GetRequiredService<ICertificateService>();
 
@@ -113,7 +113,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 return EnsureCertificateResult.PartiallyFailedToTrustTheCertificate;
             },
             CheckHttpCertificateCallback = () => CreateTrustResult(CertificateManager.TrustLevel.Partial)
-        }, nonInteractive: true, environment: new TestEnvironment { IsLinux = true });
+        }, nonInteractive: true, environment: TestEnvironment.CreateLinux());
 
         var cs = sp.GetRequiredService<ICertificateService>();
 
@@ -171,8 +171,6 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_ChecksButDoesNotTrustOnNonLinux()
     {
-        Assert.SkipWhen(OperatingSystem.IsLinux(), "Non-interactive skip only applies to macOS/Windows; Linux trust is non-interactive.");
-
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var trustCalled = false;
         var checkCalled = false;
@@ -201,6 +199,9 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
+        // Inject a non-Linux environment so the non-interactive skip path is exercised on all platforms.
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateWindows());
+
         using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
@@ -217,8 +218,6 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_WarnsWhenUntrustedOnNonLinux()
     {
-        Assert.SkipWhen(OperatingSystem.IsLinux(), "Non-interactive skip only applies to macOS/Windows; Linux trust is non-interactive.");
-
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var trustCalled = false;
 
@@ -243,6 +242,9 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
 
+        // Inject a non-Linux environment so the non-interactive skip path is exercised on all platforms.
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateWindows());
+
         using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
         var interactionService = (TestInteractionService)sp.GetRequiredService<IInteractionService>();
@@ -257,8 +259,6 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_WarnsWhenPartiallyTrustedOnNonLinux()
     {
-        Assert.SkipWhen(OperatingSystem.IsLinux(), "Non-interactive skip only applies to macOS/Windows; Linux trust is non-interactive.");
-
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var trustCalled = false;
 
@@ -282,6 +282,9 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
+
+        // Inject a non-Linux environment so the non-interactive skip path is exercised on all platforms.
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateWindows());
 
         using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
@@ -323,7 +326,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var interactiveService = sp.GetRequiredService<IInteractionService>();
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
-                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, new TestEnvironment { IsLinux = true });
+                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, TestEnvironment.CreateLinux());
             };
         });
 
@@ -339,8 +342,6 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_GeneratesCertWhenNoneExist()
     {
-        Assert.SkipWhen(OperatingSystem.IsLinux(), "Non-interactive cert generation test only applies to macOS/Windows.");
-
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var generateCalled = false;
         var checkCallCount = 0;
@@ -371,6 +372,9 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
 
+        // Inject a non-Linux environment so the non-interactive cert generation path is exercised on all platforms.
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateWindows());
+
         using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
@@ -383,8 +387,6 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_SkipsCertGenerationWhenCertsExist()
     {
-        Assert.SkipWhen(OperatingSystem.IsLinux(), "Non-interactive cert generation test only applies to macOS/Windows.");
-
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var generateCalled = false;
 
@@ -408,6 +410,9 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
         });
 
+        // Inject a non-Linux environment so the non-interactive cert generation path is exercised on all platforms.
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateWindows());
+
         using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
 
@@ -420,8 +425,6 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_EnvVarOptOutSuppressesCertGeneration()
     {
-        Assert.SkipWhen(OperatingSystem.IsLinux(), "Non-interactive cert generation test only applies to macOS/Windows.");
-
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var generateCalled = false;
 
@@ -453,8 +456,8 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
 
-        // Override the IEnvironment registration to include the env vars for this test
-        services.AddSingleton<IEnvironment>(new TestEnvironment(envVars));
+        // Override the IEnvironment registration to include the env vars and non-Linux OS for this test.
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateWindows(envVars));
 
         using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();
@@ -468,8 +471,6 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_WarnsOnCertGenerationFailure()
     {
-        Assert.SkipWhen(OperatingSystem.IsLinux(), "Non-interactive cert generation test only applies to macOS/Windows.");
-
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var toolRunner = new TestCertificateToolRunner
@@ -488,6 +489,9 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             };
             options.InteractionServiceFactory = _ => new TestInteractionService();
         });
+
+        // Inject a non-Linux environment so the non-interactive cert generation path is exercised on all platforms.
+        services.AddSingleton<IEnvironment>(TestEnvironment.CreateWindows());
 
         using var sp = services.BuildServiceProvider();
         var cs = sp.GetRequiredService<ICertificateService>();

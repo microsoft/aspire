@@ -27,6 +27,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
     private readonly IFeatures _features;
     private readonly IDotNetCliRunner _runner;
     private readonly ILogger<DotNetAppHostProject> _logger;
+    private readonly IEnvironment _environment;
     private readonly CSharpCliManagedAppHostModuleGenerator _cliManagedModuleGenerator;
 
     public CliManagedDotNetAppHostProject(
@@ -48,6 +49,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         ILogger<CSharpCliManagedAppHostModuleGenerator> cliManagedModuleGeneratorLogger,
         IGracefulShutdownWindow shutdownService,
         IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
+        IEnvironment environment,
         CliExecutionContext executionContext,
         TimeProvider? timeProvider = null)
         : base(
@@ -60,6 +62,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
             projectUpdater,
             sdkInstaller,
             bundleService,
+            environment,
             logger,
             fileLoggerProvider,
             loggingOptions,
@@ -73,6 +76,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
         _features = features;
         _runner = runner;
         _logger = logger;
+        _environment = environment;
         _cliManagedModuleGenerator = new CSharpCliManagedAppHostModuleGenerator(packagingService, cliManagedModuleGeneratorLogger, executionContext.NuGetServiceIndexOverride);
     }
 
@@ -250,7 +254,7 @@ internal sealed class CliManagedDotNetAppHostProject : DotNetAppHostProject
 
         if (!env.ContainsKey(BundleDiscovery.DcpPathEnvVar))
         {
-            var (buildOs, buildArch) = DotNetBasedAppHostServerProject.GetBuildPlatform();
+            var (buildOs, buildArch) = DotNetBasedAppHostServerProject.GetBuildPlatform(_environment);
             var dcpPackageName = $"microsoft.developercontrolplane.{buildOs}-{buildArch}";
             var dcpVersion = DotNetBasedAppHostServerProject.GetDcpVersionFromRepo(repoRoot, buildOs, buildArch);
             env[BundleDiscovery.DcpPathEnvVar] = Path.Combine(GetNuGetPackageRoot(), dcpPackageName, dcpVersion, "tools");

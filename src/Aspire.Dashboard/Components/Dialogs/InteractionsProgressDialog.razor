@@ -1,0 +1,40 @@
+@using Aspire.Dashboard.Model.Interaction
+@implements IDialogContentComponent<InteractionsProgressDialogViewModel>
+
+@if (!string.IsNullOrEmpty(Dialog.Instance.Parameters.Title))
+{
+    <FluentDialogHeader ShowDismiss="@Dialog.Instance.Parameters.ShowDismiss">
+        <FluentStack VerticalAlignment="VerticalAlignment.Center">
+            <FluentLabel Typo="Typography.PaneHeader">
+                @Dialog.Instance.Parameters.Title
+            </FluentLabel>
+        </FluentStack>
+    </FluentDialogHeader>
+}
+else
+{
+    <FluentDialogHeader Visible="false" />
+}
+
+<FluentDialogBody Class="interaction-progress-dialog">
+    <div class="progress-content">
+        <FluentProgressRing />
+
+        <div class="interaction-message">
+            @((MarkupString)Content.Message)
+        </div>
+    </div>
+</FluentDialogBody>
+
+@if (!string.IsNullOrEmpty(Dialog.Instance.Parameters.PrimaryAction))
+{
+    <FluentDialogFooter>
+        <FluentButton Appearance="Appearance.Neutral" OnClick="@CancelAsync">
+            @Dialog.Instance.Parameters.PrimaryAction
+        </FluentButton>
+    </FluentDialogFooter>
+}
+else
+{
+    <FluentDialogFooter Visible="false" />
+}

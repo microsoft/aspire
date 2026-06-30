@@ -21,6 +21,7 @@ internal sealed class GuestRuntime
     private readonly ILogger _logger;
     private readonly FileLoggerProvider? _fileLoggerProvider;
     private readonly Func<string, string?> _commandResolver;
+    private readonly IEnvironment _environment;
     private readonly ProfilingTelemetry _profilingTelemetry;
 
     /// <summary>
@@ -29,17 +30,20 @@ internal sealed class GuestRuntime
     /// <param name="spec">The runtime specification describing how to execute the guest language.</param>
     /// <param name="logger">Logger for debugging output.</param>
     /// <param name="commandResolver">Command resolver used to locate executables on PATH.</param>
+    /// <param name="environment">The environment abstraction for OS detection.</param>
     /// <param name="profilingTelemetry">Profiling telemetry for child-process diagnostics.</param>
     /// <param name="fileLoggerProvider">Optional file logger for writing output to disk.</param>
-    public GuestRuntime(RuntimeSpec spec, ILogger logger, Func<string, string?> commandResolver, ProfilingTelemetry profilingTelemetry, FileLoggerProvider? fileLoggerProvider = null)
+    public GuestRuntime(RuntimeSpec spec, ILogger logger, Func<string, string?> commandResolver, IEnvironment environment, ProfilingTelemetry profilingTelemetry, FileLoggerProvider? fileLoggerProvider = null)
     {
         ArgumentNullException.ThrowIfNull(commandResolver);
+        ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(profilingTelemetry);
 
         _spec = spec;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _commandResolver = commandResolver;
+        _environment = environment;
         _profilingTelemetry = profilingTelemetry;
     }
 
@@ -337,7 +341,7 @@ internal sealed class GuestRuntime
         commandResolver: _commandResolver,
         // The launcher logs each guest stdout/stderr line itself, so the execution factory is given
         // a NullLogger to avoid double-logging those lines.
-        processExecutionFactory: new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance));
+        processExecutionFactory: new ProcessExecutionFactory(_environment, NullLogger<ProcessExecutionFactory>.Instance));
 
     /// <summary>
     /// Replaces placeholders in command arguments with actual values.
