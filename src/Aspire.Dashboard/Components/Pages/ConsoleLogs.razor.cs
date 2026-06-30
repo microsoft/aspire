@@ -181,16 +181,20 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // so we never yank the user away from a view they're actively reading.
     // Reset on resource change.
     private bool _userPickedView;
-    // Set true the first time the JS terminal reports a non-`connecting`
-    // status for the current resource. We auto-switch to Terminal on that
-    // first transition; subsequent status changes (viewer/primary toggles,
-    // reconnects) must not re-trigger the switch.
     // Tracks the last toolbar status seen for the current terminal so we can
     // detect the connecting → connected transition. That transition is the
     // unambiguous "PTY attached" edge that drives the auto-switch to the
     // Terminal view, and it works for both initial connect and the WS
     // reconnect that follows a resource stop+start cycle.
     private string? _lastTerminalStatus;
+    // Tracks whether the currently-selected terminal resource is in a stopped
+    // KnownResourceState (Exited / Finished / FailedToStart). We flip the
+    // page back to Console on the running → stopped edge so that when the
+    // user manually stops the resource — the producer is killed by DCP and
+    // never emits an HMP1 Exit message, so client.onExit on the JS side
+    // never fires — the page still leaves Terminal and shows the resource's
+    // stop/exit log lines.
+    private bool _selectedTerminalResourceStopped;
     // Tracks the view that was rendered to the DOM on the previous render
     // pass. When the active view flips back to Terminal we need to nudge
     // xterm.js to relayout because the wrapper's display:none → visible
@@ -499,6 +503,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // messages (e.g. WaitFor) are visible immediately on selection.
         _userPickedView = false;
         _lastTerminalStatus = null;
+        _selectedTerminalResourceStopped = false;
         _activeView = ConsoleLogsView.Console;
 
         if (!isAllSelected && selectedResourceName is not null &&
@@ -509,6 +514,12 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             _selectedResourceHasTerminal = true;
             _terminalResourceName = selectedResource.DisplayName;
             _terminalReplicaIndex = replicaIndex;
+            // Seed the stopped tracker from the current snapshot so the
+            // running → stopped edge detection below in OnResourceChanged
+            // fires only on genuine state transitions, not on the very
+            // first snapshot we observe after subscribing to a resource
+            // that was already stopped when the page loaded.
+            _selectedTerminalResourceStopped = selectedResource.IsStopped();
             Logger.LogDebug("Resource '{ResourceName}' has terminal at replica {ReplicaIndex}", selectedResourceName, replicaIndex);
             // Intentionally fall through to the normal subscription path so
             // the resource's console log stream is collected even while the
@@ -1026,6 +1037,37 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 !resource.IsResourceHidden(_showHiddenResources))
             {
                 await SubscribeToSingleResourceAsync(resource);
+            }
+
+            // If the currently-selected terminal resource just transitioned
+            // from running → stopped, treat that the same as a clean PTY
+            // exit and flip the page back to Console. We do this here in
+            // addition to OnTerminalExitedAsync because manual "Stop" on a
+            // resource kills the producer process directly (DCP sends a
+            // termination signal); the producer never sends an HMP1 Exit
+            // frame, so client.onExit on the JS side never fires. The
+            // resource snapshot is the only reliable signal for that path.
+            if (_selectedResourceHasTerminal &&
+                string.Equals(resource.Name, PageViewModel.SelectedResource.Id?.InstanceId, StringComparisons.ResourceName))
+            {
+                var wasStopped = _selectedTerminalResourceStopped;
+                var isStopped = resource.IsStopped();
+                _selectedTerminalResourceStopped = isStopped;
+
+                if (!wasStopped && isStopped)
+                {
+                    // Re-arm the PTY-attach edge so that when the user
+                    // restarts the resource the next connecting → connected
+                    // transition triggers the auto-switch back to Terminal,
+                    // matching the behaviour after a clean exit.
+                    _lastTerminalStatus = "connecting";
+
+                    if (!_userPickedView && _activeView == ConsoleLogsView.Terminal)
+                    {
+                        _activeView = ConsoleLogsView.Console;
+                        StateHasChanged();
+                    }
+                }
             }
         }
         else if (changeType == ResourceViewModelChangeType.Delete)

@@ -384,6 +384,77 @@ public partial class ConsoleLogsTests
         Assert.Equal(ConsoleLogsView.Terminal, instance.ActiveViewForTest);
     }
 
+    [Fact]
+    public async Task TerminalResource_ManuallyStopped_AutoSwitchesBackToConsole()
+    {
+        // Manual Stop from the dashboard kills the producer process directly;
+        // the producer never sends an HMP1 Exit frame, so client.onExit on
+        // the JS side never fires. The ConsoleLogs page must therefore react
+        // to the resource snapshot state transitioning into a stopped
+        // KnownResourceState (Exited / Finished / FailedToStart) and flip
+        // the view back to Console so the user sees the resource's stop
+        // log lines.
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // PTY attaches → page flips to Terminal.
+        var terminalView = cut.FindComponent<TerminalView>().Instance;
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Terminal);
+
+        // Resource transitions to Exited (manual stop) — push a fresh snapshot
+        // with the same name/properties but a stopped KnownResourceState.
+        var stoppedTerminalResource = ModelTestHelpers.CreateResource(
+            resourceName: "terminal-resource",
+            state: KnownResourceState.Exited,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Terminal.Enabled] = StringProperty(KnownProperties.Terminal.Enabled, "true"),
+                [KnownProperties.Terminal.ReplicaIndex] = StringProperty(KnownProperties.Terminal.ReplicaIndex, "0"),
+                [KnownProperties.Terminal.ReplicaCount] = StringProperty(KnownProperties.Terminal.ReplicaCount, "1"),
+            });
+
+        resourceChannel.Writer.TryWrite([
+            new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, stoppedTerminalResource)
+        ]);
+
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Console);
+        Assert.Equal(ConsoleLogsView.Console, instance.ActiveViewForTest);
+    }
+
     private void SetupTerminalViewJsInterop()
     {
         // TerminalView.OnAfterRenderAsync does:
