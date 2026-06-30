@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Bug fix flushing DCP logs before terminal resource state notifications to improve DistributedApplicationTestingBuilder diagnostics",
+  "mergedAt": "2026-06-29T21:39:31Z",
+  "number": 18539,
+  "runDate": "2026-06-30T00:26:41Z",
+  "status": "included",
+  "title": "Flush logs before terminal resource notifications"
+}

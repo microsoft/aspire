@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "When a container or executable resource fails rapidly at startup, its stdout/stderr logs are now flushed to host loggers before the terminal state is reported. This ensures that DistributedApplicationTestingBuilder tests capture failure logs when using WaitForResourceAsync.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📋",
+  "firstMergedAt": "2026-06-29T21:39:31Z",
+  "lastMergedAt": "2026-06-29T21:39:31Z",
+  "name": "Logs flushed before terminal resource state notifications",
+  "owner": "davidfowl",
+  "prs": [
+    18539
+  ]
+}
