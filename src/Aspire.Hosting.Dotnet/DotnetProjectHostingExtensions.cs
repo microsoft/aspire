@@ -13,7 +13,7 @@ namespace Aspire.Hosting;
 /// Provides extension methods for adding C# projects and file-based C# apps (by path) to an
 /// <see cref="IDistributedApplicationBuilder"/>.
 /// </summary>
-public static class CSharpAppHostingExtensions
+public static class DotnetProjectHostingExtensions
 {
     /// <summary>
     /// Adds a C# project or file-based app to the application model.
@@ -24,7 +24,7 @@ public static class CSharpAppHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
-    /// This overload of the <see cref="AddCSharpApp(IDistributedApplicationBuilder, string, string)"/> method adds a C# project or file-based app to the application
+    /// This overload of the <see cref="AddDotnetProject(IDistributedApplicationBuilder, string, string)"/> method adds a C# project or file-based app to the application
     /// model using a path to the file-based app .cs file, project file (.csproj), or project directory.
     /// If the path is not an absolute path then it will be computed relative to the app host directory.
     /// </para>
@@ -33,37 +33,37 @@ public static class CSharpAppHostingExtensions
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
-    /// builder.AddCSharpApp("inventoryservice", @"..\InventoryService.cs");
+    /// builder.AddDotnetProject("inventoryservice", @"..\InventoryService.cs");
     ///
     /// builder.Build().Run();
     /// </code>
     /// </example>
     /// </remarks>
-    [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addCSharpApp dispatcher export.")]
-    public static IResourceBuilder<CSharpAppResource> AddCSharpApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path)
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDotnetProject dispatcher export.")]
+    public static IResourceBuilder<DotnetProjectResource> AddDotnetProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(path);
 
-        return builder.AddCSharpApp(name, path, _ => { });
+        return builder.AddDotnetProject(name, path, _ => { });
     }
 
     /// <summary>
     /// Adds a C# application resource.
     /// </summary>
-    [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport("addCSharpApp")]
-    internal static IResourceBuilder<CSharpAppResource> AddCSharpAppForPolyglot(
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("addDotnetProject")]
+    internal static IResourceBuilder<DotnetProjectResource> AddDotnetProjectForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
         string path,
         ProjectResourceOptions? options = null)
     {
         return options is null
-            ? builder.AddCSharpApp(name, path, _ => { })
-            : builder.AddCSharpApp(name, path, configure => ApplyProjectResourceOptions(configure, options));
+            ? builder.AddDotnetProject(name, path, _ => { })
+            : builder.AddDotnetProject(name, path, configure => ApplyProjectResourceOptions(configure, options));
     }
 
     /// <summary>
@@ -76,7 +76,7 @@ public static class CSharpAppHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// <para>
-    /// This overload of the <see cref="AddCSharpApp(IDistributedApplicationBuilder, string, string)"/> method adds a C# project or file-based app to the application
+    /// This overload of the <see cref="AddDotnetProject(IDistributedApplicationBuilder, string, string)"/> method adds a C# project or file-based app to the application
     /// model using a path to the file-based app .cs file, project file (.csproj), or project directory.
     /// If the path is not an absolute path then it will be computed relative to the app host directory.
     /// </para>
@@ -85,15 +85,15 @@ public static class CSharpAppHostingExtensions
     /// <code lang="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
-    /// builder.AddCSharpApp("inventoryservice", @"..\InventoryService.cs", o => o.LaunchProfileName = "https");
+    /// builder.AddDotnetProject("inventoryservice", @"..\InventoryService.cs", o => o.LaunchProfileName = "https");
     ///
     /// builder.Build().Run();
     /// </code>
     /// </example>
     /// </remarks>
-    [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addCSharpApp dispatcher export.")]
-    public static IResourceBuilder<CSharpAppResource> AddCSharpApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path, Action<ProjectResourceOptions> configure)
+    [Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDotnetProject dispatcher export.")]
+    public static IResourceBuilder<DotnetProjectResource> AddDotnetProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string path, Action<ProjectResourceOptions> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(name);
@@ -113,7 +113,7 @@ public static class CSharpAppHostingExtensions
         // OnBeforeResourceStarted validation below.
         var workingDirectory = Path.GetDirectoryName(projectMetadata.ProjectPath) ?? builder.AppHostDirectory;
 
-        var app = new CSharpAppResource(name, workingDirectory);
+        var app = new DotnetProjectResource(name, workingDirectory);
 
         // The app host's own build configuration (Debug/Release) is propagated to the child `dotnet run`
         // so the service matches the app host, mirroring DistributedApplicationOptions.Configuration.
@@ -125,7 +125,7 @@ public static class CSharpAppHostingExtensions
                               .WithProjectDefaults(options);
 
         // Build the `dotnet run` command line. This mirrors the ExecutionType.Process path in
-        // Dcp/ExecutableCreator.PrepareProjectExecutables() so a non-debug launch of a CSharpAppResource
+        // Dcp/ExecutableCreator.PrepareProjectExecutables() so a non-debug launch of a DotnetProjectResource
         // (now an ExecutableResource, not a ProjectResource) matches how AddProject launches today:
         //   dotnet run --project <proj> [--no-build] [--configuration <cfg>] --no-launch-profile
         //   dotnet run --file <app.cs> --no-cache [--no-build] [--configuration <cfg>] --no-launch-profile

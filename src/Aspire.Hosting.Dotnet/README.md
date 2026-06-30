@@ -5,7 +5,7 @@ Use this integration to model, configure, and orchestrate C# projects and file-b
 `Aspire.Hosting.Python`, and `Aspire.Hosting.JavaScript`.
 
 > [!NOTE]
-> `AddCSharpApp` is experimental and is exposed under the `ASPIRECSHARPAPPS001` diagnostic.
+> `AddDotnetProject` is experimental and is exposed under the `ASPIREDOTNETPROJECT001` diagnostic.
 > Its API surface may change in future releases.
 
 ## Getting started
@@ -33,7 +33,7 @@ a directory containing a single `.csproj`, or a file-based app (`.cs`):
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
-var api = builder.AddCSharpApp("api", "../api/api.csproj")
+var api = builder.AddDotnetProject("api", "../api/api.csproj")
     .WithHttpEndpoint(port: 8080)
     .WithExternalHttpEndpoints();
 
@@ -47,7 +47,7 @@ import { createBuilder } from "./.aspire/modules/aspire.mjs";
 
 const builder = await createBuilder();
 
-const api = await builder.addCSharpApp("api", "../api/api.csproj")
+const api = await builder.addDotnetProject("api", "../api/api.csproj")
     .withHttpEndpoint({ port: 8080 })
     .withExternalHttpEndpoints();
 

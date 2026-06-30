@@ -1,26 +1,26 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECSHARPAPPS001
+#pragma warning disable ASPIREDOTNETPROJECT001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
-public class CSharpAppPublicApiTests
+public class DotnetProjectPublicApiTests
 {
-    // ---- CSharpAppResource constructor guards --------------------------------
+    // ---- DotnetProjectResource constructor guards --------------------------------
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void CtorCSharpAppResourceShouldThrowWhenNameIsNullOrEmpty(bool isNull)
+    public void CtorDotnetProjectResourceShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
         var name = isNull ? null! : string.Empty;
         const string workingDirectory = "/src/app";
 
-        var action = () => new CSharpAppResource(name, workingDirectory);
+        var action = () => new DotnetProjectResource(name, workingDirectory);
 
         var exception = isNull
             ? Assert.Throws<ArgumentNullException>(action)
@@ -29,57 +29,57 @@ public class CSharpAppPublicApiTests
     }
 
     [Fact]
-    public void CtorCSharpAppResourceShouldThrowWhenWorkingDirectoryIsNull()
+    public void CtorDotnetProjectResourceShouldThrowWhenWorkingDirectoryIsNull()
     {
         const string name = "app";
 
-        var action = () => new CSharpAppResource(name, workingDirectory: null!);
+        var action = () => new DotnetProjectResource(name, workingDirectory: null!);
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal("workingDirectory", exception.ParamName);
     }
 
-    // ---- AddCSharpApp guards -------------------------------------------------
+    // ---- AddDotnetProject guards -------------------------------------------------
 
     [Fact]
-    public void AddCSharpAppShouldThrowWhenBuilderIsNull()
+    public void AddDotnetProjectShouldThrowWhenBuilderIsNull()
     {
         IDistributedApplicationBuilder builder = null!;
 
-        var action = () => builder.AddCSharpApp("app", "app.csproj");
+        var action = () => builder.AddDotnetProject("app", "app.csproj");
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal(nameof(builder), exception.ParamName);
     }
 
     [Fact]
-    public void AddCSharpAppShouldThrowWhenNameIsNull()
+    public void AddDotnetProjectShouldThrowWhenNameIsNull()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var action = () => builder.AddCSharpApp(null!, "app.csproj");
+        var action = () => builder.AddDotnetProject(null!, "app.csproj");
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal("name", exception.ParamName);
     }
 
     [Fact]
-    public void AddCSharpAppShouldThrowWhenPathIsNull()
+    public void AddDotnetProjectShouldThrowWhenPathIsNull()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var action = () => builder.AddCSharpApp("app", null!);
+        var action = () => builder.AddDotnetProject("app", null!);
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal("path", exception.ParamName);
     }
 
     [Fact]
-    public void AddCSharpAppWithConfigureShouldThrowWhenConfigureIsNull()
+    public void AddDotnetProjectWithConfigureShouldThrowWhenConfigureIsNull()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var action = () => builder.AddCSharpApp("app", "app.csproj", configure: null!);
+        var action = () => builder.AddDotnetProject("app", "app.csproj", configure: null!);
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal("configure", exception.ParamName);

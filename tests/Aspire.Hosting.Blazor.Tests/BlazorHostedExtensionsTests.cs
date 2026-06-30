@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECSHARPAPPS001
-
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
@@ -328,7 +326,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
-        var gateway = builder.AddCSharpApp("gateway", "TestProject/TestProject.csproj", o => o.ExcludeLaunchProfile = true)
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 
@@ -349,7 +347,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:4318";
 
-        var gateway = builder.AddCSharpApp("gateway", "TestProject/TestProject.csproj", o => o.ExcludeLaunchProfile = true)
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
 

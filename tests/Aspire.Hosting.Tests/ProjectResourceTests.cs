@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
+#pragma warning disable ASPIRECSHARPAPPS001
 #pragma warning disable ASPIREEXTENSION001
 
 using System.Text;
@@ -959,6 +960,17 @@ public class ProjectResourceTests
         var project = builder.AddProject("projectName", "another-path", options => { options.ExcludeLaunchProfile = true; });
 
         var annotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
+        Assert.NotNull(annotation);
+        Assert.Equal("project", annotation.LaunchConfigurationType);
+    }
+
+    [Fact]
+    public void AddCSharpAppAddsSupportsDebuggingAnnotationInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var app = builder.AddCSharpApp("appName", "app-path", options => { options.ExcludeLaunchProfile = true; });
+
+        var annotation = app.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         Assert.Equal("project", annotation.LaunchConfigurationType);
     }

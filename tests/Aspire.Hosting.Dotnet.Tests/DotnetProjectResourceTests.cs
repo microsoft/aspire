@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECSHARPAPPS001
+#pragma warning disable ASPIREDOTNETPROJECT001
 #pragma warning disable ASPIREEXTENSION001
 
 using Aspire.Hosting.ApplicationModel;
@@ -11,15 +11,15 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
-public class CSharpAppResourceTests
+public class DotnetProjectResourceTests
 {
     [Fact]
-    public async Task AddCSharpApp_ProjectFile_ProducesDotnetRunProjectArgs()
+    public async Task AddDotnetProject_ProjectFile_ProducesDotnetRunProjectArgs()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
-        var app = builder.AddCSharpApp("svc", projectPath, o => o.ExcludeLaunchProfile = true);
+        var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true);
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
@@ -32,12 +32,12 @@ public class CSharpAppResourceTests
     }
 
     [Fact]
-    public async Task AddCSharpApp_FileBasedApp_ProducesDotnetRunFileArgs()
+    public async Task AddDotnetProject_FileBasedApp_ProducesDotnetRunFileArgs()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var appPath = Path.Combine(builder.AppHostDirectory, "service.cs");
-        var app = builder.AddCSharpApp("svc", appPath, o => o.ExcludeLaunchProfile = true);
+        var app = builder.AddDotnetProject("svc", appPath, o => o.ExcludeLaunchProfile = true);
 
         var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
 
@@ -50,45 +50,45 @@ public class CSharpAppResourceTests
     }
 
     [Fact]
-    public void AddCSharpApp_UsesDotnetCommandAndProjectDirectoryAsWorkingDirectory()
+    public void AddDotnetProject_UsesDotnetCommandAndProjectDirectoryAsWorkingDirectory()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
-        var app = builder.AddCSharpApp("svc", projectPath, o => o.ExcludeLaunchProfile = true);
+        var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true);
 
         Assert.Equal("dotnet", app.Resource.Command);
         Assert.Equal(Path.GetDirectoryName(projectPath), app.Resource.WorkingDirectory);
     }
 
     [Fact]
-    public void AddCSharpApp_ResourceSupportsServiceDiscovery()
+    public void AddDotnetProject_ResourceSupportsServiceDiscovery()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
-        var app = builder.AddCSharpApp("svc", "MyService.csproj", o => o.ExcludeLaunchProfile = true);
+        var app = builder.AddDotnetProject("svc", "MyService.csproj", o => o.ExcludeLaunchProfile = true);
 
         Assert.IsAssignableFrom<IResourceWithServiceDiscovery>(app.Resource);
         Assert.IsAssignableFrom<ExecutableResource>(app.Resource);
     }
 
     [Fact]
-    public void AddCSharpApp_AddsProjectMetadataAnnotation()
+    public void AddDotnetProject_AddsProjectMetadataAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var projectPath = Path.Combine(builder.AppHostDirectory, "MyService", "MyService.csproj");
-        var app = builder.AddCSharpApp("svc", projectPath, o => o.ExcludeLaunchProfile = true);
+        var app = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true);
 
         Assert.True(app.Resource.TryGetLastAnnotation<IProjectMetadata>(out var metadata));
         Assert.Equal(projectPath, metadata.ProjectPath);
     }
 
     [Fact]
-    public void AddCSharpApp_AddsSupportsDebuggingAnnotationInRunMode()
+    public void AddDotnetProject_AddsSupportsDebuggingAnnotationInRunMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var app = builder.AddCSharpApp("appName", "app-path", options => { options.ExcludeLaunchProfile = true; });
+        var app = builder.AddDotnetProject("appName", "app-path", options => { options.ExcludeLaunchProfile = true; });
 
         var annotation = app.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
@@ -96,7 +96,7 @@ public class CSharpAppResourceTests
     }
 
     [Fact]
-    public async Task AddCSharpApp_MaterializesEndpointsFromLaunchProfile()
+    public async Task AddDotnetProject_MaterializesEndpointsFromLaunchProfile()
     {
         using var tempDir = new TestTempDirectory();
         var projectDir = Directory.CreateDirectory(Path.Combine(tempDir.Path, "MyService"));
@@ -116,7 +116,7 @@ public class CSharpAppResourceTests
             """);
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var app = builder.AddCSharpApp("svc", projectPath);
+        var app = builder.AddDotnetProject("svc", projectPath);
 
         var endpoint = Assert.Single(app.Resource.Annotations.OfType<EndpointAnnotation>());
         Assert.Equal("http", endpoint.UriScheme);
@@ -124,11 +124,11 @@ public class CSharpAppResourceTests
     }
 
     [Fact]
-    public void AddLifeCycleCommands_CSharpAppResource_RestartHasDetailedProjectDescription()
+    public void AddLifeCycleCommands_DotnetProjectResource_RestartHasDetailedProjectDescription()
     {
-        // A CSharpAppResource is a .NET app launched via the SDK, so it should receive the same
+        // A DotnetProjectResource is a .NET app launched via the SDK, so it should receive the same
         // detailed "rebuild is required" restart description that ProjectResource gets.
-        var resource = new CSharpAppResource("testapp", AppContext.BaseDirectory);
+        var resource = new DotnetProjectResource("testapp", AppContext.BaseDirectory);
         resource.AddLifeCycleCommands();
 
         var restartCommand = resource.Annotations.OfType<ResourceCommandAnnotation>().Single(a => a.Name == KnownResourceCommands.RestartCommand);

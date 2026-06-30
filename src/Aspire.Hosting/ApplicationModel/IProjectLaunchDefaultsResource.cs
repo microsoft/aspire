@@ -5,7 +5,7 @@ namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Internal abstraction shared by .NET-based resources that are launched via the SDK
-/// (<see cref="ProjectResource"/> in core and <c>CSharpAppResource</c> in
+/// (<see cref="ProjectResource"/> in core and <c>DotnetProjectResource</c> in
 /// <c>Aspire.Hosting.Dotnet</c>) and reuse the project-defaults wiring in
 /// <c>WithProjectDefaults</c>: launch-profile / Kestrel endpoint materialization,
 /// <c>ASPNETCORE_URLS</c> / <c>HTTP(S)_PORTS</c> environment, Kestrel URL overrides, and the

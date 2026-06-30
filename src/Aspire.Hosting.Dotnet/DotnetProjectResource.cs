@@ -8,7 +8,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A <see cref="CSharpAppResource"/> is added by path and is
+/// A <see cref="DotnetProjectResource"/> is added by path and is
 /// launched as an executable: <c>dotnet run --project &lt;path&gt;</c> for a project file, or
 /// <c>dotnet run --file &lt;path&gt;</c> for a file-based app (a <c>.cs</c> file). 
 /// </para>
@@ -16,7 +16,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="name">The name of the resource in the application model.</param>
 /// <param name="workingDirectory">The working directory for the app, typically the directory containing the project or <c>.cs</c> file.</param>
 [AspireExport(ExposeProperties = true)]
-public class CSharpAppResource(string name, string workingDirectory)
+public class DotnetProjectResource(string name, string workingDirectory)
     : ExecutableResource(name, "dotnet", workingDirectory), IResourceWithServiceDiscovery, IProjectLaunchDefaultsResource
 {
     // The project-defaults wiring lives in Aspire.Hosting core (WithProjectDefaults) and operates against
