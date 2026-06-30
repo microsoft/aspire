@@ -1,0 +1,111 @@
+// Integration harness for the scheduled-workflow watchdog's run() orchestrator
+// (.github/workflows/monitor-scheduled-workflows.js). Drives run() against an
+// in-memory octokit fake so the dry-run no-mutation contract, comment-based
+// dedup, and close-on-green — all outside the reach of the pure-helper tests —
+// are exercised directly.
+//
+// Input payload (JSON, first argv):
+//   {
+//     "dryRun": true,
+//     "runsByFile": { "generate-api-diffs.yml": { "conclusion": "failure", "html_url": "...", "run_number": 9, "head_sha": "abcd", "updated_at": "..." } },
+//     "issues": [ { "number": 1, "body": "...", "state": "open" } ]
+//   }
+// A workflow file absent from runsByFile yields no completed run (noop). Output:
+//   { calls, issues: [ { number, state, body, labels, comments } ] }
+
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+
+const monitor = require('../../../.github/workflows/monitor-scheduled-workflows.js');
+
+function makeGithub(store, runsByFile) {
+    const calls = [];
+    return {
+        calls,
+        paginate: async (fn, params) => (await fn(params)).data,
+        rest: {
+            issues: {
+                createLabel: async () => { calls.push('createLabel'); },
+                listForRepo: async ({ labels }) => {
+                    // Production narrows by the lookup label before the marker filter
+                    // (tracking-issue.js listOpenIssuesByLabel). Fail loudly if that
+                    // narrowing is ever dropped so the regression is caught here
+                    // rather than masked by the fake returning every open issue.
+                    if (!labels) {
+                        throw new Error('listForRepo must be called with a label filter');
+                    }
+                    return { data: store.issues.filter(issue => issue.state === 'open') };
+                },
+                create: async ({ title, body, labels }) => {
+                    calls.push('create');
+                    const issue = { number: store.next++, title, body, labels, state: 'open', comments: [] };
+                    store.issues.push(issue);
+                    return { data: issue };
+                },
+                update: async ({ issue_number, body, state }) => {
+                    calls.push('update');
+                    const issue = store.issues.find(i => i.number === issue_number);
+                    if (body !== undefined) { issue.body = body; }
+                    if (state) { issue.state = state; }
+                },
+                listComments: async ({ issue_number }) => {
+                    const issue = store.issues.find(i => i.number === issue_number);
+                    return { data: (issue?.comments ?? []).map(body => ({ body })) };
+                },
+                createComment: async ({ issue_number, body }) => {
+                    calls.push('createComment');
+                    const issue = store.issues.find(i => i.number === issue_number);
+                    (issue.comments ??= []).push(body);
+                },
+            },
+            actions: {
+                listWorkflowRuns: async ({ workflow_id, branch, event, status }) => {
+                    // The watchdog must scan only completed scheduled runs on main.
+                    // A manual or push run leaking in would let a non-scheduled
+                    // success auto-close a real scheduled-failure issue (or a
+                    // non-scheduled failure file a false one). Fail loudly if any of
+                    // those filters is ever dropped so the regression is caught here.
+                    if (branch !== 'main' || event !== 'schedule' || status !== 'completed') {
+                        throw new Error(`listWorkflowRuns called without the scheduled-run filters (branch=${branch}, event=${event}, status=${status})`);
+                    }
+                    const run = runsByFile[workflow_id];
+                    return { data: { workflow_runs: run ? [run] : [] } };
+                },
+            },
+        },
+    };
+}
+
+async function main() {
+    const input = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+
+    const store = {
+        issues: (input.issues ?? []).map(issue => ({ comments: [], state: 'open', ...issue })),
+        next: input.nextNumber ?? 1000,
+    };
+    const github = makeGithub(store, input.runsByFile ?? {});
+    const core = { info: () => {}, warning: () => {} };
+    const context = { repo: { owner: 'microsoft', repo: 'aspire' } };
+
+    await monitor.run({ github, context, core, dryRun: input.dryRun === true });
+
+    process.stdout.write(JSON.stringify({
+        result: {
+            calls: github.calls,
+            issues: store.issues.map(issue => ({
+                number: issue.number,
+                state: issue.state,
+                body: issue.body,
+                labels: issue.labels ?? [],
+                comments: issue.comments ?? [],
+            })),
+        },
+    }));
+}
+
+main().catch(error => {
+    process.stderr.write(`${error.stack ?? error}\n`);
+    process.exitCode = 1;
+});

@@ -1,0 +1,22 @@
+{
+  "$schema-note": "Watch list for the scheduled-workflow failure watchdog (monitor-scheduled-workflows.yml). One entry per scheduled/automation workflow whose failure should file an automation-broken issue. Entries are watched by default; set enabled:false (optionally with a reason) to stop watching one without deleting it. Set selfReports:true for workflows that file their OWN normal failures in-pipeline (via an if:failure() reporter): the watchdog then ONLY backstops startup_failure and timed_out (the conclusions that in-pipeline reporter cannot catch), never plain failure (which would double-file). Optional per-entry labels[] are added to the filed issue alongside automation-broken. See docs/ci/monitor-scheduled-workflows.md.",
+  "watched": [
+    { "file": "generate-api-diffs.yml", "name": "Generate API Diffs" },
+    { "file": "generate-ats-diffs.yml", "name": "Generate ATS Diffs" },
+    { "file": "refresh-manifests.yml", "name": "Refresh Manifests" },
+    { "file": "update-dependencies.yml", "name": "Update Dependencies" },
+    { "file": "update-ai-foundry-models.yml", "name": "Update AI Foundry Models" },
+    { "file": "update-azure-vm-sizes.yml", "name": "Update Azure VM Sizes" },
+    { "file": "update-aspire-skills-bundle.yml", "name": "Update Aspire Skills Bundle" },
+    { "file": "deployment-cleanup.yml", "name": "Deployment Cleanup" },
+    { "file": "labeler-cache-retention.yml", "name": "Labeler Cache Retention" },
+    { "file": "warm-cli-e2e-image-cache.yml", "name": "Warm CLI E2E Image Cache" },
+    { "file": "locker.yml", "name": "Lock Threads" },
+    { "file": "backmerge-release.yml", "name": "Backmerge Release to Main" },
+
+    { "file": "tests-outerloop.yml", "name": "Outerloop Tests", "selfReports": true, "labels": ["failing-test"] },
+    { "file": "tests-quarantine.yml", "name": "Quarantined Tests", "selfReports": true },
+    { "file": "tests-daily-smoke.yml", "name": "Daily CLI Smoke Tests", "selfReports": true, "labels": ["area-cli", "failing-test"] },
+    { "file": "deployment-tests.yml", "name": "Deployment E2E Tests", "selfReports": true, "labels": ["area-testing", "deployment-e2e"] }
+  ]
+}
