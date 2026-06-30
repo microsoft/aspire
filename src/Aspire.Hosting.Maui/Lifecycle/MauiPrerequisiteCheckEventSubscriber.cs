@@ -108,19 +108,33 @@ internal sealed class MauiPrerequisiteCheckEventSubscriber(
         var lazyCheck = _inflightChecks.GetOrAdd(
             cacheKey,
             _ => new Lazy<Task<MauiPrerequisiteCheckResult>>(
-                () => checker.CheckAsync(resource, logger, CancellationToken.None),
+                () => RunCheckAndRemoveAsync(checker, resource, cacheKey),
                 LazyThreadSafetyMode.ExecutionAndPublication));
 
+        // The probe is shared across matching resources, so a single resource-start cancellation
+        // must not cancel the underlying check for other resources. Apply caller cancellation only
+        // while awaiting the shared task.
+        return await lazyCheck.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<MauiPrerequisiteCheckResult> RunCheckAndRemoveAsync(
+        IMauiPrerequisiteChecker checker,
+        IResource resource,
+        string cacheKey)
+    {
         try
         {
-            // The probe is shared across matching resources, so a single resource-start cancellation
-            // must not cancel the underlying check for other resources. Apply caller cancellation only
-            // while awaiting the shared task.
-            return await lazyCheck.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
+            var result = await checker.CheckAsync(resource, logger, CancellationToken.None).ConfigureAwait(false);
+            if (result.IsAvailable)
+            {
+                _successfulChecks[cacheKey] = true;
+            }
+
+            return result;
         }
         finally
         {
-            _inflightChecks.TryRemove(new KeyValuePair<string, Lazy<Task<MauiPrerequisiteCheckResult>>>(cacheKey, lazyCheck));
+            _inflightChecks.TryRemove(cacheKey, out _);
         }
     }
 

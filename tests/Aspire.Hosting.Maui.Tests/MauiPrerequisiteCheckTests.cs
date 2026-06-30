@@ -289,6 +289,40 @@ public class MauiPrerequisiteCheckTests
     }
 
     [Fact]
+    public async Task CancelledCallerDoesNotRemoveSharedPrerequisiteCheckBeforeItCompletes()
+    {
+        var checkerStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseChecker = new TaskCompletionSource<MauiPrerequisiteCheckResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var checker = new TestableChecker(".NET MAUI workload", resource => resource is IMauiPlatformResource)
+        {
+            CheckCallback = async _ =>
+            {
+                checkerStarted.TrySetResult();
+                return await releaseChecker.Task.ConfigureAwait(false);
+            }
+        };
+
+        await using var env = await PrerequisiteTestEnvironment.CreateAsync([checker]);
+        using var canceledStartCts = new CancellationTokenSource();
+
+        var canceledStart = env.PublishBeforeResourceStartedAsync(env.Android, canceledStartCts.Token);
+        await checkerStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        canceledStartCts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => canceledStart.WaitAsync(TimeSpan.FromSeconds(5)));
+
+        var laterStart = env.PublishBeforeResourceStartedAsync(env.AndroidFromSecondProject);
+        await Task.Delay(100);
+        Assert.Equal(1, checker.CheckCount);
+
+        releaseChecker.SetResult(MauiPrerequisiteCheckResult.Available);
+
+        await laterStart.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(1, checker.CheckCount);
+    }
+
+    [Fact]
     public async Task WorkloadChecker_ProcessFailureReportsMissingPrerequisite()
     {
         var checker = new MauiWorkloadChecker(new FakeProcessRunner(_ => throw new InvalidOperationException("dotnet was not found")));
@@ -395,6 +429,48 @@ public class MauiPrerequisiteCheckTests
             """, ""));
 
         Assert.True((await stillChecking.WaitAsync(TimeSpan.FromSeconds(5))).IsAvailable);
+        Assert.Equal(1, processRunner.CallCount);
+    }
+
+    [Fact]
+    public async Task WorkloadChecker_CancelledCallerDoesNotRemoveSharedWorkloadListBeforeItCompletes()
+    {
+        var processStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseProcess = new TaskCompletionSource<ProcessResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var processRunner = new FakeProcessRunner(_ => throw new InvalidOperationException("Synchronous callback should not be used."))
+        {
+            AsyncCallback = async _ =>
+            {
+                processStarted.TrySetResult();
+                return await releaseProcess.Task.ConfigureAwait(false);
+            }
+        };
+        var parent = new MauiProjectResource("app", "/repo/src/MauiApp/MauiApp.csproj");
+        var android = new MauiAndroidEmulatorResource("android", parent);
+        var ios = new MauiiOSSimulatorResource("ios", parent);
+        android.Annotations.Add(new MauiBuildInfoAnnotation("/repo/src/MauiApp/MauiApp.csproj", "/repo/src/MauiApp", "net10.0-android"));
+        ios.Annotations.Add(new MauiBuildInfoAnnotation("/repo/src/MauiApp/MauiApp.csproj", "/repo/src/MauiApp", "net10.0-ios"));
+        var checker = new MauiWorkloadChecker(processRunner);
+        using var canceledCheckCts = new CancellationTokenSource();
+
+        var canceledCheck = checker.CheckAsync(android, NullLogger.Instance, canceledCheckCts.Token);
+        await processStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        canceledCheckCts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => canceledCheck.WaitAsync(TimeSpan.FromSeconds(5)));
+
+        var laterCheck = checker.CheckAsync(ios, NullLogger.Instance, CancellationToken.None);
+        await Task.Delay(100);
+        Assert.Equal(1, processRunner.CallCount);
+
+        releaseProcess.SetResult(new ProcessResult(0, """
+            Installed Workload Id      Manifest Version       Installation Source
+            --------------------------------------------------------------------
+            maui                       10.0.0/10.0.100        SDK 10.0.100
+            """, ""));
+
+        Assert.True((await laterCheck.WaitAsync(TimeSpan.FromSeconds(5))).IsAvailable);
         Assert.Equal(1, processRunner.CallCount);
     }
 

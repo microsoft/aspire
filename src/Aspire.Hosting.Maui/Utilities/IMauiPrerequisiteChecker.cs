@@ -9,6 +9,12 @@ namespace Aspire.Hosting.Maui.Utilities;
 /// <summary>
 /// Checks whether a MAUI platform resource has a required local run-mode prerequisite.
 /// </summary>
+/// <remarks>
+/// MAUI prerequisite checks intentionally do not use the hosting required-command validator. That validator
+/// is warning-oriented and caches failures by command, while MAUI startup must fail before build/device work,
+/// scope checks by platform/toolchain, and allow install-and-retry in the same AppHost after a missing workload
+/// or tool is installed.
+/// </remarks>
 internal interface IMauiPrerequisiteChecker
 {
     string Name { get; }

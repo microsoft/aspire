@@ -65,25 +65,30 @@ internal sealed class MauiWorkloadChecker(IProcessRunner processRunner) : IMauiP
         var lazyResult = _workloadListTasks.GetOrAdd(
             cacheKey,
             _ => new Lazy<Task<ProcessResult>>(
-                () => processRunner.RunAsync(
-                    GetDotNetExecutable(),
-                    ["workload", "list"],
-                    GetWorkingDirectory(resource),
-                    s_timeout,
-                    CancellationToken.None),
+                () => RunWorkloadListAndRemoveAsync(resource, cacheKey),
                 LazyThreadSafetyMode.ExecutionAndPublication));
 
+        // The workload-list process is shared across matching resources, so a single
+        // resource-start cancellation must not cancel the underlying probe for other resources.
+        return await lazyResult.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<ProcessResult> RunWorkloadListAndRemoveAsync(IResource resource, string cacheKey)
+    {
         try
         {
-            // The workload-list process is shared across matching resources, so a single
-            // resource-start cancellation must not cancel the underlying probe for other resources.
-            return await lazyResult.Value.WaitAsync(cancellationToken).ConfigureAwait(false);
+            return await processRunner.RunAsync(
+                GetDotNetExecutable(),
+                ["workload", "list"],
+                GetWorkingDirectory(resource),
+                s_timeout,
+                CancellationToken.None).ConfigureAwait(false);
         }
         finally
         {
             // Only share concurrent probes. Do not cache completed output because developers can
             // install workloads and retry a failed start without restarting the AppHost.
-            _workloadListTasks.TryRemove(new KeyValuePair<string, Lazy<Task<ProcessResult>>>(cacheKey, lazyResult));
+            _workloadListTasks.TryRemove(cacheKey, out _);
         }
     }
 
