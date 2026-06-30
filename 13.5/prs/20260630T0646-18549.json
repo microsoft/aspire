@@ -1,0 +1,9 @@
+{
+  "author": "dotnet-maestro",
+  "comment": "Bot-authored automated dependency update (dotnet/arcade SDK version bump). Excluded per Step 3 bot exclusion rule.",
+  "mergedAt": "2026-06-30T06:46:53Z",
+  "number": 18549,
+  "runDate": "2026-06-30T07:12:34Z",
+  "status": "excluded",
+  "title": "[main] Update dependencies from dotnet/arcade"
+}

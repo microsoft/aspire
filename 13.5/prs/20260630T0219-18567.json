@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal CI agentic workflow maintenance (analyze-ci-failure workflow bugs and credit optimization). Not user-facing per Step 5f filtering rules.",
+  "mergedAt": "2026-06-30T02:19:14Z",
+  "number": 18567,
+  "runDate": "2026-06-30T07:12:34Z",
+  "status": "excluded",
+  "title": "Fix analyze-ci-failure workflow: bugs, credit optimization, and simplification"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Docs site infrastructure change: adds version placeholder tokens (%ASPIRE_VERSION%) to docs content. Does not document a specific product feature; no matching changelog entry found.",
+  "mergedAt": "2026-06-30T04:45:54Z",
+  "number": 1314,
+  "runDate": "2026-06-30T07:12:34Z",
+  "status": "excluded",
+  "title": "Add Aspire version placeholders to release docs"
+}
