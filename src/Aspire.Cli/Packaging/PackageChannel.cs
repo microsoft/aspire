@@ -393,10 +393,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
         {
-            tasks.Add(nuGetPackageCache.GetPackagesAsync(
+            tasks.Add(nuGetPackageCache.GetPackageVersionsAsync(
                 workingDirectory: workingDirectory,
-                packageId: packageId,
-                filter: id => id.Equals(packageId, StringComparisons.NuGetPackageId),
+                exactPackageId: packageId,
                 prerelease: false,
                 nugetConfigFile: tempNuGetConfig?.ConfigFile,
                 useCache: true, // Enable caching for package channel resolution
@@ -405,10 +404,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         if (Quality is PackageChannelQuality.Prerelease || Quality is PackageChannelQuality.Both)
         {
-            tasks.Add(nuGetPackageCache.GetPackagesAsync(
+            tasks.Add(nuGetPackageCache.GetPackageVersionsAsync(
                 workingDirectory: workingDirectory,
-                packageId: packageId,
-                filter: id => id.Equals(packageId, StringComparisons.NuGetPackageId),
+                exactPackageId: packageId,
                 prerelease: true,
                 nugetConfigFile: tempNuGetConfig?.ConfigFile,
                 useCache: true, // Enable caching for package channel resolution
@@ -426,10 +424,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         // in preview (Aspire.Hosting.Docker circa 9.4).
         if (Quality is PackageChannelQuality.Stable && !packages.Any())
         {
-            packages = await nuGetPackageCache.GetPackagesAsync(
+            packages = await nuGetPackageCache.GetPackageVersionsAsync(
                 workingDirectory: workingDirectory,
-                packageId: packageId,
-                filter: id => id.Equals(packageId, StringComparisons.NuGetPackageId),
+                exactPackageId: packageId,
                 prerelease: true,
                 nugetConfigFile: tempNuGetConfig?.ConfigFile,
                 useCache: true, // Enable caching for package channel resolution

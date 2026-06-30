@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
@@ -14,9 +15,13 @@ using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
 
-internal sealed class ConfigCommand : BaseCommand
+internal sealed class ConfigCommand : BaseCommand, IPackageMetaPrefetchingCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
+
+    public bool PrefetchesTemplatePackageMetadata => false;
+
+    public bool PrefetchesCliPackageMetadata => false;
 
     private readonly IConfiguration _configuration;
 

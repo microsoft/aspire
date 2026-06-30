@@ -19,12 +19,15 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
     public void Dispose() => _loggerFactory.Dispose();
 
     private ProcessGuestLauncher CreateLauncher()
+        => CreateLauncher(new ProcessExecutionFactory(new TestEnvironment(), _loggerFactory.CreateLogger<ProcessExecutionFactory>()));
+
+    private ProcessGuestLauncher CreateLauncher(IProcessExecutionFactory processExecutionFactory)
         => new(
             "test",
             _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
             fileLoggerProvider: null,
             commandResolver: PathLookupHelper.FindFullPathFromPath,
-            processExecutionFactory: new ProcessExecutionFactory(new TestEnvironment(), _loggerFactory.CreateLogger<ProcessExecutionFactory>()));
+            processExecutionFactory);
 
     [Fact]
     public async Task LaunchAsync_NoOptions_OnCancellation_ForceKillsProcessTreeAndReturns()
@@ -114,6 +117,36 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
         Assert.NotEqual(0, exitCode);
         Assert.Single(signaler.Pids);
         Assert.False(shutdownService.GracefulShutdownToken.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task LaunchAsync_ForwardsKillOnParentExitSeparatelyFromConsoleIsolation()
+    {
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            AssertionCallback = (_, _, _, options) =>
+            {
+                Assert.True(options.IsolateConsole);
+                Assert.True(options.KillOnParentExit);
+            }
+        };
+        var launcher = CreateLauncher(executionFactory);
+
+        var command = OperatingSystem.IsWindows() ? "cmd.exe" : "sh";
+        var options = new GuestLaunchOptions(
+            IsolateConsoleForGracefulShutdown: true,
+            KillOnParentExit: true);
+
+        var (exitCode, _) = await launcher.LaunchAsync(
+            command,
+            args: [],
+            new DirectoryInfo(Path.GetTempPath()),
+            new Dictionary<string, string>(),
+            afterLaunchAsync: null,
+            options: options,
+            CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
     }
 
     [Fact]

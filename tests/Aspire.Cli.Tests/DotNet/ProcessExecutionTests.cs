@@ -251,6 +251,26 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to be killed after signaler failure.");
     }
 
+    [Fact]
+    public void CreateExecution_IsolateConsoleDoesNotRequireWindowsKillOnParentExitJob()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var factory = new ProcessExecutionFactory(TestEnvironment.CreateWindows(), NullLogger<ProcessExecutionFactory>.Instance);
+
+        var execution = factory.CreateExecution(
+            RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "cmd.exe" : "/bin/sh",
+            args: [],
+            env: null,
+            workspace.WorkspaceRoot,
+            new ProcessInvocationOptions
+            {
+                IsolateConsole = true,
+                KillOnParentExit = false,
+            });
+
+        Assert.NotNull(execution);
+    }
+
     private static string CreateJsonPayload(int lineCount)
     {
         var builder = new StringBuilder();
@@ -410,7 +430,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         IProcessTreeGracefulShutdownSignaler signaler,
         IGracefulShutdownWindow shutdownService)
     {
-        // The Windows kill-on-close job is now resolved on-demand inside the factory via
+        // The Windows kill-on-parent-exit job is now resolved on-demand inside the factory via
         // WindowsConsoleProcessJob.Shared, so the test no longer creates or disposes one.
         return CreateExecution(
             scriptFile,

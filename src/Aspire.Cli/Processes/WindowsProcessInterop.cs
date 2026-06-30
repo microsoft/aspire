@@ -41,16 +41,13 @@ internal static partial class WindowsProcessInterop
     public const uint CreateNewConsole = 0x00000010;
 
     /// <summary>
-    /// Composite creation flags shared by every CLI process launcher that spawns into its own
-    /// hidden console group: CREATE_UNICODE_ENVIRONMENT (we always build a Unicode env block
+    /// Base creation flags shared by Windows launchers that need explicit handle inheritance
+    /// and/or job assignment: CREATE_UNICODE_ENVIRONMENT (we always build a Unicode env block
     /// ourselves) | EXTENDED_STARTUPINFO_PRESENT (we always pass STARTUPINFOEX with an attribute
-    /// list) | CREATE_NEW_CONSOLE (the entire point — detach from the parent's console).
-    /// Centralizing the composite prevents the two launchers from drifting (e.g. one path
-    /// accidentally dropping CREATE_UNICODE_ENVIRONMENT and silently truncating non-ASCII env
-    /// values).
+    /// list). CREATE_NEW_CONSOLE is added independently by callers that need console isolation.
     /// </summary>
-    public const uint NewConsoleCreationFlags =
-        CreateUnicodeEnvironment | ExtendedStartupInfoPresent | CreateNewConsole;
+    public const uint ExplicitHandleCreationFlags =
+        CreateUnicodeEnvironment | ExtendedStartupInfoPresent;
 
     public const ushort ShowWindowHide = 0x0000;
 
@@ -301,11 +298,10 @@ internal static partial class WindowsProcessInterop
     public readonly record struct StdioHandles(nint Stdin, nint Stdout, nint Stderr);
 
     /// <summary>
-    /// Spawns a child process in its own hidden console group with exactly the stdio handles
-    /// in <paramref name="stdio"/> made inheritable through <c>PROC_THREAD_ATTRIBUTE_HANDLE_LIST</c>.
-    /// Used by both <see cref="DetachedProcessLauncher"/> (NUL-only handles) and
-    /// <see cref="IsolatedProcess"/> (NUL stdin + anonymous pipes for stdout/stderr)
-    /// so the console-isolation ceremony lives in one place.
+    /// Spawns a child process with exactly the stdio handles in <paramref name="stdio"/> made
+    /// inheritable through <c>PROC_THREAD_ATTRIBUTE_HANDLE_LIST</c>. Console isolation
+    /// (<c>CREATE_NEW_CONSOLE</c>) and parent-exit job assignment are independent options so
+    /// short-lived helper processes can get the job safety net without creating a new console.
     /// </summary>
     /// <param name="fileName">Full path to the executable to launch.</param>
     /// <param name="arguments">Arguments to pass to the child. Quoted via <see cref="BuildCommandLine"/>.</param>
@@ -323,8 +319,13 @@ internal static partial class WindowsProcessInterop
     /// to remove a subset of parent variables must materialize the parent env, apply their
     /// removals/overlays, and pass the resulting dictionary here.
     /// </param>
+    /// <param name="createNewConsole">
+    /// When <see langword="true"/>, launches the child in a new hidden console group. Use this for
+    /// AppHost-style processes that need targeted CTRL+C delivery or detached children that must not
+    /// share the parent console. Leave it <see langword="false"/> for ordinary background helpers.
+    /// </param>
     /// <param name="jobHandle">
-    /// Optional kill-on-close job object. When supplied, the child is created suspended,
+    /// Optional parent-lifetime job object. When supplied, the child is created suspended,
     /// assigned to the job, then resumed — so there is no instruction-level window where the
     /// child could spawn a grandchild that escapes the job. <see cref="DetachedProcessLauncher"/>
     /// passes <see langword="null" /> because detached children must outlive the CLI;
@@ -338,12 +339,13 @@ internal static partial class WindowsProcessInterop
     /// <see cref="System.Diagnostics.Process.GetProcessById(int)"/>).
     /// </returns>
     [SupportedOSPlatform("windows")]
-    public static PROCESS_INFORMATION SpawnConsoleIsolatedProcess(
+    public static PROCESS_INFORMATION SpawnProcess(
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
         StdioHandles stdio,
         IReadOnlyDictionary<string, string?>? environment,
+        bool createNewConsole,
         SafeFileHandle? jobHandle)
     {
         // Build the handle whitelist from the non-zero stdio slots. We pass exactly the handles
@@ -417,7 +419,12 @@ internal static partial class WindowsProcessInterop
                     // CreateProcess and AssignProcessToJobObject so it cannot fork-and-breakaway
                     // before we put the safety net under it. Without a job, the original
                     // behavior is preserved bit-for-bit (no suspend, no resume).
-                    var flags = NewConsoleCreationFlags;
+                    var flags = ExplicitHandleCreationFlags;
+                    if (createNewConsole)
+                    {
+                        flags |= CreateNewConsole;
+                    }
+
                     if (jobHandle is not null)
                     {
                         flags |= CreateSuspended;

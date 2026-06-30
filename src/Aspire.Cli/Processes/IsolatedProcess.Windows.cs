@@ -15,10 +15,11 @@ internal sealed partial class IsolatedProcess
 {
     /// <summary>
     /// Windows implementation. Opens NUL for stdin and anonymous pipes for stdout/stderr,
-    /// then delegates to <see cref="WindowsProcessInterop.SpawnConsoleIsolatedProcess"/> for
-    /// the actual <c>CreateProcessW</c> ceremony. When <see cref="IsolatedProcessStartInfo.JobHandle"/>
-    /// is supplied, the spawn primitive does the suspended-create / assign / resume dance so
-    /// the child cannot escape the CLI's kill-on-close job between spawn and assignment.
+    /// then delegates to <see cref="WindowsProcessInterop.SpawnProcess"/> for the actual
+    /// <c>CreateProcessW</c> ceremony. Console isolation and parent-exit protection are
+    /// independent: when <see cref="IsolatedProcessStartInfo.KillOnParentExit"/> is set, the spawn
+    /// primitive does the suspended-create / assign / resume dance even if the child does not need
+    /// a new console group.
     /// </summary>
     /// <remarks>
     /// Unlike <see cref="DetachedProcessLauncher"/>, this launcher consumes the child's
@@ -75,13 +76,15 @@ internal sealed partial class IsolatedProcess
             // null = inherit parent env block.
             var environment = startInfo.GetEnvironmentForSpawn();
 
-            var pi = WindowsProcessInterop.SpawnConsoleIsolatedProcess(
+            var jobHandle = startInfo.KillOnParentExit ? WindowsConsoleProcessJob.Shared.Handle : null;
+            var pi = WindowsProcessInterop.SpawnProcess(
                 startInfo.FileName,
                 startInfo.ArgumentList,
                 startInfo.WorkingDirectory,
                 stdio,
                 environment,
-                startInfo.JobHandle);
+                createNewConsole: startInfo.IsolateConsole,
+                jobHandle);
 
             // CreateProcess succeeded; from here, any failure must terminate the just-created
             // child instead of letting it run orphaned. Drop the parent-side copy of the

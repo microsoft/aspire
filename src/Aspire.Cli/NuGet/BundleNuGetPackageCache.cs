@@ -45,7 +45,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         var packages = await SearchPackagesInternalAsync(
             workingDirectory,
             query: "Aspire.ProjectTemplates",
-            exactMatch: false,
+            exactMatch: true,
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
@@ -79,7 +79,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         var packages = await SearchPackagesInternalAsync(
             workingDirectory,
             query: "Aspire.Cli",
-            exactMatch: false,
+            exactMatch: true,
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
@@ -123,7 +123,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
 
-        bool FilterExactIdMatch(string? id) => string.Equals(id, exactPackageId, StringComparison.Ordinal);
+        bool FilterExactIdMatch(string? id) => string.Equals(id, exactPackageId, StringComparison.OrdinalIgnoreCase);
         return FilterPackages(packages, FilterExactIdMatch);
     }
 
@@ -155,9 +155,15 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             "nuget",
             "search",
             "--query", query,
-            "--take", "1000",
+            "--take", exactMatch ? "1" : NuGetPackageSearchDefaults.PageSize.ToString(CultureInfo.InvariantCulture),
+            "--timeout-seconds", NuGetPackageSearchDefaults.TimeoutSeconds.ToString(CultureInfo.InvariantCulture),
             "--format", "json"
         };
+
+        if (exactMatch)
+        {
+            args.Add("--exact-match");
+        }
 
         if (prerelease)
         {
@@ -189,12 +195,26 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         var environmentVariables = new Dictionary<string, string>();
         layoutLease?.AddEnvironment(environmentVariables);
 
-        var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
-            managedPath,
-            args,
-            workingDirectory: workingDirectory.FullName,
-            environmentVariables: environmentVariables,
-            ct: cancellationToken).ConfigureAwait(false);
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(NuGetPackageSearchDefaults.Timeout);
+
+        (int exitCode, string output, string error) processResult;
+        try
+        {
+            processResult = await _layoutProcessRunner.RunAsync(
+                managedPath,
+                args,
+                workingDirectory: workingDirectory.FullName,
+                environmentVariables: environmentVariables,
+                killOnParentExit: true,
+                ct: timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutCts.IsCancellationRequested)
+        {
+            throw new NuGetPackageCacheException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.FailedToSearchForPackages, CliExitCodes.FailedToSearchIntegrations));
+        }
+
+        var (exitCode, output, error) = processResult;
 
         // Log stderr output (verbose info from NuGetHelper)
         if (!string.IsNullOrWhiteSpace(error))
@@ -239,7 +259,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             else
             {
                 var exactMatchResultPackage = result.Packages
-                    .FirstOrDefault(p => p.Id.Equals(query, StringComparison.Ordinal));
+                    .FirstOrDefault(p => p.Id.Equals(query, StringComparison.OrdinalIgnoreCase));
                 if (exactMatchResultPackage is null || exactMatchResultPackage.AllVersions is null)
                 {
                     return [];

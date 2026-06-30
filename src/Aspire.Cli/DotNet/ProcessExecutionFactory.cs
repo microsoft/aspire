@@ -33,10 +33,7 @@ internal sealed class ProcessExecutionFactory(
             FileName = fileName,
             WorkingDirectory = workingDirectory.FullName,
             IsolateConsole = options.IsolateConsole,
-            // Only the isolated path on Windows uses the kill-on-close job; the non-isolated path
-            // and every Unix path leave it null. The job is the process-wide singleton, created on
-            // demand the first time an isolated child needs it.
-            JobHandle = options.IsolateConsole && environment.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
+            KillOnParentExit = options.KillOnParentExit,
         };
 
         foreach (var a in args)
@@ -70,7 +67,7 @@ internal sealed class ProcessExecutionFactory(
             FileName = startInfo.FileName,
             WorkingDirectory = startInfo.WorkingDirectory,
             IsolateConsole = options.IsolateConsole,
-            JobHandle = options.IsolateConsole && environment.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
+            KillOnParentExit = options.KillOnParentExit,
         };
 
         foreach (var arg in startInfo.ArgumentList)

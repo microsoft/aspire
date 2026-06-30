@@ -13,7 +13,7 @@ public class DetachedProcessLauncherTests
     // DetachedProcessLauncher.StartWindows points both Stdout and Stderr at the same NUL
     // handle, and PROC_THREAD_ATTRIBUTE_HANDLE_LIST rejects duplicate handle values —
     // CreateProcessW returns ERROR_INVALID_PARAMETER (87). The unified
-    // WindowsProcessInterop.SpawnConsoleIsolatedProcess de-duplicates the inheritable
+    // WindowsProcessInterop.SpawnProcess de-duplicates the inheritable
     // handle list, so this spawn must succeed.
     [Fact]
     [SupportedOSPlatform("windows")]

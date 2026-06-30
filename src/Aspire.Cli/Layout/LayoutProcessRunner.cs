@@ -17,6 +17,7 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
         IEnumerable<string> arguments,
         string? workingDirectory = null,
         IDictionary<string, string>? environmentVariables = null,
+        bool killOnParentExit = false,
         CancellationToken ct = default)
     {
         var outputBuilder = new StringBuilder();
@@ -27,6 +28,7 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
             SuppressLogging = true,
             StandardOutputCallback = line => outputBuilder.AppendLine(line),
             StandardErrorCallback = line => errorBuilder.AppendLine(line),
+            KillOnParentExit = killOnParentExit,
         };
 
         var args = arguments.ToArray();

@@ -131,6 +131,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             // Run-path spawn: isolated console group + anonymous-pipe stdio so a graceful CTRL+C can
             // target the guest without also signalling the CLI.
             IsolateConsole = options?.IsolateConsoleForGracefulShutdown == true,
+            KillOnParentExit = options?.KillOnParentExit == true,
             GracefulShutdownSignaler = options?.GracefulShutdownSignaler,
             ShutdownService = options?.ShutdownService,
             // The guest is the AppHost's primary process; always tree-kill on escalation so no

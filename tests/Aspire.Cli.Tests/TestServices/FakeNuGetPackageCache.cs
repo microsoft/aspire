@@ -49,6 +49,17 @@ internal sealed class FakeNuGetPackageCache : INuGetPackageCache
     }
 
     public Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-        => GetPackageVersionsAsyncCallback?.Invoke(workingDirectory, exactPackageId, prerelease, nugetConfigFile, useCache, cancellationToken)
-           ?? Task.FromResult<IEnumerable<NuGetPackage>>([]);
+    {
+        if (GetPackageVersionsAsyncCallback is not null)
+        {
+            return GetPackageVersionsAsyncCallback.Invoke(workingDirectory, exactPackageId, prerelease, nugetConfigFile, useCache, cancellationToken);
+        }
+
+        if (GetPackagesAsyncCallback is not null)
+        {
+            return GetPackagesAsyncCallback.Invoke(workingDirectory, exactPackageId, id => id.Equals(exactPackageId, StringComparison.OrdinalIgnoreCase), prerelease, nugetConfigFile, useCache, cancellationToken);
+        }
+
+        return Task.FromResult<IEnumerable<NuGetPackage>>([]);
+    }
 }

@@ -68,19 +68,25 @@ internal sealed class ProcessInvocationOptions
 
     /// <summary>
     /// When <c>true</c>, the spawned process is given its own hidden console group (Windows)
-    /// and, on Windows, is assigned to the CLI's kill-on-close job object. Required so the
-    /// shutdown ladder in <see cref="ProcessExecution"/> can target the child with
-    /// DCP's <c>stop-process-tree</c> CTRL+C dance.
+    /// so the shutdown ladder in <see cref="ProcessExecution"/> can target the child with
+    /// DCP's <c>stop-process-tree</c> CTRL+C dance without also signalling the CLI.
     /// </summary>
     /// <remarks>
-    /// Pair with <see cref="GracefulShutdownSignaler"/> and <see cref="ShutdownService"/>.
-    /// On Windows the spawned process is bound to the process-wide
-    /// <see cref="WindowsConsoleProcessJob"/> kill-on-close job automatically.
+    /// Pair with <see cref="GracefulShutdownSignaler"/> and <see cref="ShutdownService"/> for
+    /// graceful shutdown. Pair with <see cref="KillOnParentExit"/> when the child should also
+    /// be bound to the parent-lifetime safety net.
     /// Leaving the signaler/service unset means cancellation falls back to
     /// <see cref="ProcessExecution"/>'s force-kill mode, preserving back-compat
     /// for the many non-Run callers (build, restore, package add, layout, etc.).
     /// </remarks>
     public bool IsolateConsole { get; set; }
+
+    /// <summary>
+    /// When <c>true</c>, the child process should be terminated when the CLI exits unexpectedly.
+    /// This provides a crash-time safety net for short-lived background helpers that should never
+    /// outlive their parent.
+    /// </summary>
+    public bool KillOnParentExit { get; set; }
 
     /// <summary>
     /// Issues the graceful shutdown signal during the shutdown ladder (DCP
@@ -315,11 +321,13 @@ internal sealed class DotNetCliRunner(
             KillEntireProcessTreeOnCancel = options.KillEntireProcessTreeOnCancel,
             // Forward the Run-path shutdown ladder opt-ins. Forgetting any of these silently
             // demotes the run to the force-kill fallback: IsolateConsole=false skips console
-            // isolation, and the null signaler/service pair causes ProcessExecution's OCE catch
+            // isolation, KillOnParentExit=false removes the crash-time safety net, and the
+            // null signaler/service pair causes ProcessExecution's OCE catch
             // (DotNet/ProcessExecution.cs) to route through its force-kill mode (best-effort SIGTERM
             // then kill) instead of its graceful ladder. Build/restore/etc. callers leave these unset
             // and intentionally keep the force-kill path.
             IsolateConsole = options.IsolateConsole,
+            KillOnParentExit = options.KillOnParentExit,
             GracefulShutdownSignaler = options.GracefulShutdownSignaler,
             ShutdownService = options.ShutdownService,
             StandardOutputCallback = line =>
@@ -1318,6 +1326,8 @@ internal sealed class DotNetCliRunner(
     public async Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity();
+
+        options.KillOnParentExit = true;
 
         string? rawKey = null;
         var cacheEnabled = useCache;

@@ -60,6 +60,22 @@ public class NuGetPackagePrefetcherTests
     }
 
     [Fact]
+    public void ConfigCommandDisablesPackageMetadataPrefetching()
+    {
+        var configCommand = new ConfigCommand(null!, null!, new CommonCommandServices(null!, null!, null!, null!, null!, null!, null!, null!));
+        var prefetchingCommand = Assert.IsAssignableFrom<IPackageMetaPrefetchingCommand>(configCommand);
+
+        Assert.False(prefetchingCommand.PrefetchesTemplatePackageMetadata);
+        Assert.False(prefetchingCommand.PrefetchesCliPackageMetadata);
+
+        var infoCommand = Assert.Single(configCommand.Subcommands, c => c.Name == "info");
+        var prefetchingInfoCommand = Assert.IsAssignableFrom<IPackageMetaPrefetchingCommand>(infoCommand);
+
+        Assert.False(prefetchingInfoCommand.PrefetchesTemplatePackageMetadata);
+        Assert.False(prefetchingInfoCommand.PrefetchesCliPackageMetadata);
+    }
+
+    [Fact]
     public void PackageMetaPrefetchingCommandDefaultsToTrueForBothPackageTypes()
     {
         var testCommandWithInterface = new TestCommandWithInterface();
@@ -140,6 +156,53 @@ public class NuGetPackagePrefetcherTests
         await Task.WhenAll(templateTcs.Task, cliTcs.Task).DefaultTimeout();
 
         await prefetcher.StopAsync(CancellationToken.None).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task StopAsyncWaitsForCanceledTemplatePrefetchToFinish()
+    {
+        var logger = new TestLogger<NuGetPackagePrefetcher>(new TestLoggerFactory(new TestSink(), enabled: true));
+
+        var executionContext = CreateExecutionContext();
+        executionContext.CommandSelected.TrySetResult(new TestCommand("new"));
+
+        var prefetchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancellationObserved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowPrefetchToFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = async cancellationToken =>
+            {
+                prefetchStarted.SetResult();
+                await cancellationToken.WaitUntilCancelledAsync();
+                cancellationObserved.SetResult();
+                await allowPrefetchToFinish.Task;
+
+                return [];
+            }
+        };
+
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.UpdateNotificationsEnabled, false);
+
+        var prefetcher = new NuGetPackagePrefetcher(
+            logger,
+            executionContext,
+            features,
+            packagingService,
+            new TestCliUpdateNotifier());
+
+        await prefetcher.StartAsync(CancellationToken.None).DefaultTimeout();
+        await prefetchStarted.Task.DefaultTimeout();
+
+        var stopTask = prefetcher.StopAsync(CancellationToken.None);
+        await cancellationObserved.Task.DefaultTimeout();
+
+        Assert.False(stopTask.IsCompleted);
+
+        allowPrefetchToFinish.SetResult();
+        await stopTask.DefaultTimeout();
     }
 
     [Fact]

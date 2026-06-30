@@ -645,7 +645,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 var guestLaunchOptions = new GuestLaunchOptions(
                     IsolateConsoleForGracefulShutdown: true,
                     GracefulShutdownSignaler: _gracefulShutdownSignaler,
-                    ShutdownService: _shutdownService);
+                    ShutdownService: _shutdownService,
+                    KillOnParentExit: true);
                 (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
                     appHostFile, directory, environmentVariables, enableHotReload, context.NoBuild, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, guestLaunchOptions, appHostSystemToken);
             }

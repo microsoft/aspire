@@ -569,6 +569,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             StandardOutputCallback = OnStdout,
             StandardErrorCallback = OnStderr,
             IsolateConsole = runControl?.IsolateConsole ?? false,
+            KillOnParentExit = runControl?.KillOnParentExit ?? false,
             GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
             ShutdownService = runControl?.ShutdownService,
             // The graceful ladder always tree-kills on escalation; this fallback only matters when

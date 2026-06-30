@@ -45,6 +45,67 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         );
     }
 
+    [Theory]
+    [InlineData("Aspire.Cli")]
+    [InlineData("Aspire.ProjectTemplates")]
+    public async Task PrefetchedPackageMetadataUsesExactPackageLookup(string packageId)
+    {
+        bool? observedExactMatch = null;
+        string? observedQuery = null;
+        int observedTake = -1;
+        int observedSkip = -1;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, query, exactMatch, prerelease, take, skip, nugetConfigFile, useCache, options, cancellationToken) =>
+                {
+                    observedQuery = query;
+                    observedExactMatch = exactMatch;
+                    observedTake = take;
+                    observedSkip = skip;
+
+                    return (0, [
+                        new NuGetPackage { Id = packageId, Version = "13.3.0", Source = "nuget.org" },
+                        new NuGetPackage { Id = packageId, Version = "13.4.0", Source = "nuget.org" }
+                    ]);
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
+        var packages = packageId switch
+        {
+            "Aspire.Cli" => await nuGetPackageCache.GetCliPackagesAsync(workspace.WorkspaceRoot, prerelease: true, nugetConfigFile: null, CancellationToken.None).DefaultTimeout(),
+            "Aspire.ProjectTemplates" => await nuGetPackageCache.GetTemplatePackagesAsync(workspace.WorkspaceRoot, prerelease: true, nugetConfigFile: null, CancellationToken.None).DefaultTimeout(),
+            _ => throw new InvalidOperationException()
+        };
+
+        Assert.Equal(packageId, observedQuery);
+        Assert.True(observedExactMatch);
+        Assert.Equal(0, observedTake);
+        Assert.Equal(0, observedSkip);
+        Assert.Collection(
+            packages.OrderBy(package => package.Version),
+            package =>
+            {
+                Assert.Equal(packageId, package.Id);
+                Assert.Equal("13.3.0", package.Version);
+            },
+            package =>
+            {
+                Assert.Equal(packageId, package.Id);
+                Assert.Equal("13.4.0", package.Version);
+            });
+    }
+
     [Fact]
     public async Task DeprecatedPackagesAreFilteredByDefault()
     {
@@ -292,5 +353,50 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
             packages,
             package => Assert.Equal("13.2.0", package.Version),
             package => Assert.Equal("13.3.0", package.Version));
+    }
+
+    [Fact]
+    public async Task GetPackageVersionsAsync_DoesNotFilterDeprecatedExactPackage()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, query, exactMatch, prerelease, take, skip, nugetConfigFile, useCache, options, cancellationToken) =>
+                {
+                    Assert.True(exactMatch);
+                    return query switch
+                    {
+                        "Aspire.Hosting.Dapr" => (0, [
+                            new NuGetPackage { Id = "Aspire.Hosting.Dapr", Version = "13.4.0", Source = "nuget.org" }
+                        ]),
+                        _ => (0, Array.Empty<NuGetPackage>())
+                    };
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
+        var packages = await nuGetPackageCache.GetPackageVersionsAsync(
+            workspace.WorkspaceRoot,
+            "Aspire.Hosting.Dapr",
+            prerelease: false,
+            nugetConfigFile: null,
+            useCache: true,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Collection(
+            packages,
+            package =>
+            {
+                Assert.Equal("Aspire.Hosting.Dapr", package.Id);
+                Assert.Equal("13.4.0", package.Version);
+            });
     }
 }

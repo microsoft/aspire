@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using NuGet.Configuration;
 using NuGet.Protocol;
 using NuGet.Protocol.Core.Types;
+using NuGet.Versioning;
 using INuGetLogger = NuGet.Common.ILogger;
 
 namespace Aspire.Managed.NuGet.Commands;
@@ -51,6 +52,26 @@ public static class SearchCommand
         };
         command.Options.Add(skipOption);
 
+        var exactMatchOption = new Option<bool>("--exact-match")
+        {
+            Description = "Only return packages whose ID exactly matches the query"
+        };
+        command.Options.Add(exactMatchOption);
+
+        var timeoutSecondsOption = new Option<int>("--timeout-seconds")
+        {
+            Description = "Maximum time to wait for package source queries (default: 30)",
+            DefaultValueFactory = _ => 30
+        };
+        timeoutSecondsOption.Validators.Add(result =>
+        {
+            if (result.GetValueOrDefault<int>() <= 0)
+            {
+                result.AddError("--timeout-seconds must be greater than zero.");
+            }
+        });
+        command.Options.Add(timeoutSecondsOption);
+
         var sourceOption = new Option<string[]>("--source")
         {
             Description = "NuGet feed URL (can specify multiple)",
@@ -90,13 +111,15 @@ public static class SearchCommand
             var prerelease = parseResult.GetValue(prereleaseOption);
             var take = parseResult.GetValue(takeOption);
             var skip = parseResult.GetValue(skipOption);
+            var exactMatch = parseResult.GetValue(exactMatchOption);
+            var timeoutSeconds = parseResult.GetValue(timeoutSecondsOption);
             var sources = parseResult.GetValue(sourceOption) ?? [];
             var configPath = parseResult.GetValue(configOption);
             var workingDir = parseResult.GetValue(workingDirOption);
             var format = parseResult.GetValue(formatOption) ?? "json";
             var verbose = parseResult.GetValue(verboseOption);
 
-            return await ExecuteSearchAsync(query, prerelease, take, skip, sources, configPath, workingDir, format, verbose).ConfigureAwait(false);
+            return await ExecuteSearchAsync(query, prerelease, take, skip, exactMatch, timeoutSeconds, sources, configPath, workingDir, format, verbose, ct).ConfigureAwait(false);
         });
 
         return command;
@@ -107,11 +130,14 @@ public static class SearchCommand
         bool prerelease,
         int take,
         int skip,
+        bool exactMatch,
+        int timeoutSeconds,
         string[] explicitSources,
         string? configPath,
         string? workingDir,
         string format,
-        bool verbose)
+        bool verbose,
+        CancellationToken cancellationToken)
     {
         var logger = new NuGetLogger(verbose);
         var allPackages = new List<PackageInfo>();
@@ -129,6 +155,9 @@ public static class SearchCommand
 
             // Search each source in parallel using NuGet.Protocol
             var searchFilter = new SearchFilter(prerelease);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+
             var searchTasks = packageSources.Select(async source =>
             {
                 try
@@ -138,7 +167,16 @@ public static class SearchCommand
                         Console.Error.WriteLine($"Searching {source.Name} ({source.Source})...");
                     }
 
-                    return await SearchSourceAsync(source, query, searchFilter, skip, take, logger).ConfigureAwait(false);
+                    return await SearchSourceAsync(source, query, searchFilter, skip, take, exactMatch, logger, timeoutCts.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutCts.IsCancellationRequested)
+                {
+                    Console.Error.WriteLine($"Warning: Timed out searching {source.Name} after {timeoutSeconds} seconds.");
+                    return [];
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -156,9 +194,9 @@ public static class SearchCommand
             // Deduplicate by package ID, keeping the highest version
             var dedupedPackages = allPackages
                 .GroupBy(p => p.Id, StringComparer.OrdinalIgnoreCase)
-                .Select(g => g.OrderByDescending(p => p.Version).First())
+                .Select(group => exactMatch ? MergeExactPackageResults(group) : SelectLatestPackage(group))
                 .OrderBy(p => p.Id)
-                .Take(take)
+                .Take(take > 0 ? take : int.MaxValue)
                 .ToList();
 
             OutputResults(dedupedPackages, format);
@@ -237,10 +275,18 @@ public static class SearchCommand
         SearchFilter filter,
         int skip,
         int take,
-        INuGetLogger logger)
+        bool exactMatch,
+        INuGetLogger logger,
+        CancellationToken cancellationToken)
     {
         var repository = Repository.Factory.GetCoreV3(source);
-        var searchResource = await repository.GetResourceAsync<PackageSearchResource>().ConfigureAwait(false);
+
+        if (exactMatch)
+        {
+            return await SearchExactPackageAsync(repository, source, query, filter, logger, cancellationToken).ConfigureAwait(false);
+        }
+
+        var searchResource = await repository.GetResourceAsync<PackageSearchResource>(cancellationToken).ConfigureAwait(false);
 
         if (searchResource is null)
         {
@@ -253,11 +299,13 @@ public static class SearchCommand
             skip,
             take,
             logger,
-            CancellationToken.None).ConfigureAwait(false);
+            cancellationToken).ConfigureAwait(false);
 
         var packages = new List<PackageInfo>();
         foreach (var result in results)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var versions = await result.GetVersionsAsync().ConfigureAwait(false);
             var allVersions = versions?.Select(v => v.Version.ToString()).ToList() ?? [];
 
@@ -274,6 +322,81 @@ public static class SearchCommand
         }
 
         return packages;
+    }
+
+    private static PackageInfo SelectLatestPackage(IGrouping<string, PackageInfo> packages)
+    {
+        return packages.OrderByDescending(p => NuGetVersion.Parse(p.Version), VersionComparer.VersionReleaseMetadata).First();
+    }
+
+    private static PackageInfo MergeExactPackageResults(IGrouping<string, PackageInfo> packages)
+    {
+        var latestPackage = SelectLatestPackage(packages);
+        var allVersions = packages
+            .SelectMany(package => package.AllVersions.Count == 0 ? [package.Version] : package.AllVersions.Append(package.Version))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(NuGetVersion.Parse, VersionComparer.VersionReleaseMetadata)
+            .ToList();
+
+        return new PackageInfo
+        {
+            Id = latestPackage.Id,
+            Version = allVersions.Last(),
+            Description = latestPackage.Description,
+            Authors = latestPackage.Authors,
+            AllVersions = allVersions,
+            Source = latestPackage.Source,
+            Deprecated = latestPackage.Deprecated
+        };
+    }
+
+    private static async Task<List<PackageInfo>> SearchExactPackageAsync(
+        SourceRepository repository,
+        PackageSource source,
+        string packageId,
+        SearchFilter filter,
+        INuGetLogger logger,
+        CancellationToken cancellationToken)
+    {
+        var metadataResource = await repository.GetResourceAsync<PackageMetadataResource>(cancellationToken).ConfigureAwait(false);
+        if (metadataResource is null)
+        {
+            return [];
+        }
+
+        using var cacheContext = new SourceCacheContext();
+        var metadata = (await metadataResource.GetMetadataAsync(
+            packageId,
+            filter.IncludePrerelease,
+            includeUnlisted: false,
+            cacheContext,
+            logger,
+            cancellationToken).ConfigureAwait(false)).ToList();
+
+        if (metadata.Count == 0)
+        {
+            return [];
+        }
+
+        var latest = metadata.OrderByDescending(m => m.Identity.Version).First();
+        var allVersions = metadata
+            .Select(m => m.Identity.Version.ToString())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return
+        [
+            new PackageInfo
+            {
+                Id = latest.Identity.Id,
+                Version = latest.Identity.Version.ToString(),
+                Description = latest.Description,
+                Authors = latest.Authors,
+                AllVersions = allVersions,
+                Source = source.Source,
+                Deprecated = await latest.GetDeprecationMetadataAsync().ConfigureAwait(false) is not null
+            }
+        ];
     }
 
     private static void OutputResults(List<PackageInfo> packages, string format)

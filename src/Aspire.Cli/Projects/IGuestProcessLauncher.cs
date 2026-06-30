@@ -21,6 +21,9 @@ namespace Aspire.Cli.Projects;
 /// <see cref="ProcessTreeGracefulShutdownService"/>) can target the guest
 /// without also signalling the CLI itself. No-op on Unix where SIGTERM is sufficient.
 /// </param>
+/// <param name="KillOnParentExit">
+/// When <see langword="true"/>, bind the guest to the parent-lifetime safety net on Windows.
+/// </param>
 /// <param name="GracefulShutdownSignaler">
 /// The per-OS "ask this process tree to shut down" primitive (DCP <c>stop-process-tree</c>
 /// on Windows, SIGTERM via <c>ProcessSignaler</c> on Unix). When non-<see langword="null"/>
@@ -36,7 +39,8 @@ namespace Aspire.Cli.Projects;
 internal sealed record GuestLaunchOptions(
     bool IsolateConsoleForGracefulShutdown = false,
     IProcessTreeGracefulShutdownSignaler? GracefulShutdownSignaler = null,
-    IGracefulShutdownWindow? ShutdownService = null);
+    IGracefulShutdownWindow? ShutdownService = null,
+    bool KillOnParentExit = false);
 
 /// <summary>
 /// Strategy for launching a guest language process.

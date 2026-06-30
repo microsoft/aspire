@@ -21,6 +21,13 @@ internal interface INuGetPackageCache
     Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken);
 }
 
+internal static class NuGetPackageSearchDefaults
+{
+    public const int PageSize = 1000;
+    public const int TimeoutSeconds = 30;
+    public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(TimeoutSeconds);
+}
+
 /// <summary>
 /// Packages that have been superseded and should be hidden from integration listings by default.
 /// </summary>
@@ -69,8 +76,6 @@ internal static class PackageIdFilters
 
 internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache memoryCache, AspireCliTelemetry telemetry, IFeatures features) : INuGetPackageCache
 {
-    private const int SearchPageSize = 1000;
-
     public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
     {
         var nuGetConfigHashSuffix = nugetConfigFile is not null ? await ComputeNuGetConfigHashSuffixAsync(nugetConfigFile, cancellationToken) : string.Empty;
@@ -78,7 +83,7 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
 
         var packages = await memoryCache.GetOrCreateAsync(key, async (entry) =>
         {
-            var packages = await GetPackagesAsync(workingDirectory, "Aspire.ProjectTemplates", null, prerelease, nugetConfigFile, true, cancellationToken);
+            var packages = await GetPackageVersionsAsync(workingDirectory, "Aspire.ProjectTemplates", prerelease, nugetConfigFile, true, cancellationToken);
             return packages.Where(p => p.Id.Equals("Aspire.ProjectTemplates", StringComparison.OrdinalIgnoreCase));
 
         }) ?? throw new NuGetPackageCacheException(ErrorStrings.FailedToRetrieveCachedTemplatePackages);
@@ -100,7 +105,7 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
         {
             // Set cache expiration to 1 hour for CLI updates
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1);
-            var packages = await GetPackagesAsync(workingDirectory, "Aspire.Cli", null, prerelease, nugetConfigFile, false, cancellationToken);
+            var packages = await GetPackageVersionsAsync(workingDirectory, "Aspire.Cli", prerelease, nugetConfigFile, false, cancellationToken);
             return packages.Where(p => p.Id.Equals("Aspire.Cli", StringComparison.OrdinalIgnoreCase));
         }) ?? [];
 
@@ -126,18 +131,19 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
         do
         {
             // This search should pick up Aspire.Hosting.* and CommunityToolkit.Aspire.Hosting.*
-            var result = await cliRunner.SearchPackagesAsync(
-                workingDirectory,
-                query,
-                exactMatch: false,
-                prerelease,
-                SearchPageSize,
-                skip,
-                nugetConfigFile,
-                useCache, // Pass through the useCache parameter
-                new ProcessInvocationOptions { SuppressLogging = true },
-                cancellationToken
-                );
+            var result = await SearchPackagesWithTimeoutAsync(
+                operation: ct => cliRunner.SearchPackagesAsync(
+                    workingDirectory,
+                    query,
+                    exactMatch: false,
+                    prerelease,
+                    NuGetPackageSearchDefaults.PageSize,
+                    skip,
+                    nugetConfigFile,
+                    useCache, // Pass through the useCache parameter
+                    new ProcessInvocationOptions { SuppressLogging = true },
+                    ct),
+                cancellationToken);
 
             if (result.ExitCode != 0)
             {
@@ -150,14 +156,14 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
                     collectedPackages.AddRange(result.Packages);
                 }
 
-                if (result.Packages?.Length < SearchPageSize)
+                if (result.Packages?.Length < NuGetPackageSearchDefaults.PageSize)
                 {
                     continueFetching = false;
                 }
                 else
                 {
                     continueFetching = true;
-                    skip += SearchPageSize;
+                    skip += NuGetPackageSearchDefaults.PageSize;
                 }
             }
         } while (continueFetching);
@@ -192,18 +198,19 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
 
         var collectedPackages = new List<NuGetPackage>();
 
-        var result = await cliRunner.SearchPackagesAsync(
-                workingDirectory,
-                exactPackageId,
-                exactMatch: true,
-                prerelease,
-                take: 0,
-                skip: 0, // skip and take parameters are ignored when exactMatch is true
-                nugetConfigFile,
-                useCache, // Pass through the useCache parameter
-                new ProcessInvocationOptions { SuppressLogging = true },
-                cancellationToken
-                );
+        var result = await SearchPackagesWithTimeoutAsync(
+                operation: ct => cliRunner.SearchPackagesAsync(
+                    workingDirectory,
+                    exactPackageId,
+                    exactMatch: true,
+                    prerelease,
+                    take: 0,
+                    skip: 0, // skip and take parameters are ignored when exactMatch is true
+                    nugetConfigFile,
+                    useCache, // Pass through the useCache parameter
+                    new ProcessInvocationOptions { SuppressLogging = true },
+                    ct),
+                cancellationToken);
 
         if (result.ExitCode != 0)
         {
@@ -215,19 +222,24 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
             collectedPackages.AddRange(result.Packages);
         }
 
-        // If no specific filter is specified we use the fallback filter which is useful in most circumstances
-        // other that aspire update which really needs to see all the packages to work effectively.
-        var effectiveFilter = (NuGetPackage p) =>
-        {
-            // Apply deprecated package filter unless the user wants to show deprecated packages
-            if (!features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false))
-            {
-                return !DeprecatedPackages.IsDeprecated(p.Id);
-            }
-            return true;
-        };
+        return collectedPackages;
+    }
 
-        return collectedPackages.Where(effectiveFilter);
+    private static async Task<(int ExitCode, NuGetPackage[]? Packages)> SearchPackagesWithTimeoutAsync(
+        Func<CancellationToken, Task<(int ExitCode, NuGetPackage[]? Packages)>> operation,
+        CancellationToken cancellationToken)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(NuGetPackageSearchDefaults.Timeout);
+
+        try
+        {
+            return await operation(timeoutCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeoutCts.IsCancellationRequested)
+        {
+            throw new NuGetPackageCacheException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.FailedToSearchForPackages, CliExitCodes.FailedToSearchIntegrations));
+        }
     }
 }
 

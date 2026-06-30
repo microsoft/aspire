@@ -19,60 +19,69 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
 
         var shouldPrefetchTemplates = ShouldPrefetchTemplatePackages(command);
         var shouldPrefetchCli = ShouldPrefetchCliPackages(command);
+        var prefetchTasks = new List<Task>();
 
         // Prefetch template packages if needed
         if (shouldPrefetchTemplates)
         {
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    var channels = await packagingService.GetChannelsAsync(stoppingToken);
-
-                    foreach (var channel in channels)
-                    {
-                        // Discard the results here, we just want them in the cache.
-                        _ = await channel.GetTemplatePackagesAsync(executionContext.WorkingDirectory, stoppingToken);
-                    }
-                }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                {
-                    logger.LogTrace("Template package prefetching was cancelled because the CLI is shutting down.");
-                }
-                catch (Exception ex)
-                {
-                    logger.LogDebug(ex, "Non-fatal error while prefetching template packages. This is not critical to the operation of the CLI.");
-                    // This prefetching is best effort. If it fails we log (above) and then the
-                    // background service will exit gracefully. Code paths that depend on this
-                    // data will handle the absence of pre-fetched packages gracefully.
-                }
-            }, stoppingToken);
+            prefetchTasks.Add(Task.Run(() => PrefetchTemplatePackagesAsync(stoppingToken), CancellationToken.None));
         }
 
         // Prefetch CLI packages if needed
         if (shouldPrefetchCli)
         {
-            _ = Task.Run(async () =>
+            prefetchTasks.Add(Task.Run(() => PrefetchCliPackagesAsync(stoppingToken), CancellationToken.None));
+        }
+
+        await Task.WhenAll(prefetchTasks).ConfigureAwait(false);
+    }
+
+    private async Task PrefetchTemplatePackagesAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            var channels = await packagingService.GetChannelsAsync(stoppingToken);
+
+            foreach (var channel in channels)
             {
-                if (features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
-                {
-                    try
-                    {
-                        await cliUpdateNotifier.CheckForCliUpdatesAsync(
-                            workingDirectory: executionContext.WorkingDirectory,
-                            cancellationToken: stoppingToken
-                            );
-                    }
-                    catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-                    {
-                        logger.LogTrace("CLI package prefetching was cancelled because the CLI is shutting down.");
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogDebug(ex, "Non-fatal error while prefetching CLI packages. This is not critical to the operation of the CLI.");
-                    }
-                }
-            }, stoppingToken);
+                // Discard the results here, we just want them in the cache.
+                _ = await channel.GetTemplatePackagesAsync(executionContext.WorkingDirectory, stoppingToken);
+            }
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            logger.LogTrace("Template package prefetching was cancelled because the CLI is shutting down.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Non-fatal error while prefetching template packages. This is not critical to the operation of the CLI.");
+            // This prefetching is best effort. If it fails we log (above) and then the
+            // background service will exit gracefully. Code paths that depend on this
+            // data will handle the absence of pre-fetched packages gracefully.
+        }
+    }
+
+    private async Task PrefetchCliPackagesAsync(CancellationToken stoppingToken)
+    {
+        if (!features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
+        {
+            return;
+        }
+
+        try
+        {
+            await cliUpdateNotifier.CheckForCliUpdatesAsync(
+                workingDirectory: executionContext.WorkingDirectory,
+                cancellationToken: stoppingToken
+                );
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            logger.LogTrace("CLI package prefetching was cancelled because the CLI is shutting down.");
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Non-fatal error while prefetching CLI packages. This is not critical to the operation of the CLI.");
         }
     }
 
@@ -88,9 +97,9 @@ internal sealed class NuGetPackagePrefetcher(ILogger<NuGetPackagePrefetcher> log
             var command = await executionContext.CommandSelected.Task.WaitAsync(combined.Token);
             return command;
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            // Timeout or cancellation occurred - proceed with no command (default behavior)
+            // Timeout occurred - proceed with no command (default behavior)
             return null;
         }
     }

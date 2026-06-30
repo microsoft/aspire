@@ -2171,6 +2171,8 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             executionContext,
             (attempt, options) =>
             {
+                Assert.True(options.KillOnParentExit);
+
                 // Always succeed
                 return (0, "{\"version\":1,\"searchResult\":[{\"sourceName\":\"nuget.org\",\"packages\":[{\"id\":\"Aspire.Hosting.Redis\",\"latestVersion\":\"9.0.0\"}]}]}");
             },
@@ -2246,6 +2248,54 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                 Assert.Equal("Aspire.Hosting.Redis", package.Id);
                 Assert.Equal("13.3.0", package.Version);
             });
+    }
+
+    [Fact]
+    public async Task SearchPackagesAsync_WithCacheEnabled_ProtectsNuGetConfigProbeWithKillOnParentExit()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var observedCommands = new List<string>();
+        var options = new ProcessInvocationOptions { SuppressLogging = true };
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (args, _, _, invocationOptions) =>
+            {
+                Assert.True(invocationOptions.KillOnParentExit);
+
+                observedCommands.Add(string.Join(" ", args));
+                if (args is ["package", "search", ..])
+                {
+                    invocationOptions.StandardOutputCallback?.Invoke(
+                        """
+                        {"version":1,"searchResult":[{"sourceName":"nuget.org","packages":[{"id":"Aspire.Cli","version":"13.4.0"}]}]}
+                        """);
+                }
+            },
+            0);
+
+        var result = await runner.SearchPackagesAsync(
+            workspace.WorkspaceRoot,
+            "Aspire.Cli",
+            exactMatch: true,
+            prerelease: true,
+            take: 0,
+            skip: 0,
+            nugetConfigFile: null,
+            useCache: true,
+            options,
+            CancellationToken.None);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Collection(
+            observedCommands,
+            command => Assert.Equal("nuget config paths", command),
+            command => Assert.Equal("package search Aspire.Cli --format json --exact-match --prerelease", command));
     }
 
     [Fact]
