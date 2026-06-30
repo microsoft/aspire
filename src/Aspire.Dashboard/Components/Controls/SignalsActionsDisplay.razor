@@ -4,8 +4,9 @@
 @if (ViewportInformation.IsDesktop)
 {
     <PauseIncomingDataSwitch IsPaused="@IsPaused" IsPausedChanged="@OnPausedChanged"/>
-    <ClearSignalsButton SelectedResource="@SelectedResource"
-                        HandleClearSignal="@HandleClearSignal"/>
+    <ManageSignalsButton SelectedResource="@SelectedResource"
+                        HandleClearSignal="@HandleClearSignal"
+                        HandleDownloadLogs="@HandleDownloadLogs"/>
 }
 else
 {
@@ -13,7 +14,8 @@ else
 
     <FluentStack Orientation="Orientation.Horizontal">
         <PauseIncomingDataSwitch IsPaused="@IsPaused" IsPausedChanged="@OnPausedChanged" />
-        <ClearSignalsButton SelectedResource="@SelectedResource"
-                            HandleClearSignal="@HandleClearSignal"/>
+        <ManageSignalsButton SelectedResource="@SelectedResource"
+                            HandleClearSignal="@HandleClearSignal"
+                            HandleDownloadLogs="@HandleDownloadLogs"/>
     </FluentStack>
 }

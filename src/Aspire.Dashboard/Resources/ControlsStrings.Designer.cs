@@ -214,7 +214,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Remove all telemetry.
+        ///   Looks up a localized string similar to Clear all.
         /// </summary>
         public static string ClearAllResources {
             get {
@@ -223,7 +223,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Remove telemetry for resource.
+        ///   Looks up a localized string similar to Clear for resource.
         /// </summary>
         public static string ClearPendingSelectedResource {
             get {
@@ -232,7 +232,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Remove telemetry for {0}.
+        ///   Looks up a localized string similar to Clear for {0}.
         /// </summary>
         public static string ClearSelectedResource {
             get {
@@ -241,7 +241,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Remove data.
+        ///   Looks up a localized string similar to Manage logs.
         /// </summary>
         public static string ClearSignalsButtonTitle {
             get {

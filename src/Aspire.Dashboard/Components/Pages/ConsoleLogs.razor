@@ -30,6 +30,7 @@
             @if (!_selectedResourceHasTerminal)
             {
                 <SignalsActionsDisplay HandleClearSignal="@ClearConsoleLogs"
+                                      HandleDownloadLogs="@DownloadLogsAsync"
                                       IsPaused="@PauseManager.ConsoleLogsPaused"
                                       OnPausedChanged="@OnPausedChanged"
                                       SelectedResource="@PageViewModel.SelectedResource" />

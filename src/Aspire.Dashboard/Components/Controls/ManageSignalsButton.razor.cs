@@ -12,10 +12,11 @@ using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Controls;
 
-public partial class ClearSignalsButton : ComponentBase
+public partial class ManageSignalsButton : ComponentBase
 {
-    private static readonly Icon s_clearSelectedResourceIcon = new Icons.Regular.Size16.SelectAllOn();
-    private static readonly Icon s_clearAllResourcesIcon = new Icons.Regular.Size16.Stack();
+    private static readonly Icon s_downloadLogsIcon = new Icons.Regular.Size16.ArrowDownload();
+    private static readonly Icon s_clearSelectedResourceIcon = new Icons.Regular.Size16.Delete();
+    private static readonly Icon s_clearAllResourcesIcon = new Icons.Regular.Size20.DeleteLines();
 
     [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
@@ -26,11 +27,30 @@ public partial class ClearSignalsButton : ComponentBase
     [Parameter]
     public required Func<ResourceKey?, Task> HandleClearSignal { get; set; }
 
+    [Parameter]
+    public Func<Task>? HandleDownloadLogs { get; set; }
+
     private readonly List<MenuButtonItem> _clearMenuItems = new();
 
     protected override void OnParametersSet()
     {
         _clearMenuItems.Clear();
+
+        if (HandleDownloadLogs is not null)
+        {
+            _clearMenuItems.Add(new()
+            {
+                Id = "clear-menu-download",
+                Icon = s_downloadLogsIcon,
+                OnClick = HandleDownloadLogs,
+                Text = Dashboard.Resources.ConsoleLogs.DownloadLogs,
+            });
+
+            _clearMenuItems.Add(new()
+            {
+                IsDivider = true
+            });
+        }
 
         _clearMenuItems.Add(new()
         {
