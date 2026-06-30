@@ -660,6 +660,15 @@ public class MauiBuildQueueTests
             State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
         });
 
+        await Task.Delay(100);
+        Assert.False(releaseTask.IsCompleted, "Running is published when the launch process starts, before MAUI/MSBuild launch work is complete.");
+        Assert.Equal(0, annotation.BuildSemaphore.CurrentCount);
+
+        await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.Finished, KnownResourceStateStyles.Success)
+        });
+
         await releaseTask.WaitAsync(TimeSpan.FromSeconds(5));
         Assert.Equal(1, annotation.BuildSemaphore.CurrentCount);
     }

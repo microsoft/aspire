@@ -204,7 +204,7 @@ When multiple MAUI platform targets reference the same project (e.g., Android, i
 - **Cancel support**: Clicking Stop on a Queued resource removes it from the queue. Clicking Stop on a Building resource kills the `dotnet build` process.
 - **Restart after cancel**: You can start a cancelled resource again — it re-enters the queue.
 - **Build timeout**: Builds that take longer than 10 minutes are automatically cancelled to prevent a hung build from blocking the queue.
-- **DCP launch handoff**: After the serialized build completes for the AppHost configuration and platform MSBuild properties, DCP launches the already-built app with build and restore disabled so the next queued platform can build without overlapping shared output writes.
+- **DCP launch handoff**: After the serialized build completes for the AppHost configuration and platform MSBuild properties, DCP invokes the MAUI Run target with restore disabled. The queue lock is held until that launch process exits so the next queued platform cannot overlap shared output writes.
 
 ### Architecture
 
@@ -213,7 +213,7 @@ The build queue is implemented via:
 - **`MauiBuildQueueAnnotation`**: Added to the parent `MauiProjectResource`, holds a `SemaphoreSlim(1,1)` and per-resource cancellation tokens
 - **`MauiBuildQueueEventSubscriber`**: Subscribes to `BeforeResourceStartedEvent`, manages the queue, runs `dotnet build` as a subprocess, and replaces the default Stop command with a queue-aware version
 - **`MauiBuildInfoAnnotation`**: Attached to each platform resource with the project path, working directory, target framework, configuration, and platform MSBuild properties used for the build subprocess
-- **`ProjectLaunchArgsOverrideAnnotation`**: A core `Aspire.Hosting` annotation that overrides DCP's default `dotnet run` args, enabling `dotnet build --no-restore /t:Run -p:NoBuild=true` for MAUI projects after the serialized pre-build
+- **`ProjectLaunchArgsOverrideAnnotation`**: A core `Aspire.Hosting` annotation that overrides DCP's default `dotnet run` args, enabling `dotnet build --no-restore /t:Run` for MAUI projects after the serialized pre-build
 
 ## Requirements
 

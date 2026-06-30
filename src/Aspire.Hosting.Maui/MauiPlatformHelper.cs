@@ -89,17 +89,18 @@ internal static class MauiPlatformHelper
         // Check if the project has the platform TFM and get the actual TFM value
         var platformTfm = ProjectFileReader.GetPlatformTargetFramework(projectPath, platformName);
 
-        // Override the default DCP launch command from 'dotnet run' to 'dotnet build --no-restore /t:Run -p:NoBuild=true'.
+        // Override the default DCP launch command from 'dotnet run' to 'dotnet build --no-restore /t:Run'.
         // The Build target is run separately by MauiBuildQueueEventSubscriber before DCP starts
         // the process, giving reliable exit-code-based build completion detection and allowing
-        // the "Building" state to persist in the dashboard. DCP only needs to launch the
-        // already-built app, so disable restore/build work in the Run target to avoid concurrent
-        // MSBuild output writes after the queue lock is released.
-        resourceBuilder.WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["build", "--no-restore", "/t:Run", "-p:NoBuild=true"], leadingResourceArgumentToRemove: "run"));
+        // the "Building" state to persist in the dashboard. DCP still invokes the MAUI Run target,
+        // so disable restore work there to avoid repeating package resolution. Do not set
+        // NoBuild=true here: the .NET SDK rejects that property when the Build target is invoked
+        // as part of the MAUI Run target graph.
+        resourceBuilder.WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["build", "--no-restore", "/t:Run"], leadingResourceArgumentToRemove: "run"));
 
         // Store build parameters so the event subscriber can run 'dotnet build' before launch.
         // The annotation captures the same target framework, configuration, and MSBuild properties
-        // that DCP later passes to the no-build Run target.
+        // that DCP later passes to the Run target.
         var workingDir = Path.GetDirectoryName(projectPath)
             ?? throw new InvalidOperationException($"Unable to determine directory from project path: {projectPath}");
         var configuration = resourceBuilder.ApplicationBuilder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
