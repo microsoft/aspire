@@ -1,5 +1,5 @@
-# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"1a23915688ef8c2979e4fdde9e7663c18c79a30be5aad0ae7fe9bf97aa74f81d","body_hash":"8bdbe65e86b1fee4dfa2bf4c69983744a281116d608a0fa7ca5bd939fb3fd6b2","compiler_version":"v0.79.8","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.60"}}
-# gh-aw-manifest: {"version":1,"secrets":["GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/cache/restore","sha":"27d5ce7f107fe9357f9df03efb73ab90386fccae","version":"v5.0.5"},{"repo":"actions/cache/save","sha":"27d5ce7f107fe9357f9df03efb73ab90386fccae","version":"v5.0.5"},{"repo":"actions/checkout","sha":"34e114876b0b11c390a56381ad16ebd13914f8d5","version":"v4"},{"repo":"actions/checkout","sha":"df4cb1c069e1874edd31b4311f1884172cec0e10","version":"v6.0.3"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/download-artifact","sha":"d3f86a106a0bac45b974a628896c90dbdf5c8093","version":"v4"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e","version":"v6.4.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"actions/upload-artifact","sha":"ea165f8d65b6e75b540449e92b4886f43607fa02","version":"v4"},{"repo":"github/gh-aw-actions/setup","sha":"c0338fef4749d08c21f8f975fb0e37efa17dda47","version":"v0.79.8"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.27.2","digest":"sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.27.2@sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.2","digest":"sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.2@sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.27.2","digest":"sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.27.2@sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.3.25","digest":"sha256:c10331ad17668ef89f38f5e356678788a40b0cd5fef96e8f92e1d9c1de47cbaa","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.3.25@sha256:c10331ad17668ef89f38f5e356678788a40b0cd5fef96e8f92e1d9c1de47cbaa"},{"image":"ghcr.io/github/github-mcp-server:v1.1.2","digest":"sha256:30197479d8036c7811892bc07e06f9a05c9ef3cdd79bc59f256d50647f95788c","pinned_image":"ghcr.io/github/github-mcp-server:v1.1.2@sha256:30197479d8036c7811892bc07e06f9a05c9ef3cdd79bc59f256d50647f95788c"}]}
+# gh-aw-metadata: {"schema_version":"v4","frontmatter_hash":"9741a179ff56cfb2a1b88db0e2ea7f22ba540c80def5d40bb76916ec368fac99","body_hash":"c4893b121adb5574ae842e03c4af16d0323bf58c1658308674b115c6e1697cba","compiler_version":"v0.79.8","strict":true,"agent_id":"copilot","engine_versions":{"copilot":"1.0.60"}}
+# gh-aw-manifest: {"version":1,"secrets":["GH_AW_GITHUB_MCP_SERVER_TOKEN","GH_AW_GITHUB_TOKEN","GITHUB_TOKEN"],"actions":[{"repo":"actions/checkout","sha":"34e114876b0b11c390a56381ad16ebd13914f8d5","version":"v4"},{"repo":"actions/checkout","sha":"df4cb1c069e1874edd31b4311f1884172cec0e10","version":"v6.0.3"},{"repo":"actions/download-artifact","sha":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","version":"v8.0.1"},{"repo":"actions/download-artifact","sha":"d3f86a106a0bac45b974a628896c90dbdf5c8093","version":"v4"},{"repo":"actions/github-script","sha":"373c709c69115d41ff229c7e5df9f8788daa9553","version":"v9"},{"repo":"actions/github-script","sha":"3a2844b7e9c422d3c10d287c895573f7108da1b3","version":"v9.0.0"},{"repo":"actions/setup-node","sha":"48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e","version":"v6.4.0"},{"repo":"actions/upload-artifact","sha":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","version":"v7.0.1"},{"repo":"actions/upload-artifact","sha":"ea165f8d65b6e75b540449e92b4886f43607fa02","version":"v4"},{"repo":"github/gh-aw-actions/setup","sha":"c0338fef4749d08c21f8f975fb0e37efa17dda47","version":"v0.79.8"}],"containers":[{"image":"ghcr.io/github/gh-aw-firewall/agent:0.27.2","digest":"sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6","pinned_image":"ghcr.io/github/gh-aw-firewall/agent:0.27.2@sha256:f88e5b17b6b7a600117bc121114d6ce2155c88c983c0c939c5df884f730fa1d6"},{"image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.2","digest":"sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4","pinned_image":"ghcr.io/github/gh-aw-firewall/api-proxy:0.27.2@sha256:ee39841d980878ebbb87592903b06d31a1af500c71525c9616f7e8e2a27041a4"},{"image":"ghcr.io/github/gh-aw-firewall/squid:0.27.2","digest":"sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591","pinned_image":"ghcr.io/github/gh-aw-firewall/squid:0.27.2@sha256:2e3a717e5f19a654cd9a2263beb52012b56bcb68562ec5ae2e42f9d156b49591"},{"image":"ghcr.io/github/gh-aw-mcpg:v0.3.25","digest":"sha256:c10331ad17668ef89f38f5e356678788a40b0cd5fef96e8f92e1d9c1de47cbaa","pinned_image":"ghcr.io/github/gh-aw-mcpg:v0.3.25@sha256:c10331ad17668ef89f38f5e356678788a40b0cd5fef96e8f92e1d9c1de47cbaa"},{"image":"ghcr.io/github/github-mcp-server:v1.1.2","digest":"sha256:30197479d8036c7811892bc07e06f9a05c9ef3cdd79bc59f256d50647f95788c","pinned_image":"ghcr.io/github/github-mcp-server:v1.1.2@sha256:30197479d8036c7811892bc07e06f9a05c9ef3cdd79bc59f256d50647f95788c"}]}
 # This file was automatically generated by gh-aw (v0.79.8). DO NOT EDIT. To debug this workflow, load the skill at https://github.com/github/gh-aw/blob/main/debug.md
 #
 #    ___                   _   _      
@@ -48,8 +48,6 @@
 #   - GITHUB_TOKEN
 #
 # Custom actions used:
-#   - actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-#   - actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
 #   - actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 #   - actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 #   - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -232,21 +230,20 @@ jobs:
         run: |
           bash "${RUNNER_TEMP}/gh-aw/actions/create_prompt_first.sh"
           {
-          cat << 'GH_AW_PROMPT_598a190c447a7622_EOF'
+          cat << 'GH_AW_PROMPT_2b0d782f4c030037_EOF'
           <system>
-          GH_AW_PROMPT_598a190c447a7622_EOF
+          GH_AW_PROMPT_2b0d782f4c030037_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/xpia.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/temp_folder_prompt.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/markdown.md"
-          cat "${RUNNER_TEMP}/gh-aw/prompts/cache_memory_prompt.md"
           cat "${RUNNER_TEMP}/gh-aw/prompts/safe_outputs_prompt.md"
-          cat << 'GH_AW_PROMPT_598a190c447a7622_EOF'
+          cat << 'GH_AW_PROMPT_2b0d782f4c030037_EOF'
           <safe-output-tools>
           Tools: add_comment, missing_tool, missing_data, noop, rerun_failed_jobs
           </safe-output-tools>
-          GH_AW_PROMPT_598a190c447a7622_EOF
+          GH_AW_PROMPT_2b0d782f4c030037_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/mcp_cli_tools_prompt.md"
-          cat << 'GH_AW_PROMPT_598a190c447a7622_EOF'
+          cat << 'GH_AW_PROMPT_2b0d782f4c030037_EOF'
           <github-context>
           The following GitHub context information is available for this workflow:
           {{#if github.actor}}
@@ -275,12 +272,12 @@ jobs:
           {{/if}}
           </github-context>
           
-          GH_AW_PROMPT_598a190c447a7622_EOF
+          GH_AW_PROMPT_2b0d782f4c030037_EOF
           cat "${RUNNER_TEMP}/gh-aw/prompts/github_mcp_tools_with_safeoutputs_prompt.md"
-          cat << 'GH_AW_PROMPT_598a190c447a7622_EOF'
+          cat << 'GH_AW_PROMPT_2b0d782f4c030037_EOF'
           </system>
           {{#runtime-import .github/workflows/analyze-ci-failure.md}}
-          GH_AW_PROMPT_598a190c447a7622_EOF
+          GH_AW_PROMPT_2b0d782f4c030037_EOF
           } > "$GH_AW_PROMPT"
       - name: Interpolate variables and render templates
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -297,9 +294,6 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GH_AW_PROMPT: /tmp/gh-aw/aw-prompts/prompt.txt
-          GH_AW_ALLOWED_EXTENSIONS: ''
-          GH_AW_CACHE_DESCRIPTION: ''
-          GH_AW_CACHE_DIR: '/tmp/gh-aw/cache-memory/'
           GH_AW_EXPR_1A3A194A: ${{ github.event.discussion.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'discussion' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
           GH_AW_EXPR_463A214A: ${{ github.event.pull_request.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'pull_request' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
           GH_AW_EXPR_802A9F6A: ${{ github.event.issue.number || (fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_type == 'issue' && fromJSON(github.event.inputs.aw_context || github.event.client_payload.aw_context || '{}').item_number) }}
@@ -320,9 +314,6 @@ jobs:
             return await substitutePlaceholders({
               file: process.env.GH_AW_PROMPT,
               substitutions: {
-                GH_AW_ALLOWED_EXTENSIONS: process.env.GH_AW_ALLOWED_EXTENSIONS,
-                GH_AW_CACHE_DESCRIPTION: process.env.GH_AW_CACHE_DESCRIPTION,
-                GH_AW_CACHE_DIR: process.env.GH_AW_CACHE_DIR,
                 GH_AW_EXPR_1A3A194A: process.env.GH_AW_EXPR_1A3A194A,
                 GH_AW_EXPR_463A214A: process.env.GH_AW_EXPR_463A214A,
                 GH_AW_EXPR_802A9F6A: process.env.GH_AW_EXPR_802A9F6A,
@@ -437,23 +428,8 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: ci-failure-data
-          path: .ci-failure-data/
+          path: ci-failure-data/
 
-      # Cache memory file share configuration from frontmatter processed below
-      - name: Create cache-memory directory
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/create_cache_memory_dir.sh"
-      - name: Restore cache-memory file share data
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          key: memory-approved-6f25a3c0-${{ env.GH_AW_WORKFLOW_ID_SANITIZED }}-${{ github.run_id }}
-          path: /tmp/gh-aw/cache-memory
-          restore-keys: |
-            memory-approved-6f25a3c0-${{ env.GH_AW_WORKFLOW_ID_SANITIZED }}-
-      - name: Setup cache-memory git repository
-        env:
-          GH_AW_CACHE_DIR: /tmp/gh-aw/cache-memory
-          GH_AW_MIN_INTEGRITY: approved
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/setup_cache_memory_git.sh"
       - name: Configure Git credentials
         env:
           REPO_NAME: ${{ github.repository }}
@@ -487,13 +463,16 @@ jobs:
           GH_HOST: github.com
       - name: Install AWF binary
         run: bash "${RUNNER_TEMP}/gh-aw/actions/install_awf_binary.sh" v0.27.2
-      - name: Parse integrity filter lists
-        id: parse-guard-vars
+      - name: Determine automatic lockdown mode for GitHub MCP Server
+        id: determine-automatic-lockdown
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         env:
-          GH_AW_BLOCKED_USERS_VAR: ${{ vars.GH_AW_GITHUB_BLOCKED_USERS || '' }}
-          GH_AW_TRUSTED_USERS_VAR: ${{ vars.GH_AW_GITHUB_TRUSTED_USERS || '' }}
-          GH_AW_APPROVAL_LABELS_VAR: ${{ vars.GH_AW_GITHUB_APPROVAL_LABELS || '' }}
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/parse_guard_list.sh"
+          GH_AW_GITHUB_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN }}
+          GH_AW_GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN }}
+        with:
+          script: |
+            const determineAutomaticLockdown = require('${{ runner.temp }}/gh-aw/actions/determine_automatic_lockdown.cjs');
+            await determineAutomaticLockdown(github, context, core);
       - name: Download activation artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -713,6 +692,8 @@ jobs:
           GH_AW_SAFE_OUTPUTS: ${{ steps.set-runtime-paths.outputs.GH_AW_SAFE_OUTPUTS }}
           GH_AW_SAFE_OUTPUTS_API_KEY: ${{ steps.safe-outputs-start.outputs.api_key }}
           GH_AW_SAFE_OUTPUTS_PORT: ${{ steps.safe-outputs-start.outputs.port }}
+          GITHUB_MCP_GUARD_MIN_INTEGRITY: ${{ steps.determine-automatic-lockdown.outputs.min_integrity }}
+          GITHUB_MCP_GUARD_REPOS: ${{ steps.determine-automatic-lockdown.outputs.repos }}
           GITHUB_MCP_SERVER_TOKEN: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -eo pipefail
@@ -743,7 +724,7 @@ jobs:
           
           mkdir -p "$HOME/.copilot"
           GH_AW_NODE=$(which node 2>/dev/null || command -v node 2>/dev/null || echo node)
-          cat << GH_AW_MCP_CONFIG_e8df3a946c8c6465_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
+          cat << GH_AW_MCP_CONFIG_c6fee03c27b97257_EOF | "$GH_AW_NODE" "${RUNNER_TEMP}/gh-aw/actions/start_mcp_gateway.cjs"
           {
             "mcpServers": {
               "github": {
@@ -753,15 +734,12 @@ jobs:
                   "GITHUB_HOST": "\${GITHUB_SERVER_URL}",
                   "GITHUB_PERSONAL_ACCESS_TOKEN": "\${GITHUB_MCP_SERVER_TOKEN}",
                   "GITHUB_READ_ONLY": "1",
-                  "GITHUB_TOOLSETS": "repos,issues,pull_requests"
+                  "GITHUB_TOOLSETS": "context,repos,issues,pull_requests"
                 },
                 "guard-policies": {
                   "allow-only": {
-                    "approval-labels": ${{ steps.parse-guard-vars.outputs.approval_labels }},
-                    "blocked-users": ${{ steps.parse-guard-vars.outputs.blocked_users }},
-                    "min-integrity": "approved",
-                    "repos": "all",
-                    "trusted-users": ${{ steps.parse-guard-vars.outputs.trusted_users }}
+                    "min-integrity": "$GITHUB_MCP_GUARD_MIN_INTEGRITY",
+                    "repos": "$GITHUB_MCP_GUARD_REPOS"
                   }
                 }
               },
@@ -787,7 +765,7 @@ jobs:
               "payloadDir": "${MCP_GATEWAY_PAYLOAD_DIR}"
             }
           }
-          GH_AW_MCP_CONFIG_e8df3a946c8c6465_EOF
+          GH_AW_MCP_CONFIG_c6fee03c27b97257_EOF
       - name: Mount MCP servers as CLIs
         id: mount-mcp-clis
         continue-on-error: true
@@ -845,7 +823,7 @@ jobs:
           fi
           # shellcheck disable=SC1003
           sudo -E awf --config "${RUNNER_TEMP}/gh-aw/awf-config.json" --container-workdir "${GITHUB_WORKSPACE}" --mount "${RUNNER_TEMP}/gh-aw:${RUNNER_TEMP}/gh-aw:ro" --mount "${RUNNER_TEMP}/gh-aw:/host${RUNNER_TEMP}/gh-aw:ro" ${GH_AW_TOOL_CACHE_MOUNT:+--mount "$GH_AW_TOOL_CACHE_MOUNT"} ${GH_AW_DOCKER_HOST_PATH_PREFIX_ARGS} --env-all --exclude-env COPILOT_GITHUB_TOKEN --exclude-env GITHUB_MCP_SERVER_TOKEN --exclude-env MCP_GATEWAY_API_KEY --log-level info --proxy-logs-dir /tmp/gh-aw/sandbox/firewall/logs --audit-dir /tmp/gh-aw/sandbox/firewall/audit --enable-host-access --allow-host-ports 80,443,8080 --skip-pull \
-            -- /bin/bash -c 'set +o histexpand; export PATH="${RUNNER_TEMP}/gh-aw/mcp-cli/bin:$PATH" && GH_AW_TOOL_CACHE="${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}"; export PATH="$(find "$GH_AW_TOOL_CACHE" /opt/hostedtoolcache /home/runner/work/_tool -maxdepth 5 -type d -name bin 2>/dev/null | tr '\''\n'\'' '\'':'\'')$PATH"; [ -n "$GOROOT" ] && export PATH="$GOROOT/bin:$PATH" || true && GH_AW_NODE_EXEC="${GH_AW_NODE_BIN:-}"; if [ -z "$GH_AW_NODE_EXEC" ] || [ ! -x "$GH_AW_NODE_EXEC" ]; then GH_AW_NODE_EXEC="$(command -v node 2>/dev/null || true)"; fi; if [ -z "$GH_AW_NODE_EXEC" ]; then echo "node runtime missing on this runner — check runtimes.node in workflow YAML" >&2; exit 127; fi; GH_AW_NPM_GLOBAL_ROOT="$(npm root -g 2>/dev/null || true)"; if [ -n "$GH_AW_NPM_GLOBAL_ROOT" ]; then export NODE_PATH="${GH_AW_NPM_GLOBAL_ROOT}${NODE_PATH:+:${NODE_PATH}}"; fi; "$GH_AW_NODE_EXEC" ${RUNNER_TEMP}/gh-aw/actions/copilot_harness.cjs /usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --disable-builtin-mcps --no-ask-user --allow-all-tools --add-dir /tmp/gh-aw/cache-memory/ --allow-all-paths --add-dir "${GITHUB_WORKSPACE}" --prompt-file /tmp/gh-aw/aw-prompts/prompt.txt' 2>&1 | tee -a /tmp/gh-aw/agent-stdio.log
+            -- /bin/bash -c 'set +o histexpand; export PATH="${RUNNER_TEMP}/gh-aw/mcp-cli/bin:$PATH" && GH_AW_TOOL_CACHE="${RUNNER_TOOL_CACHE:-/opt/hostedtoolcache}"; export PATH="$(find "$GH_AW_TOOL_CACHE" /opt/hostedtoolcache /home/runner/work/_tool -maxdepth 5 -type d -name bin 2>/dev/null | tr '\''\n'\'' '\'':'\'')$PATH"; [ -n "$GOROOT" ] && export PATH="$GOROOT/bin:$PATH" || true && GH_AW_NODE_EXEC="${GH_AW_NODE_BIN:-}"; if [ -z "$GH_AW_NODE_EXEC" ] || [ ! -x "$GH_AW_NODE_EXEC" ]; then GH_AW_NODE_EXEC="$(command -v node 2>/dev/null || true)"; fi; if [ -z "$GH_AW_NODE_EXEC" ]; then echo "node runtime missing on this runner — check runtimes.node in workflow YAML" >&2; exit 127; fi; GH_AW_NPM_GLOBAL_ROOT="$(npm root -g 2>/dev/null || true)"; if [ -n "$GH_AW_NPM_GLOBAL_ROOT" ]; then export NODE_PATH="${GH_AW_NPM_GLOBAL_ROOT}${NODE_PATH:+:${NODE_PATH}}"; fi; "$GH_AW_NODE_EXEC" ${RUNNER_TEMP}/gh-aw/actions/copilot_harness.cjs /usr/local/bin/copilot --add-dir /tmp/gh-aw/ --log-level all --log-dir /tmp/gh-aw/sandbox/agent/logs/ --disable-builtin-mcps --no-ask-user --allow-all-tools --allow-all-paths --add-dir "${GITHUB_WORKSPACE}" --prompt-file /tmp/gh-aw/aw-prompts/prompt.txt' 2>&1 | tee -a /tmp/gh-aw/agent-stdio.log
         env:
           AWF_REFLECT_ENABLED: 1
           COPILOT_AGENT_RUNNER_TYPE: STANDALONE
@@ -1005,24 +983,6 @@ jobs:
           if [ ! -f /tmp/gh-aw/agent_output.json ]; then
             echo '{"items":[]}' > /tmp/gh-aw/agent_output.json
           fi
-      - name: Commit cache-memory changes
-        if: always()
-        env:
-          GH_AW_CACHE_DIR: /tmp/gh-aw/cache-memory
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/commit_cache_memory_git.sh"
-      - name: Check cache-memory git integrity
-        if: always()
-        continue-on-error: true
-        env:
-          GH_AW_CACHE_DIR: /tmp/gh-aw/cache-memory
-        run: bash "${RUNNER_TEMP}/gh-aw/actions/check_cache_memory_git_integrity.sh"
-      - name: Upload cache-memory data as artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
-        with:
-          name: cache-memory
-          include-hidden-files: true
-          path: /tmp/gh-aw/cache-memory
       - name: Upload agent artifacts
         if: always()
         continue-on-error: true
@@ -1034,8 +994,6 @@ jobs:
             /tmp/gh-aw/sandbox/agent/logs/
             /tmp/gh-aw/redacted-urls.log
             /tmp/gh-aw/mcp-logs/
-            /tmp/gh-aw/proxy-logs/
-            !/tmp/gh-aw/proxy-logs/proxy-tls/
             /tmp/gh-aw/agent_usage.json
             /tmp/gh-aw/agent-stdio.log
             /tmp/gh-aw/pre-agent-audit.txt
@@ -1077,7 +1035,6 @@ jobs:
       run_attempt: ${{ steps.collect.outputs.run_attempt }}
       run_id: ${{ steps.collect.outputs.run_id }}
       run_url: ${{ steps.collect.outputs.run_url }}
-      use_cache: ${{ steps.collect.outputs.use_cache }}
     steps:
       - name: Configure GH_HOST for enterprise compatibility
         id: ghes-host-config
@@ -1099,7 +1056,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          mkdir -p .ci-failure-data
+          mkdir -p ci-failure-data
 
           # Resolve the run ID
           if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
@@ -1112,21 +1069,29 @@ jobs:
           echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
 
           # Fetch the workflow run metadata
-          gh api "repos/${REPO}/actions/runs/${RUN_ID}" > .ci-failure-data/run.json
+          gh api "repos/${REPO}/actions/runs/${RUN_ID}" > ci-failure-data/run.json
 
-          RUN_ATTEMPT=$(jq -r '.run_attempt // 1' .ci-failure-data/run.json)
-          HEAD_SHA=$(jq -r '.head_sha // ""' .ci-failure-data/run.json)
-          HEAD_BRANCH=$(jq -r '.head_branch // ""' .ci-failure-data/run.json)
-          RUN_URL=$(jq -r '.html_url // ""' .ci-failure-data/run.json)
+          RUN_ATTEMPT=$(jq -r '.run_attempt // 1' ci-failure-data/run.json)
+          HEAD_SHA=$(jq -r '.head_sha // ""' ci-failure-data/run.json)
+          HEAD_BRANCH=$(jq -r '.head_branch // ""' ci-failure-data/run.json)
+          RUN_URL=$(jq -r '.html_url // ""' ci-failure-data/run.json)
+          CONCLUSION=$(jq -r '.conclusion // ""' ci-failure-data/run.json)
           echo "run_attempt=${RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
           echo "head_sha=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
           echo "run_url=${RUN_URL}" >> "$GITHUB_OUTPUT"
 
+          # Skip analysis if the run succeeded (e.g. manual dispatch on a passing run)
+          if [ "${CONCLUSION}" = "success" ]; then
+            echo "Run concluded with success. Nothing to analyze."
+            echo "has_work=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           # Find the associated PR number
-          PR_NUMBERS=$(jq -r '[.pull_requests[]?.number] | join(",")' .ci-failure-data/run.json)
+          PR_NUMBERS=$(jq -r '[.pull_requests[]?.number] | join(",")' ci-failure-data/run.json)
           if [ -z "${PR_NUMBERS}" ]; then
             # Fallback: search for PRs by head branch (requires owner:branch format)
-            HEAD_OWNER=$(jq -r '.head_repository.owner.login // ""' .ci-failure-data/run.json)
+            HEAD_OWNER=$(jq -r '.head_repository.owner.login // ""' ci-failure-data/run.json)
             if [ -n "${HEAD_OWNER}" ] && [ -n "${HEAD_BRANCH}" ]; then
               PR_NUMBERS=$(gh api "repos/${REPO}/pulls?state=open&head=${HEAD_OWNER}:${HEAD_BRANCH}" \
                 --jq '[.[].number] | join(",")' 2>/dev/null || echo "")
@@ -1140,25 +1105,26 @@ jobs:
             exit 0
           fi
 
-          # On retry attempts (run_attempt > 1), skip expensive data collection.
-          # The agent will use the cached classification from the first attempt.
-          if [ "${RUN_ATTEMPT}" -gt 1 ]; then
-            echo "Run attempt ${RUN_ATTEMPT} > 1. Skipping log collection; agent will use cached analysis."
-            echo "use_cache=true" >> "$GITHUB_OUTPUT"
-            echo "has_work=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "use_cache=false" >> "$GITHUB_OUTPUT"
-
-          # Fetch all jobs for this run attempt
+          # Fetch all jobs for this run attempt.
+          # Use --jq '.jobs[]' to emit individual job objects (handles pagination
+          # correctly) then jq -s collects them into a single JSON array.
           gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}/jobs" \
-            --jq '.jobs' > .ci-failure-data/all-jobs.json
+            --jq '.jobs[]' | jq -s '.' > ci-failure-data/all-jobs.json
 
-          # Extract failed jobs
-          jq '[.[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")]' \
-            .ci-failure-data/all-jobs.json > .ci-failure-data/failed-jobs.json
+          # Extract failed jobs, excluding "gate" jobs that just check dependency status.
+          # Gate jobs (e.g. "Final Results", "Final Test Results") only echo "dependent jobs
+          # failed" and provide zero diagnostic value — they just inflate the logs.
+          jq '[.[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")
+               | select(
+                   (.steps // [] | map(select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")) | length) > 0
+                   and (
+                     (.steps // [] | map(select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")) | .[0].name)
+                     | test("^(Fail if|Check ).*(depend|failed)"; "i") | not
+                   )
+                 )]' \
+            ci-failure-data/all-jobs.json > ci-failure-data/failed-jobs.json
 
-          FAILED_COUNT=$(jq 'length' .ci-failure-data/failed-jobs.json)
+          FAILED_COUNT=$(jq 'length' ci-failure-data/failed-jobs.json)
           echo "Failed jobs: ${FAILED_COUNT}"
 
           if [ "${FAILED_COUNT}" -eq 0 ]; then
@@ -1169,27 +1135,52 @@ jobs:
 
           echo "has_work=true" >> "$GITHUB_OUTPUT"
 
-          # Fetch logs for each failed job (last 64KB of each, enough for analysis)
-          jq -r '.[].id' .ci-failure-data/failed-jobs.json | while read -r JOB_ID; do
-            JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" .ci-failure-data/failed-jobs.json)
+          # Fetch logs for each failed job and extract only error-relevant lines.
+          # Raw logs are huge (64KB+). Instead of blindly taking the last N lines,
+          # we grep for error indicators with context to produce a focused extract.
+          jq -r '.[].id' ci-failure-data/failed-jobs.json | while read -r JOB_ID; do
+            JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" ci-failure-data/failed-jobs.json)
             echo "Fetching logs for job: ${JOB_NAME} (${JOB_ID})"
-            gh api "repos/${REPO}/actions/jobs/${JOB_ID}/logs" > ".ci-failure-data/job-${JOB_ID}.log" 2>/dev/null || \
-              echo "(Failed to fetch logs for job ${JOB_ID})" > ".ci-failure-data/job-${JOB_ID}.log"
-            # Trim to last 64KB to keep context manageable
-            tail -c 65536 ".ci-failure-data/job-${JOB_ID}.log" > ".ci-failure-data/job-${JOB_ID}-trimmed.log"
-            mv ".ci-failure-data/job-${JOB_ID}-trimmed.log" ".ci-failure-data/job-${JOB_ID}.log"
+            gh api "repos/${REPO}/actions/jobs/${JOB_ID}/logs" > "ci-failure-data/job-${JOB_ID}-raw.log" 2>/dev/null || \
+              echo "(Failed to fetch logs for job ${JOB_ID})" > "ci-failure-data/job-${JOB_ID}-raw.log"
+
+            # Extract error-relevant lines with 3 lines of context before and 5 after.
+            # Patterns: compiler errors, build failures, test failures, runtime errors,
+            # infrastructure errors, and GitHub Actions error annotations.
+            grep -n -i -B3 -A5 \
+              -e 'error [A-Z]\{2,\}[0-9]' \
+              -e '##\[error\]' \
+              -e '\bFAILED\b' \
+              -e '\bfailed!\b' \
+              -e 'Build FAILED' \
+              -e 'ECONNRESET\|ECONNREFUSED\|ENOTFOUND' \
+              -e 'Connection reset by peer' \
+              -e 'Could not resolve host' \
+              -e 'Operation timed out' \
+              -e 'The SSL connection could not be established' \
+              -e '403 Forbidden' \
+              -e 'exit code [1-9]' \
+              -e 'Process completed with exit code' \
+              "ci-failure-data/job-${JOB_ID}-raw.log" 2>/dev/null \
+              | head -150 > "ci-failure-data/job-${JOB_ID}.log" || true
+
+            # If grep found nothing, fall back to last 200 lines (job may have unusual errors)
+            if [ ! -s "ci-failure-data/job-${JOB_ID}.log" ]; then
+              tail -200 "ci-failure-data/job-${JOB_ID}-raw.log" > "ci-failure-data/job-${JOB_ID}.log"
+            fi
+            rm -f "ci-failure-data/job-${JOB_ID}-raw.log"
           done
 
           # Fetch annotations for each failed job
-          jq -r '.[].id' .ci-failure-data/failed-jobs.json | while read -r JOB_ID; do
-            CHECK_RUN_ID=$(jq -r ".[] | select(.id == ${JOB_ID}) | .check_run_url" .ci-failure-data/failed-jobs.json \
+          jq -r '.[].id' ci-failure-data/failed-jobs.json | while read -r JOB_ID; do
+            CHECK_RUN_ID=$(jq -r ".[] | select(.id == ${JOB_ID}) | .check_run_url" ci-failure-data/failed-jobs.json \
               | grep -oP '\d+$' || echo "")
             if [ -n "${CHECK_RUN_ID}" ]; then
               gh api --paginate "repos/${REPO}/check-runs/${CHECK_RUN_ID}/annotations" \
-                > ".ci-failure-data/annotations-${JOB_ID}.json" 2>/dev/null || \
-                echo "[]" > ".ci-failure-data/annotations-${JOB_ID}.json"
+                > "ci-failure-data/annotations-${JOB_ID}.json" 2>/dev/null || \
+                echo "[]" > "ci-failure-data/annotations-${JOB_ID}.json"
             else
-              echo "[]" > ".ci-failure-data/annotations-${JOB_ID}.json"
+              echo "[]" > "ci-failure-data/annotations-${JOB_ID}.json"
             fi
           done
 
@@ -1197,13 +1188,19 @@ jobs:
           FIRST_PR=$(echo "${PR_NUMBERS}" | cut -d',' -f1)
           if [ -n "${FIRST_PR}" ]; then
             gh api "repos/${REPO}/pulls/${FIRST_PR}/files" --paginate \
-              --jq '[.[] | {filename, status, additions, deletions, changes}]' \
-              > .ci-failure-data/pr-files.json 2>/dev/null || echo "[]" > .ci-failure-data/pr-files.json
+              --jq '.[]' | jq -s '[.[] | {filename, status, additions, deletions, changes}]' \
+              > ci-failure-data/pr-files.json 2>/dev/null || echo "[]" > ci-failure-data/pr-files.json
+
+            # Fetch PR metadata (state, title, author) so the agent doesn't need
+            # to make MCP pull_request_read calls at runtime.
+            gh api "repos/${REPO}/pulls/${FIRST_PR}" \
+              --jq '{number, title, state, user: .user.login, head_branch: .head.ref, base_branch: .base.ref, html_url}' \
+              > ci-failure-data/pr-metadata.json 2>/dev/null || echo "{}" > ci-failure-data/pr-metadata.json
           fi
 
           # Load the known transient failure patterns for reference
           if [ -f "eng/test-retry-patterns.json" ]; then
-            cp eng/test-retry-patterns.json .ci-failure-data/retry-patterns.json
+            cp eng/test-retry-patterns.json ci-failure-data/retry-patterns.json
           fi
 
           # Fetch test results artifact if available and extract test failure info
@@ -1213,33 +1210,33 @@ jobs:
             ARTIFACT_ID=$(echo "${ARTIFACT}" | jq -r '.id')
             echo "Downloading test results artifact ${ARTIFACT_ID}..."
             gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts/${ARTIFACT_ID}/zip" \
-              > .ci-failure-data/test-results.zip 2>/dev/null || true
+              > ci-failure-data/test-results.zip 2>/dev/null || true
 
             # Extract failed test names and error messages from TRX files
-            if [ -f ".ci-failure-data/test-results.zip" ] && [ -s ".ci-failure-data/test-results.zip" ]; then
-              mkdir -p .ci-failure-data/test-results
-              unzip -q -o .ci-failure-data/test-results.zip -d .ci-failure-data/test-results 2>/dev/null || true
+            if [ -f "ci-failure-data/test-results.zip" ] && [ -s "ci-failure-data/test-results.zip" ]; then
+              mkdir -p ci-failure-data/test-results
+              unzip -q -o ci-failure-data/test-results.zip -d ci-failure-data/test-results 2>/dev/null || true
 
               # Parse TRX files for failed tests (TRX is XML with UnitTestResult elements)
               # Produce one JSON object per line using jq for proper escaping, then
               # combine into an array. This avoids pipe-subshell variable propagation
               # issues and handles all JSON special characters correctly.
               # TRX format: <UnitTestResult testName="..." outcome="Failed"><Output><ErrorInfo><Message>...</Message></ErrorInfo></Output></UnitTestResult>
-              > .ci-failure-data/test-failures.jsonl
+              > ci-failure-data/test-failures.jsonl
               while IFS= read -r TRX_FILE; do
                 while IFS= read -r TEST_NAME; do
                   ERROR_MSG=$(grep -A5 "testName=\"${TEST_NAME}\".*outcome=\"Failed\"" "${TRX_FILE}" 2>/dev/null \
                     | grep -oP '<Message>\K[^<]+' 2>/dev/null | head -1 | cut -c1-200 || echo "")
                   jq -n --arg test "${TEST_NAME}" --arg error "${ERROR_MSG}" \
-                    '{test: $test, error: $error}' >> .ci-failure-data/test-failures.jsonl
+                    '{test: $test, error: $error}' >> ci-failure-data/test-failures.jsonl
                 done < <(grep -oP '<UnitTestResult[^>]*testName="\K[^"]+(?="[^>]*outcome="Failed")' "${TRX_FILE}" 2>/dev/null || true)
-              done < <(find .ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null)
-              jq -s '.' .ci-failure-data/test-failures.jsonl > .ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > .ci-failure-data/test-failures.json
-              rm -f .ci-failure-data/test-failures.jsonl
+              done < <(find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null)
+              jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > ci-failure-data/test-failures.json
+              rm -f ci-failure-data/test-failures.jsonl
 
               # Clean up the extracted files to save space in artifact
-              rm -rf .ci-failure-data/test-results
-              rm -f .ci-failure-data/test-results.zip
+              rm -rf ci-failure-data/test-results
+              rm -f ci-failure-data/test-results.zip
             fi
           fi
 
@@ -1250,7 +1247,7 @@ jobs:
           REPO: ${{ github.repository }}
           WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
       - name: Create analysis summary
-        if: steps.collect.outputs.has_work == 'true' && steps.collect.outputs.use_cache != 'true'
+        if: steps.collect.outputs.has_work == 'true'
         run: |
           set -euo pipefail
 
@@ -1268,18 +1265,17 @@ jobs:
             echo "## Failed Jobs"
             echo ""
             jq -r '.[] | "### Job: \(.name)\n- **ID**: \(.id)\n- **Conclusion**: \(.conclusion)\n- **URL**: \(.html_url // "N/A")\n- **Failed Steps**: \([.steps[]? | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out") | .name] | join(", "))\n"' \
-              .ci-failure-data/failed-jobs.json
+              ci-failure-data/failed-jobs.json
 
-            echo "## Job Logs (Trimmed)"
+            echo "## Job Logs (Error-Focused)"
             echo ""
-            for LOG_FILE in .ci-failure-data/job-*.log; do
+            for LOG_FILE in ci-failure-data/job-*.log; do
               if [ -f "${LOG_FILE}" ]; then
                 JOB_ID=$(basename "${LOG_FILE}" | sed 's/job-\(.*\)\.log/\1/')
-                JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" .ci-failure-data/failed-jobs.json 2>/dev/null || echo "Unknown")
+                JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" ci-failure-data/failed-jobs.json 2>/dev/null || echo "Unknown")
                 echo "### Logs: ${JOB_NAME} (${JOB_ID})"
                 echo '```'
-                # Show last 200 lines to keep within context limits
-                tail -200 "${LOG_FILE}"
+                cat "${LOG_FILE}"
                 echo '```'
                 echo ""
               fi
@@ -1287,10 +1283,10 @@ jobs:
 
             echo "## Job Annotations"
             echo ""
-            for ANN_FILE in .ci-failure-data/annotations-*.json; do
+            for ANN_FILE in ci-failure-data/annotations-*.json; do
               if [ -f "${ANN_FILE}" ]; then
                 JOB_ID=$(basename "${ANN_FILE}" | sed 's/annotations-\(.*\)\.json/\1/')
-                JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" .ci-failure-data/failed-jobs.json 2>/dev/null || echo "Unknown")
+                JOB_NAME=$(jq -r ".[] | select(.id == ${JOB_ID}) | .name" ci-failure-data/failed-jobs.json 2>/dev/null || echo "Unknown")
                 ANN_COUNT=$(jq 'length' "${ANN_FILE}" 2>/dev/null || echo "0")
                 if [ "${ANN_COUNT}" -gt 0 ]; then
                   echo "### Annotations: ${JOB_NAME} (${JOB_ID})"
@@ -1302,10 +1298,10 @@ jobs:
 
             echo "## Test Failures (from TRX artifacts)"
             echo ""
-            if [ -f ".ci-failure-data/test-failures.json" ]; then
-              FAILURE_COUNT=$(jq 'length' .ci-failure-data/test-failures.json 2>/dev/null || echo "0")
+            if [ -f "ci-failure-data/test-failures.json" ]; then
+              FAILURE_COUNT=$(jq 'length' ci-failure-data/test-failures.json 2>/dev/null || echo "0")
               if [ "${FAILURE_COUNT}" -gt 0 ]; then
-                jq -r '.[] | "- `\(.test)`: \(.error)"' .ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
+                jq -r '.[] | "- `\(.test)`: \(.error)"' ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
               else
                 echo "No test failures extracted from TRX artifacts."
               fi
@@ -1314,10 +1310,19 @@ jobs:
             fi
             echo ""
 
+            echo "## Pull Request"
+            echo ""
+            if [ -f "ci-failure-data/pr-metadata.json" ]; then
+              jq -r '"- **PR**: #\(.number) \(.title)\n- **Author**: @\(.user)\n- **State**: \(.state)\n- **Branch**: \(.head_branch) → \(.base_branch)\n- **URL**: \(.html_url)"' ci-failure-data/pr-metadata.json 2>/dev/null || echo "No PR metadata available."
+            else
+              echo "No PR metadata available."
+            fi
+            echo ""
+
             echo "## PR Changed Files"
             echo ""
-            if [ -f ".ci-failure-data/pr-files.json" ]; then
-              jq -r '.[] | "- \(.filename) (\(.status), +\(.additions)/-\(.deletions))"' .ci-failure-data/pr-files.json 2>/dev/null || echo "No file data available."
+            if [ -f "ci-failure-data/pr-files.json" ]; then
+              jq -r '.[] | "- \(.filename) (\(.status), +\(.additions)/-\(.deletions))"' ci-failure-data/pr-files.json 2>/dev/null || echo "No file data available."
             else
               echo "No PR file data available."
             fi
@@ -1325,48 +1330,20 @@ jobs:
 
             echo "## Known Transient Failure Patterns"
             echo ""
-            if [ -f ".ci-failure-data/retry-patterns.json" ]; then
+            if [ -f "ci-failure-data/retry-patterns.json" ]; then
               echo "### Test Failure Patterns"
               jq -r '.testFailurePatterns[]? | "- \(.reason // "unnamed"): \(if .output | type == "string" then .output else .output.regex end)"' \
-                .ci-failure-data/retry-patterns.json 2>/dev/null || echo "None loaded."
+                ci-failure-data/retry-patterns.json 2>/dev/null || echo "None loaded."
               echo ""
               echo "### Job Failure Patterns"
               jq -r '.jobFailurePatterns[]? | "- \(.reason // "unnamed"): \(if .output | type == "string" then .output else .output.regex end)"' \
-                .ci-failure-data/retry-patterns.json 2>/dev/null || echo "None loaded."
+                ci-failure-data/retry-patterns.json 2>/dev/null || echo "None loaded."
             else
               echo "No retry patterns file found."
             fi
-          } > .ci-failure-data/analysis-summary.md
+          } > ci-failure-data/analysis-summary.md
 
-          echo "Analysis summary written to .ci-failure-data/analysis-summary.md"
-        env:
-          PR_NUMBERS: ${{ steps.collect.outputs.pr_numbers }}
-          RUN_ATTEMPT: ${{ steps.collect.outputs.run_attempt }}
-          RUN_ID: ${{ steps.collect.outputs.run_id }}
-          RUN_URL: ${{ steps.collect.outputs.run_url }}
-      - name: Write cache-hit summary for retry attempts
-        if: steps.collect.outputs.has_work == 'true' && steps.collect.outputs.use_cache == 'true'
-        run: |
-          set -euo pipefail
-
-          mkdir -p .ci-failure-data
-          {
-            echo "# CI Failure — Retry Attempt"
-            echo ""
-            echo "## Run Information"
-            echo "- **Run ID**: ${RUN_ID}"
-            echo "- **Run Attempt**: ${RUN_ATTEMPT}"
-            echo "- **Run URL**: ${RUN_URL}"
-            echo "- **Associated PRs**: ${PR_NUMBERS}"
-            echo ""
-            echo "## Cache Mode"
-            echo ""
-            echo "This is run attempt ${RUN_ATTEMPT} (not the first attempt)."
-            echo "Use the **cache-memory** tool to read the cached analysis from key \`ci-failure-analysis-${RUN_ID}\`."
-            echo "Apply the cached classification without re-analyzing the logs."
-          } > .ci-failure-data/analysis-summary.md
-
-          echo "Cache-hit summary written."
+          echo "Analysis summary written to ci-failure-data/analysis-summary.md"
         env:
           PR_NUMBERS: ${{ steps.collect.outputs.pr_numbers }}
           RUN_ATTEMPT: ${{ steps.collect.outputs.run_attempt }}
@@ -1376,7 +1353,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ci-failure-data
-          path: .ci-failure-data/
+          path: ci-failure-data/
 
   conclusion:
     needs:
@@ -1386,7 +1363,6 @@ jobs:
       - detection
       - rerun_failed_jobs
       - safe_outputs
-      - update_cache_memory
     if: >
       always() && (needs.agent.result != 'skipped' || needs.activation.outputs.lockdown_check_failed == 'true' ||
       needs.activation.outputs.stale_lock_file_failed == 'true' || needs.activation.outputs.daily_ai_credits_exceeded == 'true')
@@ -1572,7 +1548,6 @@ jobs:
           GH_AW_MISSING_TOOL_REPORT_AS_FAILURE: "true"
           GH_AW_MISSING_DATA_REPORT_AS_FAILURE: "true"
           GH_AW_TIMEOUT_MINUTES: "20"
-          GH_AW_CACHE_MEMORY_ENABLED: "true"
         with:
           github-token: ${{ secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           script: |
@@ -1844,20 +1819,34 @@ jobs:
         env:
           ENABLE_RERUN: ${{ env.ENABLE_RERUN }}
           GH_AW_AGENT_OUTPUT: ${{ runner.temp }}/gh-aw/safe-jobs/agent_output.json
-          PR_NUMBERS: ${{ jobs.rerun-failed-jobs.inputs.pr_numbers }}
-          REASON: ${{ jobs.rerun-failed-jobs.inputs.reason }}
-          RUN_ID: ${{ jobs.rerun-failed-jobs.inputs.run_id }}
         with:
           script: |
+            const fs = require('fs');
+
+            // Read inputs from the agent output artifact.
+            // gh-aw writes { "items": [ { "type": "rerun_failed_jobs", ... } ] }.
+            const outputFile = process.env.GH_AW_AGENT_OUTPUT;
+            if (!outputFile || !fs.existsSync(outputFile)) {
+              core.setFailed('Agent output file not found');
+              return;
+            }
+            const payload = JSON.parse(fs.readFileSync(outputFile, 'utf8'));
+            const items = (payload && Array.isArray(payload.items)) ? payload.items : [];
+            const item = items.find(i => i && i.type === 'rerun_failed_jobs');
+            if (!item) {
+              core.info('No rerun_failed_jobs items in agent output.');
+              return;
+            }
+
             const owner = context.repo.owner;
             const repo = context.repo.repo;
-            const runId = Number(process.env.RUN_ID);
-            const prNumbers = process.env.PR_NUMBERS.split(',').map(Number).filter(n => n > 0);
-            const reason = process.env.REASON;
+            const runId = Number(item.run_id);
+            const prNumbers = String(item.pr_numbers).split(',').map(Number).filter(n => n > 0);
+            const reason = item.reason || '';
             const enableRerun = String(process.env.ENABLE_RERUN).toLowerCase() === 'true';
 
             if (!Number.isInteger(runId) || runId <= 0) {
-              core.setFailed(`Invalid run_id: ${process.env.RUN_ID}`);
+              core.setFailed(`Invalid run_id: ${item.run_id}`);
               return;
             }
 
@@ -1997,52 +1986,4 @@ jobs:
             /tmp/gh-aw/safe-output-items.jsonl
             /tmp/gh-aw/temporary-id-map.json
           if-no-files-found: ignore
-
-  update_cache_memory:
-    needs:
-      - activation
-      - agent
-      - detection
-    if: always() && needs.detection.result == 'success' && needs.agent.result == 'success'
-    runs-on: ubuntu-slim
-    permissions: {}
-    env:
-      GH_AW_WORKFLOW_ID_SANITIZED: analyzecifailure
-    steps:
-      - name: Setup Scripts
-        id: setup
-        uses: github/gh-aw-actions/setup@c0338fef4749d08c21f8f975fb0e37efa17dda47 # v0.79.8
-        with:
-          destination: ${{ runner.temp }}/gh-aw/actions
-          job-name: ${{ github.job }}
-          trace-id: ${{ needs.activation.outputs.setup-trace-id }}
-          parent-span-id: ${{ needs.activation.outputs.setup-parent-span-id || needs.activation.outputs.setup-span-id }}
-        env:
-          GH_AW_SETUP_WORKFLOW_NAME: "Analyze CI Failure"
-          GH_AW_CURRENT_WORKFLOW_REF: ${{ github.repository }}/.github/workflows/analyze-ci-failure.lock.yml@${{ github.ref }}
-          GH_AW_INFO_VERSION: "1.0.60"
-          GH_AW_INFO_AWF_VERSION: "v0.27.2"
-          GH_AW_INFO_ENGINE_ID: "copilot"
-      - name: Download cache-memory artifact (default)
-        id: download_cache_default
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        continue-on-error: true
-        with:
-          name: cache-memory
-          path: /tmp/gh-aw/cache-memory
-      - name: Check if cache-memory folder has content (default)
-        id: check_cache_default
-        shell: bash
-        run: |
-          if [ -d "/tmp/gh-aw/cache-memory" ] && [ "$(ls -A /tmp/gh-aw/cache-memory 2>/dev/null)" ]; then
-            echo "has_content=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_content=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Save cache-memory to cache (default)
-        if: steps.check_cache_default.outputs.has_content == 'true'
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          key: memory-approved-6f25a3c0-${{ env.GH_AW_WORKFLOW_ID_SANITIZED }}-${{ github.run_id }}
-          path: /tmp/gh-aw/cache-memory
 
