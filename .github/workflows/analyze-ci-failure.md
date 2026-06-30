@@ -468,7 +468,10 @@ safe-outputs:
             RUN_ID=$(jq -r '.run_id' "$ANALYSIS_FILE")
             VERDICT=$(jq -r '.verdict' "$ANALYSIS_FILE")
             RUN_URL=$(jq -r '.run_url // ""' "$ANALYSIS_FILE")
-            PR_NUMBERS=$(jq -r '.pr.number // ""' "$ANALYSIS_FILE")
+            # Build a comma-separated list of PR numbers. The JSON schema has
+            # a single pr.number; if the collect-data job passed multiple PRs
+            # in the future, extend the agent schema accordingly.
+            PR_NUMBERS=$(jq -r '.pr.number // "" | tostring' "$ANALYSIS_FILE")
 
             # ── 1. Push data to memory branch ──
             if ! git clone --depth 1 --branch "$MEMORY_BRANCH" \
@@ -487,15 +490,16 @@ safe-outputs:
             mkdir -p "memory-repo/runs"
             cp "$ANALYSIS_FILE" "memory-repo/runs/${RUN_ID}.json"
 
-            # Store individual cause files under causes/ directory
+            # Store individual cause files under causes/<run_id>/ so that
+            # each run's snapshot is preserved and prior runs are not clobbered.
             if [ -d "$CAUSES_DIR" ]; then
-              mkdir -p "memory-repo/causes"
+              mkdir -p "memory-repo/causes/${RUN_ID}"
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
-                cp "$CAUSE_FILE" "memory-repo/causes/"
+                cp "$CAUSE_FILE" "memory-repo/causes/${RUN_ID}/"
               done
               CAUSE_COUNT=$(find "$CAUSES_DIR" -name '*.json' -type f | wc -l)
-              echo "Copied ${CAUSE_COUNT} cause file(s)"
+              echo "Copied ${CAUSE_COUNT} cause file(s) to causes/${RUN_ID}/"
             fi
 
             git -C memory-repo add -A
@@ -555,7 +559,9 @@ safe-outputs:
                   # if this run_id is already recorded (avoids duplicates on re-runs).
                   # The table row format is `| date | [run_id](url) | job | PR |`.
                   CURRENT_BODY=$(gh api "repos/${REPO}/issues/${EXISTING_ISSUE}" --jq '.body // ""')
-                  if echo "$CURRENT_BODY" | grep -qF "[${RUN_ID}]"; then
+                  # Anchor the pattern with '(' from the markdown link to avoid
+                  # partial matches (e.g., run 123 matching run 1234).
+                  if echo "$CURRENT_BODY" | grep -qF "[${RUN_ID}]("; then
                     echo "Occurrence for run ${RUN_ID} already recorded in issue #${EXISTING_ISSUE}. Skipping."
                   else
                     BODY_FILE=$(mktemp)
@@ -643,8 +649,10 @@ safe-outputs:
               exit 0
             fi
 
-            # Build comment body from the analysis JSON
-            COMMENT_BODY=$(jq -r '
+            # Build comment body from the analysis JSON and write to a file
+            # to avoid shell expansion issues and ARG_MAX limits.
+            COMMENT_FILE=$(mktemp)
+            jq -r '
               def job_list:
                 [.failed_jobs[] | "- `\(.name)` — \(.reason) (\(.classification))"]
                 | join("\n");
@@ -662,9 +670,10 @@ safe-outputs:
               else
                 "<!-- analyze-ci-failure:mixed -->\n⚠️ **CI Failure Analysis: Mixed Failures**\n\nThe CI build contains both transient and non-transient failures.\n\n**Failed jobs:**\n" + job_list + "\n\nThe CI will not be automatically rerun. Please review the failures above.\n"
               end
-            ' "$ANALYSIS_FILE")
+            ' "$ANALYSIS_FILE" > "$COMMENT_FILE"
 
-            gh pr comment "$FIRST_PR" --repo "$REPO" --body "$COMMENT_BODY"
+            gh pr comment "$FIRST_PR" --repo "$REPO" --body-file "$COMMENT_FILE"
+            rm -f "$COMMENT_FILE"
             echo "Posted analysis comment on PR #${FIRST_PR}"
     rerun-failed-jobs:
       name: "Rerun failed CI jobs"
