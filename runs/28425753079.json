@@ -1,0 +1,38 @@
+{
+  "run_id": 28425753079,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/28425753079",
+  "analyzed_at": "2026-07-01T09:20:55Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18549,
+    "title": "Update dependencies from dotnet/arcade",
+    "author": "dotnet-maestro[bot]",
+    "state": "closed",
+    "head_branch": "darc-main-965d59ab-1a32-49a1-8e6b-33fdef7f0d14",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18549"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Maui / Hosting.Maui (windows-latest)",
+      "id": 84228647778,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/28425753079/job/84228647778",
+      "classification": "flaky-test",
+      "reason": "One test failed with System.TimeoutException in MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState. The PR only modifies engineering infrastructure files (arcade updates, version bumps) with no changes to Maui hosting test code. The timeout is intermittent and consistent with a flaky async/semaphore test.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState",
+      "job": "Tests / Hosting.Maui / Hosting.Maui (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 663\n   at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 664",
+      "classification": "flaky",
+      "reason": "The PR changes only engineering infrastructure files (eng/Version.Details.xml, eng/Versions.props, eng/common/* scripts, global.json) — none of which touch MauiBuildQueueTests or Maui hosting code. The TimeoutException in an async semaphore test (ReleaseSemaphoreAfterLaunchAsync) is consistent with a race condition or timing-sensitive failure under CI load."
+    }
+  ],
+  "causes": ["mauibuildqueue-releasesemaphoreafterlaunchasync"]
+}

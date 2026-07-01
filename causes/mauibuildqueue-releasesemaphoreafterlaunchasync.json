@@ -1,0 +1,16 @@
+{
+  "id": "mauibuildqueue-releasesemaphoreafterlaunchasync",
+  "type": "flaky-test",
+  "title": "Flaky: MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState times out intermittently",
+  "test_name": "Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState",
+  "error_pattern": "System.TimeoutException : The operation has timed out.\n   at Aspire.Hosting.Maui.Tests.MauiBuildQueueTests.ReleaseSemaphoreAfterLaunchAsync_SkipsReplayStateAndReleasesOnStableState() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Maui.Tests\\MauiBuildQueueTests.cs:line 663",
+  "occurrences": [
+    {
+      "run_id": 28425753079,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/28425753079",
+      "job": "Tests / Hosting.Maui / Hosting.Maui (windows-latest)",
+      "pr_number": 18549,
+      "observed_at": "2026-07-01T09:20:55Z"
+    }
+  ]
+}
