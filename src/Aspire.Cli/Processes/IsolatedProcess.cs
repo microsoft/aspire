@@ -267,9 +267,10 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(standardErrorHandler);
 
         // Non-isolated mode is an ordinary redirected Process.Start on every platform: no new
-        // console, no JobHandle, stdin wired to an empty pipe. On Unix the isolated mode is the
-        // same redirected spawn (SIGTERM via the process group is enough), so only the isolated
-        // Windows path needs the dedicated new-console launcher.
+        // console, stdin wired to an empty pipe, and optional Windows job binding for callers that
+        // opt in to the kill-on-close safety net without console isolation. On Unix the isolated
+        // mode is the same redirected spawn (SIGTERM via the process group is enough), so only the
+        // isolated Windows path needs the dedicated new-console launcher.
         if (!startInfo.IsolateConsole)
         {
             return StartRedirected(startInfo, standardOutputHandler, standardErrorHandler, redirectStandardInput: true);
@@ -396,10 +397,15 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
                 // safety net.
             }
         }
-        catch (Exception)
+        catch (ObjectDisposedException)
         {
-            // Best-effort. Common transient failures (handle race, already exited, etc.) must not
-            // tear down a successful spawn — the helper still runs without the safety net.
+            // Best-effort. The helper may have exited and closed its handle before the assignment
+            // raced in; the worst case is the same orphan risk we had before this opt-in.
+        }
+        catch (InvalidOperationException)
+        {
+            // Best-effort. A handle race must not tear down a successful spawn — the helper still
+            // runs without the safety net.
         }
     }
 

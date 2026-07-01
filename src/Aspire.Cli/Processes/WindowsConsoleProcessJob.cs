@@ -9,10 +9,9 @@ using Microsoft.Win32.SafeHandles;
 namespace Aspire.Cli.Processes;
 
 /// <summary>
-/// Owns a Windows job object that is used as the crash-time safety net for interactive
-/// children spawned by <see cref="IsolatedProcess"/>. The job is created
-/// once per CLI process — on first isolated spawn via <see cref="Shared"/> — and held for
-/// the CLI's entire lifetime.
+/// Owns a Windows job object that is used as the crash-time safety net for child
+/// processes that must not outlive the CLI. The job is created once per CLI process —
+/// on first job-bound spawn via <see cref="Shared"/> — and held for the CLI's entire lifetime.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -44,18 +43,18 @@ internal sealed class WindowsConsoleProcessJob : IDisposable
 {
     // The job is a process-wide singleton: its configuration never varies, and the OS closes
     // the handle on process exit (firing KILL_ON_JOB_CLOSE on any still-assigned children).
-    // Created lazily on the first isolated spawn that needs it so non-Run invocations — and
-    // every non-Windows host — never allocate the kernel object. Threading a job instance
-    // through the spawn callers was the alternative; an on-demand singleton removes that
-    // plumbing because there is only ever one correct job to use.
+    // Created lazily on the first spawn that needs it so invocations without job-bound children —
+    // and every non-Windows host — never allocate the kernel object. Threading a job instance
+    // through the spawn callers was the alternative; an on-demand singleton removes that plumbing
+    // because there is only ever one correct job to use.
     private static readonly Lazy<WindowsConsoleProcessJob> s_shared = new(static () => new WindowsConsoleProcessJob());
 
     private readonly SafeFileHandle _jobHandle;
     private int _disposed;
 
     /// <summary>
-    /// The process-wide job, created on first access. Callers on the isolated-console spawn
-    /// path use this instead of receiving a job instance, so they cannot forget to supply one.
+    /// The process-wide job, created on first access. Callers on job-bound spawn paths use this
+    /// instead of receiving a job instance, so they cannot forget to supply one.
     /// Intentionally never disposed in production: the OS closes the handle at process exit,
     /// which is exactly the crash-safety net we want.
     /// </summary>
@@ -113,8 +112,10 @@ internal sealed class WindowsConsoleProcessJob : IDisposable
     }
 
     /// <summary>
-    /// The job handle. Pass directly to <see cref="WindowsProcessInterop.SpawnConsoleIsolatedProcess"/>
-    /// so the spawn primitive can do the suspended-create / assign / resume dance atomically.
+    /// The job handle. Isolated-console callers pass it to
+    /// <see cref="WindowsProcessInterop.SpawnConsoleIsolatedProcess"/> so the spawn primitive can
+    /// do the suspended-create / assign / resume dance atomically; non-isolated callers assign it
+    /// immediately after <see cref="System.Diagnostics.Process.Start(System.Diagnostics.ProcessStartInfo)"/>.
     /// </summary>
     public SafeFileHandle Handle => _jobHandle;
 

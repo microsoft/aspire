@@ -130,19 +130,16 @@ public class IsolatedProcessTests
         // (no per-call conhost.exe overhead).
         using var job = new WindowsConsoleProcessJob();
 
-        // Use the long-running ping shape from WindowsConsoleProcessJobTests so the same
-        // observable signal (process exits because the job's last handle was closed) drives this
-        // test too; the difference is that JobHandle goes through the non-isolated StartRedirected
-        // path here instead of the isolated SpawnConsoleIsolatedProcess path.
+        // Launch ping.exe directly instead of via cmd.exe so the test models the targeted helper
+        // shape: a single long-running child that is assigned to the job immediately after
+        // Process.Start returns.
         var startInfo = new IsolatedProcessStartInfo
         {
-            FileName = "cmd.exe",
+            FileName = "ping.exe",
             WorkingDirectory = Environment.CurrentDirectory,
             IsolateConsole = false,
             JobHandle = job.Handle,
         };
-        startInfo.ArgumentList.Add("/c");
-        startInfo.ArgumentList.Add("ping");
         startInfo.ArgumentList.Add("-n");
         startInfo.ArgumentList.Add("60");
         startInfo.ArgumentList.Add("127.0.0.1");

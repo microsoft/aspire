@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.DotNet;
@@ -251,6 +253,31 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         Assert.True(WaitForProcessExit(execution.ProcessId, TimeSpan.FromSeconds(10)), $"Expected process {execution.ProcessId} to be killed after signaler failure.");
     }
 
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public async Task CreateExecution_BindChildToCliJob_OnWindows_SetsJobHandleWithoutIsolatingConsole()
+    {
+        Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only behavior: kill-on-close job is a Win32 primitive.");
+
+        var factory = new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+
+        await using var execution = factory.CreateExecution(
+            "cmd.exe",
+            ["/d", "/c", "exit", "0"],
+            env: null,
+            new DirectoryInfo(Environment.CurrentDirectory),
+            new ProcessInvocationOptions
+            {
+                BindChildToCliJob = true,
+            });
+
+        var startInfo = GetStartInfo(execution);
+
+        Assert.False(startInfo.IsolateConsole);
+        Assert.NotNull(startInfo.JobHandle);
+        Assert.False(startInfo.JobHandle.IsInvalid);
+    }
+
     private static string CreateJsonPayload(int lineCount)
     {
         var builder = new StringBuilder();
@@ -422,4 +449,11 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             });
     }
 
+    private static IsolatedProcessStartInfo GetStartInfo(IProcessExecution execution)
+    {
+        var field = typeof(ProcessExecution).GetField("_startInfo", BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new MissingFieldException(typeof(ProcessExecution).FullName, "_startInfo");
+
+        return Assert.IsType<IsolatedProcessStartInfo>(field.GetValue(execution));
+    }
 }
