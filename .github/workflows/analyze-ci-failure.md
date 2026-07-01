@@ -862,18 +862,18 @@ Field details:
 - `failed_tests[].classification`: Per-test classification — `"flaky"` or `"code-issue"`.
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
 
-#### 3b. Per-cause files
+#### 3b. Per-cause files (flaky-test and infra-failure only)
 
-For each distinct underlying cause of failure, write a separate JSON file to `/tmp/gh-aw/agent/causes/<cause-id>.json`. The `<cause-id>` should be a filesystem-safe identifier derived from the cause (e.g., sanitized test name for flaky tests, or a short descriptive slug for infrastructure issues).
+For each distinct underlying cause that is NOT a code-issue, write a separate JSON file to `/tmp/gh-aw/agent/causes/<cause-id>.json`. The `<cause-id>` should be a filesystem-safe identifier derived from the cause (e.g., sanitized test name for flaky tests, or a short descriptive slug for infrastructure issues). Do NOT create cause files for code-issue classifications — those are the PR author's responsibility and are not tracked as recurring CI problems.
 
 Each cause file must follow this schema:
 
 ```json
 {
   "id": "cause-id",
-  "type": "flaky-test | infra-failure | code-issue",
+  "type": "flaky-test | infra-failure",
   "title": "Human-readable short description of the cause",
-  "test_name": "Fully.Qualified.TestName (only for flaky-test/code-issue with a specific test)",
+  "test_name": "Fully.Qualified.TestName (only for flaky-test with a specific test)",
   "error_pattern": "The key error message or pattern that identifies this cause",
   "occurrences": [
     {
@@ -889,7 +889,7 @@ Each cause file must follow this schema:
 
 Field details:
 - `id`: Must match the filename (without `.json`). Use lowercase with hyphens. For flaky tests, derive from the test name (e.g., `aspire-hosting-tests-mytest`). For infra failures, use a descriptive slug (e.g., `nuget-feed-timeout`, `docker-registry-rate-limit`).
-- `type`: One of `"flaky-test"`, `"infra-failure"`, or `"code-issue"`.
+- `type`: One of `"flaky-test"` or `"infra-failure"`. Do NOT create cause files for code-issue classifications.
 - `title`: A brief human-readable description (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
 - `test_name`: The fully qualified test name. Omit this field for infrastructure failures that aren't test-specific.
 - `error_pattern`: The representative error message or regex pattern that characterizes this cause.
@@ -993,7 +993,7 @@ Emit the `publish-data` safe output. Do NOT emit `rerun-failed-jobs`.
 
 ## Important Rules
 
-1. **Always write both JSON outputs** — every analysis must produce `/tmp/gh-aw/agent/analysis-result.json` and at least one file in `/tmp/gh-aw/agent/causes/`.
+1. **Always write the run summary** — every analysis must produce `/tmp/gh-aw/agent/analysis-result.json`. Write cause files in `/tmp/gh-aw/agent/causes/` only for `flaky-test` and `infra-failure` causes (NOT for `code-issue`).
 2. **Always emit the `publish-data` safe output** — with `run_id` and `pr_numbers` so the publish-data job can push the data and post a comment.
 3. **Never rerun when there are code issues** — only emit `rerun-failed-jobs` for pure infrastructure failures with `ENABLE_RERUN` set to `'true'`.
 4. **Be specific** — include actual error messages and job/test names in the JSON fields.
