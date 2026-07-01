@@ -8,11 +8,13 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Utils;
+using Aspire.Shared;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Layout;
 
@@ -37,6 +39,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private const string NotificationsDialogId = "NotificationsDialog";
     private const string AIAgentsDialogId = "AIAgentsDialog";
     internal const string HelpButtonId = "dashboard-help-button";
+    internal const string FeedbackButtonId = "dashboard-feedback-button";
     internal const string AssistantButtonId = "dashboard-assistant-button";
     internal const string SettingsButtonId = "dashboard-settings-button";
     internal const string NavigationButtonId = "dashboard-navigation-button";
@@ -258,6 +261,50 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     }
 
     private Task LaunchHelpAsync() => LaunchHelpAsync(GetDefaultReturnFocusElementId(HelpButtonId));
+
+    private List<MenuButtonItem> GetFeedbackMenuItems() =>
+    [
+        CreateFeedbackMenuItem(
+            Loc[nameof(Resources.Layout.MainLayoutProvideFeedbackBug)],
+            FeedbackIssueKind.Bug,
+            new Icons.Regular.Size16.Bug()),
+        CreateFeedbackMenuItem(
+            Loc[nameof(Resources.Layout.MainLayoutProvideFeedbackIdea)],
+            FeedbackIssueKind.Idea,
+            new Icons.Regular.Size16.Lightbulb()),
+        CreateFeedbackMenuItem(
+            Loc[nameof(Resources.Layout.MainLayoutProvideFeedbackGeneral)],
+            FeedbackIssueKind.General,
+            new Icons.Regular.Size16.Chat())
+    ];
+
+    private MenuButtonItem CreateFeedbackMenuItem(string text, FeedbackIssueKind kind, Icon icon)
+    {
+        return new MenuButtonItem
+        {
+            Text = text,
+            Icon = icon,
+            OnClick = () => OpenFeedbackAsync(kind, text)
+        };
+    }
+
+    private async Task OpenFeedbackAsync(FeedbackIssueKind kind, string title)
+    {
+        DialogParameters parameters = new()
+        {
+            Id = "FeedbackDialog",
+            Title = title,
+            TrapFocus = true,
+            Modal = true,
+            Width = ViewportInformation.IsDesktop ? "900px" : "100vw",
+            PrimaryAction = null,
+            SecondaryAction = null
+        };
+
+        await DialogService.ShowDialogAsync<FeedbackDialog>(
+            new FeedbackDialogViewModel(kind.ToString(), title),
+            parameters).ConfigureAwait(true);
+    }
 
     private async Task LaunchHelpAsync(string? returnFocusElementId)
     {

@@ -1,0 +1,101 @@
+.feedback-dialog-body {
+    overflow-x: hidden;
+}
+
+.feedback-input {
+    width: 100%;
+}
+
+.feedback-input ::deep fluent-text-field,
+.feedback-textarea-label,
+.feedback-input-line ::deep fluent-text-area,
+.feedback-details {
+    width: 75%;
+    max-width: 680px;
+}
+
+.feedback-textarea-label ::deep label {
+    width: 100%;
+}
+
+.feedback-textarea-label {
+    display: block;
+    margin-bottom: 4px;
+}
+
+.feedback-input-line {
+    display: flex;
+    align-items: flex-start;
+    column-gap: 12px;
+    width: 100%;
+}
+
+.feedback-input-progress {
+    align-self: flex-start;
+    flex: 0 0 auto;
+}
+
+/* The doctor output and additional-context fields are tucked into a collapsed-by-default
+   accordion to keep the dialog minimal. The wrapper div carries the scoped-CSS attribute and is
+   sized to match the title/message inputs above (via the shared 75%/max-680px rule); the
+   FluentAccordion's own <fluent-accordion> host is reached via ::deep to fill that wrapper. */
+.feedback-details ::deep fluent-accordion {
+    width: 100%;
+}
+
+/* Inside the details the accordion already provides the 75%/max-680px width constraint, so the
+   labels and textareas fill its content area (inset only by the accordion's own symmetric padding)
+   rather than shrinking to 75% again and leaving a large empty gap on the right. */
+.feedback-details .feedback-textarea-label,
+.feedback-details .feedback-input-line ::deep fluent-text-area {
+    width: 100%;
+    max-width: unset;
+}
+
+/* Loading indicator shown in the accordion header (slot="end") while `aspire doctor` output is
+   being gathered, so it stays visible even when the accordion is collapsed. */
+.feedback-details-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: var(--type-ramp-minus-1-font-size);
+    color: var(--foreground-settings-text);
+}
+
+/* FluentTextArea renders its editable <textarea> inside a shadow root, so the
+   monospace font must be applied through the exposed ::part(control) rather than
+   the host element. The doctor output and additional-context fields contain
+   diagnostic text (JSON, environment lines) that reads better fixed-width. */
+.feedback-input-line ::deep fluent-text-area.feedback-dialog-monospace::part(control) {
+    font-family: var(--font-family-monospace);
+    font-size: var(--type-ramp-minus-1-font-size);
+}
+
+.feedback-dialog-footer-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.feedback-dialog-public-message {
+    flex: 1 1 auto;
+    color: var(--foreground-settings-text);
+    font-size: var(--type-ramp-minus-1-font-size);
+    line-height: var(--type-ramp-minus-1-line-height);
+}
+
+@media (max-width: 600px) {
+    .feedback-input ::deep fluent-text-field,
+    .feedback-textarea-label,
+    .feedback-input-line ::deep fluent-text-area,
+    .feedback-details {
+        width: 100%;
+        max-width: unset;
+    }
+
+    .feedback-dialog-footer-content {
+        align-items: stretch;
+        flex-direction: column;
+    }
+}

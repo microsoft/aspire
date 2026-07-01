@@ -54,6 +54,11 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         KnownConfigNames.DashboardCorsAllowedOrigins // Set on the dashboard's Dashboard:Otlp:Cors type
     };
 
+    // Resolves the `aspire` CLI on PATH so dashboard feedback diagnostics can run `aspire doctor` even
+    // when the AppHost wasn't launched by the CLI (e.g. `dotnet run` or VS F5). Overridable so tests can
+    // make resolution deterministic without depending on the machine PATH.
+    internal static Func<string, string?> CliCommandResolver { get; set; } = PathLookupHelper.FindFullPathFromPath;
+
     private Task? _dashboardLogsTask;
     private CancellationTokenSource? _dashboardLogsCts;
     private string? _customRuntimeConfigPath;
@@ -599,6 +604,35 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         context.EnvironmentVariables[KnownAspNetCoreConfigNames.Environment] = environment;
         context.EnvironmentVariables[DashboardConfigNames.ResourceServiceUrlName.EnvVarName] = resourceServiceUrl;
+
+        // Forward a precomputed AppHost description (language, file name, Aspire SDK/package versions,
+        // and target framework) so dashboard feedback diagnostics can report the AppHost's exact loaded
+        // versions without re-running MSBuild. The AppHost knows these precisely because it is the
+        // running app; the dashboard only reads DASHBOARD__APPHOST__INFO. See
+        // DashboardFeedbackDiagnosticProvider in Aspire.Dashboard.
+        if (configuration["AppHost:FilePath"] is { Length: > 0 } appHostFilePath &&
+            AppHostDiagnosticInfo.Describe(appHostFilePath, Assembly.GetEntryAssembly(), typeof(DashboardEventHandlers).Assembly) is { Length: > 0 } appHostInfo)
+        {
+            context.EnvironmentVariables[DashboardConfigNames.AppHostInfoName.EnvVarName] = appHostInfo;
+        }
+
+        // Forward an `aspire` CLI path so dashboard feedback diagnostics can run `aspire doctor`. The
+        // dashboard only ever reads this forwarded value (DASHBOARD__CLI__PATH); it never probes for a
+        // CLI itself, so a standalone dashboard with no AppHost simply omits the doctor output.
+        //   1. When the CLI launched the AppHost it sets AspireCliPath (the CLI's own Environment.ProcessPath
+        //      via DotNetCliRunner.AddAspireCliPathEnvironment); prefer it so diagnostics come from the
+        //      exact `aspire` build the user is running.
+        //   2. Otherwise (e.g. `dotnet run` or VS F5) resolve `aspire` on the AppHost's PATH here, in this
+        //      trusted dev-machine process, so the common non-CLI launch flows still capture doctor output.
+        // When neither yields a path (no CLI installed) the value is omitted and the dashboard hides the
+        // doctor field.
+        var cliPath = configuration["AspireCliPath"] is { Length: > 0 } aspireCliPath
+            ? aspireCliPath
+            : CliCommandResolver("aspire");
+        if (!string.IsNullOrEmpty(cliPath))
+        {
+            context.EnvironmentVariables[DashboardConfigNames.CliPathName.EnvVarName] = cliPath;
+        }
 
         PopulateDashboardUrls(context);
 

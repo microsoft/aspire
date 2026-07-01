@@ -308,6 +308,160 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("true", envVars.Single(e => e.Key == "ASPIRE_DASHBOARD_PURPLE_MONKEY_DISHWASHER").Value);
     }
 
+    [Fact]
+    public async Task ConfigureEnvironmentVariables_HasAppHostFilePath_AppHostInfoCopiedToDashboard()
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var appHostFilePath = Path.Combine("C:\\", "apps", "MyApp", "MyApp.AppHost.csproj");
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([
+                new KeyValuePair<string, string?>("AppHost:FilePath", appHostFilePath)
+            ])
+            .Build();
+        var dashboardOptions = Options.Create(new DashboardOptions
+        {
+            DashboardPath = "test.dll",
+            DashboardUrl = "http://localhost:8080",
+            OtlpGrpcEndpointUrl = "http://localhost:4317",
+        });
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+
+        var envVars = new Dictionary<string, object>();
+
+        var dashboardResource = new ExecutableResource("aspire-dashboard", "dashboard.exe", ".");
+        var model = new DistributedApplicationModel([dashboardResource]);
+
+        var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            Services = new TestServiceProvider().AddService(model)
+        });
+
+        await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: envVars, resource: dashboardResource));
+
+        // The AppHost forwards a precomputed description (not the raw path). The SDK/package/TFM
+        // suffix depends on the running test host's assembly metadata, so assert only the stable,
+        // privacy-preserving file-name clause (never the absolute path).
+        var appHostInfo = Assert.IsType<string>(envVars.Single(e => e.Key == DashboardConfigNames.AppHostInfoName.EnvVarName).Value);
+        Assert.StartsWith("C# (`MyApp.AppHost.csproj`)", appHostInfo, StringComparison.Ordinal);
+        Assert.DoesNotContain(Path.GetDirectoryName(appHostFilePath)!, appHostInfo, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConfigureEnvironmentVariables_HasAspireCliPath_CopiedToDashboard()
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var aspireCliPath = Path.Combine("C:\\", "tools", "aspire", "aspire.exe");
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection([
+                new KeyValuePair<string, string?>("AspireCliPath", aspireCliPath)
+            ])
+            .Build();
+        var dashboardOptions = Options.Create(new DashboardOptions
+        {
+            DashboardPath = "test.dll",
+            DashboardUrl = "http://localhost:8080",
+            OtlpGrpcEndpointUrl = "http://localhost:4317",
+        });
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+
+        var envVars = new Dictionary<string, object>();
+
+        var dashboardResource = new ExecutableResource("aspire-dashboard", "dashboard.exe", ".");
+        var model = new DistributedApplicationModel([dashboardResource]);
+
+        var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            Services = new TestServiceProvider().AddService(model)
+        });
+
+        await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: envVars, resource: dashboardResource));
+
+        Assert.Equal(aspireCliPath, envVars.Single(e => e.Key == DashboardConfigNames.CliPathName.EnvVarName).Value);
+    }
+
+    [Fact]
+    public async Task ConfigureEnvironmentVariables_NoAspireCliPath_ResolvesAspireOnPath_CopiedToDashboard()
+    {
+        // When the AppHost wasn't launched by the CLI (e.g. `dotnet run`/VS), AspireCliPath isn't set, so
+        // the AppHost resolves `aspire` on PATH and forwards it so the dashboard can still run doctor.
+        var resolvedCliPath = Path.Combine("C:\\", "tools", "aspire", "aspire.exe");
+        var originalResolver = DashboardEventHandlers.CliCommandResolver;
+        DashboardEventHandlers.CliCommandResolver = command => command == "aspire" ? resolvedCliPath : null;
+        try
+        {
+            var resourceLoggerService = new ResourceLoggerService();
+            var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+            var configuration = new ConfigurationBuilder().Build();
+            var dashboardOptions = Options.Create(new DashboardOptions
+            {
+                DashboardPath = "test.dll",
+                DashboardUrl = "http://localhost:8080",
+                OtlpGrpcEndpointUrl = "http://localhost:4317",
+            });
+            var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+
+            var envVars = new Dictionary<string, object>();
+
+            var dashboardResource = new ExecutableResource("aspire-dashboard", "dashboard.exe", ".");
+            var model = new DistributedApplicationModel([dashboardResource]);
+
+            var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+            {
+                Services = new TestServiceProvider().AddService(model)
+            });
+
+            await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: envVars, resource: dashboardResource));
+
+            Assert.Equal(resolvedCliPath, envVars.Single(e => e.Key == DashboardConfigNames.CliPathName.EnvVarName).Value);
+        }
+        finally
+        {
+            DashboardEventHandlers.CliCommandResolver = originalResolver;
+        }
+    }
+
+    [Fact]
+    public async Task ConfigureEnvironmentVariables_NoAspireCliPath_AspireNotOnPath_OmitsCliPath()
+    {
+        // No CLI launched the AppHost and `aspire` isn't installed on PATH, so no CLI path is forwarded
+        // and the dashboard hides the doctor field (graceful degradation, no probing in the dashboard).
+        var originalResolver = DashboardEventHandlers.CliCommandResolver;
+        DashboardEventHandlers.CliCommandResolver = _ => null;
+        try
+        {
+            var resourceLoggerService = new ResourceLoggerService();
+            var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+            var configuration = new ConfigurationBuilder().Build();
+            var dashboardOptions = Options.Create(new DashboardOptions
+            {
+                DashboardPath = "test.dll",
+                DashboardUrl = "http://localhost:8080",
+                OtlpGrpcEndpointUrl = "http://localhost:4317",
+            });
+            var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+
+            var envVars = new Dictionary<string, object>();
+
+            var dashboardResource = new ExecutableResource("aspire-dashboard", "dashboard.exe", ".");
+            var model = new DistributedApplicationModel([dashboardResource]);
+
+            var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+            {
+                Services = new TestServiceProvider().AddService(model)
+            });
+
+            await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: envVars, resource: dashboardResource));
+
+            Assert.DoesNotContain(envVars, e => e.Key == DashboardConfigNames.CliPathName.EnvVarName);
+        }
+        finally
+        {
+            DashboardEventHandlers.CliCommandResolver = originalResolver;
+        }
+    }
+
     [Theory]
     [InlineData("https://localhost:17131", "localhost", 9999, "https", "localhost")]
     [InlineData("https://aspire-dashboard.dev.localhost:17131", "aspire-dashboard.dev.localhost", 9999, "https", "aspire-dashboard.dev.localhost")]

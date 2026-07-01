@@ -3,9 +3,11 @@
 
 using System.Text.RegularExpressions;
 using Aspire.Dashboard.Components.CustomIcons;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -13,6 +15,13 @@ namespace Aspire.Dashboard.Components.Layout;
 
 public partial class MobileNavMenu : ComponentBase
 {
+    private static readonly Icon s_expandIcon = new Icons.Regular.Size20.ChevronDown();
+    private static readonly Icon s_collapseIcon = new Icons.Regular.Size20.ChevronUp();
+
+    // Tracks which entries (keyed by their localized text) currently have their nested items expanded
+    // inline. Cleared whenever the menu is closed so it reopens collapsed.
+    private readonly HashSet<string> _expandedEntries = new(StringComparer.Ordinal);
+
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
@@ -32,6 +41,51 @@ public partial class MobileNavMenu : ComponentBase
     {
         NavigationManager.NavigateTo(url);
         return Task.CompletedTask;
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Reset inline expansion when the menu is closed so it reopens collapsed.
+        if (!IsNavMenuOpen && _expandedEntries.Count > 0)
+        {
+            _expandedEntries.Clear();
+        }
+    }
+
+    private Task OnEntryClickedAsync(MobileNavMenuEntry item)
+    {
+        // Entries with nested items act as inline expanders: toggle their expansion and keep the
+        // nav menu open instead of closing it (which previously made tapping feedback a no-op).
+        if (item.NestedMenuItems is { Count: > 0 })
+        {
+            if (!_expandedEntries.Remove(item.Text))
+            {
+                _expandedEntries.Add(item.Text);
+            }
+
+            return Task.CompletedTask;
+        }
+
+        CloseNavMenu();
+        return item.OnClick();
+    }
+
+    private async Task OnNestedItemClickedAsync(MenuButtonItem nestedItem)
+    {
+        CloseNavMenu();
+
+        if (nestedItem.OnClick is { } onClick)
+        {
+            await onClick();
+        }
+    }
+
+    private static Dictionary<string, object> BuildNestedItemAttributes(MenuButtonItem nestedItem)
+    {
+        return new Dictionary<string, object>(nestedItem.AdditionalAttributes ?? new Dictionary<string, object>())
+        {
+            ["title"] = nestedItem.Text ?? string.Empty
+        };
     }
 
     private IEnumerable<MobileNavMenuEntry> GetMobileNavMenuEntries()
@@ -86,6 +140,13 @@ public partial class MobileNavMenu : ComponentBase
                 await JS.InvokeVoidAsync("open", ["https://aka.ms/aspire/repo", "_blank"]);
             },
             new AspireIcons.Size24.GitHub()
+        );
+
+        yield return new MobileNavMenuEntry(
+            Loc[nameof(Resources.Layout.MainLayoutProvideFeedback)],
+            () => Task.CompletedTask,
+            new Icons.Regular.Size24.PersonFeedback(),
+            NestedMenuItems: GetFeedbackMenuItems()
         );
 
         yield return new MobileNavMenuEntry(

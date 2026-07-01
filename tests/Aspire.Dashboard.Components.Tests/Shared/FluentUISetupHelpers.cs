@@ -168,6 +168,7 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton(TimeProvider.System);
         context.Services.AddSingleton<INotificationService, NotificationService>();
         context.Services.AddScoped<DashboardDialogService>();
+        context.Services.AddScoped<IDashboardFeedbackDiagnosticProvider, DashboardFeedbackDiagnosticProvider>();
         context.Services.AddScoped<ResourceMenuBuilder>();
         context.Services.AddScoped<StructuredLogMenuBuilder>();
         context.Services.AddScoped<SpanMenuBuilder>();

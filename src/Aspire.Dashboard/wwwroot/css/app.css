@@ -969,6 +969,14 @@ fluent-tooltip[anchor="dialog_close"] > div {
     max-width: var(--aspire-menu-max-width);
 }
 
+.aspire-menu-container fluent-menu-item.mobile-nav-menu-nested-item {
+    /* Indent the whole child row (icon + label together) so the nesting under the parent
+       entry reads clearly. Padding the menu-item grid host shifts every column inward, which
+       keeps the icon-to-label gap as tight as the parent row. Padding ::part(content) instead
+       would move only the label and leave a large gap between the child icon and its label. */
+    padding-inline-start: 16px;
+}
+
 .overflow-fluent-menu-item::part(content) {
     width: 100%;
     text-overflow: ellipsis;

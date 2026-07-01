@@ -1,6 +1,8 @@
 ﻿<FluentMenu Class="aspire-menu-container" Open="@IsNavMenuOpen" Anchored="false" Style="grid-area: nav-menu; max-height: calc(100dvh - var(--mobile-header-height) - var(--mobile-nav-menu-offset)); margin-top: var(--mobile-nav-menu-offset); overflow-y: auto;">
     @foreach (var item in GetMobileNavMenuEntries())
     {
+        var hasNestedItems = item.NestedMenuItems is { Count: > 0 };
+        var isExpanded = hasNestedItems && _expandedEntries.Contains(item.Text);
         var isActive = item.LinkMatchRegex is not null && item.LinkMatchRegex.IsMatch($"/{NavigationManager.ToBaseRelativePath(NavigationManager.Uri)}");
         var menuItemAttributes = new Dictionary<string, object>
         {
@@ -10,11 +12,18 @@
         {
             menuItemAttributes["aria-current"] = "page";
         }
+        if (hasNestedItems)
+        {
+            // FluentUI submenus open via hover/expander affordances that aren't reachable on touch,
+            // so nested entries are expanded inline instead. Advertise the expandable state to AT.
+            menuItemAttributes["aria-haspopup"] = "menu";
+            menuItemAttributes["aria-expanded"] = isExpanded ? "true" : "false";
+        }
 
         @* mobile-nav-menu-item-active drives the accent color bar applied via
            ::before in app.css, mirroring the desktop FluentAppBar selected
            treatment without needing a separate sibling element. *@
-        <FluentMenuItem OnClick="@(async () => { CloseNavMenu(); await item.OnClick(); })" Class="@(isActive ? "mobile-nav-menu-item-active" : null)" Style="height: 40px; width: 100vw; margin-bottom: 6px;" AdditionalAttributes="@menuItemAttributes">
+        <FluentMenuItem OnClick="@(() => OnEntryClickedAsync(item))" Class="@(isActive ? "mobile-nav-menu-item-active" : null)" Style="height: 40px; width: 100vw; margin-bottom: 6px;" AdditionalAttributes="@menuItemAttributes">
             <span>@item.Text</span>
 
             @{
@@ -33,7 +42,29 @@
                     }
                 </span>
             }
+            @if (hasNestedItems)
+            {
+                <span slot="end">
+                    <FluentIcon Class="align-text-bottom" Value="@(isExpanded ? s_collapseIcon : s_expandIcon)" Color="Color.Neutral" />
+                </span>
+            }
         </FluentMenuItem>
+
+        @if (isExpanded)
+        {
+            foreach (var nestedItem in item.NestedMenuItems!)
+            {
+                <FluentMenuItem Class="mobile-nav-menu-nested-item" Style="height: 40px; width: 100vw; margin-bottom: 6px;" OnClick="@(() => OnNestedItemClickedAsync(nestedItem))" AdditionalAttributes="@BuildNestedItemAttributes(nestedItem)">
+                    <span>@nestedItem.Text</span>
+                    @if (nestedItem.Icon is { } nestedIcon)
+                    {
+                        <span slot="start">
+                            <FluentIcon Class="align-text-bottom" Value="@nestedIcon" Slot="start" Color="Color.Neutral" />
+                        </span>
+                    }
+                </FluentMenuItem>
+            }
+        }
 
         <FluentDivider/>
     }
@@ -48,6 +79,9 @@
 
     [Parameter, EditorRequired]
     public required Action CloseNavMenu { get; set; }
+
+    [Parameter, EditorRequired]
+    public required Func<List<MenuButtonItem>> GetFeedbackMenuItems { get; set; }
 
     [Parameter, EditorRequired]
     public required Func<Task> LaunchHelpAsync { get; set; }

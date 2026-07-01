@@ -140,6 +140,8 @@
     <Compile Include="$(SharedDir)LaunchProfiles\LaunchSettingsReader.cs" Link="LaunchProfiles\LaunchSettingsReader.cs" />
     <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="Utils\IntegrationPackageProbeManifest.cs" />
     <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="Utils\DashboardConfigNames.cs" />
+    <Compile Include="$(SharedDir)DotNetProjectProbe.cs" Link="DotNet\DotNetProjectProbe.cs" />
+    <Compile Include="$(SharedDir)AppHostProjectInspection.cs" Link="Projects\AppHostProjectInspection.cs" />
     <Compile Include="$(SharedDir)KnownContainerRuntimes.cs" Link="Utils\KnownContainerRuntimes.cs" />
     <Compile Include="$(SharedDir)ContainerRuntimeDetector.cs" Link="Utils\ContainerRuntimeDetector.cs" />
     <Compile Include="$(SharedDir)DashboardExitCodes.cs" Link="Utils\DashboardExitCodes.cs" />
@@ -168,6 +170,7 @@
     <Compile Include="$(SharedDir)Model\ResourceSourceViewModel.cs" Link="Model\ResourceSourceViewModel.cs" />
     <Compile Include="$(SharedDir)DashboardUrls.cs" Link="Utils\DashboardUrls.cs" />
     <Compile Include="$(SharedDir)FormatHelpers.cs" Link="Utils\FormatHelpers.cs" />
+    <Compile Include="$(SharedDir)FeedbackIssueUrlBuilder.cs" Link="Utils\FeedbackIssueUrlBuilder.cs" />
     <Compile Include="$(SharedDir)DateFormatStringsHelpers.cs" Link="Utils\DateFormatStringsHelpers.cs" />
     <Compile Include="$(SharedDir)TimeProviderExtensions.cs" Link="Extensions\TimeProviderExtensions.cs" />
     <Compile Include="$(SharedDir)UserSecrets\UserSecretsPathHelper.cs" Link="Utils\UserSecretsPathHelper.cs" />
