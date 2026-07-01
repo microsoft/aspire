@@ -1442,10 +1442,10 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         builder.WithTestAndResourceLogging(testOutputHelper);
 
         armClientProvider ??= ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         builder.Services.AddSingleton(armClientProvider);
-        builder.Services.AddSingleton(userPrincipalProvider);
+        builder.Services.AddSingleton(azurePrincipalProvider);
         builder.Services.AddSingleton(tokenCredentialProvider);
         builder.Services.AddSingleton(environment);
         builder.Services.AddSingleton(options);
@@ -1898,12 +1898,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         };
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
 
         builder.Services.AddSingleton<IHostEnvironment>(environment);
         builder.Services.AddSingleton(armClientProvider);
-        builder.Services.AddSingleton(userPrincipalProvider);
+        builder.Services.AddSingleton(azurePrincipalProvider);
         builder.Services.AddSingleton(tokenCredentialProvider);
         builder.Services.AddSingleton(logger);
         builder.Services.AddSingleton(options);
