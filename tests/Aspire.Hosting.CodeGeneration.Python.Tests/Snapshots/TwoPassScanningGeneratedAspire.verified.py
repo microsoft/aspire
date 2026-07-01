@@ -1504,6 +1504,8 @@ def _validate_dict_types(args: typing.Any, arg_types: typing.Any) -> bool:
 # Enum Types
 # ============================================================================
 
+AgentProtocol = typing.Literal["A2A", "Responses", "AgUi", "Acp"]
+
 CertificateTrustScope = typing.Literal["None", "Append", "Override", "System"]
 
 CommandResultFormat = typing.Literal["Text", "Json", "Markdown"]
@@ -7650,6 +7652,10 @@ class AbstractResourceWithEndpoints(AbstractResource):
     def on_resource_endpoints_allocated(self, callback: typing.Callable[[ResourceEndpointsAllocatedEvent], None]) -> typing.Self:
         """Subscribes to the ResourceEndpointsAllocated event."""
 
+    @abc.abstractmethod
+    def as_agent(self, protocol: AgentProtocol, *, agent_custom_path: str | None = None) -> typing.Self:
+        """Configures the resource as an agent that supports the specified protocol."""
+
 
 class AbstractResourceWithEnvironment(AbstractResource):
     """Abstract base class for AbstractResourceWithEnvironment interface."""
@@ -8963,6 +8969,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     remote_image_tag: str
     volume: str | VolumeParameters
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
+    as_agent: AgentProtocol | tuple[AgentProtocol, str]
     test_with_env_callback: typing.Callable[[TestEnvironmentContext], None]
     env_vars: typing.Mapping[str, str]
 
@@ -9698,6 +9705,20 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
+    def as_agent(self, protocol: AgentProtocol, *, agent_custom_path: str | None = None) -> typing.Self:
+        """Configures the resource as an agent that supports the specified protocol."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        if agent_custom_path is not None:
+            rpc_args['agentCustomPath'] = agent_custom_path
+        rpc_args['protocol'] = protocol
+        capability_id = 'Aspire.Hosting.Agents/asAgentWithPath' if agent_custom_path is not None else 'Aspire.Hosting.Agents/asAgent'
+        result = self._client.invoke_capability(
+            capability_id,
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def test_with_env_callback(self, callback: typing.Callable[[TestEnvironmentContext], None]) -> typing.Self:
         """Configures environment with callback (test version)"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -10259,6 +10280,18 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onResourceEndpointsAllocated', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_resource_endpoints_allocated'. Expected: Callable[[ResourceEndpointsAllocatedEvent], None]")
+        if _as_agent := kwargs.pop("as_agent", None):
+            if _validate_type(_as_agent, AgentProtocol):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["protocol"] = typing.cast(AgentProtocol, _as_agent)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgent', rpc_args))
+            elif _validate_tuple_types(_as_agent, (AgentProtocol, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["protocol"] = typing.cast(tuple[AgentProtocol, str], _as_agent)[0]
+                rpc_args["agentCustomPath"] = typing.cast(tuple[AgentProtocol, str], _as_agent)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgentWithPath', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'as_agent'. Expected: AgentProtocol or (AgentProtocol, str)")
         if _test_with_env_callback := kwargs.pop("test_with_env_callback", None):
             if _validate_type(_test_with_env_callback, typing.Callable[[TestEnvironmentContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10317,6 +10350,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     remote_image_tag: str
     endpoints_in_env: typing.Iterable[str]
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
+    as_agent: AgentProtocol | tuple[AgentProtocol, str]
     test_with_env_callback: typing.Callable[[TestEnvironmentContext], None]
     env_vars: typing.Mapping[str, str]
 
@@ -10836,6 +10870,20 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
+    def as_agent(self, protocol: AgentProtocol, *, agent_custom_path: str | None = None) -> typing.Self:
+        """Configures the resource as an agent that supports the specified protocol."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        if agent_custom_path is not None:
+            rpc_args['agentCustomPath'] = agent_custom_path
+        rpc_args['protocol'] = protocol
+        capability_id = 'Aspire.Hosting.Agents/asAgentWithPath' if agent_custom_path is not None else 'Aspire.Hosting.Agents/asAgent'
+        result = self._client.invoke_capability(
+            capability_id,
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def test_with_env_callback(self, callback: typing.Callable[[TestEnvironmentContext], None]) -> typing.Self:
         """Configures environment with callback (test version)"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -11224,6 +11272,18 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onResourceEndpointsAllocated', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_resource_endpoints_allocated'. Expected: Callable[[ResourceEndpointsAllocatedEvent], None]")
+        if _as_agent := kwargs.pop("as_agent", None):
+            if _validate_type(_as_agent, AgentProtocol):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["protocol"] = typing.cast(AgentProtocol, _as_agent)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgent', rpc_args))
+            elif _validate_tuple_types(_as_agent, (AgentProtocol, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["protocol"] = typing.cast(tuple[AgentProtocol, str], _as_agent)[0]
+                rpc_args["agentCustomPath"] = typing.cast(tuple[AgentProtocol, str], _as_agent)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgentWithPath', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'as_agent'. Expected: AgentProtocol or (AgentProtocol, str)")
         if _test_with_env_callback := kwargs.pop("test_with_env_callback", None):
             if _validate_type(_test_with_env_callback, typing.Callable[[TestEnvironmentContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -11294,6 +11354,7 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     remote_image_name: str
     remote_image_tag: str
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
+    as_agent: AgentProtocol | tuple[AgentProtocol, str]
     test_with_env_callback: typing.Callable[[TestEnvironmentContext], None]
     env_vars: typing.Mapping[str, str]
 
@@ -11790,6 +11851,20 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
+    def as_agent(self, protocol: AgentProtocol, *, agent_custom_path: str | None = None) -> typing.Self:
+        """Configures the resource as an agent that supports the specified protocol."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        if agent_custom_path is not None:
+            rpc_args['agentCustomPath'] = agent_custom_path
+        rpc_args['protocol'] = protocol
+        capability_id = 'Aspire.Hosting.Agents/asAgentWithPath' if agent_custom_path is not None else 'Aspire.Hosting.Agents/asAgent'
+        result = self._client.invoke_capability(
+            capability_id,
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def test_with_env_callback(self, callback: typing.Callable[[TestEnvironmentContext], None]) -> typing.Self:
         """Configures environment with callback (test version)"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -12161,6 +12236,18 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onResourceEndpointsAllocated', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_resource_endpoints_allocated'. Expected: Callable[[ResourceEndpointsAllocatedEvent], None]")
+        if _as_agent := kwargs.pop("as_agent", None):
+            if _validate_type(_as_agent, AgentProtocol):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["protocol"] = typing.cast(AgentProtocol, _as_agent)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgent', rpc_args))
+            elif _validate_tuple_types(_as_agent, (AgentProtocol, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["protocol"] = typing.cast(tuple[AgentProtocol, str], _as_agent)[0]
+                rpc_args["agentCustomPath"] = typing.cast(tuple[AgentProtocol, str], _as_agent)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgentWithPath', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'as_agent'. Expected: AgentProtocol or (AgentProtocol, str)")
         if _test_with_env_callback := kwargs.pop("test_with_env_callback", None):
             if _validate_type(_test_with_env_callback, typing.Callable[[TestEnvironmentContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

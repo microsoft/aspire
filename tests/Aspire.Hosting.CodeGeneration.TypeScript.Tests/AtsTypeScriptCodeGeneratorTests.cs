@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
 using System.Reflection;
+using Aspire.Hosting.Agents;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
@@ -529,6 +530,22 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.NotNull(addContainer);
 
         await Verify(addContainer).UseFileName("HostingAddContainerCapability");
+    }
+
+    [Fact]
+    public void Scanner_AgentsAssembly_AgentCapabilities()
+    {
+        var capabilities = ScanCapabilitiesFromAgentsAssembly();
+
+        AssertAgentCapability(capabilities, "asAgent", hasCustomPath: false);
+        AssertAgentCapability(capabilities, "asAgentWithPath", hasCustomPath: true);
+
+        var context = CreateContextFromAgentsAssembly();
+        var agentProtocol = context.EnumTypes.First(e => e.Name == nameof(AgentProtocol));
+        Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.A2A));
+        Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.Responses));
+        Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.AgUi));
+        Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.Acp));
     }
 
     [Fact]
@@ -1181,10 +1198,41 @@ public class AtsTypeScriptCodeGeneratorTests
         return result.Capabilities;
     }
 
+    private static void AssertAgentCapability(
+        List<AtsCapabilityInfo> capabilities,
+        string methodName,
+        bool hasCustomPath)
+    {
+        var capability = Assert.Single(capabilities, c => c.CapabilityId == $"Aspire.Hosting.Agents/{methodName}");
+
+        Assert.Equal(methodName, capability.MethodName);
+        Assert.True(capability.ReturnsBuilder);
+        Assert.Contains(capability.Parameters, p =>
+            p.Name == "protocol" &&
+            p.Type?.TypeId.EndsWith($".{nameof(AgentProtocol)}", StringComparison.Ordinal) == true);
+
+        if (hasCustomPath)
+        {
+            Assert.Contains(capability.Parameters, p => p.Name == "agentCustomPath" && p.Type?.TypeId == "string");
+        }
+        else
+        {
+            Assert.DoesNotContain(capability.Parameters, p => p.Name == "agentCustomPath");
+        }
+        Assert.DoesNotContain(capability.Parameters, p => p.Name == "a2AInvocationMode");
+    }
+
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromBrowsersAssembly()
     {
         var browsersAssembly = typeof(global::Aspire.Hosting.BrowserLogsBuilderExtensions).Assembly;
         var result = AtsCapabilityScanner.ScanAssembly(browsersAssembly);
+        return result.Capabilities;
+    }
+
+    private static List<AtsCapabilityInfo> ScanCapabilitiesFromAgentsAssembly()
+    {
+        var agentsAssembly = typeof(AgentResourceBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(agentsAssembly);
         return result.Capabilities;
     }
 
@@ -1195,12 +1243,20 @@ public class AtsTypeScriptCodeGeneratorTests
         return result.ToAtsContext();
     }
 
+    private static AtsContext CreateContextFromAgentsAssembly()
+    {
+        var agentsAssembly = typeof(AgentResourceBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(agentsAssembly);
+        return result.ToAtsContext();
+    }
+
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromBothAssemblies()
     {
         var (testAssembly, hostingAssembly) = LoadBothAssemblies();
 
         // Use ScanAssemblies for proper cross-assembly expansion
-        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, testAssembly]);
+        var agentsAssembly = typeof(AgentResourceBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, agentsAssembly, testAssembly]);
         return result.Capabilities;
     }
 
@@ -1209,7 +1265,8 @@ public class AtsTypeScriptCodeGeneratorTests
         var (testAssembly, hostingAssembly) = LoadBothAssemblies();
 
         // Use ScanAssemblies for proper cross-assembly expansion and enum collection
-        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, testAssembly]);
+        var agentsAssembly = typeof(AgentResourceBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, agentsAssembly, testAssembly]);
         return result.ToAtsContext();
     }
 

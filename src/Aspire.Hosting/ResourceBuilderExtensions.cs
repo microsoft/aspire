@@ -966,13 +966,15 @@ public static class ResourceBuilderExtensions
         var hasConnectionString = source.Resource is IResourceWithConnectionString && connectionStringSource is not null;
         var hasServiceDiscovery = source.Resource is IResourceWithServiceDiscovery && serviceDiscoverySource is not null;
         var hasExternalService = source.Resource is ExternalServiceResource && externalServiceSource is not null;
+        var referenceAnnotations = source.Resource.Annotations.OfType<IResourceWithReferenceAnnotation>().Where(a => a.CanApplyReference(source.Resource)).ToArray();
+        var hasReferenceAnnotation = referenceAnnotations.Length > 0;
 
         if (hasExternalService && (connectionName is not null || name is not null))
         {
             throw new InvalidOperationException("Reference names are not supported for external services.");
         }
 
-        if (name is not null && !hasServiceDiscovery)
+        if (name is not null && !hasServiceDiscovery && !hasReferenceAnnotation)
         {
             throw new InvalidOperationException("Named service references are only supported for resources with service discovery.");
         }
@@ -1007,6 +1009,17 @@ public static class ResourceBuilderExtensions
         if (hasExternalService)
         {
             builder = WithReference(builder, externalServiceSource!);
+            appliedReference = true;
+        }
+
+        if (hasReferenceAnnotation && !hasServiceDiscovery)
+        {
+            var referenceName = name ?? connectionName ?? source.Resource.Name;
+            foreach (var referenceAnnotation in referenceAnnotations)
+            {
+                builder = referenceAnnotation.WithReference(builder, source.Resource, referenceName);
+            }
+
             appliedReference = true;
         }
 
@@ -1207,6 +1220,11 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         ApplyEndpoints(builder, source.Resource);
+        foreach (var referenceAnnotation in source.Resource.Annotations.OfType<IResourceWithReferenceAnnotation>().Where(a => a.CanApplyReference(source.Resource)))
+        {
+            builder = referenceAnnotation.WithReference(builder, source.Resource, source.Resource.Name);
+        }
+
         return builder;
     }
 
@@ -1239,6 +1257,11 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         ApplyEndpoints(builder, source.Resource, endpointName: null, name);
+        foreach (var referenceAnnotation in source.Resource.Annotations.OfType<IResourceWithReferenceAnnotation>().Where(a => a.CanApplyReference(source.Resource)))
+        {
+            builder = referenceAnnotation.WithReference(builder, source.Resource, name);
+        }
+
         return builder;
     }
 

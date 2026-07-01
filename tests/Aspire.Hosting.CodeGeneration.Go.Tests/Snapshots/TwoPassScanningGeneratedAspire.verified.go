@@ -254,6 +254,16 @@ const (
 	UrlDisplayLocationDetailsOnly UrlDisplayLocation = "DetailsOnly"
 )
 
+// AgentProtocol represents AgentProtocol.
+type AgentProtocol string
+
+const (
+	AgentProtocolA2A AgentProtocol = "A2A"
+	AgentProtocolResponses AgentProtocol = "Responses"
+	AgentProtocolAgUi AgentProtocol = "AgUi"
+	AgentProtocolAcp AgentProtocol = "Acp"
+)
+
 // TestPersistenceMode represents TestPersistenceMode.
 type TestPersistenceMode string
 
@@ -1389,6 +1399,8 @@ func (s *aspireStore) GetFileNameWithContent(filenameTemplate string, sourceFile
 // Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource is the public interface for handle type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource.
 type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	AsHttp2Service() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1516,6 +1528,31 @@ type aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource struct {
 // newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle wraps an existing handle as Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource.
 func newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h *handle, c *client) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	return &aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsAgent(protocol AgentProtocol) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -3612,6 +3649,8 @@ func (s *beforeStartEvent) Services() ServiceProvider {
 // CSharpAppResource is the public interface for handle type CSharpAppResource.
 type CSharpAppResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol) CSharpAppResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) CSharpAppResource
 	AsHttp2Service() CSharpAppResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	DisableForwardedHeaders() CSharpAppResource
@@ -3721,6 +3760,31 @@ type cSharpAppResource struct {
 // newCSharpAppResourceFromHandle wraps an existing handle as CSharpAppResource.
 func newCSharpAppResourceFromHandle(h *handle, c *client) CSharpAppResource {
 	return &cSharpAppResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *cSharpAppResource) AsAgent(protocol AgentProtocol) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *cSharpAppResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -7486,6 +7550,8 @@ func (s *containerRegistryResource) WithValidator(validator func(arg TestResourc
 // ContainerResource is the public interface for handle type ContainerResource.
 type ContainerResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol) ContainerResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) ContainerResource
 	AsHttp2Service() ContainerResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() ContainerResource
@@ -7612,6 +7678,31 @@ type containerResource struct {
 // newContainerResourceFromHandle wraps an existing handle as ContainerResource.
 func newContainerResourceFromHandle(h *handle, c *client) ContainerResource {
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *containerResource) AsAgent(protocol AgentProtocol) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *containerResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -11136,6 +11227,8 @@ func (s *dockerfileStage) WorkDir(path string) DockerfileStage {
 // DotnetToolResource is the public interface for handle type DotnetToolResource.
 type DotnetToolResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol) DotnetToolResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) DotnetToolResource
 	AsHttp2Service() DotnetToolResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() DotnetToolResource
@@ -11249,6 +11342,31 @@ type dotnetToolResource struct {
 // newDotnetToolResourceFromHandle wraps an existing handle as DotnetToolResource.
 func newDotnetToolResourceFromHandle(h *handle, c *client) DotnetToolResource {
 	return &dotnetToolResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *dotnetToolResource) AsAgent(protocol AgentProtocol) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *dotnetToolResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -13936,6 +14054,8 @@ func (s *eventingSubscriberRegistrationContext) OnBeforeStart(callback func(arg 
 // ExecutableResource is the public interface for handle type ExecutableResource.
 type ExecutableResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol) ExecutableResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) ExecutableResource
 	AsHttp2Service() ExecutableResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() ExecutableResource
@@ -14043,6 +14163,31 @@ type executableResource struct {
 // newExecutableResourceFromHandle wraps an existing handle as ExecutableResource.
 func newExecutableResourceFromHandle(h *handle, c *client) ExecutableResource {
 	return &executableResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *executableResource) AsAgent(protocol AgentProtocol) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *executableResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -20285,6 +20430,8 @@ func (s *progressContext) CancellationToken() (*CancellationToken, error) {
 // ProjectResource is the public interface for handle type ProjectResource.
 type ProjectResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol) ProjectResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) ProjectResource
 	AsHttp2Service() ProjectResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	DisableForwardedHeaders() ProjectResource
@@ -20394,6 +20541,31 @@ type projectResource struct {
 // newProjectResourceFromHandle wraps an existing handle as ProjectResource.
 func newProjectResourceFromHandle(h *handle, c *client) ProjectResource {
 	return &projectResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *projectResource) AsAgent(protocol AgentProtocol) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *projectResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -23653,6 +23825,8 @@ func (s *testCollectionContext) Metadata() *Dict[string, string] {
 // TestDatabaseResource is the public interface for handle type TestDatabaseResource.
 type TestDatabaseResource interface {
 	handleReference
+	AsAgent(protocol AgentProtocol) TestDatabaseResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) TestDatabaseResource
 	AsHttp2Service() TestDatabaseResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() TestDatabaseResource
@@ -23779,6 +23953,31 @@ type testDatabaseResource struct {
 // newTestDatabaseResourceFromHandle wraps an existing handle as TestDatabaseResource.
 func newTestDatabaseResourceFromHandle(h *handle, c *client) TestDatabaseResource {
 	return &testDatabaseResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *testDatabaseResource) AsAgent(protocol AgentProtocol) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *testDatabaseResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
@@ -25863,6 +26062,8 @@ func (s *testMutableCollectionContext) Tags() *List[string] {
 type TestRedisResource interface {
 	handleReference
 	AddTestChildDatabase(name string, options ...*AddTestChildDatabaseOptions) TestDatabaseResource
+	AsAgent(protocol AgentProtocol) TestRedisResource
+	AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) TestRedisResource
 	AsHttp2Service() TestRedisResource
 	CreateExecutionConfiguration() ExecutionConfigurationBuilder
 	ExcludeFromManifest() TestRedisResource
@@ -26032,6 +26233,31 @@ func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTes
 		return &testDatabaseResource{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &testDatabaseResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// AsAgent configures the resource as an agent that supports the specified protocol.
+func (s *testRedisResource) AsAgent(protocol AgentProtocol) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// AsAgentWithPath configures the resource as an agent that supports the specified protocol using a custom protocol path.
+func (s *testRedisResource) AsAgentWithPath(agentCustomPath string, protocol AgentProtocol) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
+	reqArgs["protocol"] = serializeValue(protocol)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
