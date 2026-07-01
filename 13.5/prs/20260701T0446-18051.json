@@ -1,0 +1,9 @@
+{
+  "author": "mehara-rothila",
+  "comment": "Improved error message clarity when AppHost exits before backchannel connection is established; includes exit code in error",
+  "mergedAt": "2026-07-01T04:46:15Z",
+  "number": 18051,
+  "runDate": "2026-07-01T07:24:31Z",
+  "status": "included",
+  "title": "Improve AppHost backchannel connection error message"
+}

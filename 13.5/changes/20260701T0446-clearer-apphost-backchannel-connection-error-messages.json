@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@mehara-rothila"
+  ],
+  "description": "When the AppHost process exits before the CLI can establish a backchannel connection, the error message now includes the exit code and uses clearer wording, removing the previously redundant phrasing. This makes it easier to diagnose AppHost startup failures.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "💬",
+  "firstMergedAt": "2026-07-01T04:46:15Z",
+  "lastMergedAt": "2026-07-01T04:46:15Z",
+  "name": "Clearer AppHost backchannel connection error messages",
+  "owner": "JamesNK",
+  "prs": [
+    18051
+  ]
+}
