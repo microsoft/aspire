@@ -413,6 +413,27 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanAssembly_HostingAssembly_ExportsPromptProgressToRunSyncOnBackgroundThread()
+    {
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == "Aspire.Hosting/promptProgress");
+
+        Assert.True(capability.RunSyncOnBackgroundThread);
+
+        var optionsParameter = Assert.Single(capability.Parameters, p => p.Name == "options");
+        Assert.NotNull(optionsParameter.Type);
+        Assert.Equal(AtsTypeCategory.Dto, optionsParameter.Type.Category);
+
+        var optionsDto = Assert.Single(result.DtoTypes, d => d.TypeId == optionsParameter.Type.TypeId);
+        var workProperty = Assert.Single(optionsDto.Properties, p => p.Name == "Work");
+        Assert.True(workProperty.IsCallback);
+        Assert.True(workProperty.IsOptional);
+    }
+
+    [Fact]
     public void ScanAssembly_DerivedExportedType_DoesNotRegenerateInheritedProperties()
     {
         var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);

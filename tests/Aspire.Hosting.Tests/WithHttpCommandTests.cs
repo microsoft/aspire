@@ -430,6 +430,31 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(expectSuccess, result.Success);
     }
 
+    [Fact]
+    public async Task WithHttpCommand_WhenHttpSendObservesCanceledToken_ReturnsCanceled()
+    {
+        using var builder = CreateTestDistributedApplicationBuilder();
+        using var cts = new CancellationTokenSource();
+
+        var fakeHandler = new CancelingHttpMessageHandler(cts);
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/cancel", "Cancel The Thing", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient" });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand", cts.Token).DefaultTimeout();
+
+        Assert.True(fakeHandler.Called, "Expected the HTTP handler to be called");
+        Assert.False(result.Success);
+        Assert.True(result.Canceled);
+    }
+
     [InlineData(null, false)] // Default method is POST
     [InlineData("get", true)]
     [InlineData("post", false)]
@@ -515,6 +540,18 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
             }
 
             return response;
+        }
+    }
+
+    private sealed class CancelingHttpMessageHandler(CancellationTokenSource cancellationTokenSource) : HttpMessageHandler
+    {
+        public bool Called { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Called = true;
+            cancellationTokenSource.Cancel();
+            throw new OperationCanceledException(cancellationToken);
         }
     }
 
@@ -1011,4 +1048,3 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
 
     }
 }
-
