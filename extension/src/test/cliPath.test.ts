@@ -281,7 +281,7 @@ suite('utils/cliPath tests', () => {
         });
     });
 
-    suite('tryExecuteCli', () => {
+    suite('getWindowsPathCliCandidates', () => {
         test('builds Windows PATH candidates without current directory entries', () => {
             const candidates = getWindowsPathCliCandidates({
                 Path: '.;.\\tools;tools;C:relative;C:\\Tools; ;C:\\Users\\user\\.dotnet\\tools;',
@@ -295,7 +295,9 @@ suite('utils/cliPath tests', () => {
                 'C:\\Users\\user\\.dotnet\\tools\\aspire.CMD',
             ]);
         });
+    });
 
+    suite('getCliExecutionCommand', () => {
         test('uses direct execution for unresolved bare Windows command', () => {
             const platformStub = sinon.stub(process, 'platform').value('win32');
             const originalComSpec = process.env.ComSpec;
@@ -467,7 +469,9 @@ suite('utils/cliPath tests', () => {
                 fs.rmSync(tempDirectory, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 });
             }
         });
+    });
 
+    suite('tryExecuteCli', () => {
         test('validates Windows cmd wrappers', async function () {
             if (process.platform !== 'win32') {
                 this.skip();

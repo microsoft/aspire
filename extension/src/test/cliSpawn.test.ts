@@ -283,10 +283,9 @@ suite('spawnCliProcess tests', () => {
     });
 
     test('redacts original command arguments from Windows cmd wrapper spawn diagnostics', () => {
-        // spawnCliProcess logs through the cmd.exe wrapper on Windows, but the wrapped /c
-        // command line embeds resource command secrets (e.g. password args after `--`) verbatim.
-        // The diagnostic log must use diagnosticArgs (the original CLI argv) so that the same
-        // redaction-after-`--` rule applies as on macOS/Linux direct spawning.
+        // spawnCliProcess logs the original CLI command and argv instead of the cmd.exe wrapper
+        // command line, where resource command secrets (e.g. password args after `--`) can be
+        // embedded verbatim before the normal redaction rule gets a chance to run.
         const actualPlatform = process.platform;
         const platformStub = sinon.stub(process, 'platform').value('win32');
         const originalComSpec = process.env.ComSpec;

@@ -23,7 +23,6 @@ export interface SpawnProcessOptions {
 export interface CliSpawnCommand {
     command: string;
     args: string[];
-    diagnosticArgs?: string[];
     windowsVerbatimArguments?: boolean;
 }
 
@@ -36,7 +35,6 @@ export function getCliSpawnCommand(command: string, args?: string[]): CliSpawnCo
     return {
         command: executionCommand.file,
         args: executionCommand.args,
-        diagnosticArgs: executionCommand.diagnosticArgs,
         windowsVerbatimArguments: executionCommand.windowsVerbatimArguments,
     };
 }

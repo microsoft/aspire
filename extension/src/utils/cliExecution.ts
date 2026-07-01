@@ -9,12 +9,6 @@ export interface CliExecutionCommand {
      * Must be spawned with windowsVerbatimArguments: true so Node does not re-quote it.
      */
     args: string[];
-    /**
-     * Args suitable for human-readable diagnostics. When the cmd.exe wrapper is used these
-     * reflect the original CLI invocation (e.g. `call <cliPath> <arg1> <arg2>`) rather than
-     * the wrapped /c command line, which is easier to log and redact.
-     */
-    diagnosticArgs?: string[];
     windowsVerbatimArguments: boolean;
 }
 
@@ -37,7 +31,6 @@ export function getCliExecutionCommand(cliPath: string, args: string[]): CliExec
         return {
             file: process.env.ComSpec ?? 'cmd.exe',
             args: ['/d', '/v:off', '/s', '/c', buildCmdWrapperCommand(cliPath, args)],
-            diagnosticArgs: ['call', cliPath, ...args],
             windowsVerbatimArguments: true,
         };
     }
