@@ -198,7 +198,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         await Dialog.CancelAsync();
     }
 
-    // Default maximum number of bytes to read from an uploaded file into memory.
+    // Default maximum number of bytes to accept from an uploaded file.
     private const long DefaultMaxUploadedFileBytes = 1024 * 1024; // 1 MB
 
     private async Task OnFileSelected(IEnumerable<FluentInputFileEventArgs> args, InputViewModel inputModel)
@@ -207,10 +207,38 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         if (file?.Stream != null)
         {
             var maxBytes = inputModel.Input.MaxFileSize > 0 ? inputModel.Input.MaxFileSize : DefaultMaxUploadedFileBytes;
-            // Wrap the file stream to prevent reading more than the configured max into memory.
-            using var limitedStream = new LimitedStream(file.Stream, maxBytes);
-            using var reader = new StreamReader(limitedStream);
-            inputModel.Value = await reader.ReadToEndAsync();
+
+            // Save the uploaded file to a temp directory on disk. The AppHost reads the file
+            // directly from this path, avoiding gRPC message size limits for large files.
+            var tempDir = Path.Combine(Path.GetTempPath(), "aspire-uploads");
+            Directory.CreateDirectory(tempDir);
+            var tempFilePath = Path.Combine(tempDir, Guid.NewGuid().ToString());
+
+            await using (var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                long totalBytesWritten = 0;
+                var buffer = new byte[81920];
+                int bytesRead;
+
+                while ((bytesRead = await file.Stream.ReadAsync(buffer).ConfigureAwait(false)) > 0)
+                {
+                    if (totalBytesWritten + bytesRead > maxBytes)
+                    {
+                        // Write only up to the limit, then stop.
+                        var remaining = (int)(maxBytes - totalBytesWritten);
+                        if (remaining > 0)
+                        {
+                            await fileStream.WriteAsync(buffer.AsMemory(0, remaining)).ConfigureAwait(false);
+                        }
+                        break;
+                    }
+
+                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead)).ConfigureAwait(false);
+                    totalBytesWritten += bytesRead;
+                }
+            }
+
+            inputModel.Value = tempFilePath;
             inputModel.FileDisplayName = file.Name;
 
             _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.Value)));
@@ -224,82 +252,6 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.Value)));
             _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.FileDisplayName)));
         }
-    }
-
-    private sealed class LimitedStream(Stream innerStream, long maxBytes) : Stream
-    {
-        private long _bytesRead;
-
-        public override bool CanRead => innerStream.CanRead;
-        public override bool CanSeek => innerStream.CanSeek;
-        public override bool CanWrite => false;
-        public override long Length => innerStream.Length;
-
-        public override long Position
-        {
-            get => innerStream.Position;
-            set => innerStream.Position = value;
-        }
-
-        public override void Flush() => innerStream.Flush();
-
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            if (_bytesRead >= maxBytes)
-            {
-                return 0;
-            }
-
-            var remaining = maxBytes - _bytesRead;
-            if (count > remaining)
-            {
-                count = (int)remaining;
-            }
-
-            var read = innerStream.Read(buffer, offset, count);
-            _bytesRead += read;
-            return read;
-        }
-
-        public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
-        {
-            if (_bytesRead >= maxBytes)
-            {
-                return 0;
-            }
-
-            var remaining = maxBytes - _bytesRead;
-            if (count > remaining)
-            {
-                count = (int)remaining;
-            }
-
-            var read = await innerStream.ReadAsync(buffer.AsMemory(offset, count), cancellationToken).ConfigureAwait(false);
-            _bytesRead += read;
-            return read;
-        }
-
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
-        {
-            if (_bytesRead >= maxBytes)
-            {
-                return 0;
-            }
-
-            var remaining = maxBytes - _bytesRead;
-            if (buffer.Length > remaining)
-            {
-                buffer = buffer[..(int)remaining];
-            }
-
-            var read = await innerStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-            _bytesRead += read;
-            return read;
-        }
-
-        public override long Seek(long offset, SeekOrigin origin) => innerStream.Seek(offset, origin);
-        public override void SetLength(long value) => innerStream.SetLength(value);
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     private async Task ToggleSecretTextVisibilityAsync(InputViewModel inputModel)

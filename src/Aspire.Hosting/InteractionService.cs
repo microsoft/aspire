@@ -551,7 +551,8 @@ internal class InteractionService : IInteractionService
                                 }
                                 break;
                             case InputType.FileChooser:
-                                // File chooser values are file paths; basic validation that the value is not empty is handled above.
+                                // File chooser values are file paths on disk; basic validation that the value is not empty is handled above.
+                                // The consumer opens the file via OpenFileStreamAsync().
                                 break;
                             default:
                                 break;

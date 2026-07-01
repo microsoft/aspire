@@ -403,7 +403,7 @@ public class InputViewModelTests
 
         // Assert
         Assert.True(string.IsNullOrEmpty(viewModel.Value));
-        Assert.Null(viewModel.FileDisplayName);
+        Assert.True(string.IsNullOrEmpty(viewModel.FileDisplayName));
     }
 
     [Fact]
@@ -418,11 +418,11 @@ public class InputViewModelTests
         var viewModel = new InputViewModel(input);
 
         // Act
-        viewModel.Value = "file-content-here";
+        viewModel.Value = "/tmp/aspire-uploads/abc123";
         viewModel.FileDisplayName = "readme.txt";
 
-        // Assert
-        Assert.Equal("file-content-here", viewModel.Value);
+        // Assert - Value holds the file path, FileDisplayName holds the user-facing name
+        Assert.Equal("/tmp/aspire-uploads/abc123", viewModel.Value);
         Assert.Equal("readme.txt", viewModel.FileDisplayName);
     }
 
@@ -447,7 +447,8 @@ public class InputViewModelTests
         // Act
         viewModel.SetInput(newInput);
 
-        // Assert - FileDisplayName is not managed by SetInput, so it retains its value
-        Assert.Equal("old-file.txt", viewModel.FileDisplayName);
+        // Assert - SetInput replaces the underlying proto input, so FileDisplayName resets
+        // to the new input's FileName (empty by default).
+        Assert.True(string.IsNullOrEmpty(viewModel.FileDisplayName));
     }
 }

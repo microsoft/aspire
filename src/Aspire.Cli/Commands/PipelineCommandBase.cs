@@ -893,7 +893,11 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             answers[i] = new PublishingPromptInputAnswer
             {
-                Value = result
+                Name = input.Name,
+                Value = result,
+                FileName = string.Equals(input.InputType, "FileChooser", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(result)
+                    ? Path.GetFileName(result)
+                    : null
             };
         }
 

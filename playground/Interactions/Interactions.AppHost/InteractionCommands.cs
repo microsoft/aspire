@@ -35,13 +35,14 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var fileContent = result.Data.Value;
-                var fileSize = fileContent?.Length ?? 0;
-                logger.LogInformation("Selected file ({Size} characters)", fileSize);
+                var fileInput = result.Data;
+                await using var stream = await fileInput.OpenFileStreamAsync(commandContext.CancellationToken);
+                var fileSize = stream is not null ? new System.IO.FileInfo(fileInput.Value!).Length : 0;
+                logger.LogInformation("Selected file: {FileName} ({Size} bytes)", fileInput.FileName, fileSize);
 
                 _ = interactionService.PromptMessageBoxAsync(
                     "File selected",
-                    $"File received ({fileSize} characters).",
+                    $"File '{fileInput.FileName}' received ({fileSize} bytes).",
                     new MessageBoxInteractionOptions { Intent = MessageIntent.Success });
 
                 return CommandResults.Success();
@@ -89,10 +90,9 @@ internal static class InteractionCommands
 
                 foreach (var input in result.Data)
                 {
-                    // Log only size for file inputs to avoid leaking file contents into logs.
                     if (input.InputType == InputType.FileChooser)
                     {
-                        logger.LogInformation("Input: {Name} = ({Size} characters)", input.Name, input.Value?.Length ?? 0);
+                        logger.LogInformation("Input: {Name} = file '{FileName}'", input.Name, input.FileName);
                     }
                     else
                     {
@@ -132,14 +132,14 @@ internal static class InteractionCommands
                 }
                 else
                 {
-                    logger.LogInformation("Selected file ({Size} characters)", result.Data.Value.Length);
+                    logger.LogInformation("Selected file: {FileName}", result.Data.FileName);
                 }
 
                 _ = interactionService.PromptMessageBoxAsync(
                     "Result",
                     string.IsNullOrEmpty(result.Data.Value)
                         ? "No file was selected."
-                        : $"File received ({result.Data.Value.Length} characters).",
+                        : $"File '{result.Data.FileName}' received.",
                     new MessageBoxInteractionOptions { Intent = MessageIntent.Information });
 
                 return CommandResults.Success();
@@ -169,9 +169,17 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var content = result.Data.Value ?? string.Empty;
+                var fileInput = result.Data;
+                await using var stream = await fileInput.OpenFileStreamAsync(commandContext.CancellationToken);
+                if (stream is null)
+                {
+                    return CommandResults.Failure("No file content available.");
+                }
 
-                logger.LogInformation("File content received ({Length} characters)", content.Length);
+                using var reader = new System.IO.StreamReader(stream);
+                var content = await reader.ReadToEndAsync(commandContext.CancellationToken);
+
+                logger.LogInformation("File '{FileName}' content received ({Length} characters)", fileInput.FileName, content.Length);
 
                 // Show a truncated preview in a message box.
                 const int maxPreviewLength = 2000;

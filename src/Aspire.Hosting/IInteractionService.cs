@@ -414,6 +414,13 @@ public sealed class InteractionInput
             field = value;
         }
     }
+
+    /// <summary>
+    /// Gets or sets the original file name for <see cref="InputType.FileChooser"/> inputs.
+    /// When a file is selected, <see cref="Value"/> holds the file path on disk and this property
+    /// holds the user-facing file name (e.g. "readme.txt").
+    /// </summary>
+    public string? FileName { get; internal set; }
 }
 
 /// <summary>
