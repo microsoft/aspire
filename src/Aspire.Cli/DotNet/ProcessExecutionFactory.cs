@@ -33,10 +33,13 @@ internal sealed class ProcessExecutionFactory(
             FileName = fileName,
             WorkingDirectory = workingDirectory.FullName,
             IsolateConsole = options.IsolateConsole,
-            // Only the isolated path on Windows uses the kill-on-close job; the non-isolated path
-            // and every Unix path leave it null. The job is the process-wide singleton, created on
-            // demand the first time an isolated child needs it.
-            JobHandle = options.IsolateConsole && environment.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
+            // IsolateConsole uses the kill-on-close job through the suspended CreateProcess path.
+            // BindChildToCliJob is a non-isolated opt-in for the same job: short-lived helpers
+            // (e.g. aspire-managed.exe nuget search) want the safety net without the per-call
+            // conhost.exe overhead of CREATE_NEW_CONSOLE. The actual post-spawn
+            // AssignProcessToJobObject runs from IsolatedProcess.StartRedirected when JobHandle
+            // is non-null. See https://github.com/microsoft/aspire/issues/18490.
+            JobHandle = (options.IsolateConsole || options.BindChildToCliJob) && environment.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
         };
 
         foreach (var a in args)
@@ -70,7 +73,9 @@ internal sealed class ProcessExecutionFactory(
             FileName = startInfo.FileName,
             WorkingDirectory = startInfo.WorkingDirectory,
             IsolateConsole = options.IsolateConsole,
-            JobHandle = options.IsolateConsole && environment.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
+            // See the JobHandle comment in the other CreateExecution overload for the rationale
+            // behind the (IsolateConsole || BindChildToCliJob) gate.
+            JobHandle = (options.IsolateConsole || options.BindChildToCliJob) && environment.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
         };
 
         foreach (var arg in startInfo.ArgumentList)

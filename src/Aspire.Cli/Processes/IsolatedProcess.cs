@@ -3,6 +3,7 @@
 
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Runtime.Versioning;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
@@ -40,12 +41,17 @@ internal sealed class IsolatedProcessStartInfo
     public IDictionary<string, string?> Environment => _environment ??= LoadParentEnvironment();
 
     /// <summary>
-    /// Windows-only crash-time safety net. When set, the spawned child is atomically
-    /// assigned to this job object via the suspended-create / assign / resume dance in
-    /// <see cref="WindowsProcessInterop.SpawnConsoleIsolatedProcess"/>. Set to
-    /// <see cref="WindowsConsoleProcessJob.Handle"/> from <see cref="WindowsConsoleProcessJob.Shared"/>
-    /// on Windows hosts; <see langword="null"/> on non-Windows hosts (Unix process-group
-    /// semantics cover the equivalent case).
+    /// Windows-only crash-time safety net. When set, the spawned child is bound to this job
+    /// object so closing the job's last handle (or the parent's exit, for a kill-on-close job)
+    /// kills the child. When <see cref="IsolateConsole"/> is <see langword="true"/> the binding
+    /// is atomic via the suspended-create / assign / resume dance in
+    /// <see cref="WindowsProcessInterop.SpawnConsoleIsolatedProcess"/>; when it's
+    /// <see langword="false"/> the binding happens immediately after <see cref="Process.Start(ProcessStartInfo)"/>
+    /// returns (best-effort — the targeted helpers don't fork further children, so the post-spawn
+    /// race window is empty in practice). Set to <see cref="WindowsConsoleProcessJob.Handle"/>
+    /// from <see cref="WindowsConsoleProcessJob.Shared"/> on Windows hosts; <see langword="null"/>
+    /// on non-Windows hosts, where the CLI's normal SIGINT/SIGTERM signalling covers graceful
+    /// shutdown but a portable kill-on-parent-exit primitive is not available.
     /// </summary>
     public SafeFileHandle? JobHandle { get; init; }
 
@@ -54,10 +60,10 @@ internal sealed class IsolatedProcessStartInfo
     /// group on Windows (CREATE_NEW_CONSOLE | SW_HIDE) so a graceful CTRL+C can target it without
     /// also signalling the CLI. When <see langword="false"/> the child
     /// is spawned via an ordinary redirected <see cref="Process.Start(ProcessStartInfo)"/> — no new
-    /// console, no <see cref="JobHandle"/>, and stdin wired to an empty pipe — which is the shape
-    /// every non-isolated CLI subprocess (build, restore, package add, …) uses. On Unix both modes
-    /// are identical because SIGTERM via the process group covers teardown, so only Windows branches
-    /// on this flag.
+    /// console and stdin wired to an empty pipe — which is the shape every non-isolated CLI
+    /// subprocess (build, restore, package add, …) uses. On Unix both modes are identical because
+    /// SIGTERM via the process group covers teardown, so only Windows branches on this flag.
+    /// <see cref="JobHandle"/> is honored in both modes (see its remarks).
     /// </summary>
     public bool IsolateConsole { get; init; } = true;
 
@@ -261,9 +267,10 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(standardErrorHandler);
 
         // Non-isolated mode is an ordinary redirected Process.Start on every platform: no new
-        // console, no JobHandle, stdin wired to an empty pipe. On Unix the isolated mode is the
-        // same redirected spawn (SIGTERM via the process group is enough), so only the isolated
-        // Windows path needs the dedicated new-console launcher.
+        // console, stdin wired to an empty pipe, and optional Windows job binding for callers that
+        // opt in to the kill-on-close safety net without console isolation. On Unix the isolated
+        // mode is the same redirected spawn (SIGTERM via the process group is enough), so only the
+        // isolated Windows path needs the dedicated new-console launcher.
         if (!startInfo.IsolateConsole)
         {
             return StartRedirected(startInfo, standardOutputHandler, standardErrorHandler, redirectStandardInput: true);
@@ -281,9 +288,12 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     /// Cross-platform redirected spawn — a thin <see cref="Process.Start(ProcessStartInfo)"/>
     /// wrapper. Used for every non-isolated child (all platforms) and for isolated children on
     /// Unix, where SIGTERM / process groups handle cooperative shutdown so the new-console
-    /// gymnastics the Windows partial uses are unnecessary. <see cref="IsolatedProcessStartInfo.JobHandle"/>
-    /// is ignored here (Unix process-group reparenting + signal delivery cover the crash-time case
-    /// that JobHandle exists to address on Windows).
+    /// gymnastics the Windows partial uses are unnecessary. On Windows, when
+    /// <see cref="IsolatedProcessStartInfo.JobHandle"/> is set the child is best-effort-bound to
+    /// the job immediately after spawn so an abnormal CLI exit (e.g. <c>TerminateProcess</c> from
+    /// a parent harness) tears the helper down with us instead of orphaning it (see
+    /// https://github.com/microsoft/aspire/issues/18490). On Unix, <c>JobHandle</c> is ignored:
+    /// process-group signal delivery covers graceful shutdown, but not abrupt parent death.
     /// </summary>
     /// <param name="startInfo">Process launch parameters.</param>
     /// <param name="standardOutputHandler">Per-line callback for stdout; receives the wrapper as sender.</param>
@@ -341,6 +351,23 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         var process = Process.Start(psi)
             ?? throw new InvalidOperationException($"Failed to start child process: {startInfo.FileName}");
 
+        // Windows-only crash-time safety net for non-isolated children that opted in via
+        // ProcessInvocationOptions.BindChildToCliJob. The isolated path uses CREATE_SUSPENDED +
+        // AssignProcessToJobObject + ResumeThread to close the fork-and-breakaway race window
+        // (see WindowsProcessInterop.SpawnConsoleIsolatedProcess); we cannot use that dance here
+        // because the BCL Process.Start path does not expose CREATE_SUSPENDED. The race is
+        // accepted for the short-lived helper subprocesses this targets (aspire-managed.exe nuget
+        // search / restore, dotnet package search) — they do not fork further children, so the
+        // window between Process.Start returning and the assign succeeding is empty in practice.
+        // The same caveat applies to grandchildren that explicitly break away from the job; these
+        // targeted helpers do not create any. A failed assignment (already-exited process,
+        // already-assigned process) is swallowed: the helper still runs and the worst case is the
+        // same orphan we are trying to prevent. See https://github.com/microsoft/aspire/issues/18490.
+        if (startInfo.JobHandle is not null && !startInfo.IsolateConsole && OperatingSystem.IsWindows())
+        {
+            TryAssignNonIsolatedChildToJob(process, startInfo.JobHandle);
+        }
+
         return WrapStartedProcess(
             startInfo,
             process,
@@ -349,6 +376,37 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
             standardOutputHandler,
             standardErrorHandler,
             extraDispose: null);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void TryAssignNonIsolatedChildToJob(Process process, SafeFileHandle jobHandle)
+    {
+        try
+        {
+            // Process.SafeHandle is the kept CreateProcess handle the BCL opened internally, which
+            // satisfies the PROCESS_SET_QUOTA | PROCESS_TERMINATE minimum AssignProcessToJobObject
+            // requires. Going through this property avoids re-opening the handle.
+            // See https://learn.microsoft.com/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject
+            // for the required access rights.
+            if (!WindowsProcessInterop.AssignProcessToJobObject(jobHandle, process.SafeHandle.DangerousGetHandle()))
+            {
+                // ERROR_ACCESS_DENIED (5) typically means the process already exited; ERROR_INVALID_
+                // PARAMETER (87) can mean the process is already in a job that disallows reassign-
+                // ment. Both are benign for our short-lived helpers — the worst case is the same
+                // orphan we are trying to prevent. Swallow so spawn does not throw on a best-effort
+                // safety net.
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // Best-effort. The helper may have exited and closed its handle before the assignment
+            // raced in; the worst case is the same orphan risk we had before this opt-in.
+        }
+        catch (InvalidOperationException)
+        {
+            // Best-effort. A handle race must not tear down a successful spawn — the helper still
+            // runs without the safety net.
+        }
     }
 
     /// <summary>

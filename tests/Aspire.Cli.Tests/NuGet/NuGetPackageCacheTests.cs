@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.DotNet;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -245,6 +246,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         int observedTake = -1;
         int observedSkip = -1;
         bool? observedUseCache = null;
+        bool? observedBindChildToCliJob = null;
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
@@ -258,6 +260,7 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
                     observedTake = take;
                     observedSkip = skip;
                     observedUseCache = useCache;
+                    observedBindChildToCliJob = options.BindChildToCliJob;
 
                     return query switch
                     {
@@ -288,9 +291,54 @@ public class NuGetPackageCacheTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, observedTake);
         Assert.Equal(0, observedSkip);
         Assert.True(observedUseCache);
+        Assert.True(observedBindChildToCliJob);
         Assert.Collection(
             packages,
             package => Assert.Equal("13.2.0", package.Version),
             package => Assert.Equal("13.3.0", package.Version));
+    }
+
+    [Fact]
+    public async Task GetPackagesAsync_BindsSearchProcessToCliJob()
+    {
+        ProcessInvocationOptions? observedOptions = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, options, _) =>
+                {
+                    observedOptions = options;
+
+                    return (0, [
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Version = "13.4.0", Source = "nuget.org" }
+                    ]);
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var nuGetPackageCache = provider.GetRequiredService<INuGetPackageCache>();
+        var packages = await nuGetPackageCache.GetPackagesAsync(
+            workspace.WorkspaceRoot,
+            "Aspire.Hosting",
+            filter: null,
+            prerelease: false,
+            nugetConfigFile: null,
+            useCache: true,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Collection(
+            packages,
+            package => Assert.Equal("Aspire.Hosting.Redis", package.Id));
+        Assert.NotNull(observedOptions);
+        Assert.True(observedOptions.BindChildToCliJob);
+        Assert.True(observedOptions.SuppressLogging);
     }
 }

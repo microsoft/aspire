@@ -135,7 +135,14 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
                 skip,
                 nugetConfigFile,
                 useCache, // Pass through the useCache parameter
-                new ProcessInvocationOptions { SuppressLogging = true },
+                new ProcessInvocationOptions
+                {
+                    SuppressLogging = true,
+                    // Bind the spawned `dotnet package search` to the CLI's Windows kill-on-close
+                    // job so the helper dies with an abnormal CLI exit (e.g. TerminateProcess from
+                    // the VS Code extension). See https://github.com/microsoft/aspire/issues/18490.
+                    BindChildToCliJob = true,
+                },
                 cancellationToken
                 );
 
@@ -201,7 +208,11 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
                 skip: 0, // skip and take parameters are ignored when exactMatch is true
                 nugetConfigFile,
                 useCache, // Pass through the useCache parameter
-                new ProcessInvocationOptions { SuppressLogging = true },
+                new ProcessInvocationOptions
+                {
+                    SuppressLogging = true,
+                    BindChildToCliJob = true,
+                },
                 cancellationToken
                 );
 

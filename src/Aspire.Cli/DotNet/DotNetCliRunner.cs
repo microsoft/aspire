@@ -83,6 +83,26 @@ internal sealed class ProcessInvocationOptions
     public bool IsolateConsole { get; set; }
 
     /// <summary>
+    /// When <see langword="true"/>, on Windows the spawned process is assigned to the CLI's
+    /// kill-on-close job object after start so it dies with the CLI even if the CLI exits
+    /// abnormally (e.g. <c>TerminateProcess</c> from the VS Code extension, a crash, or a
+    /// power loss). No-op on Unix, where the CLI's normal SIGINT/SIGTERM signalling
+    /// covers graceful shutdown; a portable kill-on-parent-exit primitive is not available.
+    /// </summary>
+    /// <remarks>
+    /// Use for short-lived helper subprocesses that must never outlive the CLI — e.g.
+    /// <c>aspire-managed.exe nuget search</c> / <c>nuget restore</c> and <c>dotnet package
+    /// search</c>. Unlike <see cref="IsolateConsole"/>, this does NOT spawn the child into a
+    /// new hidden console group (no per-call <c>conhost.exe</c>) — it only binds the child
+    /// to the kill-on-close job. See https://github.com/microsoft/aspire/issues/18490 for
+    /// the orphaned-helpers bug this addresses: when the extension hard-kills the CLI via
+    /// Node's <c>proc.kill()</c> (which maps to <c>TerminateProcess</c> on Windows), the
+    /// CLI's cancellation handlers never run, and any child not in the kill-on-close job is
+    /// orphaned and accumulates over time in Process Explorer.
+    /// </remarks>
+    public bool BindChildToCliJob { get; set; }
+
+    /// <summary>
     /// Issues the graceful shutdown signal during the shutdown ladder (DCP
     /// <c>stop-process-tree</c> on Windows, SIGTERM on Unix). When <c>null</c>, the cancellation
     /// path uses <see cref="ProcessExecution"/>'s force-kill mode.
@@ -320,6 +340,7 @@ internal sealed class DotNetCliRunner(
             // then kill) instead of its graceful ladder. Build/restore/etc. callers leave these unset
             // and intentionally keep the force-kill path.
             IsolateConsole = options.IsolateConsole,
+            BindChildToCliJob = options.BindChildToCliJob,
             GracefulShutdownSignaler = options.GracefulShutdownSignaler,
             ShutdownService = options.ShutdownService,
             StandardOutputCallback = line =>
