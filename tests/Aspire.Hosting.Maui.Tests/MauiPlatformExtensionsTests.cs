@@ -60,7 +60,7 @@ public class MauiPlatformExtensionsTests
             "emulator",
             null,
             null,
-            new Dictionary<string, string> { ["AdbTarget"] = "-e" }),
+            null),
 
         new PlatformTestConfig("iOSDevice", "iOS", "ios", "mauiapp-ios-device", "net10.0-ios",
             (maui) => maui.AddiOSDevice(),

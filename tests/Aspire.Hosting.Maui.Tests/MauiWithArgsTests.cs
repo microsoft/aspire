@@ -88,7 +88,7 @@ public class MauiWithArgsTests
     }
 
     [Fact]
-    public async Task AndroidEmulator_DefaultArgs_ContainAdbTargetEmulator()
+    public async Task AndroidEmulator_DefaultArgs_DoNotContainStaticAdbTarget()
     {
         using var dir = new TestTempDirectory();
         var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
@@ -103,8 +103,7 @@ public class MauiWithArgsTests
         Assert.Contains("run", args);
         Assert.Contains("-f", args);
         Assert.Contains("net10.0-android", args);
-        // Default (no emulator ID) should use -e flag for "only running emulator"
-        Assert.Contains("-p:AdbTarget=-e", args);
+        Assert.DoesNotContain(args, a => a.Contains("AdbTarget", StringComparison.Ordinal));
     }
 
     [Fact]

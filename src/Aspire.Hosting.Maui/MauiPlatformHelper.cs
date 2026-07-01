@@ -122,6 +122,11 @@ internal static class MauiPlatformHelper
             {
                 context.Args.Add(arg);
             }
+
+            if (GetSelectedTargetMsBuildArgument(resourceBuilder.Resource) is { } selectedTargetArgument)
+            {
+                context.Args.Add(selectedTargetArgument);
+            }
         });
 
         // Configure OTLP exporter with custom endpoint support
@@ -160,6 +165,22 @@ internal static class MauiPlatformHelper
         }
 
         return platformTfm ?? string.Empty;
+    }
+
+    internal static string? GetSelectedTargetMsBuildArgument(IResource resource)
+    {
+        if (!resource.TryGetLastAnnotation<SelectedEmulatorAnnotation>(out var selection) ||
+            string.IsNullOrWhiteSpace(selection.SelectedId))
+        {
+            return null;
+        }
+
+        return selection.TargetKind switch
+        {
+            MauiTargetSelectionKind.AndroidEmulator => $"-p:{KnownMauiMSBuildProperties.AdbTarget}=-s {selection.SelectedId}",
+            MauiTargetSelectionKind.IOSSimulator => $"-p:{KnownMauiMSBuildProperties.DeviceName}=:v2:udid={selection.SelectedId}",
+            _ => null
+        };
     }
 
     /// <summary>
