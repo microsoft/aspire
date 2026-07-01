@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "CI infrastructure fix for docs site - pins sharp package version to unblock Azure DevOps Artifacts feed ingestion. Not actual documentation content.",
+  "mergedAt": "2026-07-01T13:54:39Z",
+  "number": 1320,
+  "runDate": "2026-07-01T18:36:46Z",
+  "status": "excluded",
+  "title": "Pin sharp to 0.34.5 (0.35.2 blocked by feed ingestion policy)"
+}
