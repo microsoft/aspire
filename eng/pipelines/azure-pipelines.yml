@@ -21,6 +21,15 @@ parameters:
       - stable
       - staging
       - daily
+  # When true, the notify_failure and notify_success stages run in dry-run
+  # mode: they log the `gh` CLI commands they would run to file/update/close
+  # the ci-broken issue, but do not actually mutate anything on
+  # microsoft/aspire. Use this when validating pipeline plumbing changes
+  # without spamming issues.
+  - name: notifyOnFailureDryRun
+    displayName: 'Notify on failure: dry-run (log gh commands, do not mutate)'
+    type: boolean
+    default: false
 
 trigger:
   batch: true
@@ -63,6 +72,13 @@ pr:
 variables:
   - template: /eng/pipelines/common-variables.yml@self
   - template: /eng/common/templates-official/variables/pool-providers.yml@self
+
+  # aspire-bot-app-id + aspire-bot-private-key for notify_failure / notify_success.
+  # Gate mirrors the notify stage conditions: non-PR + main/release/* only.
+  # A manual run on a feature branch never needs these, so don't pay the
+  # variable-group auth check at queue time.
+  - ${{ if and(notin(variables['Build.Reason'], 'PullRequest'), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'))) }}:
+    - group: Aspire-Release-Secrets
 
   - name: _BuildConfig
     value: Release
@@ -909,3 +925,136 @@ extends:
                         Write-Host "Resolved macOS npm validation artifact: $artifactName"
                         Write-Host "##vso[task.setvariable variable=NpmValidationArtifactName]$artifactName"
                       displayName: 🟣Resolve native macOS RID
+
+    # ----------------------------------------------------------------
+    # On every non-PR build of main / release/*, file or update a GitHub
+    # issue on microsoft/aspire when the build fails, and close any open
+    # ci-broken issue for the branch when the build succeeds.
+    #
+    # Split into TWO stages so we can gate at the STAGE level — only
+    # stage conditions can reference dependencies.<stage>.result; from a
+    # JOB condition in a different stage, the only available form is
+    # stageDependencies.<stage>.<job>.result (no stage-aggregate form),
+    # which would force us to enumerate specific job names from upstream
+    # stages.
+    #
+    # See docs/ci/internal-build-failure-notifications.md for the full
+    # contract (labels, marker, dedupe behavior, dry-run).
+    # ----------------------------------------------------------------
+    - stage: notify_failure
+      displayName: Notify Build Failure
+      dependsOn:
+        - build_sign_native
+        - build_extension
+        - build
+        - template_tests
+        - assemble
+        - prepare_installers
+      # Files an issue when at least one watched stage Failed. We depend on
+      # EVERY non-notify stage so a break anywhere — including the publish
+      # stage `assemble`, the VSIX build `build_extension`, or `template_tests`
+      # — files an issue. A stage whose dependency failed is reported as
+      # 'Skipped' (not 'Failed'), so each stage must be watched directly
+      # rather than relying on one downstream stage to roll failures up.
+      # Canceled stage results match neither 'Failed' nor 'Succeeded', so
+      # operator/timeout cancellations produce no notification.
+      condition: |
+        and(
+          ne(variables['Build.Reason'], 'PullRequest'),
+          eq(variables['_IsNotificationBranch'], 'true'),
+          or(
+            in(dependencies.build_sign_native.result, 'Failed'),
+            in(dependencies.build_extension.result, 'Failed'),
+            in(dependencies.build.result, 'Failed'),
+            in(dependencies.template_tests.result, 'Failed'),
+            in(dependencies.assemble.result, 'Failed'),
+            in(dependencies.prepare_installers.result, 'Failed')
+          )
+        )
+      variables:
+        # Stage results exposed as runtime variables so the shared notify
+        # template can compose a "failed stages" list for the notification.
+        - name: BuildSignNativeStageResult
+          value: $[ dependencies.build_sign_native.result ]
+        - name: BuildExtensionStageResult
+          value: $[ dependencies.build_extension.result ]
+        - name: BuildStageResult
+          value: $[ dependencies.build.result ]
+        - name: TemplateTestsStageResult
+          value: $[ dependencies.template_tests.result ]
+        - name: AssembleStageResult
+          value: $[ dependencies.assemble.result ]
+        - name: PrepareInstallersStageResult
+          value: $[ dependencies.prepare_installers.result ]
+      jobs:
+      - template: /eng/pipelines/templates/notify-build-result.yml@self
+        parameters:
+          mode: Failure
+          jobName: NotifyOnFailure
+          jobDisplayName: 'File / update ci-broken issue'
+          dryRun: ${{ parameters.notifyOnFailureDryRun }}
+
+    - stage: notify_success
+      displayName: Notify Build Success
+      dependsOn:
+        - build_sign_native
+        - build_extension
+        - build
+        - template_tests
+        - assemble
+        - prepare_installers
+      # Only closes the issue when EVERY watched stage is Succeeded /
+      # SucceededWithIssues (the same stage set as notify_failure). Requiring
+      # the full set means a build that fixes one stage but breaks another
+      # (e.g. green build/build_sign_native but a failed `assemble`) does NOT
+      # falsely close the open ci-broken issue.
+      #
+      # prepare_installers also permits 'Skipped': on a notifiable branch
+      # (main / release/*) it runs whenever build_sign_native succeeded, so a
+      # Skip there implies build_sign_native did not succeed — a failure path
+      # already covered by notify_failure. (The stable-channel skip in its own
+      # condition only takes effect on non-notifiable branches.) Allowing
+      # 'Skipped' is therefore defensive and cannot cause a false close.
+      #
+      # A build with no Failed stage but a Canceled/Skipped watched stage (a
+      # 1ES timeout, say) matches neither this success set nor notify_failure's
+      # Failed set, so neither stage fires. That "limbo" build leaves an open
+      # ci-broken issue OPEN by design: a canceled stage never verified its
+      # work, so there's no fully-green signal to justify a close, and
+      # auto-closing would be a false all-clear. Operators close manually if a
+      # cancellation was spurious. See
+      # docs/ci/internal-build-failure-notifications.md.
+      condition: |
+        and(
+          ne(variables['Build.Reason'], 'PullRequest'),
+          eq(variables['_IsNotificationBranch'], 'true'),
+          in(dependencies.build_sign_native.result, 'Succeeded', 'SucceededWithIssues'),
+          in(dependencies.build_extension.result, 'Succeeded', 'SucceededWithIssues'),
+          in(dependencies.build.result, 'Succeeded', 'SucceededWithIssues'),
+          in(dependencies.template_tests.result, 'Succeeded', 'SucceededWithIssues'),
+          in(dependencies.assemble.result, 'Succeeded', 'SucceededWithIssues'),
+          in(dependencies.prepare_installers.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
+        )
+      variables:
+        # Stage results exposed as runtime variables so the shared notify
+        # template can compose a "failed stages" list. In Success mode none
+        # are 'Failed', so the list is empty and the notifier ignores it.
+        - name: BuildSignNativeStageResult
+          value: $[ dependencies.build_sign_native.result ]
+        - name: BuildExtensionStageResult
+          value: $[ dependencies.build_extension.result ]
+        - name: BuildStageResult
+          value: $[ dependencies.build.result ]
+        - name: TemplateTestsStageResult
+          value: $[ dependencies.template_tests.result ]
+        - name: AssembleStageResult
+          value: $[ dependencies.assemble.result ]
+        - name: PrepareInstallersStageResult
+          value: $[ dependencies.prepare_installers.result ]
+      jobs:
+      - template: /eng/pipelines/templates/notify-build-result.yml@self
+        parameters:
+          mode: Success
+          jobName: CloseOnSuccess
+          jobDisplayName: 'Close ci-broken issue'
+          dryRun: ${{ parameters.notifyOnFailureDryRun }}

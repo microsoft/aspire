@@ -67,3 +67,13 @@ variables:
   # repositories." Consumed by publish-winget.yml to guard upstream submission.
   - name: _IsProductionBranch
     value: ${{ or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/')) }}
+
+  # Branches where notify_failure / notify_success file or close GitHub
+  # issues. Excludes internal/release/* so internal branch names don't
+  # leak into the public microsoft/aspire tracker.
+  #
+  # IMPORTANT: exact match on refs/heads/main, not startsWith — the
+  # pipeline trigger's `main*` wildcard would otherwise sweep in
+  # branches like main-something.
+  - name: _IsNotificationBranch
+    value: ${{ or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')) }}

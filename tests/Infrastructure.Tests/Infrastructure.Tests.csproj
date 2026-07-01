@@ -34,6 +34,7 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared/TempDirectory.cs" />
+    <Compile Include="$(TestsSharedDir)Playwright\TestUtils.cs" Link="shared/TestUtils.cs" />
   </ItemGroup>
 
   <ItemGroup>
