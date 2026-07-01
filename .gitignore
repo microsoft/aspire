@@ -227,3 +227,6 @@ local.settings.json
 diagnostics.log
 .squad/
 tags
+
+# Yarn Berry install state
+**/.yarn/install-state.gz
