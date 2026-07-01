@@ -1,4 +1,4 @@
-import { assertNoTerminalControlCharacters } from './AspireTerminalProvider';
+import { assertNoTerminalControlCharacters } from './terminalValidation';
 
 export interface CliExecutionCommand {
     /** Executable to spawn. On Windows for .cmd/.bat shims this is cmd.exe; otherwise the CLI path itself. */

@@ -251,7 +251,7 @@ async function promptToAddAppHostPathToSettingsFile(result: AppHostProjectSearch
 
 /**
  * Checks if the Aspire CLI is available. If not found on PATH, it checks the default
- * installation directory and updates the VS Code setting accordingly.
+ * installation directory.
  *
  * If not available, shows a message prompting to open Aspire CLI installation steps.
  * @returns An object containing the CLI path to use and whether CLI is available
