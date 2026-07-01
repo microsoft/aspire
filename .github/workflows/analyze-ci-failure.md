@@ -230,6 +230,26 @@ jobs:
             cp eng/test-retry-patterns.json ci-failure-data/retry-patterns.json
           fi
 
+          # Fetch prior cause files from the memory branch so the agent can
+          # identify recurring failures and append occurrences rather than
+          # creating duplicate cause entries.
+          MEMORY_BRANCH="memory/ci-failure-analysis"
+          if git clone --depth 1 --branch "$MEMORY_BRANCH" \
+              "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" \
+              memory-checkout 2>/dev/null; then
+            if [ -d "memory-checkout/causes" ]; then
+              mkdir -p ci-failure-data/prior-causes
+              cp memory-checkout/causes/*.json ci-failure-data/prior-causes/ 2>/dev/null || true
+              PRIOR_COUNT=$(find ci-failure-data/prior-causes -name '*.json' -type f 2>/dev/null | wc -l)
+              echo "Loaded ${PRIOR_COUNT} prior cause file(s) from memory branch"
+            else
+              echo "No prior causes directory on memory branch"
+            fi
+            rm -rf memory-checkout
+          else
+            echo "Memory branch not found (first run or not yet created)"
+          fi
+
           # Fetch test results artifact if available and extract test failure info
           ARTIFACT_NAME=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" \
             --jq '[.artifacts[] | select(.name | test("test-results|TestResults"; "i"))] | first | .name // empty' 2>/dev/null || echo "")
@@ -380,6 +400,23 @@ jobs:
                 ci-failure-data/retry-patterns.json 2>/dev/null || echo "None loaded."
             else
               echo "No retry patterns file found."
+            fi
+            echo ""
+
+            echo "## Prior Causes (from memory branch)"
+            echo ""
+            echo "These are previously identified CI failure causes. If this run's"
+            echo "failure matches an existing cause, reuse the same cause ID and"
+            echo "append a new occurrence rather than creating a duplicate."
+            echo ""
+            if [ -d "ci-failure-data/prior-causes" ] && [ "$(find ci-failure-data/prior-causes -name '*.json' -type f 2>/dev/null | wc -l)" -gt 0 ]; then
+              for CAUSE_FILE in ci-failure-data/prior-causes/*.json; do
+                [ -f "$CAUSE_FILE" ] || continue
+                jq -r '"### `\(.id)`\n- **Type**: \(.type)\n- **Title**: \(.title)\n- **Test**: \(.test_name // "N/A")\n- **Error pattern**: \(.error_pattern | .[0:300])\n- **Occurrences**: \(.occurrences | length)\n- **Last seen**: \(.occurrences | sort_by(.observed_at) | last | .observed_at // "unknown")\n"' \
+                  "$CAUSE_FILE" 2>/dev/null || true
+              done
+            else
+              echo "No prior causes available (first run or memory branch not initialized)."
             fi
           } > ci-failure-data/analysis-summary.md
 
@@ -851,6 +888,14 @@ Read `ci-failure-data/analysis-summary.md`. It contains the run information, PR 
 
 Analyze all of the data to classify each failed job (see **Classification Rules** below).
 
+Check the **Prior Causes** section in the summary. If any of this run's failures match an existing cause (same test name, same error pattern, or same infrastructure error), you MUST reuse that cause's `id` when writing the cause file in Step 3b. This allows the publish job to merge occurrences into the existing cause rather than creating duplicates.
+
+A failure matches an existing cause when:
+- For flaky tests: the failing test name matches `test_name` in a prior cause, OR the error message/stack trace substantially matches the `error_pattern`
+- For infra failures: the error message substantially matches the `error_pattern` of a prior infra-failure cause
+
+When reusing an existing cause, keep the same `id`, `type`, `title`, `test_name`, and `error_pattern` fields (you may improve the `title` or `error_pattern` if the new failure provides better detail). Only add the new occurrence to `occurrences`.
+
 ### Step 3: Write the analysis JSON files
 
 Write two types of files:
@@ -938,9 +983,9 @@ Field details:
 - `title`: A brief human-readable description (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
 - `test_name`: The fully qualified test name. Omit this field for infrastructure failures that aren't test-specific.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue (up to ~500 characters).
-- `occurrences`: An array with one entry for this run. The publish job accumulates occurrences across runs over time.
+- `occurrences`: An array with one entry for this run. The publish job accumulates occurrences across runs over time. When reusing an existing cause ID, still only include the new occurrence for this run — the publish job handles merging with historical occurrences.
 
-Create the `/tmp/gh-aw/agent/causes/` directory and write one `.json` file per distinct cause. Multiple failed tests with the same root cause (e.g., same infrastructure error) can be grouped into a single cause file.
+Create the `/tmp/gh-aw/agent/causes/` directory and write one `.json` file per distinct cause. Multiple failed tests with the same root cause (e.g., same infrastructure error) can be grouped into a single cause file. When a failure matches an existing prior cause, use the same filename (`<cause-id>.json`) so the publish job merges correctly.
 
 ### Step 4: Take action
 
@@ -957,6 +1002,7 @@ The file `ci-failure-data/analysis-summary.md` contains the full failure data:
 - Test failures extracted from TRX artifacts (test name and error message)
 - PR changed files
 - Known transient failure patterns from `eng/test-retry-patterns.json`
+- **Prior causes** from the memory branch (previously identified recurring failures with their IDs and occurrence history)
 
 ## Classification Rules
 
