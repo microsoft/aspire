@@ -47,6 +47,12 @@
     "webpack-dev-server": "^5.2.4",
     "tmp": "^0.2.6",
     "hono": "4.12.27",
-    "ws": "8.21.0"
+    "ws": "8.21.0",
+    "@angular-devkit/build-angular": {
+      "http-proxy-middleware": "3.0.7"
+    },
+    "@angular/build": {
+      "undici": "7.28.0"
+    }
   }
 }
