@@ -334,11 +334,33 @@ window.focusElement = function (selector, suppressFocusVisible) {
     }
 };
 
+window.initializeMobileNavMenuKeyboardNavigation = function (dotnetHelper) {
+    const keydownListener = function (event) {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            dotnetHelper.invokeMethodAsync("CloseMobileNavMenuFromKeyboardAsync");
+        }
+    };
+
+    // Keep Escape-to-close available as soon as the menu opens, including while
+    // focus is still on the navigation button that opened this inline menu.
+    // Do not trap Tab: this menu is inline page navigation, not a modal dialog.
+    document.addEventListener("keydown", keydownListener, true);
+
+    return {
+        keydownListener
+    };
+};
+
+window.disposeMobileNavMenuKeyboardNavigation = function (obj) {
+    document.removeEventListener("keydown", obj.keydownListener, true);
+};
+
 window.getWindowDimensions = function() {
     return {
         width: window.innerWidth,
         height: window.innerHeight
-    }
+    };
 }
 
 window.listenToWindowResize = function(dotnetHelper) {

@@ -946,6 +946,10 @@ fluent-tooltip[anchor="dialog_close"] > div {
     text-overflow: ellipsis;
 }
 
+.aspire-menu-container.mobile-nav-menu fluent-menu-item {
+    scroll-margin-block: var(--mobile-nav-menu-focus-padding);
+}
+
 .aspire-menu-container fluent-menu-item.mobile-nav-menu-item-active {
     /* Mirror the desktop FluentAppBar selected treatment with an accent bar on
        the leading edge. position: relative anchors the ::before bar to the
