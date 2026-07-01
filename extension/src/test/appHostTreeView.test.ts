@@ -5,6 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
+import * as capabilities from '../capabilities';
 import * as cliModule from '../debugger/languages/cli';
 import * as cliPathModule from '../utils/cliPath';
 import * as configInfoProvider from '../utils/configInfoProvider';
@@ -35,6 +36,16 @@ function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {
         properties: null,
     };
     return { ...base, ...overrides } as ResourceJson;
+}
+
+function makeAttachableProjectProperties(overrides: Record<string, string | null> = {}): ResourceJson['properties'] {
+    return {
+        'executable.pid': '4242',
+        'executable.path': 'dotnet',
+        'executable.args': null,
+        'project.path': '/repo/api/api.csproj',
+        ...overrides,
+    };
 }
 
 function buildPath(...segments: string[]): string {
@@ -1593,6 +1604,99 @@ suite('getResourceContextValue', () => {
         assert.strictEqual(result, 'resource:canRestart:canOpenTerminal');
     });
 
+    test('running project resource with redacted launch args includes attach debugger context', () => {
+        const result = getResourceContextValue(makeResource({
+            resourceType: 'Project',
+            state: ResourceState.Running,
+            properties: makeAttachableProjectProperties(),
+        }));
+        assert.strictEqual(result, 'resource:canAttachDebugger');
+    });
+
+    test('running F# project resource includes attach debugger context', () => {
+        const result = getResourceContextValue(makeResource({
+            resourceType: 'Project',
+            state: ResourceState.Running,
+            properties: makeAttachableProjectProperties({
+                'project.path': '/repo/worker/Worker.fsproj',
+            }),
+        }));
+        assert.strictEqual(result, 'resource:canAttachDebugger');
+    });
+
+    test('running project resource with process id excludes attach debugger context without C# debugger support', () => {
+        const result = getResourceContextValue(makeResource({
+            resourceType: 'Project',
+            state: ResourceState.Running,
+            properties: makeAttachableProjectProperties(),
+        }), false);
+        assert.strictEqual(result, 'resource');
+    });
+
+    test('project resource without process id does not include attach debugger context', () => {
+        const result = getResourceContextValue(makeResource({
+            resourceType: 'Project',
+            state: ResourceState.Running,
+            properties: {
+                'project.path': '/repo/api/api.csproj',
+                'executable.path': 'dotnet',
+            },
+        }));
+        assert.strictEqual(result, 'resource');
+    });
+
+    test('non-running project resource with process id does not include attach debugger context', () => {
+        const result = getResourceContextValue(makeResource({
+            resourceType: 'Project',
+            state: ResourceState.Finished,
+            properties: makeAttachableProjectProperties(),
+        }));
+        assert.strictEqual(result, 'resource');
+    });
+
+    test('running project resource without project path does not include attach debugger context', () => {
+        const result = getResourceContextValue(makeResource({
+            resourceType: 'Project',
+            state: ResourceState.Running,
+            properties: makeAttachableProjectProperties({
+                'project.path': null,
+            }),
+        }));
+        assert.strictEqual(result, 'resource');
+    });
+
+    test('running project resource without dotnet executable does not include attach debugger context', () => {
+        const result = getResourceContextValue(makeResource({
+            resourceType: 'Project',
+            state: ResourceState.Running,
+            properties: makeAttachableProjectProperties({
+                'executable.path': 'func',
+            }),
+        }));
+        assert.strictEqual(result, 'resource');
+    });
+
+    test('running child project resource does not include attach debugger context', () => {
+        const result = getResourceContextValue(makeResource({
+            resourceType: 'Project',
+            state: ResourceState.Running,
+            properties: makeAttachableProjectProperties({
+                'resource.parentName': 'maui',
+            }),
+        }));
+        assert.strictEqual(result, 'resource');
+    });
+
+    test('executable resource with process id does not include attach debugger context', () => {
+        const result = getResourceContextValue(makeResource({
+            resourceType: 'Executable',
+            properties: {
+                'executable.pid': '4242',
+            },
+        }));
+        assert.strictEqual(result, 'resource');
+    });
+
     test('resource with disabled lifecycle command has base context only', () => {
         const result = getResourceContextValue(makeResource({
             commands: { 'start': { displayName: null, description: null, state: 'Disabled' } },
@@ -2286,6 +2390,541 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         launchStub.restore();
         errorStub.restore();
         provider.dispose();
+    });
+
+    test('attachDebuggerToResource starts a coreclr attach session for a running project resource', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties(),
+                    }),
+                ],
+            }),
+        ]);
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+
+        try {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+
+            await (provider as any).attachDebuggerToResource(resourceItem);
+
+            assert.ok(startDebuggingStub.calledOnce, 'Expected VS Code to start one attach session');
+            const configuration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+            assert.strictEqual(configuration.type, 'coreclr');
+            assert.strictEqual(configuration.request, 'attach');
+            assert.strictEqual(configuration.name, 'Attach debugger: API');
+            assert.strictEqual(configuration.processName, 'api');
+            assert.strictEqual(configuration.processId, undefined);
+            assert.strictEqual(configuration.cwd, undefined);
+        }
+        finally {
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
+        }
+    });
+
+    test('attachDebuggerToResource derives process name from the project file name', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties({
+                            'project.path': '/repo/api/Some.Thing.csproj',
+                        }),
+                    }),
+                ],
+            }),
+        ]);
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+
+        try {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+
+            await (provider as any).attachDebuggerToResource(resourceItem);
+
+            const configuration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+            assert.strictEqual(configuration.processName, 'Some.Thing');
+        }
+        finally {
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
+        }
+    });
+
+    test('attachDebuggerToResource uses AssemblyName when the project file declares one', async () => {
+        const directory = fs.mkdtempSync(path.join(process.cwd(), '.assembly-name-test-'));
+        const projectPath = path.join(directory, 'ProjectFileName.csproj');
+        fs.writeFileSync(projectPath, `
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Custom.Assembly</AssemblyName>
+  </PropertyGroup>
+</Project>`);
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties({
+                            'project.path': projectPath,
+                        }),
+                    }),
+                ],
+            }),
+        ]);
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+
+        try {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+
+            await (provider as any).attachDebuggerToResource(resourceItem);
+
+            const configuration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+            assert.strictEqual(configuration.processName, 'Custom.Assembly');
+        }
+        finally {
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
+            fs.rmSync(directory, { recursive: true, force: true });
+        }
+    });
+
+    test('attachDebuggerToResource uses the latest resource project path', async () => {
+        const appHost = makeAppHost({
+            resources: [
+                makeResource({
+                    name: 'api',
+                    displayName: 'API',
+                    resourceType: 'Project',
+                    state: ResourceState.Running,
+                    properties: makeAttachableProjectProperties(),
+                }),
+            ],
+        });
+        const provider = makeTreeProvider([appHost]);
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+
+        try {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+            appHost.resources = [
+                makeResource({
+                    name: 'api',
+                    displayName: 'API',
+                    resourceType: 'Project',
+                    state: ResourceState.Running,
+                    properties: makeAttachableProjectProperties({
+                        'executable.pid': '5252',
+                        'project.path': '/repo/api-v2/api-v2.csproj',
+                    }),
+                }),
+            ];
+
+            await (provider as any).attachDebuggerToResource(resourceItem);
+
+            const configuration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+            assert.strictEqual(configuration.processName, 'api-v2');
+        }
+        finally {
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
+        }
+    });
+
+    test('attachDebuggerToResource resolves latest resource after AppHost process changes', async () => {
+        const appHosts = [
+            makeAppHost({
+                appHostPath: '/repo/AppHost/AppHost.csproj',
+                appHostPid: 1234,
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties(),
+                    }),
+                ],
+            }),
+        ];
+        const provider = makeTreeProvider(appHosts);
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+
+        try {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+            appHosts[0] = makeAppHost({
+                appHostPath: '/repo/AppHost/AppHost.csproj',
+                appHostPid: 5678,
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties({
+                            'executable.pid': '5252',
+                            'project.path': '/repo/api-next/api-next.csproj',
+                        }),
+                    }),
+                ],
+            });
+
+            await (provider as any).attachDebuggerToResource(resourceItem);
+
+            const configuration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+            assert.strictEqual(configuration.processName, 'api-next');
+        }
+        finally {
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
+        }
+    });
+
+    test('attachDebuggerToResource uses AppHost process identity when multiple AppHosts share a path', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                appHostPath: '/repo/AppHost/AppHost.csproj',
+                appHostPid: 1234,
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties({ 'executable.pid': '4242' }),
+                    }),
+                ],
+            }),
+            makeAppHost({
+                appHostPath: '/repo/AppHost/AppHost.csproj',
+                appHostPid: 5678,
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties({
+                            'executable.pid': '6262',
+                            'project.path': '/repo/second-api/second-api.csproj',
+                        }),
+                    }),
+                ],
+            }),
+        ]);
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+
+        try {
+            const [, secondAppHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(secondAppHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+
+            await (provider as any).attachDebuggerToResource(resourceItem);
+
+            const configuration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+            assert.strictEqual(configuration.processName, 'second-api');
+        }
+        finally {
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
+        }
+    });
+
+    test('attachDebuggerToResource fails closed when AppHost path resolution is ambiguous', async () => {
+        const appHosts = [
+            makeAppHost({
+                appHostPath: '/repo/AppHost/AppHost.csproj',
+                appHostPid: 1234,
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties({ 'executable.pid': '4242' }),
+                    }),
+                ],
+            }),
+        ];
+        const provider = makeTreeProvider(appHosts);
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage');
+
+        try {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+            appHosts.splice(
+                0,
+                appHosts.length,
+                makeAppHost({
+                    appHostPath: '/repo/AppHost/AppHost.csproj',
+                    appHostPid: 5678,
+                    resources: [
+                        makeResource({
+                            name: 'api',
+                            displayName: 'API',
+                            resourceType: 'Project',
+                            state: ResourceState.Running,
+                            properties: makeAttachableProjectProperties({ 'executable.pid': '5252' }),
+                        }),
+                    ],
+                }),
+                makeAppHost({
+                    appHostPath: '/repo/AppHost/AppHost.csproj',
+                    appHostPid: 9012,
+                    resources: [
+                        makeResource({
+                            name: 'api',
+                            displayName: 'API',
+                            resourceType: 'Project',
+                            state: ResourceState.Running,
+                            properties: makeAttachableProjectProperties({ 'executable.pid': '9292' }),
+                        }),
+                    ],
+                }));
+
+            await (provider as any).attachDebuggerToResource(resourceItem);
+
+            assert.ok(startDebuggingStub.notCalled, 'Expected no attach session when the current AppHost cannot be resolved unambiguously');
+            assert.ok(warningStub.calledOnce, 'Expected VS Code to show a warning');
+        }
+        finally {
+            warningStub.restore();
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
+        }
+    });
+
+    test('attachDebuggerToResource does not use stale resource when AppHost process id is reused', async () => {
+        const appHosts = [
+            makeAppHost({
+                appHostPath: '/repo/AppHost/AppHost.csproj',
+                appHostPid: 1234,
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties(),
+                    }),
+                ],
+            }),
+        ];
+        const provider = makeTreeProvider(appHosts);
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage');
+
+        try {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+            appHosts[0] = makeAppHost({
+                appHostPath: '/repo/OtherAppHost/AppHost.csproj',
+                appHostPid: 1234,
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'Other API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties({
+                            'executable.pid': '5252',
+                            'project.path': '/repo/other-api/other-api.csproj',
+                        }),
+                    }),
+                ],
+            });
+
+            await (provider as any).attachDebuggerToResource(resourceItem);
+
+            assert.ok(startDebuggingStub.notCalled, 'Expected no attach session for a resource from a different AppHost path');
+            assert.ok(warningStub.calledOnce, 'Expected VS Code to show a warning');
+        }
+        finally {
+            warningStub.restore();
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
+        }
+    });
+
+    test('attachDebuggerToResource does not use stale resource when latest resource is missing', async () => {
+        const appHosts = [
+            makeAppHost({
+                appHostPath: '/repo/AppHost/AppHost.csproj',
+                appHostPid: 1234,
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties(),
+                    }),
+                ],
+            }),
+        ];
+        const provider = makeTreeProvider(appHosts);
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage');
+
+        try {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+            appHosts.length = 0;
+
+            await (provider as any).attachDebuggerToResource(resourceItem);
+
+            assert.ok(startDebuggingStub.notCalled, 'Expected no attach session for a stale resource item');
+            assert.ok(warningStub.calledOnce, 'Expected VS Code to show a warning');
+        }
+        finally {
+            warningStub.restore();
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
+        }
+    });
+
+    test('attachDebuggerToResource does not use stale workspace resource after AppHost path changes', async () => {
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [
+                makeResource({
+                    name: 'api',
+                    displayName: 'API',
+                    resourceType: 'Project',
+                    state: ResourceState.Running,
+                    properties: makeAttachableProjectProperties(),
+                }),
+            ],
+            workspaceAppHostPath: '/repo/AppHost/AppHost.csproj',
+            workspaceAppHostCandidatePaths: [],
+            workspaceAppHostName: 'AppHost.csproj',
+            workspaceAppHostDescription: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository & { workspaceResources: ResourceJson[]; workspaceAppHostPath: string };
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage');
+
+        try {
+            const [workspaceResourcesItem] = provider.getChildren();
+            const [resourceItem] = provider.getChildren(workspaceResourcesItem);
+            repository.workspaceAppHostPath = '/repo/OtherAppHost/AppHost.csproj';
+            repository.workspaceResources = [
+                makeResource({
+                    name: 'api',
+                    displayName: 'Other API',
+                    resourceType: 'Project',
+                    state: ResourceState.Running,
+                    properties: makeAttachableProjectProperties({
+                        'executable.pid': '5252',
+                        'project.path': '/repo/other-api/other-api.csproj',
+                    }),
+                }),
+            ];
+
+            await (provider as any).attachDebuggerToResource(resourceItem);
+
+            assert.ok(startDebuggingStub.notCalled, 'Expected no attach session after the workspace AppHost path changed');
+            assert.ok(warningStub.calledOnce, 'Expected VS Code to show a warning');
+        }
+        finally {
+            warningStub.restore();
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
+        }
+    });
+
+    test('attachDebuggerToResource shows a warning when C# debugger support is unavailable', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties(),
+                    }),
+                ],
+            }),
+        ]);
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(false);
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage');
+
+        try {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+
+            await (provider as any).attachDebuggerToResource(resourceItem);
+
+            assert.ok(startDebuggingStub.notCalled, 'Expected no attach session without C# debugger support');
+            assert.ok(warningStub.calledOnce, 'Expected VS Code to show a warning');
+        }
+        finally {
+            warningStub.restore();
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
+        }
     });
 
     test('workspace mode renders a running AppHost with no resources', () => {

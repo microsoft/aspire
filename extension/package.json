@@ -360,6 +360,12 @@
         "icon": "$(debug-restart)"
       },
       {
+        "command": "aspire-vscode.attachDebuggerToResource",
+        "title": "%command.attachDebuggerToResource%",
+        "category": "Aspire",
+        "icon": "$(debug-alt)"
+      },
+      {
         "command": "aspire-vscode.viewResourceLogs",
         "title": "%command.viewResourceLogs%",
         "category": "Aspire",
@@ -579,6 +585,10 @@
           "when": "false"
         },
         {
+          "command": "aspire-vscode.attachDebuggerToResource",
+          "when": "false"
+        },
+        {
           "command": "aspire-vscode.viewResourceLogs",
           "when": "false"
         },
@@ -746,14 +756,19 @@
           "group": "2_actions@3"
         },
         {
+          "command": "aspire-vscode.attachDebuggerToResource",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^resource.*:canAttachDebugger/",
+          "group": "2_actions@4"
+        },
+        {
           "command": "aspire-vscode.executeResourceCommand",
           "when": "view == aspire-vscode.appHosts && viewItem =~ /^resource(:|$)/",
-          "group": "2_actions@4"
+          "group": "2_actions@5"
         },
         {
           "command": "aspire-vscode.executeResourceCommandItem",
           "when": "view == aspire-vscode.appHosts && viewItem == resourceCommand:enabled",
-          "group": "2_actions@4"
+          "group": "2_actions@5"
         },
         {
           "command": "aspire-vscode.viewResourceLogs",

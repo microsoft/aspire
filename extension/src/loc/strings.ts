@@ -123,6 +123,10 @@ export const appHostDebugActionLabel = vscode.l10n.t('Debug AppHost');
 export const appHostPathLabel = vscode.l10n.t('Path');
 export const appHostStartingDescription = vscode.l10n.t('Starting...');
 export const appHostStoppingDescription = vscode.l10n.t('Stopping...');
+export const attachDebuggerConfigurationName = (resource: string) => vscode.l10n.t('Attach debugger: {0}', resource);
+export const attachDebuggerUnavailable = vscode.l10n.t('This resource is not a running .NET project resource that can be attached with the C# debugger.');
+export const attachDebuggerCsharpExtensionRequired = vscode.l10n.t('Install the C# extension to attach the debugger to .NET project resources.');
+export const attachDebuggerDeclined = (resource: string) => vscode.l10n.t('VS Code did not start the debugger attach session for {0}.', resource);
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);
 export const appHostCandidateDescription = (language: string, status: string) => vscode.l10n.t('{0} · {1}', language, status);
 export const workspaceViewSelectedSingleAppHost = (language?: string) => language
