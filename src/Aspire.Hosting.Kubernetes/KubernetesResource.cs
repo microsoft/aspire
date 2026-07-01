@@ -227,7 +227,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 // This matches the core framework's SetBothPortsEnvVariables() behavior,
                 // which skips DefaultHttpsEndpoint when setting HTTPS_PORTS.
                 // See: https://github.com/microsoft/aspire/issues/14029
-                if (resource is ProjectResource projectResource &&
+                if (resource is IProjectLaunchDefaultsResource projectResource &&
                     endpoint == projectResource.DefaultHttpsEndpoint)
                 {
                     // Find the existing http endpoint's HelmValue to share it
