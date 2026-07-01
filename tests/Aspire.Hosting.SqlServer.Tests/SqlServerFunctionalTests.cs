@@ -16,6 +16,8 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Polly;
 
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 namespace Aspire.Hosting.SqlServer.Tests;
 
 public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
@@ -117,6 +119,34 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
 
         Assert.Single(cars);
         Assert.Equal("BatMobile", cars[0].Brand);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task SqlServerWithoutCertificateOpensConnection()
+    {
+        await AssertSqlServerConnectionAsync(
+            builder => builder.AddSqlServer("sqlserver").WithoutHttpsCertificate(),
+            (connectionStringBuilder, connectionString) =>
+            {
+                Assert.True(connectionStringBuilder.TrustServerCertificate);
+                Assert.True(string.IsNullOrEmpty(connectionStringBuilder.HostNameInCertificate));
+                Assert.DoesNotContain("Encrypt=", connectionString, StringComparison.OrdinalIgnoreCase);
+            });
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public async Task SqlServerWithModernDeveloperCertificateOpensConnection()
+    {
+        await AssertSqlServerConnectionAsync(
+            builder => builder.AddSqlServer("sqlserver").WithHttpsDeveloperCertificate(),
+            (connectionStringBuilder, _) =>
+            {
+                Assert.Equal(SqlConnectionEncryptOption.Mandatory, connectionStringBuilder.Encrypt);
+                Assert.False(connectionStringBuilder.TrustServerCertificate);
+                Assert.True(string.IsNullOrEmpty(connectionStringBuilder.HostNameInCertificate));
+            });
     }
 
     [Theory]
@@ -596,6 +626,31 @@ public class SqlServerFunctionalTests(ITestOutputHelper testOutputHelper)
             testOutputHelper,
             builder => builder.AddSqlServer("resource").WithPersistentLifetime(),
             "resource");
+    }
+
+    private async Task AssertSqlServerConnectionAsync(
+        Func<IDistributedApplicationBuilder, IResourceBuilder<SqlServerServerResource>> configure,
+        Action<SqlConnectionStringBuilder, string> assertConnectionString)
+    {
+        var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+
+        using var builder = TestDistributedApplicationBuilder.Create(o => { }, testOutputHelper);
+        var sqlServer = configure(builder);
+
+        using var app = builder.Build();
+
+        await app.StartAsync(cts.Token);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(sqlServer.Resource.Name, cts.Token);
+
+        var connectionString = await sqlServer.Resource.GetConnectionStringAsync(cts.Token);
+        Assert.NotNull(connectionString);
+        Assert.DoesNotContain(";;", connectionString);
+
+        var connectionStringBuilder = new SqlConnectionStringBuilder(connectionString);
+        assertConnectionString(connectionStringBuilder, connectionString);
+        using var sqlConnection = new SqlConnection(connectionString);
+        await sqlConnection.OpenAsync(cts.Token);
+        Assert.Equal(ConnectionState.Open, sqlConnection.State);
     }
 
 }

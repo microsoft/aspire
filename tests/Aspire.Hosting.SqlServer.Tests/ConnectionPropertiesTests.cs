@@ -10,7 +10,7 @@ public class ConnectionPropertiesTests
     [Fact]
     public void SqlServerServerResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-    var password = new ParameterResource("password", _ => "p@ssw0rd1", secret: true);
+        var password = new ParameterResource("password", _ => "p@ssw0rd1", secret: true);
         var resource = new SqlServerServerResource("sql", password);
 
         var properties = ((IResourceWithConnectionString)resource).GetConnectionProperties().ToArray();
@@ -25,7 +25,8 @@ public class ConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("JdbcConnectionString", property.Key);
-                Assert.Equal("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};trustServerCertificate=true", property.Value.ValueExpression);
+                Assert.StartsWith("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port}", property.Value.ValueExpression);
+                Assert.Contains("{cond-sql-bindings-tcp-tlsenabled-", property.Value.ValueExpression);
             },
             property =>
             {
@@ -73,7 +74,8 @@ public class ConnectionPropertiesTests
             property =>
             {
                 Assert.Equal("JdbcConnectionString", property.Key);
-                Assert.Equal("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};databaseName=Orders;trustServerCertificate=true", property.Value.ValueExpression);
+                Assert.StartsWith("jdbc:sqlserver://{sql.bindings.tcp.host}:{sql.bindings.tcp.port};databaseName=Orders", property.Value.ValueExpression);
+                Assert.Contains("{cond-sql-bindings-tcp-tlsenabled-", property.Value.ValueExpression);
             },
             property =>
             {
