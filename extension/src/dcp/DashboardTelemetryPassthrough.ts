@@ -82,8 +82,9 @@ function telemetryResultLabel(value: unknown): string {
     }
     return Number.isFinite(n) ? `Unknown(${n})` : 'Unknown';
 }
-// Failure / UserFault are routed through `sendTelemetryErrorEvent` so they
-// participate in the reporter's stricter scrubbing pass.
+// Failure / UserFault are routed through `sendTelemetryErrorEvent` so App
+// Insights treats them as error telemetry. Property-level sensitivity is still
+// controlled by the explicit allowlist and sanitizers in this file.
 function isFailureResult(value: unknown): boolean {
     if (value === undefined || value === null) {
         return false;
@@ -266,11 +267,11 @@ export class DashboardTelemetryPassthrough {
         });
 
         app.post('/telemetry/operation', requireHeaders, (req: Request, res: Response) => {
-            this._handlePostResultEvent(req, res, 'dashboard/operation', 'Operation');
+            this._handlePostResultEvent(req, res, 'aspire/dashboard/operation', 'Operation');
         });
 
         app.post('/telemetry/userTask', requireHeaders, (req: Request, res: Response) => {
-            this._handlePostResultEvent(req, res, 'dashboard/usertask', 'UserTask');
+            this._handlePostResultEvent(req, res, 'aspire/dashboard/usertask', 'UserTask');
         });
 
         app.post('/telemetry/fault', requireHeaders, (req: Request, res: Response) => {
@@ -285,40 +286,40 @@ export class DashboardTelemetryPassthrough {
             // The non-sensitive exception *type* is still reported structurally
             // via the retained `Aspire.Dashboard.Exception.Type` bundle property,
             // alongside `fault_severity` and `dashboard_event_name`.
-            const properties: EventProperties<'dashboard/fault'> = {
+            const properties: EventProperties<'aspire/dashboard/fault'> = {
                 dashboard_event_name: clampDashboardKey(payload.eventName),
                 fault_severity: faultSeverityLabel(payload.severity),
             };
             applyBundleAndCorrelations(properties, payload.properties, payload.correlatedWith);
-            sendTelemetryErrorEvent('dashboard/fault', properties);
+            sendTelemetryErrorEvent('aspire/dashboard/fault', properties);
             res.json(this._newCorrelation('Fault'));
         });
 
         app.post('/telemetry/asset', requireHeaders, (req: Request, res: Response) => {
             const payload = req.body as PostAssetRequest;
-            const properties: EventProperties<'dashboard/asset'> = {
+            const properties: EventProperties<'aspire/dashboard/asset'> = {
                 dashboard_event_name: clampDashboardKey(payload.eventName),
                 asset_id: clampDashboardKey(payload.assetId),
                 asset_event_version: formatAssetEventVersion(payload.assetEventVersion),
             };
             applyBundleAndCorrelations(properties, payload.additionalProperties, payload.correlatedWith);
-            sendTelemetryEvent('dashboard/asset', properties);
+            sendTelemetryEvent('aspire/dashboard/asset', properties);
             res.json(this._newCorrelation('Asset'));
         });
 
         // Both /property and /recurringProperty have byte-identical handler
         // bodies — only the registered event name differs. Parameterize so a
         // future field change has exactly one site to touch.
-        app.post('/telemetry/property', requireHeaders, this._propertyHandler('dashboard/property/set'));
-        app.post('/telemetry/recurringProperty', requireHeaders, this._propertyHandler('dashboard/property/recurring'));
+        app.post('/telemetry/property', requireHeaders, this._propertyHandler('aspire/dashboard/property/set'));
+        app.post('/telemetry/recurringProperty', requireHeaders, this._propertyHandler('aspire/dashboard/property/recurring'));
 
         app.post('/telemetry/commandLineFlags', requireHeaders, (req: Request, res: Response) => {
             const payload = req.body as PostCommandLineFlagsRequest;
-            const properties: EventProperties<'dashboard/commandlineflags'> = {
+            const properties: EventProperties<'aspire/dashboard/commandlineflags'> = {
                 flag_prefixes: formatFlagPrefixes(payload.flagPrefixes),
             };
             applyBundleFields(properties, payload.additionalProperties);
-            sendTelemetryEvent('dashboard/commandlineflags', properties);
+            sendTelemetryEvent('aspire/dashboard/commandlineflags', properties);
             res.status(200).end();
         });
     }
@@ -384,13 +385,13 @@ export class DashboardTelemetryPassthrough {
         this._pendingOperations.set(operationId, pending);
 
         if (postStartEvent) {
-            const startProps: EventProperties<'dashboard/scope/start'> = {
+            const startProps: EventProperties<'aspire/dashboard/scope/start'> = {
                 dashboard_event_name: eventName,
                 operation_id: operationId,
                 scope_kind: kind,
             };
             applyBundleAndCorrelations(startProps, payload.settings?.startEventProperties, payload.settings?.correlations);
-            sendTelemetryEvent('dashboard/scope/start', startProps);
+            sendTelemetryEvent('aspire/dashboard/scope/start', startProps);
         }
 
         // Response shape matches the dashboard's `StartOperationResponse`
@@ -416,7 +417,7 @@ export class DashboardTelemetryPassthrough {
         clearTimeout(pending.timer);
 
         const durationMs = Date.now() - pending.startTime;
-        const endProperties: EventProperties<'dashboard/scope/end'> = {
+        const endProperties: EventProperties<'aspire/dashboard/scope/end'> = {
             dashboard_event_name: pending.eventName,
             operation_id: payload.id,
             scope_kind: pending.kind,
@@ -445,18 +446,18 @@ export class DashboardTelemetryPassthrough {
         // property two incompatible meanings depending on event name —
         // downstream queries would have no way to tell them apart.
 
-        const endMeasurements: EventMeasurements<'dashboard/scope/end'> = {
+        const endMeasurements: EventMeasurements<'aspire/dashboard/scope/end'> = {
             duration_ms: durationMs,
         };
 
-        // Failure results are surfaced as error events so they participate in
-        // the more aggressive error-event sanitization pass. UserCancel is
-        // routine UX and stays in the standard channel.
+        // Failure results are surfaced as error events so App Insights tags
+        // them as failures. UserCancel is routine UX and stays in the standard
+        // channel.
         if (isFailureResult(payload.result)) {
-            sendTelemetryErrorEvent('dashboard/scope/end', endProperties, endMeasurements);
+            sendTelemetryErrorEvent('aspire/dashboard/scope/end', endProperties, endMeasurements);
         }
         else {
-            sendTelemetryEvent('dashboard/scope/end', endProperties, endMeasurements);
+            sendTelemetryEvent('aspire/dashboard/scope/end', endProperties, endMeasurements);
         }
 
         res.status(200).end();
@@ -471,11 +472,11 @@ export class DashboardTelemetryPassthrough {
     private _handlePostResultEvent(
         req: Request,
         res: Response,
-        eventName: 'dashboard/operation' | 'dashboard/usertask',
+        eventName: 'aspire/dashboard/operation' | 'aspire/dashboard/usertask',
         correlationType: 'Operation' | 'UserTask',
     ): void {
         const payload = req.body as PostOperationRequest;
-        const properties: EventProperties<'dashboard/operation' | 'dashboard/usertask'> = {
+        const properties: EventProperties<'aspire/dashboard/operation' | 'aspire/dashboard/usertask'> = {
             dashboard_event_name: clampDashboardKey(payload.eventName),
             result: telemetryResultLabel(payload.result),
         };
@@ -503,7 +504,7 @@ export class DashboardTelemetryPassthrough {
      * classification catalog from gaining a new row every time the dashboard
      * starts setting a new session property.
      */
-    private _propertyHandler(eventName: 'dashboard/property/set' | 'dashboard/property/recurring') {
+    private _propertyHandler(eventName: 'aspire/dashboard/property/set' | 'aspire/dashboard/property/recurring') {
         return (req: Request, res: Response): void => {
             const payload = req.body as PostPropertyRequest;
             const bundle = bundleDashboardData({ [payload.propertyName]: payload.propertyValue });
@@ -512,7 +513,7 @@ export class DashboardTelemetryPassthrough {
                 return;
             }
 
-            const properties: EventProperties<'dashboard/property/set' | 'dashboard/property/recurring'> = {
+            const properties: EventProperties<'aspire/dashboard/property/set' | 'aspire/dashboard/property/recurring'> = {
                 property_name: clampDashboardKey(payload.propertyName),
             };
             // Bundle under the real property name (not a synthetic `value` key)
@@ -878,8 +879,9 @@ const TRUNCATION_MARKER = '...[truncated]';
 // result summary) are dropped entirely elsewhere rather than forwarded; this
 // cap is the residual per-entry bound on every OTHER Basic-tagged bundle value
 // so a single property can't dump multi-KB workspace content into telemetry.
-// `@vscode/extension-telemetry` performs additional PII scrubbing on the
-// remainder, so this cap is defense-in-depth, not the only mitigation.
+// The telemetry wrapper applies its explicit value sanitizer on the dangerous
+// send path, but this cap is the primary defense because we intentionally
+// bypass TelemetryLogger.cleanData() to preserve dashboard wire names.
 const MAX_DIAGNOSTIC_STRING_LENGTH = 1024;
 
 // Caps on dashboard-supplied list-shaped fields. Both are formatted into a
@@ -1051,12 +1053,12 @@ function formatFlagPrefixes(prefixes: unknown): string {
  *  - Truncate to {@link MAX_DIAGNOSTIC_STRING_LENGTH} characters so a single
  *    oversized value cannot serve as a side channel for arbitrary workspace
  *    content or bloat the bundle.
- *  - Bundle values forwarded on failure events still run through
- *    `sendTelemetryErrorEvent`, which `@vscode/extension-telemetry` scrubs more
- *    aggressively (home-directory paths, emails, well-known token shapes).
+ *  - Bundle values forwarded on failure events still run through the telemetry
+ *    wrapper's value sanitizer, but they intentionally bypass
+ *    TelemetryLogger.cleanData() so dashboard wire names are preserved.
  *
  * This is intentionally not a PII filter — it is a length cap plus the
- * reporter's pattern scrubbing, applied as defense-in-depth on top of the
+ * wrapper's value sanitizer, applied as defense-in-depth on top of the
  * drop-list and the Pii-tag filter in {@link bundleDashboardData}.
  */
 function scrubFreeformDiagnosticText(text: unknown): string {

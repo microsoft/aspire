@@ -232,7 +232,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     this._appHostTargetVersionAtLaunch = 'unknown';
     this._appHostTargetVersionAtLaunchPromise = this.resolveAppHostTargetVersionAtLaunch(appHostTelemetryTargetPath ?? appHostPath);
     this._appHostIsDirectoryAtLaunch = 'unknown';
-    sendTelemetryEvent('debug/apphost/start', {
+    sendTelemetryEvent('aspire/vscode/debug/apphost/start', {
       mode: this._appHostModeAtLaunch,
       apphost_language: this._appHostLanguageAtLaunch,
       command: bucketAspireCommand(command),
@@ -783,7 +783,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
           const resolvedLanguage = await languagePromise ?? language;
           const resolvedTargetVersion = await targetVersionPromise ?? targetVersion;
           const aggregate = dcpServer.takeDebugSessionAggregateStats(debugSessionId);
-          sendTelemetryEvent('debug/apphost/end', {
+          sendTelemetryEvent('aspire/vscode/debug/apphost/end', {
             mode,
             apphost_language: resolvedLanguage,
             apphost_target_version: resolvedTargetVersion,

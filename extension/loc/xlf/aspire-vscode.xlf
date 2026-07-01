@@ -73,6 +73,12 @@
     <trans-unit id="extension.debug.defaultConfiguration.name">
       <source xml:lang="en">Aspire: Launch default AppHost</source>
     </trans-unit>
+    <trans-unit id="command.attachDebuggerToResource">
+      <source xml:lang="en">Attach debugger</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerConfigurationName">
+      <source xml:lang="en">Attach debugger: {0}</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.unsupportedResourceType">
       <source xml:lang="en">Attempted to start unsupported resource type: {0}.</source>
     </trans-unit>
@@ -339,6 +345,9 @@
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.installCli.title">
       <source xml:lang="en">Install the Aspire CLI</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerCsharpExtensionRequired">
+      <source xml:lang="en">Install the C# extension to attach the debugger to .NET project resources.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.invalidLaunchConfiguration">
       <source xml:lang="en">Invalid launch configuration for {0}.</source>
@@ -676,17 +685,20 @@
     <trans-unit id="views.appHosts.errorWelcome">
       <source xml:lang="en">The Aspire panel workspace view requires Aspire CLI 13.2.0 or newer and an AppHost that references Aspire.Hosting 13.2.0 or newer. Install or update the Aspire CLI and update your AppHost package to get started.&#10;[Update Aspire CLI](command:aspire-vscode.updateSelf)&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
     </trans-unit>
-    <trans-unit id="aspire-vscode.strings.dashboardLaunchNoneDescription">
-      <source xml:lang="en">The dashboard URL is still printed in the terminal and available from the Aspire panel.</source>
-    </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandOutputOpenFailed">
       <source xml:lang="en">The command completed, but its output could not be opened: {0}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchNoneDescription">
+      <source xml:lang="en">The dashboard URL is still printed in the terminal and available from the Aspire panel.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.aspireCliExecutablePath">
       <source xml:lang="en">The path to the Aspire CLI executable. If not set, the extension will attempt to use &apos;aspire&apos; from the system PATH.</source>
     </trans-unit>
     <trans-unit id="extension.debug.step">
       <source xml:lang="en">The pipeline step name to execute when command is &apos;do&apos;</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerResourceNotFound">
+      <source xml:lang="en">The selected resource is no longer available. Refresh the Aspire pane and try again.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandDynamicInputsUnsupported">
       <source xml:lang="en">This command has dynamic inputs that the Aspire extension cannot prompt for yet. Run it from the Aspire Dashboard or Aspire CLI instead.</source>
@@ -696,6 +708,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.fieldRequired">
       <source xml:lang="en">This field is required.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerUnavailable">
+      <source xml:lang="en">This resource is not a running .NET project resource that can be attached with the C# debugger.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.appHostDiscoveryTimeoutMs">
       <source xml:lang="en">Timeout in milliseconds for Aspire CLI commands that discover AppHost projects. Minimum: 1000.</source>
@@ -723,6 +738,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.startDebuggingDeclined">
       <source xml:lang="en">VS Code did not start the Aspire {0} session for {1}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.attachDebuggerDeclined">
+      <source xml:lang="en">VS Code did not start the debugger attach session for {0}.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.parameterValueMissing">
       <source xml:lang="en">Value missing</source>

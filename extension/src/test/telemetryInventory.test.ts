@@ -13,7 +13,14 @@ type TelemetryRegistryEvent = {
     entries: string[];
 };
 
-const telemetryEntityPrefix = 'microsoft-aspire.aspire-vscode/';
+// Telemetry events emit verbatim to the wire — the registry-declared name
+// (e.g. `aspire/vscode/command/invoked`, `aspire/dashboard/operation`) is
+// what appears in `extension/telemetry.json`. The extension routes every
+// event through `sendDangerousTelemetryEvent` so VS Code's automatic
+// `<extensionId>/` prefix is bypassed; the inventory file therefore stores
+// the bare wire name with no additional prefix.
+const telemetryEntityPrefix = '';
+const freeformPropertyNamePattern = /(?:^|_)(?:path|message|description|args?)(?:_|$)/i;
 
 function readTelemetryInventory(): TelemetryInventory {
     const inventoryPath = path.resolve(__dirname, '../../telemetry.json');
@@ -130,5 +137,14 @@ suite('extension/telemetry.json', () => {
             .filter(property => !Object.hasOwn(inventory.commonProperties, property));
 
         assert.deepStrictEqual(missingCommonProperties, []);
+    });
+
+    test('does not add telemetry properties that look like free-form text without an explicit inventory review', () => {
+        const suspiciousRegistryEntries = readTelemetryRegistryEvents()
+            .flatMap(event => event.entries
+                .filter(entry => freeformPropertyNamePattern.test(entry))
+                .map(entry => `${event.name}.${entry}`));
+
+        assert.deepStrictEqual(suspiciousRegistryEntries, []);
     });
 });

@@ -24,19 +24,30 @@ interface RecordedEvent {
     properties?: Record<string, string>;
     measurements?: Record<string, number>;
     isError?: true;
+    isDangerous?: true;
 }
 
 class FakeReporter {
     public events: RecordedEvent[] = [];
+    public telemetryLevel: 'all' | 'error' | 'crash' | 'off' = 'all';
 
     sendTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        // The extension routes everything through the dangerous send paths
+        // to bypass VS Code's automatic `<extensionId>/` prefix. Recording
+        // here too means a regression back to the prefixed channel still
+        // shows up in the events array (just without `isDangerous: true`)
+        // and the assertions catch it.
         this.events.push({ name, properties, measurements });
     }
     sendTelemetryErrorEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
         this.events.push({ name, properties, measurements, isError: true });
     }
-    sendDangerousTelemetryEvent(): void { /* not used */ }
-    sendDangerousTelemetryErrorEvent(): void { /* not used */ }
+    sendDangerousTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements, isDangerous: true });
+    }
+    sendDangerousTelemetryErrorEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements, isError: true, isDangerous: true });
+    }
     sendRawTelemetryEvent(): void { /* not used */ }
     dispose(): Promise<void> { return Promise.resolve(); }
 }
@@ -119,7 +130,7 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         const event = h.fake.events[0];
         // Pin the contract: the extension event name is FIXED, the dashboard
         // event name is carried as a property.
-        assert.strictEqual(event.name, 'dashboard/operation');
+        assert.strictEqual(event.name, 'aspire/dashboard/operation');
         assert.strictEqual(event.properties?.dashboard_event_name, 'aspire/dashboard/component/paramsset');
         assert.strictEqual(event.properties?.result, 'Success');
         assert.strictEqual(event.isError, undefined);
@@ -133,7 +144,7 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         });
         assert.strictEqual(status, 200);
         assert.strictEqual(h.fake.events.length, 1);
-        assert.strictEqual(h.fake.events[0].name, 'dashboard/usertask');
+        assert.strictEqual(h.fake.events[0].name, 'aspire/dashboard/usertask');
         assert.strictEqual(h.fake.events[0].properties?.dashboard_event_name, 'aspire/dashboard/mcp/toolcall');
     });
 
@@ -149,7 +160,7 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         });
         assert.strictEqual(status, 200);
         assert.strictEqual(h.fake.events.length, 1);
-        assert.strictEqual(h.fake.events[0].name, 'dashboard/fault');
+        assert.strictEqual(h.fake.events[0].name, 'aspire/dashboard/fault');
         assert.strictEqual(h.fake.events[0].isError, true);
         assert.strictEqual(h.fake.events[0].properties?.fault_severity, 'Critical');
     });
@@ -206,10 +217,10 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         // Exactly one start event + one end event.
         assert.strictEqual(h.fake.events.length, 2);
         const [startEvent, endEvent] = h.fake.events;
-        assert.strictEqual(startEvent.name, 'dashboard/scope/start');
+        assert.strictEqual(startEvent.name, 'aspire/dashboard/scope/start');
         assert.strictEqual(startEvent.properties?.dashboard_event_name, 'aspire/dashboard/component/paramsset');
         assert.strictEqual(startEvent.properties?.operation_id, operationId);
-        assert.strictEqual(endEvent.name, 'dashboard/scope/end');
+        assert.strictEqual(endEvent.name, 'aspire/dashboard/scope/end');
         assert.strictEqual(endEvent.properties?.operation_id, operationId);
         assert.strictEqual(endEvent.properties?.result, 'Success');
         // operation_id alone joins start↔end; dashboard_correlated_with must
@@ -241,7 +252,7 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         // postStartEvent: false → no start event emitted, just the end.
         assert.strictEqual(h.fake.events.length, 1);
         const event = h.fake.events[0];
-        assert.strictEqual(event.name, 'dashboard/scope/end');
+        assert.strictEqual(event.name, 'aspire/dashboard/scope/end');
         assert.strictEqual(event.isError, true);
         assert.strictEqual(event.properties?.result, 'Failure');
         assert.strictEqual(event.properties?.error_message, undefined);
@@ -277,7 +288,7 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
 
         await postJson(h.baseUrl, '/telemetry/endOperation', { id: operationId, result: 1 });
         assert.strictEqual(h.fake.events.length, 1);
-        assert.strictEqual(h.fake.events[0].name, 'dashboard/scope/end');
+        assert.strictEqual(h.fake.events[0].name, 'aspire/dashboard/scope/end');
     });
 
     test('GET /telemetry/enabled returns all three casing variants', async () => {
