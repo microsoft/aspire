@@ -36,10 +36,12 @@ internal sealed class TerminalHostFailureDiagnosticService(
     IOptions<DcpOptions> dcpOptions,
     ILogger<TerminalHostFailureDiagnosticService> logger) : BackgroundService
 {
-    // States we treat as terminal-failure for a terminal host. Finished/Exited with non-zero
-    // exit code or no exit code (e.g. host crashed before reporting) is a failure; with
-    // exit code 0 it is a clean shutdown during AppHost stop and must not be surfaced as
-    // a failure (otherwise every successful run would log a phantom error on app shutdown).
+    // States we treat as terminal-failure for a terminal host. FailedToStart is always a
+    // failure. Finished/Exited with non-zero exit code or no exit code (e.g. host crashed
+    // before reporting) is a failure; with exit code 0 it is a clean shutdown during AppHost
+    // stop and must not be surfaced as a failure (otherwise every successful run would log a
+    // phantom error on app shutdown). Terminated is emitted when DCP intentionally stops the
+    // host, so it is terminal for waiters but not a start failure.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // DCP can re-emit terminal-state events during recycle attempts and shutdown. Track
@@ -62,10 +64,15 @@ internal sealed class TerminalHostFailureDiagnosticService(
                     continue;
                 }
 
+                if (state == KnownResourceStates.Terminated)
+                {
+                    continue;
+                }
+
                 // Treat exit code 0 (or "Finished"/"Exited" + zero) as a clean stop, not a
                 // failure. FailedToStart is always a failure regardless of exit code.
-                if (state != KnownResourceStates.FailedToStart
-                    && evt.Snapshot.ExitCode is 0)
+                if (state != KnownResourceStates.FailedToStart &&
+                    evt.Snapshot.ExitCode is 0)
                 {
                     continue;
                 }
