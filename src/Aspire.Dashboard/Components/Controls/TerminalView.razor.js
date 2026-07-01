@@ -142,9 +142,14 @@ function cancelPendingReconnect(state) {
 //                      recompute font, cols×rows stay fixed (no broadcast).
 //
 // In secondary mode (someone else is primary), both control groups hide
-// (.read-only) and we lock our xterm grid to the producer's cols×rows
-// then CSS-scale .xterm to fit our viewport (letterboxing on whichever
-// axis has spare room).
+// (.read-only) and we lock our xterm grid to the producer's cols×rows,
+// then pick the largest integer font size whose rendered grid fits the
+// viewport (letterboxing on whichever axis has spare room). This mirrors
+// primary fixed-mode; we deliberately avoid CSS transform: scale() here
+// because xterm.js computes mouse-to-cell coordinates from
+// getBoundingClientRect (which returns transformed dims) divided by its
+// internally-measured cell width (which is untransformed), so any
+// scale ≠ 1 offsets text selection by roughly the scale factor.
 const MIN_FONT_PX = 4;
 const MAX_FONT_PX = 72;
 const DEFAULT_FONT_PX = 13;
@@ -459,12 +464,14 @@ function getAvailableBodySpace(state) {
 // Sizes the xterm display based on the current role and (in primary
 // mode) the current sizing mode. See docs/muxer-learnings.md §3.
 //
-//  - Secondary: lock the xterm grid to producer's cols×rows, then CSS
-//    transform: scale() .xterm so the rendered grid fills available
-//    space without distortion. Pin #terminal-body to the SCALED visible
-//    bounds so the frame card hugs the content (no empty layout space
-//    around the scaled grid). Letterboxing on whichever axis has spare
-//    room (preserves aspect).
+//  - Secondary: lock the xterm grid to producer's cols×rows and pick
+//    the largest integer font whose rendered grid fits the available
+//    stage. Pin #terminal-body to the natural rendered dims so the
+//    frame card hugs the grid (letterboxing appears in the stage on
+//    whichever axis has spare room). This is structurally the same as
+//    primary fixed-mode with fixedDims == producer dims, minus the
+//    resize broadcast — see the header comment for why we don't use
+//    CSS transform: scale() here.
 //
 //  - Primary, font-driven: pin #terminal-body to available stage, run
 //    fitAddon.fit() — grid grows/shrinks to fill at the user's chosen
@@ -494,8 +501,8 @@ function applyRoleAwareLayout(state) {
     const { width: availableW, height: availableH } = getAvailableBodySpace(state);
 
     if (!isSecondary) {
-        // Primary, no-primary, or pre-handshake: clear any secondary
-        // pinning on .xterm so it can flow naturally inside body.
+        // Primary, no-primary, or pre-handshake: clear any leftover
+        // .xterm inline styling so it flows naturally inside body.
         if (root.style.transform || root.style.width || root.style.height) {
             root.style.transform = '';
             root.style.transformOrigin = '';
@@ -537,23 +544,29 @@ function applyRoleAwareLayout(state) {
         return;
     }
 
-    // Secondary lock-and-scale.
-    const needsResize = term.cols !== state.client.width || term.rows !== state.client.height;
-    if (needsResize) {
-        try { term.resize(state.client.width, state.client.height); } catch { /* ignore */ }
+    // Secondary: lock grid to producer dims, pick the largest integer
+    // font whose rendered grid fits, then hug the frame to the natural
+    // rendered size. No CSS transform — see the header comment for why.
+    // This is intentionally the same shape as primary fixed-mode above,
+    // minus the resize broadcast (secondary never drives the PTY).
+    const producerCols = state.client.width;
+    const producerRows = state.client.height;
+    const optFont = computeOptimalFont(state, producerCols, producerRows, availableW, availableH);
+    if (term.options.fontSize !== optFont) {
+        term.options.fontSize = optFont;
     }
-
-    // If we just resized, defer measurement to next frame so the
-    // renderer can write the new .xterm-screen dims first.
-    if (needsResize) {
-        requestAnimationFrame(() => {
-            if (generation !== state.layoutGeneration) return;
-            const fresh = getAvailableBodySpace(state);
-            measureAndScale(state, fresh.width, fresh.height);
-        });
-    } else {
-        measureAndScale(state, availableW, availableH);
+    state.currentFontPx = optFont;
+    if (term.cols !== producerCols || term.rows !== producerRows) {
+        try { term.resize(producerCols, producerRows); } catch { /* ignore */ }
     }
+    requestAnimationFrame(() => {
+        if (generation !== state.layoutGeneration) return;
+        // Bail if role/producer dims changed while we were queued.
+        if (!state.client || state.client.isPrimary) return;
+        if (state.client.width !== producerCols || state.client.height !== producerRows) return;
+        pinBodyToNatural(state, root, body);
+    });
+    notifyToolbar(state);
 }
 
 function pinBodyToNatural(state, root, body) {
@@ -710,59 +723,8 @@ function buildToolbarSnapshot(state) {
     };
 }
 
-function measureAndScale(state, availableW, availableH) {
-    const term = state.term;
-    if (!term || !state.client) return;
-    const root = term.element;
-    if (!root) return;
-    const body = root.parentElement;
-    if (!body) return;
-
-    const screenEl =
-        root.querySelector('.xterm-screen') ||
-        root.querySelector('canvas.xterm-text-layer') ||
-        root;
-    const naturalWidth = screenEl.offsetWidth;
-    const naturalHeight = screenEl.offsetHeight;
-
-    if (naturalWidth <= 0 || naturalHeight <= 0 ||
-        availableW <= 0 || availableH <= 0) {
-        return;
-    }
-
-    const scale = Math.min(
-        availableW / naturalWidth,
-        availableH / naturalHeight);
-
-    if (scale <= 0) return;
-
-    const xtermTransform = `scale(${scale})`;
-    const xtermW = `${naturalWidth}px`;
-    const xtermH = `${naturalHeight}px`;
-    if (root.style.transform !== xtermTransform ||
-        root.style.width !== xtermW ||
-        root.style.height !== xtermH) {
-        root.style.transformOrigin = 'top left';
-        root.style.transform = xtermTransform;
-        root.style.width = xtermW;
-        root.style.height = xtermH;
-    }
-
-    // Math.floor + clamp to availableW/H so we never produce a body 1px
-    // wider than the stage from sub-pixel accumulation — a 1px overflow
-    // re-triggers ResizeObserver in a tight loop and looks like the
-    // terminal is bouncing.
-    const bodyW = `${Math.min(availableW, Math.floor(naturalWidth * scale))}px`;
-    const bodyH = `${Math.min(availableH, Math.floor(naturalHeight * scale))}px`;
-    if (body.style.width !== bodyW || body.style.height !== bodyH) {
-        body.style.width = bodyW;
-        body.style.height = bodyH;
-    }
-}
-
-// "Take control" handler. Clears any secondary lock-and-scale styling
-// then RequestPrimary at our current grid dims so the producer resizes
-// the PTY to match what we just laid out.
+// "Take control" handler. RequestPrimary at our current grid dims so
+// the producer resizes the PTY to match what we just laid out.
 function takePrimary(state) {
     const client = state.client;
     const term = state.term;
@@ -1082,8 +1044,8 @@ function connectClient(state, wsUrl) {
         if (myGeneration !== state.reconnect.generation) return;
         dbg(state, 'client.onResize', { cols, rows });
         // Producer's grid changed (only happens via primary's Resize).
-        // For secondaries this is the trigger to re-lock-and-scale to
-        // the new dims.
+        // For secondaries this is the trigger to re-fit the frame to
+        // the new producer dims.
         applyRoleAwareLayout(state);
     };
 
