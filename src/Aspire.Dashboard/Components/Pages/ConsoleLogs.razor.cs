@@ -1071,7 +1071,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     if (!_userPickedView && _activeView == ConsoleLogsView.Terminal)
                     {
                         _activeView = ConsoleLogsView.Console;
-                        StateHasChanged();
+                        // OnResourceChanged runs on the resource-subscription
+                        // background task (see the Task.Run wrapping the
+                        // await foreach in InitializeAsync); hop to the
+                        // renderer sync context so StateHasChanged doesn't
+                        // trip Dispatcher.AssertAccess and fault the whole
+                        // subscription loop.
+                        await InvokeAsync(StateHasChanged);
                     }
                 }
             }
@@ -1471,17 +1477,17 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             new ComponentTelemetryProperty(TelemetryPropertyKeys.ConsoleLogsShowTimestamp, new AspireTelemetryProperty(_showTimestamp, AspireTelemetryPropertyType.UserSetting))
         ], Logger);
     }
-}
 
-/// <summary>
-/// The two MainSection contents the <see cref="ConsoleLogs"/> page can show
-/// for a resource that has <c>WithTerminal()</c> applied. Non-terminal
-/// resources implicitly always show <see cref="Console"/>.
-/// </summary>
-public enum ConsoleLogsView
-{
-    /// <summary>The resource's standard log stream (LogViewer).</summary>
-    Console,
-    /// <summary>The interactive xterm.js terminal (TerminalView).</summary>
-    Terminal,
+    /// <summary>
+    /// The two MainSection contents the <see cref="ConsoleLogs"/> page can show
+    /// for a resource that has <c>WithTerminal()</c> applied. Non-terminal
+    /// resources implicitly always show <see cref="Console"/>.
+    /// </summary>
+    public enum ConsoleLogsView
+    {
+        /// <summary>The resource's standard log stream (LogViewer).</summary>
+        Console,
+        /// <summary>The interactive xterm.js terminal (TerminalView).</summary>
+        Terminal,
+    }
 }

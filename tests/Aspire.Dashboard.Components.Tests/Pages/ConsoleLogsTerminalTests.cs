@@ -182,7 +182,7 @@ public partial class ConsoleLogsTests
         // Starting state: page is on Console even though the resource has a
         // terminal — the PTY hasn't attached yet, so pre-PTY hosting messages
         // stay visible.
-        Assert.Equal(ConsoleLogsView.Console, instance.ActiveViewForTest);
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
 
         // Simulate the JS terminal pushing a toolbar snapshot once the PTY
         // attaches (status moves off "connecting"). The page should auto-flip
@@ -197,8 +197,8 @@ public partial class ConsoleLogsTests
             FontPx = 14,
         }));
 
-        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Terminal);
-        Assert.Equal(ConsoleLogsView.Terminal, instance.ActiveViewForTest);
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Terminal, instance.ActiveViewForTest);
     }
 
     [Fact]
@@ -236,7 +236,7 @@ public partial class ConsoleLogsTests
         // User explicitly latches on Console. Even though they were already
         // viewing Console, the explicit pick must latch _userPickedView so
         // subsequent auto-switch attempts are ignored.
-        await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogsView.Console)));
+        await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Console)));
 
         // PTY attaches.
         var terminalView = cut.FindComponent<TerminalView>().Instance;
@@ -250,7 +250,7 @@ public partial class ConsoleLogsTests
         }));
 
         // Page must stay on Console because the user already picked it.
-        Assert.Equal(ConsoleLogsView.Console, instance.ActiveViewForTest);
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
     }
 
     [Fact]
@@ -295,14 +295,14 @@ public partial class ConsoleLogsTests
             IsPrimary = true,
             FontPx = 14,
         }));
-        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Terminal);
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
 
         // PTY exits → page flips back to Console so the final log lines and
         // hosting exit messages are visible.
         await cut.InvokeAsync(() => terminalView.OnTerminalExited(terminalId: 1, exitCode: 0));
 
-        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Console);
-        Assert.Equal(ConsoleLogsView.Console, instance.ActiveViewForTest);
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
     }
 
     [Fact]
@@ -353,11 +353,11 @@ public partial class ConsoleLogsTests
             IsPrimary = true,
             FontPx = 14,
         }));
-        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Terminal);
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
 
         // Resource stops → PTY exits → flip back to Console.
         await cut.InvokeAsync(() => terminalView.OnTerminalExited(terminalId: 1, exitCode: 0));
-        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Console);
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
 
         // Resource restarts: the terminal host process is recreated, so the
         // consumer WS goes through `connecting` again before the new PTY
@@ -380,8 +380,8 @@ public partial class ConsoleLogsTests
             FontPx = 14,
         }));
 
-        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Terminal);
-        Assert.Equal(ConsoleLogsView.Terminal, instance.ActiveViewForTest);
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Terminal, instance.ActiveViewForTest);
     }
 
     [Fact]
@@ -433,7 +433,7 @@ public partial class ConsoleLogsTests
             IsPrimary = true,
             FontPx = 14,
         }));
-        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Terminal);
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
 
         // Resource transitions to Exited (manual stop) — push a fresh snapshot
         // with the same name/properties but a stopped KnownResourceState.
@@ -451,8 +451,8 @@ public partial class ConsoleLogsTests
             new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, stoppedTerminalResource)
         ]);
 
-        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Console);
-        Assert.Equal(ConsoleLogsView.Console, instance.ActiveViewForTest);
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
     }
 
     [Fact]
@@ -508,7 +508,7 @@ public partial class ConsoleLogsTests
             IsPrimary = true,
             FontPx = 14,
         }));
-        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Terminal);
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
 
         // Resource manually stopped.
         var stoppedTerminalResource = ModelTestHelpers.CreateResource(
@@ -524,7 +524,7 @@ public partial class ConsoleLogsTests
         resourceChannel.Writer.TryWrite([
             new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, stoppedTerminalResource)
         ]);
-        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogsView.Console);
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
 
         // Now a stale toolbar push from the JS side arrives reporting the
         // pre-stop primary state. With the gate in place this must NOT
@@ -538,7 +538,7 @@ public partial class ConsoleLogsTests
             FontPx = 14,
         }));
 
-        Assert.Equal(ConsoleLogsView.Console, instance.ActiveViewForTest);
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
     }
 
     private void SetupTerminalViewJsInterop()
