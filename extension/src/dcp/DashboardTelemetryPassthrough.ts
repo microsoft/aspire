@@ -82,9 +82,10 @@ function telemetryResultLabel(value: unknown): string {
     }
     return Number.isFinite(n) ? `Unknown(${n})` : 'Unknown';
 }
-// Failure / UserFault are routed through `sendTelemetryErrorEvent` so App
-// Insights treats them as error telemetry. Property-level sensitivity is still
-// controlled by the explicit allowlist and sanitizers in this file.
+// Failure / UserFault are routed through `sendTelemetryErrorEvent` so they
+// respect the user's error-level telemetry opt-in. The dangerous send path
+// still emits EventData/customEvent payloads, so downstream distinguishes these
+// by event name/result rather than an App Insights exception envelope.
 function isFailureResult(value: unknown): boolean {
     if (value === undefined || value === null) {
         return false;
@@ -450,9 +451,8 @@ export class DashboardTelemetryPassthrough {
             duration_ms: durationMs,
         };
 
-        // Failure results are surfaced as error events so App Insights tags
-        // them as failures. UserCancel is routine UX and stays in the standard
-        // channel.
+        // Failure results use the error telemetry gate and distinct result
+        // value. UserCancel is routine UX and stays in the standard channel.
         if (isFailureResult(payload.result)) {
             sendTelemetryErrorEvent('aspire/dashboard/scope/end', endProperties, endMeasurements);
         }

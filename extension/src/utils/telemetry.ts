@@ -46,6 +46,7 @@ const telemetryReplacementOptions = [
 const defaultTelemetryReporterFactory = (aiKey: string): TelemetryReporter => new TelemetryReporter(aiKey, telemetryReplacementOptions);
 let telemetryReporterFactory = defaultTelemetryReporterFactory;
 let reporterCommonProperties: Record<string, string> = {};
+const extensionTelemetryPackageName = '@vscode/extension-telemetry';
 
 // Aspire-specific common properties merged into every event we emit (e.g.
 // detected AppHost language, run mode). Keep this key set intentionally tiny
@@ -147,14 +148,25 @@ function mergeProperties<E extends KnownTelemetryEventName>(properties?: EventPr
 }
 
 function getReporterCommonProperties(context: vscode.ExtensionContext): Record<string, string> {
+    const telemetryClientVersion = getExtensionTelemetryClientVersion(context);
     return {
         'common.extname': context.extension.id,
         'common.extversion': String(context.extension.packageJSON.version ?? ''),
         'common.os': os.platform(),
         'common.nodeArch': os.arch(),
         'common.platformversion': os.release().replace(/^(\d+)(\.\d+)?(\.\d+)?(.*)/, '$1$2$3'),
-        'common.telemetryclientversion': '1.5.1',
+        'common.telemetryclientversion': telemetryClientVersion,
     };
+}
+
+function getExtensionTelemetryClientVersion(context: vscode.ExtensionContext): string {
+    const dependencies = context.extension.packageJSON.dependencies as Record<string, unknown> | undefined;
+    // The dangerous send path bypasses @vscode/extension-telemetry's normal
+    // common-property mix-in, so mirror the client version from the manifest
+    // dependency instead of maintaining a second literal that can drift.
+    const packageVersion = dependencies?.[extensionTelemetryPackageName];
+
+    return typeof packageVersion === 'string' ? packageVersion : '';
 }
 
 function sanitizeTelemetryProperties(properties: Record<string, string>): Record<string, string> {
@@ -214,8 +226,10 @@ export function sendTelemetryEvent<E extends KnownTelemetryEventName>(
 
 /**
  * Emits an error telemetry event. Use for faults (unexpected exceptions,
- * dashboard fault posts, etc.) so the App Insights envelope is tagged as an
- * error while preserving the registry-declared event name verbatim.
+ * dashboard fault posts, etc.). The dangerous error path still emits an
+ * EventData/customEvent payload, so downstream distinguishes errors by the
+ * registry-declared event name and the error-level opt-in gate rather than an
+ * App Insights exception envelope.
  *
  * Routed through `sendDangerousTelemetryErrorEvent` for the same reason as
  * {@link sendTelemetryEvent}: VS Code's TelemetryLogger would otherwise add

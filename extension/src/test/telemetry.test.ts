@@ -266,7 +266,10 @@ suite('telemetry utilities', () => {
                     id: 'microsoft-aspire.aspire-vscode',
                     packageJSON: {
                         aiKey: 'test-key',
-                        version: '1.2.3'
+                        version: '1.2.3',
+                        dependencies: {
+                            '@vscode/extension-telemetry': '9.8.7'
+                        }
                     }
                 },
                 subscriptions
@@ -280,7 +283,7 @@ suite('telemetry utilities', () => {
             assert.strictEqual(fake.events[0].isDangerous, true);
             assert.strictEqual(fake.events[0].properties?.['common.extname'], 'microsoft-aspire.aspire-vscode');
             assert.strictEqual(fake.events[0].properties?.['common.extversion'], '1.2.3');
-            assert.strictEqual(fake.events[0].properties?.['common.telemetryclientversion'], '1.5.1');
+            assert.strictEqual(fake.events[0].properties?.['common.telemetryclientversion'], '9.8.7');
         }
         finally {
             restoreFactory();
