@@ -20,8 +20,9 @@ function readJsonFile<T>(filePath: string): T {
 }
 
 function getExtensionTelemetryPackageVersion(): string {
-    const extensionPackage = readJsonFile<{ dependencies?: Record<string, string> }>(path.join(process.cwd(), 'package.json'));
-    const telemetryPackage = readJsonFile<{ version: string }>(path.join(process.cwd(), 'node_modules', '@vscode', 'extension-telemetry', 'package.json'));
+    const extensionRoot = path.resolve(__dirname, '..', '..');
+    const extensionPackage = readJsonFile<{ dependencies?: Record<string, string> }>(path.join(extensionRoot, 'package.json'));
+    const telemetryPackage = readJsonFile<{ version: string }>(path.join(extensionRoot, 'node_modules', '@vscode', 'extension-telemetry', 'package.json'));
     assert.strictEqual(extensionPackage.dependencies?.['@vscode/extension-telemetry'], telemetryPackage.version);
     return telemetryPackage.version;
 }
