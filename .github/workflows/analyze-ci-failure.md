@@ -235,14 +235,26 @@ jobs:
             --jq '[.artifacts[] | select(.name | test("test-results|TestResults"; "i"))] | first // empty' 2>/dev/null || echo "")
           if [ -n "${ARTIFACT}" ]; then
             ARTIFACT_ID=$(echo "${ARTIFACT}" | jq -r '.id')
-            echo "Downloading test results artifact ${ARTIFACT_ID}..."
+            ARTIFACT_NAME=$(echo "${ARTIFACT}" | jq -r '.name')
+            ARTIFACT_SIZE=$(echo "${ARTIFACT}" | jq -r '.size_in_bytes')
+            echo "Downloading test results artifact: ${ARTIFACT_NAME} (id=${ARTIFACT_ID}, size=${ARTIFACT_SIZE} bytes)..."
             gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts/${ARTIFACT_ID}/zip" \
               > ci-failure-data/test-results.zip 2>/dev/null || true
 
             # Extract failed test names and error messages from TRX files
             if [ -f "ci-failure-data/test-results.zip" ] && [ -s "ci-failure-data/test-results.zip" ]; then
+              DOWNLOAD_SIZE=$(stat -c%s ci-failure-data/test-results.zip 2>/dev/null || echo "unknown")
+              echo "Download complete: ${DOWNLOAD_SIZE} bytes"
               mkdir -p ci-failure-data/test-results
               unzip -q -o ci-failure-data/test-results.zip -d ci-failure-data/test-results 2>/dev/null || true
+
+              # List TRX files found
+              TRX_FILES=$(find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null)
+              TRX_COUNT=$(echo "$TRX_FILES" | grep -c . || echo "0")
+              echo "Found ${TRX_COUNT} TRX file(s):"
+              echo "$TRX_FILES" | while IFS= read -r f; do
+                [ -n "$f" ] && echo "  - $(basename "$f") ($(stat -c%s "$f" 2>/dev/null || echo "?") bytes)"
+              done
 
               # Parse TRX files for failed tests using yq (pre-installed) + jq.
               # yq converts XML to JSON, then jq extracts failed test info.
@@ -250,6 +262,7 @@ jobs:
               # Output/ErrorInfo/Message and Output/ErrorInfo/StackTrace.
               > ci-failure-data/test-failures.jsonl
               find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null | while IFS= read -r TRX_FILE; do
+                echo "Processing: $(basename "$TRX_FILE")"
                 yq -p xml -o json '.' "$TRX_FILE" 2>/dev/null | jq -r '
                   # Navigate to UnitTestResult — may be array or single object
                   (.TestRun.Results.UnitTestResult // []) |
@@ -270,7 +283,11 @@ jobs:
               # Clean up the extracted files to save space in artifact
               rm -rf ci-failure-data/test-results
               rm -f ci-failure-data/test-results.zip
+            else
+              echo "Warning: test-results.zip is missing or empty after download"
             fi
+          else
+            echo "No test results artifact found for run ${RUN_ID}"
           fi
 
           echo "Data collection complete."
