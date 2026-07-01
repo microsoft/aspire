@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)ProcessStartTimeHelper.cs" Link="Utils\ProcessStartTimeHelper.cs" />
     <Compile Include="$(SharedDir)KnownOtelConfigNames.cs" Link="Utils\KnownOtelConfigNames.cs" />
     <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="IntegrationPackageProbeManifest.cs" />
   </ItemGroup>

@@ -188,6 +188,9 @@ internal sealed class BundleNuGetService : INuGetService
             managedPath,
             restoreArgs,
             environmentVariables: environmentVariables,
+            // A restore against a slow/unresponsive NuGet source can hang; bind it to the CLI's
+            // kill-on-close job so a hard-killed CLI cannot leak this aspire-managed helper on Windows.
+            killOnParentExit: true,
             ct: ct);
 
         // Log stderr at debug level for diagnostics
@@ -234,6 +237,9 @@ internal sealed class BundleNuGetService : INuGetService
             managedPath,
             manifestArgs,
             environmentVariables: environmentVariables,
+            // Same rationale as the restore step above: keep this aspire-managed helper from
+            // outliving a hard-killed CLI via the Windows kill-on-close job.
+            killOnParentExit: true,
             ct: ct);
 
         // Log stderr at debug level for diagnostics

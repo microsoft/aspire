@@ -24,6 +24,7 @@ internal sealed class StopCommand : BaseCommand
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly IEnvironment _environment;
     private readonly ProcessTreeGracefulShutdownService _processShutdownService;
+    private readonly OrphanedAppHostCollector _collector;
     private readonly ProfilingTelemetry _profilingTelemetry;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", StopCommandStrings.ProjectArgumentDescription);
@@ -38,6 +39,7 @@ internal sealed class StopCommand : BaseCommand
         ICliHostEnvironment hostEnvironment,
         IEnvironment environment,
         ProcessTreeGracefulShutdownService processShutdownService,
+        OrphanedAppHostCollector collector,
         ILogger<StopCommand> logger,
         ProfilingTelemetry profilingTelemetry,
         CommonCommandServices services)
@@ -47,6 +49,7 @@ internal sealed class StopCommand : BaseCommand
         _hostEnvironment = hostEnvironment;
         _environment = environment;
         _processShutdownService = processShutdownService;
+        _collector = collector;
         _logger = logger;
         _profilingTelemetry = profilingTelemetry;
 
@@ -147,6 +150,22 @@ internal sealed class StopCommand : BaseCommand
     /// </summary>
     private async Task<int> StopAllAppHostsAsync(CancellationToken cancellationToken)
     {
+        // First collect AppHosts whose launching CLI has died. 
+        // Collecting first guarantees orphaned trees and their stale sockets are cleaned up 
+        // even if the normal stop path can't connect to one of them.
+        try
+        {
+            var collected = await _collector.CollectAsync(cancellationToken).ConfigureAwait(false);
+            if (collected > 0)
+            {
+                _logger.LogDebug("Collected {Count} orphaned AppHost(s) before stopping the rest.", collected);
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogDebug(ex, "Failed to collect orphaned AppHosts during stop --all.");
+        }
+
         var allConnections = await _connectionResolver.ResolveAllConnectionsAsync(
             SharedCommandStrings.ScanningForRunningAppHosts,
             cancellationToken);

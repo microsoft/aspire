@@ -15,6 +15,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -138,12 +139,16 @@ internal sealed class AppHostLauncher(
         executionContext.AppHostCliLogFilePath = childLogFile;
         var (executablePath, childArgs) = BuildChildProcessArgs(effectiveAppHostFile, childLogFile, isolated, globalArgs, additionalArgs);
 
-        // Compute the expected socket prefix for backchannel detection
+        // Compute the expected socket prefix for backchannel detection. The AppHost keys its
+        // auxiliary backchannel socket file on the symlink-resolved AppHost path, so the primary
+        // hash we wait on must also be computed from the resolved path (see ComputeDetachedMatchHashes).
+        var socketKeyPath = PathNormalizer.ResolveSymlinks(effectiveAppHostFile.FullName);
         var expectedSocketPrefix = AppHostHelper.ComputeAuxiliarySocketPrefix(
+            socketKeyPath,
+            executionContext.HomeDirectory.FullName);
+        var (expectedHash, legacyHashes) = ComputeDetachedMatchHashes(
             effectiveAppHostFile.FullName,
             executionContext.HomeDirectory.FullName);
-        var expectedHash = AppHostHelper.ExtractHashFromSocketPath(expectedSocketPrefix)!;
-        var legacyHashes = AppHostHelper.ComputeLegacyHashes(effectiveAppHostFile.FullName);
 
         logger.LogDebug("Waiting for socket with prefix: {SocketPrefix}, Hash: {Hash}", expectedSocketPrefix, expectedHash);
         if (legacyHashes.Length > 0)
@@ -225,6 +230,40 @@ internal sealed class AppHostLauncher(
                 throw;
             }
         }
+    }
+
+    /// <summary>
+    /// Computes the primary and fallback auxiliary-backchannel socket hashes used to match 
+    /// a detached AppHost's backchannel connection during launch.
+    /// </summary>
+    /// <param name="appHostPath">The AppHost project file or assembly path as supplied to the CLI.</param>
+    /// <param name="homeDirectory">The user's home directory.</param>
+    /// <returns>
+    /// The primary expected hash (the compact AppHost id of the resolved path) and the de-duplicated
+    /// fallback hashes to also search: the compact AppHost id of the raw path plus the legacy hex
+    /// hashes of both the resolved and raw paths (including any Windows drive-letter casing variants).
+    /// </returns>
+    internal static (string ExpectedHash, string[] FallbackHashes) ComputeDetachedMatchHashes(string appHostPath, string homeDirectory)
+    {
+        var socketKeyPath = PathNormalizer.ResolveSymlinks(appHostPath);
+
+        var expectedHash = AppHostHelper.ExtractHashFromSocketPath(
+            AppHostHelper.ComputeAuxiliarySocketPrefix(socketKeyPath, homeDirectory))!;
+
+        // Current socket file names embed the compact AppHost id (a different hash space than the
+        // legacy hex hashes below), so include the raw path's compact id explicitly. 
+        // This is what matches a still-running AppHost that keyed its socket on the unresolved path before the
+        // AppHost side started resolving symlinks.
+        var rawCompactHash = AppHostHelper.ExtractHashFromSocketPath(
+            AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, homeDirectory))!;
+
+        var fallbackHashes = new[] { rawCompactHash }
+            .Concat(AppHostHelper.ComputeLegacyHashes(socketKeyPath))
+            .Concat(AppHostHelper.ComputeLegacyHashes(appHostPath))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        return (expectedHash, fallbackHashes);
     }
 
     private async Task StopExistingInstancesAsync(FileInfo effectiveAppHostFile, CancellationToken cancellationToken)
@@ -314,6 +353,13 @@ internal sealed class AppHostLauncher(
     internal static Dictionary<string, string> CreateDetachedChildEnvironment(Activity? activity)
     {
         var environment = new Dictionary<string, string> { [KnownConfigNames.CliRunDetached] = "true" };
+
+        // Record the foreground launcher's identity (PID + start time) so the detached child can watch
+        // it during startup and tear the AppHost tree down if the launcher is killed before the app
+        // reaches readiness. Without this, killing `aspire start`/`aspire run --detach` mid-start (for
+        // example a test runner timing it out) leaks the AppHost + dashboard as orphaned processes.
+        environment[KnownConfigNames.CliLauncherProcessId] = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
+        environment[KnownConfigNames.CliLauncherProcessStarted] = ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds().ToString(CultureInfo.InvariantCulture);
 
         ProfilingTelemetry.AddActivityContextToEnvironment(activity, environment);
         ProfileCaptureEnvironment.AddCurrentToEnvironment(environment);

@@ -194,6 +194,9 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             args,
             workingDirectory: workingDirectory.FullName,
             environmentVariables: environmentVariables,
+            // A package search against a slow/unresponsive NuGet source can hang; bind it to the CLI's
+            // kill-on-close job so a hard-killed CLI cannot leak this aspire-managed helper on Windows.
+            killOnParentExit: true,
             ct: cancellationToken).ConfigureAwait(false);
 
         // Log stderr output (verbose info from NuGetHelper)

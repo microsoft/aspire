@@ -10,6 +10,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -188,16 +189,23 @@ internal sealed class AuxiliaryBackchannelMonitor(
             .ToList();
     }
 
-    private static bool IsAppHostInScopeOfDirectory(string? appHostPath, string workingDirectory)
+    /// <summary>
+    /// Determines whether <paramref name="appHostPath"/> lives within <paramref name="workingDirectory"/>.
+    /// This is the single in-scope implementation shared by <see cref="IsAppHostInScope"/>.
+    /// </summary>
+    internal static bool IsAppHostInScopeOfDirectory(string? appHostPath, string workingDirectory)
     {
         if (string.IsNullOrEmpty(appHostPath))
         {
             return false;
         }
 
-        // Normalize the paths for comparison
-        var normalizedWorkingDirectory = Path.GetFullPath(workingDirectory);
-        var normalizedAppHostPath = Path.GetFullPath(appHostPath);
+        // Resolve symlinks (not just Path.GetFullPath) on both operands. The OS reports a process's current
+        // directory in physical form (for example macOS temp dirs under /var -> /private/var), while a
+        // file-based AppHost reports its path unresolved, so comparing without resolving symlinks would treat
+        // an in-scope AppHost as out of scope. 
+        var normalizedWorkingDirectory = PathNormalizer.ResolveSymlinks(workingDirectory);
+        var normalizedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
 
         // Check if the AppHost path is within the working directory
         var relativePath = Path.GetRelativePath(normalizedWorkingDirectory, normalizedAppHostPath);
@@ -545,21 +553,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     }
 
     private bool IsAppHostInScope(string? appHostPath)
-    {
-        if (string.IsNullOrEmpty(appHostPath))
-        {
-            return false;
-        }
-
-        // Normalize the paths for comparison
-        var workingDirectory = Path.GetFullPath(executionContext.WorkingDirectory.FullName);
-        var normalizedAppHostPath = Path.GetFullPath(appHostPath);
-
-        // Check if the AppHost path is within the working directory using a robust, cross-platform method
-        var relativePath = Path.GetRelativePath(workingDirectory, normalizedAppHostPath);
-        // If the relative path starts with ".." or is equal to "..", then it's outside the working directory
-        return !relativePath.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(relativePath);
-    }
+        => IsAppHostInScopeOfDirectory(appHostPath, executionContext.WorkingDirectory.FullName);
 
     private static async Task DisconnectAsync(IAppHostAuxiliaryBackchannel connection)
     {

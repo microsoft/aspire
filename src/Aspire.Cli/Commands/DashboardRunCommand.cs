@@ -374,7 +374,10 @@ internal sealed class DashboardRunCommand : BaseCommand
         IProcessExecution process;
         try
         {
-            process = await _layoutProcessRunner.StartAsync(managedPath, dashboardArgs, environmentVariables: environmentVariables, options: options).ConfigureAwait(false);
+            // Foreground `aspire dashboard run`: the dashboard is a child of this CLI and must not
+            // outlive it, so bind it to the Windows kill-on-close job as an OS-level backstop on top of
+            // the cross-platform parent-liveness watchdog. No-op on non-Windows hosts.
+            process = await _layoutProcessRunner.StartAsync(managedPath, dashboardArgs, environmentVariables: environmentVariables, options: options, killOnParentExit: true).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

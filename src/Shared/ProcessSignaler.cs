@@ -113,11 +113,12 @@ internal static partial class ProcessSignaler
         // Truncate both sides to whole seconds before comparing. The expected start time
         // may already be at second granularity (e.g. from the orphan detector via ToUnixTimeSeconds()),
         // and the OS-reported start time has sub-second precision that would cause false mismatches.
+        // The truncate-and-compare math lives in the dependency-free ProcessStartTimeHelper so the
+        // RemoteHost and aspire-managed watchdogs (which cannot reference ProcessSignaler) share it.
         var processStartTruncated = new DateTimeOffset(processStartTime).ToUnixTimeSeconds();
         var expectedSeconds = ((DateTimeOffset)expectedStartTime).ToUnixTimeSeconds();
 
-        tolerance ??= TimeSpan.FromSeconds(1);
-        return Math.Abs(expectedSeconds - processStartTruncated) <= (long)tolerance.Value.TotalSeconds;
+        return ProcessStartTimeHelper.AreClose(expectedSeconds, processStartTruncated, tolerance);
     }
 
     private const int SigTerm = 15;
