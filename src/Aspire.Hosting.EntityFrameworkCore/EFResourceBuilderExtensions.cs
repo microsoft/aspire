@@ -650,6 +650,23 @@ public static class EFResourceBuilderExtensions
             }
         }
 
+        // Forward the migration resource's own environment to the tool resource at start time.
+        // The connection string the user declares via `.WithReference(<db>)` lands on the migration
+        // resource as an EnvironmentCallbackAnnotation *after* this method runs, so the annotations
+        // cannot be copied eagerly like the project ones above. Evaluating them lazily here ensures the
+        // dotnet-ef process receives `ConnectionStrings__<db>`; without it the design-time DbContext
+        // has no connection string and fails with "The ConnectionString property has not been initialized."
+        toolBuilder.WithEnvironment(async context =>
+        {
+            if (migrationResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var migrationEnvCallbacks))
+            {
+                foreach (var callback in migrationEnvCallbacks)
+                {
+                    await callback.Callback(context).ConfigureAwait(false);
+                }
+            }
+        });
+
         migrationResource.ToolResource = toolBuilder.Resource;
 
         migrationBuilder.WithCommand(
