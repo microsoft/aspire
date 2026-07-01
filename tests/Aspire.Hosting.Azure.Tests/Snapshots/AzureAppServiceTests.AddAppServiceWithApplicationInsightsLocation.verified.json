@@ -2,6 +2,8 @@
   "type": "azure.bicep.v0",
   "path": "env.module.bicep",
   "params": {
+    "env_mi_outputs_id": "{env-mi.outputs.id}",
+    "env_mi_outputs_clientid": "{env-mi.outputs.clientId}",
     "env_acr_outputs_name": "{env-acr.outputs.name}",
     "userPrincipalId": ""
   }

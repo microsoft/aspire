@@ -2,6 +2,7 @@
   "type": "azure.bicep.v0",
   "path": "env.module.bicep",
   "params": {
+    "env_mi_outputs_id": "{env-mi.outputs.id}",
     "customregistry_outputs_name": "{customregistry.outputs.name}",
     "userPrincipalId": ""
   }

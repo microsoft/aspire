@@ -490,13 +490,15 @@ public class AzureResourcePreparerTests
         Assert.Collection(model.Resources.Select(r => r.Name),
             n => Assert.StartsWith("azure", n),
             n => Assert.Equal("env-acr", n),
+            n => Assert.Equal("env-mi", n),
             n => Assert.Equal("env", n),
             n => Assert.Equal("storage", n),
             n => Assert.Equal("blobs", n),
             n => Assert.Equal("api", n),
             n => Assert.Equal("api2", n),
             n => Assert.Equal("api-identity", n),
-            n => Assert.Equal("api-roles-storage", n));
+            n => Assert.Equal("api-roles-storage", n),
+            n => Assert.Equal("env-mi-roles-env-acr", n));
     }
 
     [Fact]
@@ -525,13 +527,15 @@ public class AzureResourcePreparerTests
         Assert.Collection(model.Resources.Select(r => r.Name),
             n => Assert.StartsWith("azure", n),
             n => Assert.Equal("env-acr", n),
+            n => Assert.Equal("env-mi", n),
             n => Assert.Equal("env", n),
             n => Assert.Equal("storage", n),
             n => Assert.Equal("blobs", n),
             n => Assert.Equal("api", n),
             n => Assert.Equal("frontend", n),
             n => Assert.Equal("api-identity", n),
-            n => Assert.Equal("api-roles-storage", n));
+            n => Assert.Equal("api-roles-storage", n),
+            n => Assert.Equal("env-mi-roles-env-acr", n));
 
         // The ViteApp should NOT get a managed identity since it is a BuildOnlyContainer resource,
         // even though it references the storage account. Only the API should get a managed identity.

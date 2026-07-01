@@ -144,6 +144,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
                     ["name"] = new { type = "String", value = "testregistry" },
                     ["loginServer"] = new { type = "String", value = "testregistry.azurecr.io" }
                 },
+                string name when name.StartsWith("env-mi") => new Dictionary<string, object>
+                {
+                    ["id"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity") },
+                    ["principalId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000001" },
+                    ["clientId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000002" }
+                },
                 string name when name.StartsWith("env") => new Dictionary<string, object>
                 {
                     ["AZURE_CONTAINER_REGISTRY_NAME"] = new { type = "String", value = "testregistry" },
@@ -207,6 +213,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
                     ["name"] = new { type = "String", value = "testregistry" },
                     ["loginServer"] = new { type = "String", value = "testregistry.azurecr.io" }
                 },
+                string name when name.StartsWith("env-mi") => new Dictionary<string, object>
+                {
+                    ["id"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity") },
+                    ["principalId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000001" },
+                    ["clientId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000002" }
+                },
                 string name when name.StartsWith("env") => new Dictionary<string, object>
                 {
                     ["AZURE_CONTAINER_REGISTRY_NAME"] = new { type = "String", value = "testregistry" },
@@ -265,6 +277,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
                 {
                     ["name"] = new { type = "String", value = "testregistry" },
                     ["loginServer"] = new { type = "String", value = "testregistry.azurecr.io" }
+                },
+                string name when name.StartsWith("env-mi") => new Dictionary<string, object>
+                {
+                    ["id"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity") },
+                    ["principalId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000001" },
+                    ["clientId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000002" }
                 },
                 string name when name.StartsWith("env") => new Dictionary<string, object>
                 {
@@ -325,6 +343,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
                 {
                     ["name"] = new { type = "String", value = "testregistry" },
                     ["loginServer"] = new { type = "String", value = "testregistry.azurecr.io" }
+                },
+                string name when name.StartsWith("env-mi") => new Dictionary<string, object>
+                {
+                    ["id"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity") },
+                    ["principalId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000001" },
+                    ["clientId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000002" }
                 },
                 string name when name.StartsWith("env") => new Dictionary<string, object>
                 {
@@ -392,6 +416,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
                     ["name"] = new { type = "String", value = "testregistry" },
                     ["loginServer"] = new { type = "String", value = "testregistry.azurecr.io" }
                 },
+                string name when name.StartsWith("env-mi") => new Dictionary<string, object>
+                {
+                    ["id"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity") },
+                    ["principalId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000001" },
+                    ["clientId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000002" }
+                },
                 string name when name.StartsWith("env") => new Dictionary<string, object>
                 {
                     ["AZURE_CONTAINER_REGISTRY_NAME"] = new { type = "String", value = "testregistry" },
@@ -458,6 +488,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
                     ["name"] = new { type = "String", value = "testregistry" },
                     ["loginServer"] = new { type = "String", value = "testregistry.azurecr.io" }
                 },
+                string name when name.StartsWith("env-mi") => new Dictionary<string, object>
+                {
+                    ["id"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity") },
+                    ["principalId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000001" },
+                    ["clientId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000002" }
+                },
                 string name when name.StartsWith("env") => new Dictionary<string, object>
                 {
                     ["AZURE_CONTAINER_REGISTRY_NAME"] = new { type = "String", value = "testregistry" },
@@ -513,6 +549,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
                 {
                     ["name"] = new { type = "String", value = "testregistry" },
                     ["loginServer"] = new { type = "String", value = "testregistry.azurecr.io" }
+                },
+                string name when name.StartsWith("env-mi") => new Dictionary<string, object>
+                {
+                    ["id"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity") },
+                    ["principalId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000001" },
+                    ["clientId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000002" }
                 },
                 string name when name.StartsWith("env") => new Dictionary<string, object>
                 {
@@ -577,6 +619,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
                     ["name"] = new { type = "String", value = "acaregistry" },
                     ["loginServer"] = new { type = "String", value = "acaregistry.azurecr.io" }
                 },
+                string name when name.StartsWith("aca-env-mi") => new Dictionary<string, object>
+                {
+                    ["id"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/aca-identity") },
+                    ["principalId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000001" },
+                    ["clientId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000002" }
+                },
                 string name when name.StartsWith("aca-env") => new Dictionary<string, object>
                 {
                     ["AZURE_CONTAINER_REGISTRY_NAME"] = new { type = "String", value = "acaregistry" },
@@ -590,6 +638,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
                 {
                     ["name"] = new { type = "String", value = "aasregistry" },
                     ["loginServer"] = new { type = "String", value = "aasregistry.azurecr.io" }
+                },
+                string name when name.StartsWith("aas-env-mi") => new Dictionary<string, object>
+                {
+                    ["id"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/aas-identity") },
+                    ["principalId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000003" },
+                    ["clientId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000004" }
                 },
                 string name when name.StartsWith("aas-env") => new Dictionary<string, object>
                 {
@@ -811,6 +865,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
                     ["name"] = new { type = "String", value = "testregistry" },
                     ["loginServer"] = new { type = "String", value = "testregistry.azurecr.io" }
                 },
+                string name when name.StartsWith("env-mi") => new Dictionary<string, object>
+                {
+                    ["id"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity") },
+                    ["principalId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000001" },
+                    ["clientId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000002" }
+                },
                 string name when name.StartsWith("env") => new Dictionary<string, object>
                 {
                     ["AZURE_CONTAINER_REGISTRY_NAME"] = new { type = "String", value = "testregistry" },
@@ -874,6 +934,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
                 {
                     ["name"] = new { type = "String", value = "testregistry" },
                     ["loginServer"] = new { type = "String", value = "testregistry.azurecr.io" }
+                },
+                string name when name.StartsWith("env-mi") => new Dictionary<string, object>
+                {
+                    ["id"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity") },
+                    ["principalId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000001" },
+                    ["clientId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000002" }
                 },
                 string name when name.StartsWith("env") => new Dictionary<string, object>
                 {
@@ -1041,6 +1107,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
                 ["name"] = new { type = "String", value = "testregistry" },
                 ["loginServer"] = new { type = "String", value = "testregistry.azurecr.io" }
             },
+            string name when name.StartsWith("env-mi") => new Dictionary<string, object>
+            {
+                ["id"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity") },
+                ["principalId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000001" },
+                ["clientId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000002" }
+            },
             string name when name.StartsWith("env") => new Dictionary<string, object>
             {
                 ["name"] = new { type = "String", value = "env" },
@@ -1156,6 +1228,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         {
             return deploymentName switch
             {
+                string name when name.StartsWith("env-mi") => new Dictionary<string, object>
+                {
+                    ["id"] = new { type = "String", value = GetTestResourceId("/providers/Microsoft.ManagedIdentity/userAssignedIdentities/test-identity") },
+                    ["principalId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000001" },
+                    ["clientId"] = new { type = "String", value = "00000000-0000-0000-0000-000000000002" }
+                },
                 string name when name.StartsWith("env") => new Dictionary<string, object>
                 {
                     ["AZURE_CONTAINER_REGISTRY_NAME"] = new { type = "String", value = "testregistry" },

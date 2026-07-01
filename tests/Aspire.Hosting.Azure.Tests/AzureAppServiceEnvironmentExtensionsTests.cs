@@ -95,4 +95,51 @@ public class AzureAppServiceEnvironmentExtensionsTests
         Assert.Contains("not an Azure Container Registry", exception.Message);
         Assert.Contains("env", exception.Message);
     }
+
+    [Fact]
+    public async Task PublishAsExisting_CrossResourceGroupAcr_EmitsScopedAcrPullRoleModule()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/11256.
+        // When the environment's container registry is an existing ACR in a DIFFERENT resource group,
+        // the default ACR-pull role assignment must be emitted as a separately scoped module (not inlined
+        // in the env Bicep), otherwise Bicep fails with BCP139.
+        var tempDir = Directory.CreateTempSubdirectory(".acr-crossrg-appservice-test");
+        try
+        {
+            var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.FullName);
+
+            var acr = builder.AddAzureContainerRegistry("acr")
+                .PublishAsExisting("myexistingacr", "my-existing-resource-group");
+
+            builder.AddAzureAppServiceEnvironment("env")
+                .WithAzureContainerRegistry(acr);
+
+            builder.AddProject<TestProject>("apiservice", launchProfileName: null);
+
+            using var app = builder.Build();
+            app.Run();
+
+            var envBicep = await File.ReadAllTextAsync(Path.Combine(tempDir.FullName, "env", "env.bicep"));
+            // The env module must not contain an inline AcrPull role assignment scoped to the cross-RG
+            // registry (AcrPull built-in role id 7f951dda-4ed3-4680-a7ca-43fe172d538d) - that is what
+            // triggers BCP139. The role assignment must instead live in a separately scoped module.
+            Assert.DoesNotContain("7f951dda-4ed3-4680-a7ca-43fe172d538d", envBicep);
+
+            var mainBicep = await File.ReadAllTextAsync(Path.Combine(tempDir.FullName, "main.bicep"));
+            // A role-assignment module for the generated identity must be scoped to the registry's resource group.
+            Assert.Contains("env_mi_roles_acr", mainBicep);
+            Assert.Contains("resourceGroup('my-existing-resource-group')", mainBicep);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    private sealed class TestProject : IProjectMetadata
+    {
+        public string ProjectPath => "another-path";
+
+        public LaunchSettings? LaunchSettings { get; set; }
+    }
 }
