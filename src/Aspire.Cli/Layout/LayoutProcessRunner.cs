@@ -19,6 +19,7 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
         IEnumerable<string> arguments,
         string? workingDirectory = null,
         IDictionary<string, string>? environmentVariables = null,
+        bool killOnParentExit = false,
         CancellationToken ct = default)
     {
         var outputBuilder = new StringBuilder();
@@ -29,6 +30,10 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
             SuppressLogging = true,
             StandardOutputCallback = line => outputBuilder.AppendLine(line),
             StandardErrorCallback = line => errorBuilder.AppendLine(line),
+            // Windows OS-level backstop layered on top of the cross-platform watchdog stamped below:
+            // binds the child to the CLI's kill-on-close job so a hard-killed CLI cannot leak this
+            // helper even if it is wedged in a native call. No-op on non-Windows hosts.
+            KillOnParentExit = killOnParentExit,
         };
 
         var args = arguments.ToArray();
@@ -57,7 +62,8 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
         IEnumerable<string> arguments,
         string? workingDirectory = null,
         IDictionary<string, string>? environmentVariables = null,
-        ProcessInvocationOptions? options = null)
+        ProcessInvocationOptions? options = null,
+        bool killOnParentExit = false)
     {
         var args = arguments.ToArray();
         var workDir = new DirectoryInfo(workingDirectory ?? Directory.GetCurrentDirectory());
@@ -68,7 +74,18 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
         // hard-killed, preventing leaked aspire-managed processes. Does not override caller-set values.
         var effectiveEnvironment = WithOrphanDetectionEnvironment(environmentVariables);
 
-        var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, options ?? new ProcessInvocationOptions());
+        var effectiveOptions = options ?? new ProcessInvocationOptions();
+
+        // Windows OS-level backstop that complements the cross-platform watchdog above: bind the child
+        // to the CLI's kill-on-close job so the OS terminates it if the CLI dies, even when the child is
+        // wedged and cannot react to the watchdog's cancellation. Only ever turned on here (never off),
+        // so a caller that already opted in via its own options is preserved. No-op on non-Windows hosts.
+        if (killOnParentExit)
+        {
+            effectiveOptions.KillOnParentExit = true;
+        }
+
+        var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, effectiveOptions);
 
         if (!execution.Start())
         {
