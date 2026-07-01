@@ -168,7 +168,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ToggleHiddenResources_HiddenResourceVisibilityAndSelection_WorksCorrectly()
+    public async Task ToggleHiddenResources_HiddenResourceVisibilityAndSelection_WorksCorrectly()
     {
         // Arrange
         var regularResource1 = ModelTestHelpers.CreateResource(resourceName: "regular-resource1", state: KnownResourceState.Running);
@@ -226,17 +226,17 @@ public partial class ConsoleLogsTests : DashboardTestContext
         settingsMenuButton.Click();
 
         // Find and click the "Show hidden resources" menu item
-        cut.WaitForAssertion(() =>
-        {
-            var showHiddenMenuItem = cut.Find("fluent-menu-item:contains('" + Resources.ControlsStrings.ShowHiddenResources + "')");
-            Assert.NotNull(showHiddenMenuItem);
-            showHiddenMenuItem.Click();
-        });
+        var settingsMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Text == Resources.ControlsStrings.ShowHiddenResources));
+        var showHiddenMenuItem = settingsMenu.Instance.Items.Single(i => i.Text == Resources.ControlsStrings.ShowHiddenResources);
+        Assert.NotNull(showHiddenMenuItem.OnClick);
+        await cut.InvokeAsync(showHiddenMenuItem.OnClick);
+        cut.Render();
 
         // Wait for UI to update
         cut.WaitForAssertion(() =>
         {
-            var updatedOptions = selectElement.QuerySelectorAll("fluent-option");
+            var updatedSelectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
+            var updatedOptions = updatedSelectElement.QuerySelectorAll("fluent-option");
             // Should now have "All" + all three resources
             Assert.Equal(4, updatedOptions.Length);
             var updatedOptionValues = updatedOptions.Select(opt => opt.GetAttribute("value")).ToList();
@@ -245,21 +245,19 @@ public partial class ConsoleLogsTests : DashboardTestContext
             Assert.Contains("hidden-resource", updatedOptionValues);
         });
 
-        // Act & Assert 3: Click the settings menu button again and click "Hide hidden resources" to hide them again
+        // Act & Assert 3: Click "Hide hidden resources" to hide them again
         // Note: We stay on "All" view to test the hide functionality
-        settingsMenuButton.Click();
-
-        cut.WaitForAssertion(() =>
-        {
-            var hideHiddenMenuItem = cut.Find("fluent-menu-item:contains('" + Resources.ControlsStrings.HideHiddenResources + "')");
-            Assert.NotNull(hideHiddenMenuItem);
-            hideHiddenMenuItem.Click();
-        });
+        settingsMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Text == Resources.ControlsStrings.HideHiddenResources));
+        var hideHiddenMenuItem = settingsMenu.Instance.Items.Single(i => i.Text == Resources.ControlsStrings.HideHiddenResources);
+        Assert.NotNull(hideHiddenMenuItem.OnClick);
+        await cut.InvokeAsync(hideHiddenMenuItem.OnClick);
+        cut.Render();
 
         // Wait for UI to update - hidden resource should be filtered out
         cut.WaitForAssertion(() =>
         {
-            var finalOptions = selectElement.QuerySelectorAll("fluent-option");
+            var finalSelectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
+            var finalOptions = finalSelectElement.QuerySelectorAll("fluent-option");
             // Should be back to "All" + 2 regular resources only
             Assert.Equal(3, finalOptions.Length);
             var finalOptionValues = finalOptions.Select(opt => opt.GetAttribute("value")).ToList();
@@ -471,7 +469,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ClearLogEntries_AllResources_LogsFilteredOut()
+    public async Task ClearLogEntries_AllResources_LogsFilteredOut()
     {
         // Arrange
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
@@ -518,7 +516,11 @@ public partial class ConsoleLogsTests : DashboardTestContext
         cut.Find(".clear-button").Click();
 
         cut.WaitForElement("#clear-menu-all");
-        cut.Find("#clear-menu-all").Click();
+        var clearMenu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Items.Any(i => i.Id == "clear-menu-all"));
+        var clearAllMenuItem = clearMenu.Instance.Items.Single(i => i.Id == "clear-menu-all");
+        Assert.NotNull(clearAllMenuItem.OnClick);
+        await cut.InvokeAsync(clearAllMenuItem.OnClick);
+        cut.Render();
 
         cut.WaitForState(() => instance._logEntries.EntriesCount == 0);
 
