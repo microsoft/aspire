@@ -86,7 +86,7 @@ The `debuggers` property lets you pass debug config specific to a language. Use 
 
 ---
 
-## The Aspire panel
+## The Aspire Panel
 
 The extension adds an **Aspire** panel to the Activity Bar. It shows a live tree of your resources. In **Workspace** mode you see resources from the apphost in your current workspace, updating in real time. Switch to **Global** mode with the toggle in the panel header to see every running apphost on your machine.
 
@@ -98,7 +98,7 @@ Right-click a resource to start, stop, or restart it, view its logs, run resourc
 
 ## The Aspire Dashboard
 
-The dashboard gives you a live view of your running app — all your resources and their health, endpoint URLs, console logs from every service, structured logs (via OpenTelemetry), distributed traces across services, and metrics. By default, the dashboard URL is printed when your app starts and stays available from the Aspire panel.
+The dashboard gives you a live view of your running app — all your resources and their health, endpoint URLs, console logs from every service, structured logs (via OpenTelemetry), distributed traces across services, and metrics. By default, the dashboard URL is printed to the debug console when your app starts and stays available from the Aspire panel.
 
 ![Aspire Dashboard showing running resources](https://raw.githubusercontent.com/microsoft/aspire/main/extension/resources/aspire-dashboard-dark.png)
 
