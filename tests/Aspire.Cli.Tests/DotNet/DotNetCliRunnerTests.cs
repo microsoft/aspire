@@ -1003,8 +1003,8 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var exception = await Assert.ThrowsAsync<FailedToConnectBackchannelConnection>(
-            () => backchannelCompletionSource.Task.WaitAsync(TimeSpan.FromSeconds(3)));
-        Assert.Contains("The AppHost process exited", exception.Message);
+            () => backchannelCompletionSource.Task).DefaultTimeout();
+        Assert.Equal("The AppHost process exited", exception.Message);
     }
 
     [Fact]
@@ -1045,8 +1045,8 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(42, exitCode);
         var exception = await Assert.ThrowsAsync<FailedToConnectBackchannelConnection>(
-            () => backchannelCompletionSource.Task.WaitAsync(TimeSpan.FromSeconds(3)));
-        Assert.Contains("exited unexpectedly with exit code 42", exception.Message);
+            () => backchannelCompletionSource.Task).DefaultTimeout();
+        Assert.Equal("The AppHost process exited unexpectedly with exit code 42", exception.Message);
     }
 
     [Fact]
