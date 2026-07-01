@@ -160,14 +160,18 @@ function getReporterCommonProperties(context: vscode.ExtensionContext): Record<s
 function sanitizeTelemetryProperties(properties: Record<string, string>): Record<string, string> {
     const sanitized: Record<string, string> = {};
     for (const [key, value] of Object.entries(properties)) {
-        sanitized[key] = sanitizeTelemetryValue(value);
+        sanitized[key] = sanitizeTelemetryValue(value, preservesStructuralTelemetryIds(key));
     }
 
     return sanitized;
 }
 
-function sanitizeTelemetryValue(value: string): string {
-    return value
+function preservesStructuralTelemetryIds(key: string): boolean {
+    return key === 'operation_id' || key === 'asset_id' || key === 'dashboard_correlated_with';
+}
+
+function sanitizeTelemetryValue(value: string, preserveGuids: boolean): string {
+    const sanitized = value
         .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<email>')
         .replace(/\b([A-Za-z]:)\\+Users\\+[^\\\s"']+/g, (_, drive: string) => `${drive}\\Users\\<user>`)
         .replace(/(^|[^A-Za-z0-9_/-])\/Users\/[^/\s"']+/g, '$1/Users/<user>')
@@ -175,8 +179,17 @@ function sanitizeTelemetryValue(value: string): string {
         .replace(/\b(password|passwd|pwd|token|secret|api[_-]?key|client[_-]?secret|account[_-]?key|shared[_-]?access[_-]?key|sharedaccesskey|connection[_-]?string|connectionstring|key)(\s*[:=]\s*)[^&\s"',;}]+/gi, '$1$2<redacted>')
         .replace(/([?&]sig=)[^&\s"',;}]+/gi, '$1<redacted>')
         .replace(/\b(authorization\s*:\s*bearer\s+)[^\s"',;}]+/gi, '$1<redacted>')
-        .replace(/\b(bearer\s+)[A-Za-z0-9._~+/=-]+/gi, '$1<redacted>')
-        .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, '<guid>');
+        .replace(/\b(bearer\s+)[A-Za-z0-9._~+/=-]+/gi, '$1<redacted>');
+
+    // GUID-shaped values can identify users, machines, or private cloud assets
+    // when they appear in free-form fields. Keep dashboard correlation IDs
+    // intact, though, because those structural fields are how start/end events
+    // are joined downstream.
+    if (preserveGuids) {
+        return sanitized;
+    }
+
+    return sanitized.replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, '<guid>');
 }
 
 /**
