@@ -24,9 +24,21 @@ internal sealed class FakeAppHostServerSession : IAppHostServerSession
 
     public OutputCollector? Output { get; } = new();
 
-    public bool? HasServerExited => _exit.Task.IsCompleted;
+    public bool? ServerHasExited { get; set; }
 
-    public int? TryGetServerExitCode() => _exit.Task.IsCompletedSuccessfully ? _exit.Task.Result : null;
+    public int? ServerExitCode { get; set; }
+
+    public bool? HasServerExited => ServerHasExited ?? _exit.Task.IsCompleted;
+
+    public int? TryGetServerExitCode()
+    {
+        if (ServerHasExited == true)
+        {
+            return ServerExitCode;
+        }
+
+        return _exit.Task.IsCompletedSuccessfully ? _exit.Task.Result : null;
+    }
 
     public Task StartAsync() => Task.CompletedTask;
 
