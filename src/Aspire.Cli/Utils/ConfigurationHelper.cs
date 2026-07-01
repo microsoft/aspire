@@ -266,6 +266,15 @@ internal static class ConfigurationHelper
             var node = JsonNode.Parse(content, documentOptions: ParseOptions);
             if (node is not null)
             {
+                // Surface legacy "packages" entries under the new "integrations" key so the
+                // process-wide configuration (which backs `aspire config get`) presents the renamed
+                // key consistently regardless of the on-disk key. Read-only; on-disk migration
+                // happens on write paths (set/delete).
+                if (node is JsonObject settingsObject)
+                {
+                    AspireConfigFile.NormalizeLegacyIntegrationsKey(settingsObject);
+                }
+
                 var cleanJson = node.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
                 var bytes = System.Text.Encoding.UTF8.GetBytes(cleanJson);
                 configuration.AddJsonStream(new MemoryStream(bytes));

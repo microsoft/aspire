@@ -492,7 +492,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete features.stagingChannelEnabled -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("aspire config delete packages -g");
+        await auto.TypeAsync("aspire config delete integrations -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
     }

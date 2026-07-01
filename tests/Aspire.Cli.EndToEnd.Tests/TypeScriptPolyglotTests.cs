@@ -426,7 +426,8 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         var config = JsonNode.Parse(File.ReadAllText(configPath))!.AsObject();
         var appHost = config["appHost"]!.AsObject();
         Assert.Equal("aspire-apphost/apphost.mts", appHost["path"]?.GetValue<string>());
-        var packagesNode = config["packages"];
+        // New files write the "integrations" key; fall back to the legacy "packages" key for older files.
+        var packagesNode = config["integrations"] ?? config["packages"];
         Assert.NotNull(packagesNode);
         var packages = packagesNode!.AsObject();
         Assert.NotNull(packages["Aspire.Hosting.JavaScript"]);

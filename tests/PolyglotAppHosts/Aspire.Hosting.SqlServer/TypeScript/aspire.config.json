@@ -14,7 +14,7 @@
       }
     }
   },
-  "packages": {
+  "integrations": {
     "Aspire.Hosting.SqlServer": ""
   }
 }

@@ -4,6 +4,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
@@ -38,7 +39,7 @@ namespace Aspire.Cli.Configuration;
 ///       "environmentVariables": { "ASPNETCORE_ENVIRONMENT": "Development" }
 ///     }
 ///   },
-///   "packages": { "Aspire.Hosting.Redis": "9.2.0" }
+///   "integrations": { "Aspire.Hosting.Redis": "9.2.0" }
 /// }
 /// </code>
 /// <para>Legacy <c>.aspire/settings.json</c> (flat keys):</para>
@@ -116,11 +117,186 @@ internal sealed class AspireConfigFile
     public Dictionary<string, AspireConfigProfile>? Profiles { get; set; }
 
     /// <summary>
-    /// Package references for non-first-class languages.
+    /// Integration references for non-first-class languages.
+    /// Written as <c>"integrations"</c> in new files.
     /// </summary>
-    [JsonPropertyName("packages")]
-    [Description("Package references for non-first-class languages. Key is package name, value is version. A value ending in \".csproj\" is treated as a project reference.")]
+    [JsonPropertyName(IntegrationsKey)]
+    [Description("Integration references for non-first-class languages. Key is package name, value is version. A value ending in \".csproj\" is treated as a project reference.")]
     public Dictionary<string, string>? Packages { get; set; }
+
+    /// <summary>
+    /// Legacy property for backward compatibility. Reads the <c>"packages"</c> key from
+    /// older aspire.config.json files. Merged into <see cref="Packages"/> after deserialization
+    /// via <see cref="MergeLegacyPackages"/> (which sets this to <c>null</c>).
+    /// Never written back because <c>DefaultIgnoreCondition = WhenWritingNull</c> is configured
+    /// on the serializer context.
+    /// </summary>
+    [JsonPropertyName(LegacyPackagesKey)]
+    // Hidden from the generated config schema so tooling (e.g. `aspire config info --json` and IDE
+    // auto-complete) only advertises the new "integrations" key. The property still deserializes the
+    // legacy key for backward-compatible reads; it is just not surfaced as a first-class schema entry.
+    [HiddenFromConfigurationSchema]
+    [Description("Deprecated. Use \"integrations\" instead. Legacy key kept for backward compatibility with older aspire.config.json files.")]
+    public Dictionary<string, string>? LegacyPackages { get; set; }
+
+    /// <summary>
+    /// The JSON key written for integration references in new files (see <see cref="Packages"/>).
+    /// </summary>
+    internal const string IntegrationsKey = "integrations";
+
+    /// <summary>
+    /// The legacy JSON key for integration references, kept only for backward-compatible reads
+    /// (see <see cref="LegacyPackages"/>).
+    /// </summary>
+    internal const string LegacyPackagesKey = "packages";
+
+    /// <summary>
+    /// Merges any entries from the legacy <c>"packages"</c> key into <see cref="Packages"/>
+    /// (the <c>"integrations"</c> key). Entries already in <see cref="Packages"/> take precedence.
+    /// </summary>
+    /// <param name="integrationsExplicitlySet">
+    /// <c>true</c> when the <c>"integrations"</c> key was present in the source JSON (even as
+    /// <c>null</c> or <c>{}</c>). The source generator cannot distinguish an absent key from one
+    /// explicitly set to <c>null</c>/<c>{}</c> (both leave <see cref="Packages"/> <c>null</c>), so
+    /// the caller detects presence from the raw JSON. When the new key is present it always wins and
+    /// legacy <c>"packages"</c> is ignored; otherwise entries the user intentionally cleared (e.g.
+    /// <c>{"integrations": {}, "packages": { ... }}</c>) would silently resurrect on the next save.
+    /// </param>
+    internal void MergeLegacyPackages(bool integrationsExplicitlySet = false)
+    {
+        if (LegacyPackages is null)
+        {
+            return;
+        }
+
+        // When the new "integrations" key is present (even null or {}), it takes precedence and the
+        // legacy "packages" key is dropped. Clearing LegacyPackages also keeps it out of serialized
+        // output via DefaultIgnoreCondition = WhenWritingNull.
+        if (!integrationsExplicitlySet)
+        {
+            if (Packages is null)
+            {
+                Packages = LegacyPackages;
+            }
+            else
+            {
+                foreach (var (key, val) in LegacyPackages)
+                {
+                    Packages.TryAdd(key, val);
+                }
+            }
+        }
+
+        LegacyPackages = null;
+    }
+
+    /// <summary>
+    /// Rewrites the legacy <c>"packages"</c> key to the new <c>"integrations"</c> key on a parsed
+    /// config object so callers that flatten or query the raw JSON (rather than deserializing into
+    /// <see cref="AspireConfigFile"/>) observe integration references under the new key. When
+    /// <c>"integrations"</c> is already present (even as <c>null</c> or <c>{}</c>) the new key wins and
+    /// the legacy <c>"packages"</c> entry is dropped, mirroring <see cref="MergeLegacyPackages"/>.
+    /// Also flattens malformed nested integration objects produced by older dot-notation writes
+    /// back into dictionary entries.
+    /// </summary>
+    /// <returns>
+    /// <c>true</c> when the object was mutated (legacy <c>"packages"</c> was renamed or dropped);
+    /// <c>false</c> when no legacy key was present. Callers that persist the object (e.g.
+    /// <c>aspire config set</c>/<c>delete</c>) use this to migrate the file in place and avoid leaving
+    /// a dual-key (<c>"packages"</c> + <c>"integrations"</c>) file on disk.
+    /// </returns>
+    internal static bool NormalizeLegacyIntegrationsKey(JsonObject root)
+    {
+        var mutated = false;
+
+        // Match the case-insensitive property binding the serializer uses (PropertyNameCaseInsensitive
+        // = true) so e.g. "Integrations" is still treated as the new key.
+        var legacyKey = FindKeyIgnoreCase(root, LegacyPackagesKey);
+        var integrationsKey = FindKeyIgnoreCase(root, IntegrationsKey);
+
+        if (integrationsKey is not null)
+        {
+            mutated |= NormalizeIntegrationReferenceObject(root, integrationsKey);
+        }
+
+        if (legacyKey is null)
+        {
+            return mutated;
+        }
+
+        if (integrationsKey is not null)
+        {
+            // Both keys present: the new "integrations" key wins and the legacy "packages" entry is
+            // dropped, mirroring MergeLegacyPackages. Removing the legacy key is itself a mutation.
+            root.Remove(legacyKey);
+            return true;
+        }
+
+        // DeepClone detaches the node from its current parent so it can be re-parented under the new key.
+        var node = root[legacyKey]?.DeepClone();
+        root.Remove(legacyKey);
+        root[IntegrationsKey] = node;
+        NormalizeIntegrationReferenceObject(root, IntegrationsKey);
+        return true;
+    }
+
+    private static bool NormalizeIntegrationReferenceObject(JsonObject root, string integrationsKey)
+    {
+        if (root[integrationsKey] is not JsonObject integrations)
+        {
+            return false;
+        }
+
+        var flattened = new JsonObject();
+        var mutated = FlattenIntegrationReferenceObject(integrations, flattened, prefix: string.Empty);
+
+        if (!mutated)
+        {
+            return false;
+        }
+
+        root[integrationsKey] = flattened;
+        return true;
+    }
+
+    private static bool FlattenIntegrationReferenceObject(JsonObject source, JsonObject target, string prefix)
+    {
+        var mutated = false;
+
+        foreach (var kvp in source)
+        {
+            var key = string.IsNullOrEmpty(prefix) ? kvp.Key : $"{prefix}.{kvp.Key}";
+
+            if (kvp.Value is JsonObject nestedObject)
+            {
+                // Older config-set code treated package IDs such as "Aspire.Hosting.Redis" as a
+                // dotted JSON path. Integrations are a dictionary, so flatten nested objects back
+                // into the package ID string before callers read or persist the config.
+                mutated = true;
+                FlattenIntegrationReferenceObject(nestedObject, target, key);
+            }
+            else
+            {
+                target[key] = kvp.Value?.DeepClone();
+                mutated |= !string.Equals(key, kvp.Key, StringComparison.Ordinal);
+            }
+        }
+
+        return mutated;
+    }
+
+    private static string? FindKeyIgnoreCase(JsonObject root, string name)
+    {
+        foreach (var kvp in root)
+        {
+            if (string.Equals(kvp.Key, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return kvp.Key;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Loads aspire.config.json from the specified directory.
@@ -138,8 +314,11 @@ internal sealed class AspireConfigFile
         try
         {
             var json = File.ReadAllText(filePath);
-            return JsonSerializer.Deserialize(json, JsonSourceGenerationContext.Default.AspireConfigFile)
+            var normalizedJson = NormalizeJsonForDeserialization(json);
+            var config = JsonSerializer.Deserialize(normalizedJson, JsonSourceGenerationContext.Default.AspireConfigFile)
                 ?? new AspireConfigFile();
+            config.MergeLegacyPackages(integrationsExplicitlySet: ContainsIntegrationsKey(json));
+            return config;
         }
         catch (JsonException ex)
         {
@@ -149,12 +328,50 @@ internal sealed class AspireConfigFile
         }
     }
 
+    private static string NormalizeJsonForDeserialization(string json)
+    {
+        var node = JsonNode.Parse(json, documentOptions: ConfigurationHelper.ParseOptions);
+        if (node is not JsonObject settings)
+        {
+            return json;
+        }
+
+        return NormalizeLegacyIntegrationsKey(settings) ? settings.ToJsonString() : json;
+    }
+
+    /// <summary>
+    /// Determines whether the new <c>"integrations"</c> key is present in the raw JSON. Used so the
+    /// new key can take precedence over legacy <c>"packages"</c> even when set to <c>null</c> or
+    /// <c>{}</c>, which the source generator otherwise cannot distinguish from an absent key.
+    /// </summary>
+    private static bool ContainsIntegrationsKey(string json)
+    {
+        using var doc = JsonDocument.Parse(json, ConfigurationHelper.ParseOptions);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            // Case-insensitive to match the serializer's PropertyNameCaseInsensitive binding.
+            if (string.Equals(prop.Name, IntegrationsKey, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// Saves aspire.config.json to the specified directory.
     /// Uses relaxed JSON escaping so non-ASCII characters (CJK, etc.) are preserved as-is.
+    /// Always writes the <c>"integrations"</c> key (never legacy <c>"packages"</c>).
     /// </summary>
     public void Save(string directory)
     {
+        MergeLegacyPackages();
         Directory.CreateDirectory(directory);
         var filePath = Path.Combine(directory, FileName);
         var json = JsonSerializer.Serialize(this, JsonSourceGenerationContext.RelaxedEscaping.AspireConfigFile);

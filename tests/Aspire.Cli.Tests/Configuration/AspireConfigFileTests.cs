@@ -40,6 +40,152 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void Load_UsesLegacyPackages_WhenIntegrationsIsAbsent()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": "13.2.0"
+              }
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.Packages);
+        Assert.Equal("13.2.0", result.Packages["Aspire.Hosting.Redis"]);
+        Assert.Null(result.LegacyPackages);
+    }
+
+    [Fact]
+    public void Load_FlattensNestedIntegrations()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "integrations": {
+                "Aspire": {
+                  "Hosting": {
+                    "Redis": "13.2.0"
+                  }
+                }
+              }
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.Packages);
+        Assert.Equal("13.2.0", result.Packages["Aspire.Hosting.Redis"]);
+        Assert.Null(result.LegacyPackages);
+    }
+
+    [Fact]
+    public void Load_FlattensNestedLegacyPackages()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "packages": {
+                "Aspire": {
+                  "Hosting": {
+                    "Redis": "13.2.0"
+                  }
+                }
+              }
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.Packages);
+        Assert.Equal("13.2.0", result.Packages["Aspire.Hosting.Redis"]);
+        Assert.Null(result.LegacyPackages);
+    }
+
+    [Fact]
+    public void Load_DoesNotMergeLegacyPackages_WhenIntegrationsIsEmptyObject()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "integrations": {},
+              "packages": {
+                "Aspire.Hosting.Redis": "13.2.0"
+              }
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.Packages);
+        Assert.Empty(result.Packages);
+        Assert.Null(result.LegacyPackages);
+    }
+
+    [Fact]
+    public void Load_DoesNotMergeLegacyPackages_WhenIntegrationsIsNull()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "integrations": null,
+              "packages": {
+                "Aspire.Hosting.Redis": "13.2.0"
+              }
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result);
+        Assert.Null(result.Packages);
+        Assert.Null(result.LegacyPackages);
+    }
+
+    [Fact]
+    public void Load_PrefersIntegrations_AndIgnoresLegacyPackages_WhenBothPopulated()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(configPath, """
+            {
+              "integrations": {
+                "Aspire.Hosting.Redis": "14.0.0"
+              },
+              "packages": {
+                "Aspire.Hosting.Redis": "13.2.0",
+                "Aspire.Hosting.PostgreSQL": "13.2.0"
+              }
+            }
+            """);
+
+        var result = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.Packages);
+        Assert.Equal("14.0.0", result.Packages["Aspire.Hosting.Redis"]);
+        Assert.DoesNotContain("Aspire.Hosting.PostgreSQL", result.Packages.Keys);
+        Assert.Null(result.LegacyPackages);
+    }
+
+    [Fact]
     public void Load_ReturnsConfig_WhenFileContainsDocsSourceConfiguration()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

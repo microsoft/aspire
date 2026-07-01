@@ -112,6 +112,47 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void RegisterSettingsFiles_ExposesLegacyPackagesAsIntegrations()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Dot-free integration keys keep this focused on the legacy "packages" -> "integrations"
+        // normalization rather than how IConfiguration flattens package names that contain '.'.
+        var config = BuildConfigurationFromSettingsFile(workspace, """
+            {
+              "packages": {
+                "RedisIntegration": "13.2.0"
+              }
+            }
+            """);
+
+        Assert.Equal("13.2.0", config["integrations:RedisIntegration"]);
+        Assert.Null(config["packages:RedisIntegration"]);
+    }
+
+    [Fact]
+    public void RegisterSettingsFiles_PrefersIntegrations_WhenBothKeysPresent()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var config = BuildConfigurationFromSettingsFile(workspace, """
+            {
+              "integrations": {
+                "RedisIntegration": "14.0.0"
+              },
+              "packages": {
+                "RedisIntegration": "13.2.0",
+                "PostgresIntegration": "13.2.0"
+              }
+            }
+            """);
+
+        Assert.Equal("14.0.0", config["integrations:RedisIntegration"]);
+        Assert.Null(config["integrations:PostgresIntegration"]);
+        Assert.Null(config["packages:RedisIntegration"]);
+    }
+
+    [Fact]
     public void TryNormalizeSettingsFile_PreservesBooleanTypes()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
