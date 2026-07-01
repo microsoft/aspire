@@ -49,6 +49,22 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_ClearMenuDownloadItemNotDisplayed()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+
+        var cut = RenderComponent<Metrics>(builder =>
+        {
+            builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        cut.Find(".clear-button").Click();
+        cut.WaitForElement("#clear-menu-all");
+
+        Assert.Empty(cut.FindAll("#clear-menu-download"));
+    }
+
+    [Fact]
     public async Task InitialLoad_SingleResource_RedirectToResource()
     {
         // Arrange

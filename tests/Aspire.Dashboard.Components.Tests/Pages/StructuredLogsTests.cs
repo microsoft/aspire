@@ -26,6 +26,27 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class StructuredLogsTests : DashboardTestContext
 {
     [Fact]
+    public void Render_ClearMenuDownloadItemNotDisplayed()
+    {
+        SetupStructureLogsServices();
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<StructuredLogs>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        cut.Find(".clear-button").Click();
+        cut.WaitForElement("#clear-menu-all");
+
+        Assert.Empty(cut.FindAll("#clear-menu-download"));
+    }
+
+    [Fact]
     public void Render_ResourceInstanceHasDashes_AppKeyResolvedCorrectly()
     {
         // Arrange

@@ -16,7 +16,7 @@ public partial class ManageSignalsButton : ComponentBase
 {
     private static readonly Icon s_downloadLogsIcon = new Icons.Regular.Size16.ArrowDownload();
     private static readonly Icon s_clearSelectedResourceIcon = new Icons.Regular.Size16.Delete();
-    private static readonly Icon s_clearAllResourcesIcon = new Icons.Regular.Size20.DeleteLines();
+    private static readonly Icon s_clearAllResourcesIcon = new Icons.Regular.Size16.Broom();
 
     [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
