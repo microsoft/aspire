@@ -7,6 +7,8 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Utils;
 
+#pragma warning disable ASPIREEXTENSION001 // WithDebugSupport is experimental
+
 namespace Aspire.Hosting;
 
 /// <summary>
