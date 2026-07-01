@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
+import { findRunningAppHost, getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForTreeItem } from './helpers/vscode';
@@ -12,12 +12,17 @@ suite('Aspire AppHost tree E2E', function () {
             () => setCliUnavailableForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
+            () => executeE2eControlCommand({ name: 'switchToWorkspaceView' }),
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => stopPrimaryAppHostIfRunning(),
             () => waitForNoDebugSessions().catch(() => undefined),
             () => waitForNoRunningAppHost().catch(() => undefined),
         ], 'AppHost tree E2E teardown failed.');
     });
+
+    function hasWorkerResource(resources: readonly { name: string; displayName: string | null }[] | null | undefined): boolean {
+        return (resources ?? []).some(resource => (resource.displayName ?? resource.name) === 'e2e-worker');
+    }
 
     test('discovers the workspace AppHost and renders it in the Aspire view', async () => {
         await openAspireView();
@@ -132,6 +137,60 @@ suite('Aspire AppHost tree E2E', function () {
 
         await openAspireView();
         await waitForNoRunningAppHost(120000, appHostPath);
+    });
+
+    test('surfaces the same describe resources in workspace and global views from one stream', async () => {
+        const appHostPath = getPrimaryAppHostProjectPath();
+
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+
+        await executeE2eControlCommand({ name: 'switchToWorkspaceView' });
+        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForRunningAppHost();
+
+        await waitForExtensionState(
+            file => hasWorkerResource(file.state.workspaceResources),
+            'e2e-worker in workspaceResources projection (workspace view)',
+            120000);
+
+        // Switching view must not respawn the stream; the same stream's resources now attach onto
+        // appHosts[].resources instead of the workspace projection.
+        await executeE2eControlCommand({ name: 'switchToGlobalView' });
+        const globalState = await waitForExtensionState(
+            file => hasWorkerResource(findRunningAppHost(file.state, appHostPath)?.resources),
+            'e2e-worker attached to appHosts[].resources (global view)',
+            120000);
+        assert.ok(!hasWorkerResource(globalState.state.workspaceResources),
+            'Global view must not also project the host into workspaceResources (would double-render).');
+
+        await executeE2eControlCommand({ name: 'switchToWorkspaceView' });
+        await waitForExtensionState(
+            file => hasWorkerResource(file.state.workspaceResources),
+            'e2e-worker projection restored after returning to workspace view',
+            120000);
+    });
+
+    test('streams describe resources for a host run while global view is active', async () => {
+        const appHostPath = getPrimaryAppHostProjectPath();
+
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+
+        // Run the host with global view already active so the resources can only come from the global
+        // attach path, never the workspace projection.
+        await executeE2eControlCommand({ name: 'switchToGlobalView' });
+        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForRunningAppHost();
+
+        const state = await waitForExtensionState(
+            file => hasWorkerResource(findRunningAppHost(file.state, appHostPath)?.resources),
+            'e2e-worker attached to appHosts[].resources for a host run in global view',
+            120000);
+        assert.ok(!hasWorkerResource(state.state.workspaceResources),
+            'Workspace projection must stay empty while in global view.');
     });
 
 });

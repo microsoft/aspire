@@ -1792,6 +1792,333 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('fans out one describe stream per running AppHost before workspace discovery completes', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        // Deferred discovery that never resolves and streams no candidates, so the early window
+        // (discovery incomplete, candidate list empty) persists while `ps` reports running hosts.
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        const describeCalls: { args: string[]; options: any }[] = [];
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider: any, _command: any, args: string[], options: any) => {
+            if (args[0] === 'describe') {
+                describeCalls.push({ args, options });
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'workspace ps watch did not start before discovery completed');
+
+            // Two workspace AppHosts are running before `ls` has reported any candidate. Neither the
+            // single-running early-adopt nor the configured selection applies, so the per-AppHost
+            // fan-out must start a describe for each running host off the `ps` set alone.
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                    appHostPid: 125881,
+                    dashboardUrl: 'https://localhost:17193/login?t=061212',
+                },
+                {
+                    appHostPath: '/workspace/tools/Admin/AppHost.csproj',
+                    appHostPid: 125882,
+                    dashboardUrl: 'https://localhost:17194/login?t=061213',
+                },
+            ]));
+
+            await waitForCondition(() => describeCalls.length >= 2, 'a describe stream did not start for each running AppHost');
+
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
+            assert.deepStrictEqual(repository.workspaceAppHostCandidatePaths, []);
+            assert.strictEqual(repository.workspaceAppHostPath, undefined);
+            assert.strictEqual(describeCalls.length, 2);
+            const targetedPaths = describeCalls
+                .map(call => call.args[call.args.indexOf('--apphost') + 1])
+                .sort();
+            assert.deepStrictEqual(targetedPaths, [
+                '/workspace/apps/Store/AppHost.csproj',
+                '/workspace/tools/Admin/AppHost.csproj',
+            ]);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('stopping one of two running AppHosts tears down its leftover describe stream', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        // Deferred discovery keeps the early window open (discovery incomplete, candidate list
+        // empty) so the fan-out drives describe streams purely off the `ps` running set.
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        const storePath = '/workspace/apps/Store/AppHost.csproj';
+        const adminPath = '/workspace/tools/Admin/AppHost.csproj';
+        const describeChildren = new Map<string, TestChildProcess>();
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider: any, _command: any, args: string[], options: any) => {
+            const child = new TestChildProcess();
+            if (args[0] === 'describe') {
+                const targetPath = args[args.indexOf('--apphost') + 1];
+                describeChildren.set(targetPath, child);
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return child;
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'workspace ps watch did not start before discovery completed');
+
+            // Both AppHosts run during the early window: each gets a fanned-out describe stream.
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: storePath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+                { appHostPath: adminPath, appHostPid: 125882, dashboardUrl: 'https://localhost:17194/login?t=061213' },
+            ]));
+            await waitForCondition(() => describeChildren.size >= 2, 'a describe stream did not start for each running AppHost');
+            const adminChild = describeChildren.get(adminPath);
+            const storeChild = describeChildren.get(storePath);
+            assert.ok(adminChild, 'expected a describe stream for the Admin AppHost');
+            assert.ok(storeChild, 'expected a describe stream for the Store AppHost');
+
+            // The Admin AppHost stops. With the candidate list still empty the gate would skip
+            // reconciliation unless it also fires while global streams remain, so this asserts the
+            // leftover Admin describe stream is drained instead of leaking.
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: storePath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+            ]));
+            await waitForCondition(() => adminChild!.killed, 'the leftover describe stream for the stopped AppHost was not torn down');
+
+            assert.strictEqual(adminChild!.killed, true);
+            assert.strictEqual(storeChild!.killed, false, 'the still-running AppHost describe stream must stay alive');
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('idle-parked workspace describe restarts only when its AppHost starts running', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        const idlePath = '/workspace/apps/Store/AppHost.csproj';
+        const describeSpawns: string[] = [];
+        const describeOptions = new Map<string, any>();
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider: any, _command: any, args: string[], options: any) => {
+            if (args[0] === 'describe') {
+                const targetPath = args[args.indexOf('--apphost') + 1];
+                describeSpawns.push(targetPath);
+                describeOptions.set(targetPath, options);
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'workspace ps watch did not start');
+
+            // A single buildable candidate that is not running: the selected workspace target is idle.
+            discovery.resolve([{ path: idlePath, language: 'csharp', status: 'buildable' }]);
+            await waitForCondition(() => repository.isWorkspaceAppHostDiscoveryComplete, 'workspace discovery did not complete');
+
+            // An empty ps poll resolves the idle selection and starts its projected describe stream.
+            psOptions.lineCallback(JSON.stringify([]));
+            await waitForCondition(() => describeSpawns.filter(p => p === idlePath).length === 1, 'a describe stream did not start for the idle workspace target');
+
+            // The projected describe exits without ever producing data: it parks (kept in the map with
+            // no process/timer/data) instead of restart-looping.
+            describeOptions.get(idlePath)!.exitCallback(0);
+
+            // A reconcile while the host stays idle must leave the parked stream alone — no respawn.
+            psOptions.lineCallback(JSON.stringify([]));
+            await waitForAppHostDiscovery();
+            assert.strictEqual(describeSpawns.filter(p => p === idlePath).length, 1, 'a parked idle describe stream must not be respawned while its host stays idle');
+
+            // The same AppHost starts running: the idle->running edge unparks it with a fresh describe.
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: idlePath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+            ]));
+            await waitForCondition(() => describeSpawns.filter(p => p === idlePath).length === 2, 'the parked describe stream did not restart when its AppHost started running');
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('running workspace describe that empty-exits parks instead of restart-looping', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        const runningPath = '/workspace/apps/Store/AppHost.csproj';
+        const describeSpawns: string[] = [];
+        const describeOptions = new Map<string, any>();
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider: any, _command: any, args: string[], options: any) => {
+            if (args[0] === 'describe') {
+                const targetPath = args[args.indexOf('--apphost') + 1];
+                describeSpawns.push(targetPath);
+                describeOptions.set(targetPath, options);
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'workspace ps watch did not start');
+
+            discovery.resolve([{ path: runningPath, language: 'csharp', status: 'buildable' }]);
+            await waitForCondition(() => repository.isWorkspaceAppHostDiscoveryComplete, 'workspace discovery did not complete');
+
+            // The selected workspace target is already running, so its projected describe stream starts
+            // immediately (the running host wins over the idle candidate).
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: runningPath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+            ]));
+            await waitForCondition(() => describeSpawns.filter(p => p === runningPath).length === 1, 'a describe stream did not start for the running workspace target');
+
+            // The projected describe exits without ever producing data WHILE the host is running. It must
+            // park as `parked-active` so it cannot restart-loop every poll, rather than respawn.
+            describeOptions.get(runningPath)!.exitCallback(0);
+
+            // Further reconciles while the host stays running must leave the parked stream alone — a host
+            // that keeps empty-exiting while running would otherwise hammer the CLI every poll.
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: runningPath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+            ]));
+            await waitForAppHostDiscovery();
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: runningPath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+            ]));
+            await waitForAppHostDiscovery();
+            assert.strictEqual(describeSpawns.filter(p => p === runningPath).length, 1, 'a describe parked while running must not restart-loop while its host stays running');
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('parked workspace describe restarts after its AppHost stops and starts again', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => discovery.promise,
+            dispose: () => { },
+        };
+        const runningPath = '/workspace/apps/Store/AppHost.csproj';
+        const describeSpawns: string[] = [];
+        const describeOptions = new Map<string, any>();
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider: any, _command: any, args: string[], options: any) => {
+            if (args[0] === 'describe') {
+                const targetPath = args[args.indexOf('--apphost') + 1];
+                describeSpawns.push(targetPath);
+                describeOptions.set(targetPath, options);
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'workspace ps watch did not start');
+
+            discovery.resolve([{ path: runningPath, language: 'csharp', status: 'buildable' }]);
+            await waitForCondition(() => repository.isWorkspaceAppHostDiscoveryComplete, 'workspace discovery did not complete');
+
+            // The running host's projected describe stream starts and then empty-exits, parking as
+            // `parked-active` (see the test above).
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: runningPath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+            ]));
+            await waitForCondition(() => describeSpawns.filter(p => p === runningPath).length === 1, 'a describe stream did not start for the running workspace target');
+            describeOptions.get(runningPath)!.exitCallback(0);
+            await waitForAppHostDiscovery();
+
+            // The host stops: `ps` reports nothing. Because `ps` confirmed the host running earlier, this
+            // empty snapshot is a genuine stop, so the parked stream is torn down rather than left to sit
+            // permanently parked.
+            psOptions.lineCallback(JSON.stringify([]));
+            await waitForAppHostDiscovery();
+            assert.strictEqual(describeSpawns.filter(p => p === runningPath).length, 1, 'stopping the host must not itself spawn a new describe stream');
+
+            // The host starts again: a fresh describe stream must spawn. The previously parked stream must
+            // not block the restart.
+            psOptions.lineCallback(JSON.stringify([
+                { appHostPath: runningPath, appHostPid: 125881, dashboardUrl: 'https://localhost:17193/login?t=061212' },
+            ]));
+            await waitForCondition(() => describeSpawns.filter(p => p === runningPath).length === 2, 'a parked describe stream did not restart after its host stopped and started again');
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('configured AppHost outside aspire ls candidates remains selected in workspace view', async () => {
         const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-extension-workspace-'));
         const configuredAppHostPath = path.join(path.dirname(workspaceRoot), 'external', 'AppHost.csproj');
@@ -3123,6 +3450,74 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('workspace describe keeps streamed resources when ps has not yet confirmed the AppHost running', async () => {
+        // Mirror of the test above: there `ps` confirms the host running first, so a later empty `ps`
+        // snapshot is a genuine stop that tears the stream down. Here `ps` NEVER confirms the host, so
+        // the empty snapshot is just `ps` lag. Describe data does not promote the host into the running
+        // set, so the live stream and its already-streamed resources must survive instead of being torn
+        // down and respawned on every poll until `ps` catches up.
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        const describeProcess = new TestChildProcess();
+        const describeSpawns: string[] = [];
+        let describeOptions: any;
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
+            if (args[0] === 'describe') {
+                describeSpawns.push(args[args.indexOf('--apphost') + 1]);
+                describeOptions = options;
+                return describeProcess;
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            assert.ok(getAppHostsLineCallback);
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/labs/ops/apphost.cs',
+                all_project_file_candidates: ['/workspace/labs/ops/apphost.cs'],
+            }));
+            await waitForAppHostDiscovery();
+
+            assert.ok(describeOptions);
+            assert.ok(psOptions);
+
+            // Describe streams a resource BEFORE `ps` ever reports the host running.
+            describeOptions.lineCallback(JSON.stringify({ name: 'worker', resourceType: 'Project', state: 'Running' }));
+            assert.strictEqual(repository.workspaceResources.length, 1);
+
+            const spawnsBeforeEmptyPs = describeSpawns.length;
+
+            // An empty `ps` snapshot arrives while `ps` is still catching up. Because it never confirmed
+            // the host running, this is treated as lag, not a stop.
+            psOptions.lineCallback(JSON.stringify([]));
+            await waitForAppHostDiscovery();
+
+            assert.strictEqual(describeProcess.killed, false, 'the live describe stream must not be killed before ps confirms a stop');
+            assert.strictEqual(describeSpawns.length, spawnsBeforeEmptyPs, 'the describe stream must not be torn down and respawned during the ps-lag window');
+            assert.strictEqual(repository.workspaceResources.length, 1, 'streamed resources must survive the ps-lag window');
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('workspace describe exit clears stale running AppHost before ps stop snapshot', async () => {
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
@@ -4103,6 +4498,33 @@ suite('AppHostDataRepository AppHost-file gate', () => {
         assert.strictEqual(spawnStub.calledOnce, true);
 
         repository.dispose();
+    });
+
+    test('single-file describe that empty-exits parks and is not respawned by reconcile', async () => {
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setAppHostFileOpen(true);
+            await waitForMicrotasks();
+
+            const describeCalls = () => spawnStub.getCalls().filter(call => call.args[2][0] === 'describe');
+            assert.strictEqual(describeCalls().length, 1, 'the single-file describe watch did not start');
+
+            // The path-less single-file describe exits without ever producing data. There is no resolved
+            // AppHost path and no running workspace host backing the sentinel, so it parks (kept in the
+            // map with no process/timer/data) instead of restart-looping.
+            describeCalls()[0].args[3].exitCallback(0);
+
+            // Toggling panel visibility re-runs reconcile while single-file mode is still active. The
+            // parked sentinel must be left alone — it is not respawned by reconcile.
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            assert.strictEqual(describeCalls().length, 1, 'a parked single-file describe stream must not be respawned by reconcile');
+        } finally {
+            repository.dispose();
+        }
     });
 });
 
