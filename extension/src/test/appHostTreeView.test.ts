@@ -2516,6 +2516,62 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         }
     });
 
+    test('attachDebuggerToResource falls back when AssemblyName is not a simple literal', async () => {
+        const testCases = [
+            '<AssemblyName>$(MSBuildProjectName).Api</AssemblyName>',
+            '<AssemblyName>../Custom.Assembly</AssemblyName>',
+            '<AssemblyName>"Custom.Assembly"</AssemblyName>',
+            '<AssemblyName>Custom&amp;Assembly</AssemblyName>',
+            '<!-- <AssemblyName>Commented.Assembly</AssemblyName> -->',
+        ];
+
+        for (const assemblyNameMarkup of testCases) {
+            const directory = fs.mkdtempSync(path.join(process.cwd(), '.assembly-name-test-'));
+            const projectPath = path.join(directory, 'ProjectFileName.csproj');
+            fs.writeFileSync(projectPath, `
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    ${assemblyNameMarkup}
+  </PropertyGroup>
+</Project>`);
+            const provider = makeTreeProvider([
+                makeAppHost({
+                    resources: [
+                        makeResource({
+                            name: 'api',
+                            displayName: 'API',
+                            resourceType: 'Project',
+                            state: ResourceState.Running,
+                            properties: makeAttachableProjectProperties({
+                                'project.path': projectPath,
+                            }),
+                        }),
+                    ],
+                }),
+            ]);
+            const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+            const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+
+            try {
+                const [appHostItem] = provider.getChildren();
+                const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+                assert.ok(resourcesGroup, 'Expected resources group');
+                const [resourceItem] = provider.getChildren(resourcesGroup);
+
+                await (provider as any).attachDebuggerToResource(resourceItem);
+
+                const configuration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+                assert.strictEqual(configuration.processName, 'ProjectFileName');
+            }
+            finally {
+                csharpInstalledStub.restore();
+                startDebuggingStub.restore();
+                provider.dispose();
+                fs.rmSync(directory, { recursive: true, force: true });
+            }
+        }
+    });
+
     test('attachDebuggerToResource uses the latest resource project path', async () => {
         const appHost = makeAppHost({
             resources: [

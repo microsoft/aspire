@@ -527,16 +527,23 @@ function getDotNetProjectProcessName(projectPath: string): string | undefined {
 
 async function resolveDotNetProjectProcessName(projectPath: string, fallbackProcessName: string): Promise<string> {
     // AssemblyName defaults to the project filename, but users can override it in the project
-    // file. Read it best-effort so the generated attach config matches the actual apphost
-    // process more often without requiring a new Aspire CLI/backchannel contract.
+    // file. Read simple literal values best-effort so the generated attach config matches the
+    // actual apphost process more often without requiring a new Aspire CLI/backchannel contract.
+    // Reject MSBuild expressions like "$(MSBuildProjectName).Api" because CoreCLR treats the
+    // processName as a literal process matcher, not as an evaluated MSBuild property.
     try {
         const content = Buffer.from(await vscode.workspace.fs.readFile(vscode.Uri.file(projectPath))).toString('utf8');
-        const assemblyName = content.match(/<AssemblyName\s*>([^<]+)<\/AssemblyName\s*>/i)?.[1]?.trim();
-        return assemblyName && assemblyName.length > 0 ? assemblyName : fallbackProcessName;
+        const contentWithoutComments = content.replace(/<!--[\s\S]*?-->/g, '');
+        const assemblyName = contentWithoutComments.match(/<AssemblyName\s*>([^<]+)<\/AssemblyName\s*>/i)?.[1]?.trim();
+        return assemblyName && isSimpleLiteralAssemblyName(assemblyName) ? assemblyName : fallbackProcessName;
     }
     catch {
         return fallbackProcessName;
     }
+}
+
+function isSimpleLiteralAssemblyName(assemblyName: string): boolean {
+    return /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(assemblyName);
 }
 
 function getTerminalReplicaIndex(resource: ResourceJson): string | undefined {
