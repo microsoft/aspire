@@ -3784,6 +3784,79 @@ suite('AppHostDataRepository global polling', () => {
         }
     });
 
+    test('global stop refresh survives workspace discovery polling restart', async () => {
+        const clock = sinon.useFakeTimers();
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const discoveryChanges = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const discoveryService = {
+            discover: async () => [{
+                path: '/workspace/AppHost.csproj',
+                language: 'csharp' as const,
+                status: 'buildable' as const,
+                selected: true,
+            }],
+            onDidChangeCandidates: discoveryChanges.event,
+            dispose: () => discoveryChanges.dispose(),
+        } as unknown as AppHostDiscoveryService;
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
+        const repository = new AppHostDataRepository(terminalProvider, discoveryService);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const followArgs = JSON.stringify(['ps', '--follow', '--format', 'json']);
+            const snapshotArgs = JSON.stringify(['ps', '--format', 'json']);
+            const initialFollowCall = spawned.filter(call => JSON.stringify(call.args) === followArgs).at(-1);
+            assert.ok(initialFollowCall, 'expected initial ps --follow call');
+            initialFollowCall.options.lineCallback(JSON.stringify({
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                status: 'running',
+                dashboardUrl: 'https://localhost:17193/login?t=061212',
+            }));
+            await waitForCondition(() => repository.appHosts.length === 1, 'global AppHost ps delta was not applied');
+
+            repository.requestAppHostStopRefresh('/workspace/AppHost.csproj');
+            discoveryChanges.fire(workspaceFolder);
+            await waitForMicrotasks();
+
+            const snapshotCallsBeforeTimer = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length;
+            await clock.tickAsync(400);
+            await waitForMicrotasks();
+
+            assert.strictEqual(
+                spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).length,
+                snapshotCallsBeforeTimer + 1,
+                'expected stop refresh snapshot after workspace discovery restarted ps polling'
+            );
+
+            const postStopSnapshot = spawned.filter(call => JSON.stringify(call.args) === snapshotArgs).at(-1);
+            assert.ok(postStopSnapshot);
+            postStopSnapshot.options.stdoutCallback('[]');
+            postStopSnapshot.options.exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.appHosts.length, 0);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+            clock.restore();
+            discoveryChanges.dispose();
+        }
+    });
+
     test('hiding global panel before cli path resolves prevents ps from starting', async () => {
         const cliPath = createDeferred<string>();
         getCliPathStub.returns(cliPath.promise);
