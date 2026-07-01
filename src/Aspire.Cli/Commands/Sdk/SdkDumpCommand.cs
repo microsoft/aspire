@@ -14,7 +14,7 @@ using Aspire.Shared.Json;
 using Microsoft.Extensions.Logging;
 using Semver;
 using Spectre.Console;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Cli.Commands.Sdk;
 

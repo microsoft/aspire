@@ -7,7 +7,7 @@ using System.Runtime.CompilerServices;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Logging;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Cli.Backchannel;
 
@@ -332,10 +332,10 @@ internal sealed class AppHostCliBackchannel(
             JsonRpc? rpc = null;
             try
             {
-                rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()))
+                rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream), new JsonRpcOptions
                 {
-                    ActivityTracingStrategy = new ActivityTracingStrategy()
-                };
+                    SerializerOptions = BackchannelJsonSerializerContext.CreateJsonSerializerOptions()
+                });
                 rpc.StartListening();
                 activity.AddBackchannelRpcListeningEvent();
 
@@ -357,12 +357,22 @@ internal sealed class AppHostCliBackchannel(
                         );
                 }
 
-                rpc.Disconnected += OnRpcDisconnected;
+                // CurlyRpc has no Disconnected event; the Completion task signals the connection
+                // closing (successfully on graceful end-of-stream/disposal, faulted on read-loop error).
+                _ = rpc.Completion.ContinueWith(
+                    OnRpcDisconnected,
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
 
                 // Set up auto-reconnect if enabled
                 if (autoReconnect)
                 {
-                    rpc.Disconnected += OnDisconnected;
+                    _ = rpc.Completion.ContinueWith(
+                        OnDisconnected,
+                        CancellationToken.None,
+                        TaskContinuationOptions.ExecuteSynchronously,
+                        TaskScheduler.Default);
                 }
             }
             catch
@@ -386,7 +396,7 @@ internal sealed class AppHostCliBackchannel(
         }
     }
 
-    private void OnDisconnected(object? sender, JsonRpcDisconnectedEventArgs args)
+    private void OnDisconnected(Task completion)
     {
         // Prevent concurrent reconnection attempts
         lock (_lock)
@@ -399,7 +409,7 @@ internal sealed class AppHostCliBackchannel(
             _isReconnecting = true;
         }
 
-        logger.LogInformation("Backchannel disconnected: {Reason}. Attempting to reconnect...", args.Reason);
+        logger.LogInformation("Backchannel disconnected: {Reason}. Attempting to reconnect...", DescribeDisconnect(completion));
         _ = Task.Run(async () =>
         {
             try
@@ -420,14 +430,19 @@ internal sealed class AppHostCliBackchannel(
         });
     }
 
-    private void OnRpcDisconnected(object? sender, JsonRpcDisconnectedEventArgs args)
+    private void OnRpcDisconnected(Task completion)
     {
-        logger.LogDebug("Backchannel disconnected: {Reason}", args.Reason);
+        logger.LogDebug("Backchannel disconnected: {Reason}", DescribeDisconnect(completion));
         lock (_lock)
         {
             _disconnectTaskCompletionSource.TrySetResult();
         }
     }
+
+    // CurlyRpc's Completion faults with the read-loop error on abnormal disconnect and completes
+    // successfully on graceful close; surface either as a short human-readable reason for logging.
+    private static string DescribeDisconnect(Task completion)
+        => completion.Exception?.GetBaseException().Message ?? "connection closed";
 
     private void ResetForReconnection()
     {

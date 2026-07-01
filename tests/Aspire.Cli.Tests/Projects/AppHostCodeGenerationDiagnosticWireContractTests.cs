@@ -8,9 +8,9 @@ using Aspire.Cli.Projects;
 namespace Aspire.Cli.Tests.Projects;
 
 /// <summary>
-/// Guards the wire contract between the AppHost server's reflection-based
-/// <c>SystemTextJsonFormatter</c> (default <see cref="JsonSerializerOptions"/>, no naming policy,
-/// PascalCase on the wire) and the CLI source-generated
+/// Guards the wire contract between the AppHost server's reflection-based serializer
+/// (default <see cref="JsonSerializerOptions"/>, no naming policy, PascalCase on the wire)
+/// and the CLI source-generated
 /// <see cref="BackchannelJsonSerializerContext"/>. If either side adopts a naming policy or
 /// renames a property, this test must catch it before the diagnostic silently degrades to
 /// "all null" on the CLI as in issue #16709.
@@ -59,7 +59,7 @@ public class AppHostCodeGenerationDiagnosticWireContractTests
     [Fact]
     public void Roundtrip_UsingRpcFormatterOptions_PreservesAllFields()
     {
-        // Use the exact same JsonSerializerOptions the StreamJsonRpc formatter uses on the CLI
+        // Use the exact same JsonSerializerOptions the CurlyRpc serializer uses on the CLI
         // side. This catches the case where the wire-level deserializer differs from the typed
         // JsonTypeInfo<T> deserializer used by TryReadDiagnostic.
         var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();

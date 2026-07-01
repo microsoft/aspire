@@ -2,13 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Text.Json;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Hosting.Cli;
 
@@ -74,10 +75,24 @@ internal sealed class BackchannelService(
             activity.AddBackchannelClientAccepted();
 
             var stream = new NetworkStream(clientSocket, true);
-            var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream), appHostRpcTarget)
+
+            // Match the CLI client's serialization. AppHostRpcClient serializes with MCP/Web options
+            // (camelCase property names, case-insensitive matching). CurlyRpc would otherwise fall back to
+            // its implicit JsonSerializerDefaults.Web behavior when SerializerOptions is null; specifying the
+            // options explicitly here mirrors every other channel in this backchannel stack
+            // (AuxiliaryBackchannelService, JsonRpcServer, TerminalHostControlListener) and guards the
+            // AppHost<->CLI contract (e.g. GetPipelineStepsRequest) against future CurlyRpc default changes.
+            var serializerOptions = new JsonSerializerOptions
             {
-                ActivityTracingStrategy = new ActivityTracingStrategy()
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
+
+            // CurlyRpc emits OpenTelemetry Activity spans natively, so no explicit activity-tracing configuration is required.
+            // ownsStreams: true so disposing _rpc on shutdown (see Dispose) closes the client socket, letting the
+            // connected CLI observe the disconnect promptly. The handler only closes the stream when it owns it.
+            var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, ownsStreams: true), new JsonRpcOptions { SerializerOptions = serializerOptions });
+            rpc.AddLocalRpcTarget(appHostRpcTarget);
             rpc.StartListening();
             activity.AddBackchannelRpcListening();
             _rpc = rpc;

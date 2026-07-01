@@ -41,7 +41,7 @@
     <PackageReference Include="Microsoft.Extensions.Http" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="ModelContextProtocol" />
-    <PackageReference Include="StreamJsonRpc" VersionOverride="$(StreamJsonRpcPackageVersionForCli)" />
+    <PackageReference Include="CurlyRpc" />
     <PackageReference Include="Verify.XunitV3" />
   </ItemGroup>
 

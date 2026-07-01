@@ -9,7 +9,7 @@ using Aspire.Cli.Telemetry;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
@@ -108,8 +108,15 @@ public class AppHostAuxiliaryBackchannelTests
             await clientSocket.ConnectAsync((IPEndPoint)_listener.LocalEndpoint).DefaultTimeout();
             var serverSocket = await acceptTask.DefaultTimeout();
             var serverStream = new NetworkStream(serverSocket, ownsSocket: true);
-            var messageHandler = new HeaderDelimitedMessageHandler(serverStream, serverStream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter());
-            var rpc = new JsonRpc(messageHandler, Target);
+            // CurlyRpc has no (handler, target) constructor: construct with options carrying the wire
+            // casing, then register the target separately. Reflection-based AddLocalRpcTarget is fine in
+            // tests (this project is not trimmed/AOT-published).
+            var messageHandler = new HeaderDelimitedMessageHandler(serverStream, serverStream);
+            var rpc = new JsonRpc(messageHandler, new JsonRpcOptions
+            {
+                SerializerOptions = BackchannelJsonSerializerContext.CreateJsonSerializerOptions()
+            });
+            rpc.AddLocalRpcTarget(Target);
             rpc.StartListening();
             _disposables.Add(rpc);
             _disposables.Add(messageHandler);

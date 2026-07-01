@@ -489,10 +489,13 @@ internal sealed class AuxiliaryBackchannelMonitor(
             // Update isInScope based on actual appHostInfo now that we have it
             connection.IsInScope = IsAppHostInScope(connection.AppHostInfo?.AppHostPath);
 
-            // Set up disconnect handler
-            connection.Rpc!.Disconnected += (sender, args) =>
+            // Set up disconnect handler.
+            // CurlyRpc signals disconnect via the Completion task instead of a Disconnected event;
+            // it completes successfully on graceful close and faults on read-loop errors.
+            _ = connection.Rpc!.Completion.ContinueWith(completion =>
             {
-                logger.LogInformation("Disconnected from AppHost at {SocketPath}: {Reason}", socketPath, args.Reason);
+                var reason = completion.Exception?.GetBaseException().Message ?? "connection closed";
+                logger.LogInformation("Disconnected from AppHost at {SocketPath}: {Reason}", socketPath, reason);
                 if (_connectionsByHash.TryGetValue(hash, out var connectionsForHash) &&
                     connectionsForHash.TryRemove(socketPath, out var conn))
                 {
@@ -506,7 +509,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
                     NotifyConnectionsChanged();
                 }
-            };
+            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
 
             // Get or create the inner dictionary for this hash
             var connectionsDict = _connectionsByHash.GetOrAdd(hash, _ => new ConcurrentDictionary<string, AppHostAuxiliaryBackchannel>());

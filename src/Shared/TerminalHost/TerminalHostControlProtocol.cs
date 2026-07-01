@@ -4,7 +4,7 @@
 namespace Aspire.Shared.TerminalHost;
 
 /// <summary>
-/// Wire-types exchanged over the terminal host's control UDS via StreamJsonRpc.
+/// Wire-types exchanged over the terminal host's control UDS via JSON-RPC.
 /// Shared between the AppHost (caller) and the Aspire.TerminalHost (callee).
 /// </summary>
 /// <remarks>

@@ -9,7 +9,6 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Tests;
 using Microsoft.Extensions.Configuration;
-using StreamJsonRpc;
 
 namespace Aspire.Hosting.Backchannel;
 
@@ -241,31 +240,6 @@ public class BackchannelContractTests
         }
 
         Assert.True(errors.Length == 0, $"Trace context copy violations found:\n{errors}");
-    }
-
-    [Fact]
-    public void ActivityTracingStrategy_PropagatesW3CTraceContextOnJsonRpcRequest()
-    {
-        using var source = new ActivitySource("test-json-rpc-trace");
-        using var listener = ActivityListenerHelper.Create(source);
-        using var clientActivity = source.StartActivity("client", ActivityKind.Client);
-        Assert.NotNull(clientActivity);
-
-        var formatter = new SystemTextJsonFormatter();
-        var request = ((IJsonRpcMessageFactory)formatter).CreateRequestMessage();
-        request.Method = "GetCapabilitiesAsync";
-        request.Arguments = Array.Empty<object>();
-
-        var strategy = new ActivityTracingStrategy(source);
-        strategy.ApplyOutboundActivity(request);
-
-        Assert.NotNull(request.TraceParent);
-        using (strategy.ApplyInboundActivity(request))
-        {
-            Assert.NotNull(Activity.Current);
-            Assert.Equal(clientActivity.TraceId, Activity.Current.TraceId);
-            Assert.Equal(clientActivity.SpanId, Activity.Current.ParentSpanId);
-        }
     }
 
     [Fact]

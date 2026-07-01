@@ -142,7 +142,7 @@
     <PackageVersion Include="System.IO.Hashing" Version="10.0.8" />
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
-    <PackageVersion Include="StreamJsonRpc" Version="2.25.29" />
+    <PackageVersion Include="CurlyRpc" Version="0.9.6" />
     <PackageVersion Include="Semver" Version="3.0.0" />
     <PackageVersion Include="Sigstore" Version="0.5.0" />
     <PackageVersion Include="Tuf" Version="0.5.0" />

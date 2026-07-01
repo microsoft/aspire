@@ -112,8 +112,9 @@ internal abstract class BackchannelRequest
     /// Creates a copy of this request with the specified trace context.
     /// </summary>
     /// <remarks>
-    /// StreamJsonRpc carries W3C traceparent/tracestate on the JSON-RPC request envelope.
-    /// See https://microsoft.github.io/vs-streamjsonrpc/docs/resiliency.html#activity-tracing.
+    /// The W3C trace context is carried explicitly on the request object via
+    /// <see cref="BackchannelTraceContext"/> rather than relying on JSON-RPC envelope propagation,
+    /// so it works regardless of whether the peer's JSON-RPC library forwards traceparent/tracestate.
     /// The request object only carries extra trace metadata such as baggage values. Each
     /// request type owns its copy logic so this stays AOT- and trimming-friendly instead of
     /// relying on reflection to clone arbitrary records/classes.

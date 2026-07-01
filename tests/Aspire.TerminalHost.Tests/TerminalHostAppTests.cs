@@ -2,9 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Sockets;
+using System.Text.Json;
 using Aspire.Shared.TerminalHost;
 using Microsoft.Extensions.Logging.Abstractions;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.TerminalHost.Tests;
 
@@ -86,6 +87,8 @@ public class TerminalHostAppTests
             var session = await rpc.InvokeAsync<TerminalHostSessionInfo>(
                 TerminalHostControlProtocol.GetSessionMethod);
 
+            Assert.NotNull(info);
+            Assert.NotNull(session);
             Assert.Equal(TerminalHostControlProtocol.ProtocolVersion, info.ProtocolVersion);
             Assert.Equal(args.ProducerUdsPath, session.ProducerUdsPath);
             Assert.Equal(args.ConsumerUdsPath, session.ConsumerUdsPath);
@@ -113,7 +116,9 @@ public class TerminalHostAppTests
         using (var rpc = await OpenControlRpcAsync(control))
         {
             // Fire and forget — the host may close the socket before the RPC ack arrives.
-            _ = rpc.InvokeAsync(TerminalHostControlProtocol.ShutdownMethod);
+            // Use the no-result InvokeAsync(method, args, CancellationToken) overload so overload
+            // resolution does not bind to the generic InvokeAsync<TResult>.
+            _ = rpc.InvokeAsync(TerminalHostControlProtocol.ShutdownMethod, Array.Empty<object?>(), CancellationToken.None);
         }
 
         var exitCode = await hostTask.WaitAsync(TimeSpan.FromSeconds(10));
@@ -159,7 +164,7 @@ public class TerminalHostAppTests
 
                 // Drive an RPC over each socket and count the survivors. Refused
                 // sockets either close immediately (read returns 0) or fail the
-                // header-delimited read; the StreamJsonRpc completion task surfaces
+                // header-delimited read; the CurlyRpc completion task surfaces
                 // either as a ConnectionLostException / IOException.
                 var results = await Task.WhenAll(rawSockets.Select(TryGetInfoAsync));
 
@@ -185,11 +190,15 @@ public class TerminalHostAppTests
         {
             // Each candidate gets a short window to either ack a GetInfo or be
             // refused. The refused side observes a zero-length read on its
-            // NetworkStream which StreamJsonRpc raises as a ConnectionLostException.
+            // NetworkStream which CurlyRpc raises as a ConnectionLostException.
             try
             {
                 var stream = new NetworkStream(socket, ownsSocket: false);
-                using var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, new SystemTextJsonFormatter()));
+                // Match the TerminalHost listener's wire casing (default PascalCase JsonSerializerOptions).
+                using var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream), new JsonRpcOptions
+                {
+                    SerializerOptions = new JsonSerializerOptions()
+                });
                 rpc.StartListening();
 
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
@@ -753,9 +762,12 @@ public class TerminalHostAppTests
         }
 
         var stream = new NetworkStream(socket, ownsSocket: true);
-        var formatter = new SystemTextJsonFormatter();
-        var handler = new HeaderDelimitedMessageHandler(stream, stream, formatter);
-        var rpc = new JsonRpc(handler);
+        // Match the TerminalHost listener's wire casing (default PascalCase JsonSerializerOptions).
+        var handler = new HeaderDelimitedMessageHandler(stream, stream);
+        var rpc = new JsonRpc(handler, new JsonRpcOptions
+        {
+            SerializerOptions = new JsonSerializerOptions()
+        });
         rpc.StartListening();
         return rpc;
     }

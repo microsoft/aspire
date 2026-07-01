@@ -4,7 +4,7 @@
 using Aspire.TypeSystem;
 using Aspire.Hosting.RemoteHost.Diagnostics;
 using Microsoft.Extensions.Logging;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Hosting.RemoteHost.CodeGeneration;
 

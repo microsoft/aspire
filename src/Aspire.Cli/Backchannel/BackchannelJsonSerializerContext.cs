@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -11,9 +10,6 @@ using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Projects;
 using Aspire.TypeSystem;
 using Spectre.Console;
-using StreamJsonRpc;
-using StreamJsonRpc.Protocol;
-using StreamJsonRpc.Reflection;
 
 namespace Aspire.Cli.Backchannel;
 
@@ -24,13 +20,23 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(long))]
 [JsonSerializable(typeof(DashboardUrlsState))]
 [JsonSerializable(typeof(JsonElement))]
+// CurlyRpc streams plain IAsyncEnumerable<T>, serializing each element T directly (there is no
+// enumerator wrapper type on the wire). Register each streamed element type (and its batch
+// collection shapes) explicitly so the AOT source generator can serialize them.
+[JsonSerializable(typeof(RpcResourceState))]
+[JsonSerializable(typeof(RpcResourceState[]))]
+[JsonSerializable(typeof(List<RpcResourceState>))]
 [JsonSerializable(typeof(IAsyncEnumerable<RpcResourceState>))]
-[JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<RpcResourceState>))]
+[JsonSerializable(typeof(BackchannelLogEntry))]
+[JsonSerializable(typeof(BackchannelLogEntry[]))]
+[JsonSerializable(typeof(List<BackchannelLogEntry>))]
 [JsonSerializable(typeof(IAsyncEnumerable<BackchannelLogEntry>))]
-[JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<BackchannelLogEntry>))]
+[JsonSerializable(typeof(PublishingActivity))]
+[JsonSerializable(typeof(PublishingActivity[]))]
+[JsonSerializable(typeof(List<PublishingActivity>))]
 [JsonSerializable(typeof(IAsyncEnumerable<PublishingActivity>))]
-[JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<PublishingActivity>))]
-[JsonSerializable(typeof(RequestId))]
+[JsonSerializable(typeof(DisplayLineState))]
+[JsonSerializable(typeof(DisplayLineState[]))]
 [JsonSerializable(typeof(IEnumerable<DisplayLineState>))]
 [JsonSerializable(typeof(PublishingPromptInputAnswer[]))]
 [JsonSerializable(typeof(ValidationResult))]
@@ -45,24 +51,20 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(ResourceSnapshot[]))]
 [JsonSerializable(typeof(List<ResourceSnapshot>))]
 [JsonSerializable(typeof(IAsyncEnumerable<ResourceSnapshot>))]
-[JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<ResourceSnapshot>))]
 [JsonSerializable(typeof(ResourceSnapshotCommandArgument))]
 [JsonSerializable(typeof(ResourceSnapshotCommandArgument[]))]
 [JsonSerializable(typeof(ResourceSnapshotMcpServer))]
 [JsonSerializable(typeof(ResourceLogLine))]
 [JsonSerializable(typeof(ResourceLogLine[]))]
 [JsonSerializable(typeof(IAsyncEnumerable<ResourceLogLine>))]
-[JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<ResourceLogLine>))]
 [JsonSerializable(typeof(ResourceLogBatch))]
 [JsonSerializable(typeof(ResourceLogBatch[]))]
 [JsonSerializable(typeof(IAsyncEnumerable<ResourceLogBatch>))]
-[JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<ResourceLogBatch>))]
 [JsonSerializable(typeof(Dictionary<string, JsonElement>))]
 [JsonSerializable(typeof(Dictionary<string, JsonNode?>))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(JsonNode))]
 [JsonSerializable(typeof(CapabilitiesInfo))]
-[JsonSerializable(typeof(CommonErrorData))]
 [JsonSerializable(typeof(AppHostCodeGenerationDiagnostic))]
 [JsonSerializable(typeof(AppHostLoadedAssemblyInfo))]
 [JsonSerializable(typeof(List<AppHostLoadedAssemblyInfo>))]
@@ -107,15 +109,6 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(TerminalSummary[]))]
 internal partial class BackchannelJsonSerializerContext : JsonSerializerContext
 {
-    [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2026:RequiresUnreferencedCode", Justification = "Using the Json source generator.")]
-    [UnconditionalSuppressMessage("AotAnalysis", "IL3050:RequiresDynamicCode", Justification = "Using the Json source generator.")]
-    internal static SystemTextJsonFormatter CreateRpcMessageFormatter()
-    {
-        var formatter = new SystemTextJsonFormatter();
-        formatter.JsonSerializerOptions = CreateJsonSerializerOptions();
-        return formatter;
-    }
-
     internal static JsonSerializerOptions CreateJsonSerializerOptions()
     {
         var options = new JsonSerializerOptions(ModelContextProtocol.McpJsonUtilities.DefaultOptions);
