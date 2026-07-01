@@ -474,41 +474,52 @@ safe-outputs:
             PR_NUMBERS=$(jq -r '.pr.number // "" | tostring' "$ANALYSIS_FILE")
 
             # ── 1. Push data to memory branch ──
-            if ! git clone --depth 1 --branch "$MEMORY_BRANCH" \
-                "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" \
-                memory-repo 2>/dev/null; then
-              echo "Memory branch does not exist yet, creating orphan branch"
-              git init memory-repo
-              git -C memory-repo checkout --orphan "$MEMORY_BRANCH"
-              git -C memory-repo remote add origin \
-                "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
-            fi
-            git -C memory-repo config user.name "github-actions[bot]"
-            git -C memory-repo config user.email "github-actions[bot]@users.noreply.github.com"
-
-            # Store run summary under runs/ directory
-            mkdir -p "memory-repo/runs"
-            cp "$ANALYSIS_FILE" "memory-repo/runs/${RUN_ID}.json"
-
-            # Store individual cause files under causes/<run_id>/ so that
-            # each run's snapshot is preserved and prior runs are not clobbered.
-            if [ -d "$CAUSES_DIR" ]; then
-              mkdir -p "memory-repo/causes/${RUN_ID}"
-              for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
-                [ -f "$CAUSE_FILE" ] || continue
-                cp "$CAUSE_FILE" "memory-repo/causes/${RUN_ID}/"
-              done
-              CAUSE_COUNT=$(find "$CAUSES_DIR" -name '*.json' -type f | wc -l)
-              echo "Copied ${CAUSE_COUNT} cause file(s) to causes/${RUN_ID}/"
-            fi
-
-            git -C memory-repo add -A
-            if git -C memory-repo diff --cached --quiet; then
-              echo "No changes to memory branch"
+            # Skip persisting data for code-issue verdicts — these are not
+            # actionable by CI automation and would just add noise.
+            if [ "$VERDICT" = "code-issue" ]; then
+              echo "Verdict is code-issue. Skipping memory branch persistence."
             else
-              git -C memory-repo commit -m "Add CI failure analysis for run ${RUN_ID}"
-              git -C memory-repo push origin "HEAD:$MEMORY_BRANCH"
-              echo "Memory branch updated with analysis for run ${RUN_ID}"
+              if ! git clone --depth 1 --branch "$MEMORY_BRANCH" \
+                  "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" \
+                  memory-repo 2>/dev/null; then
+                echo "Memory branch does not exist yet, creating orphan branch"
+                git init memory-repo
+                git -C memory-repo checkout --orphan "$MEMORY_BRANCH"
+                git -C memory-repo remote add origin \
+                  "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git"
+              fi
+              git -C memory-repo config user.name "github-actions[bot]"
+              git -C memory-repo config user.email "github-actions[bot]@users.noreply.github.com"
+
+              # Store run summary under runs/ directory
+              mkdir -p "memory-repo/runs"
+              cp "$ANALYSIS_FILE" "memory-repo/runs/${RUN_ID}.json"
+
+              # Store individual cause files under causes/<run_id>/ so that
+              # each run's snapshot is preserved and prior runs are not clobbered.
+              if [ -d "$CAUSES_DIR" ]; then
+                mkdir -p "memory-repo/causes/${RUN_ID}"
+                for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
+                  [ -f "$CAUSE_FILE" ] || continue
+                  # Skip code-issue causes — only persist transient/flaky causes.
+                  CAUSE_TYPE_CHECK=$(jq -r '.type' "$CAUSE_FILE" 2>/dev/null || echo "")
+                  if [ "$CAUSE_TYPE_CHECK" = "code-issue" ]; then
+                    continue
+                  fi
+                  cp "$CAUSE_FILE" "memory-repo/causes/${RUN_ID}/"
+                done
+                CAUSE_COUNT=$(find "memory-repo/causes/${RUN_ID}" -name '*.json' -type f 2>/dev/null | wc -l)
+                echo "Copied ${CAUSE_COUNT} cause file(s) to causes/${RUN_ID}/"
+              fi
+
+              git -C memory-repo add -A
+              if git -C memory-repo diff --cached --quiet; then
+                echo "No changes to memory branch"
+              else
+                git -C memory-repo commit -m "Add CI failure analysis for run ${RUN_ID}"
+                git -C memory-repo push origin "HEAD:$MEMORY_BRANCH"
+                echo "Memory branch updated with analysis for run ${RUN_ID}"
+              fi
             fi
 
             # ── 2. Create or update issues for each cause ──
@@ -536,6 +547,14 @@ safe-outputs:
                 fi
 
                 CAUSE_TYPE=$(jq -r '.type' "$CAUSE_FILE")
+
+                # Skip issue creation for code-issue causes — those are the
+                # PR author's responsibility, not a recurring CI problem.
+                if [ "$CAUSE_TYPE" = "code-issue" ]; then
+                  echo "Skipping issue for code-issue cause: ${CAUSE_ID}"
+                  continue
+                fi
+
                 MARKER="<!-- ci-failure-cause:${CAUSE_ID} -->"
 
                 # Build new occurrence table rows from the cause file.
