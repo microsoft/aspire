@@ -20,6 +20,7 @@ export const aspireHostingSdkVersion = (version: string) => vscode.l10n.t('Aspir
 export const aspireCliVersion = (version: string) => vscode.l10n.t('Aspire CLI Version: {0}.', version);
 export const requiredCapability = (capability: string) => vscode.l10n.t('Required capability: {0}.', capability);
 export const aspireTerminalName = vscode.l10n.t('Aspire terminal');
+export const aspireCliPathEnvironmentDescription = vscode.l10n.t('Forwards aspire.aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution and integrated terminals use the configured Aspire CLI.');
 export const installCliPlaceholder = vscode.l10n.t('Select how to install the Aspire CLI');
 export const installCliViewAllOptions = vscode.l10n.t('View all installation options');
 export const installCliViewAllOptionsDescription = vscode.l10n.t('Open the installation guide (includes the install script)');

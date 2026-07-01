@@ -18,6 +18,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -533,12 +534,84 @@ internal sealed class DotNetCliRunner(
 
     private static void AddAspireCliPathEnvironment(Dictionary<string, string> env, FileInfo? projectFile)
     {
-        if (projectFile is null || env.ContainsKey("AspireCliPath") || string.IsNullOrWhiteSpace(Environment.ProcessPath))
+        var processPath = Environment.ProcessPath;
+        if (projectFile is null || env.ContainsKey("AspireCliPath") || string.IsNullOrWhiteSpace(processPath) || !ShouldForwardProcessPathAsAspireCliPath(processPath))
         {
             return;
         }
 
-        env["AspireCliPath"] = Environment.ProcessPath;
+        env["AspireCliPath"] = processPath;
+    }
+
+    internal static bool ShouldForwardProcessPathAsAspireCliPath(string processPath)
+    {
+        if (IsDotNetMuxerPath(processPath))
+        {
+            return false;
+        }
+
+        var cliDirectory = Path.GetDirectoryName(processPath);
+        if (string.IsNullOrEmpty(cliDirectory))
+        {
+            return false;
+        }
+
+        if (IsUnbundledFrameworkDependentCliPath(cliDirectory))
+        {
+            return false;
+        }
+
+        // Users often invoke the dogfood CLI through a symlink such as
+        // ~/bin/aspire -> artifacts/bin/Aspire.Cli/Debug/net10.0/aspire. Resolve the
+        // link before forwarding so a symlinked raw build cannot stamp stale
+        // bundle metadata through ResolveAspireCliBundle's AspireCliPath path.
+        var resolvedProcessPath = PathNormalizer.ResolveSymlinks(processPath);
+        if (!string.Equals(resolvedProcessPath, processPath, StringComparison.Ordinal))
+        {
+            var resolvedCliDirectory = Path.GetDirectoryName(resolvedProcessPath);
+            if (!string.IsNullOrEmpty(resolvedCliDirectory) && IsUnbundledFrameworkDependentCliPath(resolvedCliDirectory))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsDotNetMuxerPath(string processPath)
+    {
+        return string.Equals(Path.GetFileNameWithoutExtension(processPath), "dotnet", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsUnbundledFrameworkDependentCliPath(string cliDirectory)
+    {
+        var cliAssemblyPath = Path.Combine(cliDirectory, "aspire.dll");
+        if (!File.Exists(cliAssemblyPath))
+        {
+            return false;
+        }
+
+        // Raw `dotnet build` outputs place the apphost next to aspire.dll, but
+        // they do not contain a bundle layout. If we forward that path as
+        // AspireCliPath, ResolveAspireCliBundle treats it as an explicit CLI and
+        // falls through to ASPIRE_HOME, which can stamp stale bundle metadata.
+        return !HasInstallSidecar(cliDirectory) && !HasAdjacentBundleLayout(cliDirectory);
+    }
+
+    private static bool HasInstallSidecar(string cliDirectory)
+    {
+        return File.Exists(Path.Combine(cliDirectory, ".aspire-install.json"));
+    }
+
+    private static bool HasAdjacentBundleLayout(string cliDirectory)
+    {
+        return HasBundleRoot(cliDirectory) || HasBundleRoot(Path.Combine(cliDirectory, "bundle"));
+    }
+
+    private static bool HasBundleRoot(string bundleRoot)
+    {
+        return BundleDiscovery.TryDiscoverDcpFromDirectory(bundleRoot, out _, out _, out _)
+            && BundleDiscovery.TryDiscoverManagedFromDirectory(bundleRoot, out _);
     }
 
     internal static TimeSpan GetBackchannelConnectionTimeout(IConfiguration configuration)
