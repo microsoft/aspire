@@ -270,7 +270,13 @@ public class DevCertsCheckTests
 
         try
         {
-            File.WriteAllText(Path.Combine(tempDirectory.FullName, CertificateHelpers.CertUtilCommand), "");
+            var certUtilPath = Path.Combine(tempDirectory.FullName, CertificateHelpers.CertUtilCommand);
+            File.WriteAllText(certUtilPath, "");
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(certUtilPath, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            }
+
             var certs = new List<DevCertInfo>
             {
                 CreateDevCertInfo(CertificateManager.TrustLevel.Full, "AAAA1111BBBB2222", MinVersion),

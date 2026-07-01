@@ -582,10 +582,31 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
     private bool IsCommandAvailable(string command)
     {
+        _availableCommands ??= FindAvailableCommands();
+        return _availableCommands.Contains(command);
+    }
+
+    private HashSet<string> FindAvailableCommands()
+    {
+        var availableCommands = new HashSet<string>();
+
         // We need OpenSSL 1.1.1h or newer (to pick up https://github.com/openssl/openssl/pull/12357),
         // but, given that all of v1 is EOL, it doesn't seem worthwhile to check the version.
-        _availableCommands ??= CertificateHelpers.FindAvailableCommands(_environment, OpenSslCommand, CertificateHelpers.CertUtilCommand);
-        return _availableCommands.Contains(command);
+        var commands = new[] { OpenSslCommand, CertificateHelpers.CertUtilCommand };
+
+        var environmentVariables = _environment.GetEnvironmentVariables()
+            .Where(kv => kv.Value is not null)
+            .ToDictionary(kv => kv.Name, kv => kv.Value!);
+
+        foreach (var command in commands)
+        {
+            if (PathLookupHelper.TryResolveExecutablePath(command, out _, environmentVariables))
+            {
+                availableCommands.Add(command);
+            }
+        }
+
+        return availableCommands;
     }
 
     private static string GetCertificateNickname(X509Certificate2 certificate)

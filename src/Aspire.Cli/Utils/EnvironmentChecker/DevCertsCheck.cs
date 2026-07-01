@@ -205,7 +205,12 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
 
     private static void AddLinuxCertificateToolWarnings(List<EnvironmentCheckResult> results, IEnvironment environment)
     {
-        if (!environment.IsLinux() || CertificateHelpers.IsCommandAvailable(CertificateHelpers.CertUtilCommand, environment))
+        var environmentVariables = environment.GetEnvironmentVariables()
+            .Where(kv => kv.Value is not null)
+            .ToDictionary(kv => kv.Name, kv => kv.Value!);
+
+        if (!environment.IsLinux() ||
+            PathLookupHelper.TryResolveExecutablePath(CertificateHelpers.CertUtilCommand, out _, environmentVariables))
         {
             return;
         }

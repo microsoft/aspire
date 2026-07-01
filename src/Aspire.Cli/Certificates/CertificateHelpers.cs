@@ -101,68 +101,6 @@ internal static partial class CertificateHelpers
             or EnsureCertificateResult.NewHttpsCertificateTrusted;
 
     /// <summary>
-    /// Determines whether the specified command can be found in <c>PATH</c>.
-    /// </summary>
-    /// <param name="command">The command name to locate.</param>
-    /// <param name="environment">The environment abstraction for reading <c>PATH</c>.</param>
-    /// <returns><see langword="true"/> if the command was found; otherwise, <see langword="false"/>.</returns>
-    internal static bool IsCommandAvailable(string command, IEnvironment environment)
-    {
-        var availableCommands = FindAvailableCommands(environment, command);
-        return availableCommands.Contains(command);
-    }
-
-    /// <summary>
-    /// Finds the specified commands in <c>PATH</c>.
-    /// </summary>
-    /// <param name="environment">The environment abstraction for reading <c>PATH</c>.</param>
-    /// <param name="commands">The command names to locate.</param>
-    /// <returns>The commands found in <c>PATH</c>.</returns>
-    internal static HashSet<string> FindAvailableCommands(IEnvironment environment, params string[] commands)
-    {
-        var searchPath = environment.GetEnvironmentVariable("PATH");
-        var availableCommands = new HashSet<string>();
-
-        if (commands.Length == 0 || searchPath is null)
-        {
-            return availableCommands;
-        }
-
-        var expectedCommandCount = new HashSet<string>(commands).Count;
-        var searchFolders = searchPath.Split(Path.PathSeparator);
-
-        foreach (var searchFolder in searchFolders)
-        {
-            foreach (var command in commands)
-            {
-                if (!availableCommands.Contains(command))
-                {
-                    try
-                    {
-                        if (File.Exists(Path.Combine(searchFolder, command)))
-                        {
-                            availableCommands.Add(command);
-                        }
-                    }
-                    catch
-                    {
-                        // It's not interesting to report (e.g.) permission errors here.
-                    }
-                }
-            }
-
-            // Stop early if we've found all the required commands.
-            // They're usually all in the same folder (/bin or /usr/bin).
-            if (availableCommands.Count == expectedCommandCount)
-            {
-                break;
-            }
-        }
-
-        return availableCommands;
-    }
-
-    /// <summary>
     /// Tries to detect the OpenSSL directory by running 'openssl version -d'.
     /// Parses the OPENSSLDIR value from the output (e.g. OPENSSLDIR: "/usr/lib/ssl").
     /// </summary>
