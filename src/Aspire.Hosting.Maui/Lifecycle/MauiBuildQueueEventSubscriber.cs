@@ -102,12 +102,21 @@ internal class MauiBuildQueueEventSubscriber(
             await RunBuildAsync(resource, logger, resourceCts.Token).ConfigureAwait(false);
 
             // Build succeeded. Keep the semaphore held until DCP starts the launch process.
-            // After this handler returns, DCP invokes `dotnet build --no-restore /t:Run -p:NoBuild=true`
-            // with the same configuration used here. The no-build/no-restore flags are important:
-            // DCP may report Running as soon as the process starts, so the launch path must not perform
-            // additional restore/build work after the next queued resource is allowed to build.
+            // After this handler returns, DCP invokes
+            // `dotnet build --no-restore /t:Run -p:BuildDependsOn= -p:NoBuild=true` with the same
+            // configuration used here on platforms that can launch without additional deploy work.
+            // Android Run still needs to perform fast-deploy/runtime upload work, so it keeps the
+            // semaphore until the short-lived Run process exits instead of releasing on Running.
+            var releaseBuildLockOnResourceRunning = !resource.TryGetLastAnnotation<MauiBuildInfoAnnotation>(out var buildInfo)
+                || buildInfo.ReleaseBuildLockOnResourceRunning;
             releaseInFinally = false;
-            _ = ReleaseSemaphoreAfterLaunchAsync(resource, semaphore, s_buildingState.Text, logger, cancellationToken);
+            _ = ReleaseSemaphoreAfterLaunchAsync(
+                resource,
+                semaphore,
+                s_buildingState.Text,
+                releaseBuildLockOnResourceRunning,
+                logger,
+                cancellationToken);
         }
         catch (OperationCanceledException) when (resourceCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
@@ -142,8 +151,8 @@ internal class MauiBuildQueueEventSubscriber(
                 "Cannot proceed with build — the semaphore would be held indefinitely.");
         }
 
-        // Match DCP's launch configuration so the no-build Run target starts the exact outputs
-        // produced by this serialized build.
+        // Match DCP's launch configuration so the Run target starts the exact outputs produced
+        // by this serialized build.
         var args = new List<string> { "build", buildInfo.ProjectPath };
 
         if (!string.IsNullOrEmpty(buildInfo.TargetFramework))
@@ -262,7 +271,7 @@ internal class MauiBuildQueueEventSubscriber(
     }
 
     /// <summary>
-    /// Releases the build semaphore after DCP starts the no-build/no-restore app launch process.
+    /// Releases the build semaphore after DCP starts or completes the app launch process.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -272,21 +281,26 @@ internal class MauiBuildQueueEventSubscriber(
     /// Without this guard a restart could match on a stale snapshot.
     /// </para>
     /// <para>
-    /// Including "Running" in the predicate is intentional: the pre-build step already compiled
-    /// the project for the same configuration that DCP will pass to the launch command, and DCP's
-    /// <c>dotnet build --no-restore /t:Run -p:NoBuild=true</c> launch command is configured not to
-    /// restore or build. Waiting for a terminal state would hold the semaphore for the entire app
-    /// lifetime, blocking other platforms from starting.
+    /// Including "Running" in the predicate is intentional when <paramref name="releaseOnRunning"/>
+    /// is <see langword="true"/>: the pre-build step already compiled the project for the same
+    /// configuration that DCP will pass to the launch command, and the DCP launch command clears
+    /// <c>BuildDependsOn</c> and sets <c>NoBuild=true</c> so the Run target does not rebuild or
+    /// repackage. Waiting for a terminal state on those platforms would hold the semaphore for the
+    /// entire app lifetime, blocking other platforms from building while the first app is running.
+    /// Android does not set <paramref name="releaseOnRunning"/> because its Run target performs
+    /// short-lived deploy/runtime upload work after Build; the queue is released once that process
+    /// exits.
     /// </para>
     /// </remarks>
     internal virtual async Task ReleaseSemaphoreAfterLaunchAsync(
         IResource resource, SemaphoreSlim semaphore, string? stateAtCallTime,
+        bool releaseOnRunning,
         ILogger logger, CancellationToken cancellationToken)
     {
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromMinutes(5));
+            cts.CancelAfter(BuildTimeout);
             await notificationService.WaitForResourceAsync(
                 resource.Name,
                 e =>
@@ -298,10 +312,9 @@ internal class MauiBuildQueueEventSubscriber(
                         return false;
                     }
 
-                    return text == KnownResourceStates.Running
-                        || text == KnownResourceStates.FailedToStart
-                        || text == KnownResourceStates.Exited
-                        || text == KnownResourceStates.Finished;
+                    return (releaseOnRunning && text == KnownResourceStates.Running)
+                        || text == KnownResourceStates.RuntimeUnhealthy
+                        || KnownResourceStates.TerminalStates.Contains(text);
                 },
                 cts.Token).ConfigureAwait(false);
         }

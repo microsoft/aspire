@@ -24,7 +24,7 @@ internal static class ResourceViewModelExtensions
 
     public static bool IsStopped(this ResourceViewModel resource)
     {
-        return resource.KnownState is KnownResourceState.Exited or KnownResourceState.Finished or KnownResourceState.FailedToStart;
+        return resource.KnownState is KnownResourceState.Exited or KnownResourceState.Finished or KnownResourceState.FailedToStart or KnownResourceState.Terminated;
     }
 
     public static bool IsFailedToStart(this ResourceViewModel resource)

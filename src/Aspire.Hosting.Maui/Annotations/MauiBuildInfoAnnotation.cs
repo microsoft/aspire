@@ -15,7 +15,8 @@ internal sealed class MauiBuildInfoAnnotation(
     string workingDirectory,
     string? targetFramework,
     string? configuration = null,
-    IReadOnlyList<string>? additionalBuildArguments = null) : IResourceAnnotation
+    IReadOnlyList<string>? additionalBuildArguments = null,
+    bool releaseBuildLockOnResourceRunning = true) : IResourceAnnotation
 {
     /// <summary>
     /// Gets the absolute path to the project file.
@@ -41,4 +42,9 @@ internal sealed class MauiBuildInfoAnnotation(
     /// Gets the additional MSBuild arguments required to produce the outputs used by the Run target.
     /// </summary>
     public IReadOnlyList<string> AdditionalBuildArguments { get; } = additionalBuildArguments?.ToArray() ?? [];
+
+    /// <summary>
+    /// Gets a value indicating whether the build lock can be released when DCP reports the resource as Running.
+    /// </summary>
+    public bool ReleaseBuildLockOnResourceRunning { get; } = releaseBuildLockOnResourceRunning;
 }

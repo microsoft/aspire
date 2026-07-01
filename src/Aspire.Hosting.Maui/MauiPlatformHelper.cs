@@ -89,21 +89,35 @@ internal static class MauiPlatformHelper
         // Check if the project has the platform TFM and get the actual TFM value
         var platformTfm = ProjectFileReader.GetPlatformTargetFramework(projectPath, platformName);
 
-        // Override the default DCP launch command from 'dotnet run' to 'dotnet build --no-restore /t:Run -p:NoBuild=true'.
+        // Override the default DCP launch command from 'dotnet run' to 'dotnet build --no-restore /t:Run'.
         // The Build target is run separately by MauiBuildQueueEventSubscriber before DCP starts
         // the process, giving reliable exit-code-based build completion detection and allowing
-        // the "Building" state to persist in the dashboard. DCP only needs to launch the
-        // already-built app, so disable restore/build work in the Run target to avoid concurrent
-        // MSBuild output writes after the queue lock is released.
-        resourceBuilder.WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(["build", "--no-restore", "/t:Run", "-p:NoBuild=true"], leadingResourceArgumentToRemove: "run"));
+        // the "Building" state to persist in the dashboard. DCP still invokes the MAUI Run target,
+        // but the Run target graph references Build. Most platforms can clear BuildDependsOn before
+        // setting NoBuild=true so the SDK doesn't reject the Build target invocation, while still
+        // avoiding repeated build work after the queue releases.
+        var isAndroid = string.Equals(platformName, "android", StringComparison.Ordinal);
+        var launchOverrideArgs = isAndroid
+            // Android Run performs fast-deploy/runtime upload work after Build. Skipping that work
+            // leaves the installed app without native runtime libraries such as libmonosgen-2.0.so.
+            ? new List<string> { "build", "--no-restore", "/t:Run" }
+            : new List<string> { "build", "--no-restore", "/t:Run", "-p:BuildDependsOn=", "-p:NoBuild=true" };
+
+        resourceBuilder.WithAnnotation(new ProjectLaunchArgsOverrideAnnotation(launchOverrideArgs, leadingResourceArgumentToRemove: "run"));
 
         // Store build parameters so the event subscriber can run 'dotnet build' before launch.
         // The annotation captures the same target framework, configuration, and MSBuild properties
-        // that DCP later passes to the no-build Run target.
+        // that DCP later passes to the Run target.
         var workingDir = Path.GetDirectoryName(projectPath)
             ?? throw new InvalidOperationException($"Unable to determine directory from project path: {projectPath}");
         var configuration = resourceBuilder.ApplicationBuilder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
-        resourceBuilder.WithAnnotation(new MauiBuildInfoAnnotation(projectPath, workingDir, platformTfm, configuration, additionalArgs));
+        resourceBuilder.WithAnnotation(new MauiBuildInfoAnnotation(
+            projectPath,
+            workingDir,
+            platformTfm,
+            configuration,
+            additionalArgs,
+            releaseBuildLockOnResourceRunning: !isAndroid));
 
         // Set the command line arguments with the detected TFM and platform-specific args.
         // These are appended AFTER the DCP-generated project args.

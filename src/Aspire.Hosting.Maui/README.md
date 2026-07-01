@@ -106,9 +106,11 @@ This method automatically:
 When you configure OTLP with dev tunnel, the following environment variables are automatically set:
 
 - `OTEL_EXPORTER_OTLP_ENDPOINT`: The dev tunnel URL for the OTLP endpoint
-- `OTEL_EXPORTER_OTLP_PROTOCOL`: Set to `grpc` (standard Aspire configuration)
+- `OTEL_EXPORTER_OTLP_PROTOCOL`: Set to `http/protobuf` when the dashboard OTLP/HTTP endpoint is used (the default dynamic dashboard path), or `grpc` when the tunnel targets a configured or fallback OTLP/gRPC endpoint
 - `OTEL_SERVICE_NAME`: The resource name
 - `OTEL_RESOURCE_ATTRIBUTES`: Service instance ID
+
+When both OTLP/HTTP and OTLP/gRPC endpoint URLs are configured, MAUI dev tunnels prefer OTLP/HTTP because mobile telemetry travels through the dev tunnel HTTPS forwarding path using `http/protobuf`.
 
 ## Example: Complete Aspire App with MAUI
 
@@ -204,7 +206,8 @@ When multiple MAUI platform targets reference the same project (e.g., Android, i
 - **Cancel support**: Clicking Stop on a Queued resource removes it from the queue. Clicking Stop on a Building resource kills the `dotnet build` process.
 - **Restart after cancel**: You can start a cancelled resource again — it re-enters the queue.
 - **Build timeout**: Builds that take longer than 10 minutes are automatically cancelled to prevent a hung build from blocking the queue.
-- **DCP launch handoff**: After the serialized build completes for the AppHost configuration and platform MSBuild properties, DCP launches the already-built app with build and restore disabled so the next queued platform can build without overlapping shared output writes.
+- **DCP launch handoff**: After the serialized build completes for the AppHost configuration and platform MSBuild properties, DCP invokes the MAUI Run target. Platforms that can launch from the built outputs use restore/build-disabled Run arguments and release the queue when DCP reports the launch process as running. Android keeps the normal Run target shape because it performs required fast-deploy/runtime upload work after Build; the queue is released when that short-lived Run process exits, not when the Android app exits.
+- **Android resource state**: After Android deploys successfully, the dashboard resource may show the short-lived Run process as **"Finished"** even though the app remains running on the emulator or device and can continue sending telemetry through the configured OTLP tunnel.
 
 ### Architecture
 
@@ -213,7 +216,7 @@ The build queue is implemented via:
 - **`MauiBuildQueueAnnotation`**: Added to the parent `MauiProjectResource`, holds a `SemaphoreSlim(1,1)` and per-resource cancellation tokens
 - **`MauiBuildQueueEventSubscriber`**: Subscribes to `BeforeResourceStartedEvent`, manages the queue, runs `dotnet build` as a subprocess, and replaces the default Stop command with a queue-aware version
 - **`MauiBuildInfoAnnotation`**: Attached to each platform resource with the project path, working directory, target framework, configuration, and platform MSBuild properties used for the build subprocess
-- **`ProjectLaunchArgsOverrideAnnotation`**: A core `Aspire.Hosting` annotation that overrides DCP's default `dotnet run` args, enabling `dotnet build --no-restore /t:Run -p:NoBuild=true` for MAUI projects after the serialized pre-build
+- **`ProjectLaunchArgsOverrideAnnotation`**: A core `Aspire.Hosting` annotation that overrides DCP's default `dotnet run` args, enabling `dotnet build --no-restore /t:Run -p:BuildDependsOn= -p:NoBuild=true` for MAUI projects after the serialized pre-build on platforms that support build-free launch. Android uses `dotnet build --no-restore /t:Run` so the SDK can perform its required deploy/runtime upload steps.
 
 ## Requirements
 

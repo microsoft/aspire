@@ -40,13 +40,6 @@ internal sealed class TerminalHostFailureDiagnosticService(
     // exit code or no exit code (e.g. host crashed before reporting) is a failure; with
     // exit code 0 it is a clean shutdown during AppHost stop and must not be surfaced as
     // a failure (otherwise every successful run would log a phantom error on app shutdown).
-    private static readonly string[] s_terminalStates =
-    [
-        KnownResourceStates.FailedToStart,
-        KnownResourceStates.Finished,
-        KnownResourceStates.Exited,
-    ];
-
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // DCP can re-emit terminal-state events during recycle attempts and shutdown. Track
@@ -64,7 +57,7 @@ internal sealed class TerminalHostFailureDiagnosticService(
                 }
 
                 var state = evt.Snapshot.State?.Text;
-                if (state is null || Array.IndexOf(s_terminalStates, state) < 0)
+                if (state is null || !KnownResourceStates.TerminalStates.Contains(state, StringComparers.ResourceState))
                 {
                     continue;
                 }

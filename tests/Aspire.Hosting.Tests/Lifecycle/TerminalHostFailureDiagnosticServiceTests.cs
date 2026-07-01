@@ -88,6 +88,35 @@ public class TerminalHostFailureDiagnosticServiceTests
     }
 
     [Fact]
+    public async Task Terminated_UnhidesHostAndWritesDiagnostic()
+    {
+        var (notifications, loggers, host, service, stopCts) = CreateHarness(
+            terminalHostPath: "/usr/local/share/aspire/cli/managed/aspire-managed",
+            terminalHostInvocationArgs: "terminalhost");
+
+        try
+        {
+            await service.StartAsync(stopCts.Token).DefaultTimeout();
+
+            await notifications.PublishUpdateAsync(host, s => s with
+            {
+                State = new ResourceStateSnapshot(KnownResourceStates.Terminated, null),
+                IsHidden = true,
+            }).DefaultTimeout();
+
+            await WaitForUnhideAsync(notifications, host).DefaultTimeout();
+
+            var logs = await ReadLogsAsync(loggers, host, expected: 2).DefaultTimeout();
+            Assert.Contains("Terminal host for 'target' (replica 0) failed to start", logs[0].Content);
+        }
+        finally
+        {
+            await stopCts.CancelAsync();
+            await service.StopAsync(CancellationToken.None).DefaultTimeout();
+        }
+    }
+
+    [Fact]
     public async Task ExitedWithZeroExitCode_DoesNotSurfaceAsFailure()
     {
         // Clean shutdown during AppHost stop: host exits with code 0. We must not
