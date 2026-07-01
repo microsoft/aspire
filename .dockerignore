@@ -1,6 +1,7 @@
 # Ignore build artifacts (will be rebuilt inside Docker)
 artifacts/
 .dotnet/
+.packages/
 
 # IDE and editor files
 .vs/

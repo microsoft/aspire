@@ -1,0 +1,1 @@
+# Intentionally empty npm config for CI commands that should ignore ambient npm configuration.
