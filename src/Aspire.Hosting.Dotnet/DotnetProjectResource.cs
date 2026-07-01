@@ -10,7 +10,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <para>
 /// A <see cref="DotnetProjectResource"/> is added by path and is
 /// launched as an executable: <c>dotnet run --project &lt;path&gt;</c> for a project file, or
-/// <c>dotnet run --file &lt;path&gt;</c> for a file-based app (a <c>.cs</c> file). 
+/// <c>dotnet run --file &lt;path&gt;</c> for a file-based app (a <c>.cs</c> file).
 /// </para>
 /// </remarks>
 /// <param name="name">The name of the resource in the application model.</param>
