@@ -242,19 +242,21 @@ jobs:
               > ci-failure-data/test-results.zip 2>/dev/null || true
 
             # Extract failed test names and error messages from TRX files
-            if [ -f "ci-failure-data/test-results.zip" ] && [ -s "ci-failure-data/test-results.zip" ]; then
+            # Verify it's actually a zip (not a JSON error from an expired artifact).
+            # gh api returns a small JSON body like {"message":"Gone"} for expired artifacts.
+            if [ -f "ci-failure-data/test-results.zip" ] && [ -s "ci-failure-data/test-results.zip" ] \
+               && file ci-failure-data/test-results.zip | grep -q "Zip archive"; then
               DOWNLOAD_SIZE=$(stat -c%s ci-failure-data/test-results.zip 2>/dev/null || echo "unknown")
               echo "Download complete: ${DOWNLOAD_SIZE} bytes"
               mkdir -p ci-failure-data/test-results
               unzip -q -o ci-failure-data/test-results.zip -d ci-failure-data/test-results 2>/dev/null || true
 
               # List TRX files found
-              TRX_FILES=$(find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null)
-              TRX_COUNT=$(echo "$TRX_FILES" | grep -c . || echo "0")
+              TRX_COUNT=$(find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null | wc -l)
               echo "Found ${TRX_COUNT} TRX file(s):"
-              echo "$TRX_FILES" | while IFS= read -r f; do
-                [ -n "$f" ] && echo "  - $(basename "$f") ($(stat -c%s "$f" 2>/dev/null || echo "?") bytes)"
-              done
+              find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null | while IFS= read -r f; do
+                echo "  - $(basename "$f") ($(stat -c%s "$f" 2>/dev/null || echo "?") bytes)"
+              done || true
 
               # Parse TRX files for failed tests using yq (pre-installed) + jq.
               # yq converts XML to JSON, then jq extracts failed test info.
@@ -284,7 +286,15 @@ jobs:
               rm -rf ci-failure-data/test-results
               rm -f ci-failure-data/test-results.zip
             else
-              echo "Warning: test-results.zip is missing or empty after download"
+              # Not a valid zip — likely expired artifact returning JSON error
+              if [ -f "ci-failure-data/test-results.zip" ]; then
+                echo "Warning: Downloaded file is not a valid zip archive ($(stat -c%s ci-failure-data/test-results.zip 2>/dev/null) bytes):"
+                cat ci-failure-data/test-results.zip 2>/dev/null | head -c 200 || true
+                echo ""
+                rm -f ci-failure-data/test-results.zip
+              else
+                echo "Warning: test-results.zip is missing after download"
+              fi
             fi
           else
             echo "No test results artifact found for run ${RUN_ID}"
