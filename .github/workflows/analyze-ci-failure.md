@@ -531,10 +531,11 @@ safe-outputs:
               mkdir -p "memory-repo/runs"
               cp "$ANALYSIS_FILE" "memory-repo/runs/${RUN_ID}.json"
 
-              # Store individual cause files under causes/<run_id>/ so that
-              # each run's snapshot is preserved and prior runs are not clobbered.
+              # Store individual cause files under causes/ (shared across runs).
+              # Each cause file accumulates occurrences over time — merge new
+              # occurrences into any existing file rather than overwriting.
               if [ -d "$CAUSES_DIR" ]; then
-                mkdir -p "memory-repo/causes/${RUN_ID}"
+                mkdir -p "memory-repo/causes"
                 for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                   [ -f "$CAUSE_FILE" ] || continue
                   # Skip code-issue causes — only persist transient/flaky causes.
@@ -542,10 +543,27 @@ safe-outputs:
                   if [ "$CAUSE_TYPE_CHECK" = "code-issue" ]; then
                     continue
                   fi
-                  cp "$CAUSE_FILE" "memory-repo/causes/${RUN_ID}/"
+                  CAUSE_BASENAME=$(basename "$CAUSE_FILE")
+                  EXISTING="memory-repo/causes/${CAUSE_BASENAME}"
+                  if [ -f "$EXISTING" ]; then
+                    # Merge: append new occurrences that aren't already recorded
+                    # (deduplicate by run_id to handle re-runs of the same workflow).
+                    jq -s '
+                      .[0] as $existing | .[1] as $new |
+                      $existing * {
+                        occurrences: (
+                          [$existing.occurrences[], $new.occurrences[]]
+                          | unique_by(.run_id)
+                          | sort_by(.observed_at)
+                        )
+                      }
+                    ' "$EXISTING" "$CAUSE_FILE" > "${EXISTING}.tmp" && mv "${EXISTING}.tmp" "$EXISTING"
+                  else
+                    cp "$CAUSE_FILE" "$EXISTING"
+                  fi
                 done
-                CAUSE_COUNT=$(find "memory-repo/causes/${RUN_ID}" -name '*.json' -type f 2>/dev/null | wc -l)
-                echo "Copied ${CAUSE_COUNT} cause file(s) to causes/${RUN_ID}/"
+                CAUSE_COUNT=$(find "memory-repo/causes" -name '*.json' -type f 2>/dev/null | wc -l)
+                echo "Persisted cause files to causes/ (${CAUSE_COUNT} total)"
               fi
 
               git -C memory-repo add -A
