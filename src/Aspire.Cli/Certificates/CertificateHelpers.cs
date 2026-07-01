@@ -108,31 +108,58 @@ internal static partial class CertificateHelpers
     /// <returns><see langword="true"/> if the command was found; otherwise, <see langword="false"/>.</returns>
     internal static bool IsCommandAvailable(string command, IEnvironment environment)
     {
-        var searchPath = environment.GetEnvironmentVariable("PATH");
+        var availableCommands = FindAvailableCommands(environment, command);
+        return availableCommands.Contains(command);
+    }
 
-        if (searchPath is null)
+    /// <summary>
+    /// Finds the specified commands in <c>PATH</c>.
+    /// </summary>
+    /// <param name="environment">The environment abstraction for reading <c>PATH</c>.</param>
+    /// <param name="commands">The command names to locate.</param>
+    /// <returns>The commands found in <c>PATH</c>.</returns>
+    internal static HashSet<string> FindAvailableCommands(IEnvironment environment, params string[] commands)
+    {
+        var searchPath = environment.GetEnvironmentVariable("PATH");
+        var availableCommands = new HashSet<string>();
+
+        if (commands.Length == 0 || searchPath is null)
         {
-            return false;
+            return availableCommands;
         }
 
+        var expectedCommandCount = new HashSet<string>(commands).Count;
         var searchFolders = searchPath.Split(Path.PathSeparator);
 
         foreach (var searchFolder in searchFolders)
         {
-            try
+            foreach (var command in commands)
             {
-                if (File.Exists(Path.Combine(searchFolder, command)))
+                if (!availableCommands.Contains(command))
                 {
-                    return true;
+                    try
+                    {
+                        if (File.Exists(Path.Combine(searchFolder, command)))
+                        {
+                            availableCommands.Add(command);
+                        }
+                    }
+                    catch
+                    {
+                        // It's not interesting to report (e.g.) permission errors here.
+                    }
                 }
             }
-            catch
+
+            // Stop early if we've found all the required commands.
+            // They're usually all in the same folder (/bin or /usr/bin).
+            if (availableCommands.Count == expectedCommandCount)
             {
-                // It's not interesting to report (e.g.) permission errors here.
+                break;
             }
         }
 
-        return false;
+        return availableCommands;
     }
 
     /// <summary>

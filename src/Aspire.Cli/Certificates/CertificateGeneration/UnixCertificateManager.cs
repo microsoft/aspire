@@ -582,56 +582,10 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
     private bool IsCommandAvailable(string command)
     {
-        _availableCommands ??= FindAvailableCommands();
-        return _availableCommands.Contains(command);
-    }
-
-    private HashSet<string> FindAvailableCommands()
-    {
-        var availableCommands = new HashSet<string>();
-
         // We need OpenSSL 1.1.1h or newer (to pick up https://github.com/openssl/openssl/pull/12357),
         // but, given that all of v1 is EOL, it doesn't seem worthwhile to check the version.
-        var commands = new[] { OpenSslCommand, CertificateHelpers.CertUtilCommand };
-
-        var searchPath = _environment.GetEnvironmentVariable("PATH");
-
-        if (searchPath is null)
-        {
-            return availableCommands;
-        }
-
-        var searchFolders = searchPath.Split(Path.PathSeparator);
-
-        foreach (var searchFolder in searchFolders)
-        {
-            foreach (var command in commands)
-            {
-                if (!availableCommands.Contains(command))
-                {
-                    try
-                    {
-                        if (File.Exists(Path.Combine(searchFolder, command)))
-                        {
-                            availableCommands.Add(command);
-                        }
-                    }
-                    catch
-                    {
-                        // It's not interesting to report (e.g.) permission errors here.
-                    }
-                }
-            }
-
-            // Stop early if we've found all the required commands.
-            // They're usually all in the same folder (/bin or /usr/bin).
-            if (availableCommands.Count == commands.Length)
-            {
-                break;
-            }
-        }
-
-        return availableCommands;
+        _availableCommands ??= CertificateHelpers.FindAvailableCommands(_environment, OpenSslCommand, CertificateHelpers.CertUtilCommand);
+        return _availableCommands.Contains(command);
     }
 
     private static string GetCertificateNickname(X509Certificate2 certificate)
