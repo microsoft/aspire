@@ -104,7 +104,7 @@ public class ProjectResource : Resource, IResourceWithEnvironment, IResourceWith
     private EndpointAnnotation? _defaultHttpsEndpoint;
 
     // IProjectLaunchDefaultsResource state is implemented explicitly so the project-defaults plumbing
-    // is reused by Aspire.Hosting.Dotnet's CSharpAppResource without becoming public surface here.
+    // is reused by Aspire.Hosting.Dotnet's DotnetProjectResource without becoming public surface here.
     // HasKestrelEndpoints and ShouldInjectEndpointEnvironment come from the interface's default members.
     Dictionary<EndpointAnnotation, string> IProjectLaunchDefaultsResource.KestrelEndpointAnnotationHosts => _kestrelEndpointAnnotationHosts;
 
