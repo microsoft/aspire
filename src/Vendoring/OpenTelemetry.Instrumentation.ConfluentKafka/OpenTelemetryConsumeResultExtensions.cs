@@ -27,13 +27,13 @@ internal static class OpenTelemetryConsumeResultExtensions
         this ConsumeResult<TKey, TValue> consumeResult,
         out PropagationContext propagationContext)
     {
-#if NETFRAMEWORK
+#if NET
+        ArgumentNullException.ThrowIfNull(consumeResult);
+#else
         if (consumeResult == null)
         {
             throw new ArgumentNullException(nameof(consumeResult));
         }
-#else
-        ArgumentNullException.ThrowIfNull(consumeResult);
 #endif
 
         try
@@ -75,13 +75,13 @@ internal static class OpenTelemetryConsumeResultExtensions
         OpenTelemetryConsumeAndProcessMessageHandler<TKey, TValue> handler,
         CancellationToken cancellationToken)
     {
-#if NETFRAMEWORK
+#if NET
+        ArgumentNullException.ThrowIfNull(consumer);
+#else
         if (consumer == null)
         {
             throw new ArgumentNullException(nameof(consumer));
         }
-#else
-        ArgumentNullException.ThrowIfNull(consumer);
 #endif
 
         if (consumer is not InstrumentedConsumer<TKey, TValue> instrumentedConsumer)
@@ -89,13 +89,13 @@ internal static class OpenTelemetryConsumeResultExtensions
             throw new ArgumentException("Invalid consumer type.", nameof(consumer));
         }
 
-#if NETFRAMEWORK
-        if (handler is null)
+#if NET
+        ArgumentNullException.ThrowIfNull(handler);
+#else
+        if (handler == null)
         {
             throw new ArgumentNullException(nameof(handler));
         }
-#else
-        ArgumentNullException.ThrowIfNull(handler);
 #endif
 
         var consumeResult = instrumentedConsumer.Consume(cancellationToken);
@@ -105,25 +105,7 @@ internal static class OpenTelemetryConsumeResultExtensions
             return consumeResult;
         }
 
-        Activity? processActivity = null;
-        if (TryExtractPropagationContext(consumeResult, out var propagationContext))
-        {
-            processActivity = StartProcessActivity(
-                propagationContext,
-                consumeResult.TopicPartitionOffset,
-                consumeResult.Message.Key,
-                instrumentedConsumer.Name,
-                instrumentedConsumer.GroupId!);
-        }
-        else
-        {
-            processActivity = StartProcessActivity(
-                default,
-                consumeResult.TopicPartitionOffset,
-                consumeResult.Message.Key,
-                instrumentedConsumer.Name,
-                instrumentedConsumer.GroupId!);
-        }
+        var processActivity = StartProcessActivity(TryExtractPropagationContext(consumeResult, out var propagationContext) ? propagationContext : default, consumeResult.TopicPartitionOffset, consumeResult.Message.Key, instrumentedConsumer.Name, instrumentedConsumer.GroupId!);
 
         try
         {
@@ -133,6 +115,7 @@ internal static class OpenTelemetryConsumeResultExtensions
         {
             processActivity?.SetStatus(ActivityStatusCode.Error);
             processActivity?.SetTag(SemanticConventions.AttributeErrorType, ex.GetType().FullName);
+            throw;
         }
         finally
         {
@@ -147,15 +130,17 @@ internal static class OpenTelemetryConsumeResultExtensions
 
     private static Activity? StartProcessActivity<TKey>(PropagationContext propagationContext, TopicPartitionOffset? topicPartitionOffset, TKey? key, string clientId, string groupId)
     {
+#pragma warning disable IDE0370 // Suppression is unnecessary
         var spanName = string.IsNullOrEmpty(topicPartitionOffset?.Topic)
             ? ConfluentKafkaCommon.ProcessOperationName
             : string.Concat(topicPartitionOffset!.Topic, " ", ConfluentKafkaCommon.ProcessOperationName);
+#pragma warning restore IDE0370 // Suppression is unnecessary
 
         ActivityLink[] activityLinks = propagationContext != default && propagationContext.ActivityContext.IsValid()
-            ? new[] { new ActivityLink(propagationContext.ActivityContext) }
-            : Array.Empty<ActivityLink>();
+            ? [new ActivityLink(propagationContext.ActivityContext)]
+            : [];
 
-        Activity? activity = ConfluentKafkaCommon.ActivitySource.StartActivity(spanName, kind: ActivityKind.Consumer, links: activityLinks, parentContext: default);
+        var activity = ConfluentKafkaCommon.ActivitySource.StartActivity(spanName, kind: ActivityKind.Consumer, links: activityLinks, parentContext: default);
         if (activity?.IsAllDataRequested == true)
         {
             activity.SetTag(SemanticConventions.AttributeMessagingSystem, ConfluentKafkaCommon.KafkaMessagingSystem);
