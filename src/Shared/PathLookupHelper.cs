@@ -11,7 +11,7 @@ using System.Diagnostics.CodeAnalysis;
 internal static class PathLookupHelper
 {
     /// <summary>
-    /// Resolves an executable path or command name to a full path by searching the system PATH.
+    /// Resolves an executable path or command name by returning explicit paths as-is or by searching the system PATH.
     /// </summary>
     /// <param name="executablePath">The executable path or command name to resolve.</param>
     /// <param name="environmentVariables">Optional environment variable overrides to use for lookup.</param>
@@ -46,12 +46,12 @@ internal static class PathLookupHelper
     }
 
     /// <summary>
-    /// Tries to resolve an executable path or command name to a full path by searching the system PATH.
+    /// Tries to resolve an executable path or command name by returning explicit paths as-is or by searching the system PATH.
     /// </summary>
     /// <param name="executablePath">The executable path or command name to resolve.</param>
-    /// <param name="resolvedExecutablePath">The resolved executable path if found.</param>
+    /// <param name="resolvedExecutablePath">The resolved command path, or the original value when <paramref name="executablePath"/> is explicit.</param>
     /// <param name="environmentVariables">Optional environment variable overrides to use for lookup.</param>
-    /// <returns><see langword="true"/> when the executable was resolved; otherwise, <see langword="false"/>.</returns>
+    /// <returns><see langword="true"/> when the executable path is explicit or the command name was resolved; otherwise, <see langword="false"/>.</returns>
     public static bool TryResolveExecutablePath(
         string executablePath,
         [NotNullWhen(true)] out string? resolvedExecutablePath,
