@@ -526,6 +526,9 @@ function applyRoleAwareLayout(state) {
                 if (state.sizeMode !== 'fixed' || !state.fixedDims) return;
                 if (state.fixedDims.cols !== expectedCols || state.fixedDims.rows !== expectedRows) return;
                 pinBodyToNatural(state, root, body);
+                refineFontAfterCalibration(state, generation, expectedCols, expectedRows,
+                    () => state.sizeMode === 'fixed' && state.fixedDims &&
+                          state.fixedDims.cols === expectedCols && state.fixedDims.rows === expectedRows);
             });
         } else {
             // Font-driven: pin body to available, fit() picks cols×rows.
@@ -565,8 +568,45 @@ function applyRoleAwareLayout(state) {
         if (!state.client || state.client.isPrimary) return;
         if (state.client.width !== producerCols || state.client.height !== producerRows) return;
         pinBodyToNatural(state, root, body);
+        refineFontAfterCalibration(state, generation, producerCols, producerRows,
+            () => !!state.client && !state.client.isPrimary &&
+                  state.client.width === producerCols && state.client.height === producerRows);
     });
     notifyToolbar(state);
+}
+
+// On the very first calibrated render, computeOptimalFont bails out with
+// state.currentFontPx (the default 13px) because cellWRatio/cellHRatio
+// are still zero — those get seeded by calibrateRatios inside
+// pinBodyToNatural, which runs one RAF *after* the initial layout pass.
+// Result: the terminal opens at default font and only snaps to the
+// right size when a ResizeObserver tick (window resize, sidebar collapse)
+// re-drives layout.
+//
+// Once pinBodyToNatural has run, re-measure and recompute. If the
+// optimal font moved (typical on first open), adjust fontSize in place
+// and re-pin. We don't call applyRoleAwareLayout recursively because
+// that would bump generation and could stack under fast triggers; a
+// direct in-place adjustment converges in a single extra frame because
+// xterm's cell metrics per font-px are stable across small font deltas.
+function refineFontAfterCalibration(state, generation, cols, rows, stillApplicable) {
+    const term = state.term;
+    if (!term || !term.element) return;
+    const root = term.element;
+    const body = root.parentElement;
+    if (!body) return;
+    const fresh = getAvailableBodySpace(state);
+    if (fresh.width <= 0 || fresh.height <= 0) return;
+    const refined = computeOptimalFont(state, cols, rows, fresh.width, fresh.height);
+    if (refined === term.options.fontSize) return;
+    term.options.fontSize = refined;
+    state.currentFontPx = refined;
+    requestAnimationFrame(() => {
+        if (generation !== state.layoutGeneration) return;
+        if (!stillApplicable()) return;
+        pinBodyToNatural(state, root, body);
+        notifyToolbar(state);
+    });
 }
 
 function pinBodyToNatural(state, root, body) {
