@@ -20,6 +20,7 @@ internal sealed class LogEntry
     public string? RawContent { get; private set; }
 
     private string? _strippedRawContent;
+    private string? _strippedLogContent;
 
     /// <summary>
     /// <see cref="RawContent"/> with ANSI control sequences removed. This is the plain text the user
@@ -41,6 +42,28 @@ internal sealed class LogEntry
         }
 
         return _strippedRawContent ??= AnsiParser.StripControlSequences(RawContent);
+    }
+
+    /// <summary>
+    /// <see cref="RawContent"/> with the parsed timestamp and ANSI control sequences removed. This
+    /// represents the rendered log message text without optional row adornments such as timestamps,
+    /// resource prefixes, or stderr badges.
+    /// </summary>
+    /// <remarks>
+    /// The stripped value is cached because filtering runs over the entire log buffer on each update.
+    /// </remarks>
+    public string? GetStrippedLogContent()
+    {
+        if (RawContent is null)
+        {
+            return null;
+        }
+
+        _strippedLogContent ??= TimestampParser.TryParseConsoleTimestamp(RawContent, out var timestampParseResult)
+            ? AnsiParser.StripControlSequences(timestampParseResult.Value.ModifiedText)
+            : GetStrippedRawContent();
+
+        return _strippedLogContent;
     }
 
     public DateTime? Timestamp { get; private set; }

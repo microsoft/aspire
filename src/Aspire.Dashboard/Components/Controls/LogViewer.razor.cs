@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
@@ -25,7 +26,10 @@ public sealed partial class LogViewer
 
     private IList<LogEntry>? _visibleEntriesCache;
     private string? _appliedFilterText;
-    private bool _filterChanged;
+    private bool _appliedShowTimestamp;
+    private bool _appliedShowResourcePrefix;
+    private bool _appliedIsTimestampUtc;
+    private bool _visibleEntriesChanged;
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
@@ -103,17 +107,28 @@ public sealed partial class LogViewer
             _visibleEntriesCache = null;
         }
 
-        if (!string.Equals(_appliedFilterText, FilterText, StringComparison.Ordinal))
+        var filterChanged = !string.Equals(_appliedFilterText, FilterText, StringComparison.Ordinal);
+        var searchableFieldsChanged =
+            _appliedShowTimestamp != ShowTimestamp ||
+            _appliedShowResourcePrefix != ShowResourcePrefix ||
+            _appliedIsTimestampUtc != IsTimestampUtc;
+
+        _appliedFilterText = FilterText;
+        _appliedShowTimestamp = ShowTimestamp;
+        _appliedShowResourcePrefix = ShowResourcePrefix;
+        _appliedIsTimestampUtc = IsTimestampUtc;
+
+        if (filterChanged || (searchableFieldsChanged && !string.IsNullOrWhiteSpace(FilterText)))
         {
-            _appliedFilterText = FilterText;
             _visibleEntriesCache = null;
 
             // Virtualize caches the items it last fetched and only re-queries GetItems on an explicit
-            // RefreshDataAsync. The filter is applied inside GetItems, so we record the new filter here
-            // and defer the Virtualize refresh to OnAfterRenderAsync: observe the parameter, let the
-            // component render, then refresh Virtualize. Refreshing earlier, e.g. from the parent's bind
-            // handler before this assignment, would re-query with the previous filter value.
-            _filterChanged = true;
+            // RefreshDataAsync. Filtering is applied inside GetItems and depends on the rendered row
+            // fields, so we record the current parameters here and defer the Virtualize refresh to
+            // OnAfterRenderAsync: observe the parameters, let the component render, then refresh
+            // Virtualize. Refreshing earlier, e.g. from the parent's bind handler before this assignment,
+            // would re-query with the previous filter value.
+            _visibleEntriesChanged = true;
         }
 
         base.OnParametersSet();
@@ -147,16 +162,61 @@ public sealed partial class LogViewer
         return _visibleEntriesCache = entries.Where(e => MatchesFilter(e, filterText)).ToList();
     }
 
-    // Filter on the ANSI-stripped raw content, which is the plain text the user actually sees
-    // (including the timestamp). Content can't be used because it contains embedded HTML links and
-    // other markup added during ANSI conversion, and the unstripped RawContent still contains raw
-    // ANSI escape sequences - matching against either produces false negatives when the search term
-    // spans markup or a color boundary. Pause markers aren't log content, so they're hidden while a
-    // filter is active.
-    private static bool MatchesFilter(LogEntry entry, string filterText)
-        => entry.Type is not LogEntryType.Pause
-            && entry.GetStrippedRawContent() is { } stripped
-            && stripped.Contains(filterText, StringComparison.OrdinalIgnoreCase);
+    private bool MatchesFilter(LogEntry entry, string filterText)
+    {
+        if (entry.Type is LogEntryType.Pause)
+        {
+            return false;
+        }
+
+        return GetSearchableText(entry).Contains(filterText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetSearchableText(LogEntry entry)
+    {
+        var builder = new StringBuilder();
+
+        // Keep this in sync with the row markup in LogViewer.razor. Filtering should match only text
+        // users can see: optional/display-formatted timestamps, optional resource prefixes, the stderr
+        // badge, and the ANSI-stripped log message. RawContent is not enough because it contains hidden
+        // ISO timestamps and raw ANSI escape sequences.
+        if (ShowTimestamp && entry.Timestamp is { } timestamp)
+        {
+            AppendSearchablePart(builder, GetDisplayTimestamp(timestamp));
+        }
+
+        if (ShowResourcePrefix && entry.ResourcePrefix is { } resourcePrefix)
+        {
+            AppendSearchablePart(builder, resourcePrefix);
+        }
+
+        if (entry.Type is LogEntryType.Error)
+        {
+            AppendSearchablePart(builder, "stderr");
+        }
+
+        if (entry.GetStrippedLogContent() is { } content)
+        {
+            AppendSearchablePart(builder, content);
+        }
+
+        return builder.ToString();
+    }
+
+    private static void AppendSearchablePart(StringBuilder builder, string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return;
+        }
+
+        if (builder.Length > 0)
+        {
+            builder.Append(' ');
+        }
+
+        builder.Append(value);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -165,11 +225,11 @@ public sealed partial class LogViewer
             await JS.InvokeVoidAsync("resetContinuousScrollPosition");
             _logsChanged = false;
         }
-        if (_filterChanged)
+        if (_visibleEntriesChanged)
         {
-            _filterChanged = false;
+            _visibleEntriesChanged = false;
 
-            // The filtered view was already rebuilt for the new filter during this render pass
+            // The filtered view was already rebuilt for the new parameters during this render pass
             // (GetVisibleEntries runs from the markup to decide the "no logs match" message), so just
             // re-query Virtualize. Calling the public RefreshDataAsync here would null the cache and
             // force a second full scan of the log buffer.

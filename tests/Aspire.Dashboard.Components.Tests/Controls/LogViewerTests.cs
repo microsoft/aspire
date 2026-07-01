@@ -314,6 +314,101 @@ public class LogViewerTests : DashboardTestContext
         });
     }
 
+    [Fact]
+    public void LogViewer_FilterText_RespectsRenderedResourcePrefix()
+    {
+        SetupLogViewerServices();
+
+        var logEntries = new LogEntries(maximumEntryCount: int.MaxValue) { BaseLineNumber = 1 };
+        logEntries.InsertSorted(LogEntry.Create(
+            timestamp: null,
+            logMessage: "ready",
+            rawLogContent: "ready",
+            isErrorMessage: false,
+            resourcePrefix: "frontend"));
+
+        var cut = RenderComponent<LogViewer>(builder =>
+        {
+            builder.Add(p => p.LogEntries, logEntries);
+            builder.Add(p => p.FilterText, "frontend");
+            builder.Add(p => p.ShowResourcePrefix, false);
+        });
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".log-content")));
+
+        cut.SetParametersAndRender(builder => builder.Add(p => p.ShowResourcePrefix, true));
+
+        cut.WaitForAssertion(() =>
+        {
+            var content = Assert.Single(cut.FindAll(".log-content"));
+            Assert.Contains("frontend", content.TextContent);
+            Assert.Contains("ready", content.TextContent);
+        });
+    }
+
+    [Fact]
+    public void LogViewer_FilterText_MatchesRenderedStderrBadge()
+    {
+        SetupLogViewerServices();
+
+        var logEntries = new LogEntries(maximumEntryCount: int.MaxValue) { BaseLineNumber = 1 };
+        logEntries.InsertSorted(LogEntry.Create(
+            timestamp: null,
+            logMessage: "failed",
+            rawLogContent: "failed",
+            isErrorMessage: true,
+            resourcePrefix: null));
+
+        var cut = RenderComponent<LogViewer>(builder =>
+        {
+            builder.Add(p => p.LogEntries, logEntries);
+            builder.Add(p => p.FilterText, "stderr");
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var content = Assert.Single(cut.FindAll(".log-content"));
+            Assert.Contains("stderr", content.TextContent);
+            Assert.Contains("failed", content.TextContent);
+        });
+    }
+
+    [Fact]
+    public void LogViewer_FilterText_UsesDisplayedTimestampOnlyWhenVisible()
+    {
+        SetupLogViewerServices();
+
+        var logEntries = new LogEntries(maximumEntryCount: int.MaxValue) { BaseLineNumber = 1 };
+        logEntries.InsertSorted(LogEntry.Create(
+            timestamp: new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            logMessage: "timestamped log",
+            rawLogContent: "2024-01-01T00:00:00Z timestamped log",
+            isErrorMessage: false,
+            resourcePrefix: null));
+
+        var cut = RenderComponent<LogViewer>(builder =>
+        {
+            builder.Add(p => p.LogEntries, logEntries);
+            builder.Add(p => p.FilterText, "2024-01-01T01:00:00");
+            builder.Add(p => p.ShowTimestamp, true);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var content = Assert.Single(cut.FindAll(".log-content"));
+            Assert.Contains("2024-01-01T01:00:00", content.TextContent);
+            Assert.Contains("timestamped log", content.TextContent);
+        });
+
+        cut.SetParametersAndRender(builder =>
+        {
+            builder.Add(p => p.FilterText, "2024-01-01T00:00:00Z");
+            builder.Add(p => p.ShowTimestamp, false);
+        });
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".log-content")));
+    }
+
     private static LogEntries CreateLogEntries(params string[] messages)
     {
         var logEntries = new LogEntries(maximumEntryCount: int.MaxValue) { BaseLineNumber = 1 };
