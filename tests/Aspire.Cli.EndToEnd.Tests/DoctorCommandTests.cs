@@ -38,6 +38,9 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
 
         await auto.InstallAspireCliAsync(strategy, counter);
 
+        // INTENTIONAL TEST FAILURE: Validate that cast recording content appears in GitHub step summary
+        Assert.Fail("Intentional failure to test cast recording in step summary (DoctorCommand_WithoutSslCertDir)");
+
         // Generate and trust dev certs inside the container (Docker images don't have them by default)
         await auto.TypeAsync("dotnet dev-certs https --trust 2>/dev/null || dotnet dev-certs https");
         await auto.EnterAsync();
@@ -71,6 +74,9 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
         await auto.InstallAspireCliAsync(strategy, counter);
+
+        // INTENTIONAL TEST FAILURE: Validate that cast recording content appears in GitHub step summary
+        Assert.Fail("Intentional failure to test cast recording in step summary (DoctorCommand_WithSslCertDir)");
 
         // Generate and trust dev certs inside the container (Docker images don't have them by default)
         await auto.TypeAsync("dotnet dev-certs https --trust 2>/dev/null || dotnet dev-certs https");
