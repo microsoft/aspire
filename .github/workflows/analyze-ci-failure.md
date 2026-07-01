@@ -554,10 +554,18 @@ safe-outputs:
               cp "$ANALYSIS_FILE" "memory-repo/runs/${RUN_ID}.json"
 
               # Store individual cause files under causes/ (shared across runs).
-              # Each cause file accumulates occurrences over time — merge new
-              # occurrences into any existing file rather than overwriting.
+              # Each cause file accumulates occurrences over time. The agent
+              # writes cause definitions (no occurrences); we build the occurrence
+              # from the run summary and merge it into the stored cause file.
               if [ -d "$CAUSES_DIR" ]; then
                 mkdir -p "memory-repo/causes"
+
+                # Build the occurrence entry from the run summary JSON
+                ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
+                PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
+                # Find the first failed job name for context in the occurrence
+                FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
+
                 for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                   [ -f "$CAUSE_FILE" ] || continue
                   # Skip code-issue causes — only persist transient/flaky causes.
@@ -567,21 +575,30 @@ safe-outputs:
                   fi
                   CAUSE_BASENAME=$(basename "$CAUSE_FILE")
                   EXISTING="memory-repo/causes/${CAUSE_BASENAME}"
+
+                  # Add an occurrences array with this run's entry to the agent's cause file
+                  CAUSE_WITH_OCC=$(jq --argjson run_id "$RUN_ID" \
+                    --arg run_url "$RUN_URL" \
+                    --arg job "$FIRST_JOB" \
+                    --argjson pr_number "$PR_NUMBER" \
+                    --arg observed_at "$ANALYZED_AT" \
+                    '. + {occurrences: [{run_id: $run_id, run_url: $run_url, job: $job, pr_number: $pr_number, observed_at: $observed_at}]}' \
+                    "$CAUSE_FILE")
+
                   if [ -f "$EXISTING" ]; then
-                    # Merge: append new occurrences that aren't already recorded
-                    # (deduplicate by run_id to handle re-runs of the same workflow).
-                    jq -s '
-                      .[0] as $existing | .[1] as $new |
-                      $existing * {
+                    # Merge: append new occurrence, deduplicate by run_id
+                    echo "$CAUSE_WITH_OCC" | jq -s --slurpfile existing "$EXISTING" '
+                      .[0] as $new | $existing[0] as $ex |
+                      ($new | del(.occurrences)) * {
                         occurrences: (
-                          [$existing.occurrences[], $new.occurrences[]]
+                          [$ex.occurrences[], $new.occurrences[]]
                           | unique_by(.run_id)
                           | sort_by(.observed_at)
                         )
                       }
-                    ' "$EXISTING" "$CAUSE_FILE" > "${EXISTING}.tmp" && mv "${EXISTING}.tmp" "$EXISTING"
+                    ' > "${EXISTING}.tmp" && mv "${EXISTING}.tmp" "$EXISTING"
                   else
-                    cp "$CAUSE_FILE" "$EXISTING"
+                    echo "$CAUSE_WITH_OCC" > "$EXISTING"
                   fi
                 done
                 CAUSE_COUNT=$(find "memory-repo/causes" -name '*.json' -type f 2>/dev/null | wc -l)
@@ -601,6 +618,15 @@ safe-outputs:
             # ── 2. Create or update issues for each cause ──
             # Skip entirely for code-issue verdicts — no causes will be actionable.
             if [ "$VERDICT" != "code-issue" ] && [ -d "$CAUSES_DIR" ]; then
+              # Build occurrence info from the run summary for issue updates
+              ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
+              PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
+              FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
+
+              # Build the occurrence table row for this run
+              OCC_DATE=$(echo "$ANALYZED_AT" | cut -dT -f1)
+              NEW_OCCURRENCE_ROW="| ${OCC_DATE} | [${RUN_ID}](${RUN_URL}) | ${FIRST_JOB} | #${PR_NUMBER} |"
+
               # Fetch labeled issues once so individual cause lookups don't each
               # call `gh issue list` (which fetches full bodies of up to 500 issues).
               OPEN_ISSUES_CACHE=$(mktemp)
@@ -634,10 +660,6 @@ safe-outputs:
 
                 MARKER="<!-- ci-failure-cause:${CAUSE_ID} -->"
 
-                # Build new occurrence table rows from the cause file.
-                # Each row: | date | build link | job | PR |
-                NEW_OCCURRENCES=$(jq -r '.occurrences[] | "| " + (.observed_at | split("T")[0]) + " | [" + (.run_id | tostring) + "](" + .run_url + ") | " + .job + " | #" + (.pr_number | tostring) + " |"' "$CAUSE_FILE")
-
                 # Search for an existing open issue with this cause marker
                 EXISTING_ISSUE=$(jq -r --arg marker "$MARKER" '.[] | select(.body | contains($marker)) | .number' "$OPEN_ISSUES_CACHE" | head -1 || true)
 
@@ -661,7 +683,7 @@ safe-outputs:
                     echo "Occurrence for run ${RUN_ID} already recorded in issue #${EXISTING_ISSUE}. Skipping."
                   else
                     BODY_FILE=$(mktemp)
-                    printf '%s\n%s\n' "$CURRENT_BODY" "$NEW_OCCURRENCES" > "$BODY_FILE"
+                    printf '%s\n%s\n' "$CURRENT_BODY" "$NEW_OCCURRENCE_ROW" > "$BODY_FILE"
                     gh issue edit "$EXISTING_ISSUE" --repo "$REPO" --body-file "$BODY_FILE"
                     rm -f "$BODY_FILE"
                   fi
@@ -675,23 +697,19 @@ safe-outputs:
                 else
                   # Create a new issue for this cause
                   BODY_FILE=$(mktemp)
-                  FIRST_OCC=$(jq '.occurrences[0]' "$CAUSE_FILE")
-                  FIRST_RUN_URL=$(echo "$FIRST_OCC" | jq -r '.run_url')
-                  FIRST_JOB=$(echo "$FIRST_OCC" | jq -r '.job')
-                  FIRST_PR_NUM=$(echo "$FIRST_OCC" | jq -r '.pr_number')
                   TEST_NAME=$(jq -r '.test_name // empty' "$CAUSE_FILE")
                   {
                     echo "${MARKER}"
                     echo ""
                     echo "## Build Information"
                     echo ""
-                    echo "Build: ${FIRST_RUN_URL}"
+                    echo "Build: ${RUN_URL}"
                     if [ -n "$TEST_NAME" ]; then
                       echo "Build error leg or test failing: ${FIRST_JOB} / \`${TEST_NAME}\`"
                     else
                       echo "Build error leg: ${FIRST_JOB}"
                     fi
-                    echo "Pull request: #${FIRST_PR_NUM}"
+                    echo "Pull request: #${PR_NUMBER}"
                     echo ""
                     echo "## Error Message"
                     echo ""
@@ -709,7 +727,7 @@ safe-outputs:
                     echo ""
                     echo "| Date | Build | Job | PR |"
                     echo "|------|-------|-----|----|"
-                    echo "$NEW_OCCURRENCES"
+                    echo "$NEW_OCCURRENCE_ROW"
                   } > "$BODY_FILE"
 
                   LABELS="ci-failure-cause"
@@ -894,7 +912,7 @@ A failure matches an existing cause when:
 - For flaky tests: the failing test name matches `test_name` in a prior cause, OR the error message/stack trace substantially matches the `error_pattern`
 - For infra failures: the error message substantially matches the `error_pattern` of a prior infra-failure cause
 
-When reusing an existing cause, keep the same `id`, `type`, `title`, `test_name`, and `error_pattern` fields (you may improve the `title` or `error_pattern` if the new failure provides better detail). Only add the new occurrence to `occurrences`.
+When reusing an existing cause, keep the same `id`, `type`, `title`, `test_name`, and `error_pattern` fields (you may improve the `title` or `error_pattern` if the new failure provides better detail). Also add the cause ID to the `causes` array in the run summary.
 
 ### Step 3: Write the analysis JSON files
 
@@ -940,7 +958,8 @@ Write the run summary to `/tmp/gh-aw/agent/analysis-result.json`. The JSON must 
       "classification": "flaky | code-issue",
       "reason": "Why this test is classified this way"
     }
-  ]
+  ],
+  "causes": ["cause-id-1", "cause-id-2"]
 }
 ```
 
@@ -951,6 +970,7 @@ Field details:
 - `failed_tests[].error`: The full error message from the TRX test failure data.
 - `failed_tests[].stack_trace`: The stack trace from the TRX test failure data (include the first few relevant frames).
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
+- `causes`: An array of cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts.
 
 #### 3b. Per-cause files (flaky-test and infra-failure only)
 
@@ -964,16 +984,7 @@ Each cause file must follow this schema:
   "type": "flaky-test | infra-failure",
   "title": "Human-readable short description of the cause",
   "test_name": "Fully.Qualified.TestName (only for flaky-test with a specific test)",
-  "error_pattern": "The key error message or pattern that identifies this cause",
-  "occurrences": [
-    {
-      "run_id": 12345,
-      "run_url": "https://github.com/microsoft/aspire/actions/runs/12345",
-      "job": "Build and Test (ubuntu-latest)",
-      "pr_number": 1234,
-      "observed_at": "2026-06-30T12:00:00Z"
-    }
-  ]
+  "error_pattern": "The key error message or pattern that identifies this cause"
 }
 ```
 
@@ -983,7 +994,8 @@ Field details:
 - `title`: A brief human-readable description (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
 - `test_name`: The fully qualified test name. Omit this field for infrastructure failures that aren't test-specific.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue (up to ~500 characters).
-- `occurrences`: An array with one entry for this run. The publish job accumulates occurrences across runs over time. When reusing an existing cause ID, still only include the new occurrence for this run — the publish job handles merging with historical occurrences.
+
+Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON.
 
 Create the `/tmp/gh-aw/agent/causes/` directory and write one `.json` file per distinct cause. Multiple failed tests with the same root cause (e.g., same infrastructure error) can be grouped into a single cause file. When a failure matches an existing prior cause, use the same filename (`<cause-id>.json`) so the publish job merges correctly.
 
