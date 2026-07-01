@@ -5,6 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { extensionLogOutputChannel } from './logging';
+import { getCliExecutionCommand } from './cliExecution';
 
 const execFileAsync = promisify(execFile);
 const fsAccessAsync = promisify(fs.access);
@@ -20,13 +21,27 @@ const fsAccessAsync = promisify(fs.access);
  */
 export function getDefaultCliInstallPaths(): string[] {
     const homeDir = os.homedir();
-    const exeName = process.platform === 'win32' ? 'aspire.exe' : 'aspire';
+    const bundleInstallDirectory = path.join(homeDir, '.aspire', 'bin');
+    const globalToolDirectory = path.join(homeDir, '.dotnet', 'tools');
+
+    if (process.platform === 'win32') {
+        return [
+            // Bundle install (recommended): ~/.aspire/bin/aspire.exe
+            path.join(bundleInstallDirectory, 'aspire.exe'),
+            // Some Windows installs expose command shims instead of native executables.
+            path.join(bundleInstallDirectory, 'aspire.cmd'),
+            // .NET global tool: ~/.dotnet/tools/aspire.exe
+            path.join(globalToolDirectory, 'aspire.exe'),
+            // .NET global tool command shim: ~/.dotnet/tools/aspire.cmd
+            path.join(globalToolDirectory, 'aspire.cmd'),
+        ];
+    }
 
     return [
         // Bundle install (recommended): ~/.aspire/bin/aspire
-        path.join(homeDir, '.aspire', 'bin', exeName),
+        path.join(bundleInstallDirectory, 'aspire'),
         // .NET global tool: ~/.dotnet/tools/aspire
-        path.join(homeDir, '.dotnet', 'tools', exeName),
+        path.join(globalToolDirectory, 'aspire'),
     ];
 }
 
@@ -48,15 +63,8 @@ async function fileExists(filePath: string): Promise<boolean> {
  */
 export async function tryExecuteCli(cliPath: string): Promise<boolean> {
     try {
-        if (shouldUseCmdForCliPath(cliPath)) {
-            // .cmd/.bat files are interpreted by cmd.exe. Passing the wrapper path as a
-            // separate argument lets Node quote paths with spaces instead of relying on
-            // fragile hand-built cmd.exe command strings.
-            await execFileAsync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', 'call', cliPath, '--version'], { timeout: 5000 });
-        }
-        else {
-            await execFileAsync(cliPath, ['--version'], { timeout: 5000 });
-        }
+        const command = getCliExecutionCommand(cliPath, ['--version']);
+        await execFileAsync(command.file, command.args, { timeout: 5000, windowsVerbatimArguments: command.windowsVerbatimArguments });
 
         return true;
     }
@@ -65,15 +73,54 @@ export async function tryExecuteCli(cliPath: string): Promise<boolean> {
     }
 }
 
-function shouldUseCmdForCliPath(cliPath: string): boolean {
-    return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(cliPath);
+export function getWindowsPathCliCandidates(env: NodeJS.ProcessEnv = process.env): string[] {
+    // Avoid `where.exe aspire` and relative PATH entries here because they include the
+    // current directory, which could make a workspace-local aspire.cmd look like the user's
+    // global CLI.
+    // See: https://learn.microsoft.com/windows-server/administration/windows-commands/where
+    const pathValue = env.Path ?? env.PATH ?? '';
+    const pathExtensions = (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
+        .split(';')
+        .map(extension => extension.trim())
+        .filter(Boolean);
+    const candidates: string[] = [];
+    const seenCandidates = new Set<string>();
+
+    for (const pathEntry of pathValue.split(';')) {
+        const directory = pathEntry.trim().replace(/^"(.*)"$/, '$1');
+        if (!path.win32.isAbsolute(directory)) {
+            continue;
+        }
+
+        for (const extension of pathExtensions) {
+            const candidate = path.win32.join(directory, `aspire${extension}`);
+            const normalizedCandidate = candidate.toLowerCase();
+
+            if (!seenCandidates.has(normalizedCandidate)) {
+                candidates.push(candidate);
+                seenCandidates.add(normalizedCandidate);
+            }
+        }
+    }
+
+    return candidates;
 }
 
 /**
- * Checks if the Aspire CLI is available on the system PATH.
+ * Finds the Aspire CLI on the system PATH.
  */
-export async function isCliOnPath(): Promise<boolean> {
-    return await tryExecuteCli('aspire');
+export async function findCliOnPath(): Promise<string | undefined> {
+    if (process.platform !== 'win32') {
+        return await tryExecuteCli('aspire') ? 'aspire' : undefined;
+    }
+
+    for (const candidate of getWindowsPathCliCandidates()) {
+        if (await fileExists(candidate) && await tryExecuteCli(candidate)) {
+            return candidate;
+        }
+    }
+
+    return undefined;
 }
 
 /**
@@ -98,17 +145,15 @@ export function getConfiguredCliPath(): string {
     return vscode.workspace.getConfiguration('aspire').get<string>('aspireCliExecutablePath', '').trim();
 }
 
-/**
- * Updates the VS Code configuration setting for the Aspire CLI path.
- * Uses ConfigurationTarget.Global to set it at the user level.
- */
-export async function setConfiguredCliPath(cliPath: string): Promise<void> {
-    extensionLogOutputChannel.info(`Setting aspire.aspireCliExecutablePath to: ${cliPath || '(empty)'}`);
-    await vscode.workspace.getConfiguration('aspire').update(
-        'aspireCliExecutablePath',
-        cliPath || undefined, // Use undefined to remove the setting
-        vscode.ConfigurationTarget.Global
-    );
+function isDefaultCliInstallPath(cliPath: string): boolean {
+    const defaultPaths = getDefaultCliInstallPaths();
+    if (process.platform === 'win32') {
+        const normalizedPath = path.win32.normalize(cliPath).toLowerCase();
+
+        return defaultPaths.some(defaultPath => path.win32.normalize(defaultPath).toLowerCase() === normalizedPath);
+    }
+
+    return defaultPaths.includes(cliPath);
 }
 
 /**
@@ -128,20 +173,16 @@ export interface CliPathResolutionResult {
  */
 export interface CliPathDependencies {
     getConfiguredPath: () => string;
-    getDefaultPaths: () => string[];
-    isOnPath: () => Promise<boolean>;
+    findOnPath: () => Promise<string | undefined>;
     findAtDefaultPath: () => Promise<string | undefined>;
     tryExecute: (cliPath: string) => Promise<boolean>;
-    setConfiguredPath: (cliPath: string) => Promise<void>;
 }
 
 const defaultDependencies: CliPathDependencies = {
     getConfiguredPath: getConfiguredCliPath,
-    getDefaultPaths: getDefaultCliInstallPaths,
-    isOnPath: isCliOnPath,
+    findOnPath: findCliOnPath,
     findAtDefaultPath: findCliAtDefaultPath,
     tryExecute: tryExecuteCli,
-    setConfiguredPath: setConfiguredCliPath,
 };
 
 /**
@@ -152,14 +193,15 @@ const defaultDependencies: CliPathDependencies = {
  * 4. Default installation directories (~/.aspire/bin, ~/.dotnet/tools)
  *
  * If the CLI is found at a default installation path but not on PATH,
- * the VS Code setting is updated to use that path.
+ * use it for this resolution without rewriting the user's configured path.
  *
- * If the CLI is on PATH and a setting was previously auto-configured to a default path,
- * the setting is cleared to prefer PATH.
+ * If a non-default setting is configured, it is treated as authoritative when valid.
+ * Default-location settings are checked after PATH because older extension builds could
+ * auto-write those values, and they should not pin users away from a working PATH CLI.
  */
 export async function resolveCliPath(deps: CliPathDependencies = defaultDependencies): Promise<CliPathResolutionResult> {
     const configuredPath = deps.getConfiguredPath();
-    const defaultPaths = deps.getDefaultPaths();
+    const configuredPathIsDefault = configuredPath ? isDefaultCliInstallPath(configuredPath) : false;
     const e2eCliPath = process.env.ASPIRE_EXTENSION_E2E_CLI_PATH?.trim();
 
     if (e2eCliPath) {
@@ -171,8 +213,7 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
         extensionLogOutputChannel.warn(`E2E CLI path is invalid: ${e2eCliPath}`);
     }
 
-    // Check if user has configured a custom path (not one of the defaults)
-    if (configuredPath && !defaultPaths.includes(configuredPath)) {
+    if (configuredPath && !configuredPathIsDefault) {
         const isValid = await deps.tryExecute(configuredPath);
         if (isValid) {
             return { cliPath: configuredPath, available: true, source: 'configured' };
@@ -183,27 +224,24 @@ export async function resolveCliPath(deps: CliPathDependencies = defaultDependen
     }
 
     // 2. Check if CLI is on PATH
-    const onPath = await deps.isOnPath();
-    if (onPath) {
-        // If we previously auto-set the path to a default install location, clear it
-        // since PATH is now working
-        if (defaultPaths.includes(configuredPath)) {
-            extensionLogOutputChannel.info('Clearing aspireCliExecutablePath setting since CLI is on PATH');
-            await deps.setConfiguredPath('');
+    const pathCli = await deps.findOnPath();
+    if (pathCli) {
+        return { cliPath: pathCli, available: true, source: 'path' };
+    }
+
+    if (configuredPath && configuredPathIsDefault) {
+        const isValid = await deps.tryExecute(configuredPath);
+        if (isValid) {
+            return { cliPath: configuredPath, available: true, source: 'configured' };
         }
 
-        return { cliPath: 'aspire', available: true, source: 'path' };
+        extensionLogOutputChannel.warn(`Configured CLI path is invalid: ${configuredPath}`);
+        // Continue to check other locations
     }
 
     // 3. Check default installation paths (~/.aspire/bin first, then ~/.dotnet/tools)
     const foundPath = await deps.findAtDefaultPath();
     if (foundPath) {
-        // Update the setting so future invocations use this path
-        if (configuredPath !== foundPath) {
-            extensionLogOutputChannel.info('Updating aspireCliExecutablePath setting to use default install location');
-            await deps.setConfiguredPath(foundPath);
-        }
-
         return { cliPath: foundPath, available: true, source: 'default-install' };
     }
 

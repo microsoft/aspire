@@ -1,10 +1,11 @@
 import { ChildProcessWithoutNullStreams, spawn } from "child_process";
 import { EnvVar } from "../../dcp/types";
 import { extensionLogOutputChannel } from "../../utils/logging";
-import { AspireTerminalProvider, assertNoTerminalControlCharacters } from "../../utils/AspireTerminalProvider";
+import { AspireTerminalProvider } from "../../utils/AspireTerminalProvider";
 import * as readline from 'readline';
 import * as vscode from 'vscode';
 import { EnvironmentVariables } from "../../utils/environment";
+import { getCliExecutionCommand } from "../../utils/cliExecution";
 
 export interface SpawnProcessOptions {
     stdoutCallback?: (data: string) => void;
@@ -22,71 +23,20 @@ export interface SpawnProcessOptions {
 export interface CliSpawnCommand {
     command: string;
     args: string[];
-    diagnosticArgs?: string[];
     windowsVerbatimArguments?: boolean;
 }
 
 export function getCliSpawnCommand(command: string, args?: string[]): CliSpawnCommand {
-    if (process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command)) {
-        const commandArgs = args ?? [];
-        // cmd.exe receives this path as one `/c` command string, not an argv array.
-        // Reject terminal controls before quoting so CR/LF and ETX cannot split the wrapper
-        // invocation or cancel the command before cmd parsing reaches the quotes.
-        assertNoCmdWrapperControlCharacters([command, ...commandArgs]);
-
-        return {
-            command: process.env.ComSpec ?? 'cmd.exe',
-            args: ['/d', '/v:off', '/s', '/c', buildCmdWrapperCommand(command, commandArgs)],
-            diagnosticArgs: ['call', command, ...commandArgs],
-            windowsVerbatimArguments: true,
-        };
-    }
-
-    return { command, args: args ?? [] };
-}
-
-function assertNoCmdWrapperControlCharacters(values: readonly string[]): void {
-    for (const value of values) {
-        assertNoTerminalControlCharacters(value);
-    }
-}
-
-function buildCmdWrapperCommand(command: string, args: string[]): string {
-    return ['call', quoteCmdArgument(command), ...args.map(quoteCmdArgument)].join(' ');
-}
-
-function quoteCmdArgument(value: string): string {
-    // The wrapper command is executed as:
-    //   cmd.exe /d /v:off /s /c call "aspire.cmd" "<arg>" ...
-    // Many .cmd shims then forward arguments to a native executable with `%*`, for example:
-    //   "node.exe" "aspire.js" %*
-    // Because `%*` is parsed later by normal Windows argv rules, trailing backslashes must be
-    // doubled before our closing quote (`"--path=C:\temp\\" "next"`), and backslashes before
-    // embedded quotes must be doubled before cmd's doubled-quote escape.
-    const valueWithEscapedPercents = value.replace(/%/g, '%%');
-    let quotedValue = '';
-    let backslashCount = 0;
-
-    for (const character of valueWithEscapedPercents) {
-        if (character === '\\') {
-            backslashCount++;
-            continue;
-        }
-
-        if (character === '"') {
-            quotedValue += '\\'.repeat(backslashCount * 2);
-            backslashCount = 0;
-            quotedValue += '""';
-            continue;
-        }
-
-        quotedValue += '\\'.repeat(backslashCount);
-        backslashCount = 0;
-        quotedValue += character;
-    }
-
-    quotedValue += '\\'.repeat(backslashCount * 2);
-    return `"${quotedValue}"`;
+    // Delegate Windows .cmd/.bat shim wrapping to the shared cliExecution helper so that the
+    // wrapping rules (cmd.exe /d /v:off /s /c, windowsVerbatimArguments, control-character
+    // rejection, percent/quote escaping) stay identical between debug-launch spawning here and
+    // CLI validation/execution paths in utils/cliPath.ts.
+    const executionCommand = getCliExecutionCommand(command, args ?? []);
+    return {
+        command: executionCommand.file,
+        args: executionCommand.args,
+        windowsVerbatimArguments: executionCommand.windowsVerbatimArguments,
+    };
 }
 
 export function getCliSpawnDiagnostics(command: string, args: string[] | undefined, workingDirectory: string, noDebug: boolean | undefined, debugSessionId: string | undefined, env: Record<string, string | undefined>): string {
@@ -120,7 +70,9 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
     Object.assign(env, terminalProvider.createEnvironment(options?.debugSessionId, options?.noDebug, options?.noExtensionVariables));
     mergeCliSpawnEnvironment(env, options?.env);
 
-    extensionLogOutputChannel.info(getCliSpawnDiagnostics(spawnCommand.command, spawnCommand.diagnosticArgs ?? spawnCommand.args, workingDirectory, options?.noDebug, options?.debugSessionId, env));
+    // Log the original CLI command and argv (not the cmd.exe wrapper) so that diagnostics show
+    // what the user actually invoked. redactCliSpawnArgs still strips anything after `--`.
+    extensionLogOutputChannel.info(getCliSpawnDiagnostics(command, args, workingDirectory, options?.noDebug, options?.debugSessionId, env));
 
     const child = spawn(spawnCommand.command, spawnCommand.args, {
         cwd: workingDirectory,

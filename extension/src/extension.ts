@@ -298,7 +298,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const command = appHostPath
       ? ['logs', shellArg(resourceName), '--apphost', shellArg(appHostPath), '--follow']
       : ['logs', shellArg(resourceName), '--follow'];
-    terminalProvider.sendAspireCommandToAspireTerminal(command);
+    return terminalProvider.sendAspireCommandToAspireTerminal(command);
   });
   const codeLensRevealResourceRegistration = registerInstrumentedCommand('aspire-vscode.codeLensRevealResource', 'codelens', (resourceName: string, appHostPath?: string) => {
     const element = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
@@ -316,7 +316,7 @@ export async function activate(context: vscode.ExtensionContext) {
       additionalArgs.push('--apphost', appHostPath);
     }
     additionalArgs.push('--follow');
-    terminalProvider.sendAspireCommandToAspireTerminal('logs', true, additionalArgs);
+    return terminalProvider.sendAspireCommandToAspireTerminal('logs', true, additionalArgs);
   });
   context.subscriptions.push(codeLensRegistration, codeLensDebugPipelineStepRegistration, codeLensResourceActionRegistration, codeLensViewLogsRegistration, codeLensRevealResourceRegistration, codeLensOpenDashboardRegistration, codeLensViewAppHostLogsRegistration, codeLensProvider);
 
