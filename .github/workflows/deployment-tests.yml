@@ -286,11 +286,7 @@ jobs:
           echo "✅ Azure authentication successful"
 
       - name: Verify Docker is running
-        run: |
-          echo "Verifying Docker daemon..."
-          docker version
-          docker info | head -20
-          echo "✅ Docker is available"
+        uses: ./.github/actions/verify-docker
 
       # Pin Helm to satisfy Aspire.Hosting.Kubernetes' minimum supported version
       # (HelmVersionValidator.MinimumHelmVersion, currently v4.2.0). The new
