@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.Processes;
 
@@ -81,15 +82,5 @@ public class ParentProcessLivenessMonitorTests
         Assert.False(invoked);
     }
 
-    private static Process StartLongRunningProcess()
-    {
-        // Mirrors CliOrphanDetectorTests' cross-platform process choice for CI reliability.
-        var psi = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo("ping", "-t localhost") { CreateNoWindow = true }
-            : new ProcessStartInfo("tail", "-f /dev/null") { CreateNoWindow = true };
-
-        var process = Process.Start(psi);
-        Assert.NotNull(process);
-        return process;
-    }
+    private static Process StartLongRunningProcess() => TestProcesses.StartLongRunning();
 }

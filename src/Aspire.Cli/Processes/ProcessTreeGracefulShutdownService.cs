@@ -22,7 +22,7 @@ internal sealed class ProcessTreeGracefulShutdownService(
     CliExecutionContext executionContext,
     IEnvironment environment,
     ILogger<ProcessTreeGracefulShutdownService> logger,
-    TimeProvider timeProvider) : IProcessTreeGracefulShutdownSignaler
+    TimeProvider timeProvider) : IProcessTreeGracefulShutdownSignaler, IAppHostStopper
 {
     private static readonly TimeSpan s_processTerminationTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan s_processTerminationPollInterval = TimeSpan.FromMilliseconds(250);

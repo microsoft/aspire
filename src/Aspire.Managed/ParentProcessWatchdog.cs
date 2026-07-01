@@ -44,9 +44,16 @@ internal static class ParentProcessWatchdog
             async stopToken =>
             {
                 // Parent is gone: ask the in-flight operation to stop, then hard-exit if it doesn't.
-                if (!operationCts.IsCancellationRequested)
+                try
                 {
-                    operationCts.Cancel();
+                    if (!operationCts.IsCancellationRequested)
+                    {
+                        operationCts.Cancel();
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The operation already completed and disposed its CTS; nothing left to cancel.
                 }
 
                 await Task.Delay(s_forceExitGracePeriod, stopToken).ConfigureAwait(false);

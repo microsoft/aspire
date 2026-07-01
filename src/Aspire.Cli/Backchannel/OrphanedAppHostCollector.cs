@@ -13,7 +13,7 @@ namespace Aspire.Cli.Backchannel;
 /// </summary>
 internal sealed class OrphanedAppHostCollector(
     IAuxiliaryBackchannelMonitor backchannelMonitor,
-    ProcessTreeGracefulShutdownService processShutdownService,
+    IAppHostStopper processShutdownService,
     ILogger<OrphanedAppHostCollector> logger)
 {
     /// <summary>
