@@ -88,7 +88,7 @@ public class TerminalHostFailureDiagnosticServiceTests
     }
 
     [Fact]
-    public async Task Terminated_UnhidesHostAndWritesDiagnostic()
+    public async Task Terminated_DoesNotSurfaceAsFailure()
     {
         var (notifications, loggers, host, service, stopCts) = CreateHarness(
             terminalHostPath: "/usr/local/share/aspire/cli/managed/aspire-managed",
@@ -104,10 +104,16 @@ public class TerminalHostFailureDiagnosticServiceTests
                 IsHidden = true,
             }).DefaultTimeout();
 
-            await WaitForUnhideAsync(notifications, host).DefaultTimeout();
+            // Terminated is emitted when DCP stops a terminal host during a clean/user-initiated
+            // shutdown. It is a terminal state for waiters, but not evidence that the host failed
+            // to start.
+            await Task.Delay(200, stopCts.Token);
 
-            var logs = await ReadLogsAsync(loggers, host, expected: 2).DefaultTimeout();
-            Assert.Contains("Terminal host for 'target' (replica 0) failed to start", logs[0].Content);
+            var current = await ReadCurrentSnapshotAsync(notifications, host).DefaultTimeout();
+            Assert.True(current.IsHidden);
+
+            var hasLogs = await TryReadAnyLogAsync(loggers, host);
+            Assert.False(hasLogs);
         }
         finally
         {
