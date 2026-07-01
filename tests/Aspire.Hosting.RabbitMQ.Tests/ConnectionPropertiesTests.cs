@@ -58,10 +58,17 @@ public class ConnectionPropertiesTests
             userName: builder.AddParameter("username", "some#User"),
             password: builder.AddParameter("password", "p@ssw0rd!", secret: true));
 
+        var vhost = server.AddVirtualHost("myvhost");
+        var queue = vhost.AddQueue("myqueue");
+        var exchange = vhost.AddExchange("myexchange");
+
         // Force connection properties to be generated
         var app = builder.AddExecutable("app", "command", ".")
             .WithReference(server)
-            .WithReference(serverWithParameters);
+            .WithReference(serverWithParameters)
+            .WithReference(vhost)
+            .WithReference(queue)
+            .WithReference(exchange);
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
