@@ -54,7 +54,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const gitCommitSha = readGitCommitSha(context);
   extensionLogOutputChannel.info(`Activating Aspire extension (commit: ${gitCommitSha})`);
   initializeTelemetry(context);
-  sendTelemetryEvent('extension/activated', {
+  sendTelemetryEvent('aspire/vscode/extension/activated', {
     workspace_open: vscode.workspace.workspaceFolders?.length ? 'true' : 'false',
     extension_mode: getExtensionModeForTelemetry(context.extensionMode),
   }, {
