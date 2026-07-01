@@ -11,10 +11,13 @@ namespace Aspire.Hosting.ApplicationModel;
 public class NatsServerResource(string name) : ContainerResource(name), IResourceWithConnectionString
 {
     internal const string PrimaryEndpointName = "tcp";
+    internal const string ClusterEndpointName = "cluster";
     internal const string PrimaryNatsSchemeName = "nats";
+    internal const int ConventionalClusterPort = 4248;
     private const string DefaultUserName = "nats";
 
     private EndpointReference? _primaryEndpoint;
+    private EndpointReference? _clusterEndpoint;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="NatsServerResource"/> class.
@@ -32,6 +35,11 @@ public class NatsServerResource(string name) : ContainerResource(name), IResourc
     /// Gets the primary endpoint for the NATS server.
     /// </summary>
     public EndpointReference PrimaryEndpoint => _primaryEndpoint ??= new(this, PrimaryEndpointName);
+
+    /// <summary>
+    /// Gets the cluster endpoint for the NATS server.
+    /// </summary>
+    public EndpointReference ClusterEndpoint => _clusterEndpoint ??= new(this, ClusterEndpointName);
 
     /// <summary>
     /// Gets the host endpoint reference for this resource.

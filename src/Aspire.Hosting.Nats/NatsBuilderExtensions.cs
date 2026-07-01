@@ -152,7 +152,8 @@ public static class NatsBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithArgs("-js");
+        return builder.WithAnnotation(new NatsJetStreamAnnotation())
+            .WithArgs("-js");
     }
 
     /// <summary>
@@ -190,4 +191,80 @@ public static class NatsBuilderExtensions
         return builder.WithBindMount(source, "/var/lib/nats", isReadOnly)
             .WithArgs("-sd", "/var/lib/nats");
     }
+
+    /// <summary>
+    /// Adds cluster configurations to a NATS container resource.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="routesLocator">A function that returns a list of endpoint references for other cluster members.</param>
+    /// <param name="clusterName">The name of the cluster. Required if JetStream has been enabled on this NATS resource.</param>
+    /// <param name="clusterPort">The port for the cluster. If not provided, the conventional NATS cluster port will be used: <c>4248</c>. This port isn't exposed on the host.</param>
+    [AspireExport]
+    public static IResourceBuilder<NatsServerResource> WithCluster(
+        this IResourceBuilder<NatsServerResource> builder,
+        Func<IReadOnlyList<EndpointReference>> routesLocator,
+        string? clusterName = null,
+        int? clusterPort = null
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(routesLocator);
+
+        builder = builder
+            .WithEndpoint(
+                targetPort: NatsServerResource.ConventionalClusterPort,
+                port: clusterPort,
+                name: NatsServerResource.ClusterEndpointName
+            )
+            .WithArgs(context =>
+            {
+                var otherRoutes = routesLocator();
+                if (otherRoutes is [])
+                {
+                    return;
+                }
+
+                context.Args.Add("--cluster");
+                context.Args.Add($"nats://0.0.0.0:{NatsServerResource.ConventionalClusterPort}");
+
+                if (clusterName is not (null or ""))
+                {
+                    // NOTE: If unset, NATS will create one automatically, but only when JetStream isn't enabled.
+                    context.Args.Add("--cluster_name");
+                    context.Args.Add(clusterName);
+                }
+                else if (builder.Resource.Annotations.OfType<NatsJetStreamAnnotation>().Any())
+                {
+                    throw new ArgumentException($"The '{nameof(clusterName)}' parameter must be provided when enabling JetStream support.");
+                }
+
+                var routeUrls = otherRoutes.Select(r => $"{NatsServerResource.PrimaryNatsSchemeName}://{r.Resource.Name}:{r.TargetPort}");
+                context.Args.Add("--routes");
+                context.Args.Add(string.Join(',', routeUrls));
+            })
+            .WithArgs();
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Adds a server name to a NATS server instance.
+    /// </summary>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="serverName">The server name to set. Defaults to the resource name if not provided.</param>
+    /// <remarks>s
+    /// This is useful when configuring a NATS cluster with JetStream enabled, where each member of the cluster must have a unique server name.
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<NatsServerResource> WithServerName(
+        this IResourceBuilder<NatsServerResource> builder,
+        string? serverName = null
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithArgs("--server_name", serverName ?? builder.Resource.Name);
+    }
 }
+
+internal sealed record NatsJetStreamAnnotation : IResourceAnnotation;
