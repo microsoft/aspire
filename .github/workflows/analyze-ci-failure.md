@@ -244,22 +244,49 @@ jobs:
               mkdir -p ci-failure-data/test-results
               unzip -q -o ci-failure-data/test-results.zip -d ci-failure-data/test-results 2>/dev/null || true
 
-              # Parse TRX files for failed tests (TRX is XML with UnitTestResult elements)
-              # Produce one JSON object per line using jq for proper escaping, then
-              # combine into an array. This avoids pipe-subshell variable propagation
-              # issues and handles all JSON special characters correctly.
-              # TRX format: <UnitTestResult testName="..." outcome="Failed"><Output><ErrorInfo><Message>...</Message></ErrorInfo></Output></UnitTestResult>
-              > ci-failure-data/test-failures.jsonl
-              while IFS= read -r TRX_FILE; do
-                while IFS= read -r TEST_NAME; do
-                  ERROR_MSG=$(grep -A5 "testName=\"${TEST_NAME}\".*outcome=\"Failed\"" "${TRX_FILE}" 2>/dev/null \
-                    | grep -oP '<Message>\K[^<]+' 2>/dev/null | head -1 | cut -c1-200 || echo "")
-                  jq -n --arg test "${TEST_NAME}" --arg error "${ERROR_MSG}" \
-                    '{test: $test, error: $error}' >> ci-failure-data/test-failures.jsonl
-                done < <(grep -oP '<UnitTestResult[^>]*testName="\K[^"]+(?="[^>]*outcome="Failed")' "${TRX_FILE}" 2>/dev/null || true)
-              done < <(find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null)
-              jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > ci-failure-data/test-failures.json
-              rm -f ci-failure-data/test-failures.jsonl
+              # Parse TRX files for failed tests using Python's XML parser.
+              # TRX is XML with UnitTestResult elements containing ErrorInfo
+              # (Message + StackTrace). grep-based parsing is fragile for multi-line
+              # content, so we use ElementTree for reliable extraction.
+              python3 - ci-failure-data/test-results ci-failure-data/test-failures.json <<'PARSE_TRX'
+              import sys, os, json, xml.etree.ElementTree as ET, glob
+              results_dir = sys.argv[1]
+              output_file = sys.argv[2]
+              failures = []
+              for trx_path in glob.glob(os.path.join(results_dir, '**', '*.trx'), recursive=True):
+                  try:
+                      tree = ET.parse(trx_path)
+                      root = tree.getroot()
+                  except ET.ParseError:
+                      continue
+                  for result in root.iter():
+                      tag = result.tag.split('}')[-1] if '}' in result.tag else result.tag
+                      if tag != 'UnitTestResult':
+                          continue
+                      if (result.get('outcome', '') or '').lower() != 'failed':
+                          continue
+                      test_name = result.get('testName', '')
+                      error_msg = ''
+                      stack_trace = ''
+                      for output in list(result):
+                          output_tag = output.tag.split('}')[-1] if '}' in output.tag else output.tag
+                          if output_tag != 'Output':
+                              continue
+                          for error_info in list(output):
+                              ei_tag = error_info.tag.split('}')[-1] if '}' in error_info.tag else error_info.tag
+                              if ei_tag != 'ErrorInfo':
+                                  continue
+                              for child in list(error_info):
+                                  child_tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+                                  if child_tag == 'Message':
+                                      error_msg = (child.text or '').strip()[:1000]
+                                  elif child_tag == 'StackTrace':
+                                      stack_trace = (child.text or '').strip()[:2000]
+                      failures.append({'test': test_name, 'error': error_msg, 'stack_trace': stack_trace})
+              with open(output_file, 'w') as f:
+                  json.dump(failures, f, indent=2)
+              print(f"Extracted {len(failures)} test failure(s) from TRX files")
+              PARSE_TRX
 
               # Clean up the extracted files to save space in artifact
               rm -rf ci-failure-data/test-results
@@ -329,7 +356,7 @@ jobs:
             if [ -f "ci-failure-data/test-failures.json" ]; then
               FAILURE_COUNT=$(jq 'length' ci-failure-data/test-failures.json 2>/dev/null || echo "0")
               if [ "${FAILURE_COUNT}" -gt 0 ]; then
-                jq -r '.[] | "- `\(.test)`: \(.error)"' ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
+                jq -r '.[] | "### `\(.test)`\n\n**Error:**\n```\n\(.error)\n```\n" + (if .stack_trace != "" then "**Stack Trace:**\n```\n\(.stack_trace)\n```\n" else "" end)' ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
               else
                 echo "No test failures extracted from TRX artifacts."
               fi
@@ -687,7 +714,9 @@ safe-outputs:
                 | join("\n");
               def test_list:
                 [.failed_tests[]? | select(.classification == "flaky") |
-                  "- `\(.name)` in job `\(.job)`\n  - **Error**: \(.error)\n  - **Why likely flaky**: \(.reason)"]
+                  "- `\(.name)` in job `\(.job)`\n  - **Error**: \(.error)\n" +
+                  (if (.stack_trace // "") != "" then "  - **Stack Trace** (first frames):\n    ```\n    \(.stack_trace | split("\n") | .[0:5] | join("\n    "))\n    ```\n" else "" end) +
+                  "  - **Why likely flaky**: \(.reason)"]
                 | join("\n");
 
               if .verdict == "transient-infra" then
@@ -858,7 +887,8 @@ Write the run summary to `/tmp/gh-aw/agent/analysis-result.json`. The JSON must 
     {
       "name": "Fully.Qualified.TestName",
       "job": "job-name",
-      "error": "brief error message",
+      "error": "the error message from the test failure",
+      "stack_trace": "the stack trace from the test failure (first few frames)",
       "classification": "flaky | code-issue",
       "reason": "Why this test is classified this way"
     }
@@ -870,6 +900,8 @@ Field details:
 - `verdict`: The overall classification. Use `"transient-infra"` if ALL failures are infrastructure issues, `"flaky-test"` if ANY failures are flaky tests (and none are code issues), `"code-issue"` if ANY failures are caused by PR changes, or `"mixed"` if there are both transient and non-transient failures.
 - `failed_jobs[].classification`: Per-job classification — one of `"transient-infra"`, `"flaky-test"`, or `"code-issue"`.
 - `failed_tests[].classification`: Per-test classification — `"flaky"` or `"code-issue"`.
+- `failed_tests[].error`: The full error message from the TRX test failure data.
+- `failed_tests[].stack_trace`: The stack trace from the TRX test failure data (include the first few relevant frames).
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
 
 #### 3b. Per-cause files (flaky-test and infra-failure only)
@@ -902,7 +934,7 @@ Field details:
 - `type`: One of `"flaky-test"` or `"infra-failure"`. Do NOT create cause files for code-issue classifications.
 - `title`: A brief human-readable description (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
 - `test_name`: The fully qualified test name. Omit this field for infrastructure failures that aren't test-specific.
-- `error_pattern`: The representative error message or regex pattern that characterizes this cause.
+- `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue (up to ~500 characters).
 - `occurrences`: An array with one entry for this run. The publish job accumulates occurrences across runs over time.
 
 Create the `/tmp/gh-aw/agent/causes/` directory and write one `.json` file per distinct cause. Multiple failed tests with the same root cause (e.g., same infrastructure error) can be grouped into a single cause file.
