@@ -7,6 +7,7 @@ using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
@@ -1139,6 +1140,40 @@ public class ResourceNotificationTests
         Assert.Contains(logRecords, log => log.Level == LogLevel.Debug && log.Message.Contains("Waiting for resource 'myResource' to enter the 'Healthy' state."));
         Assert.Contains(logRecords, log => log.Level == LogLevel.Debug && log.Message.Contains("Waiting for resource ready to execute for 'myResource'."));
         Assert.Contains(logRecords, log => log.Level == LogLevel.Debug && log.Message.Contains("Finished waiting for resource 'myResource'."));
+    }
+
+    [Fact]
+    public async Task WaitForResourceHealthyAsync_StopOnResourceUnavailable_ThrowsIfResourceNotInModel()
+    {
+        var appModel = new DistributedApplicationModel([new CustomResource("existingResource")]);
+        var serviceProvider = new TestServiceProvider().AddService(appModel);
+        var notificationService = new ResourceNotificationService(
+            new NullLogger<ResourceNotificationService>(),
+            new TestHostApplicationLifetime(),
+            serviceProvider,
+            new ResourceLoggerService());
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => notificationService.WaitForResourceHealthyAsync("does-not-exist", WaitBehavior.StopOnResourceUnavailable));
+
+        Assert.Contains("does-not-exist", ex.Message);
+        Assert.Contains("does not exist in the application model", ex.Message);
+    }
+
+    [Fact]
+    public async Task WaitForResourceHealthyAsync_WaitOnResourceUnavailable_DoesNotThrowForNonexistentResource()
+    {
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        using var cts = new CancellationTokenSource();
+
+        // With WaitOnResourceUnavailable the fast-fail path must NOT trigger — the task should
+        // enter a waiting state rather than throwing DistributedApplicationException immediately.
+        var waitTask = notificationService.WaitForResourceHealthyAsync("does-not-exist", WaitBehavior.WaitOnResourceUnavailable, cts.Token);
+        Assert.False(waitTask.IsCompleted);
+
+        cts.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(() => waitTask);
     }
 
     private static async Task<bool> PublishAndGetIsHiddenAsync<T>(
