@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Automated bot PR updating Microsoft Foundry model descriptors; not user-facing",
+  "mergedAt": "2026-06-30T22:04:56Z",
+  "number": 18572,
+  "runDate": "2026-07-01T00:27:00Z",
+  "status": "excluded",
+  "title": "[Automated] Update Microsoft Foundry Models"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI/build fix for deployment E2E tests; all changed files are workflow and test infrastructure with no user-facing product change",
+  "mergedAt": "2026-06-30T22:06:44Z",
+  "number": 18569,
+  "runDate": "2026-07-01T00:27:00Z",
+  "status": "excluded",
+  "title": "fix(deployment-e2e): build real native CLI so AppHost deploys resolve the CLI bundle"
+}

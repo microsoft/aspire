@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Documents aspire ps --follow NDJSON streaming mode; matches aspire-ps-remove-resources-flag change entry (PR 17479)",
+  "mergedAt": "2026-06-30T20:27:00Z",
+  "number": 1155,
+  "runDate": "2026-07-01T00:27:00Z",
+  "status": "included",
+  "title": "[docs] Document `aspire ps --follow` NDJSON streaming mode"
+}

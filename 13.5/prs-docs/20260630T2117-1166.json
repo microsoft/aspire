@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Documents aspire resources alias pointing to aspire describe and --watch to --follow rename; matches aspire-ps-remove-resources-flag change entry (PR 17479)",
+  "mergedAt": "2026-06-30T21:17:03Z",
+  "number": 1166,
+  "runDate": "2026-07-01T00:27:00Z",
+  "status": "included",
+  "title": "CLI docs: add `aspire resources` alias page pointing to `aspire describe`"
+}
