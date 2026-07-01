@@ -188,7 +188,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             UpdateCommandStrings.RestoringPackagesAfterUpdate,
             async () =>
             {
-                var restoreExitCode = await runner.RestoreAsync(projectFile, new(), cancellationToken);
+                var restoreExitCode = await runner.RestoreAsync(projectFile, new ProcessInvocationOptions(), cancellationToken);
 
                 if (restoreExitCode != 0)
                 {

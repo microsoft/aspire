@@ -57,6 +57,18 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
             : Task.FromResult(0); // If not overridden, just return success.
     }
 
+    public Task<int> RestoreAsync(FileInfo projectFilePath, OutputCollector outputCollector, CancellationToken cancellationToken)
+    {
+        return RestoreAsync(
+            projectFilePath,
+            new ProcessInvocationOptions
+            {
+                StandardOutputCallback = outputCollector.AppendOutput,
+                StandardErrorCallback = outputCollector.AppendError,
+            },
+            cancellationToken);
+    }
+
     public Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
         var informationalVersion = VersionHelper.GetDefaultTemplateVersion();

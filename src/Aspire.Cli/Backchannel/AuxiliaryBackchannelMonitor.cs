@@ -10,6 +10,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -154,7 +155,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
             {
                 var selectedConnection = connections.FirstOrDefault(c =>
                     c.AppHostInfo?.AppHostPath != null &&
-                    string.Equals(Path.GetFullPath(c.AppHostInfo.AppHostPath), Path.GetFullPath(SelectedAppHostPath), StringComparison.OrdinalIgnoreCase));
+                    string.Equals(PathNormalizer.ResolveToFilesystemPath(c.AppHostInfo.AppHostPath), PathNormalizer.ResolveToFilesystemPath(SelectedAppHostPath), StringComparison.OrdinalIgnoreCase));
 
                 if (selectedConnection != null)
                 {
@@ -196,8 +197,8 @@ internal sealed class AuxiliaryBackchannelMonitor(
         }
 
         // Normalize the paths for comparison
-        var normalizedWorkingDirectory = Path.GetFullPath(workingDirectory);
-        var normalizedAppHostPath = Path.GetFullPath(appHostPath);
+        var normalizedWorkingDirectory = PathNormalizer.ResolveToFilesystemPath(workingDirectory);
+        var normalizedAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostPath);
 
         // Check if the AppHost path is within the working directory
         var relativePath = Path.GetRelativePath(normalizedWorkingDirectory, normalizedAppHostPath);
@@ -552,8 +553,8 @@ internal sealed class AuxiliaryBackchannelMonitor(
         }
 
         // Normalize the paths for comparison
-        var workingDirectory = Path.GetFullPath(executionContext.WorkingDirectory.FullName);
-        var normalizedAppHostPath = Path.GetFullPath(appHostPath);
+        var workingDirectory = PathNormalizer.ResolveToFilesystemPath(executionContext.WorkingDirectory.FullName);
+        var normalizedAppHostPath = PathNormalizer.ResolveToFilesystemPath(appHostPath);
 
         // Check if the AppHost path is within the working directory using a robust, cross-platform method
         var relativePath = Path.GetRelativePath(workingDirectory, normalizedAppHostPath);

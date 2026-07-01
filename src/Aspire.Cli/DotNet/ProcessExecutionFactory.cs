@@ -48,6 +48,12 @@ internal sealed class ProcessExecutionFactory(
         // applies even when the caller passes no explicit env. Then overlay the caller's env deltas.
         StripIdentityEnvVars(startInfo);
 
+        foreach (var envVar in options.EnvironmentVariablesToRemove)
+        {
+            effectiveLogger.LogDebug("{FileName} env remove: {EnvKey}", fileName, envVar);
+            startInfo.Environment.Remove(envVar);
+        }
+
         if (env is not null)
         {
             foreach (var envKvp in env)

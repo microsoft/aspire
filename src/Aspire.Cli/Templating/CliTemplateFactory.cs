@@ -4,6 +4,7 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
@@ -62,6 +63,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly IEnvironment _environment;
     private readonly TemplateNuGetConfigService _templateNuGetConfigService;
+    private readonly IFeatures _features;
     private readonly ILogger<CliTemplateFactory> _logger;
 
     public CliTemplateFactory(
@@ -74,6 +76,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         ICliHostEnvironment hostEnvironment,
         IEnvironment environment,
         TemplateNuGetConfigService templateNuGetConfigService,
+        IFeatures features,
         ILogger<CliTemplateFactory> logger)
     {
         _languageDiscovery = languageDiscovery;
@@ -85,6 +88,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         _hostEnvironment = hostEnvironment;
         _environment = environment;
         _templateNuGetConfigService = templateNuGetConfigService;
+        _features = features;
         _logger = logger;
     }
 
@@ -135,6 +139,17 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
                 ApplyEmptyAppHostTemplateAsync,
                 runtime: TemplateRuntime.Cli,
                 languageId: KnownLanguageId.TypeScript,
+                isEmpty: true,
+                showInPrompt: false),
+
+            new CallbackTemplate(
+                KnownTemplateId.CSharpCliManagedEmptyAppHost,
+                "Empty (C# AppHost, CLI-managed)",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
+                cmd => AddOptionIfMissing(cmd, _localhostTldOption),
+                ApplyCSharpCliManagedEmptyAppHostTemplateAsync,
+                runtime: TemplateRuntime.Cli,
+                languageId: KnownLanguageId.CSharp,
                 isEmpty: true,
                 showInPrompt: false),
 
@@ -222,6 +237,12 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
     private bool IsTemplateAvailable(ITemplate template)
     {
+        if (string.Equals(template.Name, KnownTemplateId.CSharpCliManagedEmptyAppHost, StringComparisons.CliInputOrOutput) &&
+            !_features.IsFeatureEnabled(KnownFeatures.ExperimentalCliManagedAppHost, defaultValue: false))
+        {
+            return false;
+        }
+
         if (string.IsNullOrWhiteSpace(template.LanguageId))
         {
             return true;

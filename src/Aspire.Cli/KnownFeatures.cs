@@ -28,6 +28,7 @@ internal static class KnownFeatures
     public static string ExperimentalPolyglotJava => "experimentalPolyglot:java";
     public static string ExperimentalPolyglotGo => "experimentalPolyglot:go";
     public static string ExperimentalPolyglotPython => "experimentalPolyglot:python";
+    public static string ExperimentalCliManagedAppHost => "experimentalCliManagedAppHost";
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
     public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
     public static string TerminalCommandsEnabled => "terminalCommandsEnabled";
@@ -77,6 +78,11 @@ internal static class KnownFeatures
         [ExperimentalPolyglotPython] = new(
             ExperimentalPolyglotPython,
             "Enable or disable experimental Python language support for polyglot Aspire applications",
+            DefaultValue: false),
+
+        [ExperimentalCliManagedAppHost] = new(
+            ExperimentalCliManagedAppHost,
+            "Enable or disable CLI-managed file-based C# AppHosts",
             DefaultValue: false),
 
         [NuGetSignatureVerificationEnabled] = new(

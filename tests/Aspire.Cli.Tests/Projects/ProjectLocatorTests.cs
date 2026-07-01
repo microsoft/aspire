@@ -14,6 +14,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -603,7 +604,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         var returnedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(projectFile, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(projectFile, returnedProjectFile);
+        Assert.Equal(PathNormalizer.ResolveToFilesystemPath(projectFile.FullName), returnedProjectFile!.FullName);
     }
 
     [Fact]
@@ -636,6 +637,35 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         Assert.NotNull(result.SelectedProjectFile);
         Assert.Equal(onDiskProjectFile.FullName, result.SelectedProjectFile!.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileResultUsesFilesystemPathForExplicitSymlinkedPath()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix symlink canonicalization is covered by this test.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("RealAppHost");
+        var onDiskProjectFile = new FileInfo(Path.Combine(realDirectory.FullName, "RealAppHost.csproj"));
+        await File.WriteAllTextAsync(onDiskProjectFile.FullName, "Not a real project file.");
+
+        var linkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "LinkedAppHost");
+        TestSymlinkHelper.TryCreateSymlink(linkDirectory, realDirectory.FullName);
+
+        var linkedProjectFile = new FileInfo(Path.Combine(linkDirectory, onDiskProjectFile.Name));
+        Assert.True(linkedProjectFile.Exists);
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            linkedProjectFile,
+            MultipleAppHostProjectsFoundBehavior.Throw,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(result.SelectedProjectFile);
+        Assert.Equal(PathNormalizer.ResolveToFilesystemPath(onDiskProjectFile.FullName), result.SelectedProjectFile!.FullName);
     }
 
     [Fact]
@@ -682,7 +712,7 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         var returnedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(appHostFile, createSettingsFile: true).DefaultTimeout();
 
-        Assert.Equal(appHostFile.FullName, returnedProjectFile!.FullName);
+        Assert.Equal(PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName), returnedProjectFile!.FullName);
 
         var updatedConfig = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
         Assert.Equal("apphost.mts", updatedConfig?.AppHost?.Path);
@@ -1172,7 +1202,7 @@ builder.Build().Run();");
 
         var result = await projectLocator.UseOrFindAppHostProjectFileAsync(appHostFile, createSettingsFile: true, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(appHostFile.FullName, result!.FullName);
+        Assert.Equal(PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName), result!.FullName);
     }
 
     [Fact]
@@ -1380,6 +1410,7 @@ builder.Build().Run();");
             public bool IsUnsupported { get; set; }
             public string LanguageId => "typescript";
             public string DisplayName => "TypeScript";
+            public bool RequiresStopForAddPackage => false;
             public string? AppHostFileName => supportedFileName;
 
             public bool IsUsingProjectReferences(FileInfo appHostFile) => false;
@@ -1395,6 +1426,9 @@ builder.Build().Run();");
 
             public Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken)
                 => throw new NotImplementedException();
+
+            public Task<int> RestoreAsync(FileInfo appHostFile, OutputCollector outputCollector, CancellationToken cancellationToken)
+                => Task.FromResult(CliExitCodes.Success);
 
             public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken)
                 => throw new NotImplementedException();
@@ -3033,4 +3067,5 @@ builder.Build().Run();");
             appHostCandidateFinder,
             telemetry ?? TestTelemetryHelper.CreateInitializedTelemetry());
     }
+
 }

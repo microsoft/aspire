@@ -949,6 +949,55 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.DotNetEmptyAppHost && subcommand.Description == "Empty (C# AppHost, dotnet template)");
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.CSharpEmptyAppHost && subcommand.Description == "Empty AppHost (Choose language...)");
         Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.TypeScriptEmptyAppHost && subcommand.Description == "Empty (TypeScript AppHost)");
+        Assert.DoesNotContain(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.CSharpCliManagedEmptyAppHost);
+    }
+
+    [Fact]
+    public void NewCommandTemplateSubcommandsIncludesCliManagedCSharpWhenFeatureEnabled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.FeatureFlagsFactory = _ => new TestFeatures()
+                .SetFeature(KnownFeatures.ExperimentalCliManagedAppHost, true);
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+
+        Assert.Contains(command.Subcommands, subcommand => subcommand.Name == KnownTemplateId.CSharpCliManagedEmptyAppHost && subcommand.Description == "Empty (C# AppHost, CLI-managed)");
+    }
+
+    [Fact]
+    public async Task NewCommandWithCliManagedCSharpEmptyTemplateCreatesFileBasedAppHost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.FeatureFlagsFactory = _ => new TestFeatures()
+                .SetFeature(KnownFeatures.ExperimentalCliManagedAppHost, true);
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new {KnownTemplateId.CSharpCliManagedEmptyAppHost} --name TestApp --output ./output --localhost-tld false --suppress-agent-init --source {sourceOverride}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(File.Exists(Path.Combine(outputPath, "apphost.cs")));
+        Assert.Contains("#:project .aspire/modules/Aspire.csproj", File.ReadAllText(Path.Combine(outputPath, "apphost.cs")));
+        var aspireConfigPath = Path.Combine(outputPath, "aspire.config.json");
+        Assert.True(File.Exists(aspireConfigPath));
+        using var aspireConfig = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(aspireConfigPath));
+        Assert.True(aspireConfig.RootElement.TryGetProperty("features", out var features));
+        Assert.True(features.GetProperty(KnownFeatures.ExperimentalCliManagedAppHost).GetBoolean());
+        Assert.False(File.Exists(Path.Combine(outputPath, "apphost.run.json")));
+        Assert.False(File.Exists(Path.Combine(outputPath, "AppHost.csproj")));
+        Assert.False(File.Exists(Path.Combine(outputPath, "nuget.config")));
     }
 
     [Fact]
