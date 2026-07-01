@@ -233,27 +233,9 @@ internal sealed class AppHostLauncher(
     }
 
     /// <summary>
-    /// Computes the primary and fallback auxiliary-backchannel socket hashes used to match a
-    /// detached AppHost's backchannel connection during launch.
+    /// Computes the primary and fallback auxiliary-backchannel socket hashes used to match 
+    /// a detached AppHost's backchannel connection during launch.
     /// </summary>
-    /// <remarks>
-    /// The AppHost keys its auxiliary backchannel socket <em>file name</em> on the symlink-resolved
-    /// AppHost path (see <c>AuxiliaryBackchannelService.GetSocketKeyAppHostPath</c> in Aspire.Hosting),
-    /// and <see cref="Backchannel.AuxiliaryBackchannelMonitor"/> keys discovered connections by the
-    /// hash embedded in that file name. The OS reports the AppHost path in its physical form
-    /// (for example, on macOS <c>/var/folders/...</c> is a symlink to <c>/private/var/folders/...</c>),
-    /// which is exactly what the AppHost hashes — so the CLI must hash the <em>resolved</em> path to
-    /// compute the primary hash it waits on. Without this, a detached <c>aspire start</c> from a
-    /// symlinked temp path (the default on macOS) never matches the AppHost's socket and times out.
-    /// <para>
-    /// The fallback set keeps the raw (unresolved) path's hashes so the CLI still matches AppHosts /
-    /// instances that keyed their socket on the unresolved path — most importantly an AppHost built
-    /// against an older <c>Aspire.Hosting</c> that predates the symlink-resolved socket key, or a path
-    /// with no symlinks where resolved == raw. Two distinct hash spaces are searched: the compact
-    /// AppHost id used by current socket file names, and the legacy hex hashes used by
-    /// <c>auxi.sock.{hash}</c>-style names (<see cref="AppHostHelper.ComputeLegacyHashes"/>).
-    /// </para>
-    /// </remarks>
     /// <param name="appHostPath">The AppHost project file or assembly path as supplied to the CLI.</param>
     /// <param name="homeDirectory">The user's home directory.</param>
     /// <returns>
@@ -269,8 +251,8 @@ internal sealed class AppHostLauncher(
             AppHostHelper.ComputeAuxiliarySocketPrefix(socketKeyPath, homeDirectory))!;
 
         // Current socket file names embed the compact AppHost id (a different hash space than the
-        // legacy hex hashes below), so include the raw path's compact id explicitly. This is what
-        // matches a still-running AppHost that keyed its socket on the unresolved path before the
+        // legacy hex hashes below), so include the raw path's compact id explicitly. 
+        // This is what matches a still-running AppHost that keyed its socket on the unresolved path before the
         // AppHost side started resolving symlinks.
         var rawCompactHash = AppHostHelper.ExtractHashFromSocketPath(
             AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, homeDirectory))!;
