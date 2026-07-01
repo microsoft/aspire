@@ -1670,37 +1670,5 @@ try {
   es.addEventListener("refresh", () => load());
 } catch {}
 
-// Phase D: capture the live Copilot theme tokens the host injects into this
-// canvas document, so the static marketplace theme can be refined to match.
-function captureTokens() {
-  try {
-    const names = [
-      "--background-color-default", "--border-color-default", "--border-color-muted", "--text-color-default",
-      "--text-color-muted", "--color-focus-outline", "--color-white",
-      "--true-color-red", "--true-color-red-muted", "--true-color-blue", "--true-color-blue-muted",
-      "--true-color-green", "--true-color-green-muted", "--true-color-yellow", "--true-color-yellow-muted",
-      "--font-sans", "--font-mono", "--font-weight-semibold",
-      "--text-title-large", "--text-body-medium", "--leading-body-medium",
-      "--n-0", "--n-1", "--n-2", "--n-3", "--b-11-10", "--bb-11-10",
-    ];
-    const cs = getComputedStyle(document.documentElement);
-    const tokens = {};
-    for (const n of names) {
-      const v = cs.getPropertyValue(n).trim();
-      if (v) tokens[n] = v;
-    }
-    const attrs = {};
-    for (const a of ["data-color-mode", "data-dark-theme", "data-light-theme", "data-theme-tone", "data-visual-mode"]) {
-      const v = document.documentElement.getAttribute(a) || document.body.getAttribute(a);
-      if (v) attrs[a] = v;
-    }
-    if (Object.keys(tokens).length) {
-      fetch("api/tokens", { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ capturedAt: new Date().toISOString(), attrs, tokens }) }).catch(() => {});
-    }
-  } catch {}
-}
-captureTokens();
-
 load();
 `;

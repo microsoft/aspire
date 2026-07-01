@@ -16,10 +16,16 @@ import {
   computeFocusExclusionItems,
   computeCommunityItems,
 } from "./model.mjs";
+import { currentRelease } from "./constants.mjs";
 
 const execFileAsync = promisify(execFile);
 
-export const CURRENT_RELEASE = "13.4";
+// The current milestone has a single source of truth in constants.mjs
+// (`currentRelease`). Re-export it here under the name the run-mode lane logic
+// (`bucketShip`) and the default `release` preference (via state.mjs) already
+// consume, so bumping the milestone in one place keeps release detection and the
+// default milestone from silently desyncing.
+export const CURRENT_RELEASE = currentRelease;
 
 export const DEFAULT_REPOS = [
   "microsoft/aspire",

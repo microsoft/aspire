@@ -8,9 +8,6 @@
 // repositories and the dashboard interleaves results from all of them.
 
 import { createServer } from "node:http";
-import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { HTML, STYLES, APP_JS } from "./render.mjs";
 import { loadDashboard } from "./github.mjs";
 import { resolveAccounts } from "./accounts.mjs";
@@ -23,9 +20,6 @@ import {
   setAccountActive,
   activeIds,
 } from "./state.mjs";
-
-const COPILOT_HOME = process.env.COPILOT_HOME || join(homedir(), ".copilot");
-const ARTIFACT_DIR = join(COPILOT_HOME, "extensions", "aspire-team-app", "artifacts");
 
 const servers = new Map(); // instanceId -> { server, url }
 const sseClients = new Set();
@@ -251,17 +245,6 @@ async function handle(req, res, log) {
       const next = await getDashboard(true);
       broadcastRefresh();
       return send(res, 200, { accounts: auth.accounts, ...next });
-    }
-    if (req.method === "POST" && path === "/api/tokens") {
-      // Phase D: capture live Copilot theme tokens from a real canvas render.
-      const tokens = await readBody(req);
-      try {
-        await mkdir(ARTIFACT_DIR, { recursive: true });
-        await writeFile(join(ARTIFACT_DIR, "copilot-tokens.json"), JSON.stringify(tokens, null, 2) + "\n");
-      } catch (e) {
-        log?.(`token capture failed: ${e.message}`);
-      }
-      return send(res, 200, { ok: true });
     }
     if (req.method === "GET" && path === "/events") {
       res.writeHead(200, {
