@@ -1,4 +1,6 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as path from 'path';
 import type { TelemetryReporter } from '@vscode/extension-telemetry';
 import * as vscode from 'vscode';
 import { __resetCommonPropertiesForTests, __resetTelemetryReporterFactoryForTests, __setReporterForTests, __setTelemetryReporterFactoryForTests, classifyError, initializeTelemetry, isCommandCancellation, sendTelemetryErrorEvent, sendTelemetryEvent, setCommandInvocationListener, setCommonTelemetryProperties, withCommandTelemetry } from '../utils/telemetry';
@@ -12,6 +14,17 @@ interface RecordedEvent {
 }
 
 type TelemetryLevel = 'all' | 'error' | 'crash' | 'off';
+
+function readJsonFile<T>(filePath: string): T {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T;
+}
+
+function getExtensionTelemetryPackageVersion(): string {
+    const extensionPackage = readJsonFile<{ dependencies?: Record<string, string> }>(path.join(process.cwd(), 'package.json'));
+    const telemetryPackage = readJsonFile<{ version: string }>(path.join(process.cwd(), 'node_modules', '@vscode', 'extension-telemetry', 'package.json'));
+    assert.strictEqual(extensionPackage.dependencies?.['@vscode/extension-telemetry'], telemetryPackage.version);
+    return telemetryPackage.version;
+}
 
 // A minimal fake TelemetryReporter that records calls and exposes
 // `telemetryLevel`. The extension routes telemetry through
@@ -133,12 +146,12 @@ suite('telemetry utilities', () => {
 
     test('sendTelemetryEvent sanitizes property values before the dangerous send path', () => {
         sendTelemetryEvent('aspire/vscode/command/invoked', {
-            command: 'cmd.leak user@example.com /Users/alice/source C:\\Users\\bob\\source --token=secret',
+            command: 'cmd.leak user@example.com /Users/alice/source C:\\Users\\bob\\source --token=secret client_secret=secret connectionstring=secret https://storage.example/?sig=signature Authorization: Bearer abc.def-ghi 4fd8856f-0fc4-4c65-9074-c234c5a0898b',
         });
 
         assert.strictEqual(
             fake.events[0].properties?.command,
-            'cmd.leak <email> /Users/<user>/source C:\\Users\\<user>\\source --token=<redacted>');
+            'cmd.leak <email> /Users/<user>/source C:\\Users\\<user>\\source --token=<redacted> client_secret=<redacted> connectionstring=<redacted> https://storage.example/?sig=<redacted> Authorization: Bearer <redacted> <guid>');
     });
 
     test('telemetry level "off" suppresses regular and error events', () => {
@@ -261,7 +274,7 @@ suite('telemetry utilities', () => {
             assert.strictEqual(fake.events[0].isDangerous, true);
             assert.strictEqual(fake.events[0].properties?.['common.extname'], 'microsoft-aspire.aspire-vscode');
             assert.strictEqual(fake.events[0].properties?.['common.extversion'], '1.2.3');
-            assert.strictEqual(fake.events[0].properties?.['common.telemetryclientversion'], '1.5.1');
+            assert.strictEqual(fake.events[0].properties?.['common.telemetryclientversion'], getExtensionTelemetryPackageVersion());
         }
         finally {
             restoreFactory();

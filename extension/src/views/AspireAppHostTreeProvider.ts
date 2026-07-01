@@ -38,6 +38,7 @@ import {
     appHostStoppingDescription,
     attachDebuggerConfigurationName,
     attachDebuggerUnavailable,
+    attachDebuggerResourceNotFound,
     attachDebuggerCsharpExtensionRequired,
     attachDebuggerDeclined,
     dashboardUrlNotFound,
@@ -422,7 +423,7 @@ class ResourceItem extends vscode.TreeItem {
     }
 }
 
-export function getResourceContextValue(resource: ResourceJson, canAttachDebugger = true): string {
+export function getResourceContextValue(resource: ResourceJson, canAttachDebugger: boolean): string {
     const commands = resource.commands;
     const parts = ['resource'];
     if (hasEnabledCommand(commands, 'start') || hasEnabledCommand(commands, 'resource-start')) {
@@ -534,7 +535,7 @@ async function resolveDotNetProjectProcessName(projectPath: string, fallbackProc
     try {
         const content = Buffer.from(await vscode.workspace.fs.readFile(vscode.Uri.file(projectPath))).toString('utf8');
         const contentWithoutComments = content.replace(/<!--[\s\S]*?-->/g, '');
-        const assemblyName = contentWithoutComments.match(/<AssemblyName\s*>([^<]+)<\/AssemblyName\s*>/i)?.[1]?.trim();
+        const assemblyName = contentWithoutComments.match(/<AssemblyName\b[^>]*>([^<]+)<\/AssemblyName\s*>/i)?.[1]?.trim();
         return assemblyName && isSimpleLiteralAssemblyName(assemblyName) ? assemblyName : fallbackProcessName;
     }
     catch {
@@ -1553,7 +1554,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     async attachDebuggerToResource(element: ResourceItem): Promise<void> {
         const resource = this._findLatestResourceForElement(element);
         if (!resource) {
-            vscode.window.showWarningMessage(attachDebuggerUnavailable);
+            vscode.window.showWarningMessage(attachDebuggerResourceNotFound);
             return;
         }
 

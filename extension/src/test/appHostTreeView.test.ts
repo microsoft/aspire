@@ -1526,27 +1526,27 @@ suite('resolveAppHostSourcePath', () => {
 
 suite('getResourceContextValue', () => {
     test('resource with no commands returns just "resource"', () => {
-        assert.strictEqual(getResourceContextValue(makeResource()), 'resource');
+        assert.strictEqual(getResourceContextValue(makeResource(), true), 'resource');
     });
 
     test('resource with start command', () => {
         const result = getResourceContextValue(makeResource({
             commands: { 'start': { displayName: null, description: null, state: 'Enabled' } },
-        }));
+        }), true);
         assert.strictEqual(result, 'resource:canStart');
     });
 
     test('resource with resource-start command', () => {
         const result = getResourceContextValue(makeResource({
             commands: { 'resource-start': { displayName: null, description: null, state: 'Enabled' } },
-        }));
+        }), true);
         assert.strictEqual(result, 'resource:canStart');
     });
 
     test('resource with stop command', () => {
         const result = getResourceContextValue(makeResource({
             commands: { 'stop': { displayName: null, description: null, state: 'Enabled' } },
-        }));
+        }), true);
         assert.strictEqual(result, 'resource:canStop');
     });
 
@@ -1557,7 +1557,7 @@ suite('getResourceContextValue', () => {
                 'stop': { displayName: null, description: null, state: 'Enabled' },
                 'restart': { displayName: null, description: null, state: 'Enabled' },
             },
-        }));
+        }), true);
         assert.strictEqual(result, 'resource:canStart:canStop:canRestart');
     });
 
@@ -1566,14 +1566,14 @@ suite('getResourceContextValue', () => {
             commands: {
                 'restart': { displayName: null, description: null },
             },
-        }));
+        }), true);
         assert.strictEqual(result, 'resource:canRestart');
     });
 
     test('resource with non-lifecycle commands has base context only', () => {
         const result = getResourceContextValue(makeResource({
             commands: { 'custom-action': { displayName: null, description: 'do something' } },
-        }));
+        }), true);
         assert.strictEqual(result, 'resource');
     });
 
@@ -1583,14 +1583,14 @@ suite('getResourceContextValue', () => {
                 'restart': { displayName: null, description: null, state: 'Enabled' },
                 'custom-action': { displayName: null, description: null, state: 'Enabled' },
             },
-        }));
+        }), true);
         assert.strictEqual(result, 'resource:canRestart');
     });
 
     test('resource with terminal enabled property includes terminal context', () => {
         const result = getResourceContextValue(makeResource({
             properties: { 'terminal.enabled': 'true' },
-        }));
+        }), true);
         assert.strictEqual(result, 'resource:canOpenTerminal');
     });
 
@@ -1600,7 +1600,7 @@ suite('getResourceContextValue', () => {
                 'restart': { displayName: null, description: null, state: 'Enabled' },
             },
             properties: { 'terminal.enabled': 'true' },
-        }));
+        }), true);
         assert.strictEqual(result, 'resource:canRestart:canOpenTerminal');
     });
 
@@ -1609,7 +1609,7 @@ suite('getResourceContextValue', () => {
             resourceType: 'Project',
             state: ResourceState.Running,
             properties: makeAttachableProjectProperties(),
-        }));
+        }), true);
         assert.strictEqual(result, 'resource:canAttachDebugger');
     });
 
@@ -1620,7 +1620,7 @@ suite('getResourceContextValue', () => {
             properties: makeAttachableProjectProperties({
                 'project.path': '/repo/worker/Worker.fsproj',
             }),
-        }));
+        }), true);
         assert.strictEqual(result, 'resource:canAttachDebugger');
     });
 
@@ -1641,7 +1641,7 @@ suite('getResourceContextValue', () => {
                 'project.path': '/repo/api/api.csproj',
                 'executable.path': 'dotnet',
             },
-        }));
+        }), true);
         assert.strictEqual(result, 'resource');
     });
 
@@ -1650,7 +1650,7 @@ suite('getResourceContextValue', () => {
             resourceType: 'Project',
             state: ResourceState.Finished,
             properties: makeAttachableProjectProperties(),
-        }));
+        }), true);
         assert.strictEqual(result, 'resource');
     });
 
@@ -1661,7 +1661,7 @@ suite('getResourceContextValue', () => {
             properties: makeAttachableProjectProperties({
                 'project.path': null,
             }),
-        }));
+        }), true);
         assert.strictEqual(result, 'resource');
     });
 
@@ -1672,7 +1672,7 @@ suite('getResourceContextValue', () => {
             properties: makeAttachableProjectProperties({
                 'executable.path': 'func',
             }),
-        }));
+        }), true);
         assert.strictEqual(result, 'resource');
     });
 
@@ -1683,7 +1683,7 @@ suite('getResourceContextValue', () => {
             properties: makeAttachableProjectProperties({
                 'resource.parentName': 'maui',
             }),
-        }));
+        }), true);
         assert.strictEqual(result, 'resource');
     });
 
@@ -1693,21 +1693,21 @@ suite('getResourceContextValue', () => {
             properties: {
                 'executable.pid': '4242',
             },
-        }));
+        }), true);
         assert.strictEqual(result, 'resource');
     });
 
     test('resource with disabled lifecycle command has base context only', () => {
         const result = getResourceContextValue(makeResource({
             commands: { 'start': { displayName: null, description: null, state: 'Disabled' } },
-        }));
+        }), true);
         assert.strictEqual(result, 'resource');
     });
 
     test('resource with api-only lifecycle command has base context only', () => {
         const result = getResourceContextValue(makeResource({
             commands: { 'start': { displayName: null, description: null, state: 'Enabled', visibility: 'Api' } },
-        }));
+        }), true);
         assert.strictEqual(result, 'resource');
     });
 
@@ -2476,7 +2476,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         fs.writeFileSync(projectPath, `
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <AssemblyName>Custom.Assembly</AssemblyName>
+    <AssemblyName Label="Project assembly">Custom.Assembly</AssemblyName>
   </PropertyGroup>
 </Project>`);
         const provider = makeTreeProvider([
@@ -2569,6 +2569,75 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
                 provider.dispose();
                 fs.rmSync(directory, { recursive: true, force: true });
             }
+        }
+    });
+
+    test('attachDebuggerToResource throws when VS Code declines to start the attach session', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties(),
+                    }),
+                ],
+            }),
+        ]);
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(false);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+
+        try {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+
+            await assert.rejects(
+                (provider as any).attachDebuggerToResource(resourceItem),
+                (error: unknown) => error instanceof Error && error.name === 'StartDebuggingDeclined');
+        }
+        finally {
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
+        }
+    });
+
+    test('attachDebuggerToResource propagates VS Code attach errors', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        name: 'api',
+                        displayName: 'API',
+                        resourceType: 'Project',
+                        state: ResourceState.Running,
+                        properties: makeAttachableProjectProperties(),
+                    }),
+                ],
+            }),
+        ]);
+        const attachError = new Error('Adapter failed');
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').rejects(attachError);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+
+        try {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+
+            await assert.rejects(
+                (provider as any).attachDebuggerToResource(resourceItem),
+                (error: unknown) => error === attachError);
+        }
+        finally {
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
         }
     });
 
