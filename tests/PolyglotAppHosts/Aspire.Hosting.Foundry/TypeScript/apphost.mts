@@ -27,6 +27,7 @@ const appInsights = await builder.addAzureApplicationInsights('insights');
 const cosmos = await builder.addAzureCosmosDB('cosmos');
 const storage = await builder.addAzureStorage('storage');
 const search = await builder.addAzureSearch('search');
+const api = await builder.addContainer('api', 'nginx');
 
 const project = await foundry.addProject('project');
 await project.withContainerRegistry(registry);
@@ -79,6 +80,12 @@ await _promptAgent.withTool(fabric);
 await _promptAgent.withTool(azFunc);
 await _promptAgent.withTool(funcTool);
 
+// Foundry Toolbox
+const toolbox = await project.addToolbox('field-tools', { version: 'v1' });
+await toolbox.withWebSearchTool();
+await toolbox.withMcpTool('inventory', api.getEndpoint('http'));
+await toolbox.withAISearchTool('knowledge-base', search);
+
 const builderProjectFoundry = await builder.addFoundry('builder-project-foundry');
 const builderProject = await builderProjectFoundry.addProject('builder-project');
 const _builderProjectModel = await builderProject.addModelDeployment('builder-project-model', 'Phi-4-mini', { modelVersion: '1', format: 'Microsoft' });
@@ -115,6 +122,7 @@ server.listen(port, '127.0.0.1');
 `
     ]);
 
+await hostedAgent.withReference(toolbox);
 await hostedAgent.asHostedAgent(project, {
     description: 'Validation hosted agent',
     cpu: 1,
@@ -124,7 +132,6 @@ await hostedAgent.asHostedAgent(project, {
     protocols: [{ protocol: 'invocations', version: '1.0.0' }]
 });
 
-const api = await builder.addContainer('api', 'nginx');
 await foundry.withContainerRegistryRoleAssignments(registry, [AzureContainerRegistryRole.AcrPull]);
 await api.withFoundryRoleAssignments(foundry, [FoundryRole.CognitiveServicesOpenAIUser]);
 
