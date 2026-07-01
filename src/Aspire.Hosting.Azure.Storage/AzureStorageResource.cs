@@ -31,6 +31,16 @@ public class AzureStorageResource(string name, Action<AzureResourceInfrastructur
     internal IResourceBuilder<AzureTableStorageResource>? TableStorageBuilder { get; set; }
     internal IResourceBuilder<AzureDataLakeStorageResource>? DataLakeStorageBuilder { get; set; }
 
+    // Implicit parent selection for child resources (containers, queues, file systems)
+    // added without an explicit parent service. Set to the first blob/queue/data-lake
+    // service created via AddBlobs/AddQueues/AddDataLake, regardless of whether the
+    // user chose a custom name or the default. Used so that AddBlobContainer /
+    // AddQueue / AddDataLakeFileSystem don't auto-create a duplicate default-named
+    // service when the user has already added their own.
+    internal IResourceBuilder<AzureBlobStorageResource>? ImplicitBlobService { get; set; }
+    internal IResourceBuilder<AzureQueueStorageResource>? ImplicitQueueService { get; set; }
+    internal IResourceBuilder<AzureDataLakeStorageResource>? ImplicitDataLakeService { get; set; }
+
     internal List<AzureBlobStorageContainerResource> BlobContainers { get; } = [];
 
     internal List<AzureDataLakeStorageFileSystemResource> DataLakeFileSystems { get; } = [];
