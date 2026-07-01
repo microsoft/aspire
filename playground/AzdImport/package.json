@@ -1,0 +1,17 @@
+{
+  "name": "azdimport-apphost",
+  "version": "1.0.0",
+  "description": "Aspire TypeScript AppHost that adopts an existing azd project (azure.yaml).",
+  "type": "module",
+  "scripts": {
+    "start": "aspire run"
+  },
+  "dependencies": {
+    "vscode-jsonrpc": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
