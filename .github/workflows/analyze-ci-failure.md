@@ -244,49 +244,28 @@ jobs:
               mkdir -p ci-failure-data/test-results
               unzip -q -o ci-failure-data/test-results.zip -d ci-failure-data/test-results 2>/dev/null || true
 
-              # Parse TRX files for failed tests using Python's XML parser.
-              # TRX is XML with UnitTestResult elements containing ErrorInfo
-              # (Message + StackTrace). grep-based parsing is fragile for multi-line
-              # content, so we use ElementTree for reliable extraction.
-              python3 - ci-failure-data/test-results ci-failure-data/test-failures.json <<'PARSE_TRX'
-              import sys, os, json, xml.etree.ElementTree as ET, glob
-              results_dir = sys.argv[1]
-              output_file = sys.argv[2]
-              failures = []
-              for trx_path in glob.glob(os.path.join(results_dir, '**', '*.trx'), recursive=True):
-                  try:
-                      tree = ET.parse(trx_path)
-                      root = tree.getroot()
-                  except ET.ParseError:
-                      continue
-                  for result in root.iter():
-                      tag = result.tag.split('}')[-1] if '}' in result.tag else result.tag
-                      if tag != 'UnitTestResult':
-                          continue
-                      if (result.get('outcome', '') or '').lower() != 'failed':
-                          continue
-                      test_name = result.get('testName', '')
-                      error_msg = ''
-                      stack_trace = ''
-                      for output in list(result):
-                          output_tag = output.tag.split('}')[-1] if '}' in output.tag else output.tag
-                          if output_tag != 'Output':
-                              continue
-                          for error_info in list(output):
-                              ei_tag = error_info.tag.split('}')[-1] if '}' in error_info.tag else error_info.tag
-                              if ei_tag != 'ErrorInfo':
-                                  continue
-                              for child in list(error_info):
-                                  child_tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-                                  if child_tag == 'Message':
-                                      error_msg = (child.text or '').strip()[:1000]
-                                  elif child_tag == 'StackTrace':
-                                      stack_trace = (child.text or '').strip()[:2000]
-                      failures.append({'test': test_name, 'error': error_msg, 'stack_trace': stack_trace})
-              with open(output_file, 'w') as f:
-                  json.dump(failures, f, indent=2)
-              print(f"Extracted {len(failures)} test failure(s) from TRX files")
-              PARSE_TRX
+              # Parse TRX files for failed tests using yq (pre-installed) + jq.
+              # yq converts XML to JSON, then jq extracts failed test info.
+              # TRX uses UnitTestResult elements with outcome="Failed" containing
+              # Output/ErrorInfo/Message and Output/ErrorInfo/StackTrace.
+              > ci-failure-data/test-failures.jsonl
+              find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null | while IFS= read -r TRX_FILE; do
+                yq -p xml -o json '.' "$TRX_FILE" 2>/dev/null | jq -r '
+                  # Navigate to UnitTestResult — may be array or single object
+                  (.TestRun.Results.UnitTestResult // []) |
+                  (if type == "array" then . else [.] end) |
+                  map(select(.["+@outcome"] == "Failed")) |
+                  .[] |
+                  {
+                    test: (.["+@testName"] // ""),
+                    error: ((.Output.ErrorInfo.Message // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:1000]),
+                    stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:2000])
+                  }
+                ' >> ci-failure-data/test-failures.jsonl 2>/dev/null || true
+              done
+              jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > ci-failure-data/test-failures.json
+              rm -f ci-failure-data/test-failures.jsonl
+              echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from TRX files"
 
               # Clean up the extracted files to save space in artifact
               rm -rf ci-failure-data/test-results
