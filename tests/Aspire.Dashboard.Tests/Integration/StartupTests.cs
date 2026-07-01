@@ -13,6 +13,7 @@ using Aspire.Dashboard.Telemetry;
 using Aspire.Hosting;
 using Aspire.Tests.Shared.Telemetry;
 using Google.Protobuf;
+using Grpc.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
@@ -132,6 +133,116 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         // Assert
         Assert.Collection(app.ValidationFailures,
             s => Assert.Contains("Dashboard:Otlp:AllowedCertificates:0:Thumbprint", s));
+    }
+
+    [Fact]
+    public async Task ErrorMode_BlocksGrpcOtlpAndDashboardApiRequests()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = nameof(OtlpAuthMode.ClientCertificate);
+                data[$"{DashboardConfigNames.DashboardOtlpAllowedCertificatesName.ConfigKey}:0"] = string.Empty;
+            });
+        await app.StartAsync().DefaultTimeout();
+
+        using var grpcChannel = IntegrationTestHelpers.CreateGrpcChannel($"http://{app.OtlpServiceGrpcEndPointAccessor().EndPoint}", testOutputHelper);
+        var grpcClient = new LogsService.LogsServiceClient(grpcChannel);
+
+        var grpcException = await Assert.ThrowsAsync<RpcException>(() => grpcClient.ExportAsync(new ExportLogsServiceRequest()).ResponseAsync).DefaultTimeout();
+        Assert.Equal(StatusCode.Unavailable, grpcException.StatusCode);
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var apiRequest = new HttpRequestMessage(HttpMethod.Get, "/api/set-language");
+        apiRequest.Headers.Accept.ParseAdd("application/json");
+
+        var apiResponse = await httpClient.SendAsync(apiRequest).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, apiResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task ErrorMode_MalformedFrontendUrl_EntersErrorModeWithoutThrowing()
+    {
+        // A malformed frontend URL must not crash startup. The dashboard should enter error mode
+        // and surface the parse failure instead of throwing while building the app.
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "not-a-valid-url";
+            });
+
+        Assert.Contains(app.ValidationFailures, s => s.Contains("Failed to parse frontend endpoint URLs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ErrorMode_PartiallyMalformedFrontendUrl_PreservesValidFrontendUrl()
+    {
+        // When a ';'-separated frontend URL list mixes valid and malformed parts, error mode keeps the
+        // valid URLs (here an https endpoint with a dynamic port) instead of discarding the whole list
+        // and falling back to the default http error-mode URL. The app must still enter error mode and
+        // surface the parse failure.
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "https://127.0.0.1:0;not-a-valid-url";
+            });
+        await app.StartAsync().DefaultTimeout();
+
+        Assert.Contains(app.ValidationFailures, s => s.Contains("Failed to parse frontend endpoint URLs", StringComparison.Ordinal));
+
+        // The preserved URL is https; the discarded error-mode fallback would have been http. A single
+        // https endpoint proves the valid part survived and the malformed part was dropped.
+        Assert.Collection(app.FrontendEndPointsAccessor,
+            a => Assert.True(a().IsHttps));
+    }
+
+    [Fact]
+    public async Task ErrorMode_MalformedOtlpGrpcUrl_EntersErrorModeWithoutThrowing()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = "not-a-valid-url";
+            });
+
+        Assert.Contains(app.ValidationFailures, s => s.Contains("Failed to parse OTLP gRPC endpoint URL", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ErrorMode_MalformedOtlpHttpUrl_EntersErrorModeWithoutThrowing()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "not-a-valid-url";
+            });
+
+        Assert.Contains(app.ValidationFailures, s => s.Contains("Failed to parse OTLP HTTP endpoint URL", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ErrorMode_MalformedOtlpGrpcUrl_StartsAndBlocksRequests()
+    {
+        // The frontend and OTLP HTTP URLs remain valid (dynamic ports) while the OTLP gRPC URL is
+        // malformed. Error mode reverts the gRPC URL to avoid binding it, so the app must still start
+        // and serve the error page from the (valid) frontend endpoint.
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
+            additionalConfiguration: data =>
+            {
+                data[DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = "not-a-valid-url";
+            });
+        await app.StartAsync().DefaultTimeout();
+
+        Assert.Contains(app.ValidationFailures, s => s.Contains("Failed to parse OTLP gRPC endpoint URL", StringComparison.Ordinal));
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var apiRequest = new HttpRequestMessage(HttpMethod.Get, "/api/set-language");
+        apiRequest.Headers.Accept.ParseAdd("application/json");
+
+        var apiResponse = await httpClient.SendAsync(apiRequest).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, apiResponse.StatusCode);
     }
 
     [Theory]
@@ -674,7 +785,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     {
         // Arrange
         var testSink = new TestSink();
-        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper, 
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper,
             additionalConfiguration: data =>
             {
                 data.Remove(DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey);
@@ -687,7 +798,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
 
         // Assert
         var l = testSink.Writes.Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName && w.LogLevel >= LogLevel.Information).ToList();
-        
+
         // Should have version, frontend, and API warning logs, but no OTLP logs
         Assert.Collection(l,
             w =>
@@ -867,10 +978,10 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
 
         // Assert
         await app.StartAsync().DefaultTimeout();
-        
+
         // Dashboard should start successfully without OTLP endpoints
         Assert.Empty(app.ValidationFailures);
-        
+
         // Verify frontend is accessible
         Assert.NotEmpty(app.FrontendEndPointsAccessor);
     }
@@ -1058,16 +1169,52 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task Run_ValidationFailure_ReturnsExitCodeValidationFailure()
+    public async Task Run_ValidationFailure_StartsInErrorModeAndReturnsExitCodeValidationFailure()
     {
-        // Omit required configuration so the dashboard fails validation.
         await using var app = new DashboardWebApplication(preConfigureBuilder: builder =>
         {
             RemoveEnvironmentVariableSources(builder);
-            // No frontend URL or auth mode configured — validation will fail.
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "http://127.0.0.1:0",
+                [DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = "http://127.0.0.1:0",
+                [DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "http://127.0.0.1:0",
+                [DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = nameof(OtlpAuthMode.ClientCertificate),
+                [$"{DashboardConfigNames.DashboardOtlpAllowedCertificatesName.ConfigKey}:0"] = string.Empty,
+                [DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.Unsecured),
+            });
         });
 
-        var exitCode = app.Run();
+        var runTask = Task.Run(app.Run);
+        try
+        {
+            await AsyncTestHelpers.AssertIsTrueRetryAsync(() =>
+            {
+                if (runTask.IsCompleted)
+                {
+                    return false;
+                }
+
+                try
+                {
+                    _ = app.FrontendSingleEndPointAccessor();
+                    return true;
+                }
+                catch (InvalidOperationException)
+                {
+                    return false;
+                }
+            }, "Wait for the dashboard to start in error mode.", NullLogger.Instance, retries: 30).DefaultTimeout();
+        }
+        finally
+        {
+            if (!runTask.IsCompleted)
+            {
+                await app.StopAsync().DefaultTimeout();
+            }
+        }
+
+        var exitCode = await runTask.DefaultTimeout();
 
         Assert.Equal(DashboardWebApplication.ExitCodeValidationFailure, exitCode);
     }
