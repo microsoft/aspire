@@ -14557,6 +14557,11 @@ export interface ContainerRegistryResource {
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ContainerRegistryResourcePromise;
     /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ContainerRegistryResourcePromise;
+    /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
@@ -14873,6 +14878,11 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ContainerRegistryResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ContainerRegistryResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -15677,6 +15687,24 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ContainerRegistryResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -16380,6 +16408,10 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
 
     withTerminal(): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
+    }
+
+    withTestRun(): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withTestRun()), this._client);
     }
 
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerRegistryResourcePromise {
@@ -17183,6 +17215,11 @@ export interface ContainerResource {
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ContainerResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -17992,6 +18029,11 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     withRemoteImageTag(remoteImageTag: string): ContainerResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ContainerResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -20193,6 +20235,24 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ContainerResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -21204,6 +21264,10 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
+    withTestRun(): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withTestRun()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -21844,6 +21908,11 @@ export interface CSharpAppResource {
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): CSharpAppResourcePromise;
     /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): CSharpAppResourcePromise;
+    /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
@@ -22467,6 +22536,11 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     withRemoteImageTag(remoteImageTag: string): CSharpAppResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): CSharpAppResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): CSharpAppResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -24231,6 +24305,24 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<CSharpAppResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -25162,6 +25254,10 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
+    withTestRun(): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withTestRun()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -25830,6 +25926,11 @@ export interface DotnetToolResource {
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): DotnetToolResourcePromise;
     /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): DotnetToolResourcePromise;
+    /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
@@ -26475,6 +26576,11 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     withRemoteImageTag(remoteImageTag: string): DotnetToolResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): DotnetToolResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): DotnetToolResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -28323,6 +28429,24 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<DotnetToolResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -29255,6 +29379,10 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
+    withTestRun(): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withTestRun()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -29893,6 +30021,11 @@ export interface ExecutableResource {
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ExecutableResourcePromise;
     /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ExecutableResourcePromise;
+    /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
@@ -30505,6 +30638,11 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     withRemoteImageTag(remoteImageTag: string): ExecutableResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ExecutableResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ExecutableResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -32249,6 +32387,24 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ExecutableResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -33157,6 +33313,10 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
+    withTestRun(): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withTestRun()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -33507,6 +33667,11 @@ export interface ExternalServiceResource {
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ExternalServiceResourcePromise;
     /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ExternalServiceResourcePromise;
+    /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
@@ -33828,6 +33993,11 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ExternalServiceResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ExternalServiceResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -34656,6 +34826,24 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ExternalServiceResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -35365,6 +35553,10 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
+    withTestRun(): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withTestRun()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -35712,6 +35904,11 @@ export interface ParameterResource {
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ParameterResourcePromise;
     /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ParameterResourcePromise;
+    /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
@@ -36041,6 +36238,11 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ParameterResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ParameterResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -36887,6 +37089,24 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ParameterResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -37600,6 +37820,10 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
+    withTestRun(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withTestRun()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -38225,6 +38449,11 @@ export interface ProjectResource {
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ProjectResourcePromise;
     /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ProjectResourcePromise;
+    /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
@@ -38848,6 +39077,11 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     withRemoteImageTag(remoteImageTag: string): ProjectResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ProjectResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ProjectResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -40613,6 +40847,24 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ProjectResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -41544,6 +41796,10 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
+    withTestRun(): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withTestRun()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -42361,6 +42617,11 @@ export interface TestDatabaseResource {
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): TestDatabaseResourcePromise;
     /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): TestDatabaseResourcePromise;
+    /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
@@ -43169,6 +43430,11 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     withRemoteImageTag(remoteImageTag: string): TestDatabaseResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): TestDatabaseResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): TestDatabaseResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -45369,6 +45635,24 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<TestDatabaseResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -46380,6 +46664,10 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
+    withTestRun(): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withTestRun()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -47212,6 +47500,11 @@ export interface TestRedisResource {
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): TestRedisResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -48085,6 +48378,11 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     withRemoteImageTag(remoteImageTag: string): TestRedisResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): TestRedisResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -50369,6 +50667,24 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<TestRedisResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -51599,6 +51915,10 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
+    withTestRun(): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withTestRun()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -52468,6 +52788,11 @@ export interface TestVaultResource {
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): TestVaultResourcePromise;
     /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): TestVaultResourcePromise;
+    /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
@@ -53278,6 +53603,11 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     withRemoteImageTag(remoteImageTag: string): TestVaultResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): TestVaultResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): TestVaultResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -55480,6 +55810,24 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<TestVaultResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -56506,6 +56854,10 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
     }
 
+    withTestRun(): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withTestRun()), this._client);
+    }
+
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withPipelineStepFactory(stepName, callback, options)), this._client);
     }
@@ -57179,6 +57531,11 @@ export interface Resource {
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ResourcePromise;
     /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ResourcePromise;
+    /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
      * @param callback The callback to execute when the step runs.
@@ -57495,6 +57852,11 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise;
     /** Adds an interactive terminal session to a resource using the default terminal options. */
     withTerminal(): ResourcePromise;
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -58300,6 +58662,24 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
+    private async _withTestRunInternal(): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withTestRun',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Marks a resource as a test resource
+     * @returns The resource builder.
+     */
+    withTestRun(): ResourcePromise {
+        return new ResourcePromiseImpl(this._withTestRunInternal(), this._client);
+    }
+
+    /** @internal */
     private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<Resource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
@@ -59003,6 +59383,10 @@ class ResourcePromiseImpl implements ResourcePromise {
 
     withTerminal(): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withTerminal()), this._client);
+    }
+
+    withTestRun(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.withTestRun()), this._client);
     }
 
     withPipelineStepFactory(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, options?: WithPipelineStepFactoryOptions): ResourcePromise {

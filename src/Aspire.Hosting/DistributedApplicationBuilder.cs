@@ -419,6 +419,12 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         if (ExecutionContext.IsRunMode)
         {
+            // Test loop: when the app host is launched via `aspire test`, the CLI drives the run's
+            // lifetime over the backchannel. This singleton observes the resources marked with a
+            // TestAnnotation and streams their progress/results to the CLI (via AppHostRpcTarget); the
+            // CLI stops the app host once the stream completes. It no-ops when test mode was not requested.
+            _innerBuilder.Services.AddSingleton<TestRunCoordinator>();
+
             // Dashboard
             if (!options.DisableDashboard)
             {
