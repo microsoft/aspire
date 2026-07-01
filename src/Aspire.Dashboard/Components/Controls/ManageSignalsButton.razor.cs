@@ -31,6 +31,7 @@ public partial class ManageSignalsButton : ComponentBase
     public Func<Task>? HandleDownloadLogs { get; set; }
 
     private readonly List<MenuButtonItem> _clearMenuItems = new();
+    private Icon LeadingIcon => HandleDownloadLogs is not null ? s_downloadLogsIcon : s_clearAllResourcesIcon;
 
     protected override void OnParametersSet()
     {

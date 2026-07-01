@@ -20,6 +20,7 @@ using OpenTelemetry.Proto.Metrics.V1;
 using Xunit;
 using static Aspire.Dashboard.Components.Pages.Metrics;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
 
@@ -60,6 +61,9 @@ public partial class MetricsTests : DashboardTestContext
 
         cut.Find(".clear-button").Click();
         cut.WaitForElement("#clear-menu-all");
+
+        var clearButton = cut.FindComponent<ManageSignalsButton>().FindComponent<AspireMenuButton>();
+        Assert.IsType<Icons.Regular.Size16.Broom>(clearButton.Instance.IconStart);
 
         Assert.Empty(cut.FindAll("#clear-menu-download"));
     }

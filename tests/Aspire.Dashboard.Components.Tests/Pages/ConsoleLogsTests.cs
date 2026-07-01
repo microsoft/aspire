@@ -18,6 +18,7 @@ using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
 
@@ -495,6 +496,9 @@ public partial class ConsoleLogsTests : DashboardTestContext
         });
 
         cut.Find(".clear-button").Click();
+
+        var clearButton = cut.FindComponent<ManageSignalsButton>().FindComponent<AspireMenuButton>();
+        Assert.IsType<Icons.Regular.Size16.ArrowDownload>(clearButton.Instance.IconStart);
 
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll("#clear-menu-download")));
     }

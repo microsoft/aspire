@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
 
@@ -33,6 +35,9 @@ public class TracesTests : DashboardTestContext
 
         cut.Find(".clear-button").Click();
         cut.WaitForElement("#clear-menu-all");
+
+        var clearButton = cut.FindComponent<ManageSignalsButton>().FindComponent<AspireMenuButton>();
+        Assert.IsType<Icons.Regular.Size16.Broom>(clearButton.Instance.IconStart);
 
         Assert.Empty(cut.FindAll("#clear-menu-download"));
     }
