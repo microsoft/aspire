@@ -547,6 +547,52 @@ public class MSBuildTests
     }
 
     [Fact]
+    public void CliBundleDnxInvocationAllowsMissingBuildTimeBundle()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var tempDirectory = new TestTempDirectory();
+
+        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+            """
+              <AspireCliInvocationMode>Dnx</AspireCliInvocationMode>
+            """);
+
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        var output = BuildProject(appHostDirectory, new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = Path.Combine(tempDirectory.Path, "empty-aspire-home"),
+            ["PATH"] = GetDotNetOnlyPath()
+        });
+
+        Assert.DoesNotContain("ASPIRE009", output);
+        Assert.DoesNotContain("the bundle could not be resolved", output);
+    }
+
+    [Fact]
+    public void CliBundleDnxInvocationFailsWhenExplicitBundlePathIsInvalid()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var tempDirectory = new TestTempDirectory();
+
+        var missingBundlePath = Path.Combine(tempDirectory.Path, "missing-bundle");
+        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+            $"""
+              <AspireCliInvocationMode>Dnx</AspireCliInvocationMode>
+              <AspireCliBundlePath>{missingBundlePath}</AspireCliBundlePath>
+            """);
+
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        var output = BuildProjectWithFailure(appHostDirectory);
+
+        Assert.Contains("warning", output);
+        Assert.Contains("AspireCliBundlePath", output);
+        Assert.Contains(missingBundlePath, output);
+        Assert.Contains("ASPIRE009", output);
+    }
+
+    [Fact]
     public void CliBundleOptInFailsWhenExplicitCliPathIsInvalid()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
