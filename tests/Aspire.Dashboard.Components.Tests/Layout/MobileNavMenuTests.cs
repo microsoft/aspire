@@ -8,6 +8,7 @@ using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.JSInterop;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
@@ -53,6 +54,16 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.Contains("padding-block: var(--mobile-nav-menu-focus-padding)", style);
         Assert.Contains("scroll-padding-block: var(--mobile-nav-menu-focus-padding)", style);
         Assert.Contains("mobile-nav-menu", cut.Find("fluent-menu").ClassList);
+    }
+
+    [Fact]
+    public void Render_OpenMenu_InitializesKeyboardNavigationWithComponentReferenceOnly()
+    {
+        _ = RenderMobileNavMenu(DashboardUrls.ResourcesUrl());
+
+        var invocation = Assert.Single(JSInterop.Invocations, i => i.Identifier == "initializeMobileNavMenuKeyboardNavigation");
+        var argument = Assert.Single(invocation.Arguments);
+        Assert.IsAssignableFrom<DotNetObjectReference<MobileNavMenu>>(argument);
     }
 
     private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl)

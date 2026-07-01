@@ -334,12 +334,7 @@ window.focusElement = function (selector, suppressFocusVisible) {
     }
 };
 
-window.initializeMobileNavMenuKeyboardNavigation = function (menuId, dotnetHelper) {
-    const menu = document.getElementById(menuId);
-    if (!menu) {
-        return null;
-    }
-
+window.initializeMobileNavMenuKeyboardNavigation = function (dotnetHelper) {
     const keydownListener = function (event) {
         if (event.key === "Escape") {
             event.preventDefault();
@@ -353,13 +348,12 @@ window.initializeMobileNavMenuKeyboardNavigation = function (menuId, dotnetHelpe
     document.addEventListener("keydown", keydownListener, true);
 
     return {
-        menu,
         keydownListener
     };
 };
 
 window.disposeMobileNavMenuKeyboardNavigation = function (obj) {
-    document.removeEventListener("keydown", obj?.keydownListener, true);
+    document.removeEventListener("keydown", obj.keydownListener, true);
 };
 
 window.getWindowDimensions = function() {

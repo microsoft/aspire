@@ -49,7 +49,7 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
             try
             {
                 _mobileNavMenuReference ??= DotNetObjectReference.Create(this);
-                var keyboardNavigation = await JS.InvokeAsync<IJSObjectReference>("initializeMobileNavMenuKeyboardNavigation", MobileNavMenuId, _mobileNavMenuReference);
+                var keyboardNavigation = await JS.InvokeAsync<IJSObjectReference>("initializeMobileNavMenuKeyboardNavigation", _mobileNavMenuReference);
                 if (_disposed || !IsNavMenuOpen)
                 {
                     await DisposeKeyboardNavigationAsync(keyboardNavigation);
