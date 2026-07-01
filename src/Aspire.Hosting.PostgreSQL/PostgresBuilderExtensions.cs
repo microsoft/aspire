@@ -3,9 +3,10 @@
 
 #pragma warning disable ASPIREMCP001
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
-using System.Diagnostics.CodeAnalysis;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Postgres;
 using Microsoft.Extensions.Configuration;
@@ -18,7 +19,7 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Provides extension methods for adding PostgreSQL resources to an <see cref="IDistributedApplicationBuilder"/>.
 /// </summary>
-public static class PostgresBuilderExtensions
+public static partial class PostgresBuilderExtensions
 {
     private const string UserEnvVarName = "POSTGRES_USER";
     private const string PasswordEnvVarName = "POSTGRES_PASSWORD";
@@ -714,6 +715,13 @@ public static class PostgresBuilderExtensions
             return false;
         }
 
+        // Handle tags like "2.28.1-pg17", "pg18-trixie", etc.
+        var match = PostgresMajorVersionPgPrefixedRegex().Match(tag);
+        if (match.Success && int.TryParse(match.Groups[1].Value, out majorVersion) && majorVersion > 0)
+        {
+            return true;
+        }
+
         // Handle tags like "18.1-alpine", "17.6-bookworm", etc.
         var versionPart = tag.Split('-')[0];
 
@@ -722,6 +730,9 @@ public static class PostgresBuilderExtensions
 
         return parts.Length > 0 && int.TryParse(parts[0], out majorVersion) && majorVersion > 0;
     }
+
+    [GeneratedRegex("pg([0-9]{2})")]
+    private static partial Regex PostgresMajorVersionPgPrefixedRegex();
 
     private static async Task CreateDatabaseAsync(NpgsqlConnection npgsqlConnection, PostgresDatabaseResource npgsqlDatabase, IServiceProvider serviceProvider, CancellationToken cancellationToken)
     {
