@@ -108,10 +108,19 @@ jobs:
           # Find the associated PR number
           PR_NUMBERS=$(jq -r '[.pull_requests[]?.number] | join(",")' ci-failure-data/run.json)
           if [ -z "${PR_NUMBERS}" ]; then
-            # Fallback: search for PRs by head branch (requires owner:branch format)
+            # Fallback 1: search for PRs by head branch (requires owner:branch format)
             HEAD_OWNER=$(jq -r '.head_repository.owner.login // ""' ci-failure-data/run.json)
             if [ -n "${HEAD_OWNER}" ] && [ -n "${HEAD_BRANCH}" ]; then
               PR_NUMBERS=$(gh api "repos/${REPO}/pulls?state=open&head=${HEAD_OWNER}:${HEAD_BRANCH}" \
+                --jq '[.[].number] | join(",")' 2>/dev/null || echo "")
+            fi
+          fi
+          if [ -z "${PR_NUMBERS}" ]; then
+            # Fallback 2: find PRs associated with the head commit SHA.
+            # This works even when the PR is merged/closed or the run metadata
+            # doesn't include the pull_requests array.
+            if [ -n "${HEAD_SHA}" ]; then
+              PR_NUMBERS=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/pulls" \
                 --jq '[.[].number] | join(",")' 2>/dev/null || echo "")
             fi
           fi
