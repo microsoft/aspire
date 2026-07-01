@@ -231,25 +231,13 @@ jobs:
           fi
 
           # Fetch test results artifact if available and extract test failure info
-          ARTIFACT=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" \
-            --jq '[.artifacts[] | select(.name | test("test-results|TestResults"; "i"))] | first // empty' 2>/dev/null || echo "")
-          if [ -n "${ARTIFACT}" ]; then
-            ARTIFACT_ID=$(echo "${ARTIFACT}" | jq -r '.id')
-            ARTIFACT_NAME=$(echo "${ARTIFACT}" | jq -r '.name')
-            ARTIFACT_SIZE=$(echo "${ARTIFACT}" | jq -r '.size_in_bytes')
-            echo "Downloading test results artifact: ${ARTIFACT_NAME} (id=${ARTIFACT_ID}, size=${ARTIFACT_SIZE} bytes)..."
-            gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts/${ARTIFACT_ID}/zip" \
-              > ci-failure-data/test-results.zip 2>/dev/null || true
-
-            # Extract failed test names and error messages from TRX files
-            # Verify it's actually a zip (not a JSON error from an expired artifact).
-            # gh api returns a small JSON body like {"message":"Gone"} for expired artifacts.
-            if [ -f "ci-failure-data/test-results.zip" ] && [ -s "ci-failure-data/test-results.zip" ] \
-               && file ci-failure-data/test-results.zip | grep -q "Zip archive"; then
-              DOWNLOAD_SIZE=$(stat -c%s ci-failure-data/test-results.zip 2>/dev/null || echo "unknown")
-              echo "Download complete: ${DOWNLOAD_SIZE} bytes"
-              mkdir -p ci-failure-data/test-results
-              unzip -q -o ci-failure-data/test-results.zip -d ci-failure-data/test-results 2>/dev/null || true
+          ARTIFACT_NAME=$(gh api "repos/${REPO}/actions/runs/${RUN_ID}/artifacts" \
+            --jq '[.artifacts[] | select(.name | test("test-results|TestResults"; "i"))] | first | .name // empty' 2>/dev/null || echo "")
+          if [ -n "${ARTIFACT_NAME}" ]; then
+            echo "Downloading test results artifact: ${ARTIFACT_NAME}..."
+            mkdir -p ci-failure-data/test-results
+            if gh run download "${RUN_ID}" --repo "${REPO}" --name "${ARTIFACT_NAME}" --dir ci-failure-data/test-results 2>&1; then
+              echo "Download complete."
 
               # List TRX files found
               TRX_COUNT=$(find ci-failure-data/test-results -name "*.trx" -type f 2>/dev/null | wc -l)
@@ -284,17 +272,8 @@ jobs:
 
               # Clean up the extracted files to save space in artifact
               rm -rf ci-failure-data/test-results
-              rm -f ci-failure-data/test-results.zip
             else
-              # Not a valid zip — likely expired artifact returning JSON error
-              if [ -f "ci-failure-data/test-results.zip" ]; then
-                echo "Warning: Downloaded file is not a valid zip archive ($(stat -c%s ci-failure-data/test-results.zip 2>/dev/null) bytes):"
-                cat ci-failure-data/test-results.zip 2>/dev/null | head -c 200 || true
-                echo ""
-                rm -f ci-failure-data/test-results.zip
-              else
-                echo "Warning: test-results.zip is missing after download"
-              fi
+              echo "Warning: Failed to download test results artifact"
             fi
           else
             echo "No test results artifact found for run ${RUN_ID}"
