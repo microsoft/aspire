@@ -327,6 +327,36 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         assert.strictEqual(body.IsEnabled, body.is_enabled);
     });
 
+    test('GET /telemetry/enabled remains enabled for errors-only telemetry', async () => {
+        // The dashboard only starts its send loop when this handshake returns
+        // true. VS Code's "errors only" setting must still allow dashboard
+        // faults/failures through `sendTelemetryErrorEvent`, while regular
+        // usage events remain gated at send time.
+        h.fake.telemetryLevel = 'error';
+
+        const res = await fetch(`${h.baseUrl}/telemetry/enabled`);
+
+        assert.strictEqual(res.status, 200);
+        const body = await res.json() as { IsEnabled?: boolean; isEnabled?: boolean; is_enabled?: boolean };
+        assert.strictEqual(body.IsEnabled, true);
+        assert.strictEqual(body.isEnabled, true);
+        assert.strictEqual(body.is_enabled, true);
+    });
+
+    test('GET /telemetry/enabled is disabled for crash-only and off telemetry', async () => {
+        for (const level of ['crash', 'off'] as const) {
+            h.fake.telemetryLevel = level;
+
+            const res = await fetch(`${h.baseUrl}/telemetry/enabled`);
+
+            assert.strictEqual(res.status, 200);
+            const body = await res.json() as { IsEnabled?: boolean; isEnabled?: boolean; is_enabled?: boolean };
+            assert.strictEqual(body.IsEnabled, false);
+            assert.strictEqual(body.isEnabled, false);
+            assert.strictEqual(body.is_enabled, false);
+        }
+    });
+
     test('PostFault drops exception message/stack-trace and never forwards the free-form description (privacy guarantee)', async () => {
         // The dashboard's TelemetryErrorRecorder builds the fault description as
         // `${ExceptionType}: ${exception.Message}` and forwards the message and

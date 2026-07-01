@@ -79,14 +79,15 @@ export function initializeTelemetry(context: vscode.ExtensionContext): void {
 }
 
 /**
- * Whether telemetry is allowed to leave the machine right now. Combines our
- * reporter availability with VS Code's global telemetry user setting so that
- * the dashboard passthrough endpoint advertises "enabled" only when both are
- * true. The reporter itself enforces the user setting on send, but we also
- * gate the dashboard's session-start handshake to avoid pointless traffic.
+ * Whether dashboard telemetry is allowed to leave the machine right now. The
+ * dashboard has fault/failure events that route through the error channel, so
+ * the passthrough handshake must stay enabled for VS Code's "errors only"
+ * setting. Individual regular dashboard events are still gated to `'all'` at
+ * send time by {@link sendTelemetryEvent}.
  */
 export function isExtensionTelemetryEnabled(): boolean {
-    return reporter !== undefined && vscode.env.isTelemetryEnabled;
+    const level = getCurrentTelemetryLevel();
+    return level === 'all' || level === 'error';
 }
 
 /**
@@ -183,9 +184,9 @@ function sanitizeTelemetryValue(value: string): string {
         .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<email>')
         // Preserve the original backslash run length so JSON-encoded values
         // like `"C:\\Users\\alice\\repo"` remain valid JSON after redaction.
-        .replace(/\b([A-Za-z]:)(\\+)Users(\\+)[^\\\s"']+/g, (_, drive: string, usersSeparator: string, nameSeparator: string) => `${drive}${usersSeparator}Users${nameSeparator}<user>`)
-        .replace(/(^|[^A-Za-z0-9_/-])\/Users\/[^/\s"']+/g, '$1/Users/<user>')
-        .replace(/(^|[^A-Za-z0-9_/-])\/home\/[^/\s"']+/g, '$1/home/<user>')
+        .replace(/\b([A-Za-z]:)(\\+)Users(\\+)[^\\\r\n"']+(?=\\|$)/g, (_, drive: string, usersSeparator: string, nameSeparator: string) => `${drive}${usersSeparator}Users${nameSeparator}<user>`)
+        .replace(/(\/Users\/)[^/\r\n"']+(?=\/|$)/g, '$1<user>')
+        .replace(/(\/home\/)[^/\r\n"']+(?=\/|$)/g, '$1<user>')
         .replace(/\b(password|passwd|pwd|token|secret|api[_-]?key|key)(\s*[:=]\s*)[^&\s"',;}]+/gi, '$1$2<redacted>');
 }
 

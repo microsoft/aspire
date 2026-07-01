@@ -141,6 +141,16 @@ suite('telemetry utilities', () => {
             'cmd.leak <email> /Users/<user>/source C:\\Users\\<user>\\source --token=<redacted>');
     });
 
+    test('sendTelemetryEvent sanitizes URI-prefixed and space-containing home paths', () => {
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: 'cmd.leak file:///Users/alice/source vscode-remote://ssh-remote+devbox/home/bob/source C:\\Users\\Bob Smith\\source',
+        });
+
+        assert.strictEqual(
+            fake.events[0].properties?.command,
+            'cmd.leak file:///Users/<user>/source vscode-remote://ssh-remote+devbox/home/<user>/source C:\\Users\\<user>\\source');
+    });
+
     test('sendTelemetryEvent sanitizes JSON-encoded dashboard bundle values without corrupting JSON', () => {
         sendTelemetryEvent('aspire/dashboard/operation', {
             dashboard_event_name: 'aspire/dashboard/component/open',
