@@ -523,7 +523,8 @@ safe-outputs:
             fi
 
             # ── 2. Create or update issues for each cause ──
-            if [ -d "$CAUSES_DIR" ]; then
+            # Skip entirely for code-issue verdicts — no causes will be actionable.
+            if [ "$VERDICT" != "code-issue" ] && [ -d "$CAUSES_DIR" ]; then
               # Fetch labeled issues once so individual cause lookups don't each
               # call `gh issue list` (which fetches full bodies of up to 500 issues).
               OPEN_ISSUES_CACHE=$(mktemp)
