@@ -353,9 +353,22 @@ internal sealed class BundleService(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogError(ex, "Failed to promote {TempDir} to {ActiveDir}.", tempDir, activeVersionDir);
-            FileDeleteHelper.TryDeleteDirectory(tempDir);
-            return false;
+            // Directory.Move fails on Windows when the OS holds handles on
+            // freshly-extracted executables (e.g. prefetcher, loader).
+            // Fall back to a copy-then-delete approach.
+            logger.LogWarning(ex, "Directory.Move failed; falling back to copy for {TempDir} -> {ActiveDir}.", tempDir, activeVersionDir);
+            try
+            {
+                CopyDirectory(tempDir, activeVersionDir);
+                FileDeleteHelper.TryDeleteDirectory(tempDir);
+            }
+            catch (Exception copyEx)
+            {
+                logger.LogError(copyEx, "Failed to promote {TempDir} to {ActiveDir}.", tempDir, activeVersionDir);
+                FileDeleteHelper.TryDeleteDirectory(tempDir);
+                FileDeleteHelper.TryDeleteDirectory(activeVersionDir);
+                return false;
+            }
         }
 
         // Re-validate after rename.
