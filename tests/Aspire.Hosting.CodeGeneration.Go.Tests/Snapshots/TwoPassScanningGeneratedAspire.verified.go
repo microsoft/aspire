@@ -186,6 +186,7 @@ const (
 	InputTypeChoice InputType = "Choice"
 	InputTypeBoolean InputType = "Boolean"
 	InputTypeNumber InputType = "Number"
+	InputTypeFileChooser InputType = "FileChooser"
 )
 
 // HealthStatus represents HealthStatus.
@@ -291,6 +292,8 @@ type InteractionInput struct {
 	AllowCustomChoice *bool `json:"AllowCustomChoice,omitempty"`
 	Disabled bool `json:"Disabled,omitempty"`
 	MaxLength *float64 `json:"MaxLength,omitempty"`
+	MaxFileSize *float64 `json:"MaxFileSize,omitempty"`
+	FileName *string `json:"FileName,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -308,6 +311,8 @@ func (d *InteractionInput) ToMap() map[string]any {
 	if d.AllowCustomChoice != nil { m["AllowCustomChoice"] = serializeValue(d.AllowCustomChoice) }
 	m["Disabled"] = serializeValue(d.Disabled)
 	if d.MaxLength != nil { m["MaxLength"] = serializeValue(d.MaxLength) }
+	if d.MaxFileSize != nil { m["MaxFileSize"] = serializeValue(d.MaxFileSize) }
+	if d.FileName != nil { m["FileName"] = serializeValue(d.FileName) }
 	return m
 }
 

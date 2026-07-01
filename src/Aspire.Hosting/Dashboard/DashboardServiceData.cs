@@ -254,7 +254,7 @@ internal sealed class DashboardServiceData : IDisposable
                 // For FileChooser inputs, propagate the original file name from the client.
                 if (requestInput.InputType == InputType.FileChooser)
                 {
-                    modelInput.FileName = requestInput.FileName;
+                    modelInput.SetFileName(requestInput.FileName);
                 }
 
                 // If we're processing updates because of a dependency change, check to see if this input is depended on.

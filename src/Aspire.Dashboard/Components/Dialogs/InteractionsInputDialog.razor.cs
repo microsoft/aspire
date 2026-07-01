@@ -210,7 +210,8 @@ public partial class InteractionsInputDialog : IAsyncDisposable
 
             // Save the uploaded file to a temp directory on disk. The AppHost reads the file
             // directly from this path, avoiding gRPC message size limits for large files.
-            var tempDir = Path.Combine(Path.GetTempPath(), "aspire-uploads");
+            // Use a process-specific subdirectory to prevent symlink attacks on multi-user systems.
+            var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-uploads-{Environment.ProcessId}");
             Directory.CreateDirectory(tempDir);
             var tempFilePath = Path.Combine(tempDir, Guid.NewGuid().ToString());
 

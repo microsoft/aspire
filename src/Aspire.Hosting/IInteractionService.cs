@@ -284,6 +284,7 @@ public sealed class LoadInputContext
 public sealed class InteractionInput
 {
     private string _name = null!;
+    private string? _fileName;
     private bool _required;
     private InputLoadOptions? _dynamicLoading;
 
@@ -297,6 +298,8 @@ public sealed class InteractionInput
     }
 
     internal void SetRequired(bool required) => _required = required;
+
+    internal void SetFileName(string? fileName) => _fileName = fileName;
 
     internal void SetDynamicLoading(InputLoadOptions? dynamicLoading) => _dynamicLoading = dynamicLoading;
 
@@ -399,7 +402,8 @@ public sealed class InteractionInput
 
     /// <summary>
     /// Gets or sets the maximum file size in bytes for <see cref="InputType.FileChooser"/> inputs.
-    /// If not specified, defaults to 1 MB.
+    /// If not specified, the Dashboard upload UI applies a default limit of 1 MB.
+    /// This limit is not enforced when the file path is provided directly (e.g. via the CLI).
     /// </summary>
     public long? MaxFileSize
     {
@@ -420,7 +424,11 @@ public sealed class InteractionInput
     /// When a file is selected, <see cref="Value"/> holds the file path on disk and this property
     /// holds the user-facing file name (e.g. "readme.txt").
     /// </summary>
-    public string? FileName { get; internal set; }
+    public string? FileName
+    {
+        get => _fileName;
+        init => _fileName = value;
+    }
 }
 
 /// <summary>

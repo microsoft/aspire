@@ -1530,7 +1530,7 @@ IconVariant = typing.Literal["Regular", "Filled"]
 
 ImagePullPolicy = typing.Literal["Default", "Always", "Missing", "Never"]
 
-InputType = typing.Literal["Text", "SecretText", "Choice", "Boolean", "Number"]
+InputType = typing.Literal["Text", "SecretText", "Choice", "Boolean", "Number", "FileChooser"]
 
 MessageIntent = typing.Literal["None", "Success", "Warning", "Error", "Information", "Confirmation"]
 
@@ -1915,6 +1915,8 @@ class InteractionInput(typing.TypedDict, total=False):
     AllowCustomChoice: bool
     Disabled: bool
     MaxLength: int | None
+    MaxFileSize: int | None
+    FileName: str | None
 
 class InteractionInputsDialogOptions(typing.TypedDict, total=False):
     PrimaryButtonText: str | None

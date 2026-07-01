@@ -16305,7 +16305,8 @@ public enum InputType implements WireValueEnum {
     SECRET_TEXT("SecretText"),
     CHOICE("Choice"),
     BOOLEAN("Boolean"),
-    NUMBER("Number");
+    NUMBER("Number"),
+    FILE_CHOOSER("FileChooser");
 
     private final String value;
 
@@ -16462,6 +16463,8 @@ public class InteractionInput implements JsonSerializable {
     private Boolean allowCustomChoice;
     private boolean disabled;
     private Double maxLength;
+    private Double maxFileSize;
+    private String fileName;
 
     public String getName() { return name; }
     public void setName(String value) { this.name = value; }
@@ -16487,6 +16490,10 @@ public class InteractionInput implements JsonSerializable {
     public void setDisabled(boolean value) { this.disabled = value; }
     public Double getMaxLength() { return maxLength; }
     public void setMaxLength(Double value) { this.maxLength = value; }
+    public Double getMaxFileSize() { return maxFileSize; }
+    public void setMaxFileSize(Double value) { this.maxFileSize = value; }
+    public String getFileName() { return fileName; }
+    public void setFileName(String value) { this.fileName = value; }
 
     @SuppressWarnings("unchecked")
     public static InteractionInput fromMap(Map<String, Object> map) {
@@ -16515,6 +16522,10 @@ public class InteractionInput implements JsonSerializable {
         value.setDisabled((Boolean) disabledValue);
         var maxLengthValue = map.get("MaxLength");
         value.setMaxLength(maxLengthValue == null ? null : ((Number) maxLengthValue).doubleValue());
+        var maxFileSizeValue = map.get("MaxFileSize");
+        value.setMaxFileSize(maxFileSizeValue == null ? null : ((Number) maxFileSizeValue).doubleValue());
+        var fileNameValue = map.get("FileName");
+        value.setFileName(fileNameValue == null ? null : (String) fileNameValue);
         return value;
     }
 
@@ -16532,6 +16543,8 @@ public class InteractionInput implements JsonSerializable {
         map.put("AllowCustomChoice", AspireClient.serializeValue(allowCustomChoice));
         map.put("Disabled", AspireClient.serializeValue(disabled));
         map.put("MaxLength", AspireClient.serializeValue(maxLength));
+        map.put("MaxFileSize", AspireClient.serializeValue(maxFileSize));
+        map.put("FileName", AspireClient.serializeValue(fileName));
         return map;
     }
 }
