@@ -412,7 +412,7 @@ jobs:
             if [ -d "ci-failure-data/prior-causes" ] && [ "$(find ci-failure-data/prior-causes -name '*.json' -type f 2>/dev/null | wc -l)" -gt 0 ]; then
               for CAUSE_FILE in ci-failure-data/prior-causes/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
-                jq -r '"### `\(.id)`\n- **Type**: \(.type)\n- **Title**: \(.title)\n- **Test**: \(.test_name // "N/A")\n- **Error pattern**: \(.error_pattern | .[0:300])\n- **Occurrences**: \(.occurrences | length)\n- **Last seen**: \(.occurrences | sort_by(.observed_at) | last | .observed_at // "unknown")\n"' \
+                jq -r '"### `\(.id)`\n- **Type**: \(.type)\n- **Title**: \(.title)\n- **Test**: \(.test_name // "N/A")\n- **Issue**: \(.issue_url // "none")\n- **Error pattern**: \(.error_pattern | .[0:300])\n- **Occurrences**: \(.occurrences | length)\n- **Last seen**: \(.occurrences | sort_by(.observed_at) | last | .observed_at // "unknown")\n"' \
                   "$CAUSE_FILE" 2>/dev/null || true
               done
             else
@@ -531,7 +531,7 @@ safe-outputs:
             # in the future, extend the agent schema accordingly.
             PR_NUMBERS=$(jq -r '.pr.number // "" | tostring' "$ANALYSIS_FILE")
 
-            # ── 1. Push data to memory branch ──
+            # ── 1. Set up memory branch and merge cause data ──
             # Skip persisting data for code-issue verdicts — these are not
             # actionable by CI automation and would just add noise.
             if [ "$VERDICT" = "code-issue" ]; then
@@ -605,19 +605,8 @@ safe-outputs:
                 echo "Persisted cause files to causes/ (${CAUSE_COUNT} total)"
               fi
 
-              git -C memory-repo add -A
-              if git -C memory-repo diff --cached --quiet; then
-                echo "No changes to memory branch"
-              else
-                git -C memory-repo commit -m "Add CI failure analysis for run ${RUN_ID}"
-                git -C memory-repo push origin "HEAD:$MEMORY_BRANCH"
-                echo "Memory branch updated with analysis for run ${RUN_ID}"
-              fi
-            fi
-
             # ── 2. Create or update issues for each cause ──
-            # Skip entirely for code-issue verdicts — no causes will be actionable.
-            if [ "$VERDICT" != "code-issue" ] && [ -d "$CAUSES_DIR" ]; then
+            if [ -d "$CAUSES_DIR" ]; then
               # Build occurrence info from the run summary for issue updates
               ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
               PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
@@ -626,15 +615,6 @@ safe-outputs:
               # Build the occurrence table row for this run
               OCC_DATE=$(echo "$ANALYZED_AT" | cut -dT -f1)
               NEW_OCCURRENCE_ROW="| ${OCC_DATE} | [${RUN_ID}](${RUN_URL}) | ${FIRST_JOB} | #${PR_NUMBER} |"
-
-              # Fetch labeled issues once so individual cause lookups don't each
-              # call `gh issue list` (which fetches full bodies of up to 500 issues).
-              OPEN_ISSUES_CACHE=$(mktemp)
-              CLOSED_ISSUES_CACHE=$(mktemp)
-              gh issue list --repo "$REPO" --label "ci-failure-cause" --state open --limit 500 --json number,body \
-                > "$OPEN_ISSUES_CACHE" 2>/dev/null || echo '[]' > "$OPEN_ISSUES_CACHE"
-              gh issue list --repo "$REPO" --label "ci-failure-cause" --state closed --limit 500 --json number,body \
-                > "$CLOSED_ISSUES_CACHE" 2>/dev/null || echo '[]' > "$CLOSED_ISSUES_CACHE"
 
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
@@ -658,24 +638,66 @@ safe-outputs:
                   continue
                 fi
 
+                CAUSE_STORED="memory-repo/causes/${CAUSE_ID}.json"
                 MARKER="<!-- ci-failure-cause:${CAUSE_ID} -->"
 
-                # Search for an existing open issue with this cause marker
-                EXISTING_ISSUE=$(jq -r --arg marker "$MARKER" '.[] | select(.body | contains($marker)) | .number' "$OPEN_ISSUES_CACHE" | head -1 || true)
+                # Check if the stored cause file already has a linked issue
+                EXISTING_ISSUE=""
+                if [ -f "$CAUSE_STORED" ]; then
+                  STORED_ISSUE_URL=$(jq -r '.issue_url // empty' "$CAUSE_STORED")
+                  if [ -n "$STORED_ISSUE_URL" ]; then
+                    # Extract issue number from URL (e.g. .../issues/1234 -> 1234)
+                    EXISTING_ISSUE=$(echo "$STORED_ISSUE_URL" | grep -oP '\d+$' || true)
+                    # Verify issue still exists
+                    if [ -n "$EXISTING_ISSUE" ]; then
+                      ISSUE_STATE=$(gh api "repos/${REPO}/issues/${EXISTING_ISSUE}" --jq '.state' 2>/dev/null || echo "")
+                      if [ -z "$ISSUE_STATE" ]; then
+                        echo "Linked issue #${EXISTING_ISSUE} no longer exists, will create new"
+                        EXISTING_ISSUE=""
+                      fi
+                    fi
+                  fi
+                fi
 
-                # If not found open, check closed issues (cause may have recurred)
+                # If no stored issue link, fall back to searching by marker
                 REOPEN="false"
                 if [ -z "$EXISTING_ISSUE" ]; then
-                  EXISTING_ISSUE=$(jq -r --arg marker "$MARKER" '.[] | select(.body | contains($marker)) | .number' "$CLOSED_ISSUES_CACHE" | head -1 || true)
-                  if [ -n "$EXISTING_ISSUE" ]; then
+                  # Fetch labeled issues for marker search (lazy-loaded once)
+                  if [ -z "${ISSUES_CACHE_LOADED:-}" ]; then
+                    OPEN_ISSUES_CACHE=$(mktemp)
+                    CLOSED_ISSUES_CACHE=$(mktemp)
+                    gh issue list --repo "$REPO" --label "ci-failure-cause" --state open --limit 500 --json number,body \
+                      > "$OPEN_ISSUES_CACHE" 2>/dev/null || echo '[]' > "$OPEN_ISSUES_CACHE"
+                    gh issue list --repo "$REPO" --label "ci-failure-cause" --state closed --limit 500 --json number,body \
+                      > "$CLOSED_ISSUES_CACHE" 2>/dev/null || echo '[]' > "$CLOSED_ISSUES_CACHE"
+                    ISSUES_CACHE_LOADED="true"
+                  fi
+
+                  EXISTING_ISSUE=$(jq -r --arg marker "$MARKER" '.[] | select(.body | contains($marker)) | .number' "$OPEN_ISSUES_CACHE" | head -1 || true)
+
+                  if [ -z "$EXISTING_ISSUE" ]; then
+                    EXISTING_ISSUE=$(jq -r --arg marker "$MARKER" '.[] | select(.body | contains($marker)) | .number' "$CLOSED_ISSUES_CACHE" | head -1 || true)
+                    if [ -n "$EXISTING_ISSUE" ]; then
+                      REOPEN="true"
+                    fi
+                  fi
+                else
+                  # Check if the stored issue is closed (may need reopening)
+                  if [ "$ISSUE_STATE" = "closed" ]; then
                     REOPEN="true"
                   fi
                 fi
 
                 if [ -n "$EXISTING_ISSUE" ]; then
+                  # Store issue URL in the cause file on memory branch
+                  ISSUE_URL="https://github.com/${REPO}/issues/${EXISTING_ISSUE}"
+                  if [ -f "$CAUSE_STORED" ]; then
+                    jq --arg url "$ISSUE_URL" '.issue_url = $url' "$CAUSE_STORED" > "${CAUSE_STORED}.tmp" \
+                      && mv "${CAUSE_STORED}.tmp" "$CAUSE_STORED"
+                  fi
+
                   # Append new occurrence rows to the existing issue body, skipping
                   # if this run_id is already recorded (avoids duplicates on re-runs).
-                  # The table row format is `| date | [run_id](url) | job | PR |`.
                   CURRENT_BODY=$(gh api "repos/${REPO}/issues/${EXISTING_ISSUE}" --jq '.body // ""')
                   # Anchor the pattern with '(' from the markdown link to avoid
                   # partial matches (e.g., run 123 matching run 1234).
@@ -738,15 +760,32 @@ safe-outputs:
                   # Build the title via jq to avoid shell metacharacter issues
                   # with agent-generated cause titles.
                   ISSUE_TITLE=$(jq -r '"[CI Failure] " + .title' "$CAUSE_FILE")
-                  gh issue create --repo "$REPO" \
+                  CREATED_ISSUE_URL=$(gh issue create --repo "$REPO" \
                     --title "$ISSUE_TITLE" \
                     --label "$LABELS" \
-                    --body-file "$BODY_FILE"
+                    --body-file "$BODY_FILE" 2>&1)
                   rm -f "$BODY_FILE"
-                  echo "Created issue for cause: ${CAUSE_ID}"
+                  echo "Created issue for cause: ${CAUSE_ID} — ${CREATED_ISSUE_URL}"
+
+                  # Store issue URL in the cause file on memory branch
+                  if [ -f "$CAUSE_STORED" ]; then
+                    jq --arg url "$CREATED_ISSUE_URL" '.issue_url = $url' "$CAUSE_STORED" > "${CAUSE_STORED}.tmp" \
+                      && mv "${CAUSE_STORED}.tmp" "$CAUSE_STORED"
+                  fi
                 fi
               done
-              rm -f "$OPEN_ISSUES_CACHE" "$CLOSED_ISSUES_CACHE"
+              rm -f "${OPEN_ISSUES_CACHE:-}" "${CLOSED_ISSUES_CACHE:-}"
+            fi
+
+              # ── 3. Push memory branch ──
+              git -C memory-repo add -A
+              if git -C memory-repo diff --cached --quiet; then
+                echo "No changes to memory branch"
+              else
+                git -C memory-repo commit -m "Add CI failure analysis for run ${RUN_ID}"
+                git -C memory-repo push origin "HEAD:$MEMORY_BRANCH"
+                echo "Memory branch updated with analysis for run ${RUN_ID}"
+              fi
             fi
 
             # ── 3. Post PR comment using the analysis JSON ──
