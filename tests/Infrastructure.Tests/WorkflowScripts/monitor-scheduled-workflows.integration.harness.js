@@ -8,10 +8,11 @@
 //   {
 //     "dryRun": true,
 //     "runsByFile": { "generate-api-diffs.yml": { "conclusion": "failure", "html_url": "...", "run_number": 9, "head_sha": "abcd", "updated_at": "..." } },
-//     "issues": [ { "number": 1, "body": "...", "state": "open" } ]
+//     "issues": [ { "number": 1, "body": "...", "state": "open" } ],
+//     "failUpdate": false
 //   }
 // A workflow file absent from runsByFile yields no completed run (noop). Output:
-//   { calls, issues: [ { number, state, body, labels, comments } ] }
+//   { threw, calls, issues: [ { number, state, body, labels, comments } ] }
 
 'use strict';
 
@@ -20,7 +21,7 @@ const path = require('node:path');
 
 const monitor = require('../../../.github/workflows/monitor-scheduled-workflows.js');
 
-function makeGithub(store, runsByFile) {
+function makeGithub(store, runsByFile, { failUpdate }) {
     const calls = [];
     return {
         calls,
@@ -28,7 +29,7 @@ function makeGithub(store, runsByFile) {
         rest: {
             issues: {
                 createLabel: async () => { calls.push('createLabel'); },
-                listForRepo: async ({ labels }) => {
+                listForRepo: async ({ labels, state }) => {
                     // Production narrows by the lookup label before the marker filter
                     // (tracking-issue.js listOpenIssuesByLabel). Fail loudly if that
                     // narrowing is ever dropped so the regression is caught here
@@ -36,7 +37,10 @@ function makeGithub(store, runsByFile) {
                     if (!labels) {
                         throw new Error('listForRepo must be called with a label filter');
                     }
-                    return { data: store.issues.filter(issue => issue.state === 'open') };
+                    const requestedState = state ?? 'open';
+                    return {
+                        data: store.issues.filter(issue => requestedState === 'all' || issue.state === requestedState),
+                    };
                 },
                 create: async ({ title, body, labels }) => {
                     calls.push('create');
@@ -46,6 +50,9 @@ function makeGithub(store, runsByFile) {
                 },
                 update: async ({ issue_number, body, state }) => {
                     calls.push('update');
+                    if (failUpdate) {
+                        throw new Error('transient update failure');
+                    }
                     const issue = store.issues.find(i => i.number === issue_number);
                     if (body !== undefined) { issue.body = body; }
                     if (state) { issue.state = state; }
@@ -85,14 +92,20 @@ async function main() {
         issues: (input.issues ?? []).map(issue => ({ comments: [], state: 'open', ...issue })),
         next: input.nextNumber ?? 1000,
     };
-    const github = makeGithub(store, input.runsByFile ?? {});
+    const github = makeGithub(store, input.runsByFile ?? {}, { failUpdate: input.failUpdate === true });
     const core = { info: () => {}, warning: () => {} };
     const context = { repo: { owner: 'microsoft', repo: 'aspire' } };
 
-    await monitor.run({ github, context, core, dryRun: input.dryRun === true });
+    let threw = false;
+    try {
+        await monitor.run({ github, context, core, dryRun: input.dryRun === true });
+    } catch {
+        threw = true;
+    }
 
     process.stdout.write(JSON.stringify({
         result: {
+            threw,
             calls: github.calls,
             issues: store.issues.map(issue => ({
                 number: issue.number,

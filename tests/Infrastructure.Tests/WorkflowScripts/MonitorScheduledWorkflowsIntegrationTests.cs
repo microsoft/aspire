@@ -142,14 +142,57 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
             runsByFile = new Dictionary<string, object> { [WatchedFile] = SucceedingRun() },
             issues = new[]
             {
-                new { number = 55, body = Marker, state = "open", comments = Array.Empty<string>() },
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:true -->", state = "open", comments = Array.Empty<string>() },
             },
         });
 
-        Assert.Contains("createComment", result.Calls);
-        Assert.Contains("update", result.Calls);
+        Assert.False(result.Threw);
+        Assert.Equal(["createLabel", "update", "createComment"], result.Calls);
         var issue = Assert.Single(result.Issues);
         Assert.Equal("closed", issue.State);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task LeavesIssueOpenWhenAutoCloseStampIsFalse()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object> { [WatchedFile] = SucceedingRun() },
+            issues = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:false -->", state = "open", comments = Array.Empty<string>() },
+            },
+        });
+
+        Assert.False(result.Threw);
+        Assert.Equal(["createLabel"], result.Calls);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("open", issue.State);
+        Assert.Empty(issue.Comments);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DoesNotCommentWhenCloseFails()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            failUpdate = true,
+            runsByFile = new Dictionary<string, object> { [WatchedFile] = SucceedingRun() },
+            issues = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:true -->", state = "open", comments = Array.Empty<string>() },
+            },
+        });
+
+        Assert.True(result.Threw);
+        Assert.Equal(["createLabel", "update"], result.Calls);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("open", issue.State);
+        Assert.Empty(issue.Comments);
     }
 
     [Fact]
@@ -206,7 +249,7 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     private sealed record HarnessResponse(MonitorResult Result);
 
-    private sealed record MonitorResult(string[] Calls, MonitorIssue[] Issues);
+    private sealed record MonitorResult(bool Threw, string[] Calls, MonitorIssue[] Issues);
 
     private sealed record MonitorIssue(int Number, string State, string Body, string[] Labels, string[] Comments);
 }

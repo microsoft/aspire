@@ -152,7 +152,10 @@ async function run({ github, context, core, dryRun = false }) {
 
     // List once and reuse across watched workflows; each workflow's marker is
     // distinct, so a fresh issue filed for one cannot affect another's lookup.
-    const openIssues = await tracking.listOpenIssuesByLabel(github, owner, repo, label);
+    // Failure recording must include closed issues so a recurring failure reopens
+    // the canonical tracker instead of filing a duplicate.
+    const issues = await tracking.listIssuesByLabel(github, owner, repo, label);
+    const openIssues = issues.filter(issue => issue.state === 'open');
 
     for (const wf of watched) {
         let latest;
@@ -191,7 +194,8 @@ async function run({ github, context, core, dryRun = false }) {
                 runUrl: latest.html_url, runNumber: latest.run_number, sha: latest.head_sha, conclusion,
             });
             if (dryRun) {
-                log(`would RECORD failure for ${wf.file} on ${issue ? `issue #${issue.number}` : 'a new issue'}`);
+                const recordingIssue = tracking.findOpenIssueForMarker(issues, marker) ?? tracking.findIssueForMarker(issues, marker);
+                log(`would RECORD failure for ${wf.file} on ${recordingIssue ? `issue #${recordingIssue.number}` : 'a new issue'}`);
                 continue;
             }
             // Optional per-entry labels (e.g. area-cli, deployment-e2e) ride alongside
@@ -201,7 +205,7 @@ async function run({ github, context, core, dryRun = false }) {
                 label, labels: issueLabels, marker, title: buildIssueTitle(wf.name),
                 runId: latest.id,
                 buildBody: () => buildIssueBody({ marker, displayName: wf.name, workflowFile: wf.file, selfReports: wf.selfReports === true }),
-                comment, openIssues,
+                comment, issues,
             });
             if (!result.skipped) {
                 core.info(`${result.created ? 'Filed' : 'Updated'} #${result.number} for ${wf.file}`);
@@ -214,9 +218,14 @@ async function run({ github, context, core, dryRun = false }) {
                 log(`would CLOSE issue #${issue.number} (${wf.file})`);
                 continue;
             }
+            const autoClose = tracking.readAutoClose(issue.body);
+            if (autoClose !== true) {
+                core.info(`Issue #${issue.number} for ${wf.file} does not opt into auto-close; leaving it open.`);
+                continue;
+            }
+            await tracking.closeIssue(github, owner, repo, issue.number);
             await tracking.addComment(github, owner, repo, issue.number,
                 `Latest run succeeded ([run #${latest.run_number}](${latest.html_url})). Closing automatically.`);
-            await tracking.closeIssue(github, owner, repo, issue.number);
             core.info(`Closed #${issue.number} for ${wf.file}`);
         }
     }

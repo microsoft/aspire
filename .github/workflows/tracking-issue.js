@@ -22,13 +22,13 @@
 // Pure: marker mechanics
 // ---------------------------------------------------------------------------
 
-// Returns the oldest open issue (lowest number) whose body carries the marker.
+// Returns the oldest issue (lowest number) whose body carries the marker.
 // "Oldest wins" gives a deterministic canonical issue. Concurrent double-filing is
 // already unlikely — most consumer workflows serialize via a `concurrency` group,
 // and the rest only file on their (infrequent) scheduled run — but if a duplicate
 // is ever filed (e.g. one created manually) the older one stays canonical and the
 // duplicate has to be closed by hand.
-function findOpenIssueForMarker(issues, marker) {
+function findIssueForMarker(issues, marker) {
     const matches = (issues ?? []).filter(
         issue => typeof issue?.body === 'string' && issue.body.includes(marker));
     if (matches.length === 0) {
@@ -36,6 +36,10 @@ function findOpenIssueForMarker(issues, marker) {
     }
 
     return matches.reduce((oldest, issue) => (issue.number < oldest.number ? issue : oldest));
+}
+
+function findOpenIssueForMarker(issues, marker) {
+    return findIssueForMarker((issues ?? []).filter(issue => issue?.state === undefined || issue.state === 'open'), marker);
 }
 
 // Hidden marker embedded in each failure comment, e.g.
@@ -113,17 +117,21 @@ async function ensureLabel(github, owner, repo, { name, color, description }) {
     }
 }
 
-// Lists all open issues carrying a label. Uses the (strongly-consistent) list
+// Lists issues carrying a label. Uses the (strongly-consistent) list
 // API rather than Search, whose eventual-consistency window would let
 // near-simultaneous pollers each see "0 hits" and file duplicates.
-async function listOpenIssuesByLabel(github, owner, repo, label) {
+async function listIssuesByLabel(github, owner, repo, label, { state = 'all' } = {}) {
     const items = await github.paginate(github.rest.issues.listForRepo, {
-        owner, repo, labels: label, state: 'open', per_page: 100,
+        owner, repo, labels: label, state, per_page: 100,
     });
     // listForRepo returns pull requests too (they are issues in the REST model).
     // Exclude them so a labeled PR whose body happens to carry a tracking marker is
     // never mistaken for the managed issue and then commented/closed in its place.
     return items.filter(item => !item.pull_request);
+}
+
+async function listOpenIssuesByLabel(github, owner, repo, label) {
+    return await listIssuesByLabel(github, owner, repo, label, { state: 'open' });
 }
 
 async function createIssue(github, owner, repo, { title, body, labels }) {
@@ -137,6 +145,10 @@ async function addComment(github, owner, repo, issueNumber, body) {
 
 async function closeIssue(github, owner, repo, issueNumber, { stateReason = 'completed' } = {}) {
     await github.rest.issues.update({ owner, repo, issue_number: issueNumber, state: 'closed', state_reason: stateReason });
+}
+
+async function reopenIssue(github, owner, repo, issueNumber) {
+    await github.rest.issues.update({ owner, repo, issue_number: issueNumber, state: 'open' });
 }
 
 // True when a comment carrying `marker` already exists on the issue. The marker is
@@ -163,14 +175,14 @@ async function hasCommentForRun(github, owner, repo, issueNumber, marker) {
 //   runId       - stable run identifier; the dedup key (see runMarker).
 //   buildBody   - () => string, the static issue body for a fresh issue.
 //   comment     - the failure comment text; the run marker is appended to it.
-//   openIssues  - optional pre-fetched open-issue list (a multi-subject caller,
+//   issues      - optional pre-fetched all-state issue list (a multi-subject caller,
 //                 e.g. the watchdog, lists once and reuses it across subjects).
 // Returns { number, created } when a comment was posted, or { number, skipped }
 // when the run was already recorded.
-async function recordRun(github, context, core, { label, labels, marker, title, runId, buildBody, comment, openIssues }) {
+async function recordRun(github, context, core, { label, labels, marker, title, runId, buildBody, comment, issues }) {
     const { owner, repo } = context.repo;
-    const list = openIssues ?? await listOpenIssuesByLabel(github, owner, repo, label);
-    const issue = findOpenIssueForMarker(list, marker);
+    const list = issues ?? await listIssuesByLabel(github, owner, repo, label);
+    const issue = findOpenIssueForMarker(list, marker) ?? findIssueForMarker(list, marker);
     const runComment = runMarker(runId);
     const commentBody = `${comment}\n\n${runComment}`;
 
@@ -187,21 +199,29 @@ async function recordRun(github, context, core, { label, labels, marker, title, 
         return { number: issue.number, skipped: true };
     }
 
+    const reopened = issue.state === 'closed';
+    if (reopened) {
+        await reopenIssue(github, owner, repo, issue.number);
+    }
+
     await addComment(github, owner, repo, issue.number, commentBody);
-    return { number: issue.number, created: false };
+    return { number: issue.number, created: false, reopened };
 }
 
 module.exports = {
+    findIssueForMarker,
     findOpenIssueForMarker,
     runMarker,
     buildBody,
     autoCloseStamp,
     readAutoClose,
     ensureLabel,
+    listIssuesByLabel,
     listOpenIssuesByLabel,
     createIssue,
     addComment,
     closeIssue,
+    reopenIssue,
     hasCommentForRun,
     recordRun,
 };

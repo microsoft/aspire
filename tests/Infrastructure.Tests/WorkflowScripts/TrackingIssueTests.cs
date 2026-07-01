@@ -145,6 +145,65 @@ public sealed class TrackingIssueTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task RecordRunReopensClosedIssueForNewRun()
+    {
+        var result = await InvokeHarnessAsync<RecordRunResult>(
+            "recordRun",
+            new
+            {
+                marker = "<!-- m -->",
+                runId = 7,
+                comment = "again",
+                issues = new object[]
+                {
+                    new { number = 5, body = "lead <!-- m -->", state = "closed", comments = new[] { "first <!-- run:6 -->" } },
+                }
+            });
+
+        Assert.False(result.Result.Created);
+        Assert.False(result.Result.Skipped);
+        Assert.Equal(["update", "createComment"], result.Calls);
+
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("open", issue.State);
+        Assert.Equal(2, issue.Comments.Length);
+        Assert.Contains(issue.Comments, c => c.Contains("<!-- run:7 -->"));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RecordRunPrefersOpenIssueOverOlderClosedDuplicate()
+    {
+        var result = await InvokeHarnessAsync<RecordRunResult>(
+            "recordRun",
+            new
+            {
+                marker = "<!-- m -->",
+                runId = 7,
+                comment = "again",
+                issues = new object[]
+                {
+                    new { number = 5, body = "lead <!-- m -->", state = "closed", comments = new[] { "first <!-- run:6 -->" } },
+                    new { number = 8, body = "lead <!-- m -->", state = "open", comments = Array.Empty<string>() },
+                }
+            });
+
+        Assert.False(result.Result.Created);
+        Assert.False(result.Result.Skipped);
+        Assert.Equal(["createComment"], result.Calls);
+
+        var closedIssue = Assert.Single(result.Issues, issue => issue.Number == 5);
+        Assert.Equal("closed", closedIssue.State);
+        Assert.Single(closedIssue.Comments);
+
+        var openIssue = Assert.Single(result.Issues, issue => issue.Number == 8);
+        Assert.Equal("open", openIssue.State);
+        var comment = Assert.Single(openIssue.Comments);
+        Assert.Contains("<!-- run:7 -->", comment);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task BuildBodyEmbedsAutoCloseStampWhenTrue()
     {
         var body = await InvokeHarnessAsync<string>(

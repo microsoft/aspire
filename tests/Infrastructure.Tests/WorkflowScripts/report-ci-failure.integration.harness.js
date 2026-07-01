@@ -11,6 +11,7 @@
 //     "env": { "REF": "main", "CI_RED": "true", "CI_GREEN": "false" },
 //     "issues": [ { "number": 1, "body": "...", "state": "open" } ],
 //     "failComment": false,            // make createComment throw (transient failure)
+//     "failUpdate": false,             // make issues.update throw (transient failure)
 //     "runId": 12345, "runNumber": 7, "sha": "abcdef..."
 //   }
 // Output: { threw, calls, issues: [ { number, title, state, state_reason, body, labels, comments } ] }
@@ -21,7 +22,7 @@ const fs = require('node:fs');
 
 const reporter = require('../../../.github/workflows/report-ci-failure.js');
 
-function makeGithub(store, { failComment }) {
+function makeGithub(store, { failComment, failUpdate }) {
     const calls = [];
     return {
         calls,
@@ -29,7 +30,7 @@ function makeGithub(store, { failComment }) {
         rest: {
             issues: {
                 createLabel: async () => { calls.push('createLabel'); },
-                listForRepo: async ({ labels }) => {
+                listForRepo: async ({ labels, state }) => {
                     // Production narrows by the lookup label before the marker filter
                     // (tracking-issue.js listOpenIssuesByLabel). Fail loudly if that
                     // narrowing is ever dropped so the regression is caught here
@@ -37,7 +38,10 @@ function makeGithub(store, { failComment }) {
                     if (!labels) {
                         throw new Error('listForRepo must be called with a label filter');
                     }
-                    return { data: store.issues.filter(issue => issue.state === 'open') };
+                    const requestedState = state ?? 'open';
+                    return {
+                        data: store.issues.filter(issue => requestedState === 'all' || issue.state === requestedState),
+                    };
                 },
                 create: async ({ title, body, labels }) => {
                     calls.push('create');
@@ -47,6 +51,9 @@ function makeGithub(store, { failComment }) {
                 },
                 update: async ({ issue_number, body, state, state_reason }) => {
                     calls.push('update');
+                    if (failUpdate) {
+                        throw new Error('transient update failure');
+                    }
                     const issue = store.issues.find(i => i.number === issue_number);
                     if (body !== undefined) { issue.body = body; }
                     if (state) { issue.state = state; }
@@ -80,7 +87,7 @@ async function main() {
         issues: (input.issues ?? []).map(issue => ({ comments: [], state: 'open', ...issue })),
         next: input.nextNumber ?? 1000,
     };
-    const github = makeGithub(store, { failComment: input.failComment === true });
+    const github = makeGithub(store, { failComment: input.failComment === true, failUpdate: input.failUpdate === true });
     const core = { info: () => {}, warning: () => {} };
     const context = {
         repo: { owner: 'microsoft', repo: 'aspire' },

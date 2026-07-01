@@ -126,10 +126,16 @@ async function resolveSuccess({ github, context, core }) {
         return;
     }
 
+    const autoClose = tracking.readAutoClose(issue.body);
+    if (autoClose !== true) {
+        core.info(`CI-failure issue #${issue.number} for ${ref} does not opt into auto-close; leaving it open.`);
+        return;
+    }
+
     const run = runContext(context);
+    await tracking.closeIssue(github, owner, repo, issue.number);
     await tracking.addComment(github, owner, repo, issue.number,
         `CI is green again on \`${ref}\` ([run #${run.runNumber}](${run.runUrl})). Closing automatically.`);
-    await tracking.closeIssue(github, owner, repo, issue.number);
     core.info(`Closed #${issue.number} for ci.yml on ${ref}`);
 }
 

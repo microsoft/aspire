@@ -129,7 +129,7 @@ public sealed class ReportCiFailureIntegrationTests : IDisposable
             env = new { REF = "main" },
             issues = new[]
             {
-                new { number = 7, body = "lead <!-- ci-failure:ci.yml:push:main -->", state = "open" },
+                new { number = 7, body = "lead <!-- ci-failure:ci.yml:push:main -->\n<!-- autoclose:true -->", state = "open" },
             },
         });
 
@@ -140,7 +140,50 @@ public sealed class ReportCiFailureIntegrationTests : IDisposable
         // A closing comment is posted so the thread records why it closed.
         var comment = Assert.Single(issue.Comments);
         Assert.Contains("green again", comment);
-        Assert.Contains("update", result.Calls);
+        Assert.Equal(["update", "createComment"], result.Calls);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ResolveSuccessLeavesIssueOpenWhenAutoCloseStampIsMissing()
+    {
+        var result = await InvokeAsync(new
+        {
+            operation = "resolveSuccess",
+            env = new { REF = "main" },
+            issues = new[]
+            {
+                new { number = 7, body = "lead <!-- ci-failure:ci.yml:push:main -->", state = "open" },
+            },
+        });
+
+        Assert.False(result.Threw);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("open", issue.State);
+        Assert.Empty(issue.Comments);
+        Assert.Empty(result.Calls);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ResolveSuccessDoesNotCommentWhenCloseFails()
+    {
+        var result = await InvokeAsync(new
+        {
+            operation = "resolveSuccess",
+            env = new { REF = "main" },
+            failUpdate = true,
+            issues = new[]
+            {
+                new { number = 7, body = "lead <!-- ci-failure:ci.yml:push:main -->\n<!-- autoclose:true -->", state = "open" },
+            },
+        });
+
+        Assert.True(result.Threw);
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("open", issue.State);
+        Assert.Empty(issue.Comments);
+        Assert.Equal(["update"], result.Calls);
     }
 
     [Fact]
@@ -205,7 +248,7 @@ public sealed class ReportCiFailureIntegrationTests : IDisposable
             env = new { REF = "main", CI_RED = "false", CI_GREEN = "true" },
             issues = new[]
             {
-                new { number = 7, body = "lead <!-- ci-failure:ci.yml:push:main -->", state = "open" },
+                new { number = 7, body = "lead <!-- ci-failure:ci.yml:push:main -->\n<!-- autoclose:true -->", state = "open" },
             },
         });
 
