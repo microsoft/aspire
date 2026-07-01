@@ -784,13 +784,13 @@ public class Program
     internal static async Task DisplayFirstTimeUseNoticeIfNeededAsync(IServiceProvider serviceProvider, string[] args, CancellationToken cancellationToken = default)
     {
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        var isInformationalCommand = args.Any(a => CommonOptionNames.InformationalOptionNames.Contains(a));
-        var isMachineReadableOutput = HasMachineReadableOutputFormat(args);
-        var noLogo = args.Any(a => a == CommonOptionNames.NoLogo)
+        var isInformationalCommand = ContainsRootOption(args, CommonOptionNames.InformationalOptionNames.Contains);
+        var isMachineReadableOutput = HasMachineReadableOutput(args);
+        var noLogo = ContainsRootOption(args, a => a == CommonOptionNames.NoLogo)
             || configuration.GetBool(CliConfigNames.NoLogo, defaultValue: false)
             || isInformationalCommand
             || isMachineReadableOutput;
-        var showBanner = args.Any(a => a == CommonOptionNames.Banner);
+        var showBanner = ContainsRootOption(args, a => a == CommonOptionNames.Banner);
 
         var sentinel = serviceProvider.GetRequiredService<IFirstTimeUseNoticeSentinel>();
         var isFirstRun = !sentinel.Exists();
@@ -858,16 +858,55 @@ public class Program
         }
     }
 
-    // Machine-readable output flags should never have welcome/telemetry text
-    // interleaved with the structured payload. Today the only such flag is
-    // `--format json` (consumed by `aspire doctor`); extend this scan if new
-    // options are added.
-    private static bool HasMachineReadableOutputFormat(string[] args)
+    private static bool ContainsRootOption(string[] args, Func<string, bool> predicate)
     {
+        foreach (var arg in args)
+        {
+            if (arg == "--")
+            {
+                return false;
+            }
+
+            if (predicate(arg))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Machine-readable output flags should never have welcome/telemetry text
+    // interleaved with the structured payload. Stop at the command argument
+    // delimiter so application/resource arguments named like CLI flags don't
+    // accidentally suppress the first-run experience.
+    private static bool HasMachineReadableOutput(string[] args)
+    {
+        if (IsLegacyExtensionGetAppHostsCommand(args))
+        {
+            return true;
+        }
+
         for (var i = 0; i < args.Length; i++)
         {
             var arg = args[i];
+            if (arg == "--")
+            {
+                return false;
+            }
+
             if (arg.Equals("--format=json", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // `--load-arguments` is treated as machine-readable specifically because of the
+            // `aspire resource <name> <command> --load-arguments` contract: that flag emits the
+            // dynamic argument-metadata JSON the VS Code extension parses. If a future command
+            // reuses the flag name with different semantics, that command should opt out here
+            // explicitly so its output is not silently treated as JSON.
+            if (arg.Equals("--json", StringComparison.OrdinalIgnoreCase) ||
+                arg.Equals("--load-arguments", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -881,6 +920,13 @@ public class Program
         }
 
         return false;
+    }
+
+    private static bool IsLegacyExtensionGetAppHostsCommand(string[] args)
+    {
+        return args.Length >= 2
+            && args[0].Equals("extension", StringComparison.OrdinalIgnoreCase)
+            && args[1].Equals("get-apphosts", StringComparison.OrdinalIgnoreCase);
     }
 
     private static IAnsiConsole BuildAnsiConsole(IServiceProvider serviceProvider, TextWriter writer)

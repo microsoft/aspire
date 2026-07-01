@@ -6,6 +6,7 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, appHostPathMustBeNonEmptyAbsolute, aspireCliCommandFailed, aspireCliCommandTimedOut, aspireCliDescribeNotSupported, aspireCliOutputParseFailed, aspireCommandOutputTruncated, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
 import { AppHostCandidate, AppHostDiscoveryService, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
+import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from '../utils/cliCompatibility';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
 import { nonInteractiveCliEnvironment } from '../utils/environment';
@@ -210,6 +211,7 @@ export class AppHostDataRepository {
     // that, if capability resolution fails (e.g. a CLI too old to support `config info`), we still
     // attempt the flag and rely on the locale-independent no-data fallback below.
     private _includeDisabledCommandsSupported = true;
+    private _noLogoSupported = true;
     private readonly _configInfoProvider: ConfigInfoProvider;
 
     // ── Running AppHost state (ps polling) ──
@@ -230,6 +232,8 @@ export class AppHostDataRepository {
     private _postStopRefreshTimers = new Map<string, PostStopRefreshTimer>();
     private _authoritativeSnapshotInProgress = false;
     private _authoritativeSnapshotPending = false;
+    private _authoritativeSnapshotPendingForce = false;
+    private _runtimeSnapshotAfterWorkspaceDiscovery = false;
     private _authoritativeSnapshotRequestId = 0;
     private _activeAuthoritativeSnapshotRequestId: number | undefined;
 
@@ -419,6 +423,7 @@ export class AppHostDataRepository {
         this._stopAllGlobalDescribes();
         this._workspaceResources.clear();
         this._clearErrors();
+        this._runtimeSnapshotAfterWorkspaceDiscovery = false;
         // A user-triggered refresh should observe AppHost/config files written by tools
         // even when the file watcher has not delivered an invalidation event yet.
         this._workspaceAppHostDiscoveryComplete = false;
@@ -432,6 +437,36 @@ export class AppHostDataRepository {
         if (this._shouldPoll) {
             this._refreshAppHostsFromAuthoritativeSnapshot();
         }
+    }
+
+    refreshRuntimeState(): void {
+        if (this._disposed) {
+            return;
+        }
+
+        const shouldWatchWorkspace = this._shouldWatchWorkspace;
+        const shouldPoll = this._shouldPoll;
+        const forceSnapshot = this._dataActive && !shouldPoll;
+        if (this._dataActive && this._viewMode === 'workspace' && !this._workspaceAppHostDiscoveryComplete && this._workspaceAppHostCandidatePaths.length === 0) {
+            this._runtimeSnapshotAfterWorkspaceDiscovery = true;
+        }
+        if (!shouldWatchWorkspace && !shouldPoll && !forceSnapshot) {
+            return;
+        }
+
+        this._clearErrors();
+        this._describeRestartDelay = 5000;
+        if (shouldWatchWorkspace) {
+            this._startDescribeWatch();
+        } else {
+            this._stopDescribeWatch({ clearWorkspaceResources: true });
+        }
+
+        if (shouldPoll || forceSnapshot) {
+            this._refreshAppHostsFromAuthoritativeSnapshot(forceSnapshot);
+        }
+
+        this._reconcileGlobalDescribes();
     }
 
     requestAppHostStopRefresh(appHostPath: string): void {
@@ -521,7 +556,7 @@ export class AppHostDataRepository {
     }
 
     async fetchAppHostsOnce(): Promise<AppHostDisplayInfo[]> {
-        const appHosts = await this._runCliJson<AppHostDisplayInfo[] | AppHostDisplayInfo>('aspire ps', ['ps', '--format', 'json']);
+        const appHosts = await this._runCliJson<AppHostDisplayInfo[] | AppHostDisplayInfo>('aspire ps', this._withNoLogo(['ps', '--format', 'json']));
         const appHostList = Array.isArray(appHosts) ? appHosts : [appHosts];
         const appHostsWithResources = await Promise.allSettled(appHostList.map(async appHost => ({
             ...appHost,
@@ -598,6 +633,8 @@ export class AppHostDataRepository {
         this._disposed = true;
         this._clearPostStopRefreshTimers();
         this._authoritativeSnapshotPending = false;
+        this._authoritativeSnapshotPendingForce = false;
+        this._runtimeSnapshotAfterWorkspaceDiscovery = false;
         this._stopPolling();
         this._stopDescribeWatch();
         this._stopAllGlobalDescribes();
@@ -690,6 +727,7 @@ export class AppHostDataRepository {
         const discoveryVersion = ++this._workspaceAppHostDiscoveryVersion;
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {
+            this._runtimeSnapshotAfterWorkspaceDiscovery = false;
             this._workspaceAppHostDiscoveryComplete = true;
             this._clearWorkspaceAppHostDiscovery();
             this._clearWorkspaceAppHostData();
@@ -722,6 +760,7 @@ export class AppHostDataRepository {
 
             this._workspaceAppHostDiscoveryComplete = true;
             extensionLogOutputChannel.warn(`Failed to fetch workspace apphost: ${error}`);
+            this._runtimeSnapshotAfterWorkspaceDiscovery = false;
             this._clearWorkspaceAppHostDiscovery();
             this._clearWorkspaceAppHostData();
             this._setDescribeError(errorFetchingAppHosts(String(error)));
@@ -744,6 +783,7 @@ export class AppHostDataRepository {
 
     private _cancelWorkspaceAppHostDiscovery(): void {
         this._workspaceAppHostDiscoveryRefreshQueued = false;
+        this._runtimeSnapshotAfterWorkspaceDiscovery = false;
         this._workspaceAppHostDiscoveryCancellationSource?.cancel();
         this._workspaceAppHostDiscoveryCancellationSource?.dispose();
         this._workspaceAppHostDiscoveryCancellationSource = undefined;
@@ -754,6 +794,8 @@ export class AppHostDataRepository {
         const buildableAppHostCandidates = appHostCandidates.filter(isBuildableAppHostCandidate);
 
         if (buildableAppHostCandidates.length === 0) {
+            const refreshRuntimeStateAfterDiscovery = this._runtimeSnapshotAfterWorkspaceDiscovery;
+            this._runtimeSnapshotAfterWorkspaceDiscovery = false;
             this._clearWorkspaceAppHostDiscovery();
             this._clearWorkspaceAppHostData();
             if (appHostCandidates.length > 0) {
@@ -761,9 +803,14 @@ export class AppHostDataRepository {
             }
             this._clearErrors();
             this._syncPolling();
+            if (refreshRuntimeStateAfterDiscovery && this._dataActive && this._viewMode === 'workspace') {
+                this._refreshAppHostsFromAuthoritativeSnapshot(true);
+            }
             this._updateWorkspaceContext({ clearLoading: true });
             return;
         }
+
+        this._runtimeSnapshotAfterWorkspaceDiscovery = false;
 
         if (buildableAppHostCandidates.length > 1) {
             this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
@@ -880,7 +927,7 @@ export class AppHostDataRepository {
 
             // Read the cached capability synchronously — see constructor for why we don't await here.
             const includeDisabledCommands = forceIncludeDisabledCommands ?? this._includeDisabledCommandsSupported;
-            const args = ['describe', '--follow', '--format', 'json'];
+            const args = this._withNoLogo(['describe', '--follow', '--format', 'json']);
             if (includeDisabledCommands) {
                 args.push('--include-disabled-commands');
             }
@@ -929,6 +976,11 @@ export class AppHostDataRepository {
                     // loop forever. The panel will refresh when the user explicitly
                     // retries or when activity resumes.
                     if (!this._describeReceivedData) {
+                        if (this._disableNoLogoForRetry(args, describeNonJsonLines.join('\n'), describeStderr, 'aspire describe --follow')) {
+                            this._startDescribeWatch(forceIncludeDisabledCommands);
+                            return;
+                        }
+
                         if (includeDisabledCommands && isIncludeDisabledCommandsUnsupportedOutput(describeNonJsonLines, describeStderr)) {
                             this._includeDisabledCommandsSupported = false;
                             this._startDescribeWatch(false);
@@ -1147,7 +1199,7 @@ export class AppHostDataRepository {
 
             // Read the cached capability synchronously — see constructor for why we don't await here.
             const includeDisabledCommands = this._includeDisabledCommandsSupported;
-            const args = ['describe', '--follow', '--format', 'json'];
+            const args = this._withNoLogo(['describe', '--follow', '--format', 'json']);
             if (includeDisabledCommands) {
                 args.push('--include-disabled-commands');
             }
@@ -1180,6 +1232,12 @@ export class AppHostDataRepository {
                     extensionLogOutputChannel.info(`aspire describe --follow for ${appHostPath} exited with code ${code}`);
                     stream.process = undefined;
                     if (this._disposed) {
+                        return;
+                    }
+
+                    if (code !== 0 && this._disableNoLogoForRetry(args, stream.nonJsonLines.join('\n'), stream.stderr, `aspire describe --follow for ${appHostPath}`)) {
+                        this._globalDescribeStreams.delete(appHostPath);
+                        this._startGlobalDescribe(appHostPath);
                         return;
                     }
 
@@ -1281,6 +1339,45 @@ export class AppHostDataRepository {
         }
     }
 
+    private _withNoLogo(args: string[]): string[] {
+        if (!this._noLogoSupported) {
+            return args;
+        }
+
+        const appHostIndex = args.indexOf('--apphost');
+        const insertIndex = appHostIndex === -1 ? args.length : appHostIndex;
+        return [...args.slice(0, insertIndex), noLogoOption, ...args.slice(insertIndex)];
+    }
+
+    // Returns the args to retry with when the installed CLI does not recognize --nologo, or
+    // undefined when this failure is unrelated to --nologo. Has the intentional side effect of
+    // flipping _noLogoSupported to false the first time the unsupported pattern is observed so
+    // subsequent _withNoLogo calls stop adding the option for the lifetime of the repository.
+    //
+    // Callers that own their own retry args use the returned value directly; long-lived watch
+    // restarters (describe/ps follow) use _disableNoLogoForRetry below and intentionally discard
+    // the returned args because the watch starter rebuilds args via _withNoLogo.
+    private _tryGetNoLogoRetryArgs(args: string[], stdout: string, stderr: string, operation: string): string[] | undefined {
+        if (!isNoLogoUnsupportedOutput(args, stdout, stderr)) {
+            return undefined;
+        }
+
+        if (this._noLogoSupported) {
+            this._noLogoSupported = false;
+            extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying ${operation} without it.`);
+        }
+
+        return removeRootNoLogoOption(args);
+    }
+
+    // Boolean variant of _tryGetNoLogoRetryArgs for watch restarters that rebuild args via
+    // _withNoLogo when they restart. These call sites only need to know "did we just disable
+    // --nologo support for the rest of this session?" — the recomputed args from
+    // _tryGetNoLogoRetryArgs would be thrown away.
+    private _disableNoLogoForRetry(args: string[], stdout: string, stderr: string, operation: string): boolean {
+        return this._tryGetNoLogoRetryArgs(args, stdout, stderr, operation) !== undefined;
+    }
+
     private async _runCliCommand(command: string, args: string[], options: RunCliCommandOptions = {}): Promise<{ stdout: string; stderr: string }> {
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath().catch(error => {
             throw new AspireCliNotInstalledError(String(error));
@@ -1338,6 +1435,14 @@ export class AppHostDataRepository {
                 stderrCallback: (data) => { stderr.append(data); },
                 exitCallback: (code) => {
                     if (code !== 0) {
+                        const retryArgs = this._tryGetNoLogoRetryArgs(args, stdout.value, stderr.value, command);
+                        if (retryArgs) {
+                            settle(() => {
+                                this._runCliCommand(command, retryArgs, options).then(resolve, reject);
+                            });
+                            return;
+                        }
+
                         settle(() => reject(new AspireCliFailedError(command, code, stdout.value, stderr.value)));
                         return;
                     }
@@ -1353,7 +1458,7 @@ export class AppHostDataRepository {
     }
 
     private async _fetchAppHostResourcesOnce(appHostPath: string): Promise<ResourceJson[]> {
-        const snapshot = await this._runCliJson<DescribeSnapshotJson>('aspire describe', ['describe', '--format', 'json', '--apphost', appHostPath]);
+        const snapshot = await this._runCliJson<DescribeSnapshotJson>('aspire describe', this._withNoLogo(['describe', '--format', 'json', '--apphost', appHostPath]));
         return snapshot.resources ?? [];
     }
 
@@ -1443,6 +1548,7 @@ export class AppHostDataRepository {
         this._fetchInProgress = false;
         this._authoritativeSnapshotInProgress = false;
         this._authoritativeSnapshotPending = false;
+        this._authoritativeSnapshotPendingForce = false;
         this._activeAuthoritativeSnapshotRequestId = undefined;
         this._clearPostStopRefreshTimers();
         if (this._pollingInterval) {
@@ -1493,10 +1599,15 @@ export class AppHostDataRepository {
             }
         };
 
-        const args = ['ps', '--follow', '--format', 'json'];
+        const args = this._withNoLogo(['ps', '--follow', '--format', 'json']);
+        const psFollowStdout = new LimitedOutputBuffer(AppHostDataRepository._oneShotOutputBufferLimit);
+        const psFollowStderr = new LimitedOutputBuffer(AppHostDataRepository._oneShotOutputBufferLimit);
 
         psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
             noExtensionVariables: true,
+            stdoutCallback: (data) => {
+                psFollowStdout.append(data);
+            },
             lineCallback: (line) => {
                 if (!this._isCurrentPsFetch(fetchVersion) || line.trim().length === 0) {
                     return;
@@ -1504,6 +1615,9 @@ export class AppHostDataRepository {
 
                 this._setPsError(undefined);
                 this._handlePsOutput(line);
+            },
+            stderrCallback: (data) => {
+                psFollowStderr.append(data);
             },
             exitCallback: (code) => {
                 removePsProcess();
@@ -1516,6 +1630,11 @@ export class AppHostDataRepository {
                 }
 
                 if (code !== 0) {
+                    if (this._disableNoLogoForRetry(args, psFollowStdout.value, psFollowStderr.value, 'aspire ps --follow')) {
+                        this._startPsFollow();
+                        return;
+                    }
+
                     this._supportsPsFollow = false;
                     extensionLogOutputChannel.info('aspire ps --follow failed, falling back to aspire ps polling');
                     this._startPsIntervalPolling();
@@ -1559,7 +1678,7 @@ export class AppHostDataRepository {
         this._fetchInProgress = true;
         const fetchVersion = ++this._psFetchVersion;
 
-        const args = ['ps', '--format', 'json'];
+        const args = this._withNoLogo(['ps', '--format', 'json']);
         this._runPsCommand(args, (code, stdout, stderr) => {
             if (code === 0) {
                 this._setPsError(undefined);
@@ -1572,21 +1691,25 @@ export class AppHostDataRepository {
         }, { fetchVersion });
     }
 
-    private _refreshAppHostsFromAuthoritativeSnapshot(): void {
-        if (this._disposed || !this._shouldPoll) {
+    private _refreshAppHostsFromAuthoritativeSnapshot(force = false): void {
+        if (this._disposed || (!force && !this._shouldPoll)) {
             return;
         }
 
         if (this._authoritativeSnapshotInProgress) {
             this._authoritativeSnapshotPending = true;
+            this._authoritativeSnapshotPendingForce ||= force;
             return;
         }
 
         this._authoritativeSnapshotInProgress = true;
         const snapshotRequestId = ++this._authoritativeSnapshotRequestId;
         this._activeAuthoritativeSnapshotRequestId = snapshotRequestId;
+        const isCurrentSnapshot = () => this._activeAuthoritativeSnapshotRequestId === snapshotRequestId
+            && !this._disposed
+            && (force || this._shouldPoll);
         const pollingGeneration = this._psPollingGeneration;
-        const args = ['ps', '--format', 'json'];
+        const args = this._withNoLogo(['ps', '--format', 'json']);
         this._runPsCommand(args, (code, stdout, stderr) => {
             if (this._activeAuthoritativeSnapshotRequestId !== snapshotRequestId) {
                 return;
@@ -1598,10 +1721,10 @@ export class AppHostDataRepository {
                 return;
             }
 
-            if (!this._disposed && this._shouldPoll) {
+            if (!this._disposed && (force || this._shouldPoll)) {
                 if (code === 0) {
                     this._setPsError(undefined);
-                    this._handlePsOutput(stdout);
+                    this._handlePsOutput(stdout, { useWorkspaceRootFallback: force });
                 } else {
                     this._clearLoadingForCurrentView();
                     this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
@@ -1611,10 +1734,12 @@ export class AppHostDataRepository {
             this._activeAuthoritativeSnapshotRequestId = undefined;
             this._authoritativeSnapshotInProgress = false;
             if (this._authoritativeSnapshotPending) {
+                const pendingForce = this._authoritativeSnapshotPendingForce;
                 this._authoritativeSnapshotPending = false;
-                this._refreshAppHostsFromAuthoritativeSnapshot();
+                this._authoritativeSnapshotPendingForce = false;
+                this._refreshAppHostsFromAuthoritativeSnapshot(pendingForce);
             }
-        });
+        }, { force, isCurrent: isCurrentSnapshot });
     }
 
     private _isCurrentPsFetch(fetchVersion: number): boolean {
@@ -1681,7 +1806,7 @@ export class AppHostDataRepository {
         }
     }
 
-    private _handlePsOutput(stdout: string): void {
+    private _handlePsOutput(stdout: string, options?: { useWorkspaceRootFallback?: boolean }): void {
         try {
             const parsed: AppHostDisplayInfo[] | AppHostDisplayInfo = JSON.parse(stdout);
             const appHosts = Array.isArray(parsed)
@@ -1689,7 +1814,7 @@ export class AppHostDataRepository {
                 : this._applyPsDelta(parsed);
 
             if (this._viewMode === 'workspace') {
-                this._handleWorkspacePsOutput(appHosts);
+                this._handleWorkspacePsOutput(appHosts, options);
                 return;
             }
 
@@ -1733,11 +1858,16 @@ export class AppHostDataRepository {
         ];
     }
 
-    private _handleWorkspacePsOutput(appHosts: readonly AppHostDisplayInfo[]): void {
+    private _handleWorkspacePsOutput(appHosts: readonly AppHostDisplayInfo[], options?: { useWorkspaceRootFallback?: boolean }): void {
         let workspaceAppHostPath = this._workspaceAppHostPath;
         const discoveryPending = !this._workspaceAppHostDiscoveryComplete;
         let workspaceAppHosts: AppHostDisplayInfo[];
-        if (this._workspaceAppHostCandidatePaths.length === 0 && discoveryPending) {
+        // Runtime refresh after dashboard startup intentionally avoids rediscovery. If the panel
+        // is active but discovery has no candidates, fall back to workspace-root filtering so a
+        // just-started AppHost can appear without paying for another `aspire ls`.
+        const useWorkspaceRootFallback = this._workspaceAppHostCandidatePaths.length === 0
+            && (discoveryPending || options?.useWorkspaceRootFallback === true);
+        if (useWorkspaceRootFallback) {
             workspaceAppHosts = appHosts.filter(appHost => isPathInWorkspace(appHost.appHostPath));
         } else if (this._workspaceAppHostCandidatePaths.length > 0) {
             workspaceAppHosts = appHosts.filter(appHost => this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHost.appHostPath, candidatePath)));
@@ -1832,14 +1962,19 @@ export class AppHostDataRepository {
         this._attachGlobalResourcesToAppHosts();
     }
 
-    private async _runPsCommand(args: string[], callback: (code: number, stdout: string, stderr: string) => void, options?: { fetchVersion?: number }): Promise<void> {
+    private async _runPsCommand(args: string[], callback: (code: number, stdout: string, stderr: string) => void, options?: { fetchVersion?: number; force?: boolean; isCurrent?: () => boolean }): Promise<void> {
         const fetchVersion = options?.fetchVersion;
+        const force = options?.force === true;
         const isCurrentPsCommand = () => {
+            if (options?.isCurrent) {
+                return options.isCurrent();
+            }
+
             if (fetchVersion !== undefined) {
                 return this._isCurrentPsFetch(fetchVersion);
             }
 
-            return !this._disposed && this._shouldPoll;
+            return !this._disposed && (force || this._shouldPoll);
         };
 
         let cliPath: string;
@@ -1879,6 +2014,14 @@ export class AppHostDataRepository {
             exitCallback: (code) => {
                 removePsProcess();
                 if (!callbackInvoked) {
+                    if ((code ?? 1) !== 0) {
+                        const retryArgs = this._tryGetNoLogoRetryArgs(args, stdout, stderr, 'aspire ps');
+                        if (retryArgs) {
+                            this._runPsCommand(retryArgs, callback, options);
+                            return;
+                        }
+                    }
+
                     callbackInvoked = true;
                     if (isCurrentPsCommand()) {
                         callback(code ?? 1, stdout, stderr);

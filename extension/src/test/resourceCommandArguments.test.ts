@@ -422,6 +422,7 @@ suite('ResourceCommandArguments', () => {
                 '--non-interactive',
                 '--apphost',
                 '/repo/AppHost.csproj',
+                '--nologo',
                 '--',
                 '--category=fruit',
             ]);
@@ -431,6 +432,73 @@ suite('ResourceCommandArguments', () => {
             assert.strictEqual(withProgressStub.calledOnce, true);
             assert.strictEqual(loadedInputs?.[0]?.name, 'item');
             assert.strictEqual(loadedInputs?.[0]?.options?.banana, 'Banana');
+        }
+        finally {
+            spawnStub.restore();
+            warningStub.restore();
+            withProgressStub.restore();
+        }
+    });
+
+    test('shared dynamic argument loader retries without nologo when an older CLI rejects it', async () => {
+        const withProgressStub = sinon.stub(vscode.window, 'withProgress').callsFake((_options: any, task: any) => task(undefined, undefined));
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => 'aspire',
+        } as AspireTerminalProvider;
+        const capturedArgs: string[][] = [];
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+            capturedArgs.push(args);
+            queueMicrotask(() => {
+                if (args.includes('--nologo')) {
+                    options?.stderrCallback?.("Unrecognized command or argument '--nologo'.");
+                    options?.exitCallback?.(1);
+                } else {
+                    options?.stdoutCallback?.('[{"name":"item","inputType":"Choice","options":{"banana":"Banana"}}]');
+                    options?.exitCallback?.(0);
+                }
+            });
+
+            return { stdin: { end() { } } } as any;
+        });
+
+        try {
+            const loader = createResourceCommandArgumentLoader({
+                cliExecutionProvider: terminalProvider,
+                resourceName: 'argument-commands',
+                commandName: 'dependent-arguments',
+                appHostPath: '/repo/AppHost.csproj',
+            });
+
+            const loadedInputs = await loader([
+                { input: makeInput({ name: 'category', inputType: 'Choice' }), value: '--nologo' },
+            ]);
+
+            assert.deepStrictEqual(capturedArgs[0], [
+                'resource',
+                'argument-commands',
+                'dependent-arguments',
+                '--load-arguments',
+                '--non-interactive',
+                '--apphost',
+                '/repo/AppHost.csproj',
+                '--nologo',
+                '--',
+                '--category=--nologo',
+            ]);
+            assert.deepStrictEqual(capturedArgs[1], [
+                'resource',
+                'argument-commands',
+                'dependent-arguments',
+                '--load-arguments',
+                '--non-interactive',
+                '--apphost',
+                '/repo/AppHost.csproj',
+                '--',
+                '--category=--nologo',
+            ]);
+            assert.strictEqual(warningStub.called, false);
+            assert.strictEqual(loadedInputs?.[0]?.name, 'item');
         }
         finally {
             spawnStub.restore();
