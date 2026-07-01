@@ -460,6 +460,11 @@ public static class KnownResourceStates
     public static readonly string Finished = nameof(Finished);
 
     /// <summary>
+    /// The terminated state. Useful for showing the resource was stopped before it exited normally.
+    /// </summary>
+    public static readonly string Terminated = nameof(Terminated);
+
+    /// <summary>
     /// The waiting state. Useful for showing the resource is waiting for a dependency.
     /// </summary>
     public static readonly string Waiting = nameof(Waiting);
@@ -487,12 +492,12 @@ public static class KnownResourceStates
     /// <summary>
     /// List of terminal states.
     /// </summary>
-    public static readonly IReadOnlyList<string> TerminalStates = [Finished, FailedToStart, Exited];
+    public static readonly IReadOnlyList<string> TerminalStates = [Finished, FailedToStart, Exited, Terminated];
 
     /// <summary>
     /// List of states in which a resource can be rebuilt.
     /// </summary>
-    public static readonly IReadOnlyList<string> BuildableStates = [Running, Waiting, Finished, FailedToStart, Exited];
+    public static readonly IReadOnlyList<string> BuildableStates = [Running, Waiting, Finished, FailedToStart, Exited, Terminated];
 }
 
 internal static class ResourceSnapshotBuilder

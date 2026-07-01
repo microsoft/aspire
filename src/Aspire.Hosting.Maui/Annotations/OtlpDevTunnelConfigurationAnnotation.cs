@@ -13,6 +13,8 @@ namespace Aspire.Hosting.Maui.Annotations;
 /// </summary>
 internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
 {
+    private volatile bool _isOtlpEndpointResolved;
+
     /// <summary>
     /// The OTLP loopback stub resource that acts as the service discovery target.
     /// </summary>
@@ -28,13 +30,28 @@ internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
     /// </summary>
     public IResourceBuilder<DevTunnelResource> DevTunnel { get; }
 
+    /// <summary>
+    /// Gets a value indicating whether the OTLP endpoint has been resolved from dashboard/configuration.
+    /// </summary>
+    public bool IsOtlpEndpointResolved => _isOtlpEndpointResolved;
+
     public OtlpDevTunnelConfigurationAnnotation(
         OtlpLoopbackResource otlpStub,
         IResourceBuilder<OtlpLoopbackResource> otlpStubBuilder,
-        IResourceBuilder<DevTunnelResource> devTunnel)
+        IResourceBuilder<DevTunnelResource> devTunnel,
+        bool isOtlpEndpointResolved)
     {
         OtlpStub = otlpStub;
         OtlpStubBuilder = otlpStubBuilder;
         DevTunnel = devTunnel;
+        _isOtlpEndpointResolved = isOtlpEndpointResolved;
+    }
+
+    /// <summary>
+    /// Marks the tunneled OTLP endpoint as resolved.
+    /// </summary>
+    public void MarkOtlpEndpointResolved()
+    {
+        _isOtlpEndpointResolved = true;
     }
 }
