@@ -122,6 +122,42 @@ public sealed class SpecializedTestFailureRunnerTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ReopensClosedIssueForNewRun()
+    {
+        var result = await InvokeAsync(new
+        {
+            env = OuterloopEnv(),
+            failedTests = new[] { "Tests.Type.A" },
+            issues = new[]
+            {
+                new
+                {
+                    number = 4242,
+                    body = "<!-- ci-failure:tests-outerloop.yml:test-failures -->\n\nExisting closed issue.",
+                    state = "closed",
+                    comments = Array.Empty<string>(),
+                },
+            },
+            runId = 67890,
+            runNumber = 8,
+        });
+
+        Assert.DoesNotContain("create", result.Calls);
+        Assert.Contains("update", result.Calls);
+        Assert.Contains("createComment", result.Calls);
+
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal(4242, issue.Number);
+        Assert.Equal("open", issue.State);
+
+        var comment = Assert.Single(issue.Comments);
+        Assert.Contains("`Tests.Type.A`", comment);
+        Assert.Contains("/actions/runs/67890", comment);
+        Assert.Contains("<!-- run:67890 -->", comment);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task MissingResultsPathIsClassifiedAsTestFailures()
     {
         // The extract step crashed before emitting its path (FAILED_TESTS_PATH

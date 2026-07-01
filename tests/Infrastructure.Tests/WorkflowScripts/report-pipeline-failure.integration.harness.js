@@ -30,7 +30,7 @@ function makeGithub(store, { failComment }) {
         rest: {
             issues: {
                 createLabel: async () => { calls.push('createLabel'); },
-                listForRepo: async ({ labels }) => {
+                listForRepo: async ({ labels, state }) => {
                     // Production narrows by the lookup label before the marker filter
                     // (tracking-issue.js listOpenIssuesByLabel). Fail loudly if that
                     // narrowing is ever dropped so the regression is caught here
@@ -38,7 +38,10 @@ function makeGithub(store, { failComment }) {
                     if (!labels) {
                         throw new Error('listForRepo must be called with a label filter');
                     }
-                    return { data: store.issues.filter(issue => issue.state === 'open') };
+                    const requestedState = state ?? 'open';
+                    return {
+                        data: store.issues.filter(issue => requestedState === 'all' || issue.state === requestedState),
+                    };
                 },
                 create: async ({ title, body, labels }) => {
                     calls.push('create');

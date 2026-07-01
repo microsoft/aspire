@@ -192,6 +192,41 @@ public sealed class ReportPipelineFailureIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ReopensClosedIssueForNewRun()
+    {
+        var result = await InvokeAsync(new
+        {
+            env = DeploymentEnv(),
+            labels = s_deploymentLabels,
+            issues = new[]
+            {
+                new
+                {
+                    number = 4242,
+                    body = "<!-- ci-failure:deployment-tests.yml:scheduled -->\n\nExisting closed issue.",
+                    state = "closed",
+                    comments = Array.Empty<string>(),
+                },
+            },
+            runId = 67890,
+            runNumber = 8,
+        });
+
+        Assert.DoesNotContain("create", result.Calls);
+        Assert.Contains("update", result.Calls);
+        Assert.Contains("createComment", result.Calls);
+
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal(4242, issue.Number);
+        Assert.Equal("open", issue.State);
+
+        var comment = Assert.Single(issue.Comments);
+        Assert.Contains("/actions/runs/67890", comment);
+        Assert.Contains("<!-- run:67890 -->", comment);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task DoesNotManageAnotherWorkflowsAutomationBrokenIssue()
     {
         // Both pipelines and the scanner/specialized reporter carry automation-broken,
