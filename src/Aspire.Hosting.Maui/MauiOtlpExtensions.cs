@@ -227,10 +227,19 @@ public static class MauiOtlpExtensions
 
         var port = allocatedEndpoint.Port;
 
-        // For DCP-proxied dashboard endpoints, AllocatedEndpoint.Port is the proxy port, but
+        if (endpointReference.Resource.IsContainer())
+        {
+            // Dev tunnel hosting runs on the host, so container endpoints must forward the host-reachable
+            // allocated port rather than the container-internal target port.
+            if (await TryGetEndpointPortAsync(endpointReference, EndpointProperty.Port, cancellationToken).ConfigureAwait(false) is { } allocatedPort)
+            {
+                port = allocatedPort;
+            }
+        }
+        // For non-container DCP-proxied dashboard endpoints, AllocatedEndpoint.Port is the proxy port, but
         // devtunnel host forwards to localhost:<tunnel-port>. Prefer the target listener port
         // when the endpoint exposes it as a concrete value.
-        if (await TryGetEndpointTargetPortAsync(endpointReference, cancellationToken).ConfigureAwait(false) is { } targetPort)
+        else if (await TryGetEndpointPortAsync(endpointReference, EndpointProperty.TargetPort, cancellationToken).ConfigureAwait(false) is { } targetPort)
         {
             port = targetPort;
         }
@@ -238,20 +247,20 @@ public static class MauiOtlpExtensions
         return new OtlpEndpointTarget(allocatedEndpoint.UriScheme, port, protocol);
     }
 
-    private static async ValueTask<int?> TryGetEndpointTargetPortAsync(EndpointReference endpointReference, CancellationToken cancellationToken)
+    private static async ValueTask<int?> TryGetEndpointPortAsync(EndpointReference endpointReference, EndpointProperty property, CancellationToken cancellationToken)
     {
-        string? targetPortValue;
+        string? portValue;
         try
         {
-            targetPortValue = await endpointReference.Property(EndpointProperty.TargetPort).GetValueAsync(cancellationToken).ConfigureAwait(false);
+            portValue = await endpointReference.Property(property).GetValueAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (InvalidOperationException) when (endpointReference.IsAllocated)
+        catch (InvalidOperationException) when (property == EndpointProperty.TargetPort && endpointReference.IsAllocated)
         {
             return null;
         }
 
-        return int.TryParse(targetPortValue, NumberStyles.None, CultureInfo.InvariantCulture, out var targetPort)
-            ? targetPort
+        return int.TryParse(portValue, NumberStyles.None, CultureInfo.InvariantCulture, out var port)
+            ? port
             : null;
     }
 
