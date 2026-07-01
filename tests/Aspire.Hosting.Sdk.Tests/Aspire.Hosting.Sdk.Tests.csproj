@@ -21,7 +21,7 @@
 
   <ItemGroup>
     <!-- Expose the built RID tool path to tests via assembly metadata so the older-SDK fallback can be exercised. -->
-    <AssemblyMetadata Include="AspireRuntimeIdentifierToolPath" Value="$(ArtifactsBinDir)Aspire.RuntimeIdentifier.Tool\$(Configuration)\$(DefaultTargetFramework)\Aspire.RuntimeIdentifier.Tool.dll" />
+    <AssemblyMetadata Include="AspireRuntimeIdentifierToolPath" Value="$(ArtifactsBinDir)Aspire.RuntimeIdentifier.Tool/$(Configuration)/$(DefaultTargetFramework)/Aspire.RuntimeIdentifier.Tool.dll" />
   </ItemGroup>
 
   <ItemGroup>
