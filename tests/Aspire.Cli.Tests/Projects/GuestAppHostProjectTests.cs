@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net.Sockets;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
@@ -14,6 +16,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
@@ -927,6 +930,33 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.Equal(seededChannel, reloaded.Channel);
     }
 
+    [Theory]
+    [InlineData(CliExitCodes.Success, "The AppHost server process exited")]
+    [InlineData(42, "The AppHost server process exited unexpectedly with exit code 42")]
+    [InlineData(null, "The AppHost server process exited unexpectedly")]
+    public async Task StartBackchannelConnectionAsync_WhenGuestServerExitsBeforeBackchannelConnects_ReportsExitCodeWhenKnown(
+        int? serverExitCode,
+        string expectedMessage)
+    {
+        var backchannel = new TestAppHostBackchannel
+        {
+            ConnectAsyncCallback = (_, _) => throw new SocketException((int)SocketError.ConnectionRefused)
+        };
+        var project = CreateGuestAppHostProject(backchannel: backchannel);
+        var serverSession = new FakeAppHostServerSession
+        {
+            ServerHasExited = true,
+            ServerExitCode = serverExitCode
+        };
+        var backchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await InvokeStartBackchannelConnectionAsync(project, serverSession, backchannelCompletionSource);
+
+        var exception = await Assert.ThrowsAsync<FailedToConnectBackchannelConnection>(
+            () => backchannelCompletionSource.Task).DefaultTimeout();
+        Assert.Equal(expectedMessage, exception.Message);
+    }
+
     [Fact]
     public void IsUsingProjectReferencesReturnsFalseWhenIdentityIsOverridden()
     {
@@ -1163,6 +1193,7 @@ public class GuestAppHostProjectTests : IDisposable
     private GuestAppHostProject CreateGuestAppHostProject(
         TestInteractionService? interactionService = null,
         string identityChannel = "local",
+        TestAppHostBackchannel? backchannel = null,
         TestAppHostServerProjectFactory? appHostServerProjectFactory = null,
         IAppHostServerSessionFactory? serverSessionFactory = null,
         bool identityOverridden = false)
@@ -1192,7 +1223,7 @@ public class GuestAppHostProjectTests : IDisposable
         return new GuestAppHostProject(
             language: language,
             interactionService: interactionService ?? new TestInteractionService(),
-            backchannel: new TestAppHostBackchannel(),
+            backchannel: backchannel ?? new TestAppHostBackchannel(),
             appHostServerProjectFactory: appHostServerProjectFactory ?? new TestAppHostServerProjectFactory(),
             certificateService: new TestCertificateService(),
             runner: new TestDotNetCliRunner(),
@@ -1209,6 +1240,27 @@ public class GuestAppHostProjectTests : IDisposable
             shutdownService: shutdownWindow,
             serverSessionFactory: serverSessionFactory ?? new FakeAppHostServerSessionFactory(),
             timeProvider: TimeProvider.System);
+    }
+
+    private static async Task InvokeStartBackchannelConnectionAsync(
+        GuestAppHostProject project,
+        IAppHostServerSession serverSession,
+        TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource)
+    {
+        var method = typeof(GuestAppHostProject).GetMethod(
+            "StartBackchannelConnectionAsync",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        var task = Assert.IsAssignableFrom<Task>(method.Invoke(project, [
+            serverSession,
+            "fake.sock",
+            backchannelCompletionSource,
+            false,
+            default(System.Diagnostics.ActivityContext),
+            CancellationToken.None
+        ]));
+        await task.DefaultTimeout();
     }
 
     private sealed class NoOpGracefulSignaler : IProcessTreeGracefulShutdownSignaler
