@@ -4,7 +4,9 @@
 using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Aspire.Microsoft.Azure.Cosmos.Tests;
@@ -628,6 +630,52 @@ public class AspireMicrosoftAzureCosmosExtensionsTests
 
         Assert.Same(usersContainer.Database.Client, ordersContainer.Database.Client);
         Assert.NotSame(usersContainer.Database.Client, productsContainer.Database.Client);
+    }
+
+    [Fact]
+    public void AddAzureCosmosClient_AddsHealthCheckByDefault()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+
+        PopulateConfiguration(builder.Configuration, "AccountEndpoint=https://localhost:8081;AccountKey=fake;");
+
+        builder.AddAzureCosmosClient("cosmos");
+
+        using var host = builder.Build();
+
+        var registrations = host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations;
+        Assert.Contains(registrations, r => r.Name == "Microsoft.Azure.Cosmos");
+    }
+
+    [Fact]
+    public void AddAzureCosmosClient_DoesNotAddHealthCheck_WhenDisabled()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+
+        PopulateConfiguration(builder.Configuration, "AccountEndpoint=https://localhost:8081;AccountKey=fake;");
+
+        builder.AddAzureCosmosClient("cosmos", configureSettings: settings => settings.DisableHealthChecks = true);
+
+        using var host = builder.Build();
+
+        var registrations = host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations;
+        Assert.DoesNotContain(registrations, r => r.Name == "Microsoft.Azure.Cosmos");
+    }
+
+    [Fact]
+    public void AddKeyedAzureCosmosClient_AddsHealthCheckWithKeyedName()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        var serviceKey = "cosmos-key";
+
+        PopulateConfiguration(builder.Configuration, "AccountEndpoint=https://localhost:8081;AccountKey=fake;", serviceKey);
+
+        builder.AddKeyedAzureCosmosClient(serviceKey);
+
+        using var host = builder.Build();
+
+        var registrations = host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations;
+        Assert.Contains(registrations, r => r.Name == $"Microsoft.Azure.Cosmos_{serviceKey}");
     }
 
     private static void PopulateConfiguration(ConfigurationManager configuration, string connectionString, string? key = null) =>
