@@ -305,4 +305,32 @@ public class DevCertsCheckTests
             tempDirectory.Delete(recursive: true);
         }
     }
+
+    [Fact]
+    public async Task CheckAsync_NonLinux_DoesNotReadEnvironmentVariablesForCertUtilWarning()
+    {
+        var certs = new List<DevCertInfo>
+        {
+            CreateDevCertInfo(CertificateManager.TrustLevel.Full, "AAAA1111BBBB2222", MinVersion),
+        };
+        var toolRunner = new TestCertificateToolRunner
+        {
+            CheckHttpCertificateCallback = () => new CertificateTrustResult
+            {
+                HasCertificates = true,
+                TrustLevel = CertificateManager.TrustLevel.Full,
+                Certificates = certs
+            }
+        };
+        var environment = TestEnvironment.CreateMacOS(new Dictionary<string, string?>
+        {
+            ["PATH"] = Path.Combine(AppContext.BaseDirectory, Guid.NewGuid().ToString("N"))
+        });
+        var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+
+        var results = await check.CheckAsync();
+
+        Assert.Equal(0, environment.GetEnvironmentVariablesCallCount);
+        Assert.Collection(results, result => Assert.Equal(DevCertsCheck.CheckName, result.Name));
+    }
 }
