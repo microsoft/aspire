@@ -30,22 +30,4 @@ jobs:
       with:
         node-version: 20.x
     - name: Validate extension modules and manifests
-      shell: bash
-      run: |
-        set -euo pipefail
-        status=0
-
-        # node --check parses each module and reports syntax / import-statement errors
-        # without resolving imports, which is enough to catch a broken .mjs before merge.
-        while IFS= read -r -d '' file; do
-          echo "node --check $file"
-          node --check "$file" || status=1
-        done < <(find .github/extensions -type f \( -name '*.mjs' -o -name '*.js' \) -print0)
-
-        # Every copilot-extension.json manifest must parse as JSON.
-        while IFS= read -r -d '' file; do
-          echo "validate manifest $file"
-          node -e "JSON.parse(require('node:fs').readFileSync(process.argv[1], 'utf8'))" "$file" || status=1
-        done < <(find .github/extensions -type f -name 'copilot-extension.json' -print0)
-
-        exit $status
+      run: node .github/extensions/validate-extensions.mjs
