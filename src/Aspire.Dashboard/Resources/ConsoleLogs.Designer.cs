@@ -219,18 +219,6 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
-        public static string TerminalHeader {
-            get {
-                return ResourceManager.GetString("TerminalHeader", resourceCulture);
-            }
-        }
-        
-        public static string TerminalPageTitle {
-            get {
-                return ResourceManager.GetString("TerminalPageTitle", resourceCulture);
-            }
-        }
-        
         public static string ConsoleLogsViewConsoleOption {
             get {
                 return ResourceManager.GetString("ConsoleLogsViewConsoleOption", resourceCulture);

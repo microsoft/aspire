@@ -8,7 +8,7 @@
 <PageTitle>
     <ApplicationName
         AdditionalText="@PageViewModel.SelectedResource.Id?.ReplicaSetName"
-        ResourceName="@(_activeView == ConsoleLogsView.Terminal ? nameof(Dashboard.Resources.ConsoleLogs.TerminalPageTitle) : nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsPageTitle))"
+        ResourceName="@nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsPageTitle)"
         Loc="@Loc"/>
 </PageTitle>
 
@@ -18,7 +18,7 @@
                              MainContentStyle="margin-top: 10px;"
                              MobileToolbarButtonText="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSelectResourceToolbar)]">
         <PageTitleSection>
-            <h1 class="page-header">@Loc[_activeView == ConsoleLogsView.Terminal ? nameof(Dashboard.Resources.ConsoleLogs.TerminalHeader) : nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsHeader)]</h1>
+            <h1 class="page-header">@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsHeader)]</h1>
         </PageTitleSection>
         <ToolbarSection>
             <ResourceSelect Resources="_resources"
