@@ -589,18 +589,14 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Console)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewConsoleOption)],
-                Icon = _activeView == ConsoleLogsView.Console
-                    ? new Icons.Regular.Size16.CheckboxChecked()
-                    : new Icons.Regular.Size16.CheckboxUnchecked()
+                Icon = new Icons.Regular.Size16.TextBulletListLtr()
             });
 
             _logsMenuItems.Add(new()
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Terminal)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)],
-                Icon = _activeView == ConsoleLogsView.Terminal
-                    ? new Icons.Regular.Size16.CheckboxChecked()
-                    : new Icons.Regular.Size16.CheckboxUnchecked()
+                Icon = new Icons.Regular.Size16.Prompt()
             });
 
             _logsMenuItems.Add(new()
@@ -627,7 +623,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = TerminalFontMinusAsync,
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)],
-                Icon = new Icons.Regular.Size16.TextFontSize(),
+                Icon = new Icons.Regular.Size16.Subtract(),
                 IsDisabled = !fontControlsEnabled || fontPx <= TerminalFontMin,
             });
 
@@ -635,7 +631,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = TerminalFontPlusAsync,
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)],
-                Icon = new Icons.Regular.Size16.TextFontSize(),
+                Icon = new Icons.Regular.Size16.Add(),
                 IsDisabled = !fontControlsEnabled || fontPx >= TerminalFontMax,
             });
 
@@ -654,9 +650,11 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     {
                         OnClick = () => TerminalSizeChangedAsync(value),
                         Text = preset.Label,
+                        // Bare tick on the active preset; no icon on the others
+                        // so the menu doesn't look like a checkbox list.
                         Icon = string.Equals(currentSizeKey, value, StringComparison.Ordinal)
-                            ? new Icons.Regular.Size16.CheckboxChecked()
-                            : new Icons.Regular.Size16.CheckboxUnchecked(),
+                            ? new Icons.Regular.Size16.Checkmark()
+                            : null,
                         IsDisabled = !sizeSelectEnabled,
                     });
                 }
