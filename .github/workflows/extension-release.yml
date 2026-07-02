@@ -480,7 +480,7 @@ jobs:
             echo "   | \`SkipVSCodeExtensionPublish\` | \`false\` |"
             echo ""
             echo "5. For a full Aspire release, keep the normal NuGet/channel/GitHub task settings and additionally set \`SkipVSCodeExtensionPublish=false\`. For a pre-release extension, also use a source build queued with \`Package VS Code Extension as Pre-Release=true\` and set \`IsPrerelease=true\`."
-            echo "6. To validate without publishing, run the same pipeline with \`DryRun=true\` and \`SkipVSCodeExtensionPublish=false\`; the release job validates the VSIX/manifest/signature triplet and Marketplace PAT but skips \`vsce publish\`."
+            echo "6. To validate without publishing, run the same pipeline with \`DryRun=true\` and \`SkipVSCodeExtensionPublish=false\`; the release job validates the VSIX/manifest/signature triplet and Marketplace service-connection identity but skips \`vsce publish\`."
             echo ""
             echo "> **Note:** This preparation workflow can also be tested from a fork with \`dry_run=true\`. Dry-run mode resolves the Marketplace baseline, generates the changelog entry, uploads the proposed files as a workflow artifact, and skips bot-token branch/PR creation."
           } > "$WORK_DIR/pr_body.md"

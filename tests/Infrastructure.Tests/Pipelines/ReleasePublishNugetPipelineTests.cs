@@ -545,6 +545,35 @@ public sealed class ReleasePublishNugetPipelineTests
         Assert.Contains("npm view $spec version --registry=https://registry.npmjs.org/", pipeline);
     }
 
+    [Fact]
+    public async Task VSCodeExtensionPublishUsesAzureCredential()
+    {
+        var pipeline = await ReadRepoFileAsync("eng/pipelines/release-publish-nuget.yml");
+        var job = ExtractSection(
+            pipeline,
+            "# ===== VS CODE EXTENSION PUBLISHING =====",
+            "# ===== WINGET PUBLISHING =====");
+
+        Assert.Contains("task: AzureCLI@2", job);
+        Assert.Contains("azureSubscription: 'VSCode Marketplace Publishing'", job);
+        Assert.Contains("vsce verify-pat --azure-credential $publisher", job);
+        Assert.Contains("""$publishArgs = @("publish", "--azure-credential", "--packagePath", $vsix.FullName, "--manifestPath", $manifestPath, "--signaturePath", $signaturePath)""", job);
+        Assert.Contains("vsce @publishArgs", job);
+
+        var secretReferenceMatches = System.Text.RegularExpressions.Regex.Matches(job, @"\b(VSCE_PAT|VscePublishToken)\b");
+        Assert.Empty(secretReferenceMatches);
+    }
+
+    private static string ExtractSection(string contents, string begin, string end)
+    {
+        var beginIndex = FindRequiredText(contents, begin);
+        var endIndex = FindRequiredText(contents, end);
+
+        Assert.True(endIndex > beginIndex, $"Expected '{end}' after '{begin}'.");
+
+        return contents[beginIndex..endIndex];
+    }
+
     private static void AssertBefore(string contents, string text, int boundaryIndex)
     {
         var textIndex = FindRequiredText(contents, text);

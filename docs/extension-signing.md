@@ -39,7 +39,7 @@ The pipeline runs `vsce verify-signature` to confirm the signature is valid befo
 
 ### 4. Publish
 
-The internal CI pipeline publishes the signed VSIX, manifest, and signature as the `aspire-vscode-extension` build artifact. The `release-publish-nuget` Azure DevOps release pipeline consumes that artifact in a 1ES `releaseJob`, verifies the signature again, verifies the `VscePublishToken`, and then runs `vsce publish` with the VSIX, manifest, and signature paths. When the release run has `IsPrerelease=true`, the extension publish step also passes `--pre-release` to `vsce`.
+The internal CI pipeline publishes the signed VSIX, manifest, and signature as the `aspire-vscode-extension` build artifact. The `release-publish-nuget` Azure DevOps release pipeline consumes that artifact in a 1ES `releaseJob`, verifies the signature again, verifies that the `VSCode Marketplace Publishing` Azure service connection has access to the `microsoft-aspire` publisher, and then runs `vsce publish --azure-credential` with the VSIX, manifest, and signature paths. When the release run has `IsPrerelease=true`, the extension publish step also passes `--pre-release` to `vsce`.
 
 ## Configuration
 
