@@ -553,6 +553,10 @@ public class Program
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, ClaudeCodeAgentEnvironmentScanner>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IAgentEnvironmentScanner, DeprecatedMcpCommandScanner>());
 
+        // Agent telemetry hook installation/configuration.
+        builder.Services.AddSingleton<Aspire.Cli.Agents.Hooks.ITelemetryHookInstaller, Aspire.Cli.Agents.Hooks.TelemetryHookInstaller>();
+        builder.Services.AddSingleton<Aspire.Cli.Agents.Hooks.ITelemetryHookConfigurator, Aspire.Cli.Agents.Hooks.TelemetryHookConfigurator>();
+
         // Template factories.
         builder.Services.AddSingleton<TemplateNuGetConfigService>();
         builder.Services.AddSingleton<ITemplateProvider, TemplateProvider>();
@@ -633,6 +637,7 @@ public class Program
         builder.Services.AddTransient<AgentCommand>();
         builder.Services.AddTransient<AgentMcpCommand>();
         builder.Services.AddTransient<AgentInitCommand>();
+        builder.Services.AddTransient<AgentTelemetryCommand>();
         builder.Services.AddTransient<TelemetryCommand>();
         builder.Services.AddTransient<TelemetryLogsCommand>();
         builder.Services.AddTransient<TelemetrySpansCommand>();
@@ -1008,8 +1013,18 @@ public class Program
         // Log feature state at startup for diagnostics
         app.Services.GetRequiredService<IFeatures>().LogFeatureState();
 
+        // The agent telemetry command is invoked fire-and-forget by the agent telemetry hook
+        // scripts on every PostToolUse event. It emits its own dedicated reported span, so the
+        // generic aspire/cli/main span is suppressed below to avoid double-counting CLI usage, and
+        // the first-run telemetry notice is skipped so a background hook cannot silently consume the
+        // notice the user is meant to see on their first interactive command.
+        var isAgentTelemetryInvocation = AgentTelemetryInvocation.Matches(args);
+
         // Display first run experience if this is the first time the CLI is run on this machine
-        await DisplayFirstTimeUseNoticeIfNeededAsync(app.Services, args, cancellationManager.Token);
+        if (!isAgentTelemetryInvocation)
+        {
+            await DisplayFirstTimeUseNoticeIfNeededAsync(app.Services, args, cancellationManager.Token);
+        }
 
         var rootCommand = app.Services.GetRequiredService<RootCommand>();
         var invokeConfig = new InvocationConfiguration()
@@ -1021,7 +1036,13 @@ public class Program
         };
 
         app.Services.GetRequiredService<CliExecutionContext>();
-        using var mainActivity = telemetry.StartReportedActivity(TelemetryConstants.Activities.Main, ActivityKind.Internal);
+
+        // Suppress the generic main span for the agent telemetry command path: that command emits
+        // its own aspire/cli/agent_telemetry span, and creating the main span too would record a
+        // second span (inflating ordinary CLI-usage metrics) for every hook event.
+        using var mainActivity = isAgentTelemetryInvocation
+            ? null
+            : telemetry.StartReportedActivity(TelemetryConstants.Activities.Main, ActivityKind.Internal);
         ProfileCaptureService.ProfileCaptureSession? profileCaptureSession = null;
 
         if (mainActivity != null)
@@ -1105,6 +1126,22 @@ public class Program
             {
                 mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
                 mainActivity?.Stop();
+            }
+
+            // The agent telemetry command runs fire-and-forget from an agent hook and the process
+            // exits immediately after. The short Release shutdown flush window is not enough to
+            // reliably export the single just-created span, so force a bounded reported-provider
+            // flush here before returning. This is a no-op when telemetry is opted out (no provider).
+            if (isAgentTelemetryInvocation)
+            {
+                try
+                {
+                    await telemetryManager.ForceFlushReportedAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                    // A telemetry flush failure must never change the hook's exit code.
+                }
             }
 
             if (profileCaptureSession is not null)

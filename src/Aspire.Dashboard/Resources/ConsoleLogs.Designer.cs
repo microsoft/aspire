@@ -75,6 +75,18 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
+        public static string ConsoleLogsNoLogsMatchFilter {
+            get {
+                return ResourceManager.GetString("ConsoleLogsNoLogsMatchFilter", resourceCulture);
+            }
+        }
+        
+        public static string ConsoleLogsTextFilter {
+            get {
+                return ResourceManager.GetString("ConsoleLogsTextFilter", resourceCulture);
+            }
+        }
+        
         public static string ConsoleLogsWatchingLogs {
             get {
                 return ResourceManager.GetString("ConsoleLogsWatchingLogs", resourceCulture);

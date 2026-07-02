@@ -11,6 +11,8 @@ internal sealed class TestEnvironment : IEnvironment
 {
     public IReadOnlyDictionary<string, string?> Variables { get; }
 
+    public int GetEnvironmentVariablesCallCount { get; private set; }
+
     public TestEnvironment(IReadOnlyDictionary<string, string?>? variables = null)
     {
         Variables = variables ?? new Dictionary<string, string?>();
@@ -23,6 +25,7 @@ internal sealed class TestEnvironment : IEnvironment
 
     public IEnumerable<(string Name, string? Value)> GetEnvironmentVariables()
     {
+        GetEnvironmentVariablesCallCount++;
         return Variables.Select(pair => (pair.Key, pair.Value));
     }
 

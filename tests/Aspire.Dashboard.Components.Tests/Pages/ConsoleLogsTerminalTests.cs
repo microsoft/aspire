@@ -12,6 +12,7 @@ using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 using Value = Google.Protobuf.WellKnownTypes.Value;
 
@@ -145,6 +146,87 @@ public partial class ConsoleLogsTests
         Assert.Single(cut.FindComponents<LogViewer>());
 
         await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task SwitchingFromTerminalToNonTerminalResource_RestoresSearchFilter()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var plainResource = ModelTestHelpers.CreateResource(resourceName: "plain-resource", state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource, plainResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // Simulate PTY attach so the page auto-flips to the Terminal view,
+        // where the log filter is hidden (the filter only applies to
+        // LogViewer content, not to a live PTY).
+        var terminalView = cut.FindComponent<TerminalView>().Instance;
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+        Assert.Empty(cut.FindComponents<FluentSearch>());
+
+        navigationManager.LocationChanged += (sender, e) =>
+        {
+            cut.SetParametersAndRender(builder =>
+            {
+                builder.Add(m => m.ResourceName, "plain-resource");
+            });
+        };
+        var resourceSelect = cut.FindComponent<ResourceSelect>();
+        var innerSelect = resourceSelect.Find("fluent-select");
+        innerSelect.Change("plain-resource");
+
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == plainResource.Name);
+        cut.WaitForState(() => cut.FindComponents<LogViewer>().Count > 0);
+
+        consoleLogsChannel.Writer.TryWrite([
+            new ResourceLogLine(1, "first log", IsErrorMessage: false),
+            new ResourceLogLine(2, "filtered log", IsErrorMessage: false)
+        ]);
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".log-content").Count));
+
+        var search = Assert.Single(cut.FindComponents<FluentSearch>());
+        await cut.InvokeAsync(() => search.Instance.ValueChanged.InvokeAsync("filtered"));
+
+        cut.WaitForAssertion(() =>
+        {
+            var logViewer = Assert.Single(cut.FindComponents<LogViewer>());
+            Assert.Equal("filtered", logViewer.Instance.FilterText);
+
+            var content = Assert.Single(cut.FindAll(".log-content"));
+            Assert.Contains("filtered log", content.TextContent);
+        });
     }
 
     [Fact]
