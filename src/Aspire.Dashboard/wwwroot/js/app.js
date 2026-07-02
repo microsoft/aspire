@@ -334,6 +334,261 @@ window.focusElement = function (selector, suppressFocusVisible) {
     }
 };
 
+const aspirePopupKeyboardNavigationState = new Map();
+
+window.initializeAspirePopupKeyboardNavigation = function (anchorId, popupId, dotNetHelper, options) {
+    window.disposeAspirePopupKeyboardNavigation(anchorId, popupId);
+
+    const anchorElement = document.getElementById(anchorId);
+    if (!anchorElement) {
+        return;
+    }
+
+    const key = getAspirePopupKeyboardNavigationKey(anchorId, popupId);
+    const tabExitsAlways = options?.tabExitsAlways ?? options?.TabExitsAlways ?? false;
+    const resolvePopupElement = () => document.getElementById(popupId);
+
+    const popupKeydownListener = function (ev) {
+        const isEscape = ev.key === "Escape" || ev.keyCode === 27;
+        if (ev.key !== "Tab" && !isEscape) {
+            return;
+        }
+
+        if (isEscape) {
+            stopPopupKeyboardEvent(ev);
+            anchorElement.focus();
+            dotNetHelper.invokeMethodAsync("CloseAsync");
+            return;
+        }
+
+        if (tabExitsAlways) {
+            const popupElement = resolvePopupElement();
+            stopPopupKeyboardEvent(ev);
+            if (ev.shiftKey) {
+                anchorElement.focus();
+            } else {
+                focusNextElementAfterAnchor(anchorElement, popupElement);
+            }
+            dotNetHelper.invokeMethodAsync("CloseAsync");
+            return;
+        }
+
+        const popupElement = resolvePopupElement();
+        if (!popupElement) {
+            return;
+        }
+
+        const focusableElements = getAspireFocusableElements(popupElement);
+        const activeIndex = findAspireActiveElementIndex(focusableElements);
+
+        if (!ev.shiftKey && (focusableElements.length === 0 || activeIndex === focusableElements.length - 1)) {
+            stopPopupKeyboardEvent(ev);
+            focusNextElementAfterAnchor(anchorElement, popupElement);
+            dotNetHelper.invokeMethodAsync("CloseAsync");
+        } else if (ev.shiftKey && (focusableElements.length === 0 || activeIndex === 0)) {
+            stopPopupKeyboardEvent(ev);
+            anchorElement.focus();
+            dotNetHelper.invokeMethodAsync("CloseAsync");
+        }
+    };
+
+    const anchorKeydownListener = function (ev) {
+        if (ev.key !== "Tab") {
+            return;
+        }
+
+        if (ev.shiftKey) {
+            // Shift+Tab on the anchor: let the browser move focus back to the previous
+            // page element and close the popup. We intentionally do NOT preventDefault
+            // here (the native focus shift is the desired behavior), but we still stop
+            // propagation so Fluent UI's own keyboard helper doesn't also fire and
+            // calculate the previous element from the wrong (shadow DOM) starting point.
+            ev.stopPropagation();
+            ev.stopImmediatePropagation();
+            dotNetHelper.invokeMethodAsync("CloseAsync");
+            return;
+        }
+
+        const popupElement = resolvePopupElement();
+        if (!popupElement) {
+            return;
+        }
+
+        const firstFocusable = getAspireFocusableElements(popupElement)[0];
+        if (firstFocusable) {
+            stopPopupKeyboardEvent(ev);
+            firstFocusable.focus();
+        } else {
+            stopPopupKeyboardEvent(ev);
+            focusNextElementAfterAnchor(anchorElement, popupElement);
+            dotNetHelper.invokeMethodAsync("CloseAsync");
+        }
+    };
+
+    const documentKeydownListener = function (ev) {
+        const isEscape = ev.key === "Escape" || ev.keyCode === 27;
+        if (ev.key !== "Tab" && !isEscape) {
+            return;
+        }
+
+        const eventPath = typeof ev.composedPath === "function" ? ev.composedPath() : [];
+        const popupElement = resolvePopupElement();
+        const isFromAnchor = eventPath.includes(anchorElement) || anchorElement.contains(ev.target);
+        const isFromPopup = popupElement && (eventPath.includes(popupElement) || popupElement.contains(ev.target));
+
+        if (isFromAnchor) {
+            anchorKeydownListener(ev);
+        } else if (isFromPopup) {
+            popupKeydownListener(ev);
+        }
+    };
+
+    // Fluent UI's popup keyboard helper currently calculates the next page element from
+    // the inner shadow DOM target for fluent-button anchors and menu items. Those inner
+    // elements are not in document order, so Tab can wrap to the first focusable control
+    // on the page. Capture Tab at the document before Fluent UI's listener and calculate
+    // from the stable host elements instead.
+    document.addEventListener("keydown", documentKeydownListener, true);
+
+    aspirePopupKeyboardNavigationState.set(key, {
+        anchorElement,
+        documentKeydownListener
+    });
+};
+
+window.disposeAspirePopupKeyboardNavigation = function (anchorId, popupId) {
+    const key = getAspirePopupKeyboardNavigationKey(anchorId, popupId);
+    const state = aspirePopupKeyboardNavigationState.get(key);
+    if (!state) {
+        return;
+    }
+
+    document.removeEventListener("keydown", state.documentKeydownListener, true);
+    aspirePopupKeyboardNavigationState.delete(key);
+};
+
+function getAspirePopupKeyboardNavigationKey(anchorId, popupId) {
+    return `${anchorId}:${popupId}`;
+}
+
+function stopPopupKeyboardEvent(ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    ev.stopImmediatePropagation();
+}
+
+function getAspireFocusableElements(container, excludedContainer) {
+    const focusableSelector = "input, select, textarea, button, object, a[href], area[href], iframe, summary, [tabindex], [contenteditable='true']";
+    const focusableElements = [];
+
+    for (const element of container.querySelectorAll("*")) {
+        if (excludedContainer?.contains(element)) {
+            continue;
+        }
+
+        if (isAspireFocusableElement(element, focusableSelector)) {
+            focusableElements.push(element);
+        }
+    }
+
+    return focusableElements;
+}
+
+function isAspireFocusableElement(element, focusableSelector) {
+    const tagName = element.tagName.toLowerCase();
+    const isFluentInteractiveElement = tagName === "fluent-anchor"
+        || tagName === "fluent-button"
+        || tagName === "fluent-checkbox"
+        || tagName === "fluent-menu-item"
+        || tagName === "fluent-radio"
+        || tagName === "fluent-search"
+        || tagName === "fluent-select"
+        || tagName === "fluent-switch"
+        || tagName === "fluent-tab"
+        || tagName === "fluent-text-field";
+
+    if (!isFluentInteractiveElement && !element.matches(focusableSelector)) {
+        return false;
+    }
+
+    // A negative tabIndex always opts an element out of sequential focus navigation,
+    // including Fluent custom elements. Without this check, a fluent-button with
+    // tabindex="-1" (e.g. an item that's only programmatically focused) would still
+    // be picked up by Tab navigation through the popup.
+    if (element.tabIndex < 0) {
+        return false;
+    }
+
+    if (element.disabled || element.getAttribute("aria-disabled") === "true") {
+        return false;
+    }
+
+    return isAspireElementVisible(element);
+}
+
+function isAspireElementVisible(element) {
+    if (typeof element.checkVisibility === "function") {
+        return element.checkVisibility();
+    }
+
+    return !!(element.offsetWidth || element.offsetHeight || element.getClientRects().length);
+}
+
+function findAspireActiveElementIndex(focusableElements) {
+    const activeElement = document.activeElement;
+    const deepActiveElement = getAspireDeepActiveElement();
+
+    return focusableElements.findIndex(element =>
+        element === activeElement
+        || element === deepActiveElement
+        || element.contains(deepActiveElement)
+        || element.shadowRoot?.contains(deepActiveElement));
+}
+
+function getAspireDeepActiveElement() {
+    let activeElement = document.activeElement;
+    while (activeElement?.shadowRoot?.activeElement) {
+        activeElement = activeElement.shadowRoot.activeElement;
+    }
+
+    return activeElement;
+}
+
+function focusNextElementAfterAnchor(anchorElement, popupElement) {
+    const root = anchorElement.getRootNode() instanceof Document
+        ? anchorElement.getRootNode().body
+        : document.body;
+    const focusableSelector = "input, select, textarea, button, object, a[href], area[href], iframe, summary, [tabindex], [contenteditable='true']";
+
+    // Walk the document in source order and stop at the first focusable element that
+    // comes after the anchor. Building the full focusable list (the previous approach)
+    // is wasteful when the page has many controls and the answer is usually a sibling
+    // of the anchor a few nodes away. Elements inside the popup are skipped because Tab
+    // is supposed to land *after* the popup, not back inside it.
+    let foundAnchor = false;
+    for (const element of root.querySelectorAll("*")) {
+        if (popupElement?.contains(element)) {
+            continue;
+        }
+
+        if (!foundAnchor) {
+            if (element === anchorElement) {
+                foundAnchor = true;
+            }
+            continue;
+        }
+
+        if (isAspireFocusableElement(element, focusableSelector)) {
+            element.focus();
+            return;
+        }
+    }
+
+    // No focusable element follows the anchor. Keep focus on the anchor so the user
+    // doesn't get warped to the top of the page.
+    anchorElement.focus();
+}
+
 window.getWindowDimensions = function() {
     return {
         width: window.innerWidth,

@@ -5,7 +5,11 @@
 @inject IStringLocalizer<ControlsStrings> Loc
 
 @{
-    var id = $"typeFilterButton-{Filter.SanitizedHtmlId}-{Guid.NewGuid()}";
+    // Use a stable per-instance id (computed once in OnInitialized) so the FluentPopover anchor
+    // doesn't change between renders. The old Guid.NewGuid() call here re-rendered the anchor id
+    // every render, which in turn caused AspirePopupFocusNavigation to dispose and re-register the
+    // popup-keyboard handler on every parent state change.
+    var id = _anchorId;
 }
 <FluentButton id="@id"
               IconEnd="@(new Icons.Regular.Size20.Filter())"
@@ -16,22 +20,24 @@
 <FluentPopover AnchorId="@id" @bind-Open="Filter.PopupVisible" VerticalThreshold="@(Math.Min((Filter.Values.Count + 1) * 36 + 48, 300))" AutoFocus="false">
     <Header>@Filter.Name</Header>
     <Body>
-        <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
-            <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
-                            ThreeState="true"
-                            ShowIndeterminate="false"
-                            ThreeStateOrderUncheckToIntermediate="true"
-                            @bind-CheckState:get="Filter.AreAllValuesSelected"
-                            @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(v))"/>
-            @foreach (var tag in ChartFilterTags.GetOrderedValues(Filter.Values))
-            {
-                var isChecked = Filter.SelectedValues.Contains(tag);
-                <FluentCheckbox Label="@tag.Text"
-                                title="@tag.Text"
-                                @key=tag
-                                @bind-Value:get="isChecked"
-                                @bind-Value:set="c => OnTagSelectionChangedAsync(tag, c)"/>
-            }
-        </FluentStack>
+        <AspirePopupFocusNavigation AnchorId="@id" @bind-Open="Filter.PopupVisible">
+            <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
+                <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
+                                ThreeState="true"
+                                ShowIndeterminate="false"
+                                ThreeStateOrderUncheckToIntermediate="true"
+                                @bind-CheckState:get="Filter.AreAllValuesSelected"
+                                @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(v))"/>
+                @foreach (var tag in ChartFilterTags.GetOrderedValues(Filter.Values))
+                {
+                    var isChecked = Filter.SelectedValues.Contains(tag);
+                    <FluentCheckbox Label="@tag.Text"
+                                    title="@tag.Text"
+                                    @key=tag
+                                    @bind-Value:get="isChecked"
+                                    @bind-Value:set="c => OnTagSelectionChangedAsync(tag, c)"/>
+                }
+            </FluentStack>
+        </AspirePopupFocusNavigation>
     </Body>
 </FluentPopover>

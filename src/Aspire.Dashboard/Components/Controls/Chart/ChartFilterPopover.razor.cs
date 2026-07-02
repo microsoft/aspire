@@ -3,11 +3,17 @@
 
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
+using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Components;
 
 public partial class ChartFilterPopover : IDisposable
 {
+    // Stable per-instance id used as the FluentPopover anchor. Composed of the sanitized filter
+    // name (for readability when debugging) plus an Identifier.NewId() suffix so multiple
+    // ChartFilterPopover instances on the same page never collide.
+    private string _anchorId = string.Empty;
+
     [Parameter, EditorRequired]
     public required DimensionFilterViewModel Filter { get; set; }
 
@@ -16,6 +22,7 @@ public partial class ChartFilterPopover : IDisposable
 
     protected override void OnInitialized()
     {
+        _anchorId = $"typeFilterButton-{Filter.SanitizedHtmlId}-{Identifier.NewId()}";
         Filter.NotifyStateChanged += OnFilterStateChanged;
     }
 

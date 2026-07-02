@@ -65,6 +65,31 @@ public class UrlsColumnDisplayTests : DashboardTestContext
         Assert.Equal(totalUrls, overflowItems.Count);
     }
 
+    [Fact]
+    public void Render_MultipleUrls_OverflowPopoverAnchorsToMoreButton()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        FluentUISetupHelpers.SetupFluentOverflow(this);
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+
+        var displayedUrls = CreateDisplayedUrls(3);
+        var resource = ModelTestHelpers.CreateResource(resourceName: "test-resource", resourceType: "Project", state: KnownResourceState.Running);
+
+        var cut = RenderComponent<UrlsColumnDisplay>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.HasMultipleReplicas, false);
+            builder.Add(p => p.DisplayedUrls, displayedUrls);
+        });
+
+        var moreButton = cut.Find("fluent-button.url-button");
+        var moreButtonId = moreButton.GetAttribute("id");
+
+        Assert.False(string.IsNullOrEmpty(moreButtonId));
+        Assert.All(cut.FindComponents<FluentPopover>(), popover => Assert.Equal(moreButtonId, popover.Instance.AnchorId));
+        Assert.All(cut.FindComponents<AspirePopupFocusNavigation>(), navigation => Assert.Equal(moreButtonId, navigation.Instance.AnchorId));
+    }
+
     private static List<DisplayedUrl> CreateDisplayedUrls(int count)
     {
         return Enumerable.Range(0, count).Select(i => new DisplayedUrl

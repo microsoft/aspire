@@ -43,6 +43,7 @@
                 @if (HasViewOptionsMenu())
                 {
                     <AspireMenuButton ButtonAppearance="Appearance.Stealth"
+                                      MenuButtonId="resourcesViewOptionsButton"
                                       Icon="@(new Icons.Regular.Size20.Options())"
                                       Items="@_resourcesMenuItems"
                                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)]"
@@ -71,19 +72,24 @@
         </ToolbarSection>
 
         <MainSection>
-            <FluentPopover AnchorId="resourceFilterButton"
-                           @bind-Open="_isFilterPopupVisible"
-                           AutoFocus="true"
-                           FixedPlacement="true"
-                           Class="resources-filter-popup">
-                <Body>
-                    <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
-                                     ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
-                                     ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
-                                     OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
-                                     OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
-                </Body>
-            </FluentPopover>
+            @if (ViewportInformation.IsDesktop)
+            {
+                <FluentPopover AnchorId="resourceFilterButton"
+                               @bind-Open="_isFilterPopupVisible"
+                               AutoFocus="true"
+                               FixedPlacement="true"
+                               Class="resources-filter-popup">
+                    <Body>
+                        <AspirePopupFocusNavigation AnchorId="resourceFilterButton" @bind-Open="_isFilterPopupVisible">
+                            <ResourceFilters ResourceStates="@PageViewModel.ResourceStatesToVisibility"
+                                             ResourceTypes="@PageViewModel.ResourceTypesToVisibility"
+                                             ResourceHealthStates="@PageViewModel.ResourceHealthStatusesToVisibility"
+                                             OnAllFilterVisibilityCheckedChangedAsync="@OnAllFilterVisibilityCheckedChangedAsync"
+                                             OnResourceFilterVisibilityChangedAsync="@OnResourceFilterVisibilityChangedAsync" />
+                        </AspirePopupFocusNavigation>
+                    </Body>
+                </FluentPopover>
+            }
 
             <SummaryDetailsView DetailsTitle="@(PageViewModel.SelectedResource != null ? $"{PageViewModel.SelectedResource.ResourceType}: {GetResourceName(PageViewModel.SelectedResource)}" : null)"
                                 ShowDetails="@showDetailsView"

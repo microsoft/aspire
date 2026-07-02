@@ -57,6 +57,7 @@ internal static class FluentUISetupHelpers
         var module = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/AnchoredRegion/FluentAnchoredRegion.razor.js"));
         module.SetupVoid("goToNextFocusableElement", _ => true);
         module.SetupVoid("initializeKeyboardNavigation", _ => true);
+        module.SetupVoid("disposeKeyboardNavigation", _ => true);
         module.SetupVoid("removeKeyboardNavigation", _ => true);
     }
 
@@ -173,6 +174,9 @@ internal static class FluentUISetupHelpers
         context.Services.AddScoped<SpanMenuBuilder>();
         context.Services.AddScoped<TraceMenuBuilder>();
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
+
+        context.JSInterop.SetupVoid("initializeAspirePopupKeyboardNavigation", _ => true);
+        context.JSInterop.SetupVoid("disposeAspirePopupKeyboardNavigation", _ => true);
     }
 
     public static void SetupFluentUIComponents(TestContext context)
