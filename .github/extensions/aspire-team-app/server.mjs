@@ -105,9 +105,14 @@ async function getDashboard(force = false) {
       dashboard.dismissedCount = (prefs.dismissedNotifications || []).length;
     }
     cache = { dashboard, prefs };
-    inflight = null;
     return cache;
-  })();
+  })().finally(() => {
+    // Clear the in-flight marker whether the load resolved OR threw. If a rejected
+    // promise were left cached here, the `if (inflight) return inflight` guard above
+    // would replay that same failure to every later /api/state and /api/refresh request
+    // until the extension process restarted. Resetting it lets the next request retry.
+    inflight = null;
+  });
   return inflight;
 }
 
@@ -137,11 +142,51 @@ async function readBody(req) {
   }
 }
 
+// Reject cross-origin mutating requests. The iframe served by this instance calls the
+// loopback API same-origin, so a present Origin header must match this server's host and
+// a present Sec-Fetch-Site must indicate a same-origin (or non-site) navigation. Missing
+// headers (older clients / direct navigations) are allowed through. This mirrors the
+// origin guard used by the sibling issue-triage-canvas extension so any browser page that
+// happens to reach the loopback port cannot drive preference/account/notification changes.
+function isAllowedPostRequest(req) {
+  const host = req.headers.host;
+  if (!host) {
+    return false;
+  }
+
+  const expectedOrigin = `http://${host}`;
+  const origin = req.headers.origin;
+  if (origin && !isSameOrigin(origin, expectedOrigin)) {
+    return false;
+  }
+
+  const fetchSite = req.headers["sec-fetch-site"];
+  if (fetchSite && fetchSite !== "same-origin" && fetchSite !== "none") {
+    return false;
+  }
+
+  return true;
+}
+
+function isSameOrigin(origin, expectedOrigin) {
+  try {
+    return new URL(origin).origin === new URL(expectedOrigin).origin;
+  } catch {
+    return false;
+  }
+}
+
 async function handle(req, res, log) {
   const url = new URL(req.url, "http://127.0.0.1");
   const path = url.pathname;
 
   try {
+    // Every mutating route on this API is a POST, so gate POSTs on the origin guard
+    // before dispatching to any handler that reads the body or writes preferences.
+    if (req.method === "POST" && !isAllowedPostRequest(req)) {
+      return send(res, 403, { error: "forbidden" });
+    }
+
     if (req.method === "GET" && (path === "/" || path === "/index.html")) {
       return send(res, 200, HTML, "text/html");
     }
