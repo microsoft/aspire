@@ -195,6 +195,16 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // never fires — the page still leaves Terminal and shows the resource's
     // stop/exit log lines.
     private bool _selectedTerminalResourceStopped;
+    // Set when client.onExit fires on the JS side, cleared the next time we
+    // observe a genuine "connecting" toolbar snapshot. While this is true the
+    // auto-switch-to-Terminal path is suppressed so a late in-flight
+    // primary/viewer snapshot arriving after onExit — the JS side may have
+    // already queued a notifyToolbar callback before the exit propagated —
+    // can't be mistaken for a fresh attach and yank the user back to Terminal
+    // right after we just flipped to Console. A real reconnect always goes
+    // through the WebSocket lifecycle and emits "connecting" first, which is
+    // what clears this gate and re-arms the attach edge.
+    private bool _terminalExitedAwaitingReattach;
     // Tracks the view that was rendered to the DOM on the previous render
     // pass. When the active view flips back to Terminal we need to nudge
     // xterm.js to relayout because the wrapper's display:none → visible
@@ -504,6 +514,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         _userPickedView = false;
         _lastTerminalStatus = null;
         _selectedTerminalResourceStopped = false;
+        _terminalExitedAwaitingReattach = false;
         _activeView = ConsoleLogsView.Console;
 
         if (!isAllSelected && selectedResourceName is not null &&
@@ -1050,36 +1061,40 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             if (_selectedResourceHasTerminal &&
                 string.Equals(resource.Name, PageViewModel.SelectedResource.Id?.InstanceId, StringComparisons.ResourceName))
             {
-                var wasStopped = _selectedTerminalResourceStopped;
-                var isStopped = resource.IsStopped();
-                _selectedTerminalResourceStopped = isStopped;
-
-                if (!wasStopped && isStopped)
+                // OnResourceChanged runs on the resource-subscription
+                // background task (see the Task.Run wrapping the await
+                // foreach in InitializeAsync). The terminal callbacks
+                // OnTerminalToolbarStateChangedAsync and OnTerminalExitedAsync
+                // read/write these same fields (_selectedTerminalResourceStopped
+                // gates the auto-switch, _activeView is the switch target) on
+                // the renderer dispatcher. Hop the entire read/modify/write
+                // sequence onto the dispatcher so those two writers are
+                // serialized and neither observes a torn intermediate state.
+                var stoppedSnapshot = resource.IsStopped();
+                await InvokeAsync(() =>
                 {
-                    // Flip back to Console. We deliberately do NOT
-                    // synthetically set _lastTerminalStatus to "connecting"
-                    // here: the JS side may still have an in-flight
-                    // `primary` snapshot, and pretending we just saw
-                    // "connecting" would make that next snapshot look
-                    // like a fresh attach edge and yank the user straight
-                    // back to Terminal. The real WS will go through close
-                    // → connecting → connected naturally on restart, so
-                    // the genuine edge fires then. The
-                    // _selectedTerminalResourceStopped gate in the auto-
-                    // switch logic suppresses any spurious edges in the
-                    // meantime.
-                    if (!_userPickedView && _activeView == ConsoleLogsView.Terminal)
+                    var wasStopped = _selectedTerminalResourceStopped;
+                    _selectedTerminalResourceStopped = stoppedSnapshot;
+
+                    if (!wasStopped && stoppedSnapshot &&
+                        !_userPickedView && _activeView == ConsoleLogsView.Terminal)
                     {
+                        // Flip back to Console. We deliberately do NOT
+                        // synthetically set _lastTerminalStatus to
+                        // "connecting" here: the JS side may still have
+                        // an in-flight `primary` snapshot, and pretending
+                        // we just saw "connecting" would make that next
+                        // snapshot look like a fresh attach edge and yank
+                        // the user straight back to Terminal. The real WS
+                        // will go through close → connecting → connected
+                        // naturally on restart, so the genuine edge fires
+                        // then. The _selectedTerminalResourceStopped gate
+                        // in the auto-switch logic suppresses any spurious
+                        // edges in the meantime.
                         _activeView = ConsoleLogsView.Console;
-                        // OnResourceChanged runs on the resource-subscription
-                        // background task (see the Task.Run wrapping the
-                        // await foreach in InitializeAsync); hop to the
-                        // renderer sync context so StateHasChanged doesn't
-                        // trip Dispatcher.AssertAccess and fault the whole
-                        // subscription loop.
-                        await InvokeAsync(StateHasChanged);
+                        StateHasChanged();
                     }
-                }
+                });
             }
         }
         else if (changeType == ResourceViewModelChangeType.Delete)
@@ -1334,16 +1349,27 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         var previousStatus = _lastTerminalStatus;
         _lastTerminalStatus = state.Status;
 
+        // A genuine WebSocket reconnect always emits "connecting" before the
+        // next attach snapshot. Use that transition to clear the post-onExit
+        // gate: any late in-flight snapshot arriving without a preceding
+        // "connecting" is stale and will be ignored by the guard below.
+        var isConnectingStatus = string.Equals(state.Status, "connecting", StringComparison.Ordinal);
+        if (isConnectingStatus)
+        {
+            _terminalExitedAwaitingReattach = false;
+        }
+
         // The initial JS-side snapshot may already report a non-connecting
         // status if the WebSocket handshake completes before the first
         // notifyToolbar fires. Treat the "no prior status" case the same as
         // "connecting" so the initial-attach edge still triggers.
         var wasConnecting = previousStatus is null
             || string.Equals(previousStatus, "connecting", StringComparison.Ordinal);
-        var isConnected = !string.Equals(state.Status, "connecting", StringComparison.Ordinal);
+        var isConnected = !isConnectingStatus;
 
         if (_selectedResourceHasTerminal &&
             !_selectedTerminalResourceStopped &&
+            !_terminalExitedAwaitingReattach &&
             !_userPickedView &&
             wasConnecting &&
             isConnected)
@@ -1358,13 +1384,16 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     {
         Logger.LogDebug("Terminal for resource '{ResourceName}' exited with code {ExitCode}.", _terminalResourceName, info.ExitCode);
 
-        // Force the next snapshot to look like a fresh attach: the WebSocket
-        // will go through `connecting` again when the resource restarts and
-        // the terminal host process is recreated. Setting the cached status
-        // back to `connecting` here means that reconnect's first non-
-        // connecting snapshot will trigger the auto-switch back to Terminal,
-        // matching the behavior on initial connect.
-        _lastTerminalStatus = "connecting";
+        // Arm the post-exit gate. The auto-switch-to-Terminal path is now
+        // suppressed until we observe a genuine "connecting" toolbar snapshot
+        // (which only fires when the JS side opens a fresh WebSocket for the
+        // restarted terminal host). This defends against a race where the JS
+        // side had already queued a `primary`/`viewer` notifyToolbar callback
+        // before onExit propagated: without the gate that stale snapshot would
+        // look like a fresh attach edge (previous status = whatever, new
+        // status = primary) and yank the user back to Terminal right after we
+        // just flipped to Console.
+        _terminalExitedAwaitingReattach = true;
 
         // PTY closed — flip back to Console so the user sees the resource's
         // final log lines (including the hosting "exited" message and any

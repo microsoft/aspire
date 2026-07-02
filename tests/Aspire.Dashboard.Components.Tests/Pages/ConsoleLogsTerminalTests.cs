@@ -541,6 +541,251 @@ public partial class ConsoleLogsTests
         Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
     }
 
+    [Fact]
+    public async Task TerminalResource_ViewToggle_RenderedDisplayStylesMatchActiveView()
+    {
+        // The user-visible contract for the view flip is not the _activeView
+        // enum but the `display: contents` / `display: none` pair on the two
+        // wrapper divs in ConsoleLogs.razor. Lock down that mapping so a
+        // future edit that inverts the ternary or swaps the wrappers can't
+        // pass the enum-based tests while producing a broken UI.
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // Initial state: page defaults to Console. The Console wrapper (the
+        // one containing LogViewer) must be visible; the Terminal wrapper
+        // must be hidden. Locate each wrapper by descending from the
+        // component's rendered element.
+        var (consoleWrapper, terminalWrapper) = FindViewWrappers(cut);
+        Assert.Contains("display: contents", consoleWrapper.GetAttribute("style"));
+        Assert.Contains("display: none", terminalWrapper.GetAttribute("style"));
+
+        // Flip to Terminal via the user-picked latch path and re-query the
+        // wrappers — the render pass must swap the two `display` values.
+        await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Terminal)));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+
+        (consoleWrapper, terminalWrapper) = FindViewWrappers(cut);
+        Assert.Contains("display: none", consoleWrapper.GetAttribute("style"));
+        Assert.Contains("display: contents", terminalWrapper.GetAttribute("style"));
+    }
+
+    [Fact]
+    public async Task TerminalResource_CleanExit_StaleToolbarSnapshotDoesNotFlipBack()
+    {
+        // Regression: OnTerminalExitedAsync previously forced
+        // _lastTerminalStatus back to "connecting" so a subsequent
+        // non-connecting snapshot would look like a fresh attach. That made
+        // the page vulnerable to a stale in-flight primary snapshot that the
+        // JS side had already queued before onExit propagated: the snapshot
+        // would arrive after we flipped to Console and immediately snap the
+        // user back to Terminal. The fix is a _terminalExitedAwaitingReattach
+        // gate that only clears when we observe a real "connecting" snapshot
+        // (which only fires on a genuine WebSocket reopen).
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // PTY attaches → page flips to Terminal.
+        var terminalView = cut.FindComponent<TerminalView>().Instance;
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+
+        // Clean exit from the JS side (user typed `exit`) — page flips back
+        // to Console.
+        await cut.InvokeAsync(() => terminalView.OnTerminalExited(1, 0));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
+
+        // Stale in-flight primary snapshot lands after onExit. Without the
+        // reattach gate this would look like a fresh attach edge; with the
+        // gate it must be ignored.
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
+    }
+
+    [Fact]
+    public async Task TerminalResource_CleanExit_GenuineReconnectAutoSwitchesBackToTerminal()
+    {
+        // Companion to the stale-snapshot test: a real WebSocket reopen goes
+        // through "connecting" before the next non-connecting snapshot. That
+        // "connecting" observation clears the reattach gate, so the
+        // subsequent primary snapshot is a genuine attach edge and the auto-
+        // switch to Terminal fires again — matching the initial-connect
+        // behaviour.
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        var terminalView = cut.FindComponent<TerminalView>().Instance;
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+
+        await cut.InvokeAsync(() => terminalView.OnTerminalExited(1, 0));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
+
+        // Genuine reconnect: WS reopens, JS emits "connecting" first. That
+        // clears the reattach gate. (In production a fresh initTerminal
+        // would allocate a new TerminalId; the bUnit JS stub returns the
+        // same id both times, so we reuse id 1 which matches what the
+        // TerminalView cached at init and thus passes its stale-id guard.)
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "connecting",
+            Connected = false,
+            IsPrimary = false,
+            FontPx = 14,
+        }));
+
+        // Next snapshot is the fresh attach — must auto-switch back to
+        // Terminal.
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Terminal, instance.ActiveViewForTest);
+    }
+
+    private static (AngleSharp.Dom.IElement Console, AngleSharp.Dom.IElement Terminal) FindViewWrappers(
+        Bunit.IRenderedComponent<Components.Pages.ConsoleLogs> cut)
+    {
+        // LogViewer renders <div class="log-overflow ..."> as its root and
+        // TerminalView renders <div class="terminal-container">. The two
+        // Console/Terminal wrappers are the enclosing divs that carry the
+        // `display: contents;` / `display: none;` inline style bound to
+        // _activeView. Walk up from each component root until we hit that
+        // wrapper — the raw inline style is the user-visible flip contract.
+        var logRoot = cut.Find(".log-overflow");
+        var terminalRoot = cut.Find(".terminal-container");
+
+        var consoleWrapper = FindWrapperWithDisplayStyle(logRoot);
+        var terminalWrapper = FindWrapperWithDisplayStyle(terminalRoot);
+
+        Assert.NotNull(consoleWrapper);
+        Assert.NotNull(terminalWrapper);
+        return (consoleWrapper!, terminalWrapper!);
+    }
+
+    private static AngleSharp.Dom.IElement? FindWrapperWithDisplayStyle(AngleSharp.Dom.IElement start)
+    {
+        var current = start.ParentElement;
+        while (current is not null)
+        {
+            var style = current.GetAttribute("style") ?? string.Empty;
+            if (current.TagName.Equals("DIV", StringComparison.OrdinalIgnoreCase) &&
+                style.Contains("display:", StringComparison.Ordinal))
+            {
+                return current;
+            }
+            current = current.ParentElement;
+        }
+        return null;
+    }
+
     private void SetupTerminalViewJsInterop()
     {
         // TerminalView.OnAfterRenderAsync does:
