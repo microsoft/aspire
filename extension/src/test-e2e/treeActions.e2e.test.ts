@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import { findResource, getCommandInvocationCount, getTerminalCommandCount, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForHttpText, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { assertClipboardTextForE2E, executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { assertClipboardTextForE2E, executeE2eControlCommand, restoreClipboardSnapshotForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { answerActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
@@ -16,6 +16,7 @@ suite('Aspire tree action command E2E', function () {
 
     teardown(async () => {
         await runE2eTeardown([
+            () => restoreClipboardSnapshotForE2E(),
             () => setCliUnavailableForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
@@ -80,6 +81,7 @@ suite('Aspire tree action command E2E', function () {
         await noCommandsResource.expand();
         assert.strictEqual(await noCommandsResource.findChildItem('Commands'), undefined);
 
+        await snapshotClipboardForE2E();
         await executeE2eControlCommand({ name: 'copyAppHostPath', appHostPath });
         await assertClipboardTextForE2E(appHostPath, 'path');
 

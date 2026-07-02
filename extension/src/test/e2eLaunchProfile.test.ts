@@ -278,6 +278,7 @@ suite('E2E launch profile', () => {
         const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
         const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
         const appHostTreeE2E = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostTree.e2e.test.ts'), 'utf8');
+        const treeActionsE2E = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
 
         assert.ok(apiTypes.includes("{ name: 'snapshotClipboard' }"));
         assert.ok(apiTypes.includes("{ name: 'restoreClipboardSnapshot' }"));
@@ -301,6 +302,11 @@ suite('E2E launch profile', () => {
         assert.ok(appHostTreeE2E.includes('restoreClipboardSnapshotForE2E'));
         assert.ok(appHostTreeE2E.includes("await assertClipboardTextForE2E(appHostPath, 'path');"));
         assert.ok(!appHostTreeE2E.includes('clipboardTextToRestore'));
+
+        assert.ok(treeActionsE2E.includes('snapshotClipboardForE2E'));
+        assert.ok(treeActionsE2E.includes('restoreClipboardSnapshotForE2E'));
+        assert.ok(treeActionsE2E.indexOf('() => restoreClipboardSnapshotForE2E()') < treeActionsE2E.indexOf('() => setCliUnavailableForE2E(false)'));
+        assert.ok(treeActionsE2E.indexOf('await snapshotClipboardForE2E();') < treeActionsE2E.indexOf("await executeE2eControlCommand({ name: 'copyAppHostPath'"));
     });
 
     test('keeps copied values out of E2E control command results', () => {
