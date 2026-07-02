@@ -4,6 +4,7 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 var matchmaker = builder.AddProject<Projects.Godot_Matchmaker>("matchmaker")
+    .WithHttpEndpoint()
     .WithExternalHttpEndpoints();
 
 // Read Godot binary path from configuration; fall back to a platform-appropriate default.
@@ -15,7 +16,7 @@ var godotBin = builder.Configuration["GODOT_BIN"]
 var godotServer = builder.AddExecutable("godot-server", godotBin, "../GameServer", "--headless", "--script", "server.gd")
     // Expose the UDP game-server port and propagate it as GODOT_SERVER_PORT so the GDScript can
     // read it via OS.get_environment("GODOT_SERVER_PORT") rather than hard-coding a port number.
-    .WithEndpoint(targetPort: 7000, env: "GODOT_SERVER_PORT", name: "game",
+    .WithEndpoint(env: "GODOT_SERVER_PORT", name: "game",
         protocol: System.Net.Sockets.ProtocolType.Udp, isProxied: false);
 
 // WithExplicitStart prevents the AppHost from failing on machines without Godot installed.
