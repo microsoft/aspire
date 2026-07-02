@@ -48,4 +48,4 @@ Running the AppHost with a live Godot server requires:
 | Variable | Description |
 |---|---|
 | `GODOT_BIN` | Path to the Godot 4 binary. Defaults to `godot` (Linux/macOS) or `godot.exe` (Windows). |
-| `GODOT_SERVER_PORT` | UDP port the Godot server listens on. Injected by Aspire; defaults to `7000`. |
+| `GODOT_SERVER_PORT` | UDP port the Godot server listens on. Injected by Aspire when the resource starts; the script defaults to `7000` when the variable is absent. |

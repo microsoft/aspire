@@ -31,8 +31,15 @@ public class GodotPlaygroundTests(ITestOutputHelper testOutput)
         var root = payload.RootElement;
 
         Assert.Equal("godot-server", root.GetProperty("resourceName").GetString());
-        Assert.Equal(7000, root.GetProperty("port").GetInt32());
-        Assert.Equal("udp://localhost:7000", root.GetProperty("endpoint").GetString());
+
+        var port = root.GetProperty("port").GetInt32();
+        var endpoint = root.GetProperty("endpoint").GetString();
+
+        Assert.InRange(port, 1, 65535);
+        Assert.True(Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri), $"Expected a valid endpoint URI, got '{endpoint}'.");
+        Assert.Equal("udp", endpointUri.Scheme);
+        Assert.Equal("localhost", endpointUri.Host);
+        Assert.Equal(port, endpointUri.Port);
 
         app.EnsureNoErrorsLogged();
         await app.StopAsync();
