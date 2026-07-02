@@ -666,6 +666,7 @@ const expanded = new Set(); // account ids whose detail (sources + repos) is exp
 const collapsedLanes = new Set(); // lane ids the user collapsed (survives re-render + SSE)
 const draftReposByAcct = {}; // account id -> working copy of that account's watched repos
 const editingByAcct = {};    // account id -> index of the repo row being inline-edited, or -1
+const repoSaveSeqByAcct = {}; // account id -> latest repository save request number
 
 const RANK = { queue: 0, notifications: 1, accounts: 1, settings: 1 };
 
@@ -794,20 +795,26 @@ const setMode = (mode) => { if (state && state.mode === mode) return; goView("qu
 const toggleAccountActive = (id, active) => withRefresh(() => postJSON("api/account/toggle", { id, active }));
 
 // Persist one account's repos without a full refresh/broadcast (the editor owns
-// the DOM and a re-render would interrupt typing). Fire-and-forget; the in-memory
-// copies are already updated by the editor.
-function persistAccountRepos(id) {
+// the DOM and a re-render would interrupt typing). The editor is optimistic, so a
+// failed save reverts to the previous draft and shows the API error beside the row.
+function persistAccountRepos(id, previousRepos) {
   const repos = (draftReposByAcct[id] || []).slice();
-  postJSON("api/account/repos", { id, repos }).then((data) => {
+  const seq = (repoSaveSeqByAcct[id] || 0) + 1;
+  repoSaveSeqByAcct[id] = seq;
+  return postJSON("api/account/repos", { id, repos }).then((data) => {
+    if (repoSaveSeqByAcct[id] !== seq) return data;
     if (data && data.dashboard) { state = data.dashboard; prefs = data.prefs; }
     repoErr(id, "");
+    return data;
   }).catch((e) => {
-    // The optimistic in-memory edit was never persisted. Surface it inline and
-    // revert the draft to the server's last-known list so the visible editor can't
-    // silently drift from what is actually saved.
-    const acct = state && (state.accounts || []).find((a) => a.id === id);
-    if (acct && Array.isArray(acct.repos)) { draftReposByAcct[id] = acct.repos.slice(); renderRepoList(id); }
-    repoErr(id, "Couldn't save repositories: " + String((e && e.message) || e));
+    if (repoSaveSeqByAcct[id] === seq) {
+      const msg = "Couldn't save repositories: " + String((e && e.message) || e);
+      draftReposByAcct[id] = (Array.isArray(previousRepos) ? previousRepos : accountRepos(id)).slice();
+      editingByAcct[id] = -1;
+      renderRepoList(id);
+      repoErr(id, msg);
+    }
+    return null;
   });
 }
 
@@ -1517,6 +1524,12 @@ function updateRepoCount(id) {
   if (c) c.textContent = (draftReposByAcct[id] || []).length;
 }
 
+function accountRepos(id) {
+  const accts = (state && state.accounts) || [];
+  const a = accts.find(function (acct) { return acct.id === id; });
+  return (a && a.repos) || [];
+}
+
 function renderRepoList(id, flagLast) {
   var ul = document.querySelector('.repo-list[data-list="' + cssEsc(id) + '"]');
   if (!ul) return;
@@ -1540,11 +1553,12 @@ function addRepoFromInput(id) {
   if (list.some(function (r) { return r.toLowerCase() === v.toLowerCase(); })) {
     repoErr(id, v + " is already in the list."); shake(inp); return;
   }
+  var before = list.slice();
   list.push(v);
   inp.value = "";
   repoErr(id, "");
   renderRepoList(id, true);
-  persistAccountRepos(id);
+  persistAccountRepos(id, before);
   inp.focus();
 }
 
@@ -1557,12 +1571,14 @@ function commitEdit(id, i) {
   if (list.some(function (r, j) { return j !== i && r.toLowerCase() === v.toLowerCase(); })) {
     repoErr(id, v + " is already in the list."); shake(inp); return;
   }
+  var before = list.slice();
   list[i] = v; editingByAcct[id] = -1; repoErr(id, "");
   renderRepoList(id);
-  persistAccountRepos(id);
+  persistAccountRepos(id, before);
 }
 
 function deleteRepo(id, i, row) {
+  var before = (draftReposByAcct[id] || []).slice();
   // The row-removal animation is our cue to actually splice, but a missed
   // animationend (reduced motion, a backgrounded tab, an interrupted animation)
   // would strand the row. We keep a fallback timer as a backstop, so both the
@@ -1578,7 +1594,7 @@ function deleteRepo(id, i, row) {
     (draftReposByAcct[id] || []).splice(i, 1);
     if (editingByAcct[id] === i) editingByAcct[id] = -1;
     renderRepoList(id);
-    persistAccountRepos(id);
+    persistAccountRepos(id, before);
   };
   if (row) { row.classList.add("removing"); row.addEventListener("animationend", done, { once: true }); fallback = setTimeout(done, 240); }
   else done();

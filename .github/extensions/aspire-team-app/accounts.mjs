@@ -20,15 +20,25 @@ const UA = "aspire-team-app-canvas";
 // REST + GraphQL endpoints for a given host. github.com uses the public API
 // origin; GitHub Enterprise Server (GHES) exposes /api/v3 and /api/graphql on the
 // instance host itself.
+function normalizeHost(host) {
+  const h = String(host ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/\/.*$/, "");
+  return !h || h === "github.com" || h === "api.github.com" ? "github.com" : h;
+}
+
 function endpoints(host) {
-  if (!host || host === "github.com" || host === "api.github.com") {
+  const h = normalizeHost(host);
+  if (h === "github.com") {
     return { rest: "https://api.github.com", graphql: "https://api.github.com/graphql" };
   }
-  return { rest: `https://${host}/api/v3`, graphql: `https://${host}/api/graphql` };
+  return { rest: `https://${h}/api/v3`, graphql: `https://${h}/api/graphql` };
 }
 
 export function isEnterpriseHost(host) {
-  return !!host && host !== "github.com" && host !== "api.github.com";
+  return normalizeHost(host) !== "github.com";
 }
 
 function tokenHash(token) {
@@ -98,7 +108,7 @@ export async function detectCandidates() {
     const hash = tokenHash(token);
     if (seenHash.has(hash)) return; // identical token already captured
     seenHash.add(hash);
-    out.push({ source, token, hash, login: login ?? null, host: host || "github.com" });
+    out.push({ source, token, hash, login: login ?? null, host: normalizeHost(host) });
   };
 
   // gh CLI accounts (each may have distinct scopes / hosts).
@@ -108,7 +118,7 @@ export async function detectCandidates() {
   }
 
   // Plain env tokens (host from GH_HOST when targeting an enterprise instance).
-  const envHost = process.env.GH_HOST || "github.com";
+  const envHost = normalizeHost(process.env.GH_HOST || "github.com");
   add("env", process.env.GH_TOKEN, null, envHost);
   add("env", process.env.GITHUB_TOKEN, null, envHost);
 
@@ -157,7 +167,8 @@ function aliasFor(i) {
 
 // Pass 1: resolve the credential to a GitHub identity (login + avatar + scopes).
 async function probeIdentity(candidate) {
-  const { token, host } = candidate;
+  const { token } = candidate;
+  const host = normalizeHost(candidate.host);
   const base = {
     source: candidate.source,
     hash: candidate.hash,
@@ -214,21 +225,13 @@ function loginKey(login) {
   return String(login ?? "unknown").trim().toLowerCase();
 }
 
-// Normalize a host so the public API's several spellings (empty, "api.github.com")
-// all collapse to the canonical "github.com".
-function hostKey(host) {
-  const h = String(host ?? "").trim().toLowerCase();
-  return !h || h === "github.com" || h === "api.github.com" ? "github.com" : h;
-}
-
-// github.com keeps the legacy login-only id ("acct:<login>") so preferences saved
-// before host-qualification (all github.com in practice) keep resolving. Enterprise
-// hosts are qualified ("acct:<host>/<login>") so they can't collide with a
-// same-named github.com account.
+// The account id includes the normalized host so a github.com account and a GHES
+// account with the same login never share repository preferences. state.mjs keeps
+// a fallback for the previous github.com-only "acct:<login>" keys.
 export function accountId(login, host) {
   const key = loginKey(login);
-  const h = hostKey(host);
-  return h === "github.com" ? `acct:${key}` : `acct:${h}/${key}`;
+  const h = normalizeHost(host);
+  return `acct:${h}/${key}`;
 }
 
 function score(probe) {

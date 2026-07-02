@@ -13,7 +13,12 @@ import { accountId } from "./accounts.mjs";
 
 function resolveAccountId(ref) {
   if (!ref) return null;
-  return String(ref).startsWith("acct:") ? String(ref).toLowerCase() : accountId(ref);
+  const value = String(ref).toLowerCase();
+  if (value.startsWith("acct:")) {
+    const accountRef = value.slice("acct:".length);
+    return accountRef.includes("/") ? value : accountId(accountRef);
+  }
+  return accountId(value);
 }
 
 const session = await joinSession({

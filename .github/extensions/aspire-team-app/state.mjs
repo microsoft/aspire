@@ -30,7 +30,7 @@ export const DEFAULT_PREFS = {
   showDrafts: false,
   dismissedNotifications: [],
   notifications: { ...DEFAULT_NOTIFICATIONS },
-  // Per-account configuration keyed by account id ("acct:<login>"):
+  // Per-account configuration keyed by account id ("acct:<host>/<login>"):
   //   { [id]: { repos: string[], active: boolean } }
   accounts: {},
 };
@@ -43,6 +43,12 @@ function normalizeAccounts(raw) {
     out[id] = { repos: [...new Set(repos)], active: !!cfg?.active };
   }
   return out;
+}
+
+function legacyIdFor(id) {
+  const prefix = "acct:github.com/";
+  const value = String(id || "").toLowerCase();
+  return value.startsWith(prefix) ? `acct:${value.slice(prefix.length)}` : null;
 }
 
 function migrate(parsed) {
@@ -88,8 +94,8 @@ export async function savePrefs(prefs) {
 // Per-account helpers
 // ---------------------------------------------------------------------------
 
-export function accountConfig(prefs, id) {
-  const cfg = prefs.accounts?.[id];
+export function accountConfig(prefs, id, legacyId = legacyIdFor(id)) {
+  const cfg = prefs.accounts?.[id] ?? (legacyId ? prefs.accounts?.[legacyId] : undefined);
   return {
     repos: Array.isArray(cfg?.repos) && cfg.repos.length ? cfg.repos : [...DEFAULT_REPOS],
     active: !!cfg?.active,
@@ -100,16 +106,20 @@ export function accountConfig(prefs, id) {
 
 export function setAccountRepos(prefs, id, repos) {
   if (!prefs.accounts) prefs.accounts = {};
-  const cfg = accountConfig(prefs, id);
+  const legacyId = legacyIdFor(id);
+  const cfg = accountConfig(prefs, id, legacyId);
   const clean = [...new Set((Array.isArray(repos) ? repos : []).map((r) => String(r).trim()).filter(Boolean))];
   prefs.accounts[id] = { repos: clean.length ? clean : [...DEFAULT_REPOS], active: cfg.active };
+  if (legacyId) delete prefs.accounts[legacyId];
   return prefs;
 }
 
 export function setAccountActive(prefs, id, active) {
   if (!prefs.accounts) prefs.accounts = {};
-  const cfg = accountConfig(prefs, id);
+  const legacyId = legacyIdFor(id);
+  const cfg = accountConfig(prefs, id, legacyId);
   prefs.accounts[id] = { repos: cfg.repos, active: !!active };
+  if (legacyId) delete prefs.accounts[legacyId];
   return prefs;
 }
 
