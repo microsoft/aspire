@@ -11,7 +11,7 @@ app.MapGet("/health", () => Results.Ok());
 // When running outside of Aspire, these variables are absent and the response reflects that.
 app.MapGet("/servers", (IConfiguration config) =>
 {
-    var serverEndpoint = config["services__godot-server__game__0"];
+    var serverEndpoint = config["services:godot-server:game:0"];
     var serverPort = Uri.TryCreate(serverEndpoint, UriKind.Absolute, out var endpointUri)
         ? endpointUri.Port
         : (int?)null;
