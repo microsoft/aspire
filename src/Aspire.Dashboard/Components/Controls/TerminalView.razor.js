@@ -538,23 +538,10 @@ function applyRoleAwareLayout(state) {
                 body.style.width = bodyW;
                 body.style.height = bodyH;
             }
-            const fontChanged = term.options.fontSize !== state.currentFontPx;
-            if (fontChanged) {
+            if (term.options.fontSize !== state.currentFontPx) {
                 term.options.fontSize = state.currentFontPx;
             }
             safeFit(state);
-            // xterm rebuilds its per-glyph cell dimensions asynchronously
-            // when fontSize changes, so the safeFit() above still divided
-            // the container by the OLD cell size and reported unchanged
-            // cols/rows. Re-fit on the next frame once the new metrics are
-            // in place so the grid actually shrinks/grows with the font.
-            if (fontChanged) {
-                requestAnimationFrame(() => {
-                    if (generation !== state.layoutGeneration) return;
-                    if (state.sizeMode !== 'font') return;
-                    safeFit(state);
-                });
-            }
         }
         notifyToolbar(state);
         return;

@@ -1297,19 +1297,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // JS remains the source of truth for terminal state; this layer just
     // mirrors the latest snapshot and routes user actions back to JS via
     // the TerminalView public methods.
+    private const int TerminalFontStep = 1;
     private const int TerminalFontMin = 4;
     private const int TerminalFontMax = 72;
-
-    // Font sizes offered in the toolbar Font size dropdown. The list is a
-    // curated subset of the [TerminalFontMin, TerminalFontMax] range: values
-    // people actually pick for terminal text at typical viewport zooms. When
-    // the JS side reports a size outside this list (e.g. after the initial
-    // fit-to-screen calculation), the FluentSelect renders no selection but
-    // the numeric readout on the terminal still reflects the true size.
-    private static readonly int[] s_terminalFontSizePresets =
-    [
-        8, 10, 12, 14, 16, 18, 20, 24, 28, 32
-    ];
 
     private async Task OnTerminalToolbarStateChangedAsync(Controls.TerminalToolbarState state)
     {
@@ -1450,23 +1440,22 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     internal ConsoleLogsView ActiveViewForTest => _activeView;
     internal Task HandleViewChangedForTestAsync(string? newView) => HandleViewChangedAsync(newView);
 
-    private Task TerminalFontSizeChangedAsync(string? newValue)
+    private Task TerminalFontMinusAsync()
     {
-        if (newValue is null || _terminalViewRef is null)
+        if (_terminalToolbarState is not { } s || _terminalViewRef is null)
         {
             return Task.CompletedTask;
         }
+        return _terminalViewRef.SetFontSizeAsync(Math.Max(TerminalFontMin, s.FontPx - TerminalFontStep));
+    }
 
-        // Guard defensively against a malformed dropdown value — FluentSelect
-        // only offers values we populated from s_terminalFontSizePresets, but
-        // we don't want a stray string to throw and tear down the page.
-        if (!int.TryParse(newValue, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+    private Task TerminalFontPlusAsync()
+    {
+        if (_terminalToolbarState is not { } s || _terminalViewRef is null)
         {
             return Task.CompletedTask;
         }
-
-        var clamped = Math.Clamp(parsed, TerminalFontMin, TerminalFontMax);
-        return _terminalViewRef.SetFontSizeAsync(clamped);
+        return _terminalViewRef.SetFontSizeAsync(Math.Min(TerminalFontMax, s.FontPx + TerminalFontStep));
     }
 
     private Task TerminalSizeChangedAsync(string? newKey)

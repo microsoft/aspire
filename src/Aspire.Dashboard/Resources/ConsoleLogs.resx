@@ -186,6 +186,12 @@
   <data name="TerminalToolbarFontSize" xml:space="preserve">
     <value>Font size</value>
   </data>
+  <data name="TerminalToolbarDecreaseFontSize" xml:space="preserve">
+    <value>Decrease font size</value>
+  </data>
+  <data name="TerminalToolbarIncreaseFontSize" xml:space="preserve">
+    <value>Increase font size</value>
+  </data>
   <data name="TerminalToolbarGridSize" xml:space="preserve">
     <value>Terminal dimensions</value>
   </data>

@@ -177,6 +177,18 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
+        public static string TerminalToolbarDecreaseFontSize {
+            get {
+                return ResourceManager.GetString("TerminalToolbarDecreaseFontSize", resourceCulture);
+            }
+        }
+        
+        public static string TerminalToolbarIncreaseFontSize {
+            get {
+                return ResourceManager.GetString("TerminalToolbarIncreaseFontSize", resourceCulture);
+            }
+        }
+        
         public static string TerminalToolbarGridSize {
             get {
                 return ResourceManager.GetString("TerminalToolbarGridSize", resourceCulture);

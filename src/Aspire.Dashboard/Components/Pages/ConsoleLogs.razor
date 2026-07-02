@@ -83,17 +83,18 @@
             @if (_activeView == ConsoleLogsView.Terminal && _terminalToolbarState is { } terminalState)
             {
                 <span slot="end" style="margin-inline-start: 10px; align-self: center;">@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarFontSize)]</span>
-                <FluentSelect TOption="int"
-                              slot="end"
-                              Items="@s_terminalFontSizePresets"
-                              OptionValue="@(v => v.ToString(System.Globalization.CultureInfo.InvariantCulture))"
-                              OptionText="@(v => v.ToString(System.Globalization.CultureInfo.InvariantCulture))"
-                              Value="@terminalState.FontPx.ToString(System.Globalization.CultureInfo.InvariantCulture)"
-                              ValueChanged="TerminalFontSizeChangedAsync"
-                              Disabled="@(!terminalState.FontControlsEnabled)"
-                              Width="80px"
-                              Style="min-width: auto;"
-                              AriaLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarFontSize)]" />
+                <FluentButton slot="end"
+                              Appearance="Appearance.Stealth"
+                              Disabled="@(!terminalState.FontControlsEnabled || terminalState.FontPx <= TerminalFontMin)"
+                              OnClick="TerminalFontMinusAsync"
+                              Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)]">−</FluentButton>
+                <span slot="end" style="min-width: 28px; text-align: center; font-variant-numeric: tabular-nums; align-self: center;"
+                      title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarFontSize)]">@terminalState.FontPx</span>
+                <FluentButton slot="end"
+                              Appearance="Appearance.Stealth"
+                              Disabled="@(!terminalState.FontControlsEnabled || terminalState.FontPx >= TerminalFontMax)"
+                              OnClick="TerminalFontPlusAsync"
+                              Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)]">+</FluentButton>
 
                 @if (_terminalSizePresets.Count > 0)
                 {
