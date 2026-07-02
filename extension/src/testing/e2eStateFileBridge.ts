@@ -41,6 +41,7 @@ export function createE2eStateFileBridge(
   const debugConsoleOutputs: AspireExtensionE2EDebugConsoleOutput[] = [];
   const stoppingPathEvents: AspireExtensionE2EStoppingPathEvent[] = [];
   const clipboardSnapshot: E2eClipboardSnapshot = { hasSnapshot: false };
+  const clipboardExpectation: E2eClipboardExpectation = {};
   let commandInvocationSequence = 0;
   let terminalCommandSequence = 0;
   let debugLaunchSequence = 0;
@@ -178,7 +179,7 @@ export function createE2eStateFileBridge(
               }
             };
 
-            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, clipboardSnapshot, payload.command, markCommandStarted);
+            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, clipboardSnapshot, clipboardExpectation, payload.command, markCommandStarted);
             controlStatus = { revision, status: 'applied', startedObserved: commandStarted, result };
           }
           else {
@@ -283,6 +284,7 @@ async function executeE2eControlCommand(
   appHostTreeProvider: AspireAppHostTreeProvider,
   terminalProvider: AspireTerminalProvider,
   clipboardSnapshot: E2eClipboardSnapshot,
+  clipboardExpectation: E2eClipboardExpectation,
   command: AspireExtensionE2EControlCommand,
   markStarted: () => void
 ): Promise<unknown> {
@@ -356,9 +358,11 @@ async function executeE2eControlCommand(
     }
     case 'copyAppHostPath': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
+      const expectedClipboardText = getAppHostPathForClipboard(element);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyAppHostPath', element);
       markStarted();
       await commandPromise;
+      setClipboardExpectation(clipboardExpectation, expectedClipboardText, 'path');
       return undefined;
     }
     case 'viewAppHostLogFile': {
@@ -370,9 +374,11 @@ async function executeE2eControlCommand(
     }
     case 'copyLogFilePath': {
       const element = getLogFileElement(appHostTreeProvider, command.appHostPath);
+      const expectedClipboardText = getLogFilePathForClipboard(element);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyLogFilePath', element);
       markStarted();
       await commandPromise;
+      setClipboardExpectation(clipboardExpectation, expectedClipboardText, 'path');
       return undefined;
     }
     case 'viewResourceLogs': {
@@ -389,9 +395,11 @@ async function executeE2eControlCommand(
     }
     case 'copyResourceName': {
       const element = getResourceElement(appHostTreeProvider, command.resourceName, command.appHostPath);
+      const expectedClipboardText = getResourceNameForClipboard(element);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyResourceName', element);
       markStarted();
       await commandPromise;
+      setClipboardExpectation(clipboardExpectation, expectedClipboardText);
       return undefined;
     }
     case 'copyEndpointUrl': {
@@ -399,6 +407,7 @@ async function executeE2eControlCommand(
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyEndpointUrl', endpoint.element);
       markStarted();
       await commandPromise;
+      setClipboardExpectation(clipboardExpectation, endpoint.url);
       return undefined;
     }
     case 'openInIntegratedBrowser': {
@@ -565,34 +574,19 @@ async function executeE2eControlCommand(
 
       return undefined;
     }
-    case 'assertClipboardMatchesWorkspaceAppHostPath': {
+    case 'captureWorkspaceAppHostPathClipboardExpectation': {
       markStarted();
       const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
       if (!state.workspaceAppHostPath) {
         throw new Error('E2E clipboard assertion could not determine the workspace AppHost path.');
       }
 
-      await assertClipboardText(state.workspaceAppHostPath, 'path');
+      setClipboardExpectation(clipboardExpectation, state.workspaceAppHostPath, 'path');
       return undefined;
     }
-    case 'assertClipboardMatchesResourceName': {
+    case 'assertClipboardMatchesLastExpectation': {
       markStarted();
-      const element = getResourceElement(appHostTreeProvider, command.resourceName, command.appHostPath);
-      const resourceName = getResourceNameForClipboard(element);
-      await assertClipboardText(resourceName);
-      return undefined;
-    }
-    case 'assertClipboardMatchesEndpointUrl': {
-      markStarted();
-      const endpoint = getEndpointElement(appHostTreeProvider, command);
-      await assertClipboardText(endpoint.url);
-      return undefined;
-    }
-    case 'assertClipboardMatchesLogFilePath': {
-      markStarted();
-      const element = getLogFileElement(appHostTreeProvider, command.appHostPath);
-      const logFilePath = getLogFilePathForClipboard(element);
-      await assertClipboardText(logFilePath, 'path');
+      await assertExpectedClipboardText(clipboardExpectation);
       return undefined;
     }
     case 'openWorkspaceFolder': {
@@ -624,7 +618,26 @@ interface E2eClipboardSnapshot {
   hasSnapshot: boolean;
 }
 
-async function assertClipboardText(expectedText: string, comparison: 'exact' | 'path' = 'exact'): Promise<void> {
+interface E2eClipboardExpectation {
+  text?: string;
+  comparison?: 'exact' | 'path';
+}
+
+function setClipboardExpectation(expectation: E2eClipboardExpectation, text: string, comparison: 'exact' | 'path' = 'exact'): void {
+  expectation.text = text;
+  expectation.comparison = comparison;
+}
+
+async function assertExpectedClipboardText(expectation: E2eClipboardExpectation): Promise<void> {
+  if (expectation.text === undefined) {
+    throw new Error('E2E clipboard assertion did not have an expected value captured in memory.');
+  }
+
+  const expectedText = expectation.text;
+  const comparison = expectation.comparison ?? 'exact';
+  expectation.text = undefined;
+  expectation.comparison = undefined;
+
   const clipboardText = await vscode.env.clipboard.readText();
   const matches = comparison === 'path'
     ? isSamePath(clipboardText, expectedText)
@@ -1203,6 +1216,39 @@ async function getDiagnosticsForFile(filePath: string): Promise<{ message: strin
 
 function getAppHostElement(appHostTreeProvider: AspireAppHostTreeProvider, appHostPath: string | undefined): unknown {
   return appHostPath ? appHostTreeProvider.findAppHostElement(appHostPath) ?? { appHostPath } : undefined;
+}
+
+function getAppHostPathForClipboard(element: unknown): string {
+  if (hasAppHostPath(element)) {
+    return element.appHostPath;
+  }
+
+  if (hasNestedAppHostPath(element)) {
+    return element.appHost.appHostPath;
+  }
+
+  throw new Error('Aspire extension E2E AppHost clipboard assertion found an AppHost tree item with an unexpected shape.');
+}
+
+function hasAppHostPath(element: unknown): element is { appHostPath: string } {
+  return typeof element === 'object'
+    && element !== null
+    && 'appHostPath' in element
+    && typeof element.appHostPath === 'string'
+    && element.appHostPath.length > 0;
+}
+
+function hasNestedAppHostPath(element: unknown): element is { appHost: { appHostPath: string } } {
+  if (typeof element !== 'object' || element === null || !('appHost' in element)) {
+    return false;
+  }
+
+  const appHost = element.appHost;
+  return typeof appHost === 'object'
+    && appHost !== null
+    && 'appHostPath' in appHost
+    && typeof appHost.appHostPath === 'string'
+    && appHost.appHostPath.length > 0;
 }
 
 function getResourceElement(appHostTreeProvider: AspireAppHostTreeProvider, resourceName: string, appHostPath?: string): unknown {

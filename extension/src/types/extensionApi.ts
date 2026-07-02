@@ -190,10 +190,8 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getDiagnostics'; filePath: string }
     | { name: 'snapshotClipboard' }
     | { name: 'restoreClipboardSnapshot' }
-    | { name: 'assertClipboardMatchesWorkspaceAppHostPath' }
-    | { name: 'assertClipboardMatchesResourceName'; appHostPath?: string; resourceName: string }
-    | { name: 'assertClipboardMatchesEndpointUrl'; appHostPath?: string; resourceName?: string }
-    | { name: 'assertClipboardMatchesLogFilePath'; appHostPath?: string }
+    | { name: 'captureWorkspaceAppHostPathClipboardExpectation' }
+    | { name: 'assertClipboardMatchesLastExpectation' }
     | { name: 'openWorkspaceFolder'; folderPath: string }
     | { name: 'getWorkspaceFolders' }
     | { name: 'getActiveEditor' }
