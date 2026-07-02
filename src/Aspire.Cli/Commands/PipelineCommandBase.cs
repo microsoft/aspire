@@ -891,11 +891,16 @@ internal abstract class PipelineCommandBase : BaseCommand
                 result = input.Value;
             }
 
+            if (IsFileChooserInput(input.InputType) && !string.IsNullOrWhiteSpace(result))
+            {
+                result = Path.GetFullPath(result);
+            }
+
             answers[i] = new PublishingPromptInputAnswer
             {
                 Name = input.Name,
                 Value = result,
-                FileName = string.Equals(input.InputType, "FileChooser", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(result)
+                FileName = IsFileChooserInput(input.InputType) && !string.IsNullOrWhiteSpace(result)
                     ? Path.GetFileName(result)
                     : null
             };
@@ -943,15 +948,14 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             InputType.Number => await HandleNumberInputAsync(input, promptText, cancellationToken),
 
-            InputType.FileChooser => await InteractionService.PromptForStringAsync(
-                promptText,
-                binding: PromptBinding.CreateDefault(input.Value),
-                required: input.Required,
-                cancellationToken: cancellationToken),
+            InputType.FileChooser => await HandleFileChooserInputAsync(input, promptText, cancellationToken),
 
             _ => await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken)
         };
     }
+
+    private static bool IsFileChooserInput(string inputType) =>
+        string.Equals(inputType, nameof(InputType.FileChooser), StringComparison.OrdinalIgnoreCase);
 
     private async Task<string?> HandleSelectInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
     {
@@ -1005,6 +1009,43 @@ internal abstract class PipelineCommandBase : BaseCommand
             validator: Validator,
             required: input.Required,
             cancellationToken: cancellationToken);
+    }
+
+    private async Task<string?> HandleFileChooserInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
+    {
+        static ValidationResult Validator(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return ValidationResult.Success();
+            }
+
+            string fullPath;
+            try
+            {
+                fullPath = Path.GetFullPath(value);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return ValidationResult.Error("Please enter a valid file path.");
+            }
+
+            if (!File.Exists(fullPath))
+            {
+                return ValidationResult.Error("File does not exist.");
+            }
+
+            return ValidationResult.Success();
+        }
+
+        var value = await InteractionService.PromptForFilePathAsync(
+            promptText,
+            binding: PromptBinding.CreateDefault(input.Value),
+            validator: Validator,
+            required: input.Required,
+            cancellationToken: cancellationToken);
+
+        return string.IsNullOrWhiteSpace(value) ? string.Empty : Path.GetFullPath(value);
     }
 
     private static bool ParseBooleanValue(string? value)

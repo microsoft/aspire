@@ -169,7 +169,7 @@
                                 <div class="file-chooser-container">
                                     <FluentTextField @ref="@_elementRefs[input.ViewModel]"
                                                      @bind-Value="input.ViewModel.FileDisplayName"
-                                                     Placeholder="@(input.ViewModel.Input.Placeholder ?? Loc[nameof(Dialogs.InteractionFileChooserPlaceholder)])"
+                                                     Placeholder="@GetFileChooserPlaceholder(input.ViewModel)"
                                                      Required="input.ViewModel.Input.Required"
                                                      ReadOnly="true"
                                                      Disabled="input.ViewModel.InputDisabled"
@@ -184,7 +184,8 @@
                                                   IconStart="@(new Icons.Regular.Size16.FolderOpen())"
                                                   Appearance="Appearance.Outline"
                                                   Disabled="input.ViewModel.InputDisabled"
-                                                  Title="@Loc[nameof(Dialogs.InteractionFileChooserBrowse)]">
+                                                  Title="@GetFileChooserBrowseLabel(input.ViewModel)"
+                                                  aria-label="@GetFileChooserBrowseLabel(input.ViewModel)">
                                         @Loc[nameof(Dialogs.InteractionFileChooserBrowse)]
                                     </FluentButton>
                                 </div>

@@ -471,6 +471,7 @@ type CreateInteractionInputOptions struct {
 	AllowCustomChoice *bool `json:"AllowCustomChoice,omitempty"`
 	Disabled *bool `json:"Disabled,omitempty"`
 	MaxLength *float64 `json:"MaxLength,omitempty"`
+	MaxFileSize *float64 `json:"MaxFileSize,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -485,6 +486,7 @@ func (d *CreateInteractionInputOptions) ToMap() map[string]any {
 	if d.AllowCustomChoice != nil { m["AllowCustomChoice"] = serializeValue(d.AllowCustomChoice) }
 	if d.Disabled != nil { m["Disabled"] = serializeValue(d.Disabled) }
 	if d.MaxLength != nil { m["MaxLength"] = serializeValue(d.MaxLength) }
+	if d.MaxFileSize != nil { m["MaxFileSize"] = serializeValue(d.MaxFileSize) }
 	return m
 }
 
@@ -18008,6 +18010,7 @@ type InteractionService interface {
 	handleReference
 	CreateBooleanInput(name string, options ...*CreateBooleanInputOptions) InteractionInputBuilder
 	CreateChoiceInput(name string, options ...*CreateChoiceInputOptions) InteractionInputBuilder
+	CreateFileChooserInput(name string, options ...*CreateFileChooserInputOptions) InteractionInputBuilder
 	CreateNumberInput(name string, options ...*CreateNumberInputOptions) InteractionInputBuilder
 	CreateSecretInput(name string, options ...*CreateSecretInputOptions) InteractionInputBuilder
 	CreateTextInput(name string, options ...*CreateTextInputOptions) InteractionInputBuilder
@@ -18080,6 +18083,33 @@ func (s *interactionService) CreateChoiceInput(name string, options ...*CreateCh
 	href, ok := result.(handleReference)
 	if !ok {
 		err := fmt.Errorf("aspire: Aspire.Hosting/createChoiceInput returned unexpected type %T", result)
+		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &interactionInputBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// CreateFileChooserInput creates a file chooser input.
+func (s *interactionService) CreateFileChooserInput(name string, options ...*CreateFileChooserInputOptions) InteractionInputBuilder {
+	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"interactionService": s.handle.ToJSON(),
+	}
+	reqArgs["name"] = serializeValue(name)
+	if len(options) > 0 {
+		merged := &CreateFileChooserInputOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createFileChooserInput", reqArgs)
+	if err != nil {
+		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/createFileChooserInput returned unexpected type %T", result)
 		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &interactionInputBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
@@ -29351,6 +29381,18 @@ type CreateNumberInputOptions struct {
 }
 
 func (o *CreateNumberInputOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
+	return m
+}
+
+// CreateFileChooserInputOptions carries optional parameters for CreateFileChooserInput.
+type CreateFileChooserInputOptions struct {
+	Options *CreateInteractionInputOptions `json:"options,omitempty"`
+}
+
+func (o *CreateFileChooserInputOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.Options != nil { m["options"] = serializeValue(o.Options) }

@@ -340,6 +340,9 @@
   <data name="InteractionFileChooserBrowse" xml:space="preserve">
     <value>Browse</value>
   </data>
+  <data name="InteractionFileChooserBrowseLabel" xml:space="preserve">
+    <value>Browse for {0}</value>
+  </data>
   <data name="GenAIPreviousButtonText" xml:space="preserve">
     <value>Previous</value>
   </data>

@@ -256,6 +256,81 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     }
 
     [Fact]
+    public async Task PublishCommand_FileChooserPrompt_RejectsMissingPathAndSendsFileMetadata()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var selectedFile = Path.Combine(workspace.WorkspaceRoot.FullName, "artifact.zip");
+        await File.WriteAllTextAsync(selectedFile, "artifact");
+
+        var missingFile = Path.Combine(workspace.WorkspaceRoot.FullName, "missing.zip");
+        var relativeMissingFile = Path.GetRelativePath(Directory.GetCurrentDirectory(), missingFile);
+        var relativeSelectedFile = Path.GetRelativePath(Directory.GetCurrentDirectory(), selectedFile);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("file-prompt-1", "Artifact", InputTypes.FileChooser, "Select artifact:", isRequired: true);
+        consoleService.SetupSequentialResponses(
+            (relativeMissingFile, ResponseType.String),
+            (relativeSelectedFile, ResponseType.String));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Single(consoleService.FilePathPromptCalls);
+        Assert.Empty(consoleService.StringPromptCalls);
+        Assert.Equal("File does not exist.", Assert.Single(consoleService.ValidationFailures));
+
+        var completedPrompt = Assert.Single(promptBackchannel.CompletedPrompts);
+        var answer = Assert.Single(completedPrompt.Answers);
+        Assert.Equal(Path.GetFullPath(selectedFile), answer.Value);
+        Assert.Equal("artifact.zip", answer.FileName);
+    }
+
+    [Fact]
+    public async Task PublishCommand_FileChooserPrompt_TreatsOptionalWhitespaceAsEmpty()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("file-prompt-1", "Artifact", InputTypes.FileChooser, "Select artifact:", isRequired: false);
+        consoleService.SetupStringPromptResponse("   ");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        var completedPrompt = Assert.Single(promptBackchannel.CompletedPrompts);
+        var answer = Assert.Single(completedPrompt.Answers);
+        Assert.Empty(answer.Value!);
+        Assert.Null(answer.FileName);
+    }
+
+    [Fact]
     public async Task PublishCommand_MultiplePrompts_HandlesSequentialInteractions()
     {
         // Arrange
@@ -870,7 +945,6 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
     {
         StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret));
-
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
             throw new OperationCanceledException();
@@ -980,4 +1054,5 @@ internal static class InputTypes
     public const string Choice = "choice";
     public const string Boolean = "boolean";
     public const string Number = "number";
+    public const string FileChooser = "FileChooser";
 }

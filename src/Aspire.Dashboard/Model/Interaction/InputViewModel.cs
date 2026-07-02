@@ -21,10 +21,11 @@ public sealed class InputViewModel
         // local values by default so an update for a dependent choice does not clobber text the user is
         // typing elsewhere in the dialog. ShouldUseIncomingValue captures the cases where the server is
         // authoritative because the field is being dynamically loaded or is not currently editable.
-        var value = Input is null || ShouldUseIncomingValue(Input, input)
-            ? input.Value
-            : Input.Value;
-        input.Value = value;
+        if (Input is not null && !ShouldUseIncomingValue(Input, input))
+        {
+            input.Value = Input.Value;
+            input.FileName = Input.FileName;
+        }
 
         Input = input;
         if (input.InputType == InputType.Choice && input.Options != null)

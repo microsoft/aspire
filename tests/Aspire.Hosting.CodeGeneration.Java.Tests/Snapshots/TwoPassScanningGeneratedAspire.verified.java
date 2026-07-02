@@ -7766,6 +7766,7 @@ public class CreateInteractionInputOptions implements JsonSerializable {
     private Boolean allowCustomChoice;
     private Boolean disabled;
     private Double maxLength;
+    private Double maxFileSize;
 
     public String getLabel() { return label; }
     public void setLabel(String value) { this.label = value; }
@@ -7785,6 +7786,8 @@ public class CreateInteractionInputOptions implements JsonSerializable {
     public void setDisabled(Boolean value) { this.disabled = value; }
     public Double getMaxLength() { return maxLength; }
     public void setMaxLength(Double value) { this.maxLength = value; }
+    public Double getMaxFileSize() { return maxFileSize; }
+    public void setMaxFileSize(Double value) { this.maxFileSize = value; }
 
     @SuppressWarnings("unchecked")
     public static CreateInteractionInputOptions fromMap(Map<String, Object> map) {
@@ -7807,6 +7810,8 @@ public class CreateInteractionInputOptions implements JsonSerializable {
         value.setDisabled(disabledValue == null ? null : (Boolean) disabledValue);
         var maxLengthValue = map.get("MaxLength");
         value.setMaxLength(maxLengthValue == null ? null : ((Number) maxLengthValue).doubleValue());
+        var maxFileSizeValue = map.get("MaxFileSize");
+        value.setMaxFileSize(maxFileSizeValue == null ? null : ((Number) maxFileSizeValue).doubleValue());
         return value;
     }
 
@@ -7821,6 +7826,7 @@ public class CreateInteractionInputOptions implements JsonSerializable {
         map.put("AllowCustomChoice", AspireClient.serializeValue(allowCustomChoice));
         map.put("Disabled", AspireClient.serializeValue(disabled));
         map.put("MaxLength", AspireClient.serializeValue(maxLength));
+        map.put("MaxFileSize", AspireClient.serializeValue(maxFileSize));
         return map;
     }
 }
@@ -15482,6 +15488,22 @@ public class IInteractionService extends HandleWrapperBase {
             reqArgs.put("options", AspireClient.serializeValue(options));
         }
         var result = getClient().invokeCapability("Aspire.Hosting/createNumberInput", reqArgs);
+        return (InteractionInputBuilder) result;
+    }
+
+    public InteractionInputBuilder createFileChooserInput(String name) {
+        return createFileChooserInput(name, null);
+    }
+
+    /** Creates a file chooser input. */
+    public InteractionInputBuilder createFileChooserInput(String name, CreateInteractionInputOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/createFileChooserInput", reqArgs);
         return (InteractionInputBuilder) result;
     }
 

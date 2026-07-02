@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
+using DialogsResources = Aspire.Dashboard.Resources.Dialogs;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
@@ -178,6 +179,22 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         return inputModel.Input.Required &&
             inputModel.Input.InputType != InputType.Boolean &&
             string.IsNullOrWhiteSpace(inputModel.Value);
+    }
+
+    private string GetFileChooserPlaceholder(InputViewModel inputModel) =>
+        string.IsNullOrEmpty(inputModel.Input.Placeholder)
+            ? Loc[nameof(DialogsResources.InteractionFileChooserPlaceholder)]
+            : inputModel.Input.Placeholder;
+
+    private string GetFileChooserBrowseLabel(InputViewModel inputModel)
+    {
+        var label = !string.IsNullOrEmpty(inputModel.Input.Label)
+            ? inputModel.Input.Label
+            : inputModel.Input.Name;
+
+        return string.IsNullOrEmpty(label)
+            ? Loc[nameof(DialogsResources.InteractionFileChooserBrowse)]
+            : Loc[nameof(DialogsResources.InteractionFileChooserBrowseLabel), label];
     }
 
     private async Task SubmitAsync()

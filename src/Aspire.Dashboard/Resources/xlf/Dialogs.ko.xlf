@@ -504,6 +504,11 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">확인</target>
         <note />
       </trans-unit>
+      <trans-unit id="InteractionFileChooserBrowseLabel">
+        <source>Browse for {0}</source>
+        <target state="new">Browse for {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ManageDataAllDataCheckboxLabel">
         <source>All data</source>
         <target state="new">All data</target>

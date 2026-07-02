@@ -1826,6 +1826,7 @@ class CreateInteractionInputOptions(typing.TypedDict, total=False):
     AllowCustomChoice: bool | None
     Disabled: bool | None
     MaxLength: int | None
+    MaxFileSize: int | None
 
 class DynamicLoadingOptions(typing.TypedDict, total=False):
     AlwaysLoadOnStart: bool | None
@@ -3100,6 +3101,18 @@ class AbstractInteractionService:
             rpc_args['options'] = options
         result = self._client.invoke_capability(
             'Aspire.Hosting/createNumberInput',
+            rpc_args,
+        )
+        return typing.cast(InteractionInputBuilder, result)
+
+    def create_file_chooser_input(self, name: str, *, options: CreateInteractionInputOptions | None = None) -> InteractionInputBuilder:
+        """Creates a file chooser input."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['name'] = name
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/createFileChooserInput',
             rpc_args,
         )
         return typing.cast(InteractionInputBuilder, result)

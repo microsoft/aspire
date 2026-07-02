@@ -427,28 +427,28 @@ public class InputViewModelTests
     }
 
     [Fact]
-    public void InputViewModel_FileChooser_SetInputResetsFileDisplayName()
+    public void InputViewModel_FileChooser_SetInputPreservesFileDisplayNameWhenValueIsPreserved()
     {
-        // Arrange
         var initialInput = new InteractionInput
         {
             Label = "Select File",
-            InputType = InputType.FileChooser
+            InputType = InputType.FileChooser,
+            Value = "/upload/local"
         };
         var viewModel = new InputViewModel(initialInput);
-        viewModel.FileDisplayName = "old-file.txt";
+        viewModel.FileDisplayName = "local-file.txt";
 
         var newInput = new InteractionInput
         {
             Label = "Select Another File",
-            InputType = InputType.FileChooser
+            InputType = InputType.FileChooser,
+            Value = string.Empty,
+            FileName = string.Empty
         };
 
-        // Act
         viewModel.SetInput(newInput);
 
-        // Assert - SetInput replaces the underlying proto input, so FileDisplayName resets
-        // to the new input's FileName (empty by default).
-        Assert.True(string.IsNullOrEmpty(viewModel.FileDisplayName));
+        Assert.Equal("/upload/local", viewModel.Value);
+        Assert.Equal("local-file.txt", viewModel.FileDisplayName);
     }
 }
