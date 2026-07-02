@@ -51,6 +51,27 @@ public class ResourceNotificationTests
         Assert.Contains(KnownResourceStates.Terminated, KnownResourceStates.BuildableStates);
     }
 
+    [Fact]
+    public async Task WaitForResourceHealthyAsyncStopOnResourceUnavailableThrowsWhenResourceIsTerminated()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var waitTask = notificationService.WaitForResourceHealthyAsync(resource.Name, WaitBehavior.StopOnResourceUnavailable);
+
+        await notificationService.PublishUpdateAsync(resource, s => s with
+        {
+            State = KnownResourceStates.Terminated
+        }).DefaultTimeout();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        {
+            await waitTask;
+        }).DefaultTimeout();
+
+        Assert.Equal("Stopped waiting for resource 'myResource' to become healthy because it failed to start.", ex.Message);
+    }
+
     [Theory]
     [InlineData(typeof(ProjectResource), KnownResourceTypes.Project)]
     [InlineData(typeof(ContainerResource), KnownResourceTypes.Container)]

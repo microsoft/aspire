@@ -788,6 +788,47 @@ public class MauiPlatformExtensionsTests
     }
 
     [Fact]
+    public async Task WithOtlpDevTunnel_FallsBackToAllocatedPortWhenDynamicDashboardOtlpTargetPortIsDcpExpression()
+    {
+        using var dir = new TestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
+
+        var dashboard = appBuilder.AddResource(new ExecutableResource(KnownResourceNames.AspireDashboard, "dashboard", ""));
+        dashboard.Resource.Annotations.Add(new EndpointAnnotation(
+            ProtocolType.Tcp,
+            name: KnownEndpointNames.OtlpHttpEndpointName,
+            uriScheme: "http",
+            isProxied: true));
+
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        maui.AddiOSSimulator()
+            .WithOtlpDevTunnel();
+
+        var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
+        var stubEndpoint = tunnelConfig.OtlpStub.OtlpEndpoint;
+
+        await using var app = appBuilder.Build();
+
+        var dashboardEndpoint = dashboard.Resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+        dashboardEndpoint.AllocatedEndpoint = new AllocatedEndpoint(
+            dashboardEndpoint,
+            "localhost",
+            55076,
+            targetPortExpression: """{{- portForServing "dashboard-service" -}}""");
+        await appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services), CancellationToken.None);
+
+        Assert.Equal("http", stubEndpoint.UriScheme);
+        Assert.Equal(55076, stubEndpoint.Port);
+        Assert.Equal(55076, stubEndpoint.TargetPort);
+        Assert.Equal("http://localhost:55076", stubEndpoint.AllocatedEndpoint?.UriString);
+        Assert.Equal("http", stubEndpoint.Transport);
+    }
+
+    [Fact]
     public async Task WithOtlpDevTunnel_AllocatesStubFromContainerDashboardOtlpAllocatedPort()
     {
         using var dir = new TestTempDirectory();
