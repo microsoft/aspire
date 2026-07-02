@@ -1,27 +1,15 @@
 import * as assert from 'assert';
 import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, readClipboardForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning, writeClipboardForE2E } from './helpers/fixtures';
+import { assertClipboardTextForE2E, executeE2eControlCommand, restoreClipboardSnapshotForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem } from './helpers/vscode';
 
 suite('Aspire AppHost tree E2E', function () {
     this.timeout(240000);
 
-    let clipboardTextToRestore: string | undefined;
-
-    async function restoreClipboardIfNeeded(): Promise<void> {
-        if (clipboardTextToRestore === undefined) {
-            return;
-        }
-
-        const clipboardText = clipboardTextToRestore;
-        await writeClipboardForE2E(clipboardText);
-        clipboardTextToRestore = undefined;
-    }
-
     teardown(async () => {
         await runE2eTeardown([
-            () => restoreClipboardIfNeeded(),
+            () => restoreClipboardSnapshotForE2E(),
             () => setCliUnavailableForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
@@ -47,7 +35,7 @@ suite('Aspire AppHost tree E2E', function () {
     test('clicking the Path tree item copies the AppHost path and shows a confirmation notification', async () => {
         await openAspireView();
         await waitForRepositoryIdle();
-        clipboardTextToRestore = await readClipboardForE2E();
+        await snapshotClipboardForE2E();
         const discovered = await waitForWorkspaceAppHost();
         const appHostLabel = getTreeAppHostLabel(discovered.state);
         const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
@@ -68,8 +56,7 @@ suite('Aspire AppHost tree E2E', function () {
         // routed through aspire-vscode.copyAppHostPath rather than reading a stale clipboard value.
         await waitForNotificationMessage('AppHost path copied to clipboard.');
 
-        const clipboard = await readClipboardForE2E();
-        assert.ok(isSamePath(clipboard, appHostPath), `Expected clipboard '${clipboard}' to match AppHost path '${appHostPath}'.`);
+        await assertClipboardTextForE2E(appHostPath, 'path');
     });
 
     test('runs, shows resources and dashboard state, routes resource commands, and stops from the tree', async () => {

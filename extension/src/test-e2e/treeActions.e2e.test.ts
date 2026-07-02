@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import { findResource, getCommandInvocationCount, getTerminalCommandCount, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForHttpText, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { assertClipboardTextForE2E, executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { answerActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
@@ -82,6 +82,7 @@ suite('Aspire tree action command E2E', function () {
 
         const copiedAppHost = await executeE2eControlCommand({ name: 'copyAppHostPath', appHostPath });
         assert.ok(isSamePath(String(copiedAppHost.result), appHostPath));
+        await assertClipboardTextForE2E(appHostPath, 'path');
 
         const openedSource = await executeE2eControlCommand({ name: 'openAppHostSource', appHostPath });
         assert.ok(String((openedSource.result as { fileName?: string }).fileName).endsWith(path.join('AspireE2E.AppHost', 'AppHost.cs')));
@@ -91,10 +92,12 @@ suite('Aspire tree action command E2E', function () {
 
         const copiedResourceName = await executeE2eControlCommand({ name: 'copyResourceName', appHostPath, resourceName: 'e2e-worker' });
         assert.strictEqual(copiedResourceName.result, 'e2e-worker');
+        await assertClipboardTextForE2E('e2e-worker');
 
         const copiedEndpointUrl = await executeE2eControlCommand({ name: 'copyEndpointUrl', appHostPath, resourceName: 'e2e-worker' });
         const endpointUrl = String(copiedEndpointUrl.result);
         assert.ok(endpointUrl.startsWith('http'));
+        await assertClipboardTextForE2E(endpointUrl);
 
         before = getCommandInvocationCount('aspire-vscode.openInIntegratedBrowser');
         const openedEndpoint = await executeE2eControlCommand({ name: 'openInIntegratedBrowser', appHostPath, resourceName: 'e2e-worker' });
@@ -109,6 +112,7 @@ suite('Aspire tree action command E2E', function () {
 
         const copiedLogPath = await executeE2eControlCommand({ name: 'copyLogFilePath', appHostPath });
         assert.ok(path.isAbsolute(String(copiedLogPath.result)));
+        await assertClipboardTextForE2E(String(copiedLogPath.result), 'path');
 
         let terminalBefore: number;
 

@@ -75,17 +75,16 @@ export async function executeE2eControlCommand(
     return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
 }
 
-export async function readClipboardForE2E(): Promise<string> {
-    const clipboard = await executeE2eControlCommand({ name: 'readClipboard' });
-    if (typeof clipboard.result !== 'string') {
-        throw new Error(`Expected E2E clipboard read to return a string, but got ${typeof clipboard.result}.`);
-    }
-
-    return clipboard.result;
+export async function snapshotClipboardForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'snapshotClipboard' });
 }
 
-export async function writeClipboardForE2E(text: string): Promise<void> {
-    await executeE2eControlCommand({ name: 'writeClipboard', text });
+export async function restoreClipboardSnapshotForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'restoreClipboardSnapshot' });
+}
+
+export async function assertClipboardTextForE2E(expectedText: string, comparison: 'exact' | 'path' = 'exact'): Promise<void> {
+    await executeE2eControlCommand({ name: 'assertClipboardText', expectedText, comparison });
 }
 
 export async function runE2eTeardown(cleanups: ReadonlyArray<() => unknown | Promise<unknown>>, failureMessage: string): Promise<void> {

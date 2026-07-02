@@ -272,6 +272,37 @@ suite('E2E launch profile', () => {
         assert.ok(assertions.includes("waitFor === 'applied' ? file.control.status === 'applied' : file.control.startedObserved === true"));
     });
 
+    test('keeps E2E clipboard snapshots out of diagnostic state and control files', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const appHostTreeE2E = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostTree.e2e.test.ts'), 'utf8');
+
+        assert.ok(apiTypes.includes("{ name: 'snapshotClipboard' }"));
+        assert.ok(apiTypes.includes("{ name: 'restoreClipboardSnapshot' }"));
+        assert.ok(apiTypes.includes("{ name: 'assertClipboardText'; expectedText: string; comparison?: 'exact' | 'path' }"));
+        assert.ok(!apiTypes.includes("{ name: 'readClipboard' }"));
+        assert.ok(!apiTypes.includes("{ name: 'writeClipboard'; text: string }"));
+
+        assert.ok(e2eStateFileBridge.includes("case 'snapshotClipboard':"));
+        assert.ok(e2eStateFileBridge.includes("case 'restoreClipboardSnapshot':"));
+        assert.ok(e2eStateFileBridge.includes("case 'assertClipboardText':"));
+        assert.ok(!e2eStateFileBridge.includes('return await vscode.env.clipboard.readText();'));
+        assert.ok(!e2eStateFileBridge.includes('await vscode.env.clipboard.writeText(command.text);'));
+
+        assert.ok(fixtures.includes('snapshotClipboardForE2E'));
+        assert.ok(fixtures.includes('restoreClipboardSnapshotForE2E'));
+        assert.ok(fixtures.includes('assertClipboardTextForE2E'));
+        assert.ok(!fixtures.includes('readClipboardForE2E'));
+        assert.ok(!fixtures.includes('writeClipboardForE2E'));
+
+        assert.ok(appHostTreeE2E.includes('snapshotClipboardForE2E'));
+        assert.ok(appHostTreeE2E.includes('restoreClipboardSnapshotForE2E'));
+        assert.ok(appHostTreeE2E.includes("await assertClipboardTextForE2E(appHostPath, 'path');"));
+        assert.ok(!appHostTreeE2E.includes('clipboardTextToRestore'));
+    });
+
     test('latches E2E AppHost stopping path transitions before snapshots can clear', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');

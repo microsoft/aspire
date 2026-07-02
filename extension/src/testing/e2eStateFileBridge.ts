@@ -40,6 +40,7 @@ export function createE2eStateFileBridge(
   const debugLaunches: AspireExtensionE2EDebugLaunch[] = [];
   const debugConsoleOutputs: AspireExtensionE2EDebugConsoleOutput[] = [];
   const stoppingPathEvents: AspireExtensionE2EStoppingPathEvent[] = [];
+  const clipboardSnapshot: E2eClipboardSnapshot = { hasSnapshot: false };
   let commandInvocationSequence = 0;
   let terminalCommandSequence = 0;
   let debugLaunchSequence = 0;
@@ -177,7 +178,7 @@ export function createE2eStateFileBridge(
               }
             };
 
-            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, payload.command, markCommandStarted);
+            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, clipboardSnapshot, payload.command, markCommandStarted);
             controlStatus = { revision, status: 'applied', startedObserved: commandStarted, result };
           }
           else {
@@ -281,6 +282,7 @@ async function executeE2eControlCommand(
   appHostLaunchService: AppHostLaunchService,
   appHostTreeProvider: AspireAppHostTreeProvider,
   terminalProvider: AspireTerminalProvider,
+  clipboardSnapshot: E2eClipboardSnapshot,
   command: AspireExtensionE2EControlCommand,
   markStarted: () => void
 ): Promise<unknown> {
@@ -354,10 +356,11 @@ async function executeE2eControlCommand(
     }
     case 'copyAppHostPath': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
+      const copiedPath = getElementStringProperty(element, 'appHostPath') ?? command.appHostPath;
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyAppHostPath', element);
       markStarted();
       await commandPromise;
-      return await vscode.env.clipboard.readText();
+      return copiedPath;
     }
     case 'viewAppHostLogFile': {
       const element = getLogFileElement(appHostTreeProvider, command.appHostPath);
@@ -368,10 +371,11 @@ async function executeE2eControlCommand(
     }
     case 'copyLogFilePath': {
       const element = getLogFileElement(appHostTreeProvider, command.appHostPath);
+      const logFilePath = getRequiredElementStringProperty(element, 'logFilePath', 'Aspire extension E2E log file command found a tree item without a log file path.');
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyLogFilePath', element);
       markStarted();
       await commandPromise;
-      return await vscode.env.clipboard.readText();
+      return logFilePath;
     }
     case 'viewResourceLogs': {
       const element = getResourceElement(appHostTreeProvider, command.resourceName, command.appHostPath);
@@ -390,14 +394,14 @@ async function executeE2eControlCommand(
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyResourceName', element);
       markStarted();
       await commandPromise;
-      return await vscode.env.clipboard.readText();
+      return command.resourceName;
     }
     case 'copyEndpointUrl': {
       const endpoint = getEndpointElement(appHostTreeProvider, command);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyEndpointUrl', endpoint.element);
       markStarted();
       await commandPromise;
-      return await vscode.env.clipboard.readText();
+      return endpoint.url;
     }
     case 'openInIntegratedBrowser': {
       const endpoint = getEndpointElement(appHostTreeProvider, command);
@@ -545,13 +549,36 @@ async function executeE2eControlCommand(
       markStarted();
       return await getDiagnosticsForFile(command.filePath);
     }
-    case 'readClipboard': {
+    case 'snapshotClipboard': {
       markStarted();
-      return await vscode.env.clipboard.readText();
+      // The state and control files are uploaded as E2E diagnostics, so arbitrary user
+      // clipboard text must stay in extension-host memory instead of crossing the JSON bridge.
+      clipboardSnapshot.text = await vscode.env.clipboard.readText();
+      clipboardSnapshot.hasSnapshot = true;
+      return undefined;
     }
-    case 'writeClipboard': {
+    case 'restoreClipboardSnapshot': {
       markStarted();
-      await vscode.env.clipboard.writeText(command.text);
+      if (clipboardSnapshot.hasSnapshot) {
+        await vscode.env.clipboard.writeText(clipboardSnapshot.text ?? '');
+        clipboardSnapshot.text = undefined;
+        clipboardSnapshot.hasSnapshot = false;
+      }
+
+      return undefined;
+    }
+    case 'assertClipboardText': {
+      markStarted();
+      const clipboardText = await vscode.env.clipboard.readText();
+      const matches = command.comparison === 'path'
+        ? isSamePath(clipboardText, command.expectedText)
+        : clipboardText === command.expectedText;
+      if (!matches) {
+        throw new Error(command.comparison === 'path'
+          ? 'E2E clipboard path did not match the expected path.'
+          : 'E2E clipboard text did not match the expected text.');
+      }
+
       return undefined;
     }
     case 'openWorkspaceFolder': {
@@ -576,6 +603,11 @@ async function executeE2eControlCommand(
     default:
       throw new Error(`Unsupported Aspire extension E2E control command: ${getUnknownCommandName(command)}`);
   }
+}
+
+interface E2eClipboardSnapshot {
+  text?: string;
+  hasSnapshot: boolean;
 }
 
 function getE2eLaunchConfiguration(value: unknown): ExecutableLaunchConfiguration {
@@ -1247,6 +1279,24 @@ function getLogFileElement(appHostTreeProvider: AspireAppHostTreeProvider, appHo
   }
 
   return element;
+}
+
+function getRequiredElementStringProperty(element: unknown, propertyName: string, errorMessage: string): string {
+  const value = getElementStringProperty(element, propertyName);
+  if (value === undefined) {
+    throw new Error(errorMessage);
+  }
+
+  return value;
+}
+
+function getElementStringProperty(element: unknown, propertyName: string): string | undefined {
+  if (!element || typeof element !== 'object' || !(propertyName in element)) {
+    return undefined;
+  }
+
+  const value = (element as Record<string, unknown>)[propertyName];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function getActiveEditorInfo(): { uri?: string; fileName?: string; text?: string } {
