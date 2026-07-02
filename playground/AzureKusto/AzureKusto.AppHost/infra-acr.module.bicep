@@ -15,3 +15,5 @@ resource infra_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
 output name string = infra_acr.name
 
 output loginServer string = infra_acr.properties.loginServer
+
+output id string = infra_acr.id
