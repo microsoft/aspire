@@ -31,7 +31,8 @@ public class TerminalHostFailureDiagnosticServiceTests
 
             await notifications.PublishUpdateAsync(host, s => s with
             {
-                State = new ResourceStateSnapshot(KnownResourceStates.FailedToStart, null),
+                State = new ResourceStateSnapshot("failedtostart", null),
+                ExitCode = 0,
                 IsHidden = true,
             }).DefaultTimeout();
 
@@ -100,7 +101,7 @@ public class TerminalHostFailureDiagnosticServiceTests
 
             await notifications.PublishUpdateAsync(host, s => s with
             {
-                State = new ResourceStateSnapshot(KnownResourceStates.Terminated, null),
+                State = new ResourceStateSnapshot("terminated", null),
                 IsHidden = true,
             }).DefaultTimeout();
 

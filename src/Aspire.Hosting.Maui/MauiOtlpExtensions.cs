@@ -401,8 +401,8 @@ public static class MauiOtlpExtensions
 
     private static bool IsUnavailableState(string? state) =>
         state is not null &&
-        (KnownResourceStates.TerminalStates.Contains(state) ||
-         state == KnownResourceStates.RuntimeUnhealthy);
+        (KnownResourceStates.TerminalStates.Contains(state, StringComparers.ResourceState) ||
+         string.Equals(state, KnownResourceStates.RuntimeUnhealthy, StringComparisons.ResourceState));
 
     private static Task AllocateOtlpStubEndpointAsync(
         OtlpDevTunnelConfigurationAnnotation tunnelConfig,

@@ -54,7 +54,7 @@ public class MauiBuildQueueTests
 
         await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
         {
-            State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
+            State = new ResourceStateSnapshot("running", KnownResourceStateStyles.Success)
         });
 
         await Task.Delay(100);
@@ -94,7 +94,7 @@ public class MauiBuildQueueTests
 
         await env.NotificationService.PublishUpdateAsync(env.Android, s => s with
         {
-            State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success)
+            State = new ResourceStateSnapshot("running", KnownResourceStateStyles.Success)
         });
 
         await Task.Delay(100);
@@ -875,7 +875,8 @@ public class MauiBuildQueueTests
         [KnownResourceStates.RuntimeUnhealthy, KnownResourceStateStyles.Error],
         [KnownResourceStates.Exited, KnownResourceStateStyles.Info],
         [KnownResourceStates.Finished, KnownResourceStateStyles.Success],
-        [KnownResourceStates.Terminated, KnownResourceStateStyles.Warn]
+        [KnownResourceStates.Terminated, KnownResourceStateStyles.Warn],
+        ["terminated", KnownResourceStateStyles.Warn]
     ];
 
     private static void AddOriginalStopCommand(IResource resource, Action? onExecute = null)
