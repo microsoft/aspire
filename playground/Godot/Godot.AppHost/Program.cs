@@ -18,11 +18,9 @@ var godotServer = builder.AddExecutable("godot-server", godotBin, "../GameServer
     .WithEndpoint(port: 7000, targetPort: 7000, env: "GODOT_SERVER_PORT", name: "game",
         protocol: System.Net.Sockets.ProtocolType.Udp, isProxied: false);
 
-godotServer.WithReference(matchmaker)
-           .WaitFor(matchmaker)
-           // WithExplicitStart prevents the AppHost from failing on machines without Godot installed.
-           // Start this resource manually from the dashboard after setting GODOT_BIN or installing Godot on PATH.
-           .WithExplicitStart();
+// WithExplicitStart prevents the AppHost from failing on machines without Godot installed.
+// Start this resource manually from the dashboard after setting GODOT_BIN or installing Godot on PATH.
+godotServer.WithExplicitStart();
 
 matchmaker.WithReference(godotServer.GetEndpoint("game"));
 
