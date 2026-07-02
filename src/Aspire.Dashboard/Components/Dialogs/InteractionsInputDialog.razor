@@ -1,4 +1,4 @@
-﻿@using Aspire.Dashboard.Components.Controls.Chart
+@using Aspire.Dashboard.Components.Controls.Chart
 @using Aspire.Dashboard.Model.Interaction
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
@@ -161,7 +161,7 @@
                                                    aria-describedby="@input.DescriptionId" />
                             </InteractionInputField>
                             break;
-                        case InputType.FileChooser:
+                        case InputType.File:
                             <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"

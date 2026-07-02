@@ -268,7 +268,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
-        promptBackchannel.AddPrompt("file-prompt-1", "Artifact", InputTypes.FileChooser, "Select artifact:", isRequired: true);
+        promptBackchannel.AddPrompt("file-prompt-1", "Artifact", InputTypes.File, "Select artifact:", isRequired: true);
         consoleService.SetupSequentialResponses(
             (relativeMissingFile, ResponseType.String),
             (relativeSelectedFile, ResponseType.String));
@@ -305,7 +305,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
-        promptBackchannel.AddPrompt("file-prompt-1", "Artifact", InputTypes.FileChooser, "Select artifact:", isRequired: false);
+        promptBackchannel.AddPrompt("file-prompt-1", "Artifact", InputTypes.File, "Select artifact:", isRequired: false);
         consoleService.SetupStringPromptResponse("   ");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -1054,5 +1054,5 @@ internal static class InputTypes
     public const string Choice = "choice";
     public const string Boolean = "boolean";
     public const string Number = "number";
-    public const string FileChooser = "FileChooser";
+    public const string File = "File";
 }

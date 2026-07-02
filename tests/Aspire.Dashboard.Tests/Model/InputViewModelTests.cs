@@ -395,7 +395,7 @@ public class InputViewModelTests
         var input = new InteractionInput
         {
             Label = "Select File",
-            InputType = InputType.FileChooser
+            InputType = InputType.File
         };
 
         // Act
@@ -413,7 +413,7 @@ public class InputViewModelTests
         var input = new InteractionInput
         {
             Label = "Select File",
-            InputType = InputType.FileChooser
+            InputType = InputType.File
         };
         var viewModel = new InputViewModel(input);
 
@@ -432,7 +432,7 @@ public class InputViewModelTests
         var initialInput = new InteractionInput
         {
             Label = "Select File",
-            InputType = InputType.FileChooser,
+            InputType = InputType.File,
             Value = "/upload/local"
         };
         var viewModel = new InputViewModel(initialInput);
@@ -441,7 +441,7 @@ public class InputViewModelTests
         var newInput = new InteractionInput
         {
             Label = "Select Another File",
-            InputType = InputType.FileChooser,
+            InputType = InputType.File,
             Value = string.Empty,
             FileName = string.Empty
         };

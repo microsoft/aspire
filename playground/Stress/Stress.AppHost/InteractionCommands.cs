@@ -482,7 +482,8 @@ internal static class InteractionCommands
                {
                    predefinedOptionsInput,
                    customChoiceInput,
-                   dynamicInput
+                   dynamicInput,
+                   new InteractionInput { Name = "Receipt", InputType = InputType.File, Label = "Receipt", Placeholder = "Upload receipt", Required = true },
                };
                 var result = await interactionService.PromptInputsAsync(
                     "Choice inputs",
@@ -507,7 +508,12 @@ internal static class InteractionCommands
 
                 foreach (var updatedInput in result.Data)
                 {
-                    logger.LogInformation("Input: {Name} = {Value}", updatedInput.Name, updatedInput.Value);
+                    var value = updatedInput.Value;
+                    if (updatedInput.InputType == InputType.File && !string.IsNullOrEmpty(value))
+                    {
+                        value += $" (FileName: {updatedInput.FileName})";
+                    }
+                    logger.LogInformation("Input: {Name} = {Value}", updatedInput.Name, value);
                 }
 
                 return CommandResults.Success();

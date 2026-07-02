@@ -110,7 +110,7 @@ public sealed class InputViewModel
     // Used to track secret text visibility state
     public bool IsSecretTextVisible { get; set; }
 
-    // Used to display the original filename for FileChooser inputs while Value holds the temp file path.
+    // Used to display the original filename for File inputs while Value holds the temp file path.
     public string? FileDisplayName
     {
         get => Input.FileName;

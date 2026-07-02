@@ -401,7 +401,7 @@ public sealed class InteractionInput
     }
 
     /// <summary>
-    /// Gets or sets the maximum file size in bytes for <see cref="InputType.FileChooser"/> inputs.
+    /// Gets or sets the maximum file size in bytes for <see cref="InputType.File"/> inputs.
     /// If not specified, the Dashboard upload UI applies a default limit of 1 MB.
     /// This limit is not enforced when the file path is provided directly (e.g. via the CLI).
     /// </summary>
@@ -420,7 +420,7 @@ public sealed class InteractionInput
     }
 
     /// <summary>
-    /// Gets or sets the original file name for <see cref="InputType.FileChooser"/> inputs.
+    /// Gets or sets the original file name for <see cref="InputType.File"/> inputs.
     /// When a file is selected, <see cref="Value"/> holds the file path on disk and this property
     /// holds the user-facing file name (e.g. "readme.txt").
     /// </summary>
@@ -634,9 +634,9 @@ public enum InputType
     /// </summary>
     Number,
     /// <summary>
-    /// A file chooser input. Allows the user to select a file using the OS/browser file picker.
+    /// A file input. Allows the user to select a file using the OS/browser file picker.
     /// </summary>
-    FileChooser
+    File
 }
 
 /// <summary>

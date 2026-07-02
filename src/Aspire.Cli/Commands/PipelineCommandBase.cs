@@ -948,14 +948,14 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             InputType.Number => await HandleNumberInputAsync(input, promptText, cancellationToken),
 
-            InputType.FileChooser => await HandleFileChooserInputAsync(input, promptText, cancellationToken),
+            InputType.File => await HandleFileChooserInputAsync(input, promptText, cancellationToken),
 
             _ => await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken)
         };
     }
 
     private static bool IsFileChooserInput(string inputType) =>
-        string.Equals(inputType, nameof(InputType.FileChooser), StringComparison.OrdinalIgnoreCase);
+        string.Equals(inputType, nameof(InputType.File), StringComparison.OrdinalIgnoreCase);
 
     private async Task<string?> HandleSelectInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
     {

@@ -208,9 +208,9 @@ internal static class InteractionExports
     /// Creates a file chooser input.
     /// </summary>
     [AspireExport]
-    public static InteractionInputBuilder CreateFileChooserInput(this IInteractionService interactionService, string name, CreateInteractionInputOptions? options = null)
+    public static InteractionInputBuilder CreateFileInput(this IInteractionService interactionService, string name, CreateInteractionInputOptions? options = null)
     {
-        return InteractionInputBuilder.Create(name, InputType.FileChooser, options);
+        return InteractionInputBuilder.Create(name, InputType.File, options);
     }
 
     /// <summary>

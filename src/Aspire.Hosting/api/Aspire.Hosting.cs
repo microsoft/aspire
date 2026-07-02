@@ -678,7 +678,7 @@ namespace Aspire.Hosting
         Choice = 2,
         Boolean = 3,
         Number = 4,
-        FileChooser = 5
+        File = 5
     }
 
     [AspireDto]

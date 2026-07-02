@@ -125,7 +125,7 @@ public class AtsExportsTests
             "Upload",
             "Select a file.",
             [
-                InteractionExports.CreateFileChooserInput(interactionService, "artifact", new CreateInteractionInputOptions
+                InteractionExports.CreateFileInput(interactionService, "artifact", new CreateInteractionInputOptions
                 {
                     Label = "Artifact",
                     MaxFileSize = 1024
@@ -146,11 +146,11 @@ public class AtsExportsTests
     }
 
     [Fact]
-    public void CreateFileChooserInput_CreatesFileChooserWithOptions()
+    public void CreateFileInput_CreatesFileWithOptions()
     {
         var interactionService = new TestInteractionService();
 
-        var input = InteractionExports.CreateFileChooserInput(interactionService, "artifact", new CreateInteractionInputOptions
+        var input = InteractionExports.CreateFileInput(interactionService, "artifact", new CreateInteractionInputOptions
         {
             Label = "Artifact",
             Placeholder = "Choose artifact",
@@ -160,7 +160,7 @@ public class AtsExportsTests
         Assert.Equal("artifact", input.Name);
         Assert.Equal("Artifact", input.Label);
         Assert.Equal("Choose artifact", input.Placeholder);
-        Assert.Equal(InputType.FileChooser, input.InputType);
+        Assert.Equal(InputType.File, input.InputType);
         Assert.Equal(2048, input.MaxFileSize);
     }
 #pragma warning restore ASPIREINTERACTION001

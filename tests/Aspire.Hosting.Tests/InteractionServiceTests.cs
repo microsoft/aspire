@@ -1268,7 +1268,7 @@ public class InteractionServiceTests
     {
         var interactionService = CreateInteractionService();
 
-        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.FileChooser, Required = true };
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File, Required = true };
         _ = interactionService.PromptInputAsync("Select file", "please", input);
 
         var interaction = Assert.Single(interactionService.GetCurrentInteractions());
@@ -1277,7 +1277,7 @@ public class InteractionServiceTests
             interactionService,
             interaction.InteractionId,
             new InteractionCompletionState { Complete = true, State = new[] { input } },
-            inputs: [new InputDto("File", "file-content-here", InputType.FileChooser)]);
+            inputs: [new InputDto("File", "file-content-here", InputType.File)]);
 
         Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
         Assert.Empty(input.ValidationErrors);
@@ -1288,7 +1288,7 @@ public class InteractionServiceTests
     {
         var interactionService = CreateInteractionService();
 
-        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.FileChooser, Required = true };
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File, Required = true };
         _ = interactionService.PromptInputAsync("Select file", "please", input);
 
         var interaction = Assert.Single(interactionService.GetCurrentInteractions());
@@ -1297,7 +1297,7 @@ public class InteractionServiceTests
             interactionService,
             interaction.InteractionId,
             new InteractionCompletionState { Complete = true, State = new[] { input } },
-            inputs: [new InputDto("File", string.Empty, InputType.FileChooser)]);
+            inputs: [new InputDto("File", string.Empty, InputType.File)]);
 
         // The interaction should still be in progress due to required field being empty
         Assert.False(interaction.CompletionTcs.Task.IsCompleted);
@@ -1311,7 +1311,7 @@ public class InteractionServiceTests
     {
         var interactionService = CreateInteractionService();
 
-        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.FileChooser, Required = false };
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File, Required = false };
         _ = interactionService.PromptInputAsync("Select file", "please", input);
 
         var interaction = Assert.Single(interactionService.GetCurrentInteractions());
@@ -1320,7 +1320,7 @@ public class InteractionServiceTests
             interactionService,
             interaction.InteractionId,
             new InteractionCompletionState { Complete = true, State = new[] { input } },
-            inputs: [new InputDto("File", string.Empty, InputType.FileChooser)]);
+            inputs: [new InputDto("File", string.Empty, InputType.File)]);
 
         Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
         Assert.Empty(input.ValidationErrors);
@@ -1332,14 +1332,14 @@ public class InteractionServiceTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new InteractionInput
         {
             Name = "File",
-            InputType = InputType.FileChooser,
+            InputType = InputType.File,
             MaxFileSize = 0
         });
 
         Assert.Throws<ArgumentOutOfRangeException>(() => new InteractionInput
         {
             Name = "File",
-            InputType = InputType.FileChooser,
+            InputType = InputType.File,
             MaxFileSize = -1
         });
     }
@@ -1350,7 +1350,7 @@ public class InteractionServiceTests
         var input = new InteractionInput
         {
             Name = "File",
-            InputType = InputType.FileChooser,
+            InputType = InputType.File,
             MaxFileSize = 1024 * 1024
         };
 
@@ -1363,7 +1363,7 @@ public class InteractionServiceTests
         var input = new InteractionInput
         {
             Name = "File",
-            InputType = InputType.FileChooser
+            InputType = InputType.File
         };
 
         Assert.Null(input.MaxFileSize);
@@ -1387,7 +1387,7 @@ public class InteractionServiceTests
         var input = new InteractionInput
         {
             Name = "File",
-            InputType = InputType.FileChooser,
+            InputType = InputType.File,
             Value = null
         };
 
@@ -1401,7 +1401,7 @@ public class InteractionServiceTests
         var input = new InteractionInput
         {
             Name = "File",
-            InputType = InputType.FileChooser,
+            InputType = InputType.File,
             Value = string.Empty
         };
 
@@ -1415,7 +1415,7 @@ public class InteractionServiceTests
         var input = new InteractionInput
         {
             Name = "File",
-            InputType = InputType.FileChooser,
+            InputType = InputType.File,
             Value = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString())
         };
 
@@ -1434,7 +1434,7 @@ public class InteractionServiceTests
             var input = new InteractionInput
             {
                 Name = "File",
-                InputType = InputType.FileChooser,
+                InputType = InputType.File,
                 Value = tempFile,
                 FileName = "test.txt"
             };

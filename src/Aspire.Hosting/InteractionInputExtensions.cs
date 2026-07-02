@@ -9,11 +9,11 @@ namespace Aspire.Hosting;
 public static class InteractionInputExtensions
 {
     /// <summary>
-    /// Opens a read-only stream for the file associated with a <see cref="InputType.FileChooser"/> input.
+    /// Opens a read-only stream for the file associated with a <see cref="InputType.File"/> input.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// For <see cref="InputType.FileChooser"/> inputs, <see cref="InteractionInput.Value"/> holds the file path
+    /// For <see cref="InputType.File"/> inputs, <see cref="InteractionInput.Value"/> holds the file path
     /// on disk and <see cref="InteractionInput.FileName"/> holds the user-facing file name. This method opens
     /// the file at that path for reading.
     /// </para>
@@ -28,7 +28,7 @@ public static class InteractionInputExtensions
     /// or <see langword="null"/> if <see cref="InteractionInput.Value"/> is null or empty.
     /// </returns>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when the input's <see cref="InteractionInput.InputType"/> is not <see cref="InputType.FileChooser"/>.
+    /// Thrown when the input's <see cref="InteractionInput.InputType"/> is not <see cref="InputType.File"/>.
     /// </exception>
     /// <exception cref="FileNotFoundException">
     /// Thrown when the file path in <see cref="InteractionInput.Value"/> does not exist on disk.
@@ -37,10 +37,10 @@ public static class InteractionInputExtensions
     {
         _ = cancellationToken; // Reserved for future use when streaming over gRPC.
 
-        if (input.InputType != InputType.FileChooser)
+        if (input.InputType != InputType.File)
         {
             throw new InvalidOperationException(
-                $"OpenFileStreamAsync can only be called on inputs with InputType.FileChooser. The input '{input.Name}' has InputType.{input.InputType}.");
+                $"OpenFileStreamAsync can only be called on inputs with InputType.File. The input '{input.Name}' has InputType.{input.InputType}.");
         }
 
         if (string.IsNullOrEmpty(input.Value))

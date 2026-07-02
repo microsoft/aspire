@@ -28,7 +28,7 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
         {
             Name = "artifact",
             Label = "Artifact",
-            InputType = InputType.FileChooser,
+            InputType = InputType.File,
             Placeholder = string.Empty
         });
         var viewModel = new InteractionsInputsDialogViewModel

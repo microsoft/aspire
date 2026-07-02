@@ -246,7 +246,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.Hosting.InputType.Choice => Aspire.DashboardService.Proto.V1.InputType.Choice,
             Aspire.Hosting.InputType.Boolean => Aspire.DashboardService.Proto.V1.InputType.Boolean,
             Aspire.Hosting.InputType.Number => Aspire.DashboardService.Proto.V1.InputType.Number,
-            Aspire.Hosting.InputType.FileChooser => Aspire.DashboardService.Proto.V1.InputType.FileChooser,
+            Aspire.Hosting.InputType.File => Aspire.DashboardService.Proto.V1.InputType.File,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
@@ -260,7 +260,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.DashboardService.Proto.V1.InputType.Choice => InputType.Choice,
             Aspire.DashboardService.Proto.V1.InputType.Boolean => InputType.Boolean,
             Aspire.DashboardService.Proto.V1.InputType.Number => InputType.Number,
-            Aspire.DashboardService.Proto.V1.InputType.FileChooser => InputType.FileChooser,
+            Aspire.DashboardService.Proto.V1.InputType.File => InputType.File,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }

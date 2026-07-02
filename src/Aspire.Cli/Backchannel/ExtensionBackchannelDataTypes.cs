@@ -47,9 +47,9 @@ internal enum InputType
     /// </summary>
     Number,
     /// <summary>
-    /// A file chooser input. Allows the user to select a file.
+    /// A file input. Allows the user to select a file.
     /// </summary>
-    FileChooser
+    File
 }
 
 internal sealed class EnvVar
