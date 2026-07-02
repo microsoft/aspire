@@ -456,7 +456,7 @@ public class ResourceCommandService
 
         var progressResult = await interactionService.PromptProgressAsync(progressOptions.Message, title: progressOptions.Title, options: options, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        if (progressResult.Canceled && commandResult is null)
+        if (progressResult.Canceled)
         {
             return CommandResults.Canceled();
         }

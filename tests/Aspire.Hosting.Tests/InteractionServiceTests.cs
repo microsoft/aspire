@@ -1173,6 +1173,38 @@ public class InteractionServiceTests
     }
 
     [Fact]
+    public async Task PromptProgressAsync_WithWorkThatHandlesCancellation_CancelledViaButton_ReturnsCanceled()
+    {
+        var interactionService = CreateInteractionService();
+
+        var tcs = new TaskCompletionSource();
+        var resultTask = interactionService.PromptProgressAsync("Please wait", "Working...", new ProgressInteractionOptions
+        {
+            PrimaryButtonText = "Cancel",
+            Work = async ctx =>
+            {
+                tcs.SetResult();
+                try
+                {
+                    await Task.Delay(Timeout.Infinite, ctx.CancellationToken);
+                }
+                catch (OperationCanceledException) when (ctx.CancellationToken.IsCancellationRequested)
+                {
+                }
+            }
+        });
+
+        await tcs.Task.DefaultTimeout();
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+        await CompleteInteractionAsync(interactionService, interaction.InteractionId, new InteractionCompletionState { Complete = true, State = false });
+
+        var result = await resultTask.DefaultTimeout();
+        Assert.True(result.Canceled);
+        Assert.Empty(interactionService.GetCurrentInteractions());
+    }
+
+    [Fact]
     public async Task PromptProgressAsync_WithoutWork_Cancellation_ClosesDialog()
     {
         var interactionService = CreateInteractionService();
@@ -1263,4 +1295,3 @@ public class InteractionServiceTests
             configuration);
     }
 }
-

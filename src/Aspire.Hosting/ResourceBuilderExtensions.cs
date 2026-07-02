@@ -3753,6 +3753,10 @@ public static class ResourceBuilderExtensions
 
                     return await GetDefaultHttpCommandResultAsync(response, commandOptions, context.CancellationToken).ConfigureAwait(false);
                 }
+                catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+                {
+                    return CommandResults.Canceled();
+                }
                 catch (Exception ex)
                 {
                     return CommandResults.Failure(ex);
