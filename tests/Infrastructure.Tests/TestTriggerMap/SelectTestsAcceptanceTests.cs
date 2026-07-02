@@ -838,15 +838,20 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
         Assert.False(filter.IsExcluded("eng/pipelines/azure-pipelines-public.yml"));
         Assert.False(filter.IsExcluded("eng/github-ci/ci-skip-entirely-patterns.txt"));
         Assert.False(filter.IsExcluded("eng/scripts/pack-cli-npm-package.CHANGELOG.md"));
+        Assert.False(filter.IsExcluded("eng/scripts/pack-cli-npm-package.pointer.README.md"));
+        Assert.False(filter.IsExcluded("eng/scripts/pack-cli-npm-package.rid.README.md"));
     }
 
-    [Fact]
-    public void RealMapNpmChangelogTemplateChangeRunsPackagingValidation()
+    [Theory]
+    [InlineData("eng/scripts/pack-cli-npm-package.CHANGELOG.md")]
+    [InlineData("eng/scripts/pack-cli-npm-package.pointer.README.md")]
+    [InlineData("eng/scripts/pack-cli-npm-package.rid.README.md")]
+    public void RealMapNpmPackageMarkdownTemplateChangeRunsPackagingValidation(string templatePath)
     {
         var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
         var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
 
-        var r = selector.Select(["eng/scripts/pack-cli-npm-package.CHANGELOG.md"], [], new SelectorOptions());
+        var r = selector.Select([templatePath], [], new SelectorOptions());
 
         Assert.False(r.SelectsAll);
         Assert.Contains("Aspire.Cli.Tests", r.TestProjects);

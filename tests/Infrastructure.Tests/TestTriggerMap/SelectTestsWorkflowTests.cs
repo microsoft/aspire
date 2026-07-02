@@ -55,6 +55,8 @@ public sealed class SelectTestsWorkflowTests
         Assert.Contains("KEEP_UNMATCHED_PATTERNS", action);
         Assert.Contains("keep_unmatched: |", ciYml);
         Assert.Contains("eng/scripts/pack-cli-npm-package.CHANGELOG.md", ciYml);
+        Assert.Contains("eng/scripts/pack-cli-npm-package.pointer.README.md", ciYml);
+        Assert.Contains("eng/scripts/pack-cli-npm-package.rid.README.md", ciYml);
     }
 
     // The comment_selection job posts one comment per pushed commit (createComment for a new commit,

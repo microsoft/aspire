@@ -44,6 +44,8 @@ jobs:
           patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
           keep_unmatched: |
             eng/scripts/pack-cli-npm-package.CHANGELOG.md
+            eng/scripts/pack-cli-npm-package.pointer.README.md
+            eng/scripts/pack-cli-npm-package.rid.README.md
 
       - id: compute_version_suffix
         name: Compute version suffix for PRs
