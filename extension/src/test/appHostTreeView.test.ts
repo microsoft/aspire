@@ -2516,6 +2516,132 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         }
     });
 
+    test('attachDebuggerToResource ignores conditional AssemblyName values', async () => {
+        const testCases = [
+            {
+                fileName: 'ProjectWithDefault.csproj',
+                markup: `
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName Condition="'$(Configuration)' == 'Release'">Release.Assembly</AssemblyName>
+    <AssemblyName>Default.Assembly</AssemblyName>
+  </PropertyGroup>
+</Project>`,
+                expectedProcessName: 'Default.Assembly',
+            },
+            {
+                fileName: 'ProjectFileName.csproj',
+                markup: `
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName Condition="'$(Configuration)' == 'Release'">Release.Assembly</AssemblyName>
+  </PropertyGroup>
+</Project>`,
+                expectedProcessName: 'ProjectFileName',
+            },
+            {
+                fileName: 'ProjectWithGroupDefault.csproj',
+                markup: `
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <AssemblyName>Release.Assembly</AssemblyName>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AssemblyName>Default.Assembly</AssemblyName>
+  </PropertyGroup>
+</Project>`,
+                expectedProcessName: 'Default.Assembly',
+            },
+            {
+                fileName: 'ProjectGroupOnly.csproj',
+                markup: `
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <AssemblyName>Release.Assembly</AssemblyName>
+  </PropertyGroup>
+</Project>`,
+                expectedProcessName: 'ProjectGroupOnly',
+            },
+            {
+                fileName: 'ProjectWithChooseDefault.csproj',
+                markup: `
+<Project Sdk="Microsoft.NET.Sdk">
+  <Choose>
+    <When Condition="'$(Configuration)' == 'Release'">
+      <PropertyGroup>
+        <AssemblyName>Release.Assembly</AssemblyName>
+      </PropertyGroup>
+    </When>
+  </Choose>
+  <PropertyGroup>
+    <AssemblyName>Default.Assembly</AssemblyName>
+  </PropertyGroup>
+</Project>`,
+                expectedProcessName: 'Default.Assembly',
+            },
+            {
+                fileName: 'ProjectChooseOnly.csproj',
+                markup: `
+<Project Sdk="Microsoft.NET.Sdk">
+  <Choose>
+    <When Condition="'$(Configuration)' == 'Release'">
+      <PropertyGroup>
+        <AssemblyName>Release.Assembly</AssemblyName>
+      </PropertyGroup>
+    </When>
+    <Otherwise>
+      <PropertyGroup>
+        <AssemblyName>Default.Assembly</AssemblyName>
+      </PropertyGroup>
+    </Otherwise>
+  </Choose>
+</Project>`,
+                expectedProcessName: 'ProjectChooseOnly',
+            },
+        ];
+
+        for (const testCase of testCases) {
+            const directory = fs.mkdtempSync(path.join(process.cwd(), '.assembly-name-test-'));
+            const projectPath = path.join(directory, testCase.fileName);
+            fs.writeFileSync(projectPath, testCase.markup);
+            const provider = makeTreeProvider([
+                makeAppHost({
+                    resources: [
+                        makeResource({
+                            name: 'api',
+                            displayName: 'API',
+                            resourceType: 'Project',
+                            state: ResourceState.Running,
+                            properties: makeAttachableProjectProperties({
+                                'project.path': projectPath,
+                            }),
+                        }),
+                    ],
+                }),
+            ]);
+            const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+            const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+
+            try {
+                const [appHostItem] = provider.getChildren();
+                const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+                assert.ok(resourcesGroup, 'Expected resources group');
+                const [resourceItem] = provider.getChildren(resourcesGroup);
+
+                await (provider as any).attachDebuggerToResource(resourceItem);
+
+                const configuration = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+                assert.strictEqual(configuration.processName, testCase.expectedProcessName);
+            }
+            finally {
+                csharpInstalledStub.restore();
+                startDebuggingStub.restore();
+                provider.dispose();
+                fs.rmSync(directory, { recursive: true, force: true });
+            }
+        }
+    });
+
     test('attachDebuggerToResource falls back when AssemblyName is not a simple literal', async () => {
         const testCases = [
             '<AssemblyName>$(MSBuildProjectName).Api</AssemblyName>',

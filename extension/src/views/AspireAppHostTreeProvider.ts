@@ -547,15 +547,67 @@ async function resolveDotNetProjectProcessName(projectPath: string, fallbackProc
     // actual apphost process more often without requiring a new Aspire CLI/backchannel contract.
     // Reject MSBuild expressions like "$(MSBuildProjectName).Api" because CoreCLR treats the
     // processName as a literal process matcher, not as an evaluated MSBuild property.
+    // Also ignore conditional values like:
+    //   <AssemblyName Condition="'$(Configuration)' == 'Release'">MyApp.Release</AssemblyName>
+    //   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    //     <AssemblyName>MyApp.Release</AssemblyName>
+    //   </PropertyGroup>
+    //   <Choose>
+    //     <When Condition="'$(Configuration)' == 'Release'">...</When>
+    //   </Choose>
+    // The attach action does not have the evaluated MSBuild context, so a conditional value can be
+    // less safe than the project filename fallback.
     try {
         const content = Buffer.from(await vscode.workspace.fs.readFile(vscode.Uri.file(projectPath))).toString('utf8');
         const contentWithoutComments = content.replace(/<!--[\s\S]*?-->/g, '');
-        const assemblyName = contentWithoutComments.match(/<AssemblyName\b[^>]*>([^<]+)<\/AssemblyName\s*>/i)?.[1]?.trim();
+        const assemblyName = getUnconditionalAssemblyName(contentWithoutComments);
         return assemblyName && isSimpleLiteralAssemblyName(assemblyName) ? assemblyName : fallbackProcessName;
     }
     catch {
         return fallbackProcessName;
     }
+}
+
+function getUnconditionalAssemblyName(projectFileContent: string): string | undefined {
+    const conditionalAncestorRanges = getConditionalAssemblyNameAncestorRanges(projectFileContent);
+    const assemblyNameRegex = /<AssemblyName\b([^>]*)>([^<]+)<\/AssemblyName\s*>/ig;
+    for (const match of projectFileContent.matchAll(assemblyNameRegex)) {
+        const index = match.index ?? -1;
+        const attributes = match[1];
+        if (hasConditionAttribute(attributes) || conditionalAncestorRanges.some(range => index >= range.start && index < range.end)) {
+            continue;
+        }
+
+        return match[2].trim();
+    }
+
+    return undefined;
+}
+
+function getConditionalAssemblyNameAncestorRanges(projectFileContent: string): { start: number; end: number }[] {
+    return [
+        ...getElementRanges(projectFileContent, 'PropertyGroup', hasConditionAttribute),
+        // Any AssemblyName inside Choose/When/Otherwise depends on MSBuild branch evaluation. Treat the
+        // whole Choose block as conditional because the attach action does not know which branch applied.
+        ...getElementRanges(projectFileContent, 'Choose', () => true),
+    ];
+}
+
+function getElementRanges(projectFileContent: string, elementName: string, shouldInclude: (attributes: string) => boolean): { start: number; end: number }[] {
+    const ranges: { start: number; end: number }[] = [];
+    const elementRegex = new RegExp(`<${elementName}\\b([^>]*)>[\\s\\S]*?<\\/${elementName}\\s*>`, 'ig');
+    for (const match of projectFileContent.matchAll(elementRegex)) {
+        if (shouldInclude(match[1])) {
+            const start = match.index ?? 0;
+            ranges.push({ start, end: start + match[0].length });
+        }
+    }
+
+    return ranges;
+}
+
+function hasConditionAttribute(attributes: string): boolean {
+    return /(?:^|\s)Condition\s*=/i.test(attributes);
 }
 
 function isSimpleLiteralAssemblyName(assemblyName: string): boolean {
