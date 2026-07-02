@@ -56,7 +56,17 @@ export async function runExtensionTests(root = extensionRoot) {
     return { tests: 0 };
   }
 
-  await execFileAsync(process.execPath, ["--test", "--test-concurrency=1", ...tests], { cwd: resolvedRoot });
+  try {
+    await execFileAsync(process.execPath, ["--test", "--test-concurrency=1", ...tests], { cwd: resolvedRoot });
+  } catch (error) {
+    // node:test writes the failing-test report (assertion diffs, stack traces) to the
+    // child's stdout as it runs; execFileAsync only rejects with an opaque
+    // "Command failed: node --test ..." message. Surface the captured stdout (and any
+    // stderr) so the actual test failure is visible instead of the bare exit code.
+    // stdout first because that is where the failure detail lives.
+    const detail = [error.stdout, error.stderr].filter(Boolean).join("\n").trim();
+    throw new Error(`extension tests failed${detail ? `\n${detail}` : ""}`);
+  }
   return { tests: tests.length };
 }
 
