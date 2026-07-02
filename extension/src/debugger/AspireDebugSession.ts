@@ -73,7 +73,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   private readonly _onDidChangeState = new EventEmitter<void>();
   private readonly _disposables: vscode.Disposable[] = [];
   private _disposed = false;
-  private _parentStopRequested = false;
+  private _parentStopPromise: Thenable<void> | undefined;
   // Timestamp for the `debug/apphost/end` duration measurement. Captured the first
   // time we observe a `launch` request so it covers the actual user-visible session
   // lifetime, not the moment the AspireDebugSession object was constructed.
@@ -135,17 +135,18 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     }
   }
 
-  private stopParentDebugSessionOnce(): Thenable<void> | undefined {
-    if (this._parentStopRequested) {
-      return undefined;
+  private stopParentDebugSessionOnce(): Thenable<void> {
+    if (this._parentStopPromise) {
+      return this._parentStopPromise;
     }
 
     // stopDebugging() and dispose() can race depending on when VS Code delivers
     // the AppHost termination event. Record the request before calling VS Code
-    // so the Aspire parent has a single stop owner in either ordering.
-    this._parentStopRequested = true;
+    // so the Aspire parent has a single stop owner in either ordering, and
+    // return the original Thenable so callers still wait for the in-flight stop.
+    this._parentStopPromise = vscode.debug.stopDebugging(this._session);
 
-    return vscode.debug.stopDebugging(this._session);
+    return this._parentStopPromise;
   }
 
   handleMessage(message: any): void {
@@ -591,14 +592,19 @@ export class AspireDebugSession implements vscode.DebugAdapter {
             return;
           }
 
+          let stopSessionPromise: Thenable<void> | undefined;
           const disposalFunction = () => {
+            if (stopSessionPromise) {
+              return stopSessionPromise;
+            }
+
             extensionLogOutputChannel.info(`Stopping debug session: ${session.name} (run id: ${session.configuration.runId})`);
-            const stopDebugging = vscode.debug.stopDebugging(session);
+            stopSessionPromise = vscode.debug.stopDebugging(session);
 
             // Run any cleanup registered by resource-type extensions (e.g. func host for Azure Functions)
             cleanupRun(debugConfig.runId);
 
-            return stopDebugging;
+            return stopSessionPromise;
           };
 
           const vsCodeDebugSession: AspireResourceDebugSession = {

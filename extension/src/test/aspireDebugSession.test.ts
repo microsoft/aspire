@@ -466,6 +466,132 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         assert.strictEqual(stopDebuggingStub.secondCall.args[0], parentDebugSession);
     });
 
+    test('stopDebugging waits for the Aspire parent stop when AppHost stop disposes the Aspire session', async () => {
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.cs',
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const appHostDebugSession = {
+            id: 'apphost-session',
+            type: 'coreclr',
+            name: 'AppHost',
+            configuration: {
+                type: 'coreclr',
+                request: 'launch',
+                name: 'AppHost',
+            },
+        };
+        const terminalProvider = {
+            isCliDebugLoggingEnabled: () => false,
+        };
+        let resolveParentStop: (() => void) | undefined;
+        const parentStopPromise = new Promise<void>(resolve => {
+            resolveParentStop = resolve;
+        });
+        const stopDebuggingStub = sinon.stub(vscode.debug, 'stopDebugging').callsFake(async session => {
+            if (session === parentDebugSession) {
+                await parentStopPromise;
+            }
+        });
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+        (aspireDebugSession as any)._appHostDebugSession = {
+            id: appHostDebugSession.id,
+            session: appHostDebugSession as unknown as vscode.DebugSession,
+            stopSession: () => {
+                const stopAppHost = vscode.debug.stopDebugging(appHostDebugSession as unknown as vscode.DebugSession);
+                aspireDebugSession.dispose();
+                return stopAppHost;
+            },
+        };
+
+        const stopDebugging = aspireDebugSession.stopDebugging();
+        const resultBeforeParentStop = await Promise.race([
+            stopDebugging.then(() => 'completed'),
+            new Promise<'pending'>(resolve => setTimeout(() => resolve('pending'), 25)),
+        ]);
+
+        assert.strictEqual(resultBeforeParentStop, 'pending');
+
+        resolveParentStop!();
+        await stopDebugging;
+
+        assert.strictEqual(stopDebuggingStub.callCount, 2);
+        assert.strictEqual(stopDebuggingStub.firstCall.args[0], appHostDebugSession);
+        assert.strictEqual(stopDebuggingStub.secondCall.args[0], parentDebugSession);
+    });
+
+    test('stopDebugging does not stop the AppHost debug session twice when disposal follows AppHost termination', async () => {
+        let startSessionCallback: ((session: vscode.DebugSession) => void) | undefined;
+        const parentDebugSession = {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: {
+                type: 'aspire',
+                request: 'launch',
+                name: 'Aspire',
+                program: '/workspace/apphost.cs',
+                command: 'run',
+            },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+        const appHostDebugSession = {
+            id: 'apphost-session',
+            type: 'coreclr',
+            name: 'AppHost',
+            configuration: {
+                runId: 'apphost-run',
+            },
+        };
+        const terminalProvider = {
+            isDebugConfigEnvironmentLoggingEnabled: () => false,
+        };
+        const debugConfig = {
+            runId: 'apphost-run',
+            debugSessionId: 'debug-1',
+            type: 'coreclr',
+            name: 'AppHost',
+            request: 'launch',
+            program: '/workspace/AppHost/bin/Debug/net10.0/AppHost.dll',
+            cwd: '/workspace/AppHost',
+            isApphost: true,
+        } as AspireResourceExtendedDebugConfiguration;
+        sinon.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
+        sinon.stub(vscode.debug, 'onDidStartDebugSession').callsFake(callback => {
+            startSessionCallback = callback;
+            return { dispose: sinon.stub() };
+        });
+        sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const stopDebuggingStub = sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession as unknown as vscode.DebugSession, {} as any, {} as any, terminalProvider as any, () => { });
+
+        const sessionPromise = aspireDebugSession.startAndGetDebugSession(debugConfig);
+        await Promise.resolve();
+        startSessionCallback?.(appHostDebugSession as unknown as vscode.DebugSession);
+        const appHostSession = await sessionPromise;
+        (aspireDebugSession as any)._appHostDebugSession = appHostSession;
+
+        await aspireDebugSession.stopDebugging();
+        aspireDebugSession.dispose();
+
+        assert.strictEqual(stopDebuggingStub.callCount, 2);
+        assert.strictEqual(stopDebuggingStub.firstCall.args[0], appHostDebugSession);
+        assert.strictEqual(stopDebuggingStub.secondCall.args[0], parentDebugSession);
+    });
+
     test('reports AppHost target version in end telemetry', async () => {
         const fake = new FakeTelemetryReporter();
         const restoreReporter = __setReporterForTests(fake as unknown as TelemetryReporter);
