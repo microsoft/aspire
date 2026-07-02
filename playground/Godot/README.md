@@ -10,7 +10,7 @@ This playground demonstrates hosting a Godot 4 dedicated game server as an Aspir
 
 ## Build and CI
 
-**The repository build and CI does not require Godot.** The `Godot.AppHost` and `Godot.Matchmaker` projects are plain .NET projects that build with `dotnet build` like any other playground project. The `GameServer/` directory contains only GDScript and a Godot project file, neither of which participates in the .NET build.
+**The repository build and CI do not require Godot.** The `Godot.AppHost` and `Godot.Matchmaker` projects are plain .NET projects that build with `dotnet build` like any other playground project. The `GameServer/` directory contains only GDScript and a Godot project file, neither of which participates in the .NET build.
 
 ## Manual Run
 
