@@ -286,6 +286,15 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
                     foreach (var (changeType, resource) in changes)
                     {
+                        // Detect a genuine resource addition before OnResourceChanged inserts it into
+                        // _resourceByName. An Upsert covers both new resources and updates to existing
+                        // ones, so the map lookup distinguishes the two. Match the visibility condition
+                        // used to decide subscription below so a render only happens when the addition
+                        // will actually appear in the resource picker.
+                        var isNewResource = changeType == ResourceViewModelChangeType.Upsert &&
+                            !_resourceByName.ContainsKey(resource.Name) &&
+                            !resource.IsResourceHidden(_showHiddenResources);
+
                         await OnResourceChanged(changeType, resource);
 
                         // Track whether this batch contains changes that affect the visible page UI
@@ -295,6 +304,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                         // FluentSearch's ImmediateDelay input buffer from being clobbered by stale
                         // parameter values pushed during the debounce window.
                         if (changeType == ResourceViewModelChangeType.Delete ||
+                            isNewResource ||
                             string.Equals(resource.Name, selectedResourceName, StringComparisons.ResourceName))
                         {
                             needsRender = true;
