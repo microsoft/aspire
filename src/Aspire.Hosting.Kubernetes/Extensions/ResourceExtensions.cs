@@ -226,10 +226,15 @@ internal static class ResourceExtensions
 
             if (bindingsByVolumeName is not null && bindingsByVolumeName.TryGetValue(volume.Name, out var binding))
             {
-                var claimName = binding.Volume.GeneratedClaim?.Metadata.Name ?? binding.Volume.Name.ToKubernetesResourceName();
+                // Route the pod's volumes[] entry through the PV resource's canonical
+                // PVC name. We call GetClaimName() rather than reading GeneratedClaim
+                // because this method runs during the workload-compose loop, while
+                // GeneratedClaim is only populated later by ProcessPersistentVolumeResources.
+                // Centralizing name derivation on the resource keeps this claimName
+                // in lockstep with BuildPersistentVolumeClaim's metadata.name.
                 podVolume.PersistentVolumeClaim = new()
                 {
-                    ClaimName = claimName,
+                    ClaimName = binding.Volume.GetClaimName(),
                 };
                 podTemplateSpec.Spec.Volumes.Add(podVolume);
                 continue;

@@ -49,7 +49,6 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     internal Dictionary<string, string> Labels { get; private set; } = [];
     internal List<string> Commands { get; } = [];
     internal List<VolumeMountV1> Volumes { get; } = [];
-    internal List<PersistentVolume> PersistentVolumes { get; } = [];
     internal List<PersistentVolumeClaim> PersistentVolumeClaims { get; } = [];
 #pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     internal List<(ProbeType Type, ProbeV1 Probe)> Probes { get; } = [];
@@ -125,11 +124,6 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
         if (Service is not null)
         {
             yield return Service;
-        }
-
-        foreach (var volume in PersistentVolumes)
-        {
-            yield return volume;
         }
 
         foreach (var volumeClaim in PersistentVolumeClaims)

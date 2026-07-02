@@ -889,7 +889,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         {
             Metadata =
             {
-                Name = volumeResource.Name.ToKubernetesResourceName(),
+                Name = volumeResource.GetClaimName(),
             },
             Spec = new PersistentVolumeClaimSpecV1
             {

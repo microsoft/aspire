@@ -3,6 +3,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Kubernetes.Resources;
 
 namespace Aspire.Hosting.Kubernetes;
@@ -102,6 +103,16 @@ public sealed class KubernetesPersistentVolumeResource(
     /// populated during publish processing. <see langword="null"/> until publish runs.
     /// </summary>
     internal PersistentVolumeClaim? GeneratedClaim { get; set; }
+
+    /// <summary>
+    /// The canonical Kubernetes name of the PVC that backs this volume resource.
+    /// Both the PVC emission path (<c>BuildPersistentVolumeClaim</c>) and the pod
+    /// volume binding path (<c>WithPodSpecVolumes</c>) resolve the name via this
+    /// helper so the pod's <c>claimName</c> can never drift from the emitted PVC's
+    /// <c>metadata.name</c>, even though the two paths run in different phases of
+    /// publish. Do not derive the PVC name from the resource name directly.
+    /// </summary>
+    internal string GetClaimName() => Name.ToKubernetesResourceName();
 }
 
 /// <summary>
