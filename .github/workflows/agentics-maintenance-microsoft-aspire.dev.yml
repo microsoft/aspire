@@ -33,6 +33,24 @@
 # For more information on the SideRepoOps pattern and how this file fits into it, see:
 # https://github.github.com/gh-aw/patterns/side-repo-ops/
 #
+# -----------------------------------------------------------------------------
+# MANUAL PATCH (not produced by `gh aw compile`) — tracking: microsoft/aspire#18615
+#
+# The gh-aw maintenance generator emits `github-token: ${{ secrets.GH_AW_GITHUB_TOKEN }}`
+# with no fallback for the cross-repo steps below. That secret is NOT configured in
+# microsoft/aspire, so every scheduled run failed immediately with:
+#   "Error: Input required and not supplied: github-token".
+#
+# Until gh-aw can mint a GitHub App token for the maintenance workflow itself (or
+# GH_AW_GITHUB_TOKEN is provisioned as an org/repo secret), each job that writes to
+# microsoft/aspire.dev now mints an `aspire-bot` installation token at runtime via
+# `actions/create-github-app-token` — the same App auth flow already used by the
+# source (.md) agentic workflows in this repo (e.g. pr-docs-check).
+#
+# CAVEAT: this file is generated (see DO NOT EDIT above). Running `gh aw compile`
+# will regenerate it and revert this patch. If you recompile, re-apply this change
+# or, preferably, provision the GH_AW_GITHUB_TOKEN secret and drop the patch.
+# -----------------------------------------------------------------------------
 name: Agentic Maintenance (microsoft/aspire.dev)
 
 on:
@@ -90,12 +108,21 @@ jobs:
         with:
           destination: ${{ runner.temp }}/gh-aw/actions
 
+      - name: Mint aspire-bot token (microsoft/aspire.dev)
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          owner: microsoft
+          repositories: aspire.dev
+
       - name: Close expired discussions
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GH_AW_TARGET_REPO_SLUG: "microsoft/aspire.dev"
         with:
-          github-token: ${{ secrets.GH_AW_GITHUB_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
             setupGlobals(core, github, context, exec, io, getOctokit);
@@ -107,7 +134,7 @@ jobs:
         env:
           GH_AW_TARGET_REPO_SLUG: "microsoft/aspire.dev"
         with:
-          github-token: ${{ secrets.GH_AW_GITHUB_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
             setupGlobals(core, github, context, exec, io, getOctokit);
@@ -119,7 +146,7 @@ jobs:
         env:
           GH_AW_TARGET_REPO_SLUG: "microsoft/aspire.dev"
         with:
-          github-token: ${{ secrets.GH_AW_GITHUB_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
             setupGlobals(core, github, context, exec, io, getOctokit);
@@ -153,14 +180,23 @@ jobs:
             const { main } = require('${{ runner.temp }}/gh-aw/actions/check_team_member.cjs');
             await main();
 
+      - name: Mint aspire-bot token (microsoft/aspire.dev)
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          owner: microsoft
+          repositories: aspire.dev
+
       - name: Apply Safe Outputs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
-          GH_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_AW_RUN_URL: ${{ inputs.run_url }}
           GH_AW_TARGET_REPO_SLUG: "microsoft/aspire.dev"
         with:
-          github-token: ${{ secrets.GH_AW_GITHUB_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
             setupGlobals(core, github, context, exec, io, getOctokit);
@@ -203,13 +239,22 @@ jobs:
         with:
           version: v0.79.6
 
+      - name: Mint aspire-bot token (microsoft/aspire.dev)
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          owner: microsoft
+          repositories: aspire.dev
+
       - name: Create missing labels in target repository
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           GH_AW_CMD_PREFIX: gh aw
           GH_AW_TARGET_REPO_SLUG: "microsoft/aspire.dev"
         with:
-          github-token: ${{ secrets.GH_AW_GITHUB_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const { setupGlobals } = require('${{ runner.temp }}/gh-aw/actions/setup_globals.cjs');
             setupGlobals(core, github, context, exec, io, getOctokit);
@@ -250,6 +295,15 @@ jobs:
         with:
           version: v0.79.6
 
+      - name: Mint aspire-bot token (microsoft/aspire.dev)
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          owner: microsoft
+          repositories: aspire.dev
+
       - name: Restore activity report logs cache
         id: activity_report_logs_cache
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -263,7 +317,7 @@ jobs:
         timeout-minutes: 20
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GH_AW_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_AW_CMD_PREFIX: gh aw
           GH_AW_TARGET_REPO_SLUG: "microsoft/aspire.dev"
         run: |
@@ -285,7 +339,7 @@ jobs:
       - name: Generate activity report issue in target repository
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
-          github-token: ${{ secrets.GH_AW_GITHUB_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const fs = require('node:fs');
             const reportPath = './.cache/gh-aw/activity-report-logs/report.md';
