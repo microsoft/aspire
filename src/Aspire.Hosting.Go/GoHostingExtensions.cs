@@ -118,7 +118,7 @@ public static class GoHostingExtensions
                     if (delveAnnotation.Log)
                     {
                         ctx.Args.Add("--log");
-                        if (delveAnnotation.LogOutput.Length > 0)
+                        if (!string.IsNullOrEmpty(delveAnnotation.LogOutput))
                         {
                             ctx.Args.Add($"--log-output={delveAnnotation.LogOutput}");
                         }
