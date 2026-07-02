@@ -459,6 +459,21 @@ interface AttachDebuggerResourceInfo {
     processName: string;
 }
 
+/**
+ * Handled failure returned by {@link AspireAppHostTreeProvider.attachDebuggerToResource} for guard
+ * conditions that are surfaced to the user with a warning (a stale/missing resource, a resource that
+ * is no longer an attachable running .NET project, or the C# extension being absent). Returning this
+ * shape — rather than throwing or returning `void` — lets `withCommandTelemetry` classify the
+ * invocation as an `error` outcome with a specific `error_kind`, while suppressing VS Code's generic
+ * "command failed" notification that a thrown error would otherwise trigger. The genuine
+ * "VS Code declined to start the attach session" case still throws so its distinct behavior is
+ * preserved.
+ */
+interface AttachDebuggerHandledFailure {
+    success: false;
+    errorKind: 'ResourceNotFound' | 'ResourceNotAttachable' | 'CSharpExtensionMissing';
+}
+
 function getAttachDebuggerResourceInfo(resource: ResourceJson): AttachDebuggerResourceInfo | undefined {
     // Avoid inspecting executable.args here. The backchannel redacts that sensitive property
     // to null, so use only the non-sensitive project path and executable path.
@@ -1551,22 +1566,22 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         return await this._runResourceCommand(element, 'restart');
     }
 
-    async attachDebuggerToResource(element: ResourceItem): Promise<void> {
+    async attachDebuggerToResource(element: ResourceItem): Promise<AttachDebuggerHandledFailure | void> {
         const resource = this._findLatestResourceForElement(element);
         if (!resource) {
             vscode.window.showWarningMessage(attachDebuggerResourceNotFound);
-            return;
+            return { success: false, errorKind: 'ResourceNotFound' };
         }
 
         const attachInfo = getAttachDebuggerResourceInfo(resource);
         if (attachInfo === undefined) {
             vscode.window.showWarningMessage(attachDebuggerUnavailable);
-            return;
+            return { success: false, errorKind: 'ResourceNotAttachable' };
         }
 
         if (!isCsharpInstalled()) {
             vscode.window.showWarningMessage(attachDebuggerCsharpExtensionRequired);
-            return;
+            return { success: false, errorKind: 'CSharpExtensionMissing' };
         }
 
         const resourceLabel = resource.displayName ?? resource.name;

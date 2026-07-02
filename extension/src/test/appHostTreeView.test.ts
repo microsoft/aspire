@@ -2850,8 +2850,9 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
                     ],
                 }));
 
-            await (provider as any).attachDebuggerToResource(resourceItem);
+            const outcome = await (provider as any).attachDebuggerToResource(resourceItem);
 
+            assert.deepStrictEqual(outcome, { success: false, errorKind: 'ResourceNotFound' });
             assert.ok(startDebuggingStub.notCalled, 'Expected no attach session when the current AppHost cannot be resolved unambiguously');
             assert.ok(warningStub.calledOnce, 'Expected VS Code to show a warning');
         }
@@ -2906,8 +2907,9 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
                 ],
             });
 
-            await (provider as any).attachDebuggerToResource(resourceItem);
+            const outcome = await (provider as any).attachDebuggerToResource(resourceItem);
 
+            assert.deepStrictEqual(outcome, { success: false, errorKind: 'ResourceNotFound' });
             assert.ok(startDebuggingStub.notCalled, 'Expected no attach session for a resource from a different AppHost path');
             assert.ok(warningStub.calledOnce, 'Expected VS Code to show a warning');
         }
@@ -2947,8 +2949,9 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             const [resourceItem] = provider.getChildren(resourcesGroup);
             appHosts.length = 0;
 
-            await (provider as any).attachDebuggerToResource(resourceItem);
+            const outcome = await (provider as any).attachDebuggerToResource(resourceItem);
 
+            assert.deepStrictEqual(outcome, { success: false, errorKind: 'ResourceNotFound' });
             assert.ok(startDebuggingStub.notCalled, 'Expected no attach session for a stale resource item');
             assert.ok(warningStub.calledOnce, 'Expected VS Code to show a warning');
         }
@@ -3002,8 +3005,9 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
                 }),
             ];
 
-            await (provider as any).attachDebuggerToResource(resourceItem);
+            const outcome = await (provider as any).attachDebuggerToResource(resourceItem);
 
+            assert.deepStrictEqual(outcome, { success: false, errorKind: 'ResourceNotFound' });
             assert.ok(startDebuggingStub.notCalled, 'Expected no attach session after the workspace AppHost path changed');
             assert.ok(warningStub.calledOnce, 'Expected VS Code to show a warning');
         }
@@ -3039,13 +3043,140 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             assert.ok(resourcesGroup, 'Expected resources group');
             const [resourceItem] = provider.getChildren(resourcesGroup);
 
-            await (provider as any).attachDebuggerToResource(resourceItem);
+            const outcome = await (provider as any).attachDebuggerToResource(resourceItem);
 
+            assert.deepStrictEqual(outcome, { success: false, errorKind: 'CSharpExtensionMissing' });
             assert.ok(startDebuggingStub.notCalled, 'Expected no attach session without C# debugger support');
             assert.ok(warningStub.calledOnce, 'Expected VS Code to show a warning');
         }
         finally {
             warningStub.restore();
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            provider.dispose();
+        }
+    });
+
+    test('attachDebuggerToResource guard failures reach command telemetry as error outcomes', async () => {
+        // These are handled, user-visible guard failures (a warning is shown). The command is
+        // registered through withCommandTelemetry, so returning a handled-failure object — rather
+        // than void — is what makes the invocation record as an `error` outcome with a specific
+        // error_kind instead of a false `success`, while still suppressing VS Code's generic
+        // "command failed" notification.
+        const invocations: Array<{ command: string; outcome: string; errorKind?: string; source?: string }> = [];
+        const invocationSubscription = onDidInvokeCommand(event => invocations.push(event));
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(true);
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage');
+        let csharpInstalled = true;
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').callsFake(() => csharpInstalled);
+
+        const getResourceItem = (provider: AspireAppHostTreeProvider) => {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+            return resourceItem;
+        };
+        const runAttach = (provider: AspireAppHostTreeProvider, item: unknown) =>
+            withCommandTelemetry('aspire-vscode.attachDebuggerToResource', () => (provider as any).attachDebuggerToResource(item), { source: 'tree' });
+
+        // A resource that exists at selection time but is removed from the model before the command
+        // runs (exercises the stale/not-found guard).
+        const staleAppHosts = [
+            makeAppHost({
+                resources: [
+                    makeResource({ name: 'api', displayName: 'API', resourceType: 'Project', state: ResourceState.Running, properties: makeAttachableProjectProperties() }),
+                ],
+            }),
+        ];
+        const staleProvider = makeTreeProvider(staleAppHosts);
+        const unattachableProvider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({ name: 'api', displayName: 'API', resourceType: 'Project', state: ResourceState.Running, properties: makeAttachableProjectProperties({ 'executable.path': 'node' }) }),
+                ],
+            }),
+        ]);
+        const csharpMissingProvider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({ name: 'api', displayName: 'API', resourceType: 'Project', state: ResourceState.Running, properties: makeAttachableProjectProperties() }),
+                ],
+            }),
+        ]);
+
+        try {
+            const staleResourceItem = getResourceItem(staleProvider);
+            const unattachableResourceItem = getResourceItem(unattachableProvider);
+            const csharpMissingResourceItem = getResourceItem(csharpMissingProvider);
+
+            // 1) The selected resource is gone from the model -> ResourceNotFound.
+            staleAppHosts.length = 0;
+            const staleOutcome = await runAttach(staleProvider, staleResourceItem);
+            assert.deepStrictEqual(staleOutcome, { success: false, errorKind: 'ResourceNotFound' });
+
+            // 2) The resource is present but no longer attachable -> ResourceNotAttachable.
+            const unattachableOutcome = await runAttach(unattachableProvider, unattachableResourceItem);
+            assert.deepStrictEqual(unattachableOutcome, { success: false, errorKind: 'ResourceNotAttachable' });
+
+            // 3) The C# extension is not installed -> CSharpExtensionMissing.
+            csharpInstalled = false;
+            const csharpMissingOutcome = await runAttach(csharpMissingProvider, csharpMissingResourceItem);
+            assert.deepStrictEqual(csharpMissingOutcome, { success: false, errorKind: 'CSharpExtensionMissing' });
+
+            assert.ok(startDebuggingStub.notCalled, 'Expected no attach session for any guard failure');
+            assert.strictEqual(warningStub.callCount, 3, 'Expected a warning for each guard failure');
+            assert.deepStrictEqual(
+                invocations.map(event => [event.command, event.outcome, event.errorKind, event.source]),
+                [
+                    ['aspire-vscode.attachDebuggerToResource', 'error', 'ResourceNotFound', 'tree'],
+                    ['aspire-vscode.attachDebuggerToResource', 'error', 'ResourceNotAttachable', 'tree'],
+                    ['aspire-vscode.attachDebuggerToResource', 'error', 'CSharpExtensionMissing', 'tree'],
+                ]);
+        }
+        finally {
+            invocationSubscription.dispose();
+            warningStub.restore();
+            csharpInstalledStub.restore();
+            startDebuggingStub.restore();
+            staleProvider.dispose();
+            unattachableProvider.dispose();
+            csharpMissingProvider.dispose();
+        }
+    });
+
+    test('attachDebuggerToResource declining to start is recorded as an error command outcome', async () => {
+        // The genuine "VS Code declined to start the attach session" path still throws, so
+        // withCommandTelemetry classifies it as an error via the thrown error name. This preserves
+        // the distinct behavior from the handled guard failures above.
+        const invocations: Array<{ command: string; outcome: string; errorKind?: string }> = [];
+        const invocationSubscription = onDidInvokeCommand(event => invocations.push(event));
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({ name: 'api', displayName: 'API', resourceType: 'Project', state: ResourceState.Running, properties: makeAttachableProjectProperties() }),
+                ],
+            }),
+        ]);
+        const startDebuggingStub = sinon.stub(vscode.debug, 'startDebugging').resolves(false);
+        const csharpInstalledStub = sinon.stub(capabilities, 'isCsharpInstalled').returns(true);
+
+        try {
+            const [appHostItem] = provider.getChildren();
+            const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+            assert.ok(resourcesGroup, 'Expected resources group');
+            const [resourceItem] = provider.getChildren(resourcesGroup);
+
+            await assert.rejects(
+                withCommandTelemetry('aspire-vscode.attachDebuggerToResource', () => (provider as any).attachDebuggerToResource(resourceItem), { source: 'tree' }),
+                (error: unknown) => error instanceof Error && error.name === 'StartDebuggingDeclined');
+
+            assert.deepStrictEqual(
+                invocations.map(event => [event.command, event.outcome, event.errorKind]),
+                [['aspire-vscode.attachDebuggerToResource', 'error', 'StartDebuggingDeclined']]);
+        }
+        finally {
+            invocationSubscription.dispose();
             csharpInstalledStub.restore();
             startDebuggingStub.restore();
             provider.dispose();

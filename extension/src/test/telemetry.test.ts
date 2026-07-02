@@ -155,6 +155,32 @@ suite('telemetry utilities', () => {
             'cmd.leak <email> /Users/<user>/source C:\\Users\\<user>\\source --token=<redacted> client_secret=<redacted> connectionstring=<redacted> https://storage.example/?sig=<redacted> Authorization: Bearer <redacted> <guid>');
     });
 
+    test('sendTelemetryEvent redacts home usernames that contain spaces', () => {
+        // The username is a single path segment that can legitimately contain spaces. Redaction must
+        // consume the whole segment up to the next separator instead of stopping at the first space
+        // (which previously leaked the rest of the username, e.g. `.../<user> Smith/project`).
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: 'posix /Users/Alice Smith/project win C:\\Users\\Alice Smith\\project home /home/Alice Smith/project',
+        });
+
+        assert.strictEqual(
+            fake.events[0].properties?.command,
+            'posix /Users/<user>/project win C:\\Users\\<user>\\project home /home/<user>/project');
+    });
+
+    test('sendTelemetryEvent does not over-redact path segments after a spaced home username', () => {
+        // Only the username segment should be redacted. A following, unrelated path segment (which may
+        // itself contain spaces) and adjacent tokens must survive because redaction stops at the
+        // separator that ends the username.
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: '/Users/Alice Smith/some folder/file --flag /Users/alice C:\\Users\\bob\\x',
+        });
+
+        assert.strictEqual(
+            fake.events[0].properties?.command,
+            '/Users/<user>/some folder/file --flag /Users/<user> C:\\Users\\<user>\\x');
+    });
+
     test('telemetry level "off" suppresses regular and error events', () => {
         fake.telemetryLevel = 'off';
         sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.off' });
@@ -327,6 +353,16 @@ suite('telemetry utilities', () => {
         const event = fake.events[0];
         assert.strictEqual(event.properties?.outcome, 'error');
         assert.strictEqual(event.properties?.error_kind, 'HandledError');
+    });
+
+    test('withCommandTelemetry records a handled failure error_kind when the result supplies one', async () => {
+        const result = await withCommandTelemetry('cmd.handledKind', () => ({ success: false, errorKind: 'ResourceNotFound' }));
+
+        assert.deepStrictEqual(result, { success: false, errorKind: 'ResourceNotFound' });
+        assert.strictEqual(fake.events.length, 1);
+        const event = fake.events[0];
+        assert.strictEqual(event.properties?.outcome, 'error');
+        assert.strictEqual(event.properties?.error_kind, 'ResourceNotFound');
     });
 
     test('withCommandTelemetry classifies cancellations and does not record error_kind', async () => {

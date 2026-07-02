@@ -173,9 +173,16 @@ function preservesStructuralTelemetryIds(key: string): boolean {
 function sanitizeTelemetryValue(value: string, preserveGuids: boolean): string {
     const sanitized = value
         .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<email>')
-        .replace(/\b([A-Za-z]:)\\+Users\\+[^\\\s"']+/g, (_, drive: string) => `${drive}\\Users\\<user>`)
-        .replace(/(^|[^A-Za-z0-9_/-])\/Users\/[^/\s"']+/g, '$1/Users/<user>')
-        .replace(/(^|[^A-Za-z0-9_/-])\/home\/[^/\s"']+/g, '$1/home/<user>')
+        // Home-directory redaction. The username is a single path segment that can legitimately
+        // contain spaces (e.g. `C:\Users\Alice Smith\project` or `/Users/Alice Smith/project`), so
+        // match either a run of space-separated words that is still followed by the same-type path
+        // separator (the username continues) OR a single whitespace-free run (the historical
+        // behavior). Requiring the trailing separator for the multi-word form keeps us from
+        // swallowing following, unrelated tokens — the inner character classes exclude the
+        // separator, so a subsequent `\segment` or `/segment` is never consumed as part of the name.
+        .replace(/\b([A-Za-z]:)\\+Users\\+(?:[^\\\s"']+(?: +[^\\\s"']+)*(?=\\)|[^\\\s"']+)/g, (_, drive: string) => `${drive}\\Users\\<user>`)
+        .replace(/(^|[^A-Za-z0-9_/-])\/Users\/(?:[^/\s"']+(?: +[^/\s"']+)*(?=\/)|[^/\s"']+)/g, '$1/Users/<user>')
+        .replace(/(^|[^A-Za-z0-9_/-])\/home\/(?:[^/\s"']+(?: +[^/\s"']+)*(?=\/)|[^/\s"']+)/g, '$1/home/<user>')
         .replace(/\b(password|passwd|pwd|token|secret|api[_-]?key|client[_-]?secret|account[_-]?key|shared[_-]?access[_-]?key|sharedaccesskey|connection[_-]?string|connectionstring|key)(\s*[:=]\s*)[^&\s"',;}]+/gi, '$1$2<redacted>')
         .replace(/([?&]sig=)[^&\s"',;}]+/gi, '$1<redacted>')
         .replace(/\b(authorization\s*:\s*bearer\s+)[^\s"',;}]+/gi, '$1<redacted>')
