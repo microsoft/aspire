@@ -64,14 +64,14 @@ internal sealed class TerminalHostFailureDiagnosticService(
                     continue;
                 }
 
-                if (state == KnownResourceStates.Terminated)
+                if (string.Equals(state, KnownResourceStates.Terminated, StringComparisons.ResourceState))
                 {
                     continue;
                 }
 
                 // Treat exit code 0 (or "Finished"/"Exited" + zero) as a clean stop, not a
                 // failure. FailedToStart is always a failure regardless of exit code.
-                if (state != KnownResourceStates.FailedToStart &&
+                if (!string.Equals(state, KnownResourceStates.FailedToStart, StringComparisons.ResourceState) &&
                     evt.Snapshot.ExitCode is 0)
                 {
                     continue;

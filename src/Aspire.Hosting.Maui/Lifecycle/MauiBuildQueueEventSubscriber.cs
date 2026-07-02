@@ -307,14 +307,14 @@ internal class MauiBuildQueueEventSubscriber(
                 {
                     var text = e.Snapshot.State?.Text;
                     // Skip the replayed snapshot that matches the state when we were called.
-                    if (string.Equals(text, stateAtCallTime, StringComparison.Ordinal))
+                    if (string.Equals(text, stateAtCallTime, StringComparisons.ResourceState))
                     {
                         return false;
                     }
 
-                    return (releaseOnRunning && text == KnownResourceStates.Running)
-                        || text == KnownResourceStates.RuntimeUnhealthy
-                        || KnownResourceStates.TerminalStates.Contains(text);
+                    return (releaseOnRunning && string.Equals(text, KnownResourceStates.Running, StringComparisons.ResourceState))
+                        || string.Equals(text, KnownResourceStates.RuntimeUnhealthy, StringComparisons.ResourceState)
+                        || KnownResourceStates.TerminalStates.Contains(text, StringComparers.ResourceState);
                 },
                 cts.Token).ConfigureAwait(false);
         }
@@ -412,7 +412,7 @@ internal class MauiBuildQueueEventSubscriber(
                                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                                 await notificationService.WaitForResourceAsync(
                                     resource.Name,
-                                    e => string.Equals(e.Snapshot.State?.Text, KnownResourceStates.FailedToStart, StringComparison.Ordinal),
+                                    e => string.Equals(e.Snapshot.State?.Text, KnownResourceStates.FailedToStart, StringComparisons.ResourceState),
                                     cts.Token).ConfigureAwait(false);
                             }
                             catch (OperationCanceledException)
@@ -432,7 +432,8 @@ internal class MauiBuildQueueEventSubscriber(
 
                             await notificationService.PublishUpdateAsync(resource, s =>
                             {
-                                if (s.State?.Text is not null && s.State.Text != KnownResourceStates.FailedToStart)
+                                if (s.State?.Text is not null &&
+                                    !string.Equals(s.State.Text, KnownResourceStates.FailedToStart, StringComparisons.ResourceState))
                                 {
                                     return s;
                                 }
