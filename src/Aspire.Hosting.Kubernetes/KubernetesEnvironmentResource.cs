@@ -108,6 +108,12 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     public string DefaultImagePullPolicy { get; set; } = "IfNotPresent";
 
     /// <summary>
+    /// Gets or sets the default policy for provisioning persistent volumes in Kubernetes.
+    /// If set to true, Aspire will not generate *-pv.yaml files for the environment.
+    /// </summary>
+    public bool DefaultShouldDynamicallyProvision { get; set; }
+
+    /// <summary>
     /// Gets or sets the default Kubernetes service type to be used when generating artifacts.
     /// </summary>
     /// <remarks>
