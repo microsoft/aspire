@@ -15,7 +15,7 @@ var godotBin = builder.Configuration["GODOT_BIN"]
 var godotServer = builder.AddExecutable("godot-server", godotBin, "../GameServer", "--headless", "--script", "server.gd")
     // Expose the UDP game-server port and propagate it as GODOT_SERVER_PORT so the GDScript can
     // read it via OS.get_environment("GODOT_SERVER_PORT") rather than hard-coding a port number.
-    .WithEndpoint(port: 7000, targetPort: 7000, env: "GODOT_SERVER_PORT", name: "game",
+    .WithEndpoint(targetPort: 7000, env: "GODOT_SERVER_PORT", name: "game",
         protocol: System.Net.Sockets.ProtocolType.Udp, isProxied: false);
 
 // WithExplicitStart prevents the AppHost from failing on machines without Godot installed.
