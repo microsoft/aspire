@@ -4042,15 +4042,36 @@ suite('AppHostDataRepository AppHost-file gate', () => {
         subscriptions.forEach(subscription => subscription.dispose());
     });
 
-    test('opening AppHost file with hidden panel starts describe watch', async () => {
+    test('opening AppHost file with hidden panel starts describe watch for that file', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
         repository.activate();
-        repository.setAppHostFileOpen(true);
+        repository.setAppHostFileOpen(true, '/workspace/TestShop.AppHost/AppHost.cs');
         await waitForMicrotasks();
 
         assert.strictEqual(spawnStub.calledOnce, true);
-        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--follow', '--format', 'json', '--include-disabled-commands']);
+        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', '/workspace/TestShop.AppHost/AppHost.cs']);
+
+        repository.dispose();
+    });
+
+    test('changing open AppHost file retargets single-file describe watch', async () => {
+        const firstChildProcess = new TestChildProcess();
+        const secondChildProcess = new TestChildProcess();
+        spawnStub.onFirstCall().returns(firstChildProcess);
+        spawnStub.onSecondCall().returns(secondChildProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setAppHostFileOpen(true, '/workspace/First.AppHost/AppHost.cs');
+        await waitForMicrotasks();
+
+        repository.setAppHostFileOpen(true, '/workspace/Second.AppHost/AppHost.cs');
+        await waitForMicrotasks();
+
+        assert.strictEqual(firstChildProcess.killed, true);
+        assert.strictEqual(spawnStub.calledTwice, true);
+        assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', '/workspace/Second.AppHost/AppHost.cs']);
 
         repository.dispose();
     });

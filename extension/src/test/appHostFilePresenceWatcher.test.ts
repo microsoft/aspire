@@ -127,6 +127,7 @@ suite('AppHostFilePresenceWatcher', () => {
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
         assert.strictEqual(setOpenSpy.firstCall.args[0], true);
+        assert.strictEqual(setOpenSpy.firstCall.args[1], '/test/AppHost.cs');
         watcher.dispose();
     });
 
@@ -138,6 +139,22 @@ suite('AppHostFilePresenceWatcher', () => {
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
         assert.strictEqual(setOpenSpy.firstCall.args[0], true);
+        watcher.dispose();
+    });
+
+    test('visibility change between AppHost files reports the new file path', async () => {
+        visibleEditors = [makeEditor('/test/First.AppHost/AppHost.cs', appHostCsContent)];
+        const watcher = new AppHostFilePresenceWatcher(repository);
+        await waitForUpdate(watcher);
+        assert.strictEqual(setOpenSpy.calledOnce, true);
+
+        visibleEditors = [makeEditor('/test/Second.AppHost/AppHost.cs', appHostCsContent)];
+        captured.visibilityListeners.forEach(l => l(visibleEditors));
+        await waitForUpdate(watcher);
+
+        assert.strictEqual(setOpenSpy.callCount, 2);
+        assert.strictEqual(setOpenSpy.secondCall.args[0], true);
+        assert.strictEqual(setOpenSpy.secondCall.args[1], '/test/Second.AppHost/AppHost.cs');
         watcher.dispose();
     });
 
