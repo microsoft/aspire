@@ -16,7 +16,7 @@ import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConst
 import type { AspireSubcommand } from '../utils/AspireTerminalProvider';
 import { AspireTerminalProvider, shellArg } from '../utils/AspireTerminalProvider';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
-import { terminalCommandArgumentControlCharacters, appHostPathCopiedToClipboard } from '../loc/strings';
+import { terminalCommandArgumentControlCharacters, appHostPathCopiedToClipboard, appHostPathInvalid } from '../loc/strings';
 import { onDidInvokeCommand, withCommandTelemetry } from '../utils/telemetry';
 
 function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {
@@ -2924,6 +2924,7 @@ suite('copyAppHostPath', () => {
             assert.strictEqual(await vscode.env.clipboard.readText(), 'sentinel-unchanged');
             assert.strictEqual(infoStub.callCount, 0);
             assert.ok(warningStub.calledOnce);
+            assert.strictEqual(warningStub.firstCall.args[0], appHostPathInvalid);
         } finally {
             try {
                 await vscode.env.clipboard.writeText(previousClipboard);

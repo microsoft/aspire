@@ -1,4 +1,6 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as path from 'path';
 import { formatText } from '../utils/strings';
 
 suite('utils/strings tests', () => {
@@ -18,4 +20,21 @@ suite('utils/strings tests', () => {
         const resultWithNoEmojis = formatText(inputWithNoEmojis);
         assert.strictEqual(resultWithNoEmojis, expectedOutputWithNoEmojis);
 	});
+
+
+    test('copy AppHost path loc strings have package nls entries', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const stringsSource = fs.readFileSync(path.join(extensionRoot, 'src', 'loc', 'strings.ts'), 'utf8');
+        const packageNls = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'package.nls.json'), 'utf8')) as Record<string, string>;
+
+        const expectedStrings = {
+            appHostPathCopiedToClipboard: 'AppHost path copied to clipboard.',
+            appHostPathInvalid: 'Could not determine the AppHost path to copy.',
+        };
+
+        for (const [name, value] of Object.entries(expectedStrings)) {
+            assert.ok(stringsSource.includes(`export const ${name} = vscode.l10n.t('${value}');`));
+            assert.strictEqual(packageNls[`aspire-vscode.strings.${name}`], value);
+        }
+    });
 });

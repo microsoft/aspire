@@ -19,6 +19,7 @@ import {
     appHostDebugActionLabel,
     appHostPathLabel,
     appHostPathCopiedToClipboard,
+    appHostPathInvalid,
     resourceCountDescription,
     tooltipType,
     tooltipState,
@@ -1552,7 +1553,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     async copyAppHostPath(element: AppHostItem | WorkspaceResourcesItem | WorkspaceAppHostItem): Promise<void> {
         const appHostPath = element instanceof AppHostItem ? element.appHost.appHostPath : element.appHostPath;
         if (!appHostPath) {
-            vscode.window.showWarningMessage(appHostSourceNotFound);
+            vscode.window.showWarningMessage(appHostPathInvalid);
             return;
         }
         await vscode.env.clipboard.writeText(appHostPath);
