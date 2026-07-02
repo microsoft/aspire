@@ -18,6 +18,7 @@ import {
     appHostRunActionLabel,
     appHostDebugActionLabel,
     appHostPathLabel,
+    appHostPathCopiedToClipboard,
     resourceCountDescription,
     tooltipType,
     tooltipState,
@@ -246,6 +247,15 @@ class WorkspaceAppHostPathItem extends vscode.TreeItem {
         this.contextValue = 'workspaceAppHostPath';
         this.description = parent.appHostPath;
         this.tooltip = parent.appHostPath;
+        // Clicking the Path row copies the AppHost path, since that's the most obvious thing a user
+        // expects when clicking a path. This mirrors WorkspaceAppHostActionItem/EndpointUrlItem and
+        // reuses the same handler as the right-click context menu. See
+        // https://github.com/microsoft/aspire/issues/18578.
+        this.command = {
+            command: 'aspire-vscode.copyAppHostPath',
+            title: appHostPathLabel,
+            arguments: [parent]
+        };
     }
 }
 
@@ -1546,6 +1556,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
         await vscode.env.clipboard.writeText(appHostPath);
+        vscode.window.showInformationMessage(appHostPathCopiedToClipboard);
     }
 
     async viewAppHostLogFile(element: unknown): Promise<void> {

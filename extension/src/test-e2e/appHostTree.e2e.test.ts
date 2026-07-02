@@ -1,8 +1,8 @@
 import * as assert from 'assert';
-import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
+import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForTreeItem } from './helpers/vscode';
+import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem } from './helpers/vscode';
 
 suite('Aspire AppHost tree E2E', function () {
     this.timeout(240000);
@@ -29,6 +29,33 @@ suite('Aspire AppHost tree E2E', function () {
         const item = await waitForTreeItem(section, label);
         assert.strictEqual(await item.getLabel(), label);
         assert.ok(stateFile.state.workspaceAppHostCandidatePaths.length >= 1);
+    });
+
+    test('clicking the Path tree item copies the AppHost path and shows a confirmation notification', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostLabel = getTreeAppHostLabel(discovered.state);
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+        const section = await openAspireView();
+
+        // The Path row only appears under an idle (non-running) workspace AppHost item, so exercise
+        // it before starting the AppHost. See https://github.com/microsoft/aspire/issues/18578.
+        const idleItem = await waitForTreeItem(section, appHostLabel);
+        await idleItem.expand();
+
+        // Labels below match loc/strings.ts (appHostPathLabel / appHostPathCopiedToClipboard); the
+        // E2E host runs in English so the literals are stable, mirroring other tree-item labels
+        // asserted in this suite (e.g. 'Run AppHost').
+        const pathItem = await waitForChildTreeItem(idleItem, 'Path');
+        await pathItem.click();
+
+        // The notification only fires after a successful copy, so its appearance proves the click
+        // routed through aspire-vscode.copyAppHostPath rather than reading a stale clipboard value.
+        await waitForNotificationMessage('AppHost path copied to clipboard.');
+
+        const clipboard = await executeE2eControlCommand({ name: 'readClipboard' });
+        assert.ok(isSamePath(String(clipboard.result), appHostPath), `Expected clipboard '${clipboard.result}' to match AppHost path '${appHostPath}'.`);
     });
 
     test('runs, shows resources and dashboard state, routes resource commands, and stops from the tree', async () => {
