@@ -565,6 +565,14 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         {
             StartNoLogsMessageDelay();
         }
+
+        // Rebuild the options menu now that _selectedResourceHasTerminal
+        // reflects the new selection. The earlier UpdateMenuButtons() call
+        // in OnParametersSetAsync ran before this method updated the flag,
+        // so without this the menu keeps the previous resource's shape —
+        // e.g. the Console/Terminal view toggle would linger on a resource
+        // that has no WithTerminal(), and be missing on the reverse switch.
+        UpdateMenuButtons();
     }
 
     private bool IsAllSelected()
