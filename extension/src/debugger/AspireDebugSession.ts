@@ -130,7 +130,9 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       await this._appHostDebugSession?.stopSession();
     }
     finally {
-      await vscode.debug.stopDebugging(this._session);
+      if (!this._disposed) {
+        await vscode.debug.stopDebugging(this._session);
+      }
     }
   }
 
