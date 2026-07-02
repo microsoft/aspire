@@ -1467,6 +1467,27 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         return _terminalViewRef.SetSizeModeAsync(newKey);
     }
 
+    // Rebuild the presets list for rendering so the "Fit" (auto) entry shows
+    // the current live cols×rows next to its label — e.g. "Fit (80×24)". The
+    // fixed presets already have dims baked into their labels ("80×24"), so
+    // this only rewrites the auto entry. Called from markup on each render;
+    // the list is short (~6 items) and only allocates when there are live
+    // dims to fold in.
+    private IReadOnlyList<Controls.TerminalSizePreset> GetTerminalSizePresetsForDisplay(Controls.TerminalToolbarState state)
+    {
+        if (state.Cols <= 0 || state.Rows <= 0)
+        {
+            return _terminalSizePresets;
+        }
+
+        var baseAutoLabel = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)];
+        var autoLabel = $"{baseAutoLabel} ({state.Cols}×{state.Rows})";
+
+        return _terminalSizePresets
+            .Select(p => p.Value == "auto" ? p with { Label = autoLabel } : p)
+            .ToList();
+    }
+
     // IComponentWithTelemetry impl
     public ComponentTelemetryContext TelemetryContext { get; } = new(ComponentType.Page, TelemetryComponentIds.ConsoleLogs);
 

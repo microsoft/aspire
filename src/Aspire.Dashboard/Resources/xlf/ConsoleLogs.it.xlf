@@ -153,8 +153,8 @@
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarGridSizeAuto">
-        <source>Fit to screen</source>
-        <target state="new">Fit to screen</target>
+        <source>Fit</source>
+        <target state="new">Fit</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarIncreaseFontSize">

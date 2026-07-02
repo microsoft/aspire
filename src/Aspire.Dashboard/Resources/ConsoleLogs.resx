@@ -196,7 +196,7 @@
     <value>Terminal dimensions</value>
   </data>
   <data name="TerminalToolbarGridSizeAuto" xml:space="preserve">
-    <value>Fit to screen</value>
+    <value>Fit</value>
   </data>
   <data name="TerminalToolbarCurrentGrid" xml:space="preserve">
     <value>Current terminal grid</value>

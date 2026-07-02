@@ -101,7 +101,7 @@
                     <span slot="end" style="margin-inline-start: 10px; align-self: center;">@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)]</span>
                     <FluentSelect TOption="Controls.TerminalSizePreset"
                                   slot="end"
-                                  Items="@_terminalSizePresets"
+                                  Items="@GetTerminalSizePresetsForDisplay(terminalState)"
                                   OptionValue="@(p => p.Value)"
                                   OptionText="@(p => p.Label)"
                                   Value="@terminalState.SizeKey"
@@ -110,14 +110,6 @@
                                   Width="140px"
                                   Style="min-width: auto;"
                                   AriaLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)]" />
-                }
-
-                @if (terminalState.Cols > 0 && terminalState.Rows > 0)
-                {
-                    <span slot="end" style="color: var(--neutral-foreground-hint); font-variant-numeric: tabular-nums; align-self: center; margin-inline-start: 6px;"
-                          title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarCurrentGrid)]">
-                        @terminalState.Cols × @terminalState.Rows
-                    </span>
                 }
             }
 
