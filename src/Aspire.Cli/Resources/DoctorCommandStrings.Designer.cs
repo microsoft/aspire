@@ -393,6 +393,33 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to certutil is not available; browser certificate trust may be incomplete.
+        /// </summary>
+        public static string DevCertsMissingCertUtilMessage {
+            get {
+                return ResourceManager.GetString("DevCertsMissingCertUtilMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux..
+        /// </summary>
+        public static string DevCertsMissingCertUtilDetails {
+            get {
+                return ResourceManager.GetString("DevCertsMissingCertUtilDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install certutil from your distribution's NSS tools package (for example, libnss3-tools)..
+        /// </summary>
+        public static string DevCertsMissingCertUtilFix {
+            get {
+                return ResourceManager.GetString("DevCertsMissingCertUtilFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) bundle not found; skipping connection health checks.
         /// </summary>
         public static string DcpBundleNotFoundMessage {

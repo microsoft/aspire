@@ -22,7 +22,7 @@ public partial class FoundryModel
         /// Claude Haiku 4.5 delivers near-frontier performance for a wide range of use cases, and stands out as one of the best coding and agent models – with the right speed and cost to power free products and scaled sub-agents.
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel ClaudeHaiku45 = new() { Name = "claude-haiku-4-5", Version = "20251001", Format = "Anthropic" };
+        public static readonly FoundryModel ClaudeHaiku45 = new() { Name = "claude-haiku-4-5", Version = "2", Format = "Anthropic" };
 
         /// <summary>
         /// Claude Mythos 5 (gated) is a new class of intelligence for cybersecurity, coding, and long-running agents. Only available as a gated research preview with access prioritized for defensive cybersecurity use cases
@@ -64,7 +64,7 @@ public partial class FoundryModel
         /// Claude Opus 4.8 is our most intelligent Opus model and the best generally available model for coding and agents, with deeper reasoning for enterprise workflows.
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel ClaudeOpus48 = new() { Name = "claude-opus-4-8", Version = "1", Format = "Anthropic" };
+        public static readonly FoundryModel ClaudeOpus48 = new() { Name = "claude-opus-4-8", Version = "2", Format = "Anthropic" };
 
         /// <summary>
         /// Claude Sonnet 4.5 is Anthropic's most capable model for complex agents and an industry leader for coding and computer use.
