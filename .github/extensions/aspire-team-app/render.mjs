@@ -741,10 +741,20 @@ function acctAvatar(a, size) {
 
 /* ---- data ---- */
 
+// Parse a JSON response, surfacing the server's { error } message on any non-2xx
+// (origin-guard 403, 500, etc.) instead of treating the error body as a successful
+// payload. The loopback server always replies with JSON, but tolerate a missing or
+// unparseable body so a raw failure still yields a useful message.
+async function readJson(res) {
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error((data && data.error) || ("Request failed (" + res.status + ")"));
+  return data;
+}
+
 async function load() {
   try {
     const res = await fetch("api/state");
-    const data = await res.json();
+    const data = await readJson(res);
     state = data.dashboard; prefs = data.prefs; loadError = null;
   } catch (e) {
     loadError = String((e && e.message) || e);
@@ -772,7 +782,7 @@ function setLoading(on) {
 
 async function postJSON(path, body) {
   const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
-  return res.json();
+  return readJson(res);
 }
 
 const refresh = () => withRefresh(() => postJSON("api/refresh"));
@@ -808,8 +818,10 @@ async function rescanAccounts() {
   if (btn) btn.classList.add("spin");
   try {
     const res = await fetch("api/accounts");
-    const data = await res.json();
-    state = data.dashboard; prefs = data.prefs;
+    const data = await readJson(res);
+    state = data.dashboard; prefs = data.prefs; loadError = null;
+  } catch (e) {
+    loadError = String((e && e.message) || e);
   } finally { rescanning = false; render(); }
 }
 

@@ -101,7 +101,11 @@ async function getDashboard(force = false) {
         showDrafts: prefs.showDrafts,
       });
       dashboard.accounts = auth.accounts;
-      dashboard.activeAccounts = active.map((a) => ({ id: a.id, login: a.login, avatarUrl: a.avatarUrl, enterprise: a.enterprise, host: a.host }));
+      // Carry the fields the canvas actions in extension.mjs read back off an active
+      // account: set_repos reads `repos`, and summary reads `sourceKinds`/`status`/`repos`.
+      // Omitting them made set_repos return an empty repo list and summary report
+      // undefined sources/status for active accounts.
+      dashboard.activeAccounts = active.map((a) => ({ id: a.id, login: a.login, avatarUrl: a.avatarUrl, enterprise: a.enterprise, host: a.host, repos: a.repos, status: a.status, sourceKinds: a.sourceKinds }));
       dashboard.dismissedCount = (prefs.dismissedNotifications || []).length;
     }
     cache = { dashboard, prefs };
