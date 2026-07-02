@@ -368,28 +368,15 @@ internal sealed class DotNetCliRunner(
         public int StderrLineCount;
     }
 
-    internal static int GetCurrentProcessId() => Environment.ProcessId;
-
-    internal static long GetCurrentProcessStartTimeUnixSeconds()
-    {
-        var startTime = Process.GetCurrentProcess().StartTime;
-        return ((DateTimeOffset)startTime).ToUnixTimeSeconds();
-    }
-
     /// <summary>
     /// Configures dotnet-specific environment variables for CLI process executions.
     /// </summary>
     private void ConfigureDotNetEnvironment(IDictionary<string, string> env)
     {
-        // The AppHost uses this environment variable to signal to the CliOrphanDetector which process
-        // it should monitor in order to know when to stop the CLI. As long as the process still exists
-        // the orphan detector will allow the CLI to keep running. If the environment variable does
-        // not exist the orphan detector will exit.
-        env[KnownConfigNames.CliProcessId] = GetCurrentProcessId().ToString(CultureInfo.InvariantCulture);
-
-        // Set the CLI process start time for robust orphan detection to prevent PID reuse issues.
-        // The AppHost will verify both PID and start time to ensure it's monitoring the correct process.
-        env[KnownConfigNames.CliProcessStarted] = GetCurrentProcessStartTimeUnixSeconds().ToString(CultureInfo.InvariantCulture);
+        // Stamp the CLI's identity (PID + start time) so the AppHost's CliOrphanDetector can verify
+        // which process it is monitoring and exit once that process is gone. Verifying both PID and
+        // start time avoids acting on a recycled PID. If the variables are absent the detector exits.
+        OrphanDetectionEnvironment.ApplyCurrentProcess(env);
 
         // Pass the CLI log file path so that querying CLI processes (e.g., aspire resource, aspire stop)
         // can surface it to help users diagnose issues in the managing CLI process.

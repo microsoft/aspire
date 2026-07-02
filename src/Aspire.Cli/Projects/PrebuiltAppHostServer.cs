@@ -13,6 +13,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
@@ -1016,18 +1017,14 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 
         // Configure environment
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
-        startInfo.Environment[KnownConfigNames.RemoteAppHostProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliLogFilePath] = _executionContext.LogFilePath;
 
-        // Pair the parent PID with its start time so the RemoteHost orphan detector verifies both and
-        // does not keep the server alive against a recycled PID. hostPid is the launching CLI process.
-        if (ProcessStartTimeHelper.TryGetProcessStartTimeUnixSeconds(hostPid) is { } hostStartedUnix)
-        {
-            var hostStarted = hostStartedUnix.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            startInfo.Environment[KnownConfigNames.RemoteAppHostProcessStarted] = hostStarted;
-            startInfo.Environment[KnownConfigNames.CliProcessStarted] = hostStarted;
-        }
+        // Stamp the launching CLI (hostPid) as the parent under both the RemoteHost and generic CLI
+        // key pairs. Resolve the start time once and pair it with the PID so the RemoteHost orphan
+        // detector verifies both and does not keep the server alive against a recycled PID.
+        var hostStartedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixSeconds(hostPid);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.RemoteAppHostProcessId, KnownConfigNames.RemoteAppHostProcessStarted);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted);
 
         if (_integrationLibsPath is not null)
         {

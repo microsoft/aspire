@@ -1,10 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using System.Text;
 using Aspire.Cli.DotNet;
-using Aspire.Hosting;
+using Aspire.Cli.Processes;
 
 namespace Aspire.Cli.Layout;
 
@@ -103,15 +102,9 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
             ? new Dictionary<string, string>(StringComparer.Ordinal)
             : new Dictionary<string, string>(environmentVariables, StringComparer.Ordinal);
 
-        if (!environment.ContainsKey(KnownConfigNames.CliProcessId))
-        {
-            environment[KnownConfigNames.CliProcessId] = Environment.ProcessId.ToString(CultureInfo.InvariantCulture);
-        }
-
-        if (!environment.ContainsKey(KnownConfigNames.CliProcessStarted))
-        {
-            environment[KnownConfigNames.CliProcessStarted] = ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds().ToString(CultureInfo.InvariantCulture);
-        }
+        // Stamp the launching CLI's identity, but never override values the caller already supplied
+        // so an explicit caller override always wins.
+        OrphanDetectionEnvironment.ApplyCurrentProcess(environment, overwrite: false);
 
         return environment;
     }
