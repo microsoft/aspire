@@ -24,6 +24,11 @@ public sealed record CustomResourceSnapshot
     internal long Version { get; init; }
 
     /// <summary>
+    /// Gets whether the normalized snapshot state came from DCP executable termination.
+    /// </summary>
+    internal bool IsDcpExecutableTerminated { get; init; }
+
+    /// <summary>
     /// The type of the resource.
     /// </summary>
     public required string ResourceType { get; init; }
@@ -460,11 +465,6 @@ public static class KnownResourceStates
     public static readonly string Finished = nameof(Finished);
 
     /// <summary>
-    /// The terminated state. Useful for showing the resource was stopped before it exited normally.
-    /// </summary>
-    public static readonly string Terminated = nameof(Terminated);
-
-    /// <summary>
     /// The waiting state. Useful for showing the resource is waiting for a dependency.
     /// </summary>
     public static readonly string Waiting = nameof(Waiting);
@@ -492,12 +492,12 @@ public static class KnownResourceStates
     /// <summary>
     /// List of terminal states.
     /// </summary>
-    public static readonly IReadOnlyList<string> TerminalStates = [Finished, FailedToStart, Exited, Terminated];
+    public static readonly IReadOnlyList<string> TerminalStates = [Finished, FailedToStart, Exited];
 
     /// <summary>
     /// List of states in which a resource can be rebuilt.
     /// </summary>
-    public static readonly IReadOnlyList<string> BuildableStates = [Running, Waiting, Finished, FailedToStart, Exited, Terminated];
+    public static readonly IReadOnlyList<string> BuildableStates = [Running, Waiting, Finished, FailedToStart, Exited];
 }
 
 internal static class ResourceSnapshotBuilder

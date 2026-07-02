@@ -417,17 +417,19 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
         if (resource is Executable executable)
         {
-            if (executable.Spec.Start == false && IsNotStartedExecutableState(executable.Status?.State))
+            var state = DcpStateMapper.NormalizeExecutableState(executable.Status?.State);
+            if (executable.Spec.Start == false && IsNotStartedExecutableState(state))
             {
                 // If the resource is set for delay start, treat not-yet-started states as NotStarted.
                 return new(KnownResourceStates.NotStarted, null, null);
             }
 
-            return new(executable.Status?.State, executable.Status?.StartupTimestamp?.ToUniversalTime(), executable.Status?.FinishTimestamp?.ToUniversalTime());
+            return new(state, executable.Status?.StartupTimestamp?.ToUniversalTime(), executable.Status?.FinishTimestamp?.ToUniversalTime());
         }
         if (resource is ContainerExec containerExec)
         {
-            return new(containerExec.Status?.State, containerExec.Status?.StartupTimestamp?.ToUniversalTime(), containerExec.Status?.FinishTimestamp?.ToUniversalTime());
+            var state = DcpStateMapper.NormalizeExecutableState(containerExec.Status?.State);
+            return new(state, containerExec.Status?.StartupTimestamp?.ToUniversalTime(), containerExec.Status?.FinishTimestamp?.ToUniversalTime());
         }
 
         return new(null, null, null);

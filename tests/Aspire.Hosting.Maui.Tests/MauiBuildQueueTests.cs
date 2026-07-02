@@ -875,8 +875,7 @@ public class MauiBuildQueueTests
         [KnownResourceStates.RuntimeUnhealthy, KnownResourceStateStyles.Error],
         [KnownResourceStates.Exited, KnownResourceStateStyles.Info],
         [KnownResourceStates.Finished, KnownResourceStateStyles.Success],
-        [KnownResourceStates.Terminated, KnownResourceStateStyles.Warn],
-        ["terminated", KnownResourceStateStyles.Warn]
+        ["exited", KnownResourceStateStyles.Info]
     ];
 
     private static void AddOriginalStopCommand(IResource resource, Action? onExecute = null)

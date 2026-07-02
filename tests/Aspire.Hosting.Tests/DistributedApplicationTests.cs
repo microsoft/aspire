@@ -2117,7 +2117,7 @@ public class DistributedApplicationTests
                     rns.WaitForResourceAsync(executableResourceName, e =>
                     {
                         var state = e.Snapshot.State?.Text;
-                        return state == KnownResourceStates.Finished || state == ExecutableState.Terminated;
+                        return state == KnownResourceStates.Finished || state == KnownResourceStates.Exited;
                     }, token))
                     .DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
             }

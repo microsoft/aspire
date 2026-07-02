@@ -89,41 +89,6 @@ public class TerminalHostFailureDiagnosticServiceTests
     }
 
     [Fact]
-    public async Task Terminated_DoesNotSurfaceAsFailure()
-    {
-        var (notifications, loggers, host, service, stopCts) = CreateHarness(
-            terminalHostPath: "/usr/local/share/aspire/cli/managed/aspire-managed",
-            terminalHostInvocationArgs: "terminalhost");
-
-        try
-        {
-            await service.StartAsync(stopCts.Token).DefaultTimeout();
-
-            await notifications.PublishUpdateAsync(host, s => s with
-            {
-                State = new ResourceStateSnapshot("terminated", null),
-                IsHidden = true,
-            }).DefaultTimeout();
-
-            // Terminated is emitted when DCP stops a terminal host during a clean/user-initiated
-            // shutdown. It is a terminal state for waiters, but not evidence that the host failed
-            // to start.
-            await Task.Delay(200, stopCts.Token);
-
-            var current = await ReadCurrentSnapshotAsync(notifications, host).DefaultTimeout();
-            Assert.True(current.IsHidden);
-
-            var hasLogs = await TryReadAnyLogAsync(loggers, host);
-            Assert.False(hasLogs);
-        }
-        finally
-        {
-            await stopCts.CancelAsync();
-            await service.StopAsync(CancellationToken.None).DefaultTimeout();
-        }
-    }
-
-    [Fact]
     public async Task ExitedWithZeroExitCode_DoesNotSurfaceAsFailure()
     {
         // Clean shutdown during AppHost stop: host exits with code 0. We must not
@@ -145,6 +110,39 @@ public class TerminalHostFailureDiagnosticServiceTests
             // No way to deterministically prove "nothing happens" — give the service a
             // moment to observe the event, then assert the host is still hidden and no
             // logs were written.
+            await Task.Delay(200, stopCts.Token);
+
+            var current = await ReadCurrentSnapshotAsync(notifications, host).DefaultTimeout();
+            Assert.True(current.IsHidden);
+
+            var hasLogs = await TryReadAnyLogAsync(loggers, host);
+            Assert.False(hasLogs);
+        }
+        finally
+        {
+            await stopCts.CancelAsync();
+            await service.StopAsync(CancellationToken.None).DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task DcpTerminatedHost_DoesNotSurfaceAsFailure()
+    {
+        var (notifications, loggers, host, service, stopCts) = CreateHarness(
+            terminalHostPath: "/usr/local/share/aspire/cli/managed/aspire-managed",
+            terminalHostInvocationArgs: "terminalhost");
+
+        try
+        {
+            await service.StartAsync(stopCts.Token).DefaultTimeout();
+
+            await notifications.PublishUpdateAsync(host, s => s with
+            {
+                State = new ResourceStateSnapshot(KnownResourceStates.Exited, null),
+                IsDcpExecutableTerminated = true,
+                IsHidden = true,
+            }).DefaultTimeout();
+
             await Task.Delay(200, stopCts.Token);
 
             var current = await ReadCurrentSnapshotAsync(notifications, host).DefaultTimeout();
