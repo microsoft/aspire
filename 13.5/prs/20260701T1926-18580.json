@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Linux cert cleanup now handles missing certutil gracefully; aspire doctor warns when certutil is unavailable on Linux",
+  "mergedAt": "2026-07-01T19:26:44Z",
+  "number": 18580,
+  "runDate": "2026-07-02T00:27:21Z",
+  "status": "included",
+  "title": "Handle missing certutil during cert cleanup"
+}

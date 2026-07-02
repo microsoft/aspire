@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "On Linux, `aspire certs clean` now completes successfully even when `certutil` is unavailable, treating NSS database cleanup as best-effort rather than a hard failure. `aspire doctor` also reports a warning when `certutil` is missing, suggesting installation of the distribution's NSS tools package (e.g., `libnss3-tools`) for full browser certificate trust.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-07-01T19:26:44Z",
+  "lastMergedAt": "2026-07-01T19:26:44Z",
+  "name": "Linux certificate cleanup handles missing NSS tools gracefully",
+  "owner": "danegsta",
+  "prs": [
+    18580
+  ]
+}
