@@ -5,7 +5,18 @@
 // buckets, the focused "Needs attention" queue, the personal "For you" action
 // picks, community lane, core-team ownership, and the "outside the queue" reasons.
 
-import { coreTeamMembers, coreTeamMemberAliasSuffixes, currentRelease, dayMs, hourMs, personalPickActions } from "./constants.mjs";
+import {
+  afscromeIssueAuthor,
+  coreTeamMembers,
+  coreTeamMemberAliasSuffixes,
+  ctiTeamTitleMarker,
+  currentRelease,
+  dayMs,
+  hourMs,
+  nonBlockingCheckFailureRules,
+  personalPickActions,
+  releaseBlockingLabelMarker,
+} from "./constants.mjs";
 
 const approvedAgingMs = 2 * dayMs;
 const communityWaitMs = 12 * hourMs;
@@ -28,20 +39,34 @@ const knownBotAuthors = new Set(["copilot-swe-agent", "dotnet-maestro"]);
 // ---------------------------------------------------------------------------
 
 export function actorIdentityKey(actor) {
-  return String(actor || "").trim().toLowerCase();
+  // A "{human}/copilot" author identifies as the human who started the Copilot PR, so
+  // ownership, core-team matching, and dedupe all key off that human. We also strip any
+  // non-alphanumeric characters so alias punctuation ("karolz-ms", "IEvangelist_microsoft")
+  // normalizes consistently on both sides of a comparison. Ported from pr-dashboard
+  // models.ts `actorIdentityKey`.
+  const normalized = String(actor || "").toLowerCase();
+  const human = normalized.endsWith("/copilot")
+    ? normalized.slice(0, -"/copilot".length)
+    : normalized;
+  return human.replace(/[^a-z0-9]/g, "");
 }
 function sameLogin(a, b) {
   return actorIdentityKey(a) === actorIdentityKey(b);
 }
 function isCopilotAttributedAuthor(author) {
-  return actorIdentityKey(author).endsWith("/copilot");
+  // Check the raw author, not actorIdentityKey: the latter strips "/copilot" (and all
+  // punctuation) as part of keying to the human owner, so it can never end with "/copilot".
+  return String(author || "").toLowerCase().endsWith("/copilot");
 }
 function isBotAuthor(author, authorType) {
   if (isCopilotAttributedAuthor(author)) return false;
-  const n = actorIdentityKey(author);
+  // GraphQL __typename is the most precise signal when present; the string checks mirror
+  // pr-dashboard models.ts `isBotAuthor` (raw lowercased login, not the punctuation-stripped
+  // identity key). `github-actions` and the configured bot logins round out the list.
   if (authorType === "Bot") return true;
+  const n = String(author || "").toLowerCase();
   if (knownBotAuthors.has(n)) return true;
-  return n.endsWith("[bot]") || n === "copilot" || n.includes("dependabot");
+  return n.endsWith("[bot]") || n.includes("bot") || n === "copilot" || n === "github-actions";
 }
 function isCoreTeamAuthor(author) {
   return coreTeamOwnershipActor(author) !== null;
@@ -95,10 +120,12 @@ function isCommunityWaiting(pr) {
   );
 }
 function isOwnCopilotAuthor(author, login) {
+  // Match on the raw author: actorIdentityKey strips "/copilot", so the suffix test must
+  // run against the original string before comparing the human base via sameLogin.
   const suffix = "/copilot";
-  const n = actorIdentityKey(author);
-  if (!n.endsWith(suffix)) return false;
-  return sameLogin(author.slice(0, author.length - suffix.length), login);
+  const raw = String(author || "");
+  if (!raw.toLowerCase().endsWith(suffix)) return false;
+  return sameLogin(raw.slice(0, raw.length - suffix.length), login);
 }
 function isOwnCopilotAuthorAny(author, logins) {
   return logins.some((l) => isOwnCopilotAuthor(author, l));
@@ -109,7 +136,72 @@ function isOwnCopilotAuthorAny(author, logins) {
 // ---------------------------------------------------------------------------
 
 export function isChecksFailing(pr) {
-  return pr.checks?.state === "failure";
+  // A "failure" rollup is only real red CI when it isn't driven purely by checks a
+  // non-blocking rule marks informational. Ported from pr-dashboard models.ts.
+  return pr.checks?.state === "failure"
+    && !isNonBlockingAggregateFailure(pr)
+    && !nonBlockingOnlyFailureRule(pr);
+}
+
+// The check state to display/act on after accounting for non-blocking rules. Mirrors
+// pr-dashboard models.ts `visibleCheckState`:
+//   * An aggregate failure on a rule-covered repo with no per-check detail yet is
+//     "unknown" (the dashboard lazily fetches details; we surface it as indeterminate).
+//   * When every failing check matches a non-blocking rule, the PR is effectively
+//     pending (if anything is still running) or success.
+//   * Otherwise the raw rollup state stands.
+export function visibleCheckState(pr) {
+  if (isNonBlockingAggregateFailure(pr)) {
+    return "unknown";
+  }
+  if (!nonBlockingOnlyFailureRule(pr)) {
+    return pr.checks?.state;
+  }
+  return (pr.checks?.pendingCount ?? 0) > 0 ? "pending" : "success";
+}
+
+// Every failing check on the PR maps to a non-blocking rule for its repo (and the rollup
+// reported no other failures), so the failure is informational only. Returns the matched
+// rule, else null. Defensive against the lean list-level checks shape (no failingChecks).
+function nonBlockingOnlyFailureRule(pr) {
+  const checks = pr.checks;
+  if (!checks || checks.state !== "failure") {
+    return null;
+  }
+  const failing = checks.failingChecks ?? [];
+  if ((checks.failureCount ?? 0) !== failing.length || failing.length === 0) {
+    return null;
+  }
+  const matchingRules = failing.map((check) => matchingNonBlockingCheckFailureRule(pr.repository, check.name));
+  return matchingRules.every((rule) => rule != null) ? matchingRules[0] ?? null : null;
+}
+
+// A "failure" rollup on a rule-covered repo where no individual check detail is available
+// yet (totalCount/failureCount/failingChecks all zero). This is the list-level shape the
+// dashboard treats as indeterminate rather than red.
+function isNonBlockingAggregateFailure(pr) {
+  const checks = pr.checks;
+  return checks?.state === "failure"
+    && hasNonBlockingCheckFailureRule(pr.repository)
+    && (checks.totalCount ?? 0) === 0
+    && (checks.failureCount ?? 0) === 0
+    && (checks.failingChecks ?? []).length === 0;
+}
+
+function hasNonBlockingCheckFailureRule(repository) {
+  return nonBlockingCheckFailureRules.some((rule) => sameRepository(rule.repository, repository));
+}
+function matchingNonBlockingCheckFailureRule(repository, name) {
+  return nonBlockingCheckFailureRules.find((rule) =>
+    sameRepository(rule.repository, repository) && matchesNonBlockingCheckFailureName(rule, name)) ?? null;
+}
+function sameRepository(first, second) {
+  return String(first).toLowerCase() === String(second).toLowerCase();
+}
+function matchesNonBlockingCheckFailureName(rule, name) {
+  const normalized = String(name || "").trim().toLowerCase();
+  return rule.checkNames.some((checkName) => normalized === checkName.toLowerCase())
+    || rule.checkNameContains.some((fragment) => normalized.includes(fragment.toLowerCase()));
 }
 export function hasMergeConflicts(pr) {
   return pr.mergeableState === "dirty";
@@ -127,6 +219,12 @@ function matchingDoNotMergeLabel(pr) {
 }
 export function hasNeedsAuthorActionLabel(pr) {
   return matchingDoNotMergeLabel(pr) !== null;
+}
+// A PR that belongs on its author's own plate, not the shared review/ship lists: still a
+// draft, conflicting, or explicitly labeled do-not-merge. Ported from pr-dashboard
+// models.ts `shouldHideFromSharedPullRequestLists`.
+export function shouldHideFromSharedPullRequestLists(pr) {
+  return pr.draft || hasMergeConflicts(pr) || hasNeedsAuthorActionLabel(pr);
 }
 function hasUnresolvedFeedback(pr) {
   return pr.review.unresolvedThreadCount > 0;
@@ -267,7 +365,8 @@ function reviewFootprint(pr) {
 // ---------------------------------------------------------------------------
 
 function isChecksPending(pr) {
-  return pr.checks?.state === "pending";
+  const state = visibleCheckState(pr);
+  return state === "pending" || state === "unknown";
 }
 
 export function createAttentionSignals(item) {
@@ -388,6 +487,16 @@ function checksAttentionSignal(pullRequest) {
   const checks = pullRequest.checks;
   if (!checks || checks.state === "none" || checks.state === "unknown") {
     return null;
+  }
+  // An aggregate failure that's only the non-blocking rule (or indeterminate detail) gets
+  // no red CI pill. When every failing check maps to a rule, surface the rule's label as a
+  // warning instead of "CI failing". Ported from pr-dashboard models.ts checksAttentionSignal.
+  if (isNonBlockingAggregateFailure(pullRequest)) {
+    return null;
+  }
+  const nonBlockingFailure = nonBlockingOnlyFailureRule(pullRequest);
+  if (nonBlockingFailure) {
+    return { label: nonBlockingFailure.label, tone: "warning" };
   }
   if (checks.state === "failure") {
     const label = checks.failureCount > 0
@@ -716,12 +825,13 @@ function createPersonalPick(pr) {
   if (hasNeedsAuthorActionLabel(pr)) {
     return mine ? { pullRequest: pr, action: personalPickActions.needsAttention, reason: `Your PR is labeled ${matchingDoNotMergeLabel(pr) ?? "no-merge"} · ${pickReason(pr)}`, tone: "danger", personal: true } : null;
   }
-  if (mine && pr.checks?.state === "failure") {
+  if (mine && isChecksFailing(pr)) {
     const fc = pr.checks.failureCount ?? 0;
     return { pullRequest: pr, action: personalPickActions.fixCi, reason: `${fc > 0 ? `Your PR has ${formatCount(fc, "failing check")}` : "Your PR is failing CI"} · ${pickReason(pr)}`, tone: "danger", personal: true };
   }
   if (!mine && pr.review.reviewRequestedFromViewer) {
-    const ci = pr.checks?.state === "failure" ? " · CI failing" : pr.checks?.state === "pending" ? " · CI running" : "";
+    const visibleState = visibleCheckState(pr);
+    const ci = isChecksFailing(pr) ? " · CI failing" : visibleState === "pending" ? " · CI running" : "";
     return { pullRequest: pr, action: personalPickActions.reviewThis, reason: `Review requested from you · ${pickReason(pr)}${ci}`, tone: "warning", personal: true };
   }
   if (mine && pr.review.state === "changes_requested") {
@@ -783,6 +893,208 @@ export function createDeveloperPullRequestCounts(prs) {
     })
     .filter((c) => c.openPullRequestCount > 0)
     .sort((a, b) => b.openPullRequestCount - a.openPullRequestCount || a.actor.localeCompare(b.actor));
+}
+
+// ---------------------------------------------------------------------------
+// Issues focus buckets + signals (port of pr-dashboard models.ts ship-week issue
+// intelligence). Adapted for the GraphQL issue shape this extension collects: we do
+// NOT have per-issue linked-PR data (the dashboard's dedicated server endpoint supplies
+// `linkedOpenPullRequests`), so any signal that depends on it ("Needs PR", the open-PR
+// count pill, and the linked-PR validation branch) is skipped rather than guessed, which
+// would otherwise mislabel every issue "Needs PR".
+// ---------------------------------------------------------------------------
+
+const ctiTeamIssueBucketLabel = "CTI team";
+const afscromeIssueBucketLabel = "afscrome finds";
+const myIssuesBucketLabel = "My issues";
+const releaseBlockingSignalLabel = "Blocking release";
+const staleIssueMs = 7 * dayMs;
+const coldIssueMs = 14 * dayMs;
+
+const validationTerms = ["validation", "validate", "verify", "verification", "test", "e2e", "servicing validation"];
+const installerTerms = ["installer", "install", "workload", "acquisition", "setup", "visual studio", " vs ", "sdk"];
+const typeScriptTerms = ["typescript", " ts ", "javascript", " js ", "node", "polyglot", "apphost"];
+const cliTerms = ["cli", "channel", "version", "versioning", "feed", "template"];
+const docsTerms = ["docs", "documentation", "release notes", "readme", "release readiness", "announcement"];
+
+// Each definition matches a class of issue that deserves its own focus lane. `countsAsDomain`
+// marks the issue as already owned by a domain (suppresses the "Unowned" pill); `needsValidation`
+// forces the "Needs validation" pill.
+const focusIssueBucketDefinitions = [
+  { label: regressionBucketLabel, tone: "danger", matches: (issue) => hasRegressionLabel(issue.labels) },
+  { label: ctiTeamIssueBucketLabel, tone: "warning", matches: isCtiTeamIssue, countsAsDomain: true, needsValidation: true, suppressNeedsPr: true },
+  { label: afscromeIssueBucketLabel, tone: "success", matches: isAfscromeIssue },
+];
+
+const shipWeekIssueSignalToneByLabel = new Map([
+  ...focusIssueBucketDefinitions.map((definition) => [definition.label, definition.tone]),
+  ["Needs PR", "danger"],
+  ["Needs validation", "warning"],
+  ["Installer/acquisition", "accent"],
+  ["TypeScript/polyglot", "accent"],
+  ["CLI channel/versioning", "accent"],
+  ["Docs/release readiness", "success"],
+  ["Unowned", "warning"],
+]);
+
+function isCtiTeamIssue(issue) {
+  return String(issue.title || "").toLowerCase().includes(ctiTeamTitleMarker);
+}
+function isAfscromeIssue(issue) {
+  return sameLogin(issue.author, afscromeIssueAuthor);
+}
+function hasReleaseBlockingLabel(labels) {
+  return (labels || []).some((label) => label.toLowerCase().includes(releaseBlockingLabelMarker));
+}
+function matchingFocusIssueBucketDefinitions(issue) {
+  return focusIssueBucketDefinitions.filter((definition) => definition.matches(issue));
+}
+function firstFocusIssueBucketDefinition(issue) {
+  return matchingFocusIssueBucketDefinitions(issue)[0];
+}
+function targetsCurrentReleaseIssue(issue) {
+  if (!currentRelease) return false;
+  return [issue.title, issue.milestone, ...(issue.labels || [])]
+    .some((value) => value != null && releaseSignalMatches(value, currentRelease));
+}
+function issueMatchesTerms(issue, terms) {
+  const searchText = ` ${[issue.title, issue.author, ...(issue.labels || [])].join(" ").toLowerCase()} `;
+  return terms.some((term) => searchText.includes(term));
+}
+// Whether per-issue linked-PR data is available. This extension does not fetch it, so the
+// value is treated as unknown and the linked-PR-derived signals are omitted.
+function linkedOpenPullRequestCount(issue) {
+  return Array.isArray(issue.linkedOpenPullRequests) ? issue.linkedOpenPullRequests.length : null;
+}
+
+// Focus lanes for the Issues view. Returns non-empty buckets (each sorted newest-first),
+// plus a per-login "My issues" bucket when a login is supplied. Ported from pr-dashboard
+// models.ts `createFocusIssueBuckets`.
+export function createFocusIssueBuckets(issues, login) {
+  const definitions = login
+    ? [
+      ...focusIssueBucketDefinitions,
+      {
+        label: myIssuesBucketLabel,
+        tone: "accent",
+        matches: (issue) => (issue.assignees || []).some((assignee) => sameLogin(assignee, login)),
+      },
+    ]
+    : focusIssueBucketDefinitions;
+
+  return definitions
+    .map(({ matches, ...definition }) => {
+      const bucketIssues = issues
+        .filter(matches)
+        .sort((first, second) => new Date(second.updatedAt).getTime() - new Date(first.updatedAt).getTime());
+      return bucketIssues.length === 0 ? null : { ...definition, issues: bucketIssues };
+    })
+    .filter((bucket) => bucket !== null);
+}
+
+// Signal pills for a single issue (leading action pill + release/domain/idle/label context).
+// Ported from pr-dashboard models.ts `createIssueSignals`, minus the linked-PR pills.
+export function createIssueSignals(issue) {
+  const action = issueActionSignal(issue);
+  const signals = [action];
+
+  if (currentRelease && targetsCurrentReleaseIssue(issue)) {
+    signals.push({ label: `release ${currentRelease}`, tone: "danger" });
+  }
+
+  const linkedCount = linkedOpenPullRequestCount(issue);
+  if (linkedCount != null && linkedCount > 0) {
+    signals.push({ label: formatCount(linkedCount, "open PR"), tone: "warning" });
+  }
+
+  for (const signalLabel of shipWeekIssueSignalLabels(issue)) {
+    if (signalLabel !== action.label) {
+      signals.push({ label: signalLabel, tone: shipWeekIssueSignalToneByLabel.get(signalLabel) ?? "muted" });
+    }
+  }
+
+  const updatedAge = ageMs(issue.updatedAt);
+  if (updatedAge >= coldIssueMs) {
+    signals.push({ label: `idle ${formatAge(issue.updatedAt)}`, tone: "danger" });
+  } else if (updatedAge >= staleIssueMs) {
+    signals.push({ label: `idle ${formatAge(issue.updatedAt)}`, tone: "warning" });
+  }
+
+  if (issue.milestone) {
+    signals.push({ label: "milestone", tone: "accent" });
+  }
+
+  for (const label of (issue.labels || []).slice(0, 2)) {
+    signals.push({ label, tone: "accent" });
+  }
+
+  if (isBotAuthor(issue.author, issue.authorType)) {
+    signals.push({ label: "bot", tone: "accent" });
+  }
+
+  return dedupeIssueSignals(signals).slice(0, 7);
+}
+
+function issueActionSignal(issue) {
+  if (hasReleaseBlockingLabel(issue.labels)) {
+    return { label: releaseBlockingSignalLabel, tone: "danger" };
+  }
+  const focusDefinition = firstFocusIssueBucketDefinition(issue);
+  if (focusDefinition) {
+    return { label: focusDefinition.label, tone: focusDefinition.tone };
+  }
+  // "Needs PR" (linkedCount === 0) is intentionally omitted: without linked-PR data we
+  // cannot tell an issue has no PR, and defaulting to "Needs PR" would tag everything.
+  if ((issue.assignees || []).length === 0) {
+    return { label: "Unowned", tone: "warning" };
+  }
+  return { label: "Needs validation", tone: "warning" };
+}
+
+function shipWeekIssueSignalLabels(issue) {
+  const labels = [];
+  let domainMatch = false;
+  const focusDefinitions = matchingFocusIssueBucketDefinitions(issue);
+  const linkedCount = linkedOpenPullRequestCount(issue);
+
+  for (const definition of focusDefinitions) {
+    labels.push(definition.label);
+    domainMatch = domainMatch || definition.countsAsDomain === true;
+  }
+
+  // "Needs PR" only when we positively know there are zero linked PRs.
+  if (linkedCount === 0 && !focusDefinitions.some((definition) => definition.suppressNeedsPr)) {
+    labels.push("Needs PR");
+  }
+
+  if (
+    focusDefinitions.some((definition) => definition.needsValidation)
+    || (linkedCount != null && linkedCount > 0)
+    || issueMatchesTerms(issue, validationTerms)
+  ) {
+    labels.push("Needs validation");
+  }
+
+  if (issueMatchesTerms(issue, installerTerms)) { labels.push("Installer/acquisition"); domainMatch = true; }
+  if (issueMatchesTerms(issue, typeScriptTerms)) { labels.push("TypeScript/polyglot"); domainMatch = true; }
+  if (issueMatchesTerms(issue, cliTerms)) { labels.push("CLI channel/versioning"); domainMatch = true; }
+  if (issueMatchesTerms(issue, docsTerms)) { labels.push("Docs/release readiness"); domainMatch = true; }
+
+  if ((issue.assignees || []).length === 0 && !domainMatch) {
+    labels.push("Unowned");
+  }
+
+  return labels;
+}
+
+function dedupeIssueSignals(signals) {
+  const seen = new Set();
+  return signals.filter((signal) => {
+    const key = signal.label.trim().toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 // ---------------------------------------------------------------------------

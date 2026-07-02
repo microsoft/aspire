@@ -27,6 +27,28 @@ export const coreTeamMembers = [
 // it is attributed to that member. Ported from pr-dashboard Dashboard config (#95).
 export const coreTeamMemberAliasSuffixes = ["_microsoft"];
 
+// Repos where specific check failures are non-blocking (informational only), so an
+// aggregate "failure" rollup driven solely by these checks should not read as red CI.
+// Ported from pr-dashboard server appsettings.json `NonBlockingCheckFailureRules`.
+// A rule matches a failing check when its trimmed, lowercased name equals one of
+// `checkNames` OR contains one of `checkNameContains`. Example: the aspire-1p
+// "GitOps/GitHubPop" proof-of-presence gate stays green in the review queue while
+// still being visible to the owning team.
+export const nonBlockingCheckFailureRules = [
+  {
+    repository: "devdiv-microsoft/aspire-1p",
+    label: "proof of presence",
+    checkNames: ["GitOps/GitHubPop"],
+    checkNameContains: ["proof of presence"],
+  },
+];
+
+// Markers for the Issues focus buckets (ported from pr-dashboard models.ts). These
+// are matched case-insensitively via substring (title/label) or login equality.
+export const ctiTeamTitleMarker = "[aspiree2e]";
+export const afscromeIssueAuthor = "afscrome";
+export const releaseBlockingLabelMarker = "blocking-release";
+
 // Single source of truth for the "For you" personal-pick action labels.
 export const personalPickActions = {
   resolveConflicts: "Resolve conflicts",
