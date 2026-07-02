@@ -23,6 +23,43 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
     }
 
     [Fact]
+    public void Resolve_WhenPackageManagerIsDeno_ReturnsDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"deno@2.9.0\" }");
+
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(workspace.WorkspaceRoot, new TestEnvironment(), logger: null);
+
+        Assert.Equal(TypeScriptAppHostToolchain.Deno, toolchain);
+    }
+
+    [Fact]
+    public void Resolve_WhenDenoLockExists_ReturnsDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "deno.lock"), "{ \"version\": \"5\" }");
+
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot, new TestEnvironment());
+
+        Assert.Equal(TypeScriptAppHostToolchain.Deno, resolution.Toolchain);
+        Assert.Equal($"deno.lock found in {workspace.WorkspaceRoot.FullName}", resolution.Reason);
+    }
+
+    [Fact]
+    public void Resolve_WhenDenoJsonExists_ReturnsDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"name\": \"apphost\" }");
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "deno.json"), "{}");
+
+        var resolution = TypeScriptAppHostToolchainResolver.ResolveWithReason(workspace.WorkspaceRoot, new TestEnvironment());
+
+        Assert.Equal(TypeScriptAppHostToolchain.Deno, resolution.Toolchain);
+        Assert.Equal($"deno.json found in {workspace.WorkspaceRoot.FullName}", resolution.Reason);
+    }
+
+    [Fact]
     public void Resolve_WhenPnpmLockExists_ReturnsPnpm()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -344,6 +381,26 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
         Assert.Equal(["exec", "tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"], runtimeSpec.Execute.Args);
         Assert.Equal("pnpm", runtimeSpec.WatchExecute?.Command);
         Assert.Contains("pnpm exec tsc --noEmit -p tsconfig.apphost.json && pnpm exec tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", runtimeSpec.WatchExecute?.Args ?? []);
+    }
+
+    [Fact]
+    public void ApplyToRuntimeSpec_WhenDenoSelected_UsesDenoRunCommands()
+    {
+        var baseRuntimeSpec = CreateBaseRuntimeSpec();
+
+        var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Deno);
+
+        Assert.Equal("TypeScript (Deno)", runtimeSpec.DisplayName);
+        Assert.Equal("deno", runtimeSpec.InstallDependencies?.Command);
+        Assert.Equal(["install"], runtimeSpec.InstallDependencies!.Args);
+        var preExecute = Assert.Single(runtimeSpec.PreExecute!);
+        Assert.Equal("deno", preExecute.Command);
+        Assert.Equal(["check", "{appHostFile}"], preExecute.Args);
+        Assert.Equal("deno", runtimeSpec.Execute.Command);
+        Assert.Equal(["run", "-A", "{appHostFile}"], runtimeSpec.Execute.Args);
+        Assert.Equal("deno", runtimeSpec.WatchExecute?.Command);
+        Assert.Equal(["run", "-A", "--check", "--watch", "{appHostFile}"], runtimeSpec.WatchExecute!.Args);
+        Assert.Equal("node", runtimeSpec.ExtensionLaunchCapability);
     }
 
     private static RuntimeSpec CreateBaseRuntimeSpec()

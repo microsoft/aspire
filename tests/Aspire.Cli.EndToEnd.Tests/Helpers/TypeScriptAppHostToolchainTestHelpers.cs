@@ -46,7 +46,7 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             return;
         }
 
-        foreach (var lockFileName in new[] { "package-lock.json", "bun.lock", "bun.lockb", "pnpm-lock.yaml", "yarn.lock" })
+        foreach (var lockFileName in new[] { "package-lock.json", "bun.lock", "bun.lockb", "pnpm-lock.yaml", "yarn.lock", "deno.lock" })
         {
             var lockFilePath = Path.Combine(projectRoot, lockFileName);
             if (File.Exists(lockFilePath))
@@ -80,6 +80,8 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             "yarn" => $"yarn run tsc --noEmit -p {tsConfigFileName}",
             "pnpm" => $"pnpm exec tsc --noEmit -p {tsConfigFileName}",
             "npm" => $"npx --no-install tsc --noEmit -p {tsConfigFileName}",
+            // Deno type-checks with its own compiler over the AppHost graph; there is no tsc/tsconfig step.
+            "deno" => "deno check apphost.mts",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
 
@@ -87,7 +89,24 @@ internal static class TypeScriptAppHostToolchainTestHelpers
     /// Gets the script runner command for a toolchain.
     /// </summary>
     internal static string GetRunScriptCommand(string toolchain, string scriptName) =>
-        $"{GetCommandName(toolchain)} run {scriptName}";
+        NormalizeToolchain(toolchain) switch
+        {
+            // Deno runs package.json scripts via `deno task`, not `deno run` (which runs a file).
+            "deno" => $"deno task {scriptName}",
+            _ => $"{GetCommandName(toolchain)} run {scriptName}"
+        };
+
+    /// <summary>
+    /// Gets the console text that indicates watch mode is active for a toolchain.
+    /// Node-based toolchains use nodemon; Deno uses its native file watcher, which prints
+    /// a different banner.
+    /// </summary>
+    internal static string GetWatchModeReadyText(string toolchain) =>
+        NormalizeToolchain(toolchain) switch
+        {
+            "deno" => "Watcher Process started.",
+            _ => "Watching for file changes."
+        };
 
     /// <summary>
     /// Gets the primary lock file name a toolchain should produce after restore/install.
@@ -99,6 +118,7 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             "yarn" => "yarn.lock",
             "pnpm" => "pnpm-lock.yaml",
             "npm" => "package-lock.json",
+            "deno" => "deno.lock",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
 
@@ -114,6 +134,7 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             "yarn" => "yarn@4.14.1",
             "pnpm" => "pnpm@10.0.0",
             "npm" => "npm@10.0.0",
+            "deno" => "deno@2.9.0",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
 
@@ -132,6 +153,7 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             "yarn" => "Yarn",
             "pnpm" => "pnpm",
             "npm" => "Node.js",
+            "deno" => "Deno",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
 
@@ -147,6 +169,7 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             "yarn" => "https://yarnpkg.com/getting-started/install",
             "pnpm" => "https://pnpm.io/installation",
             "npm" => "https://nodejs.org/en/download",
+            "deno" => "https://docs.deno.com/runtime/getting_started/installation/",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
 
@@ -180,6 +203,7 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             "yarn" => "yarn",
             "pnpm" => "pnpm",
             "npm" => "npm",
+            "deno" => "deno",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
 

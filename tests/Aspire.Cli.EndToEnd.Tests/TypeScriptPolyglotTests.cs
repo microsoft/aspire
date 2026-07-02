@@ -22,7 +22,8 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         "npm",
         "bun",
         "yarn",
-        "pnpm"
+        "pnpm",
+        "deno"
     };
 
     [Theory]
@@ -289,7 +290,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetRunScriptCommand(toolchain, "aspire:dev"));
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
-            s => s.ContainsText("Watching for file changes."),
+            s => s.ContainsText(TypeScriptAppHostToolchainTestHelpers.GetWatchModeReadyText(toolchain)),
             timeout: TimeSpan.FromMinutes(2),
             description: $"{toolchain} watch mode to start");
 

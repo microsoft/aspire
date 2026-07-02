@@ -382,6 +382,9 @@ internal sealed class ScaffoldingService : IScaffoldingService
             TypeScriptAppHostToolchain.Pnpm => $"pnpm --dir {relativeAppHostDirectory} run {scriptName}",
             TypeScriptAppHostToolchain.Yarn => $"yarn --cwd {relativeAppHostDirectory} run {scriptName}",
             TypeScriptAppHostToolchain.Bun => $"bun --cwd {relativeAppHostDirectory} run {scriptName}",
+            // Deno has no `run <script>` for package.json scripts; `deno task` runs them and `--cwd`
+            // scopes the task to the nested AppHost package, mirroring npm's `--prefix`.
+            TypeScriptAppHostToolchain.Deno => $"deno task --cwd {relativeAppHostDirectory} {scriptName}",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
     }
