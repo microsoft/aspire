@@ -11,11 +11,11 @@ public class ProcessSignalerTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
     [InlineData(0, true)]       // Exact match
-    [InlineData(0.8, true)]     // Sub-second difference within same second after truncation
-    [InlineData(1.2, true)]
-    [InlineData(1, true)]       // Exactly 1 second apart (within tolerance)
+    [InlineData(0.8, true)]     // Sub-second difference within the same second after truncation
+    [InlineData(1.2, false)]    // Next second: a recycled PID must not match
+    [InlineData(1, false)]      // Exactly one second later is a different whole second
     [InlineData(3, false)]      // 3 seconds apart (PID reuse)
-    [InlineData(-0.5, true)]    // Negative sub-second difference
+    [InlineData(-0.5, false)]   // Previous second after truncation
     public void AreClose_ComparesAtSecondGranularity(double offsetSeconds, bool expected)
     {
         var baseTime = new DateTime(2025, 6, 12, 10, 30, 45, 0, DateTimeKind.Local);

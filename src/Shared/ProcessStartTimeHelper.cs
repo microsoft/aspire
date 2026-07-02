@@ -11,11 +11,6 @@ using System.Globalization;
 /// </summary>
 internal static class ProcessStartTimeHelper
 {
-    // Process start times reported by the OS have sub-second precision, while the values we
-    // round-trip through environment variables / sockets are second-granularity Unix timestamps.
-    // Compare with a one-second tolerance so a truncated expected value still matches.
-    private static readonly TimeSpan s_defaultTolerance = TimeSpan.FromSeconds(1);
-
     /// <summary>
     /// Gets the current process's start time as whole Unix seconds. This is the value that should be
     /// propagated to child processes so they can verify the parent's identity (PID + start time).
@@ -59,7 +54,7 @@ internal static class ProcessStartTimeHelper
     /// </summary>
     /// <param name="pid">The process ID to check.</param>
     /// <param name="expectedStartTimeUnixSeconds">The expected start time (whole Unix seconds), or <see langword="null"/> for PID-only.</param>
-    /// <param name="tolerance">Allowed difference between the expected and observed start time. Defaults to one second.</param>
+    /// <param name="tolerance">Allowed difference between the expected and observed start time. Defaults to an exact match.</param>
     /// <returns><see langword="true"/> if the process exists and matches; otherwise <see langword="false"/>.</returns>
     public static bool IsProcessRunning(int pid, long? expectedStartTimeUnixSeconds = null, TimeSpan? tolerance = null)
     {
@@ -110,12 +105,23 @@ internal static class ProcessStartTimeHelper
     }
 
     /// <summary>
-    /// Returns whether two start times, expressed as whole Unix seconds, are within
-    /// <paramref name="tolerance"/> (default one second) of each other.
+    /// Returns whether two start times, expressed as whole Unix seconds, identify the same process.
+    /// The comparison is exact by default: both values are already truncated to whole seconds, so
+    /// accepting an adjacent second would let a PID recycled into the neighboring second impersonate the
+    /// original process and defeat the reuse guard.
     /// </summary>
+    /// <param name="expectedStartTimeUnixSeconds">The expected start time, in whole Unix seconds.</param>
+    /// <param name="actualStartTimeUnixSeconds">The observed start time, in whole Unix seconds.</param>
+    /// <param name="tolerance">
+    /// Optional allowed difference between the two values. Defaults to an exact match. Callers should only
+    /// opt into a non-zero tolerance when they must absorb cross-process jitter in the OS-reported start
+    /// time. For example, on Linux <see cref="Process.StartTime"/> is derived from an independently sampled
+    /// boot time (a coarse clock), so reading the same process from two different processes can truncate to
+    /// adjacent seconds near a second boundary. No caller needs this today.
+    /// </param>
     public static bool AreClose(long expectedStartTimeUnixSeconds, long actualStartTimeUnixSeconds, TimeSpan? tolerance = null)
     {
-        tolerance ??= s_defaultTolerance;
-        return Math.Abs(expectedStartTimeUnixSeconds - actualStartTimeUnixSeconds) <= (long)tolerance.Value.TotalSeconds;
+        var toleranceSeconds = tolerance is { } value ? (long)value.TotalSeconds : 0;
+        return Math.Abs(expectedStartTimeUnixSeconds - actualStartTimeUnixSeconds) <= toleranceSeconds;
     }
 }

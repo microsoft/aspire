@@ -23,7 +23,7 @@ public class ProcessStartTimeHelperTests
     [Fact]
     public void IsProcessRunning_CurrentProcessWithWrongStartTime_ReturnsFalse()
     {
-        // A start time decades off can never be within tolerance, simulating PID reuse.
+        // A start time decades off can never match, simulating PID reuse.
         Assert.False(ProcessStartTimeHelper.IsProcessRunning(Environment.ProcessId, expectedStartTimeUnixSeconds: 1));
     }
 
@@ -84,12 +84,21 @@ public class ProcessStartTimeHelperTests
     }
 
     [Theory]
-    [InlineData(1000L, 1000L, true)]   // exact
-    [InlineData(1000L, 1001L, true)]   // within default 1s tolerance
-    [InlineData(1000L, 999L, true)]    // within default 1s tolerance
-    [InlineData(1000L, 1002L, false)]  // outside tolerance
-    public void AreClose_RespectsDefaultTolerance(long expected, long actual, bool expectedResult)
+    [InlineData(1000L, 1000L, true)]   // exact match
+    [InlineData(1000L, 1001L, false)]  // adjacent second: a recycled PID must not match
+    [InlineData(1000L, 999L, false)]   // adjacent second: a recycled PID must not match
+    [InlineData(1000L, 1002L, false)]  // clearly different
+    public void AreClose_DefaultsToExactMatch(long expected, long actual, bool expectedResult)
     {
         Assert.Equal(expectedResult, ProcessStartTimeHelper.AreClose(expected, actual));
+    }
+
+    [Theory]
+    [InlineData(1000L, 1001L, true)]   // within the opt-in one-second tolerance
+    [InlineData(1000L, 999L, true)]    // within the opt-in one-second tolerance
+    [InlineData(1000L, 1002L, false)]  // outside the opt-in one-second tolerance
+    public void AreClose_WithOptInTolerance_AllowsNeighboringSeconds(long expected, long actual, bool expectedResult)
+    {
+        Assert.Equal(expectedResult, ProcessStartTimeHelper.AreClose(expected, actual, TimeSpan.FromSeconds(1)));
     }
 }
