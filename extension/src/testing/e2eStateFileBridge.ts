@@ -549,6 +549,11 @@ async function executeE2eControlCommand(
       markStarted();
       return await vscode.env.clipboard.readText();
     }
+    case 'writeClipboard': {
+      markStarted();
+      await vscode.env.clipboard.writeText(command.text);
+      return undefined;
+    }
     case 'openWorkspaceFolder': {
       const folderPath = getE2eWorkspaceFolderPath(command.folderPath);
       markStarted();
