@@ -230,6 +230,12 @@
   <Folder Name="/playground/DotnetTool/">
     <Project Path="playground/DotnetTool/DotnetTool.AppHost/DotnetTool.AppHost.csproj" />
   </Folder>
+  <Folder Name="/playground/DotnetProject/">
+    <Project Path="playground/DotnetProject/DotnetProject.SharedLibrary/DotnetProject.SharedLibrary.csproj" />
+    <Project Path="playground/DotnetProject/DotnetProject.ApiService/DotnetProject.ApiService.csproj" />
+    <Project Path="playground/DotnetProject/DotnetProject.WorkerService/DotnetProject.WorkerService.csproj" />
+    <Project Path="playground/DotnetProject/DotnetProject.AppHost/DotnetProject.AppHost.csproj" />
+  </Folder>
   <Folder Name="/playground/DatabaseMigration/">
     <Project Path="playground/DatabaseMigration/DatabaseMigration.ApiModel/DatabaseMigration.ApiModel.csproj" />
     <Project Path="playground/DatabaseMigration/DatabaseMigration.ApiService/DatabaseMigration.ApiService.csproj" />

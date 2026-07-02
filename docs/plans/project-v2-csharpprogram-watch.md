@@ -275,6 +275,18 @@ case, and Session 9 extends it for the watch end-to-end.
 **Verify:** `aspire run` (non-watch) starts the services from both the C# and TS app hosts; 
 endpoints, env, and service discovery resolve. *Depends on: 1. Parallelizable with 2–5.*
 
+**Status: ✅ Complete** — sample added at `playground/DotnetProject/`: a C# app host
+(`DotnetProject.AppHost`, using `AddDotnetProject`) and a `TypeScriptAppHost` (using the polyglot
+`addDotnetProject`), sharing a class library (`DotnetProject.SharedLibrary`), two `.csproj` services
+(`DotnetProject.ApiService`, `DotnetProject.WorkerService` — both referencing the shared library, with
+`workerservice` referencing/`WaitFor`-ing `apiservice`), and a file-based `.cs` service (`worker/worker.cs`).
+The four C# projects are in `Aspire.slnx` and build clean. `aspire run` was verified end-to-end from the
+**C# app host**: all resources reach `Running`/`Healthy`, each `DotnetProjectResource` launches via
+`dotnet run --project/--file … --no-launch-profile`, and HTTP calls confirm the shared library and
+service discovery (`workerservice`/`worker` → `apiservice`). The **TypeScript** app host is authored
+against the same model and confirmed-available polyglot APIs; running it in-repo follows the standard
+polyglot package workflow (pack `Aspire.Hosting.Dotnet` to a local source + `npm install`; see A2/A1).
+
 ### Session 2 — Non-watch **debug/F5 parity** (DCP project-launch generalization)
 Generalize the DCP path so a non-`ProjectResource` carrying `IProjectMetadata` + a `"project"`
 `SupportsDebuggingAnnotation` is launched/debugged correctly (preferred: an annotation/metadata-driven
@@ -348,7 +360,7 @@ limitations (no watch-debug, no partial runs yet), `ASPIREDOTNETPROJECT001`. *De
                       ▲           ▲
                       └─ (4,5) ───┘
 ```
-Session 1 (✅ complete) is the root. Sessions 1b, 2, 4, 5 parallelize after 1; session 3 is independent.
+Session 1 (✅ complete) is the root. Sessions 1b (✅ complete), 2, 4, 5 parallelize after 1; session 3 is independent.
 Service watch (6) needs 3+4+5; CLI `--watch` (7) needs 6+3; app-host watch (8) needs 7+4; tests/docs (9) last.
 Session 1b (the playground dogfood harness) is extended by session 9.
 
