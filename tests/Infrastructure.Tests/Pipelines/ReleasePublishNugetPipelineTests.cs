@@ -564,6 +564,36 @@ public sealed class ReleasePublishNugetPipelineTests
         Assert.Empty(secretReferenceMatches);
     }
 
+    [Fact]
+    public async Task ExtensionReleaseInstructionsSkipNonExtensionReleaseLegs()
+    {
+        var workflow = await ReadRepoFileAsync(".github/workflows/extension-release.yml");
+        var instructions = ExtractSection(
+            workflow,
+            "For an extension-only release, use these parameters:",
+            "For a full Aspire release");
+
+        Assert.Contains("| \\`SkipNuGetPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipNpmRidPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipNpmPointerPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipChannelPromotion\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipWinGetPublish\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipHomebrewValidation\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipGitHubTasks\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipReleaseAssets\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipNixPackageUpdate\\` | \\`true\\` |", instructions);
+        Assert.Contains("| \\`SkipVSCodeExtensionPublish\\` | \\`false\\` |", instructions);
+    }
+
+    [Fact]
+    public async Task ExtensionReleaseDryRunInstructionsDoNotOverstatePublisherRoleValidation()
+    {
+        var workflow = await ReadRepoFileAsync(".github/workflows/extension-release.yml");
+
+        Assert.Contains("can acquire an Azure credential and read publisher role assignments", workflow);
+        Assert.Contains("Separately confirm the service connection identity is a Contributor", workflow);
+    }
+
     private static string ExtractSection(string contents, string begin, string end)
     {
         var beginIndex = FindRequiredText(contents, begin);
