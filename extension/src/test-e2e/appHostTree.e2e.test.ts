@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import { getCommandInvocationCount, getResources, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForCommandOutcome, waitForDashboardUrl, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { assertClipboardTextForE2E, executeE2eControlCommand, restoreClipboardSnapshotForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { assertClipboardMatchesWorkspaceAppHostPathForE2E, executeE2eControlCommand, restoreClipboardSnapshotForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { cancelActiveInput, clickTreeItem, executeCommandFromPalette, openAspireView, waitForChildTreeItem, waitForNotificationMessage, waitForTreeItem } from './helpers/vscode';
 
@@ -38,7 +38,6 @@ suite('Aspire AppHost tree E2E', function () {
         await snapshotClipboardForE2E();
         const discovered = await waitForWorkspaceAppHost();
         const appHostLabel = getTreeAppHostLabel(discovered.state);
-        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
         const section = await openAspireView();
 
         // The Path row only appears under an idle (non-running) workspace AppHost item, so exercise
@@ -56,7 +55,7 @@ suite('Aspire AppHost tree E2E', function () {
         // routed through aspire-vscode.copyAppHostPath rather than reading a stale clipboard value.
         await waitForNotificationMessage('AppHost path copied to clipboard.');
 
-        await assertClipboardTextForE2E(appHostPath, 'path');
+        await assertClipboardMatchesWorkspaceAppHostPathForE2E();
     });
 
     test('runs, shows resources and dashboard state, routes resource commands, and stops from the tree', async () => {

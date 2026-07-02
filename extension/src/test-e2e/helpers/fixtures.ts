@@ -83,8 +83,20 @@ export async function restoreClipboardSnapshotForE2E(): Promise<void> {
     await executeE2eControlCommand({ name: 'restoreClipboardSnapshot' });
 }
 
-export async function assertClipboardTextForE2E(expectedText: string, comparison: 'exact' | 'path' = 'exact'): Promise<void> {
-    await executeE2eControlCommand({ name: 'assertClipboardText', expectedText, comparison });
+export async function assertClipboardMatchesWorkspaceAppHostPathForE2E(): Promise<void> {
+    await executeE2eControlCommand({ name: 'assertClipboardMatchesWorkspaceAppHostPath' });
+}
+
+export async function assertClipboardMatchesResourceNameForE2E(resourceName: string, appHostPath?: string): Promise<void> {
+    await executeE2eControlCommand({ name: 'assertClipboardMatchesResourceName', appHostPath, resourceName });
+}
+
+export async function assertClipboardMatchesEndpointUrlForE2E(options: { appHostPath?: string; resourceName?: string }): Promise<void> {
+    await executeE2eControlCommand({ name: 'assertClipboardMatchesEndpointUrl', ...options });
+}
+
+export async function assertClipboardMatchesLogFilePathForE2E(appHostPath?: string): Promise<void> {
+    await executeE2eControlCommand({ name: 'assertClipboardMatchesLogFilePath', appHostPath });
 }
 
 export async function runE2eTeardown(cleanups: ReadonlyArray<() => unknown | Promise<unknown>>, failureMessage: string): Promise<void> {

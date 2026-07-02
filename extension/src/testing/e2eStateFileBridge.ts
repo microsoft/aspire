@@ -565,18 +565,34 @@ async function executeE2eControlCommand(
 
       return undefined;
     }
-    case 'assertClipboardText': {
+    case 'assertClipboardMatchesWorkspaceAppHostPath': {
       markStarted();
-      const clipboardText = await vscode.env.clipboard.readText();
-      const matches = command.comparison === 'path'
-        ? isSamePath(clipboardText, command.expectedText)
-        : clipboardText === command.expectedText;
-      if (!matches) {
-        throw new Error(command.comparison === 'path'
-          ? 'E2E clipboard path did not match the expected path.'
-          : 'E2E clipboard text did not match the expected text.');
+      const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
+      if (!state.workspaceAppHostPath) {
+        throw new Error('E2E clipboard assertion could not determine the workspace AppHost path.');
       }
 
+      await assertClipboardText(state.workspaceAppHostPath, 'path');
+      return undefined;
+    }
+    case 'assertClipboardMatchesResourceName': {
+      markStarted();
+      const element = getResourceElement(appHostTreeProvider, command.resourceName, command.appHostPath);
+      const resourceName = getResourceNameForClipboard(element);
+      await assertClipboardText(resourceName);
+      return undefined;
+    }
+    case 'assertClipboardMatchesEndpointUrl': {
+      markStarted();
+      const endpoint = getEndpointElement(appHostTreeProvider, command);
+      await assertClipboardText(endpoint.url);
+      return undefined;
+    }
+    case 'assertClipboardMatchesLogFilePath': {
+      markStarted();
+      const element = getLogFileElement(appHostTreeProvider, command.appHostPath);
+      const logFilePath = getLogFilePathForClipboard(element);
+      await assertClipboardText(logFilePath, 'path');
       return undefined;
     }
     case 'openWorkspaceFolder': {
@@ -606,6 +622,18 @@ async function executeE2eControlCommand(
 interface E2eClipboardSnapshot {
   text?: string;
   hasSnapshot: boolean;
+}
+
+async function assertClipboardText(expectedText: string, comparison: 'exact' | 'path' = 'exact'): Promise<void> {
+  const clipboardText = await vscode.env.clipboard.readText();
+  const matches = comparison === 'path'
+    ? isSamePath(clipboardText, expectedText)
+    : clipboardText === expectedText;
+  if (!matches) {
+    throw new Error(comparison === 'path'
+      ? 'E2E clipboard path did not match the expected path.'
+      : 'E2E clipboard text did not match the expected text.');
+  }
 }
 
 function getE2eLaunchConfiguration(value: unknown): ExecutableLaunchConfiguration {
@@ -1192,12 +1220,12 @@ function getResourceElement(appHostTreeProvider: AspireAppHostTreeProvider, reso
 
 function getEndpointElement(
   appHostTreeProvider: AspireAppHostTreeProvider,
-  command: Extract<AspireExtensionE2EControlCommand, { name: 'copyEndpointUrl' | 'openInIntegratedBrowser' }>
+  command: Extract<AspireExtensionE2EControlCommand, { name: 'copyEndpointUrl' | 'openInIntegratedBrowser' | 'assertClipboardMatchesEndpointUrl' }>
 ): { element: unknown; url: string } {
   const element = appHostTreeProvider.findEndpointElement({
     appHostPath: command.appHostPath,
     resourceName: command.resourceName,
-    url: command.url,
+    url: 'url' in command ? command.url : undefined,
   });
   if (!element) {
     throw new Error('Aspire extension E2E endpoint command could not find a matching endpoint.');
@@ -1216,6 +1244,27 @@ function hasEndpointUrl(element: unknown): element is { url: string } {
     && 'url' in element
     && typeof element.url === 'string'
     && element.url.length > 0;
+}
+
+function getResourceNameForClipboard(element: unknown): string {
+  if (!hasResourceForClipboard(element)) {
+    throw new Error('Aspire extension E2E resource clipboard assertion found a resource tree item with an unexpected shape.');
+  }
+
+  return element.resource.displayName ?? element.resource.name;
+}
+
+function hasResourceForClipboard(element: unknown): element is { resource: { displayName?: string | null; name: string } } {
+  if (typeof element !== 'object' || element === null || !('resource' in element)) {
+    return false;
+  }
+
+  const resource = element.resource;
+  return typeof resource === 'object'
+    && resource !== null
+    && 'name' in resource
+    && typeof resource.name === 'string'
+    && (!('displayName' in resource) || resource.displayName === undefined || resource.displayName === null || typeof resource.displayName === 'string');
 }
 
 function getResourceCommandElement(
@@ -1277,6 +1326,22 @@ function getLogFileElement(appHostTreeProvider: AspireAppHostTreeProvider, appHo
   }
 
   return element;
+}
+
+function getLogFilePathForClipboard(element: unknown): string {
+  if (!hasLogFilePath(element)) {
+    throw new Error('Aspire extension E2E log file clipboard assertion found a log file tree item with an unexpected shape.');
+  }
+
+  return element.logFilePath;
+}
+
+function hasLogFilePath(element: unknown): element is { logFilePath: string } {
+  return typeof element === 'object'
+    && element !== null
+    && 'logFilePath' in element
+    && typeof element.logFilePath === 'string'
+    && element.logFilePath.length > 0;
 }
 
 function getActiveEditorInfo(): { uri?: string; fileName?: string; text?: string } {

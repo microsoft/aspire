@@ -282,25 +282,34 @@ suite('E2E launch profile', () => {
 
         assert.ok(apiTypes.includes("{ name: 'snapshotClipboard' }"));
         assert.ok(apiTypes.includes("{ name: 'restoreClipboardSnapshot' }"));
-        assert.ok(apiTypes.includes("{ name: 'assertClipboardText'; expectedText: string; comparison?: 'exact' | 'path' }"));
+        assert.ok(apiTypes.includes("{ name: 'assertClipboardMatchesWorkspaceAppHostPath' }"));
+        assert.ok(apiTypes.includes("{ name: 'assertClipboardMatchesResourceName'; appHostPath?: string; resourceName: string }"));
+        assert.ok(apiTypes.includes("{ name: 'assertClipboardMatchesEndpointUrl'; appHostPath?: string; resourceName?: string }"));
+        assert.ok(apiTypes.includes("{ name: 'assertClipboardMatchesLogFilePath'; appHostPath?: string }"));
         assert.ok(!apiTypes.includes("{ name: 'readClipboard' }"));
         assert.ok(!apiTypes.includes("{ name: 'writeClipboard'; text: string }"));
 
         assert.ok(e2eStateFileBridge.includes("case 'snapshotClipboard':"));
         assert.ok(e2eStateFileBridge.includes("case 'restoreClipboardSnapshot':"));
-        assert.ok(e2eStateFileBridge.includes("case 'assertClipboardText':"));
+        assert.ok(e2eStateFileBridge.includes("case 'assertClipboardMatchesWorkspaceAppHostPath':"));
+        assert.ok(e2eStateFileBridge.includes("case 'assertClipboardMatchesResourceName':"));
+        assert.ok(e2eStateFileBridge.includes("case 'assertClipboardMatchesEndpointUrl':"));
+        assert.ok(e2eStateFileBridge.includes("case 'assertClipboardMatchesLogFilePath':"));
         assert.ok(!e2eStateFileBridge.includes('return await vscode.env.clipboard.readText();'));
         assert.ok(!e2eStateFileBridge.includes('await vscode.env.clipboard.writeText(command.text);'));
 
         assert.ok(fixtures.includes('snapshotClipboardForE2E'));
         assert.ok(fixtures.includes('restoreClipboardSnapshotForE2E'));
-        assert.ok(fixtures.includes('assertClipboardTextForE2E'));
+        assert.ok(fixtures.includes('assertClipboardMatchesWorkspaceAppHostPathForE2E'));
+        assert.ok(fixtures.includes('assertClipboardMatchesResourceNameForE2E'));
+        assert.ok(fixtures.includes('assertClipboardMatchesEndpointUrlForE2E'));
+        assert.ok(fixtures.includes('assertClipboardMatchesLogFilePathForE2E'));
         assert.ok(!fixtures.includes('readClipboardForE2E'));
         assert.ok(!fixtures.includes('writeClipboardForE2E'));
 
         assert.ok(appHostTreeE2E.includes('snapshotClipboardForE2E'));
         assert.ok(appHostTreeE2E.includes('restoreClipboardSnapshotForE2E'));
-        assert.ok(appHostTreeE2E.includes("await assertClipboardTextForE2E(appHostPath, 'path');"));
+        assert.ok(appHostTreeE2E.includes('await assertClipboardMatchesWorkspaceAppHostPathForE2E();'));
         assert.ok(!appHostTreeE2E.includes('clipboardTextToRestore'));
 
         assert.ok(treeActionsE2E.includes('snapshotClipboardForE2E'));
@@ -311,7 +320,9 @@ suite('E2E launch profile', () => {
 
     test('keeps copied values out of E2E control command results', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
+        const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
         const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
         const treeActionsE2E = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
 
         const copyAppHostPathCase = getSwitchCase(e2eStateFileBridge, 'copyAppHostPath', 'viewAppHostLogFile');
@@ -330,6 +341,10 @@ suite('E2E launch profile', () => {
         assert.ok(!copyLogFilePathCase.includes("'logFilePath'"));
         assert.ok(!copyResourceNameCase.includes('return command.resourceName;'));
         assert.ok(!copyEndpointUrlCase.includes('return endpoint.url;'));
+        assert.ok(!apiTypes.includes('expectedText: string'));
+        assert.ok(!fixtures.includes('assertClipboardTextForE2E(expectedText'));
+        assert.ok(!e2eStateFileBridge.includes('command.expectedText'));
+        assert.ok(!treeActionsE2E.includes("name: 'copyEndpointUrl', appHostPath, resourceName: 'e2e-worker', url"));
 
         assert.ok(!treeActionsE2E.includes('copiedAppHost.result'));
         assert.ok(!treeActionsE2E.includes('copiedResourceName.result'));
