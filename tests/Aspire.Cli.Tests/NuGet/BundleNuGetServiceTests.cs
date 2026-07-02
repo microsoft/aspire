@@ -89,6 +89,53 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RestorePackagesAsync_BindsManagedHelperToCliJob()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        var managedPath = Path.Combine(
+            managedDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        File.WriteAllText(managedPath, string.Empty);
+
+        var invocations = new List<(string FileName, string Command, bool BindChildToCliJob)>();
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            FileNameAssertionCallback = (fileName, args, _, _, options) =>
+                invocations.Add((fileName, args[1], options.BindChildToCliJob))
+        };
+
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            new TestEnvironment(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        await service.RestorePackagesAsync(
+            [("Aspire.Hosting.JavaScript", "9.4.0")],
+            workingDirectory: appHostDirectory.FullName);
+
+        Assert.Collection(
+            invocations,
+            invocation =>
+            {
+                Assert.Equal(managedPath, invocation.FileName);
+                Assert.Equal("restore", invocation.Command);
+                Assert.True(invocation.BindChildToCliJob);
+            },
+            invocation =>
+            {
+                Assert.Equal(managedPath, invocation.FileName);
+                Assert.Equal("manifest", invocation.Command);
+                Assert.True(invocation.BindChildToCliJob);
+            });
+    }
+
+    [Fact]
     public async Task RestorePackagesAsync_PassesNuGetConfigToRestore()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
