@@ -23,8 +23,10 @@ const monitor = require('../../../.github/workflows/monitor-scheduled-workflows.
 
 function makeGithub(store, runsByFile, { failUpdate }) {
     const calls = [];
+    const listRunRequests = [];
     return {
         calls,
+        listRunRequests,
         paginate: async (fn, params) => (await fn(params)).data,
         rest: {
             issues: {
@@ -59,6 +61,12 @@ function makeGithub(store, runsByFile, { failUpdate }) {
                 },
                 listComments: async ({ issue_number }) => {
                     const issue = store.issues.find(i => i.number === issue_number);
+                    if (!issue) {
+                        const error = new Error(`issue #${issue_number} not found`);
+                        error.status = 404;
+                        throw error;
+                    }
+
                     return { data: (issue?.comments ?? []).map(body => ({ body })) };
                 },
                 createComment: async ({ issue_number, body }) => {
@@ -68,7 +76,8 @@ function makeGithub(store, runsByFile, { failUpdate }) {
                 },
             },
             actions: {
-                listWorkflowRuns: async ({ workflow_id, branch, event, status }) => {
+                listWorkflowRuns: async ({ workflow_id, branch, event, status, per_page }) => {
+                    listRunRequests.push({ workflowId: workflow_id, perPage: per_page });
                     // The watchdog must scan only completed scheduled runs on main.
                     // A manual or push run leaking in would let a non-scheduled
                     // success auto-close a real scheduled-failure issue (or a
@@ -77,8 +86,8 @@ function makeGithub(store, runsByFile, { failUpdate }) {
                     if (branch !== 'main' || event !== 'schedule' || status !== 'completed') {
                         throw new Error(`listWorkflowRuns called without the scheduled-run filters (branch=${branch}, event=${event}, status=${status})`);
                     }
-                    const run = runsByFile[workflow_id];
-                    return { data: { workflow_runs: run ? [run] : [] } };
+                    const runs = runsByFile[workflow_id];
+                    return { data: { workflow_runs: Array.isArray(runs) ? runs : (runs ? [runs] : []) } };
                 },
             },
         },
@@ -93,12 +102,23 @@ async function main() {
         next: input.nextNumber ?? 1000,
     };
     const github = makeGithub(store, input.runsByFile ?? {}, { failUpdate: input.failUpdate === true });
-    const core = { info: () => {}, warning: () => {} };
+    const logs = [];
+    const warnings = [];
+    const core = {
+        info: message => logs.push(String(message)),
+        warning: message => warnings.push(String(message)),
+    };
     const context = { repo: { owner: 'microsoft', repo: 'aspire' } };
 
     let threw = false;
     try {
-        await monitor.run({ github, context, core, dryRun: input.dryRun === true });
+        await monitor.run({
+            github,
+            context,
+            core,
+            dryRun: input.dryRun === true,
+            now: input.now ? new Date(input.now) : undefined,
+        });
     } catch {
         threw = true;
     }
@@ -107,6 +127,9 @@ async function main() {
         result: {
             threw,
             calls: github.calls,
+            logs,
+            warnings,
+            listRunRequests: github.listRunRequests,
             issues: store.issues.map(issue => ({
                 number: issue.number,
                 state: issue.state,

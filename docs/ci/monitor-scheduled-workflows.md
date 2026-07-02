@@ -20,6 +20,11 @@ Runs every 2 hours (`cron: '0 */2 * * *'`) and on `workflow_dispatch`. The
 manual dispatch accepts a `dry_run` boolean that logs the issue actions it
 *would* take without mutating anything on GitHub.
 
+Each run fetches recent completed scheduled runs and processes the runs updated
+in a three-hour polling window, oldest to newest. That prevents an hourly
+workflow failure from being hidden by a later success before the next watchdog
+tick; the per-run comment marker still deduplicates repeat observations.
+
 ## What it watches
 
 The watch-list lives in
@@ -87,8 +92,8 @@ trigger the reporter, so the watchdog leaves those to it.
 
 ## What gets filed
 
-When a watched workflow's latest completed run on `main` concluded `failure`,
-`timed_out`, or `startup_failure`:
+When a watched workflow has a completed scheduled run on `main` in the watchdog
+polling window that concluded `failure`, `timed_out`, or `startup_failure`:
 
 - **Title:** `Scheduled workflow failing: <display name>`
 - **Label:** `automation-broken` (created idempotently by the workflow)
@@ -100,10 +105,9 @@ description written once at filing (the hidden marker plus prose); each failed
 run is recorded as a **comment** carrying the run link, commit, and conclusion.
 The comment is what fires notifications.
 
-Comments are deduplicated by run: the scanner runs every 2h but most watched
-workflows run less often, so the same still-latest failed run is observed on many
-ticks. Each comment embeds a hidden `<!-- run:<id> -->` marker; a run whose
-comment already exists is a no-op (no duplicate comment) until a newer run
+Comments are deduplicated by run: the scanner can observe the same failed run on
+multiple ticks. Each comment embeds a hidden `<!-- run:<id> -->` marker; a run
+whose comment already exists is a no-op (no duplicate comment) until a newer run
 completes.
 
 `cancelled` and `skipped` conclusions are intentionally ignored — operator
@@ -116,9 +120,9 @@ plus any per-entry `labels`, and are stamped `autoClose:true`.
 
 ## What gets closed
 
-When a watched workflow's latest completed run concludes `success`, any open
-`automation-broken` issue for that workflow gets a "latest run succeeded"
-comment and is closed with `state_reason: completed`.
+When the newest completed scheduled run in the polling window concludes
+`success`, any open `automation-broken` issue for that workflow gets a "latest
+run succeeded" comment and is closed with `state_reason: completed`.
 
 ## Dedup
 

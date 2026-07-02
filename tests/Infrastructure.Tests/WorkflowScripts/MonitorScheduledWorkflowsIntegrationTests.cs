@@ -41,35 +41,37 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
     public void Dispose() => _tempDirectory.Dispose();
 
     // `id` is the stable run identifier the runner uses as the comment dedup key.
-    private static object FailingRun() => new
+    private static object FailingRun(int id = 9, int runNumber = 9, string? updatedAt = null) => new
     {
-        id = 9,
+        id,
         conclusion = "failure",
-        html_url = "https://github.com/microsoft/aspire/actions/runs/9",
-        run_number = 9,
+        html_url = $"https://github.com/microsoft/aspire/actions/runs/{id}",
+        run_number = runNumber,
         head_sha = "abcdef1234567890",
-        updated_at = "2026-01-01T00:00:00Z",
+        updated_at = updatedAt ?? MinutesAgo(30),
     };
 
-    private static object SucceedingRun() => new
+    private static object SucceedingRun(int id = 10, int runNumber = 10, string? updatedAt = null) => new
     {
-        id = 10,
+        id,
         conclusion = "success",
-        html_url = "https://github.com/microsoft/aspire/actions/runs/10",
-        run_number = 10,
+        html_url = $"https://github.com/microsoft/aspire/actions/runs/{id}",
+        run_number = runNumber,
         head_sha = "0123456789abcdef",
-        updated_at = "2026-01-02T00:00:00Z",
+        updated_at = updatedAt ?? MinutesAgo(30),
     };
 
-    private static object StartupFailureRun() => new
+    private static object StartupFailureRun(int id = 11, int runNumber = 11, string? updatedAt = null) => new
     {
-        id = 11,
+        id,
         conclusion = "startup_failure",
-        html_url = "https://github.com/microsoft/aspire/actions/runs/11",
-        run_number = 11,
+        html_url = $"https://github.com/microsoft/aspire/actions/runs/{id}",
+        run_number = runNumber,
         head_sha = "fedcba9876543210",
-        updated_at = "2026-01-03T00:00:00Z",
+        updated_at = updatedAt ?? MinutesAgo(30),
     };
+
+    private static string MinutesAgo(int minutes) => DateTimeOffset.UtcNow.AddMinutes(-minutes).ToString("O");
 
     [Fact]
     [RequiresTools(["node"])]
@@ -132,6 +134,26 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task DryRunDoesNotLogRecordWhenFailedRunAlreadyRecorded()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = true,
+            runsByFile = new Dictionary<string, object> { [WatchedFile] = FailingRun(updatedAt: MinutesAgo(30)) },
+            issues = new[]
+            {
+                new { number = 55, body = Marker, state = "open", comments = new[] { "earlier <!-- run:9 -->" } },
+            },
+        });
+
+        Assert.DoesNotContain(result.Logs, log => log.Contains("would RECORD", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Calls, call => call is "create" or "update" or "createComment");
+        var issue = Assert.Single(result.Issues);
+        Assert.Single(issue.Comments);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task ClosesIssueWhenLatestRunIsGreen()
     {
         // A successful latest run with an open issue closes it automatically, with a
@@ -175,6 +197,73 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task DryRunDoesNotLogCloseWhenAutoCloseStampIsFalse()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = true,
+            runsByFile = new Dictionary<string, object> { [WatchedFile] = SucceedingRun(updatedAt: MinutesAgo(30)) },
+            issues = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:false -->", state = "open", comments = Array.Empty<string>() },
+            },
+        });
+
+        Assert.DoesNotContain(result.Logs, log => log.Contains("would CLOSE", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Calls, call => call is "update" or "createComment");
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("open", issue.State);
+        Assert.Empty(issue.Comments);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DryRunLogsCloseAfterWouldRecordWhenNewestRunSucceeded()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = true,
+            runsByFile = new Dictionary<string, object>
+            {
+                [WatchedFile] = new[]
+                {
+                    FailingRun(id: 9, runNumber: 9, updatedAt: MinutesAgo(75)),
+                    SucceedingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+                },
+            },
+        });
+
+        Assert.Contains(result.Logs, log => log.Contains("would RECORD failure", StringComparison.Ordinal));
+        Assert.Contains(result.Logs, log => log.Contains("would CLOSE", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Calls, call => call is "create" or "update" or "createComment");
+        Assert.Empty(result.Issues);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DryRunRecordsMultipleFailuresInWindowWithoutReadingPlaceholderComments()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = true,
+            runsByFile = new Dictionary<string, object>
+            {
+                [WatchedFile] = new[]
+                {
+                    FailingRun(id: 9, runNumber: 9, updatedAt: MinutesAgo(75)),
+                    FailingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+                },
+            },
+        });
+
+        Assert.False(result.Threw);
+        Assert.Equal(2, result.Logs.Count(log => log.Contains("would RECORD failure", StringComparison.Ordinal)));
+        Assert.DoesNotContain(result.Calls, call => call is "create" or "update" or "createComment");
+        Assert.Empty(result.Issues);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task DoesNotCommentWhenCloseFails()
     {
         var result = await InvokeAsync(new
@@ -197,6 +286,56 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task ProcessesRecentFailureEvenWhenNewerRunSucceeded()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object>
+            {
+                [WatchedFile] = new[]
+                {
+                    SucceedingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+                    FailingRun(id: 9, runNumber: 9, updatedAt: MinutesAgo(75)),
+                },
+            },
+        });
+
+        Assert.All(result.ListRunRequests, request => Assert.True(request.PerPage > 1, "The watchdog must fetch more than one run per workflow."));
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("closed", issue.State);
+        Assert.Contains(issue.Comments, comment => comment.Contains("<!-- run:9 -->", StringComparison.Ordinal));
+        Assert.Contains(issue.Comments, comment => comment.Contains("Latest run succeeded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task DoesNotCloseWhenNewestRunInPollingWindowIsRecordedFailure()
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object>
+            {
+                [WatchedFile] = new[]
+                {
+                    SucceedingRun(id: 9, runNumber: 9, updatedAt: MinutesAgo(75)),
+                    FailingRun(id: 10, runNumber: 10, updatedAt: MinutesAgo(15)),
+                },
+            },
+            issues = new[]
+            {
+                new { number = 55, body = $"{Marker}\n<!-- autoclose:true -->", state = "open", comments = new[] { "earlier <!-- run:10 -->" } },
+            },
+        });
+
+        var issue = Assert.Single(result.Issues);
+        Assert.Equal("open", issue.State);
+        Assert.DoesNotContain(issue.Comments, comment => comment.Contains("Latest run succeeded", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task SelfReportsEntryFilesBackstopIssueWithPerEntryLabelsOnStartupFailure()
     {
         // deployment-tests.yml is a selfReports entry with per-entry labels. A
@@ -213,6 +352,22 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
         Assert.Contains("automation-broken", issue.Labels);
         Assert.Contains("area-testing", issue.Labels);
         Assert.Contains("deployment-e2e", issue.Labels);
+    }
+
+    [Theory]
+    [InlineData("tests-outerloop.yml")]
+    [InlineData("tests-daily-smoke.yml")]
+    [RequiresTools(["node"])]
+    public async Task SelfReportsBackstopIssueDoesNotUseFailingTestLabel(string workflowFile)
+    {
+        var result = await InvokeAsync(new
+        {
+            dryRun = false,
+            runsByFile = new Dictionary<string, object> { [workflowFile] = StartupFailureRun(updatedAt: MinutesAgo(30)) },
+        });
+
+        var issue = Assert.Single(result.Issues);
+        Assert.DoesNotContain("failing-test", issue.Labels);
     }
 
     [Fact]
@@ -249,7 +404,9 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     private sealed record HarnessResponse(MonitorResult Result);
 
-    private sealed record MonitorResult(bool Threw, string[] Calls, MonitorIssue[] Issues);
+    private sealed record MonitorResult(bool Threw, string[] Calls, MonitorIssue[] Issues, string[] Logs, ListRunRequest[] ListRunRequests);
 
     private sealed record MonitorIssue(int Number, string State, string Body, string[] Labels, string[] Comments);
+
+    private sealed record ListRunRequest(string WorkflowId, int? PerPage);
 }
