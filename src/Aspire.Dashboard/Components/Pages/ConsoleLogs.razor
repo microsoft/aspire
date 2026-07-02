@@ -27,23 +27,6 @@
                             @bind-SelectedResource:after="HandleSelectedOptionChangedAsync"
                             LabelClass="toolbar-left" />
 
-            @if (_selectedResourceHasTerminal)
-            {
-                // View toggle: only meaningful for terminal-enabled resources.
-                // For non-terminal resources Console is the only thing to look
-                // at, so the dropdown stays hidden — keeping the toolbar
-                // identical to today for the common case.
-                <FluentSelect TOption="string"
-                              Items="@s_viewSelectOptions"
-                              OptionValue="@(o => o)"
-                              OptionText="@(o => string.Equals(o, nameof(ConsoleLogsView.Terminal), StringComparison.Ordinal) ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)].Value : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewConsoleOption)].Value)"
-                              Value="@_activeView.ToString()"
-                              ValueChanged="HandleViewChangedAsync"
-                              Width="120px"
-                              Style="min-width: auto; margin-left: 10px;"
-                              AriaLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewSelectorLabel)]" />
-            }
-
             @if (_activeView == ConsoleLogsView.Console)
             {
                 <SignalsActionsDisplay HandleClearSignal="@ClearConsoleLogs"
@@ -80,46 +63,16 @@
                 }
             }
 
-            @if (_activeView == ConsoleLogsView.Terminal && _terminalToolbarState is { } terminalState)
-            {
-                <span slot="end" style="margin-inline-start: 10px; align-self: center;">@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarFontSize)]</span>
-                <FluentButton slot="end"
-                              Appearance="Appearance.Stealth"
-                              Disabled="@(!terminalState.FontControlsEnabled || terminalState.FontPx <= TerminalFontMin)"
-                              OnClick="TerminalFontMinusAsync"
-                              Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)]">−</FluentButton>
-                <span slot="end" style="min-width: 28px; text-align: center; font-variant-numeric: tabular-nums; align-self: center;"
-                      title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarFontSize)]">@terminalState.FontPx</span>
-                <FluentButton slot="end"
-                              Appearance="Appearance.Stealth"
-                              Disabled="@(!terminalState.FontControlsEnabled || terminalState.FontPx >= TerminalFontMax)"
-                              OnClick="TerminalFontPlusAsync"
-                              Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)]">+</FluentButton>
-
-                @if (_terminalSizePresets.Count > 0)
-                {
-                    <span slot="end" style="margin-inline-start: 10px; align-self: center;">@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)]</span>
-                    <FluentSelect TOption="Controls.TerminalSizePreset"
-                                  slot="end"
-                                  Items="@GetTerminalSizePresetsForDisplay(terminalState)"
-                                  OptionValue="@(p => p.Value)"
-                                  OptionText="@(p => p.Label)"
-                                  Value="@terminalState.SizeKey"
-                                  ValueChanged="TerminalSizeChangedAsync"
-                                  Disabled="@(!terminalState.SizeSelectEnabled)"
-                                  Width="140px"
-                                  Style="min-width: auto;"
-                                  AriaLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)]" />
-                }
-            }
-
             @if (ViewportInformation.IsDesktop)
             {
                 // This takes up too much horizontal space on mobile, so show on a new line on mobile
                 @if (_activeView == ConsoleLogsView.Console)
                 {
                     <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]" slot="end">@PageViewModel.Status</FluentLabel>
+                }
 
+                @if (_activeView == ConsoleLogsView.Console || _selectedResourceHasTerminal)
+                {
                     <AspireMenuButton
                         ButtonAppearance="Appearance.Lightweight"
                         Icon="@(new Icons.Regular.Size20.Options())"
@@ -128,7 +81,7 @@
                         slot="end"/>
                 }
             }
-            else if (_activeView == ConsoleLogsView.Console)
+            else if (_activeView == ConsoleLogsView.Console || _selectedResourceHasTerminal)
             {
                 <AspireMenuButton
                     Icon="@(new Icons.Regular.Size20.Options())"

@@ -210,15 +210,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // transition may not trigger ResizeObserver in every browser.
     private ConsoleLogsView? _lastRenderedView;
 
-    // Static option list for the View dropdown. The text comes from the
-    // resource manager at render time so it stays in sync with the page's
-    // current culture; the underlying values are the enum names.
-    private static readonly string[] s_viewSelectOptions =
-    [
-        nameof(ConsoleLogsView.Console),
-        nameof(ConsoleLogsView.Terminal),
-    ];
-
     // UI
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
     private AspirePageContentLayout? _contentLayout;
@@ -587,64 +578,157 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         _logsMenuItems.Clear();
         _resourceMenuItems.Clear();
 
-        _logsMenuItems.Add(new()
-        {
-            IsDisabled = PageViewModel.SelectedResource is null && !_isSubscribedToAll,
-            OnClick = DownloadLogsAsync,
-            Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogs)],
-            Icon = new Icons.Regular.Size16.ArrowDownload()
-        });
-
-        _logsMenuItems.Add(new()
-        {
-            IsDivider = true
-        });
-
         var selectedResource = GetSelectedResource();
 
-        // Only show the "Hide hidden resources" menu item when viewing all resources
-        // Use IsAllSelected() instead of _isSubscribedToAll because UpdateMenuButtons()
-        // can be called before the subscription is established
-        if (IsAllSelected())
+        // View toggle (Console / Terminal): only meaningful for terminal-
+        // enabled resources; keeps the menu identical to today for the common
+        // no-terminal case.
+        if (_selectedResourceHasTerminal)
         {
-            CommonMenuItems.AddToggleHiddenResourcesMenuItem(
-                _logsMenuItems,
-                ControlsStringsLoc,
-                _showHiddenResources,
-                _resourceByName.Values,
-                SessionStorage,
-                EventCallback.Factory.Create<bool>(this, async
-                value =>
-                {
-                    _showHiddenResources = value;
-                    UpdateResourcesList();
-                    UpdateMenuButtons();
+            _logsMenuItems.Add(new()
+            {
+                OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Console)),
+                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewConsoleOption)],
+                Icon = _activeView == ConsoleLogsView.Console
+                    ? new Icons.Regular.Size16.CheckboxChecked()
+                    : new Icons.Regular.Size16.CheckboxUnchecked()
+            });
 
-                    await this.RefreshIfMobileAsync(_contentLayout);
-                }));
+            _logsMenuItems.Add(new()
+            {
+                OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Terminal)),
+                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)],
+                Icon = _activeView == ConsoleLogsView.Terminal
+                    ? new Icons.Regular.Size16.CheckboxChecked()
+                    : new Icons.Regular.Size16.CheckboxUnchecked()
+            });
+
+            _logsMenuItems.Add(new()
+            {
+                IsDivider = true
+            });
         }
 
-        _logsMenuItems.Add(new()
+        if (_activeView == ConsoleLogsView.Terminal)
         {
-            OnClick = () => ToggleTimestampAsync(showTimestamp: !_showTimestamp, isTimestampUtc: _isTimestampUtc),
-            Text = _showTimestamp ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampHide)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShow)],
-            Icon = new Icons.Regular.Size16.CalendarClock()
-        });
+            // Terminal-only items: font +/- and a nested Terminal dimensions
+            // submenu carrying the same presets the old inline toolbar used.
+            // We render these unconditionally so the menu structure is stable
+            // even before the first toolbar-state snapshot arrives; enabled
+            // state and current font readout come from _terminalToolbarState
+            // when present.
+            var terminalState = _terminalToolbarState;
+            var fontPx = terminalState?.FontPx ?? 0;
+            var fontControlsEnabled = terminalState?.FontControlsEnabled ?? false;
+            var sizeSelectEnabled = terminalState?.SizeSelectEnabled ?? false;
+            var currentSizeKey = terminalState?.SizeKey;
 
-        _logsMenuItems.Add(new()
-        {
-            OnClick = () => ToggleTimestampAsync(showTimestamp: _showTimestamp, isTimestampUtc: !_isTimestampUtc),
-            Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc)],
-            Icon = _isTimestampUtc ? new Icons.Regular.Size16.CheckboxChecked() : new Icons.Regular.Size16.CheckboxUnchecked(),
-            IsDisabled = !_showTimestamp
-        });
+            _logsMenuItems.Add(new()
+            {
+                OnClick = TerminalFontMinusAsync,
+                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)],
+                Icon = new Icons.Regular.Size16.TextFontSize(),
+                IsDisabled = !fontControlsEnabled || fontPx <= TerminalFontMin,
+            });
 
-        _logsMenuItems.Add(new()
+            _logsMenuItems.Add(new()
+            {
+                OnClick = TerminalFontPlusAsync,
+                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)],
+                Icon = new Icons.Regular.Size16.TextFontSize(),
+                IsDisabled = !fontControlsEnabled || fontPx >= TerminalFontMax,
+            });
+
+            if (_terminalSizePresets.Count > 0)
+            {
+                var nested = new List<MenuButtonItem>();
+                var displayPresets = terminalState is not null
+                    ? GetTerminalSizePresetsForDisplay(terminalState)
+                    : _terminalSizePresets;
+                foreach (var preset in displayPresets)
+                {
+                    // Capture the value locally so the click handler doesn't
+                    // see whatever `preset` ends up as after the foreach.
+                    var value = preset.Value;
+                    nested.Add(new()
+                    {
+                        OnClick = () => TerminalSizeChangedAsync(value),
+                        Text = preset.Label,
+                        Icon = string.Equals(currentSizeKey, value, StringComparison.Ordinal)
+                            ? new Icons.Regular.Size16.CheckboxChecked()
+                            : new Icons.Regular.Size16.CheckboxUnchecked(),
+                        IsDisabled = !sizeSelectEnabled,
+                    });
+                }
+
+                _logsMenuItems.Add(new()
+                {
+                    Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)],
+                    Icon = new Icons.Regular.Size16.ArrowExpand(),
+                    NestedMenuItems = nested,
+                });
+            }
+        }
+        else
         {
-            OnClick = () => ToggleWrapLogsAsync(noWrapLogs: !_noWrapLogs),
-            Text = _noWrapLogs ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNoWrapLogs)],
-            Icon = _noWrapLogs ? new Icons.Regular.Size16.TextWrap() : new Icons.Regular.Size16.TextWrapOff()
-        });
+            // Console-view items: preserved from the original menu.
+            _logsMenuItems.Add(new()
+            {
+                IsDisabled = PageViewModel.SelectedResource is null && !_isSubscribedToAll,
+                OnClick = DownloadLogsAsync,
+                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogs)],
+                Icon = new Icons.Regular.Size16.ArrowDownload()
+            });
+
+            _logsMenuItems.Add(new()
+            {
+                IsDivider = true
+            });
+
+            // Only show the "Hide hidden resources" menu item when viewing all resources
+            // Use IsAllSelected() instead of _isSubscribedToAll because UpdateMenuButtons()
+            // can be called before the subscription is established
+            if (IsAllSelected())
+            {
+                CommonMenuItems.AddToggleHiddenResourcesMenuItem(
+                    _logsMenuItems,
+                    ControlsStringsLoc,
+                    _showHiddenResources,
+                    _resourceByName.Values,
+                    SessionStorage,
+                    EventCallback.Factory.Create<bool>(this, async
+                    value =>
+                    {
+                        _showHiddenResources = value;
+                        UpdateResourcesList();
+                        UpdateMenuButtons();
+
+                        await this.RefreshIfMobileAsync(_contentLayout);
+                    }));
+            }
+
+            _logsMenuItems.Add(new()
+            {
+                OnClick = () => ToggleTimestampAsync(showTimestamp: !_showTimestamp, isTimestampUtc: _isTimestampUtc),
+                Text = _showTimestamp ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampHide)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShow)],
+                Icon = new Icons.Regular.Size16.CalendarClock()
+            });
+
+            _logsMenuItems.Add(new()
+            {
+                OnClick = () => ToggleTimestampAsync(showTimestamp: _showTimestamp, isTimestampUtc: !_isTimestampUtc),
+                Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTimestampShowUtc)],
+                Icon = _isTimestampUtc ? new Icons.Regular.Size16.CheckboxChecked() : new Icons.Regular.Size16.CheckboxUnchecked(),
+                IsDisabled = !_showTimestamp
+            });
+
+            _logsMenuItems.Add(new()
+            {
+                OnClick = () => ToggleWrapLogsAsync(noWrapLogs: !_noWrapLogs),
+                Text = _noWrapLogs ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)] : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNoWrapLogs)],
+                Icon = _noWrapLogs ? new Icons.Regular.Size16.TextWrap() : new Icons.Regular.Size16.TextWrapOff()
+            });
+        }
 
         if (selectedResource != null)
         {
@@ -1376,6 +1460,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             _activeView = ConsoleLogsView.Terminal;
         }
 
+        UpdateMenuButtons();
         StateHasChanged();
     }
 
@@ -1403,6 +1488,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             _activeView == ConsoleLogsView.Terminal)
         {
             _activeView = ConsoleLogsView.Console;
+            UpdateMenuButtons();
             StateHasChanged();
         }
 
@@ -1428,6 +1514,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // auto-switch can override it for the rest of this resource session.
         _userPickedView = true;
         _activeView = parsed;
+        UpdateMenuButtons();
         StateHasChanged();
         return Task.CompletedTask;
     }
