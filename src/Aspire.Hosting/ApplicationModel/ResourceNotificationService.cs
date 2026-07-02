@@ -254,10 +254,17 @@ public class ResourceNotificationService : IDisposable
         _logger.LogDebug("Waiting for resource ready to execute for '{ResourceName}'.", resourceName);
         resourceEvent = await WaitForResourceCoreAsync(
             resourceName,
-            re => re.ResourceId == resourceEvent.ResourceId && re.Snapshot.ResourceReadyEvent is not null,
+            re => re.ResourceId == resourceEvent.ResourceId &&
+                  (re.Snapshot.ResourceReadyEvent is not null ||
+                   (waitBehavior == WaitBehavior.StopOnResourceUnavailable && IsUnavailableState(re.Snapshot.State?.Text))),
             $"Resource '{resourceName}' failed to execute the resource ready event before the operation was cancelled.",
             waitCondition: "resource_ready",
             cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        if (waitBehavior == WaitBehavior.StopOnResourceUnavailable && IsUnavailableState(resourceEvent.Snapshot.State?.Text))
+        {
+            throw new DistributedApplicationException($"Stopped waiting for resource '{resourceName}' to become healthy because it failed to start.");
+        }
 
         // Observe the result of the resource ready event task
         await resourceEvent.Snapshot.ResourceReadyEvent!.EventTask.WaitAsync(cancellationToken).ConfigureAwait(false);
