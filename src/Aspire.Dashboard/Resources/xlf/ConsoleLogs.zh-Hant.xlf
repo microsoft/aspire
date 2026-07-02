@@ -92,11 +92,6 @@
         <target state="new">Console logs</target>
         <note>Option in the View dropdown that shows the resource's console logs.</note>
       </trans-unit>
-      <trans-unit id="ConsoleLogsViewSelectorLabel">
-        <source>View</source>
-        <target state="new">View</target>
-        <note>Label for the dropdown that selects between Console logs and Terminal views.</note>
-      </trans-unit>
       <trans-unit id="ConsoleLogsViewTerminalOption">
         <source>Terminal</source>
         <target state="new">Terminal</target>

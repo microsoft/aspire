@@ -1500,9 +1500,10 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             return Task.CompletedTask;
         }
 
-        // Parse defensively: FluentSelect always echoes one of the option
-        // values we provided, but we don't want a bad value to throw and
-        // tear down the page.
+        // Parse defensively so a bad enum value can't tear down the page.
+        // The menu-item click handlers pass nameof(...) literals today, but
+        // this indirection keeps the entry point safe if it grows a new
+        // caller.
         if (!Enum.TryParse<ConsoleLogsView>(newView, ignoreCase: true, out var parsed))
         {
             return Task.CompletedTask;

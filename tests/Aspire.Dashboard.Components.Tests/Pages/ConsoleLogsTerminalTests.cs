@@ -461,14 +461,12 @@ public partial class ConsoleLogsTests
         // Regression: after manual Stop the JS side may still have an in-
         // flight toolbar snapshot reporting `primary` (the WS close has
         // not propagated yet, or the snapshot was queued before close).
-        // Earlier the page synthetically re-armed _lastTerminalStatus to
-        // "connecting" inside the stopped-edge handler, which made that
-        // stale `primary` snapshot look like a fresh attach edge and
-        // immediately snapped the user back to Terminal. The fix is to
-        // gate the auto-switch on the resource not currently being
-        // stopped, so stale snapshots that arrive after Stop are
-        // ignored until the resource actually transitions back out of
-        // a stopped state.
+        // Without any protection that stale `primary` snapshot would look
+        // like a fresh attach edge and immediately snap the user back to
+        // Terminal. The _selectedTerminalResourceStopped gate suppresses
+        // the auto-switch while the resource is in a stopped state, so
+        // stale snapshots that arrive after Stop are ignored until the
+        // resource actually transitions back out of a stopped state.
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
@@ -599,15 +597,14 @@ public partial class ConsoleLogsTests
     [Fact]
     public async Task TerminalResource_CleanExit_StaleToolbarSnapshotDoesNotFlipBack()
     {
-        // Regression: OnTerminalExitedAsync previously forced
-        // _lastTerminalStatus back to "connecting" so a subsequent
-        // non-connecting snapshot would look like a fresh attach. That made
-        // the page vulnerable to a stale in-flight primary snapshot that the
-        // JS side had already queued before onExit propagated: the snapshot
-        // would arrive after we flipped to Console and immediately snap the
-        // user back to Terminal. The fix is a _terminalExitedAwaitingReattach
-        // gate that only clears when we observe a real "connecting" snapshot
-        // (which only fires on a genuine WebSocket reopen).
+        // Regression: after a clean PTY exit the JS side may still have an
+        // in-flight toolbar snapshot queued before onExit propagated (a
+        // `primary`/`viewer` snapshot). Without a gate that stale snapshot
+        // would look like a fresh attach edge and immediately snap the
+        // user back to Terminal after we just flipped to Console. The
+        // _terminalExitedAwaitingReattach gate suppresses the auto-switch
+        // until a real WebSocket reopen produces a genuine `connecting`
+        // snapshot (which only fires on a fresh consumer session).
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
         var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);

@@ -121,7 +121,8 @@ stream.
 For a terminal-enabled resource the dashboard `ConsoleLogs` page mounts
 **both** `LogViewer` (the resource's standard log stream) and
 `TerminalView` (the interactive xterm.js terminal) at the same time and
-flips between them via a small "View" `FluentSelect` in the toolbar:
+flips between them via a pair of checkable **Console logs** / **Terminal**
+items rendered inside the toolbar's options (⋯) `AspireMenuButton`:
 
 - The page defaults to **Console** on resource selection so any pre-PTY
   hosting messages — `WaitFor` notifications, startup failures, image
@@ -137,10 +138,15 @@ flips between them via a small "View" `FluentSelect` in the toolbar:
   - `OnResourceChanged` observes the resource snapshot transitioning
     from a running state to a stopped/finished state (e.g. the user
     presses **Stop** in the dashboard or the resource crashes before
-    the PTY reports exit). This path also re-arms the PTY-attach edge
-    (`_lastTerminalStatus = "connecting"`) so a subsequent restart
-    auto-switches to Terminal again.
-- Once the user manually picks a view from the dropdown the page
+    the PTY reports exit). This path deliberately does **not** synthesize
+    a `connecting` toolbar status to re-arm the attach edge — a stale
+    in-flight `primary` snapshot arriving after we flip to Console
+    would then look like a fresh attach and yank the user back to
+    Terminal. Instead the `_selectedTerminalResourceStopped` gate
+    suppresses the auto-switch until the resource leaves the stopped
+    state, and the genuine WebSocket close → open on restart drives a
+    real `connecting → connected` edge which the auto-switch picks up.
+- Once the user manually picks a view from the menu the page
   **latches** their choice for the rest of that resource's session and
   ignores subsequent auto-switch triggers. The latch resets when a
   different resource is selected.

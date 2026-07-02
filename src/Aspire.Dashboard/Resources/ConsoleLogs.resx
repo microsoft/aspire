@@ -208,10 +208,6 @@
     <value>{0} terminal</value>
     <comment>{0} is an application name</comment>
   </data>
-  <data name="ConsoleLogsViewSelectorLabel" xml:space="preserve">
-    <value>View</value>
-    <comment>Label for the dropdown that selects between Console logs and Terminal views.</comment>
-  </data>
   <data name="ConsoleLogsViewConsoleOption" xml:space="preserve">
     <value>Console logs</value>
     <comment>Option in the View dropdown that shows the resource's console logs.</comment>
