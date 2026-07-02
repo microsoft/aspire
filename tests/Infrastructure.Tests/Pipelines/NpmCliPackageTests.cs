@@ -259,6 +259,7 @@ public sealed class NpmCliPackageTests : IDisposable
         Assert.Equal(
             s_supportedRids.ToDictionary(rid => $"{PackageName}-{rid.Rid}", _ => PackageVersion, StringComparer.Ordinal),
             GetStringMap(GetObject(packageJson, "optionalDependencies")));
+        Assert.Equal(["bin", "README.md", "CHANGELOG.md"], GetStringArray(packageJson["files"]));
 
         var packageMap = ReadJsonObject(Path.Combine(package.PointerPackageRoot, "bin", "aspire-package-map.json"));
         Assert.Equal(
@@ -298,6 +299,31 @@ public sealed class NpmCliPackageTests : IDisposable
         // The C# AppHost example was intentionally removed; the npm README is TypeScript-only.
         Assert.DoesNotContain("apphost.cs", readme);
         Assert.DoesNotContain("```csharp", readme);
+
+        var changelog = await File.ReadAllTextAsync(Path.Combine(package.PointerPackageRoot, "CHANGELOG.md"));
+        Assert.Equal(
+            await RenderTemplateAsync("eng/scripts/pack-cli-npm-package.CHANGELOG.md", ("PACKAGE_NAME", PackageName), ("VERSION", PackageVersion)),
+            changelog);
+        Assert.Contains($"bundles the Aspire CLI at version `{PackageVersion}`.", changelog);
+        Assert.Contains($"https://github.com/microsoft/aspire/releases/tag/v{PackageVersion}", changelog);
+        Assert.Contains("https://github.com/microsoft/aspire/releases", changelog);
+        Assert.DoesNotContain("__VERSION__", changelog);
+        Assert.DoesNotContain("__PACKAGE_NAME__", changelog);
+    }
+
+    [Fact]
+    public async Task PointerPackageChangelogTemplateReferencesVersionAndReleaseNotes()
+    {
+        var changelog = await RenderTemplateAsync(
+            "eng/scripts/pack-cli-npm-package.CHANGELOG.md",
+            ("PACKAGE_NAME", PackageName),
+            ("VERSION", PackageVersion));
+
+        Assert.Contains($"bundles the Aspire CLI at version `{PackageVersion}`.", changelog);
+        Assert.Contains($"Release notes for this version: <https://github.com/microsoft/aspire/releases/tag/v{PackageVersion}>", changelog);
+        Assert.Contains("All Aspire releases: <https://github.com/microsoft/aspire/releases>", changelog);
+        Assert.DoesNotContain("__VERSION__", changelog);
+        Assert.DoesNotContain("__PACKAGE_NAME__", changelog);
     }
 
     [Fact]
