@@ -60,7 +60,20 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
 
                 // Pass stopToken through so a callback that waits (e.g. a force-exit grace period) is
                 // cancelled if the caller disposes the monitor while the callback is running.
-                await onParentExited(stopToken).ConfigureAwait(false);
+                try
+                {
+                    await onParentExited(stopToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // The callback is only a best-effort cleanup hook after the parent is gone. Don't
+                    // let callback failures fault monitor disposal paths that are already unwinding.
+                }
+
                 return;
             }
         }

@@ -82,5 +82,44 @@ public class ParentProcessLivenessMonitorTests
         Assert.False(invoked);
     }
 
+    [Fact]
+    public async Task ParentExit_CallbackFailureDoesNotFaultDispose()
+    {
+        using var parent = StartLongRunningProcess();
+        var parentStartedUnix = ((DateTimeOffset)parent.StartTime).ToUnixTimeSeconds();
+
+        var callbackInvokedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var monitor = ParentProcessLivenessMonitor.Start(
+            parent.Id,
+            parentStartedUnix,
+            _ =>
+            {
+                callbackInvokedTcs.TrySetResult();
+                throw new InvalidOperationException("Callback failure should not fault monitor disposal.");
+            });
+
+        try
+        {
+            parent.Kill(entireProcessTree: true);
+            parent.WaitForExit();
+
+            await callbackInvokedTcs.Task.WaitAsync(s_observationTimeout);
+
+            var exception = await Record.ExceptionAsync(async () => await monitor.DisposeAsync());
+
+            Assert.Null(exception);
+        }
+        finally
+        {
+            if (!parent.HasExited)
+            {
+                parent.Kill(entireProcessTree: true);
+                parent.WaitForExit();
+            }
+
+            await monitor.DisposeAsync();
+        }
+    }
+
     private static Process StartLongRunningProcess() => TestProcesses.StartLongRunning();
 }
