@@ -717,6 +717,7 @@ public class WaitForTests(ITestOutputHelper testOutputHelper)
         await app.ResourceNotifications.PublishUpdateAsync(dependency.Resource, "test0", s => s with
         {
             State = KnownResourceStates.Finished,
+            ExitCode = 0,
         });
 
         await app.ResourceNotifications.WaitForResourceAsync(nginx.Resource.Name, KnownResourceStates.Waiting, waitingStateCts.Token);
@@ -725,6 +726,7 @@ public class WaitForTests(ITestOutputHelper testOutputHelper)
         await app.ResourceNotifications.PublishUpdateAsync(dependency.Resource, "test1", s => s with
         {
             State = KnownResourceStates.Finished,
+            ExitCode = 0,
         });
 
         await app.ResourceNotifications.WaitForResourceAsync(nginx.Resource.Name, KnownResourceStates.Running, waitingStateCts.Token);
@@ -736,7 +738,7 @@ public class WaitForTests(ITestOutputHelper testOutputHelper)
 
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
-    public async Task WaitForCompletionSucceedsIfDependentResourceEntersTerminalStateWithoutAnExitCode()
+    public async Task WaitForCompletionSucceedsIfDependentResourceEntersTerminalStateWithZeroExitCode()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
 
@@ -765,7 +767,8 @@ public class WaitForTests(ITestOutputHelper testOutputHelper)
         // Now that we know we successfully entered the Waiting state, we can end the dependency
         await app.ResourceNotifications.PublishUpdateAsync(dependency.Resource, s => s with
         {
-            State = KnownResourceStates.Finished
+            State = KnownResourceStates.Finished,
+            ExitCode = 0,
         });
 
         await app.ResourceNotifications.WaitForResourceAsync(nginx.Resource.Name, KnownResourceStates.Running, waitingStateCts.Token);
