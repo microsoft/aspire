@@ -837,6 +837,20 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
         Assert.False(filter.IsExcluded(".github/workflows/backport.yml"));
         Assert.False(filter.IsExcluded("eng/pipelines/azure-pipelines-public.yml"));
         Assert.False(filter.IsExcluded("eng/github-ci/ci-skip-entirely-patterns.txt"));
+        Assert.False(filter.IsExcluded("eng/scripts/pack-cli-npm-package.CHANGELOG.md"));
+    }
+
+    [Fact]
+    public void RealMapNpmChangelogTemplateChangeRunsPackagingValidation()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var r = selector.Select(["eng/scripts/pack-cli-npm-package.CHANGELOG.md"], [], new SelectorOptions());
+
+        Assert.False(r.SelectsAll);
+        Assert.Contains("Aspire.Cli.Tests", r.TestProjects);
+        Assert.Contains("Infrastructure.Tests", r.TestProjects);
     }
 
     // A src/** file that no Layer 2 rule matches and that is not under a project directory normally hits

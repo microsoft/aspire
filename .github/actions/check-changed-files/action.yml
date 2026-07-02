@@ -9,6 +9,8 @@ description: |
   Inputs:
   - patterns_file: Path to a file containing glob patterns (relative to repository root).
                    Lines starting with '#' and blank lines are ignored.
+  - keep_unmatched: Optional newline-separated glob patterns for files that must be treated
+                    as requiring CI even when patterns_file would otherwise match them.
 
   Pattern syntax:
   - **  matches any path including directory separators (recursive)
@@ -25,6 +27,10 @@ inputs:
   patterns_file:
     description: 'Path to a file containing glob patterns (relative to repository root)'
     required: true
+  keep_unmatched:
+    description: 'Newline-separated glob patterns for files that should not be counted as matched by patterns_file'
+    required: false
+    default: ''
 
 outputs:
   only_changed:
@@ -96,6 +102,7 @@ runs:
         }
 
         PATTERNS=()
+        KEEP_UNMATCHED_PATTERNS=()
 
         PATTERNS_FILE="${{ inputs.patterns_file }}"
 
@@ -114,6 +121,16 @@ runs:
           fi
           PATTERNS+=("$(glob_to_regex "$line")")
         done < "$FULL_PATH"
+
+        while IFS= read -r line; do
+          # Remove leading/trailing whitespace
+          line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+          # Skip blank lines and comments
+          if [ -z "$line" ] || [[ "$line" == \#* ]]; then
+            continue
+          fi
+          KEEP_UNMATCHED_PATTERNS+=("$(glob_to_regex "$line")")
+        done <<< "${{ inputs.keep_unmatched }}"
 
         # Check if we have any valid patterns
         if [ ${#PATTERNS[@]} -eq 0 ]; then
@@ -152,14 +169,25 @@ runs:
               continue
             fi
 
-            MATCHED=false
-            for pattern in "${PATTERNS[@]}"; do
+            KEEP_UNMATCHED=false
+            for pattern in "${KEEP_UNMATCHED_PATTERNS[@]}"; do
               # Use safe regex matching with error handling
               if [[ "$file" =~ $pattern ]] 2>/dev/null; then
-                MATCHED=true
+                KEEP_UNMATCHED=true
                 break
               fi
             done
+
+            MATCHED=false
+            if [ "$KEEP_UNMATCHED" = false ]; then
+              for pattern in "${PATTERNS[@]}"; do
+                # Use safe regex matching with error handling
+                if [[ "$file" =~ $pattern ]] 2>/dev/null; then
+                  MATCHED=true
+                  break
+                fi
+              done
+            fi
 
             if [ "$MATCHED" = true ]; then
               MATCHED_FILES+=("$file")

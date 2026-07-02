@@ -199,6 +199,14 @@ try {
     throw "Pointer package CHANGELOG.md does not reference the packed version '$($pointerPackageJson.version)'."
   }
 
+  if ($changelog -match '__[A-Z0-9_]+__') {
+    throw "Pointer package CHANGELOG.md contains an unreplaced template placeholder."
+  }
+
+  if ($changelog -notmatch [System.Text.RegularExpressions.Regex]::Escape('https://github.com/microsoft/aspire/releases')) {
+    throw "Pointer package CHANGELOG.md does not link to the Aspire release notes."
+  }
+
   if ($pointerPackageJson.files -notcontains 'CHANGELOG.md') {
     throw "Pointer package.json files list must include CHANGELOG.md so npm publishes it."
   }

@@ -42,6 +42,8 @@ jobs:
         uses: ./.github/actions/check-changed-files
         with:
           patterns_file: eng/github-ci/ci-skip-entirely-patterns.txt
+          keep_unmatched: |
+            eng/scripts/pack-cli-npm-package.CHANGELOG.md
 
       - id: compute_version_suffix
         name: Compute version suffix for PRs

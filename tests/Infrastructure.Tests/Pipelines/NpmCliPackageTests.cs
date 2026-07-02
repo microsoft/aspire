@@ -304,9 +304,9 @@ public sealed class NpmCliPackageTests : IDisposable
         Assert.Equal(
             await RenderTemplateAsync("eng/scripts/pack-cli-npm-package.CHANGELOG.md", ("PACKAGE_NAME", PackageName), ("VERSION", PackageVersion)),
             changelog);
-        Assert.Contains($"bundles the Aspire CLI at version `{PackageVersion}`.", changelog);
-        Assert.Contains($"https://github.com/microsoft/aspire/releases/tag/v{PackageVersion}", changelog);
+        Assert.Contains($"This package `{PackageName}` bundles the Aspire CLI at version `{PackageVersion}`.", changelog);
         Assert.Contains("https://github.com/microsoft/aspire/releases", changelog);
+        Assert.DoesNotContain("https://github.com/microsoft/aspire/releases/tag/v", changelog);
         Assert.DoesNotContain("__VERSION__", changelog);
         Assert.DoesNotContain("__PACKAGE_NAME__", changelog);
     }
@@ -319,9 +319,10 @@ public sealed class NpmCliPackageTests : IDisposable
             ("PACKAGE_NAME", PackageName),
             ("VERSION", PackageVersion));
 
-        Assert.Contains($"bundles the Aspire CLI at version `{PackageVersion}`.", changelog);
-        Assert.Contains($"Release notes for this version: <https://github.com/microsoft/aspire/releases/tag/v{PackageVersion}>", changelog);
-        Assert.Contains("All Aspire releases: <https://github.com/microsoft/aspire/releases>", changelog);
+        Assert.Contains($"This package `{PackageName}` bundles the Aspire CLI at version `{PackageVersion}`.", changelog);
+        Assert.Contains("Aspire release notes: <https://github.com/microsoft/aspire/releases>", changelog);
+        Assert.Contains($"Find the entry that matches version `{PackageVersion}` on the releases page.", changelog);
+        Assert.DoesNotContain("https://github.com/microsoft/aspire/releases/tag/v", changelog);
         Assert.DoesNotContain("__VERSION__", changelog);
         Assert.DoesNotContain("__PACKAGE_NAME__", changelog);
     }
