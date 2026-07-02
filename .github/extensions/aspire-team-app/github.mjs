@@ -5,8 +5,6 @@
 // signal pills. This is a faithful, self-contained port of the lane + signal logic
 // from davidfowl/pr-dashboard (frontend/src/utils/{models,signals,pullRequests}.ts).
 
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import {
   createAttentionBuckets,
   createForMeItems,
@@ -17,8 +15,6 @@ import {
   computeCommunityItems,
 } from "./model.mjs";
 import { currentRelease } from "./constants.mjs";
-
-const execFileAsync = promisify(execFile);
 
 // The current milestone has a single source of truth in constants.mjs
 // (`currentRelease`). Re-export it here under the name the run-mode lane logic
@@ -38,31 +34,8 @@ export const DEFAULT_REPOS = [
 const GRAPHQL = "https://api.github.com/graphql";
 
 // ---------------------------------------------------------------------------
-// Token + viewer resolution (the logged-in GitHub user).
+// GraphQL helper.
 // ---------------------------------------------------------------------------
-
-let cachedToken;
-
-export async function resolveToken() {
-  if (cachedToken) return cachedToken;
-  for (const key of ["GH_TOKEN", "GITHUB_TOKEN"]) {
-    if (process.env[key]) {
-      cachedToken = process.env[key];
-      return cachedToken;
-    }
-  }
-  try {
-    const { stdout } = await execFileAsync("gh", ["auth", "token"], { timeout: 8000 });
-    const token = stdout.trim();
-    if (token) {
-      cachedToken = token;
-      return cachedToken;
-    }
-  } catch {
-    // gh not installed or not authenticated.
-  }
-  return null;
-}
 
 async function gql(token, query, variables, graphqlUrl = GRAPHQL) {
   const res = await fetch(graphqlUrl, {
@@ -82,11 +55,6 @@ async function gql(token, query, variables, graphqlUrl = GRAPHQL) {
     throw new Error(json.errors.map((e) => e.message).join("; "));
   }
   return json.data;
-}
-
-export async function resolveViewer(token) {
-  const data = await gql(token, `query { viewer { login } }`, {});
-  return data.viewer.login;
 }
 
 // ---------------------------------------------------------------------------

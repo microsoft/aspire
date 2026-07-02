@@ -358,7 +358,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .section { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 14px 12px; margin-bottom: 12px; }
 .section h3 { margin: 0 0 3px; font-size: 13px; }
 .section .hint { margin: 0 0 10px; color: var(--muted); font-size: 11.5px; }
-.section .hint b { color: var(--text); }
+.section .hint b { color: var(--fg); }
 .policy { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; }
 .policy-row {
   display: flex; gap: 9px; align-items: flex-start;
@@ -367,7 +367,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   font-size: 11.5px; line-height: 1.5; color: var(--muted);
 }
 .policy-row svg { flex: none; width: 15px; height: 15px; margin-top: 1px; color: var(--accent); }
-.policy-row b { color: var(--text); font-weight: 600; }
+.policy-row b { color: var(--fg); font-weight: 600; }
 .field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; }
 .field + .field { margin-top: 12px; }
 .field textarea {
