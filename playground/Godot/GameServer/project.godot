@@ -1,0 +1,21 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;    [section] ; section goes between []
+;    param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="GodotDedicatedServer"
+config/description="Internal Aspire playground dedicated game-server scaffold. Not a public sample."
+config/run/main_scene=""
+config/features=PackedStringArray("4.3")
+
+[display]
+
+window/size/viewport_width=1152
+window/size/viewport_height=648
