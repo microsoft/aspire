@@ -122,12 +122,14 @@ public sealed partial class LogViewer
         {
             _visibleEntriesCache = null;
 
-            // Virtualize caches the items it last fetched and only re-queries GetItems on an explicit
-            // RefreshDataAsync. Filtering is applied inside GetItems and depends on the rendered row
-            // fields, so we record the current parameters here and defer the Virtualize refresh to
-            // OnAfterRenderAsync: observe the parameters, let the component render, then refresh
-            // Virtualize. Refreshing earlier, e.g. from the parent's bind handler before this assignment,
-            // would re-query with the previous filter value.
+            // Virtualize only re-queries GetItems on an explicit RefreshDataAsync call.
+            // We can't call it here (OnParametersSet) because Virtualize.RefreshDataAsync()
+            // triggers a child-component re-render mid-lifecycle, which creates re-entrant
+            // rendering in Blazor Server. Additionally, OnParametersSetAsync would cause a
+            // double-render (sync portion renders stale items, then re-renders after await).
+            // Deferring to OnAfterRenderAsync guarantees the full component tree has rendered
+            // with the new state, and the cache is already warm from the razor markup's call
+            // to GetVisibleEntries() (for the "no logs match" message).
             _visibleEntriesChanged = true;
         }
 
