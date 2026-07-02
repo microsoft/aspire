@@ -129,9 +129,17 @@ flips between them via a small "View" `FluentSelect` in the toolbar:
 - The page **auto-switches to Terminal** the first time the JS terminal
   reports a non-`connecting` toolbar status (PTY attached). Reconnects do
   not re-trigger the auto-switch.
-- The page **auto-switches back to Console** when the JS terminal raises
-  `client.onExit` (PTY exited), so the user sees the final log lines
-  including the hosting exit message.
+- The page **auto-switches back to Console** on either of two triggers,
+  so the user sees the final log lines including the hosting exit
+  message:
+  - The JS terminal raises `client.onExit` (PTY exited cleanly from the
+    guest side, e.g. `exit` at the shell).
+  - `OnResourceChanged` observes the resource snapshot transitioning
+    from a running state to a stopped/finished state (e.g. the user
+    presses **Stop** in the dashboard or the resource crashes before
+    the PTY reports exit). This path also re-arms the PTY-attach edge
+    (`_lastTerminalStatus = "connecting"`) so a subsequent restart
+    auto-switches to Terminal again.
 - Once the user manually picks a view from the dropdown the page
   **latches** their choice for the rest of that resource's session and
   ignores subsequent auto-switch triggers. The latch resets when a
