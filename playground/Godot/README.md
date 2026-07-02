@@ -31,7 +31,7 @@ Running the AppHost with a live Godot server requires:
 2. **Start the AppHost:**
 
    ```bash
-   dotnet run --project playground/Godot/Godot.AppHost
+   aspire start --apphost playground/Godot/Godot.AppHost/Godot.AppHost.csproj
    ```
 
 3. **Start the `godot-server` resource** from the Aspire dashboard (it is marked explicit-start and will not launch automatically). The Aspire dashboard URL is printed to the console on AppHost startup.
