@@ -285,6 +285,13 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
 
+        // Drive the launcher watchdog off a fake clock so the "monitor stays disarmed" guarantee can be
+        // observed deterministically. After the backchannel disarms the monitor we advance the clock past
+        // several poll intervals: a still-armed monitor would fire and cancel the run, but a correctly
+        // disarmed one has no live timer, so nothing happens. This replaces a real-time sleep that raced
+        // the 5s teardown budget and made the regression test flaky under CI load.
+        var timeProvider = new FakeTimeProvider();
+
         var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
         var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
@@ -344,6 +351,9 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(timeProvider);
+
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"run --apphost {appHostFile.FullName}");
@@ -354,11 +364,13 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         // is disarmed before this point.
         await dashboardRequested.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
-        // Kill the launcher and give the monitor's ~1s poll generous time to (incorrectly) fire. With the
-        // fix the monitor is already disarmed, so the run must survive and reach readiness.
+        // Kill the launcher, then advance the fake clock well past the monitor's 1s poll interval. If the
+        // monitor were still armed it would tick, observe the dead launcher, and cancel the run; because it
+        // was disarmed when the backchannel came up, there is no live timer and advancing is a no-op. The
+        // run must survive and reach readiness.
         launcher.Kill(entireProcessTree: true);
         launcher.WaitForExit();
-        await Task.Delay(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+        timeProvider.Advance(TimeSpan.FromSeconds(5));
 
         dashboardCanReturn.SetResult();
         await appHostReady.Task.WaitAsync(TimeSpan.FromSeconds(30));

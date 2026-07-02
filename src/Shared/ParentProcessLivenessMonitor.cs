@@ -27,10 +27,11 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
 
     /// <summary>
     /// Starts polling the parent identified by <paramref name="parentPid"/> (and, when supplied,
-    /// <paramref name="parentStartedUnixSeconds"/> to guard against PID reuse). When the parent is gone,
-    /// <paramref name="onParentExited"/> is invoked exactly once. The token passed to that callback is
-    /// cancelled when this monitor is disposed, so any grace delay inside the callback is unwound if the
-    /// caller disarms first.
+    /// <paramref name="parentStartedUnixSeconds"/> to guard against PID reuse). The parent is probed once
+    /// immediately, then on every poll interval, so a parent that is already gone is detected without
+    /// waiting a full tick. When the parent is gone, <paramref name="onParentExited"/> is invoked exactly
+    /// once. The token passed to that callback is cancelled when this monitor is disposed, so any grace
+    /// delay inside the callback is unwound if the caller disarms first.
     /// </summary>
     public static ParentProcessLivenessMonitor Start(
         int parentPid,
@@ -50,9 +51,25 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
     {
         try
         {
+            // Hop off the caller's thread so Start() stays non-blocking (the original first operation was
+            // an async timer await). The probe below then still runs on the very next scheduler turn
+            // instead of after a full poll interval.
+            await Task.Yield();
+
             using var timer = new PeriodicTimer(s_pollInterval, timeProvider);
-            while (await timer.WaitForNextTickAsync(stopToken).ConfigureAwait(false))
+
+            // Probe once before awaiting the first tick. If the parent already died during our startup
+            // window it is detected immediately instead of after a full poll interval, which closes the
+            // gap where the parent is gone before the watchdog notices. This matches CliOrphanDetector,
+            // whose do/while loop also checks once before it awaits its timer. See
+            // src/Aspire.Hosting/Cli/CliOrphanDetector.cs.
+            do
             {
+                // Honor a disarm that raced with this probe: a disposed monitor must never invoke the
+                // callback. The original loop guaranteed this by awaiting the (already-cancelled) timer
+                // first; ThrowIfCancellationRequested preserves that when we probe before the timer.
+                stopToken.ThrowIfCancellationRequested();
+
                 if (ProcessStartTimeHelper.IsProcessRunning(parentPid, parentStartedUnixSeconds))
                 {
                     continue;
@@ -75,7 +92,7 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
                 }
 
                 return;
-            }
+            } while (await timer.WaitForNextTickAsync(stopToken).ConfigureAwait(false));
         }
         catch (OperationCanceledException)
         {

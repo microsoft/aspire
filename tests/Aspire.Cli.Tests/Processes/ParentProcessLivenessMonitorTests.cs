@@ -3,12 +3,43 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Tests.TestServices;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Processes;
 
 public class ParentProcessLivenessMonitorTests
 {
     private static readonly TimeSpan s_observationTimeout = TimeSpan.FromSeconds(15);
+
+    [Fact]
+    public async Task ParentAlreadyExited_InvokesCallbackWithoutWaitingForFirstTick()
+    {
+        // Immediate-first-check: when the parent is already gone at Start time, the callback must fire on
+        // the pre-tick probe rather than after a full poll interval. A FakeTimeProvider that is never
+        // advanced proves it: with the immediate probe the callback still fires; if detection depended on
+        // the timer, WaitForNextTickAsync would never complete and this would time out.
+        using var parent = StartLongRunningProcess();
+        var parentStartedUnix = ((DateTimeOffset)parent.StartTime).ToUnixTimeSeconds();
+        var parentPid = parent.Id;
+
+        parent.Kill(entireProcessTree: true);
+        parent.WaitForExit();
+
+        var timeProvider = new FakeTimeProvider();
+        var exitedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var monitor = ParentProcessLivenessMonitor.Start(
+            parentPid,
+            parentStartedUnix,
+            _ =>
+            {
+                exitedTcs.TrySetResult();
+                return Task.CompletedTask;
+            },
+            timeProvider);
+
+        // Deliberately never advance the fake clock. The callback must still fire from the initial probe.
+        await exitedTcs.Task.WaitAsync(s_observationTimeout);
+    }
 
     [Fact]
     public async Task ParentExit_InvokesCallback()
