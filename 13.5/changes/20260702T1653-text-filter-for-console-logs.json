@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "A search box on the Console Logs page filters displayed log lines by case-insensitive substring match, making it easier to find relevant output in noisy log streams.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔎",
+  "firstMergedAt": "2026-07-02T16:53:01Z",
+  "lastMergedAt": "2026-07-02T16:53:01Z",
+  "name": "Text filter for console logs",
+  "owner": "ellahathaway",
+  "prs": [
+    18565
+  ]
+}

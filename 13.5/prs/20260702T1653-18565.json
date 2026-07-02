@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "New text filter feature on the Dashboard Console Logs page",
+  "mergedAt": "2026-07-02T16:53:01Z",
+  "number": 18565,
+  "runDate": "2026-07-02T18:30:18Z",
+  "status": "included",
+  "title": "Add text filter to the console logs page"
+}

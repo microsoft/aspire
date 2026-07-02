@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Adds Aspire.Hosting.Dotnet, a new language integration package that brings C# project support on par with the existing Go, Python, and JavaScript integrations. This is the first part of the Project V2 workstream.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔷",
+  "firstMergedAt": "2026-07-02T16:19:51Z",
+  "lastMergedAt": "2026-07-02T16:19:51Z",
+  "name": "Aspire.Hosting.Dotnet integration package",
+  "owner": "karolz-ms",
+  "prs": [
+    18442
+  ]
+}
