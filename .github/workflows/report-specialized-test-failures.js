@@ -118,7 +118,7 @@ function toInlineCode(name) {
 function formatComment({ kind, run, failedTests = [], maxListed = DEFAULT_MAX_LISTED_TESTS }) {
     const runLink = `[run #${run.runNumber ?? '?'}](${run.runUrl})`;
     if (kind !== KIND_TEST_FAILURES) {
-        return `Infrastructure failure again in ${runLink}. See the run for build/setup logs.`;
+        return `Infrastructure failure in ${runLink}. See the run for build/setup logs.`;
     }
 
     if (failedTests.length === 0) {
