@@ -82,43 +82,38 @@
 
             @if (_activeView == ConsoleLogsView.Terminal && _terminalToolbarState is { } terminalState)
             {
-                <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
-
-                <FluentButton Appearance="@TerminalPrimaryButtonAppearance(terminalState.Status)"
-                              Disabled="@(!terminalState.CanTakeControl)"
-                              OnClick="TerminalTakeControlAsync"
-                              Title="@TerminalPrimaryButtonTitle(terminalState.Status)">
-                    @TerminalPrimaryButtonLabel(terminalState.Status)
-                </FluentButton>
-
-                <FluentButton Appearance="Appearance.Stealth"
-                              Disabled="@(!terminalState.FontControlsEnabled || terminalState.FontPx <= TerminalFontMin)"
-                              OnClick="TerminalFontMinusAsync"
-                              Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize)]">−</FluentButton>
-                <span style="min-width: 28px; text-align: center; font-variant-numeric: tabular-nums;"
-                      title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarFontSize)]">@terminalState.FontPx</span>
-                <FluentButton Appearance="Appearance.Stealth"
-                              Disabled="@(!terminalState.FontControlsEnabled || terminalState.FontPx >= TerminalFontMax)"
-                              OnClick="TerminalFontPlusAsync"
-                              Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarIncreaseFontSize)]">+</FluentButton>
+                <span slot="end" style="margin-inline-start: 10px; align-self: center;">@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarFontSize)]</span>
+                <FluentSelect TOption="int"
+                              slot="end"
+                              Items="@s_terminalFontSizePresets"
+                              OptionValue="@(v => v.ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                              OptionText="@(v => v.ToString(System.Globalization.CultureInfo.InvariantCulture))"
+                              Value="@terminalState.FontPx.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                              ValueChanged="TerminalFontSizeChangedAsync"
+                              Disabled="@(!terminalState.FontControlsEnabled)"
+                              Width="80px"
+                              Style="min-width: auto;"
+                              AriaLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarFontSize)]" />
 
                 @if (_terminalSizePresets.Count > 0)
                 {
+                    <span slot="end" style="margin-inline-start: 10px; align-self: center;">@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)]</span>
                     <FluentSelect TOption="Controls.TerminalSizePreset"
+                                  slot="end"
                                   Items="@_terminalSizePresets"
                                   OptionValue="@(p => p.Value)"
                                   OptionText="@(p => p.Label)"
                                   Value="@terminalState.SizeKey"
                                   ValueChanged="TerminalSizeChangedAsync"
                                   Disabled="@(!terminalState.SizeSelectEnabled)"
-                                  Width="100px"
+                                  Width="140px"
                                   Style="min-width: auto;"
                                   AriaLabel="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSize)]" />
                 }
 
                 @if (terminalState.Cols > 0 && terminalState.Rows > 0)
                 {
-                    <span style="color: var(--neutral-foreground-hint); font-variant-numeric: tabular-nums;"
+                    <span slot="end" style="color: var(--neutral-foreground-hint); font-variant-numeric: tabular-nums; align-self: center; margin-inline-start: 6px;"
                           title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarCurrentGrid)]">
                         @terminalState.Cols × @terminalState.Rows
                     </span>

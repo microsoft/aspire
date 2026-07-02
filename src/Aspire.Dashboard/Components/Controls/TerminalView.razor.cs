@@ -234,26 +234,6 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     }
 
     /// <summary>
-    /// Requests primary control of the producer session. No-op if the terminal
-    /// JS module hasn't initialized yet or if we're already primary; JS
-    /// performs the authoritative role checks.
-    /// </summary>
-    public async Task TakePrimaryAsync()
-    {
-        if (_jsModule is null || _terminalId == 0)
-        {
-            return;
-        }
-        try
-        {
-            await _jsModule.InvokeVoidAsync("takePrimaryFromHost", _terminalId);
-        }
-        catch (JSDisconnectedException)
-        {
-        }
-    }
-
-    /// <summary>
     /// Sets the terminal font size and switches sizing back to "Auto" (font-
     /// driven) mode. Out-of-range values are clamped by the JS side.
     /// </summary>

@@ -1230,12 +1230,6 @@ export function getSizePresets() {
     return SIZE_PRESETS.map((p) => ({ value: p.value, label: p.label, cols: p.cols, rows: p.rows }));
 }
 
-export function takePrimaryFromHost(id) {
-    const state = terminals.get(id);
-    if (!state) return;
-    takePrimary(state);
-}
-
 export function setFontSizeFromHost(id, newSize) {
     const state = terminals.get(id);
     if (!state || typeof newSize !== 'number') return;

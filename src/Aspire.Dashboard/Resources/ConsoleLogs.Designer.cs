@@ -171,21 +171,9 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
-        public static string TerminalToolbarDecreaseFontSize {
-            get {
-                return ResourceManager.GetString("TerminalToolbarDecreaseFontSize", resourceCulture);
-            }
-        }
-        
         public static string TerminalToolbarFontSize {
             get {
                 return ResourceManager.GetString("TerminalToolbarFontSize", resourceCulture);
-            }
-        }
-        
-        public static string TerminalToolbarIncreaseFontSize {
-            get {
-                return ResourceManager.GetString("TerminalToolbarIncreaseFontSize", resourceCulture);
             }
         }
         
@@ -204,48 +192,6 @@ namespace Aspire.Dashboard.Resources {
         public static string TerminalToolbarCurrentGrid {
             get {
                 return ResourceManager.GetString("TerminalToolbarCurrentGrid", resourceCulture);
-            }
-        }
-        
-        public static string TerminalToolbarPrimaryLabel {
-            get {
-                return ResourceManager.GetString("TerminalToolbarPrimaryLabel", resourceCulture);
-            }
-        }
-        
-        public static string TerminalToolbarConnectingLabel {
-            get {
-                return ResourceManager.GetString("TerminalToolbarConnectingLabel", resourceCulture);
-            }
-        }
-        
-        public static string TerminalToolbarTakeControlLabel {
-            get {
-                return ResourceManager.GetString("TerminalToolbarTakeControlLabel", resourceCulture);
-            }
-        }
-        
-        public static string TerminalToolbarPrimaryTitle {
-            get {
-                return ResourceManager.GetString("TerminalToolbarPrimaryTitle", resourceCulture);
-            }
-        }
-        
-        public static string TerminalToolbarNoPrimaryTitle {
-            get {
-                return ResourceManager.GetString("TerminalToolbarNoPrimaryTitle", resourceCulture);
-            }
-        }
-        
-        public static string TerminalToolbarViewerTitle {
-            get {
-                return ResourceManager.GetString("TerminalToolbarViewerTitle", resourceCulture);
-            }
-        }
-        
-        public static string TerminalToolbarConnectingTitle {
-            get {
-                return ResourceManager.GetString("TerminalToolbarConnectingTitle", resourceCulture);
             }
         }
         
