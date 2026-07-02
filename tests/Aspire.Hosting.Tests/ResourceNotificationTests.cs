@@ -1195,6 +1195,51 @@ public class ResourceNotificationTests
     }
 
     [Fact]
+    public async Task WaitForResourceHealthyAsyncStopOnResourceUnavailableThrowsWhenResourceTerminates()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var waitTask = notificationService.WaitForResourceHealthyAsync(
+            resource.Name,
+            WaitBehavior.StopOnResourceUnavailable);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Terminated
+        }).DefaultTimeout();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => waitTask.DefaultTimeout());
+        Assert.Equal("Stopped waiting for resource 'myResource' to become healthy because it failed to start.", ex.Message);
+    }
+
+    [Fact]
+    public async Task WaitForResourceHealthyAsyncStopOnResourceUnavailableThrowsWhenResourceTerminatesAfterHealthy()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var waitTask = notificationService.WaitForResourceHealthyAsync(
+            resource.Name,
+            WaitBehavior.StopOnResourceUnavailable);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        Assert.False(waitTask.IsCompleted);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Terminated
+        }).DefaultTimeout();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => waitTask.DefaultTimeout());
+        Assert.Equal("Stopped waiting for resource 'myResource' to become healthy because it failed to start.", ex.Message);
+    }
+
+    [Fact]
     public async Task WaitForResourceHealthyAsyncWorksWithoutResourceReadyEvent()
     {
         var resource = new CustomResource("myResource");
