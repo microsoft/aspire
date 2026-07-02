@@ -7,6 +7,7 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -109,6 +110,35 @@ public class ChartFiltersTests : DashboardTestContext
         Assert.True(changed);
         Assert.Single(dimensionFilter.SelectedValues);
         Assert.Equal("GET", dimensionFilter.SelectedValues.Single().Text);
+    }
+
+    [Fact]
+    public void Render_FilterPopover_KeepsStableAnchorIdAfterRerender()
+    {
+        SetupChartFilters();
+        var dimensionFilter = CreateDimensionFilter();
+        dimensionFilter.PopupVisible = true;
+
+        var cut = RenderComponent<ChartFilterPopover>(builder =>
+        {
+            builder.Add(p => p.Filter, dimensionFilter);
+            builder.Add(p => p.OnSelectionChanged, EventCallback.Factory.Create<DimensionFilterViewModel>(this, _ => { }));
+        });
+
+        var anchorId = cut.Find("fluent-button").GetAttribute("id");
+
+        Assert.False(string.IsNullOrEmpty(anchorId));
+        Assert.Equal(anchorId, cut.FindComponent<FluentPopover>().Instance.AnchorId);
+        Assert.Equal(anchorId, cut.FindComponent<AspirePopupFocusNavigation>().Instance.AnchorId);
+
+        dimensionFilter.NotifyStateChanged?.Invoke();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(anchorId, cut.Find("fluent-button").GetAttribute("id"));
+            Assert.Equal(anchorId, cut.FindComponent<FluentPopover>().Instance.AnchorId);
+            Assert.Equal(anchorId, cut.FindComponent<AspirePopupFocusNavigation>().Instance.AnchorId);
+        });
     }
 
     [Fact]

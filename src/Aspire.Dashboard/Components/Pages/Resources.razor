@@ -43,6 +43,7 @@
                 @if (HasViewOptionsMenu())
                 {
                     <AspireMenuButton ButtonAppearance="Appearance.Stealth"
+                                      MenuButtonId="resourcesViewOptionsButton"
                                       Icon="@(new Icons.Regular.Size20.Options())"
                                       Items="@_resourcesMenuItems"
                                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)]"

@@ -30,7 +30,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         {
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
 
-            var viewOptions = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourcesChangeViewOptions });
+            var viewOptions = page.Locator("#resourcesViewOptionsButton");
             await viewOptions.ClickAsync();
             await Assertions.Expect(page.GetByRole(AriaRole.Menu)).ToBeVisibleAsync();
 
@@ -38,7 +38,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await page.Keyboard.PressAsync("Tab");
 
             await Assertions.Expect(page.GetByRole(AriaRole.Menu)).ToBeHiddenAsync();
-            Assert.Equal(Dashboard.Resources.Layout.NavMenuResourcesTab, await GetActiveElementNameAsync(page));
+            await AssertActiveElementIsAsync(page, "fluent-tab#tab-Table");
         });
     }
 
@@ -50,7 +50,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         {
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
 
-            var resourceFilter = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourcesNotFiltered });
+            var resourceFilter = page.Locator("#resourceFilterButton");
             var popup = page.Locator(".resources-filter-popup");
             var popupCheckboxes = popup.Locator("fluent-checkbox");
 
@@ -64,21 +64,21 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             // that is the data-view-kind tab strip (the "Resources" table tab is the next
             // element with tabindex >= 0; tabindex=-1 elements are correctly skipped by
             // isAspireFocusableElement now that the Fluent-element short-circuit is removed).
-            Assert.Equal(Dashboard.Resources.ControlsStrings.ResourcesContainerTableTab, await GetActiveElementNameAsync(page));
+            await AssertActiveElementIsAsync(page, "fluent-tab#tab-Table");
 
             await OpenResourceFilterAsync(resourceFilter, popup);
             await popupCheckboxes.First.FocusAsync();
             await page.Keyboard.PressAsync("Shift+Tab");
 
             await Assertions.Expect(popup).ToBeHiddenAsync();
-            Assert.Equal(Dashboard.Resources.Resources.ResourcesNotFiltered, await GetActiveElementNameAsync(page));
+            await AssertActiveElementIsAsync(page, "#resourceFilterButton");
 
             await OpenResourceFilterAsync(resourceFilter, popup);
             await popupCheckboxes.First.FocusAsync();
             await page.Keyboard.PressAsync("Escape");
 
             await Assertions.Expect(popup).ToBeHiddenAsync();
-            Assert.Equal(Dashboard.Resources.Resources.ResourcesNotFiltered, await GetActiveElementNameAsync(page));
+            await AssertActiveElementIsAsync(page, "#resourceFilterButton");
         });
     }
 
@@ -183,16 +183,25 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         await Assertions.Expect(popover).ToBeVisibleAsync();
     }
 
-    private static async Task<string?> GetActiveElementNameAsync(IPage page)
+    private static async Task AssertActiveElementIsAsync(IPage page, string selector)
     {
-        return await page.EvaluateAsync<string?>(
-            """
-            () => {
-                const activeElement = document.activeElement;
-                return activeElement?.getAttribute('aria-label')
-                    ?? activeElement?.getAttribute('title')
-                    ?? activeElement?.textContent?.trim().replace(/\s+/g, ' ');
-            }
-            """);
+        var matches = await page.EvaluateAsync<bool>(
+            "selector => document.activeElement === document.querySelector(selector)",
+            selector);
+
+        if (!matches)
+        {
+            var activeElement = await page.EvaluateAsync<string?>(
+                """
+                () => {
+                    const activeElement = document.activeElement;
+                    return activeElement
+                        ? `${activeElement.tagName.toLowerCase()}#${activeElement.id ?? ""}.${activeElement.className ?? ""}`
+                        : null;
+                }
+                """);
+
+            Assert.True(matches, $"Expected active element to match '{selector}', but active element was '{activeElement}'.");
+        }
     }
 }
