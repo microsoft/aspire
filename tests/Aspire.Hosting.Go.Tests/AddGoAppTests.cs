@@ -350,6 +350,103 @@ public class AddGoAppTests
                 "--headless=true",
                 "--listen=127.0.0.1:2345",
                 "--api-version=2",
+                "--accept-multiclient",
+                "debug",
+                "."
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    [Fact]
+    public async Task VerifyManifest_WithDelveServer_DisableAcceptMulticlient()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
+            .WithDelveServer(options =>
+            {
+                options.AcceptMulticlient = false;
+            });
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "dlv",
+              "args": [
+                "--headless=true",
+                "--listen=127.0.0.1:2345",
+                "--api-version=2",
+                "debug",
+                "."
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    [Fact]
+    public async Task VerifyManifest_WithDelveServer_DisableOnlySameUser()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
+            .WithDelveServer(options =>
+            {
+                options.OnlySameUser = false;
+            });
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "dlv",
+              "args": [
+                "--headless=true",
+                "--listen=127.0.0.1:2345",
+                "--api-version=2",
+                "--accept-multiclient",
+                "--only-same-user=false",
+                "debug",
+                "."
+              ]
+            }
+            """;
+        Assert.Equal(expected, manifest.ToString());
+    }
+
+    [Fact]
+    public async Task VerifyManifest_WithDelveServer_EnableLog()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
+            .WithDelveServer(options =>
+            {
+                options.Log = true;
+                options.LogOutput = "rpc,dap,debugger";
+            });
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        var expected = """
+            {
+              "type": "executable.v0",
+              "workingDirectory": ".",
+              "command": "dlv",
+              "args": [
+                "--headless=true",
+                "--listen=127.0.0.1:2345",
+                "--api-version=2",
+                "--accept-multiclient",
+                "--log",
+                "--log-output=rpc,dap,debugger",
                 "debug",
                 "."
               ]
@@ -495,6 +592,7 @@ public class AddGoAppTests
                 "--headless=true",
                 "--listen=127.0.0.1:2345",
                 "--api-version=2",
+                "--accept-multiclient",
                 "debug",
                 "--build-flags=-tags=\u0027netgo\u0027 -ldflags=\u0027-s -w\u0027",
                 "."
@@ -525,6 +623,7 @@ public class AddGoAppTests
                 "--headless=true",
                 "--listen=127.0.0.1:2345",
                 "--api-version=2",
+                "--accept-multiclient",
                 "debug",
                 "--build-flags=-race",
                 "."
@@ -555,6 +654,7 @@ public class AddGoAppTests
                 "--headless=true",
                 "--listen=127.0.0.1:2345",
                 "--api-version=2",
+                "--accept-multiclient",
                 "debug",
                 "--build-flags=-gcflags=\u0027all=-N -l\u0027",
                 "."
@@ -586,6 +686,7 @@ public class AddGoAppTests
                 "--headless=true",
                 "--listen=127.0.0.1:2345",
                 "--api-version=2",
+                "--accept-multiclient",
                 "debug",
                 ".",
                 "--",
