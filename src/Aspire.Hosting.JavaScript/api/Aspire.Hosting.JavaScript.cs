@@ -14,6 +14,9 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<JavaScript.BunAppResource> AddBunApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string scriptPath) { throw null; }
 
         [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> AddDenoApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string scriptPath) { throw null; }
+
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<JavaScript.JavaScriptAppResource> AddJavaScriptApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string runScriptName = "dev") { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -64,6 +67,10 @@ namespace Aspire.Hosting
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 
         [AspireExport]
+        public static ApplicationModel.IResourceBuilder<TResource> WithDeno<TResource>(this ApplicationModel.IResourceBuilder<TResource> resource, bool install = false, string[]? installArgs = null)
+            where TResource : JavaScript.JavaScriptAppResource { throw null; }
+
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TResource> WithNpm<TResource>(this ApplicationModel.IResourceBuilder<TResource> resource, bool install = true, string? installCommand = null, string[]? installArgs = null)
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 
@@ -94,6 +101,12 @@ namespace Aspire.Hosting.JavaScript
 
     public sealed partial record CopyFilePattern(string Source, string Destination)
     {
+    }
+
+    [AspireExport(ExposeProperties = true)]
+    public sealed partial class DenoAppResource : JavaScriptAppResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource
+    {
+        public DenoAppResource(string name, string command, string workingDirectory) : base(default!, default!, default!) { }
     }
 
     [AspireExport(ExposeProperties = true)]
