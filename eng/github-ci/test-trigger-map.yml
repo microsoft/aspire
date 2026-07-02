@@ -65,6 +65,9 @@ prefilter:
     - .github/workflows/**                            # routed to Infrastructure.Tests (workflow validation)
     - eng/pipelines/**                                # routed to Infrastructure.Tests (pipeline validation)
     - eng/github-ci/ci-skip-entirely-patterns.txt      # a selector input (read above) -> route to Infrastructure.Tests
+    - eng/scripts/pack-cli-npm-package.CHANGELOG.md    # npm package inputs hidden by **.md -> route to npm packaging validation
+    - eng/scripts/pack-cli-npm-package.pointer.README.md
+    - eng/scripts/pack-cli-npm-package.rid.README.md
 
 # Ignore: files Layer 2 accounts for with NO target, so they do NOT trigger the run-all fallback.
 # Each is either covered precisely by Layer 1 (the graph index sees the linked/shared-file consumers)
@@ -259,8 +262,11 @@ path_rules:
     reason: builds the CLI E2E Docker image consumed only by the requiresCliArchive test shards (Aspire.Cli.EndToEnd.Tests, the sole RequiresCliArchive=true project); the build_cli_e2e_image job self-gates on tests_matrix_requires_cli_archive, so it only runs when that test is selected anyway -> route there, not ALL
   - paths:
       - eng/scripts/pack-cli-npm-package.ps1
+      - eng/scripts/pack-cli-npm-package.CHANGELOG.md
+      - eng/scripts/pack-cli-npm-package.pointer.README.md
+      - eng/scripts/pack-cli-npm-package.rid.README.md
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
-    reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse this script
+    reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse the pack script; Infrastructure.Tests validates the markdown templates that the script renders into npm packages
   - paths:
       - .github/workflows/update-nix-cli-flake.yml
       - flake.nix

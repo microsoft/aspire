@@ -186,6 +186,31 @@ try {
     throw "Pointer package is missing bin/aspire.js."
   }
 
+  # The pointer package ships a version-stamped CHANGELOG.md so npm users can find
+  # the release notes before updating (microsoft/aspire#17719). Verify it exists
+  # and references the packed version.
+  $changelogPath = Join-Path $pointerExtract 'package/CHANGELOG.md'
+  if (-not (Test-Path -LiteralPath $changelogPath)) {
+    throw "Pointer package is missing CHANGELOG.md."
+  }
+
+  $changelog = Get-Content -Path $changelogPath -Raw
+  if ($changelog -notmatch [System.Text.RegularExpressions.Regex]::Escape($pointerPackageJson.version)) {
+    throw "Pointer package CHANGELOG.md does not reference the packed version '$($pointerPackageJson.version)'."
+  }
+
+  if ($changelog -match '__[A-Z0-9_]+__') {
+    throw "Pointer package CHANGELOG.md contains an unreplaced template placeholder."
+  }
+
+  if ($changelog -notmatch [System.Text.RegularExpressions.Regex]::Escape('https://github.com/microsoft/aspire/releases')) {
+    throw "Pointer package CHANGELOG.md does not link to the Aspire release notes."
+  }
+
+  if ($pointerPackageJson.files -notcontains 'CHANGELOG.md') {
+    throw "Pointer package.json files list must include CHANGELOG.md so npm publishes it."
+  }
+
   $packageMapPath = Join-Path $pointerExtract 'package/bin/aspire-package-map.json'
   if (-not (Test-Path -LiteralPath $packageMapPath)) {
     throw "Pointer package is missing bin/aspire-package-map.json."
