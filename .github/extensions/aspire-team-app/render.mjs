@@ -602,6 +602,10 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .state .cmd { display: inline-block; margin-top: 14px; font-family: var(--mono); font-size: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 11px; color: var(--fg); }
 .state .state-cta { margin-top: 16px; display: flex; gap: 8px; justify-content: center; }
 .errbar { margin: 12px 16px 0; padding: 9px 12px; border-radius: 8px; background: color-mix(in srgb, var(--danger) 12%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); color: var(--danger); font-size: 11.5px; }
+.errbar.loaderr { display: flex; align-items: center; gap: 8px; }
+.errbar-x { margin-left: auto; display: inline-flex; align-items: center; justify-content: center; padding: 2px; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; opacity: .75; }
+.errbar-x:hover { opacity: 1; background: color-mix(in srgb, var(--danger) 18%, transparent); }
+.errbar-x svg { width: 13px; height: 13px; }
 .empty-lane { color: var(--muted); font-size: 12px; padding: 6px 0; }
 
 /* Skeleton shimmer */
@@ -796,7 +800,15 @@ function persistAccountRepos(id) {
   const repos = (draftReposByAcct[id] || []).slice();
   postJSON("api/account/repos", { id, repos }).then((data) => {
     if (data && data.dashboard) { state = data.dashboard; prefs = data.prefs; }
-  }).catch(() => {});
+    repoErr(id, "");
+  }).catch((e) => {
+    // The optimistic in-memory edit was never persisted. Surface it inline and
+    // revert the draft to the server's last-known list so the visible editor can't
+    // silently drift from what is actually saved.
+    const acct = state && (state.accounts || []).find((a) => a.id === id);
+    if (acct && Array.isArray(acct.repos)) { draftReposByAcct[id] = acct.repos.slice(); renderRepoList(id); }
+    repoErr(id, "Couldn't save repositories: " + String((e && e.message) || e));
+  });
 }
 
 async function saveSettings() {
@@ -1368,8 +1380,20 @@ function render(forward) {
   else inner = queueView();
 
   const dir = forward === false || (forward === undefined && (RANK[view] || 0) < prevRank) ? "back" : "";
-  app.innerHTML = topbarHtml() + '<div class="viewport"><div class="view ' + dir + '">' + inner + "</div></div>";
+  // A refresh/rescan that fails after the dashboard already loaded sets loadError
+  // but keeps the last-good state. Surface it as a dismissible banner instead of
+  // discarding the loaded UI (the full-screen "Could not load" state above only
+  // applies to the very first load, when there is no state to preserve).
+  const banner = loadError
+    ? '<div class="errbar loaderr" role="alert">' + esc(loadError) +
+      '<button class="errbar-x" id="load-errbar-dismiss" type="button" title="Dismiss" aria-label="Dismiss">' + ICONS.x + "</button></div>"
+    : "";
+  app.innerHTML = topbarHtml() + banner + '<div class="viewport"><div class="view ' + dir + '">' + inner + "</div></div>";
   app.classList.toggle("loading", refreshing);
+  if (banner) {
+    const bx = document.getElementById("load-errbar-dismiss");
+    if (bx) bx.addEventListener("click", function () { loadError = null; render(); });
+  }
   wire();
   layoutGrids();
 }
@@ -1539,13 +1563,24 @@ function commitEdit(id, i) {
 }
 
 function deleteRepo(id, i, row) {
+  // The row-removal animation is our cue to actually splice, but a missed
+  // animationend (reduced motion, a backgrounded tab, an interrupted animation)
+  // would strand the row. We keep a fallback timer as a backstop, so both the
+  // animationend handler and the timer can fire. A once-only guard makes the splice
+  // run exactly once: without it the second call would splice a now-shifted index
+  // and silently drop the wrong repository.
+  var ran = false;
+  var fallback = null;
   var done = function () {
+    if (ran) return;
+    ran = true;
+    if (fallback) clearTimeout(fallback);
     (draftReposByAcct[id] || []).splice(i, 1);
     if (editingByAcct[id] === i) editingByAcct[id] = -1;
     renderRepoList(id);
     persistAccountRepos(id);
   };
-  if (row) { row.classList.add("removing"); row.addEventListener("animationend", done, { once: true }); setTimeout(done, 240); }
+  if (row) { row.classList.add("removing"); row.addEventListener("animationend", done, { once: true }); fallback = setTimeout(done, 240); }
   else done();
 }
 

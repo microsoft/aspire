@@ -61,11 +61,20 @@ async function gql(token, query, variables, graphqlUrl = GRAPHQL) {
 // Queries
 // ---------------------------------------------------------------------------
 
+// GitHub's GraphQL connections cap `first` at 100 and page the remainder behind a
+// cursor. High-volume repos (e.g. microsoft/aspire) have far more than one page of
+// open PRs/issues, so a single `first:40` fetch silently truncates the queue. We
+// follow `pageInfo.endCursor` until GitHub reports no more pages. MAX_PAGES is an
+// explicit safety bound (25 pages * 40 = up to 1000 open items per repo per account)
+// so a pathological repo can't spin the loader indefinitely.
+const MAX_PAGES = 25;
+
 const PR_QUERY = `
-query($owner:String!, $name:String!) {
+query($owner:String!, $name:String!, $after:String) {
   repository(owner:$owner, name:$name) {
     isPrivate
-    pullRequests(states:OPEN, first:40, orderBy:{field:UPDATED_AT, direction:DESC}) {
+    pullRequests(states:OPEN, first:40, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
+      pageInfo { hasNextPage endCursor }
       nodes {
         number title url isDraft state createdAt updatedAt
         author { __typename login avatarUrl }
@@ -94,9 +103,10 @@ query($owner:String!, $name:String!) {
 }`;
 
 const ISSUE_QUERY = `
-query($owner:String!, $name:String!) {
+query($owner:String!, $name:String!, $after:String) {
   repository(owner:$owner, name:$name) {
-    issues(states:OPEN, first:40, orderBy:{field:UPDATED_AT, direction:DESC}) {
+    issues(states:OPEN, first:40, after:$after, orderBy:{field:UPDATED_AT, direction:DESC}) {
+      pageInfo { hasNextPage endCursor }
       nodes {
         number title url createdAt updatedAt
         author { login avatarUrl }
@@ -593,17 +603,29 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
           }
           try {
             if (wantIssues) {
-              const data = await gql(acct.token, ISSUE_QUERY, { owner, name }, acct.graphql);
-              for (const node of data.repository?.issues?.nodes ?? []) {
-                const issue = normalizeIssue(repo, node, viewers);
-                if (!issueById.has(issue.url)) issueById.set(issue.url, issue);
+              let after = null;
+              for (let page = 0; page < MAX_PAGES; page++) {
+                const data = await gql(acct.token, ISSUE_QUERY, { owner, name, after }, acct.graphql);
+                const conn = data.repository?.issues;
+                for (const node of conn?.nodes ?? []) {
+                  const issue = normalizeIssue(repo, node, viewers);
+                  if (!issueById.has(issue.url)) issueById.set(issue.url, issue);
+                }
+                if (!conn?.pageInfo?.hasNextPage) break;
+                after = conn.pageInfo.endCursor;
               }
             } else {
-              const data = await gql(acct.token, PR_QUERY, { owner, name }, acct.graphql);
-              const repoPrivate = !!data.repository?.isPrivate;
-              for (const node of data.repository?.pullRequests?.nodes ?? []) {
-                const pr = normalizePr(repo, node, viewers, repoPrivate);
-                if (!prById.has(pr.url)) prById.set(pr.url, pr);
+              let after = null;
+              for (let page = 0; page < MAX_PAGES; page++) {
+                const data = await gql(acct.token, PR_QUERY, { owner, name, after }, acct.graphql);
+                const repoPrivate = !!data.repository?.isPrivate;
+                const conn = data.repository?.pullRequests;
+                for (const node of conn?.nodes ?? []) {
+                  const pr = normalizePr(repo, node, viewers, repoPrivate);
+                  if (!prById.has(pr.url)) prById.set(pr.url, pr);
+                }
+                if (!conn?.pageInfo?.hasNextPage) break;
+                after = conn.pageInfo.endCursor;
               }
             }
             okRepos.add(repo);

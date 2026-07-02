@@ -204,15 +204,31 @@ async function probeRepoAccess(token, repos, host) {
   return { accessible, total, status };
 }
 
-// A single account is keyed by its GitHub login (names are unique). The same
-// login can surface through several credentials (gh CLI, env, Copilot); we keep
-// them all as "sources" under one account and use the strongest for API calls.
+// A single account is keyed by its host + GitHub login. Logins are only unique
+// within a host, so a github.com user and a GitHub Enterprise Server user that
+// happen to share a login are distinct accounts and must not collapse together.
+// The same (host, login) can still surface through several credentials (gh CLI,
+// env, Copilot); we keep them all as "sources" under one account and use the
+// strongest for API calls.
 function loginKey(login) {
   return String(login ?? "unknown").trim().toLowerCase();
 }
 
-export function accountId(login) {
-  return `acct:${loginKey(login)}`;
+// Normalize a host so the public API's several spellings (empty, "api.github.com")
+// all collapse to the canonical "github.com".
+function hostKey(host) {
+  const h = String(host ?? "").trim().toLowerCase();
+  return !h || h === "github.com" || h === "api.github.com" ? "github.com" : h;
+}
+
+// github.com keeps the legacy login-only id ("acct:<login>") so preferences saved
+// before host-qualification (all github.com in practice) keep resolving. Enterprise
+// hosts are qualified ("acct:<host>/<login>") so they can't collide with a
+// same-named github.com account.
+export function accountId(login, host) {
+  const key = loginKey(login);
+  const h = hostKey(host);
+  return h === "github.com" ? `acct:${key}` : `acct:${h}/${key}`;
 }
 
 function score(probe) {
@@ -250,10 +266,11 @@ export async function resolveAccounts(reposForId, isActive) {
     idents.push(p);
   }
 
-  // Group every credential under its login.
+  // Group every credential under its (host, login) account identity so accounts
+  // that share a login across github.com and an enterprise host stay separate.
   const groups = new Map();
   for (const p of idents) {
-    const key = loginKey(p.login);
+    const key = accountId(p.login, p.host);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(p);
   }
@@ -261,8 +278,7 @@ export async function resolveAccounts(reposForId, isActive) {
   const accounts = [];
   const tokenById = new Map();
 
-  for (const [key, list] of groups) {
-    const id = accountId(key);
+  for (const [id, list] of groups) {
     const repos = reposForId(id);
 
     // Probe repo access for each credential against this account's own repos.
