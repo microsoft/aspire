@@ -61,6 +61,11 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private const string DirectoryBuildPropsName = "Directory.Build.props";
     private const string DirectoryBuildTargetsName = "Directory.Build.targets";
 
+    // The conventional MSBuild directory-level import files, in the order the ancestor walk probes them.
+    // Hoisted to a static so AncestorDirectoryContainsAppHostMarker doesn't reallocate this array at every
+    // ancestor level it walks (the prefilter runs in parallel over every candidate project during a scan).
+    private static readonly string[] s_directoryBuildFileNames = [DirectoryBuildPropsName, DirectoryBuildTargetsName];
+
     internal static IReadOnlyCollection<string> ProjectExtensions { get; } =
         Array.AsReadOnly([".csproj", ".fsproj", ".vbproj"]);
 
@@ -272,7 +277,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // "plausibly an AppHost", and MSBuild evaluation remains the authoritative confirmation downstream.
         for (var current = directory; current is not null; current = current.Parent)
         {
-            foreach (var fileName in new[] { DirectoryBuildPropsName, DirectoryBuildTargetsName })
+            foreach (var fileName in s_directoryBuildFileNames)
             {
                 var filePath = Path.Combine(current.FullName, fileName);
                 if (!File.Exists(filePath))
@@ -321,6 +326,13 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             // is a directory; in a worktree, submodule, or certain tool-managed setups it is a regular
             // file that points at the real git dir. Check both so the walk terminates in those layouts.
             // https://git-scm.com/docs/git-worktree#_details
+            //
+            // This bound is chosen for parity with the fingerprint walk and deliberately trades away one
+            // narrow false-negative window: MSBuild's own Directory.Build.* discovery does NOT stop at
+            // .git, so a marker set in a Directory.Build.props *above* a nested .git boundary (for example
+            // an Aspire app checked in inside a repository that has its own inner .git, or a submodule
+            // whose marker lives in the outer parent) would be found by MSBuild but not by this prefilter.
+            // That layout is unusual; if it ever needs to be supported, this is the boundary to revisit.
             var gitMarker = Path.Combine(current.FullName, ".git");
             if (Directory.Exists(gitMarker) || File.Exists(gitMarker))
             {

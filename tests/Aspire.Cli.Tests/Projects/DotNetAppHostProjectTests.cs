@@ -2648,6 +2648,14 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
 
     private FileInfo WriteIsLikelyAppHostProject(string fileName, string content)
     {
+        // Stamp a .git sentinel at the synthetic workspace root so IsLikelyAppHost's ancestor walk
+        // terminates here instead of escaping to the real filesystem. Without this bound, a stray
+        // Directory.Build.props anywhere above the OS temp directory could promote a project and flip
+        // the _ReturnsFalse assertions in these tests, making them environment-dependent. Tests that
+        // exercise a nearer boundary (e.g. the git-boundary walk-stop test) create an additional .git
+        // deeper in the tree; the walk stops at whichever boundary it reaches first.
+        Directory.CreateDirectory(Path.Combine(_workspace.WorkspaceRoot.FullName, ".git"));
+
         var path = Path.Combine(_workspace.WorkspaceRoot.FullName, fileName);
         var directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(directory))
