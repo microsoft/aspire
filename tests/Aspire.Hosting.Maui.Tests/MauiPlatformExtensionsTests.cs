@@ -1049,7 +1049,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
 
         await notificationService.PublishUpdateAsync(dashboard.Resource, snapshot => snapshot with
         {
-            State = "terminated",
+            State = "exited",
             EnvironmentVariables =
             [
                 new(

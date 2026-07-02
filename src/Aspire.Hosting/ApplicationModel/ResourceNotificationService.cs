@@ -346,30 +346,23 @@ public class ResourceNotificationService : IDisposable
 
                 throw new DistributedApplicationException($"Resource '{resource.Name}' stopped waiting for dependency resource '{displayName}' because it failed to start.");
             }
-            else if (string.Equals(state, KnownResourceStates.Terminated, StringComparisons.ResourceState))
-            {
-                resourceLogger.LogError(
-                    "Dependency resource '{ResourceName}' was terminated.",
-                    displayName
-                    );
-
-                throw new DistributedApplicationException($"Resource '{resource.Name}' stopped waiting for dependency resource '{displayName}' because it was terminated.");
-            }
             else if ((string.Equals(state, KnownResourceStates.Finished, StringComparisons.ResourceState) ||
                       string.Equals(state, KnownResourceStates.Exited, StringComparisons.ResourceState)) &&
-                     snapshot.ExitCode is not null &&
                      snapshot.ExitCode != exitCode)
             {
+                var exitCodeMessage = snapshot.ExitCode is { } actualExitCode
+                    ? $"with exit code '{actualExitCode}', expected '{exitCode}'"
+                    : $"without reporting an exit code, expected '{exitCode}'";
+
                 resourceLogger.LogError(
-                    "Resource '{ResourceName}' has entered the '{State}' state with exit code '{ExitCode}' expected '{ExpectedExitCode}'.",
+                    "Resource '{ResourceName}' has entered the '{State}' state {ExitCodeMessage}.",
                     displayName,
                     state,
-                    snapshot.ExitCode,
-                    exitCode
+                    exitCodeMessage
                     );
 
                 throw new DistributedApplicationException(
-                    $"Resource '{resource.Name}' stopped waiting for dependency resource '{displayName}' because it entered the '{state}' state with exit code '{snapshot.ExitCode}', expected '{exitCode}'."
+                    $"Resource '{resource.Name}' stopped waiting for dependency resource '{displayName}' because it entered the '{state}' state {exitCodeMessage}."
                     );
             }
 

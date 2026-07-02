@@ -11,7 +11,7 @@ namespace Aspire.Dashboard.Components.Tests;
 public class ResourceViewModelExtensionsTests
 {
     [Fact]
-    public void TerminatedResourceIsStopped()
+    public void ExitedResourceIsStopped()
     {
         var resource = new ResourceViewModel
         {
@@ -20,8 +20,8 @@ public class ResourceViewModelExtensionsTests
             DisplayName = "resource",
             Uid = "resource",
             ReplicaIndex = 0,
-            State = nameof(KnownResourceState.Terminated),
-            KnownState = KnownResourceState.Terminated,
+            State = nameof(KnownResourceState.Exited),
+            KnownState = KnownResourceState.Exited,
             StateStyle = null,
             CreationTimeStamp = null,
             StartTimeStamp = null,

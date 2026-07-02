@@ -40,8 +40,7 @@ internal sealed class TerminalHostFailureDiagnosticService(
     // failure. Finished/Exited with non-zero exit code or no exit code (e.g. host crashed
     // before reporting) is a failure; with exit code 0 it is a clean shutdown during AppHost
     // stop and must not be surfaced as a failure (otherwise every successful run would log a
-    // phantom error on app shutdown). Terminated is emitted when DCP intentionally stops the
-    // host, so it is terminal for waiters but not a start failure.
+    // phantom error on app shutdown).
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // DCP can re-emit terminal-state events during recycle attempts and shutdown. Track
@@ -64,7 +63,11 @@ internal sealed class TerminalHostFailureDiagnosticService(
                     continue;
                 }
 
-                if (string.Equals(state, KnownResourceStates.Terminated, StringComparisons.ResourceState))
+                // DCP "Terminated" means the controller intentionally stopped the process
+                // during scale-down or object deletion. The public state is normalized to
+                // Exited, but the diagnostic service still needs to distinguish that from
+                // a hidden terminal host crashing before it reported startup success.
+                if (evt.Snapshot.IsDcpExecutableTerminated)
                 {
                     continue;
                 }
