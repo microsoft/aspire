@@ -284,6 +284,7 @@ public sealed class LoadInputContext
 public sealed class InteractionInput
 {
     private string _name = null!;
+    private string? _fileName;
     private bool _required;
     private InputLoadOptions? _dynamicLoading;
 
@@ -297,6 +298,8 @@ public sealed class InteractionInput
     }
 
     internal void SetRequired(bool required) => _required = required;
+
+    internal void SetFileName(string? fileName) => _fileName = fileName;
 
     internal void SetDynamicLoading(InputLoadOptions? dynamicLoading) => _dynamicLoading = dynamicLoading;
 
@@ -395,6 +398,36 @@ public sealed class InteractionInput
 
             field = value;
         }
+    }
+
+    /// <summary>
+    /// Gets or sets the maximum file size in bytes for <see cref="InputType.FileChooser"/> inputs.
+    /// If not specified, the Dashboard upload UI applies a default limit of 1 MB.
+    /// This limit is not enforced when the file path is provided directly (e.g. via the CLI).
+    /// </summary>
+    public long? MaxFileSize
+    {
+        get => field;
+        init
+        {
+            if (value is { } v)
+            {
+                ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(v, 0);
+            }
+
+            field = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the original file name for <see cref="InputType.FileChooser"/> inputs.
+    /// When a file is selected, <see cref="Value"/> holds the file path on disk and this property
+    /// holds the user-facing file name (e.g. "readme.txt").
+    /// </summary>
+    public string? FileName
+    {
+        get => _fileName;
+        init => _fileName = value;
     }
 }
 
@@ -599,7 +632,11 @@ public enum InputType
     /// <summary>
     /// A numeric input.
     /// </summary>
-    Number
+    Number,
+    /// <summary>
+    /// A file chooser input. Allows the user to select a file using the OS/browser file picker.
+    /// </summary>
+    FileChooser
 }
 
 /// <summary>

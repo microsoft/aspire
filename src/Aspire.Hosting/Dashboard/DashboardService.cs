@@ -225,6 +225,14 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         {
             dto.MaxLength = input.MaxLength.Value;
         }
+        if (input.MaxFileSize != null)
+        {
+            dto.MaxFileSize = input.MaxFileSize.Value;
+        }
+        if (input.FileName != null)
+        {
+            dto.FileName = input.FileName;
+        }
         dto.ValidationErrors.AddRange(input.ValidationErrors);
         return dto;
     }
@@ -238,6 +246,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.Hosting.InputType.Choice => Aspire.DashboardService.Proto.V1.InputType.Choice,
             Aspire.Hosting.InputType.Boolean => Aspire.DashboardService.Proto.V1.InputType.Boolean,
             Aspire.Hosting.InputType.Number => Aspire.DashboardService.Proto.V1.InputType.Number,
+            Aspire.Hosting.InputType.FileChooser => Aspire.DashboardService.Proto.V1.InputType.FileChooser,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
@@ -251,6 +260,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.DashboardService.Proto.V1.InputType.Choice => InputType.Choice,
             Aspire.DashboardService.Proto.V1.InputType.Boolean => InputType.Boolean,
             Aspire.DashboardService.Proto.V1.InputType.Number => InputType.Number,
+            Aspire.DashboardService.Proto.V1.InputType.FileChooser => InputType.FileChooser,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }

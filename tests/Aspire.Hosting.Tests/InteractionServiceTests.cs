@@ -1262,5 +1262,195 @@ public class InteractionServiceTests
             new ServiceCollection().BuildServiceProvider(),
             configuration);
     }
+
+    [Fact]
+    public async Task PromptInputsAsync_FileChooserWithValue_PassesValidation()
+    {
+        var interactionService = CreateInteractionService();
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.FileChooser, Required = true };
+        _ = interactionService.PromptInputAsync("Select file", "please", input);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", "file-content-here", InputType.FileChooser)]);
+
+        Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
+        Assert.Empty(input.ValidationErrors);
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_FileChooserRequiredEmpty_ReturnErrors()
+    {
+        var interactionService = CreateInteractionService();
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.FileChooser, Required = true };
+        _ = interactionService.PromptInputAsync("Select file", "please", input);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", string.Empty, InputType.FileChooser)]);
+
+        // The interaction should still be in progress due to required field being empty
+        Assert.False(interaction.CompletionTcs.Task.IsCompleted);
+
+        Assert.Collection(input.ValidationErrors,
+            error => Assert.Equal("Value is required.", error));
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_FileChooserOptionalEmpty_PassesValidation()
+    {
+        var interactionService = CreateInteractionService();
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.FileChooser, Required = false };
+        _ = interactionService.PromptInputAsync("Select file", "please", input);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", string.Empty, InputType.FileChooser)]);
+
+        Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
+        Assert.Empty(input.ValidationErrors);
+    }
+
+    [Fact]
+    public void InteractionInput_MaxFileSize_RejectsInvalidValues()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.FileChooser,
+            MaxFileSize = 0
+        });
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.FileChooser,
+            MaxFileSize = -1
+        });
+    }
+
+    [Fact]
+    public void InteractionInput_MaxFileSize_AcceptsValidValues()
+    {
+        var input = new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.FileChooser,
+            MaxFileSize = 1024 * 1024
+        };
+
+        Assert.Equal(1024 * 1024, input.MaxFileSize);
+    }
+
+    [Fact]
+    public void InteractionInput_MaxFileSize_DefaultsToNull()
+    {
+        var input = new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.FileChooser
+        };
+
+        Assert.Null(input.MaxFileSize);
+    }
+
+    [Fact]
+    public async Task OpenFileStreamAsync_ThrowsForNonFileChooserInput()
+    {
+        var input = new InteractionInput
+        {
+            Name = "TextInput",
+            InputType = InputType.Text
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => input.OpenFileStreamAsync().AsTask());
+    }
+
+    [Fact]
+    public async Task OpenFileStreamAsync_ReturnsNullForEmptyValue()
+    {
+        var input = new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.FileChooser,
+            Value = null
+        };
+
+        var stream = await input.OpenFileStreamAsync();
+        Assert.Null(stream);
+    }
+
+    [Fact]
+    public async Task OpenFileStreamAsync_ReturnsNullForEmptyStringValue()
+    {
+        var input = new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.FileChooser,
+            Value = string.Empty
+        };
+
+        var stream = await input.OpenFileStreamAsync();
+        Assert.Null(stream);
+    }
+
+    [Fact]
+    public async Task OpenFileStreamAsync_ThrowsFileNotFoundForMissingFile()
+    {
+        var input = new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.FileChooser,
+            Value = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString())
+        };
+
+        await Assert.ThrowsAsync<FileNotFoundException>(() => input.OpenFileStreamAsync().AsTask());
+    }
+
+    [Fact]
+    public async Task OpenFileStreamAsync_ReturnsStreamForExistingFile()
+    {
+        var tempDir = Directory.CreateTempSubdirectory("aspire-test-");
+        var tempFile = Path.Combine(tempDir.FullName, "test.txt");
+        await File.WriteAllTextAsync(tempFile, "hello world");
+
+        try
+        {
+            var input = new InteractionInput
+            {
+                Name = "File",
+                InputType = InputType.FileChooser,
+                Value = tempFile,
+                FileName = "test.txt"
+            };
+
+            await using var stream = await input.OpenFileStreamAsync();
+            Assert.NotNull(stream);
+            Assert.True(stream.CanRead);
+
+            using var reader = new StreamReader(stream);
+            var content = await reader.ReadToEndAsync();
+            Assert.Equal("hello world", content);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
 }
 
