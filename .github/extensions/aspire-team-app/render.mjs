@@ -333,6 +333,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .avatar { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border); }
 .reason { color: var(--muted); font-size: 12px; }
 .pills { display: flex; flex-wrap: wrap; gap: 5px; }
+.pills:empty { display: none; }
 .pill {
   display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; line-height: 1;
   padding: 0 8px; min-height: 20px; border-radius: 999px; border: 1px solid transparent;
@@ -356,7 +357,9 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 
 /* Settings form */
 .section { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 14px 14px 12px; margin-bottom: 12px; }
-.section h3 { margin: 0 0 3px; font-size: 13px; }
+.section.current { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); box-shadow: inset 3px 0 0 var(--accent); }
+.section h3 { margin: 0 0 3px; font-size: 13px; display: flex; align-items: center; gap: 7px; }
+.section h3 svg { color: var(--accent); }
 .section .hint { margin: 0 0 10px; color: var(--muted); font-size: 11.5px; }
 .section .hint b { color: var(--fg); }
 .policy { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; }
@@ -668,7 +671,7 @@ const draftReposByAcct = {}; // account id -> working copy of that account's wat
 const editingByAcct = {};    // account id -> index of the repo row being inline-edited, or -1
 const repoSaveSeqByAcct = {}; // account id -> latest repository save request number
 
-const RANK = { queue: 0, notifications: 1, accounts: 1, settings: 1 };
+const RANK = { queue: 0, notifications: 1, accounts: 1, settings: 1, filters: 1 };
 
 const ICONS = {
   refresh: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>',
@@ -698,6 +701,8 @@ const ICONS = {
   globe: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
   usersSm: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   layers: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
+  info: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+  funnel: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>',
 };
 
 const LOGO = '<svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M3.5 30C1.57 30 0 28.43 0 26.5C0 25.871 0.166 25.259 0.48 24.729L8.818 10.287L8.852 10.236L12.968 3.099C13.593 2.019 14.754 1.349 16 1.349C17.246 1.349 18.407 2.019 19.031 3.098L31.531 24.749C31.833 25.258 31.999 25.87 31.999 26.499C31.999 28.429 30.429 29.999 28.499 29.999L3.5 30Z" fill="#512BD4"/><path d="M25.33 18H16.99L16 16.28L13.13 11.31C13 11.09 12.82 10.9 12.58 10.77C11.87 10.35 10.95 10.6 10.53 11.32L14.7 4.10001C14.96 3.65001 15.44 3.35001 16 3.35001C16.56 3.35001 17.04 3.65001 17.3 4.10001L21.45 11.29L21.46 11.31L21.48 11.34L25.33 18Z" fill="#7455DD"/><path d="M30 26.5C30 27.33 29.33 28 28.5 28H20.17C21 28 21.67 27.33 21.67 26.5C21.67 26.23 21.59 25.97 21.47 25.75L17.3 18.53L16.99 18H25.33L29.8 25.75C29.93 25.97 30 26.23 30 26.5Z" fill="#9780E5"/><path d="M21.67 26.5C21.67 27.33 21 28 20.17 28H11.83C12.66 28 13.33 27.33 13.33 26.5C13.33 26.23 13.26 25.97 13.13 25.75C13.13 25.74 13.12 25.73 13.11 25.72L11.79 23.57L8.82004 18.72C8.55004 18.28 8.07004 18 7.54004 18H16.99L17.3 18.53L17.427 18.75L21.47 25.75C21.59 25.97 21.67 26.23 21.67 26.5Z" fill="#B9AAEE"/><path d="M13.33 26.5C13.33 27.33 12.66 28 11.83 28H3.5C2.67 28 2 27.33 2 26.5C2 26.23 2.07 25.97 2.2 25.75L6.24 18.75C6.51 18.29 7.01 18 7.54 18C8.07 18 8.55 18.28 8.82 18.72L11.79 23.57L13.11 25.72C13.12 25.73 13.13 25.74 13.13 25.75C13.26 25.97 13.33 26.23 13.33 26.5Z" fill="#DCD5F6"/><path d="M16.99 18H7.53999C7.00999 18 6.50999 18.29 6.23999 18.75L6.66999 18L10.49 11.39L10.53 11.33V11.32C10.95 10.6 11.87 10.35 12.58 10.77C12.82 10.9 13 11.09 13.13 11.31L16 16.28L16.99 18Z" fill="#9780E5"/></svg>';
@@ -875,7 +880,7 @@ function prCard(item) {
       "<span>by " + esc(pr.author) + "</span>" +
     "</div>" +
     (item.reason ? '<div class="reason">' + esc(item.reason) + "</div>" : "") +
-    '<div class="pills">' + (item.signals || []).map(pill).join("") + "</div>" +
+    ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
   "</a>";
 }
 
@@ -888,7 +893,7 @@ function issueCard(item) {
       '<span class="repo">' + esc(shortRepo(is.repository)) + " #" + is.number + "</span>" +
       "<span>by " + esc(is.author) + "</span>" +
     "</div>" +
-    '<div class="pills">' + (item.signals || []).map(pill).join("") + "</div>" +
+    ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
   "</a>";
 }
 
@@ -1133,6 +1138,7 @@ function topbarHtml() {
     (state ? accountChip() : "") +
     '<div class="tb-actions">' +
     '<button class="iconbtn ' + (refreshing ? "spin" : "") + '" id="refresh-btn" title="Refresh">' + ICONS.refresh + "</button>" +
+    '<button class="iconbtn ' + (view === "filters" ? "active" : "") + '" id="filters-btn" title="What\u2019s filtered">' + ICONS.funnel + "</button>" +
     '<button class="iconbtn ' + (view === "notifications" ? "active" : "") + '" id="bell-btn" title="Notifications">' + ICONS.bell +
       (notifCount ? '<span class="badge">' + notifCount + "</span>" : "") + "</button>" +
     '<button class="iconbtn ' + (view === "settings" ? "active" : "") + '" id="gear-btn" title="Settings">' + ICONS.gear + "</button>" +
@@ -1199,6 +1205,46 @@ function toggle(id, title, desc, checked) {
   return '<div class="toggle-row"><span><span class="tl">' + esc(title) + "</span>" +
     (desc ? '<span class="td">' + esc(desc) + "</span>" : "") + "</span>" +
     '<label class="switch"><input type="checkbox" id="' + id + '" ' + (checked ? "checked" : "") + ' /><span class="slider"></span></label></div>';
+}
+
+function filtersView() {
+  const mode = state.mode;
+  const modeName = { review: "Review", issues: "Issues", ship: "Ship" }[mode] || "Review";
+  const cur = (m) => (mode === m ? " current" : "");
+  const drafts = state.counts && state.counts.drafts;
+  const draftLine = state.showDrafts
+    ? "Draft PRs are <b>shown</b> right now."
+    : "Draft PRs are <b>hidden</b> right now" + (drafts ? " (" + drafts + " hidden)" : "") + ".";
+  return '<div class="page">' +
+    '<div class="page-head"><h2>What\u2019s filtered</h2><p>This queue is curated, not a raw list. Here is exactly what each mode surfaces, holds back, or routes elsewhere, so a missing PR or issue is never a mystery. You are viewing <b>' + esc(modeName) + '</b> mode.</p></div>' +
+
+    '<div class="section' + cur("review") + '"><h3>' + ICONS.eye + " Review</h3>" +
+      '<div class="policy">' +
+        '<div class="policy-row">' + ICONS.merge + "<span>A PR reaches the <b>shared review queue</b> only once <b>checks are green</b> and <b>all feedback is resolved</b>. Unfinished work stays in the author\u2019s <b>Your PRs</b> lane.</span></div>" +
+        '<div class="policy-row">' + ICONS.pr + "<span><b>Drafts, merge conflicts, and needs-author-action</b> PRs are routed out of the shared lists, so reviewers only see PRs that are genuinely ready.</span></div>" +
+        '<div class="policy-row">' + ICONS.xcircle + "<span><b>CI-failing</b> PRs are held out of Needs attention. A failure driven only by informational <b>aspire-1p checks</b> (proof of presence) is not counted as red.</span></div>" +
+        '<div class="policy-row">' + ICONS.usersSm + "<span>PRs you authored <b>as yourself or via Copilot</b> both count as yours, so delegated work still lands in your lanes and developer totals.</span></div>" +
+      "</div>" +
+    "</div>" +
+
+    '<div class="section' + cur("issues") + '"><h3>' + ICONS.tag + " Issues</h3>" +
+      '<div class="policy">' +
+        '<div class="policy-row">' + ICONS.alertSm + "<span><b>Focus buckets</b> surface the issues that matter first: regressions, CTI team items ([aspiree2e]), afscrome finds, and your own issues.</span></div>" +
+        '<div class="policy-row">' + ICONS.dot2 + "<span>Everything else lands in <b>Needs triage</b> (unlabeled and unassigned) or <b>Recently active</b>, so no open issue silently drops off.</span></div>" +
+      "</div>" +
+    "</div>" +
+
+    '<div class="section' + cur("ship") + '"><h3>' + ICONS.merge + " Ship</h3>" +
+      '<div class="policy">' +
+        '<div class="policy-row">' + ICONS.clock + "<span>Groups open work for the active milestone (<b>" + esc(prefs.release || state.release || "\u2014") + "</b>) so the release view stays focused on what is landing now.</span></div>" +
+      "</div>" +
+    "</div>" +
+
+    '<div class="section"><h3>Drafts</h3>' +
+      '<p class="hint">' + draftLine + " Drafts are prototypes and experiments, not review work. Change this in Settings.</p>" +
+      '<div class="row-actions"><button class="btn ghost" id="filters-to-settings">Open settings</button></div>' +
+    "</div>" +
+  "</div>";
 }
 
 function settingsView() {
@@ -1382,6 +1428,7 @@ function render(forward) {
   let inner;
   if (!state.authenticated) { view = "queue"; inner = authPicker(); }
   else if (view === "settings") inner = settingsView();
+  else if (view === "filters") inner = filtersView();
   else if (view === "accounts") inner = accountsView();
   else if (view === "notifications") inner = notificationsView();
   else inner = queueView();
@@ -1643,16 +1690,20 @@ function wire() {
   const back = document.getElementById("back-btn"); if (back) back.addEventListener("click", () => goView("queue", false));
   const bell = document.getElementById("bell-btn"); if (bell) bell.addEventListener("click", () => goView(view === "notifications" ? "queue" : "notifications"));
   const gear = document.getElementById("gear-btn"); if (gear) gear.addEventListener("click", () => goView(view === "settings" ? "queue" : "settings"));
+  const filt = document.getElementById("filters-btn"); if (filt) filt.addEventListener("click", () => goView(view === "filters" ? "queue" : "filters"));
   const acct = document.getElementById("acct-btn"); if (acct) acct.addEventListener("click", () => goView(view === "accounts" ? "queue" : "accounts"));
 
   const save = document.getElementById("save-settings"); if (save) save.addEventListener("click", saveSettings);
   const cancel = document.getElementById("cancel-settings"); if (cancel) cancel.addEventListener("click", () => goView("queue", false));
+  const fToSettings = document.getElementById("filters-to-settings"); if (fToSettings) fToSettings.addEventListener("click", () => goView("settings"));
 
   // The Esc/Enter hints on the settings buttons are real shortcuts, like the app's
-  // Cancel/Continue. Bound once so re-renders don't stack handlers.
+  // Cancel/Continue. Bound once so re-renders don't stack handlers. Esc also backs
+  // out of the filters info page, which has no Enter action of its own.
   if (!keysBound) {
     keysBound = true;
     document.addEventListener("keydown", function (e) {
+      if (view === "filters" && e.key === "Escape") { e.preventDefault(); goView("queue", false); return; }
       if (view !== "settings") return;
       if (e.key === "Escape") { e.preventDefault(); goView("queue", false); }
       else if (e.key === "Enter" && !e.isComposing && (e.target.tagName || "") !== "TEXTAREA") {
