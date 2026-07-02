@@ -120,14 +120,15 @@ suite('AppHostFilePresenceWatcher', () => {
     });
 
     test('constructor reports true when an AppHost file is already visible', async () => {
-        visibleEditors = [makeEditor('/test/AppHost.cs', appHostCsContent)];
+        const appHostPath = '/test/AppHost.cs';
+        visibleEditors = [makeEditor(appHostPath, appHostCsContent)];
 
         const watcher = new AppHostFilePresenceWatcher(repository);
         await waitForUpdate(watcher);
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
         assert.strictEqual(setOpenSpy.firstCall.args[0], true);
-        assert.strictEqual(setOpenSpy.firstCall.args[1], '/test/AppHost.cs');
+        assert.strictEqual(setOpenSpy.firstCall.args[1], vscode.Uri.file(appHostPath).fsPath);
         watcher.dispose();
     });
 
@@ -143,18 +144,20 @@ suite('AppHostFilePresenceWatcher', () => {
     });
 
     test('visibility change between AppHost files reports the new file path', async () => {
-        visibleEditors = [makeEditor('/test/First.AppHost/AppHost.cs', appHostCsContent)];
+        const firstAppHostPath = '/test/First.AppHost/AppHost.cs';
+        const secondAppHostPath = '/test/Second.AppHost/AppHost.cs';
+        visibleEditors = [makeEditor(firstAppHostPath, appHostCsContent)];
         const watcher = new AppHostFilePresenceWatcher(repository);
         await waitForUpdate(watcher);
         assert.strictEqual(setOpenSpy.calledOnce, true);
 
-        visibleEditors = [makeEditor('/test/Second.AppHost/AppHost.cs', appHostCsContent)];
+        visibleEditors = [makeEditor(secondAppHostPath, appHostCsContent)];
         captured.visibilityListeners.forEach(l => l(visibleEditors));
         await waitForUpdate(watcher);
 
         assert.strictEqual(setOpenSpy.callCount, 2);
         assert.strictEqual(setOpenSpy.secondCall.args[0], true);
-        assert.strictEqual(setOpenSpy.secondCall.args[1], '/test/Second.AppHost/AppHost.cs');
+        assert.strictEqual(setOpenSpy.secondCall.args[1], vscode.Uri.file(secondAppHostPath).fsPath);
         watcher.dispose();
     });
 
