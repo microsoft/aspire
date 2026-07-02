@@ -183,6 +183,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private bool _isTimestampUtc;
     private bool _noWrapLogs;
     private bool _showNoLogsMessage;
+    private string _logFilter = string.Empty;
     public ConsoleLogsViewModel PageViewModel { get; set; } = null!;
     private IDisposable? _consoleLogsFiltersChangedSubscription;
 
@@ -280,9 +281,24 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 await foreach (var changes in subscription.WithCancellation(_resourceSubscriptionToken).ConfigureAwait(false))
                 {
+                    var selectedResourceName = PageViewModel.SelectedResource?.Id?.InstanceId;
+                    var needsRender = false;
+
                     foreach (var (changeType, resource) in changes)
                     {
                         await OnResourceChanged(changeType, resource);
+
+                        // Track whether this batch contains changes that affect the visible page UI
+                        // (selected resource modified, or resources added/removed). Frequent property
+                        // updates on non-selected resources (health checks, state transitions) don't
+                        // require a full page re-render. Avoiding unnecessary re-renders prevents
+                        // FluentSearch's ImmediateDelay input buffer from being clobbered by stale
+                        // parameter values pushed during the debounce window.
+                        if (changeType == ResourceViewModelChangeType.Delete ||
+                            string.Equals(resource.Name, selectedResourceName, StringComparisons.ResourceName))
+                        {
+                            needsRender = true;
+                        }
 
                         // the initial snapshot we obtain is [almost] never correct (it's always empty)
                         // we still want to select the user's initial queried resource on page load,
@@ -292,17 +308,21 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                         if (ResourceName is not null && PageViewModel.SelectedResource is null && changeType == ResourceViewModelChangeType.Upsert && string.Equals(ResourceName, resource.Name, StringComparisons.ResourceName))
                         {
                             SetSelectedResourceOption(resource);
+                            needsRender = true;
                         }
                     }
 
-                    await InvokeAsync(() =>
+                    if (needsRender)
                     {
-                        // The selected resource may have changed, so update resource action buttons.
-                        // Update inside in the render's sync context so the buttons don't change while the UI is rendering.
-                        UpdateMenuButtons();
+                        await InvokeAsync(() =>
+                        {
+                            // The selected resource may have changed, so update resource action buttons.
+                            // Update inside the render's sync context so the buttons don't change while the UI is rendering.
+                            UpdateMenuButtons();
 
-                        StateHasChanged();
-                    });
+                            StateHasChanged();
+                        });
+                    }
                 }
             });
         }

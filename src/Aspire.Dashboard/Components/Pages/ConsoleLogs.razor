@@ -115,6 +115,14 @@
                 {
                     <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]" slot="end">@PageViewModel.Status</FluentLabel>
 
+                    <FluentSearch @bind-Value="_logFilter"
+                                  Name="console-logs-search"
+                                  Immediate="true"
+                                  ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                  Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                                  title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]"
+                                  slot="end" />
+
                     <AspireMenuButton
                         ButtonAppearance="Appearance.Lightweight"
                         Icon="@(new Icons.Regular.Size20.Options())"
@@ -125,6 +133,15 @@
             }
             else if (!_selectedResourceHasTerminal)
             {
+                <FluentSearch @bind-Value="_logFilter"
+                              Name="console-logs-search"
+                              Immediate="true"
+                              ImmediateDelay="@FluentUIExtensions.InputDelay"
+                              Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                              Label="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)].Value"
+                              title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsTextFilter)]"
+                              slot="end" />
+
                 <AspireMenuButton
                     Icon="@(new Icons.Regular.Size20.Options())"
                     Items="@_logsMenuItems"
@@ -164,6 +181,7 @@
                 <LogViewer
                 @ref="_logViewerRef"
                 LogEntries="@_logEntries"
+                FilterText="@_logFilter"
                 ShowTimestamp="@_showTimestamp"
                 IsTimestampUtc="@_isTimestampUtc"
                 NoWrapLogs="@_noWrapLogs"
