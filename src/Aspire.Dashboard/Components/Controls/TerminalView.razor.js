@@ -142,9 +142,14 @@ function cancelPendingReconnect(state) {
 //                      recompute font, cols×rows stay fixed (no broadcast).
 //
 // In secondary mode (someone else is primary), both control groups hide
-// (.read-only) and we lock our xterm grid to the producer's cols×rows
-// then CSS-scale .xterm to fit our viewport (letterboxing on whichever
-// axis has spare room).
+// (.read-only) and we lock our xterm grid to the producer's cols×rows,
+// then pick the largest integer font size whose rendered grid fits the
+// viewport (letterboxing on whichever axis has spare room). This mirrors
+// primary fixed-mode; we deliberately avoid CSS transform: scale() here
+// because xterm.js computes mouse-to-cell coordinates from
+// getBoundingClientRect (which returns transformed dims) divided by its
+// internally-measured cell width (which is untransformed), so any
+// scale ≠ 1 offsets text selection by roughly the scale factor.
 const MIN_FONT_PX = 4;
 const MAX_FONT_PX = 72;
 const DEFAULT_FONT_PX = 13;
@@ -387,6 +392,20 @@ function buildChrome(state) {
     const blazorElement = state.element;
     if (!blazorElement) return;
 
+    // Defense in depth: never leave a previous terminal's chrome attached to
+    // the Blazor container element. The .NET-side OnAfterRenderAsync guard
+    // is the primary protection against re-entrant initialization, but if
+    // anything ever calls initTerminal twice against the same element
+    // (resource stop+restart bursts, lifecycle bugs, future hot-reload, …)
+    // appending another host on top of an existing one leaves multiple
+    // stacked xterm instances all wired to the same WebSocket — input
+    // echoes everywhere and the terminals can render at different sizes.
+    // Clearing the element first means worst-case we drop the previous
+    // (now-orphaned) chrome instead of duplicating it.
+    while (blazorElement.firstChild) {
+        blazorElement.removeChild(blazorElement.firstChild);
+    }
+
     // The Blazor element already has inline width/height: 100%. Wrap
     // it with our own host so we can apply our flex column layout
     // without disturbing whatever else the parent has set on it.
@@ -445,12 +464,14 @@ function getAvailableBodySpace(state) {
 // Sizes the xterm display based on the current role and (in primary
 // mode) the current sizing mode. See docs/muxer-learnings.md §3.
 //
-//  - Secondary: lock the xterm grid to producer's cols×rows, then CSS
-//    transform: scale() .xterm so the rendered grid fills available
-//    space without distortion. Pin #terminal-body to the SCALED visible
-//    bounds so the frame card hugs the content (no empty layout space
-//    around the scaled grid). Letterboxing on whichever axis has spare
-//    room (preserves aspect).
+//  - Secondary: lock the xterm grid to producer's cols×rows and pick
+//    the largest integer font whose rendered grid fits the available
+//    stage. Pin #terminal-body to the natural rendered dims so the
+//    frame card hugs the grid (letterboxing appears in the stage on
+//    whichever axis has spare room). This is structurally the same as
+//    primary fixed-mode with fixedDims == producer dims, minus the
+//    resize broadcast — see the header comment for why we don't use
+//    CSS transform: scale() here.
 //
 //  - Primary, font-driven: pin #terminal-body to available stage, run
 //    fitAddon.fit() — grid grows/shrinks to fill at the user's chosen
@@ -480,8 +501,8 @@ function applyRoleAwareLayout(state) {
     const { width: availableW, height: availableH } = getAvailableBodySpace(state);
 
     if (!isSecondary) {
-        // Primary, no-primary, or pre-handshake: clear any secondary
-        // pinning on .xterm so it can flow naturally inside body.
+        // Primary, no-primary, or pre-handshake: clear any leftover
+        // .xterm inline styling so it flows naturally inside body.
         if (root.style.transform || root.style.width || root.style.height) {
             root.style.transform = '';
             root.style.transformOrigin = '';
@@ -505,6 +526,9 @@ function applyRoleAwareLayout(state) {
                 if (state.sizeMode !== 'fixed' || !state.fixedDims) return;
                 if (state.fixedDims.cols !== expectedCols || state.fixedDims.rows !== expectedRows) return;
                 pinBodyToNatural(state, root, body);
+                refineFontAfterCalibration(state, generation, expectedCols, expectedRows,
+                    () => state.sizeMode === 'fixed' && state.fixedDims &&
+                          state.fixedDims.cols === expectedCols && state.fixedDims.rows === expectedRows);
             });
         } else {
             // Font-driven: pin body to available, fit() picks cols×rows.
@@ -523,23 +547,66 @@ function applyRoleAwareLayout(state) {
         return;
     }
 
-    // Secondary lock-and-scale.
-    const needsResize = term.cols !== state.client.width || term.rows !== state.client.height;
-    if (needsResize) {
-        try { term.resize(state.client.width, state.client.height); } catch { /* ignore */ }
+    // Secondary: lock grid to producer dims, pick the largest integer
+    // font whose rendered grid fits, then hug the frame to the natural
+    // rendered size. No CSS transform — see the header comment for why.
+    // This is intentionally the same shape as primary fixed-mode above,
+    // minus the resize broadcast (secondary never drives the PTY).
+    const producerCols = state.client.width;
+    const producerRows = state.client.height;
+    const optFont = computeOptimalFont(state, producerCols, producerRows, availableW, availableH);
+    if (term.options.fontSize !== optFont) {
+        term.options.fontSize = optFont;
     }
+    state.currentFontPx = optFont;
+    if (term.cols !== producerCols || term.rows !== producerRows) {
+        try { term.resize(producerCols, producerRows); } catch { /* ignore */ }
+    }
+    requestAnimationFrame(() => {
+        if (generation !== state.layoutGeneration) return;
+        // Bail if role/producer dims changed while we were queued.
+        if (!state.client || state.client.isPrimary) return;
+        if (state.client.width !== producerCols || state.client.height !== producerRows) return;
+        pinBodyToNatural(state, root, body);
+        refineFontAfterCalibration(state, generation, producerCols, producerRows,
+            () => !!state.client && !state.client.isPrimary &&
+                  state.client.width === producerCols && state.client.height === producerRows);
+    });
+    notifyToolbar(state);
+}
 
-    // If we just resized, defer measurement to next frame so the
-    // renderer can write the new .xterm-screen dims first.
-    if (needsResize) {
-        requestAnimationFrame(() => {
-            if (generation !== state.layoutGeneration) return;
-            const fresh = getAvailableBodySpace(state);
-            measureAndScale(state, fresh.width, fresh.height);
-        });
-    } else {
-        measureAndScale(state, availableW, availableH);
-    }
+// On the very first calibrated render, computeOptimalFont bails out with
+// state.currentFontPx (the default 13px) because cellWRatio/cellHRatio
+// are still zero — those get seeded by calibrateRatios inside
+// pinBodyToNatural, which runs one RAF *after* the initial layout pass.
+// Result: the terminal opens at default font and only snaps to the
+// right size when a ResizeObserver tick (window resize, sidebar collapse)
+// re-drives layout.
+//
+// Once pinBodyToNatural has run, re-measure and recompute. If the
+// optimal font moved (typical on first open), adjust fontSize in place
+// and re-pin. We don't call applyRoleAwareLayout recursively because
+// that would bump generation and could stack under fast triggers; a
+// direct in-place adjustment converges in a single extra frame because
+// xterm's cell metrics per font-px are stable across small font deltas.
+function refineFontAfterCalibration(state, generation, cols, rows, stillApplicable) {
+    const term = state.term;
+    if (!term || !term.element) return;
+    const root = term.element;
+    const body = root.parentElement;
+    if (!body) return;
+    const fresh = getAvailableBodySpace(state);
+    if (fresh.width <= 0 || fresh.height <= 0) return;
+    const refined = computeOptimalFont(state, cols, rows, fresh.width, fresh.height);
+    if (refined === term.options.fontSize) return;
+    term.options.fontSize = refined;
+    state.currentFontPx = refined;
+    requestAnimationFrame(() => {
+        if (generation !== state.layoutGeneration) return;
+        if (!stillApplicable()) return;
+        pinBodyToNatural(state, root, body);
+        notifyToolbar(state);
+    });
 }
 
 function pinBodyToNatural(state, root, body) {
@@ -592,6 +659,10 @@ function setFontSize(state, newSize) {
     newSize = Math.max(MIN_FONT_PX, Math.min(MAX_FONT_PX, newSize));
     if (newSize === state.currentFontPx && state.sizeMode === 'font') return;
     state.currentFontPx = newSize;
+    // Preserve the caller's requested size as the "Fit-mode font" so the
+    // toolbar can show what Fit would produce even after a later fixed
+    // preset overwrites currentFontPx with an auto-calculated size.
+    state.fitFontPx = newSize;
     state.sizeMode = 'font';
     state.fixedDims = null;
     if (state.term) state.term.options.fontSize = state.currentFontPx;
@@ -670,6 +741,25 @@ function buildToolbarSnapshot(state) {
         ? `${state.fixedDims.cols}x${state.fixedDims.rows}`
         : 'auto';
 
+    // Predict what grid Fit mode would produce right now, using the
+    // last font size the user picked for font-driven mode. This lets the
+    // toolbar show a real preview on the Fit entry even while a fixed
+    // preset is currently locking the actual term.cols/rows. Requires
+    // calibration to have run at least once (cellWRatio/cellHRatio > 0).
+    let fitCols = 0;
+    let fitRows = 0;
+    if (state.cellWRatio > 0 && state.cellHRatio > 0 && state.fitFontPx > 0) {
+        const { width: availW, height: availH } = getAvailableBodySpace(state);
+        if (availW > 0 && availH > 0) {
+            const cellW = state.cellWRatio * state.fitFontPx;
+            const cellH = state.cellHRatio * state.fitFontPx;
+            if (cellW > 0 && cellH > 0) {
+                fitCols = Math.max(1, Math.floor(availW / cellW));
+                fitRows = Math.max(1, Math.floor(availH / cellH));
+            }
+        }
+    }
+
     return {
         terminalId: state.id,
         // Generation lets the .NET side discard stale snapshots that arrive
@@ -693,62 +783,13 @@ function buildToolbarSnapshot(state) {
         sizeSelectEnabled: isPrimary || canTakeControl,
         cols: term && term.cols ? term.cols : 0,
         rows: term && term.rows ? term.rows : 0,
+        fitCols,
+        fitRows,
     };
 }
 
-function measureAndScale(state, availableW, availableH) {
-    const term = state.term;
-    if (!term || !state.client) return;
-    const root = term.element;
-    if (!root) return;
-    const body = root.parentElement;
-    if (!body) return;
-
-    const screenEl =
-        root.querySelector('.xterm-screen') ||
-        root.querySelector('canvas.xterm-text-layer') ||
-        root;
-    const naturalWidth = screenEl.offsetWidth;
-    const naturalHeight = screenEl.offsetHeight;
-
-    if (naturalWidth <= 0 || naturalHeight <= 0 ||
-        availableW <= 0 || availableH <= 0) {
-        return;
-    }
-
-    const scale = Math.min(
-        availableW / naturalWidth,
-        availableH / naturalHeight);
-
-    if (scale <= 0) return;
-
-    const xtermTransform = `scale(${scale})`;
-    const xtermW = `${naturalWidth}px`;
-    const xtermH = `${naturalHeight}px`;
-    if (root.style.transform !== xtermTransform ||
-        root.style.width !== xtermW ||
-        root.style.height !== xtermH) {
-        root.style.transformOrigin = 'top left';
-        root.style.transform = xtermTransform;
-        root.style.width = xtermW;
-        root.style.height = xtermH;
-    }
-
-    // Math.floor + clamp to availableW/H so we never produce a body 1px
-    // wider than the stage from sub-pixel accumulation — a 1px overflow
-    // re-triggers ResizeObserver in a tight loop and looks like the
-    // terminal is bouncing.
-    const bodyW = `${Math.min(availableW, Math.floor(naturalWidth * scale))}px`;
-    const bodyH = `${Math.min(availableH, Math.floor(naturalHeight * scale))}px`;
-    if (body.style.width !== bodyW || body.style.height !== bodyH) {
-        body.style.width = bodyW;
-        body.style.height = bodyH;
-    }
-}
-
-// "Take control" handler. Clears any secondary lock-and-scale styling
-// then RequestPrimary at our current grid dims so the producer resizes
-// the PTY to match what we just laid out.
+// "Take control" handler. RequestPrimary at our current grid dims so
+// the producer resizes the PTY to match what we just laid out.
 function takePrimary(state) {
     const client = state.client;
     const term = state.term;
@@ -802,6 +843,12 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
         sizeMode: 'font',
         fixedDims: null,
         currentFontPx: DEFAULT_FONT_PX,
+        // Font size that "Fit" mode would use, tracked separately from
+        // currentFontPx because fixed-preset layout overwrites the latter
+        // with the auto-calculated optimal font. Preserving the user's last
+        // font-mode font here lets the toolbar preview show what cols x rows
+        // Fit would produce, without actually leaving fixed mode.
+        fitFontPx: DEFAULT_FONT_PX,
         cellWRatio: 0,
         cellHRatio: 0,
         layoutGeneration: 0,
@@ -1068,8 +1115,8 @@ function connectClient(state, wsUrl) {
         if (myGeneration !== state.reconnect.generation) return;
         dbg(state, 'client.onResize', { cols, rows });
         // Producer's grid changed (only happens via primary's Resize).
-        // For secondaries this is the trigger to re-lock-and-scale to
-        // the new dims.
+        // For secondaries this is the trigger to re-fit the frame to
+        // the new producer dims.
         applyRoleAwareLayout(state);
     };
 
@@ -1079,6 +1126,19 @@ function connectClient(state, wsUrl) {
         try {
             state.term?.write(`\r\n[workload exited with code ${code}]\r\n`);
         } catch { /* ignore */ }
+        // Notify the .NET host that the workload (PTY) has exited so the
+        // page can flip back to the Console logs view. We deliberately use
+        // a separate JSInvokable rather than overloading the toolbar
+        // snapshot because the toolbar status (connecting/primary/viewer/
+        // no-primary) describes the consumer-side WebSocket and primary
+        // ownership — it doesn't directly signal producer exit.
+        if (state.dotNetRef) {
+            try {
+                state.dotNetRef.invokeMethodAsync('OnTerminalExited', state.id, code ?? -1);
+            } catch (e) {
+                dbg(state, 'client.onExit: dotNet invoke failed', { error: e?.message });
+            }
+        }
     };
 
     client.onClose = (ev) => {
@@ -1201,12 +1261,6 @@ export function getSizePresets() {
     return SIZE_PRESETS.map((p) => ({ value: p.value, label: p.label, cols: p.cols, rows: p.rows }));
 }
 
-export function takePrimaryFromHost(id) {
-    const state = terminals.get(id);
-    if (!state) return;
-    takePrimary(state);
-}
-
 export function setFontSizeFromHost(id, newSize) {
     const state = terminals.get(id);
     if (!state || typeof newSize !== 'number') return;
@@ -1263,4 +1317,17 @@ export function refreshToolbarState(id) {
     if (!state) return;
     state._lastToolbarJson = null;
     flushToolbarState(state);
+}
+
+// Triggers a layout recompute on demand. Called by the .NET host after the
+// terminal element becomes visible again following a Console/Terminal view
+// flip — the wrapper goes from display:none to visible, which may or may
+// not trigger ResizeObserver depending on the browser's box-tree timing.
+// Forcing applyRoleAwareLayout here guarantees xterm rebinds to the new
+// available space immediately rather than waiting for the next external
+// resize event.
+export function refreshLayout(id) {
+    const state = terminals.get(id);
+    if (!state) return;
+    applyRoleAwareLayout(state);
 }

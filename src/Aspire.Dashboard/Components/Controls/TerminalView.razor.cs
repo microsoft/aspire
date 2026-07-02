@@ -20,6 +20,19 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private int _terminalId;
     private string? _connectedResourceName;
     private int _connectedReplicaIndex = -1;
+    // Guards against concurrent or re-entrant initialization. OnAfterRenderAsync
+    // can fire again while the first InitializeTerminalAsync await is still in
+    // flight (Blazor does not serialize OnAfterRenderAsync calls when re-renders
+    // happen during awaits). Without this latch, the non-firstRender branch
+    // below would see _connectedResourceName == null, mistake that for "rebind
+    // needed", call ReconnectAsync, and — because _terminalId is also still 0
+    // — fall through to InitializeTerminalAsync a second time. Each
+    // initTerminal call appends a brand-new xterm host element to the same
+    // Blazor container, leaving multiple stacked terminals in the DOM that
+    // mirror the same input/output stream. This pattern is easy to trigger
+    // on a resource stop+restart where the dashboard fires a burst of
+    // resource-snapshot-driven re-renders right after the page mounts.
+    private bool _initStarted;
 
     /// <summary>
     /// Gets or sets the user-facing display name of the resource that owns the
@@ -45,6 +58,16 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [Parameter]
     public EventCallback<TerminalToolbarState> OnToolbarStateChanged { get; set; }
 
+    /// <summary>
+    /// Raised when the JS side reports that the workload (PTY) has exited.
+    /// The host page subscribes so it can auto-switch the view back to the
+    /// resource's console logs — the workload has stopped producing
+    /// terminal bytes and the final exit code / hosting messages live in
+    /// the console log stream.
+    /// </summary>
+    [Parameter]
+    public EventCallback<TerminalExitInfo> OnExited { get; set; }
+
     [Inject]
     public required IJSRuntime JS { get; init; }
 
@@ -60,9 +83,22 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
         if (firstRender)
         {
+            _initStarted = true;
             await InitializeTerminalAsync();
             _connectedResourceName = ResourceName;
             _connectedReplicaIndex = ReplicaIndex;
+            return;
+        }
+
+        // If a re-render fires while the very first initTerminal call is still
+        // in flight, do nothing here. Once that call completes the firstRender
+        // path will set _connectedResourceName / _connectedReplicaIndex and
+        // any future rebind needed will be caught on the next render after
+        // that. Without this guard the rebind branch below would re-enter
+        // initialization and stack a second xterm onto the same container —
+        // see the comment on _initStarted.
+        if (_initStarted && _terminalId == 0)
+        {
             return;
         }
 
@@ -158,6 +194,26 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     }
 
     /// <summary>
+    /// Invoked by the JS terminal when the workload (PTY) exits. The JS side
+    /// also writes a "[workload exited with code N]" line into the xterm
+    /// buffer; this callback exists so the host page can react beyond the
+    /// in-terminal message (e.g. flip the visible view back to console logs).
+    /// </summary>
+    [JSInvokable]
+    public Task OnTerminalExited(int terminalId, int exitCode)
+    {
+        // Drop stale notifications that arrive after this view was rebound to
+        // a different resource/replica — the previous JS terminal id is no
+        // longer relevant to the currently displayed resource.
+        if (_terminalId != 0 && terminalId != _terminalId)
+        {
+            return Task.CompletedTask;
+        }
+
+        return OnExited.InvokeAsync(new TerminalExitInfo { TerminalId = terminalId, ExitCode = exitCode });
+    }
+
+    /// <summary>
     /// Invoked by the JS terminal whenever its role/size/font state changes.
     /// Forwards the snapshot to the host page via <see cref="OnToolbarStateChanged"/>.
     /// JS remains the source of truth for terminal state — the toolbar
@@ -175,26 +231,6 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         }
 
         return OnToolbarStateChanged.InvokeAsync(state);
-    }
-
-    /// <summary>
-    /// Requests primary control of the producer session. No-op if the terminal
-    /// JS module hasn't initialized yet or if we're already primary; JS
-    /// performs the authoritative role checks.
-    /// </summary>
-    public async Task TakePrimaryAsync()
-    {
-        if (_jsModule is null || _terminalId == 0)
-        {
-            return;
-        }
-        try
-        {
-            await _jsModule.InvokeVoidAsync("takePrimaryFromHost", _terminalId);
-        }
-        catch (JSDisconnectedException)
-        {
-        }
     }
 
     /// <summary>
@@ -279,6 +315,29 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Asks the JS terminal to recompute its layout. Called by the host
+    /// page when the terminal element transitions from hidden back to
+    /// visible (e.g. the user flips the page-level View dropdown from
+    /// Console back to Terminal) — display:none → visible does not always
+    /// trigger ResizeObserver, so forcing a relayout here guarantees the
+    /// terminal fills the available space immediately.
+    /// </summary>
+    public async Task RefreshLayoutAsync()
+    {
+        if (_jsModule is null || _terminalId == 0)
+        {
+            return;
+        }
+        try
+        {
+            await _jsModule.InvokeVoidAsync("refreshLayout", _terminalId);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
     private string BuildWebSocketUrl(string resource, int replica)
     {
         var baseUri = new Uri(NavigationManager.BaseUri);
@@ -357,6 +416,18 @@ public sealed record TerminalToolbarState
 
     /// <summary>Current xterm grid height.</summary>
     public int Rows { get; init; }
+
+    /// <summary>
+    /// Cols the terminal would take on if switched to Fit mode right now,
+    /// computed from the container size and the last font-driven font. 0
+    /// when calibration hasn't produced cell metrics yet. Distinct from
+    /// <see cref="Cols"/>, which reflects the actual current grid (which
+    /// may be locked by a fixed preset).
+    /// </summary>
+    public int FitCols { get; init; }
+
+    /// <summary>Rows counterpart to <see cref="FitCols"/>.</summary>
+    public int FitRows { get; init; }
 }
 
 /// <summary>
@@ -364,3 +435,15 @@ public sealed record TerminalToolbarState
 /// host page's size dropdown).
 /// </summary>
 public sealed record TerminalSizePreset(string Value, string Label, int Cols, int Rows);
+
+/// <summary>
+/// Payload pushed up from the JS terminal when the workload (PTY) exits.
+/// </summary>
+public sealed record TerminalExitInfo
+{
+    /// <summary>The JS-side terminal id that emitted the exit notification.</summary>
+    public int TerminalId { get; init; }
+
+    /// <summary>The workload's exit code, or <c>-1</c> when the JS side did not receive one.</summary>
+    public int ExitCode { get; init; }
+}
