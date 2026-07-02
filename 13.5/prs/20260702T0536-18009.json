@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "New CLI feature: installs AI agent telemetry hooks during aspire agent init",
+  "mergedAt": "2026-07-02T05:36:55Z",
+  "number": 18009,
+  "runDate": "2026-07-02T07:03:19Z",
+  "status": "included",
+  "title": "Collect AI agent skill-usage telemetry (CLI command + agent init hooks)"
+}

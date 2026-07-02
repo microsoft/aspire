@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Running `aspire agent init` now installs telemetry hook scripts that record AI skill and MCP tool usage through the CLI telemetry pipeline. Opt out at any time by setting the `ASPIRE_CLI_TELEMETRY_OPTOUT` environment variable.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udd2d",
+  "firstMergedAt": "2026-07-02T05:36:55Z",
+  "lastMergedAt": "2026-07-02T05:36:55Z",
+  "name": "AI agent skill-usage telemetry",
+  "owner": "IEvangelist",
+  "prs": [
+    18009
+  ]
+}

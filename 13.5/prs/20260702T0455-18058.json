@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI/build infrastructure: automated issue filing for CI failures; area-engineering-systems label, no user-visible effect in released products",
+  "mergedAt": "2026-07-02T04:55:30Z",
+  "number": 18058,
+  "runDate": "2026-07-02T07:03:19Z",
+  "status": "excluded",
+  "title": "ci: file deduplicated GitHub issues for failing CI, scheduled, nightly, outerloop & quarantine runs"
+}

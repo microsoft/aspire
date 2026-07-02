@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Updates aspire.dev website own AppHost infrastructure (not documentation content); no markdown documentation files changed",
+  "mergedAt": "2026-07-02T02:31:26Z",
+  "number": 1171,
+  "runDate": "2026-07-02T07:03:19Z",
+  "status": "excluded",
+  "title": "Adopt `PublishWithContainerFiles` for frontend assets and remove `esproj` coupling"
+}
