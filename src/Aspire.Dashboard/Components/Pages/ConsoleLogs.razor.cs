@@ -1555,20 +1555,20 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     }
 
     // Rebuild the presets list for rendering so the "Fit" (auto) entry shows
-    // the current live cols×rows next to its label — e.g. "Fit (80×24)". The
-    // fixed presets already have dims baked into their labels ("80×24"), so
-    // this only rewrites the auto entry. Called from markup on each render;
-    // the list is short (~6 items) and only allocates when there are live
-    // dims to fold in.
+    // the cols x rows Fit mode *would* produce right now — using the JS-side
+    // FitCols/FitRows preview rather than the actual current grid dims, which
+    // may be locked by a fixed preset. Called from the menu builder on each
+    // UpdateMenuButtons pass; the list is short (~6 items) and only allocates
+    // when there is a Fit preview to fold in.
     private IReadOnlyList<Controls.TerminalSizePreset> GetTerminalSizePresetsForDisplay(Controls.TerminalToolbarState state)
     {
-        if (state.Cols <= 0 || state.Rows <= 0)
+        if (state.FitCols <= 0 || state.FitRows <= 0)
         {
             return _terminalSizePresets;
         }
 
         var baseAutoLabel = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)];
-        var autoLabel = $"{baseAutoLabel} ({state.Cols}×{state.Rows})";
+        var autoLabel = $"{baseAutoLabel} ({state.FitCols}×{state.FitRows})";
 
         return _terminalSizePresets
             .Select(p => p.Value == "auto" ? p with { Label = autoLabel } : p)

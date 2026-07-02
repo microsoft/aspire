@@ -659,6 +659,10 @@ function setFontSize(state, newSize) {
     newSize = Math.max(MIN_FONT_PX, Math.min(MAX_FONT_PX, newSize));
     if (newSize === state.currentFontPx && state.sizeMode === 'font') return;
     state.currentFontPx = newSize;
+    // Preserve the caller's requested size as the "Fit-mode font" so the
+    // toolbar can show what Fit would produce even after a later fixed
+    // preset overwrites currentFontPx with an auto-calculated size.
+    state.fitFontPx = newSize;
     state.sizeMode = 'font';
     state.fixedDims = null;
     if (state.term) state.term.options.fontSize = state.currentFontPx;
@@ -737,6 +741,25 @@ function buildToolbarSnapshot(state) {
         ? `${state.fixedDims.cols}x${state.fixedDims.rows}`
         : 'auto';
 
+    // Predict what grid Fit mode would produce right now, using the
+    // last font size the user picked for font-driven mode. This lets the
+    // toolbar show a real preview on the Fit entry even while a fixed
+    // preset is currently locking the actual term.cols/rows. Requires
+    // calibration to have run at least once (cellWRatio/cellHRatio > 0).
+    let fitCols = 0;
+    let fitRows = 0;
+    if (state.cellWRatio > 0 && state.cellHRatio > 0 && state.fitFontPx > 0) {
+        const { width: availW, height: availH } = getAvailableBodySpace(state);
+        if (availW > 0 && availH > 0) {
+            const cellW = state.cellWRatio * state.fitFontPx;
+            const cellH = state.cellHRatio * state.fitFontPx;
+            if (cellW > 0 && cellH > 0) {
+                fitCols = Math.max(1, Math.floor(availW / cellW));
+                fitRows = Math.max(1, Math.floor(availH / cellH));
+            }
+        }
+    }
+
     return {
         terminalId: state.id,
         // Generation lets the .NET side discard stale snapshots that arrive
@@ -760,6 +783,8 @@ function buildToolbarSnapshot(state) {
         sizeSelectEnabled: isPrimary || canTakeControl,
         cols: term && term.cols ? term.cols : 0,
         rows: term && term.rows ? term.rows : 0,
+        fitCols,
+        fitRows,
     };
 }
 
@@ -818,6 +843,12 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
         sizeMode: 'font',
         fixedDims: null,
         currentFontPx: DEFAULT_FONT_PX,
+        // Font size that "Fit" mode would use, tracked separately from
+        // currentFontPx because fixed-preset layout overwrites the latter
+        // with the auto-calculated optimal font. Preserving the user's last
+        // font-mode font here lets the toolbar preview show what cols x rows
+        // Fit would produce, without actually leaving fixed mode.
+        fitFontPx: DEFAULT_FONT_PX,
         cellWRatio: 0,
         cellHRatio: 0,
         layoutGeneration: 0,

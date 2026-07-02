@@ -416,6 +416,18 @@ public sealed record TerminalToolbarState
 
     /// <summary>Current xterm grid height.</summary>
     public int Rows { get; init; }
+
+    /// <summary>
+    /// Cols the terminal would take on if switched to Fit mode right now,
+    /// computed from the container size and the last font-driven font. 0
+    /// when calibration hasn't produced cell metrics yet. Distinct from
+    /// <see cref="Cols"/>, which reflects the actual current grid (which
+    /// may be locked by a fixed preset).
+    /// </summary>
+    public int FitCols { get; init; }
+
+    /// <summary>Rows counterpart to <see cref="FitCols"/>.</summary>
+    public int FitRows { get; init; }
 }
 
 /// <summary>
