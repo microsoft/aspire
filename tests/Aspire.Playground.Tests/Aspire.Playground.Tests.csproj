@@ -101,7 +101,6 @@
     <ProjectReference Include="$(PlaygroundSourceDir)withdockerfile/WithDockerfile.AppHost/WithDockerfile.AppHost.csproj" />
     <ProjectReference Include="$(PlaygroundSourceDir)BlazorHosted/BlazorHosted.AppHost/BlazorHosted.AppHost.csproj" />
     <ProjectReference Include="$(PlaygroundSourceDir)BlazorStandalone/BlazorStandalone.AppHost/BlazorStandalone.AppHost.csproj" />
-    <ProjectReference Include="$(PlaygroundSourceDir)Godot/Godot.AppHost/Godot.AppHost.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(PrepareForHelix)' == 'true'" Label="Prepare archive dir for helix">
