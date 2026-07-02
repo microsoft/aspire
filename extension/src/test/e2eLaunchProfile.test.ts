@@ -303,6 +303,34 @@ suite('E2E launch profile', () => {
         assert.ok(!appHostTreeE2E.includes('clipboardTextToRestore'));
     });
 
+    test('keeps copied values out of E2E control command results', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const treeActionsE2E = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
+
+        const copyAppHostPathCase = getSwitchCase(e2eStateFileBridge, 'copyAppHostPath', 'viewAppHostLogFile');
+        const copyLogFilePathCase = getSwitchCase(e2eStateFileBridge, 'copyLogFilePath', 'viewResourceLogs');
+        const copyResourceNameCase = getSwitchCase(e2eStateFileBridge, 'copyResourceName', 'copyEndpointUrl');
+        const copyEndpointUrlCase = getSwitchCase(e2eStateFileBridge, 'copyEndpointUrl', 'openInIntegratedBrowser');
+
+        assert.ok(copyAppHostPathCase.includes("vscode.commands.executeCommand('aspire-vscode.copyAppHostPath'"));
+        assert.ok(copyLogFilePathCase.includes("vscode.commands.executeCommand('aspire-vscode.copyLogFilePath'"));
+        assert.ok(copyResourceNameCase.includes("vscode.commands.executeCommand('aspire-vscode.copyResourceName'"));
+        assert.ok(copyEndpointUrlCase.includes("vscode.commands.executeCommand('aspire-vscode.copyEndpointUrl'"));
+
+        assert.ok(!copyAppHostPathCase.includes('return copiedPath;'));
+        assert.ok(!copyAppHostPathCase.includes("'appHostPath'"));
+        assert.ok(!copyLogFilePathCase.includes('return logFilePath;'));
+        assert.ok(!copyLogFilePathCase.includes("'logFilePath'"));
+        assert.ok(!copyResourceNameCase.includes('return command.resourceName;'));
+        assert.ok(!copyEndpointUrlCase.includes('return endpoint.url;'));
+
+        assert.ok(!treeActionsE2E.includes('copiedAppHost.result'));
+        assert.ok(!treeActionsE2E.includes('copiedResourceName.result'));
+        assert.ok(!treeActionsE2E.includes('copiedEndpointUrl.result'));
+        assert.ok(!treeActionsE2E.includes('copiedLogPath.result'));
+    });
+
     test('latches E2E AppHost stopping path transitions before snapshots can clear', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
@@ -527,3 +555,13 @@ suite('E2E launch profile', () => {
         assert.ok(!resourceLifecycleCommands.includes("['Stopped', 'Finished', 'Exited']"));
     });
 });
+
+function getSwitchCase(source: string, startCase: string, nextCase: string): string {
+    const start = source.indexOf(`case '${startCase}':`);
+    const end = source.indexOf(`case '${nextCase}':`, start);
+
+    assert.ok(start >= 0, `Expected to find ${startCase} case.`);
+    assert.ok(end > start, `Expected to find ${nextCase} case after ${startCase}.`);
+
+    return source.slice(start, end);
+}

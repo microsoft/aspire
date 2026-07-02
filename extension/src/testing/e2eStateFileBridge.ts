@@ -356,11 +356,10 @@ async function executeE2eControlCommand(
     }
     case 'copyAppHostPath': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
-      const copiedPath = getElementStringProperty(element, 'appHostPath') ?? command.appHostPath;
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyAppHostPath', element);
       markStarted();
       await commandPromise;
-      return copiedPath;
+      return undefined;
     }
     case 'viewAppHostLogFile': {
       const element = getLogFileElement(appHostTreeProvider, command.appHostPath);
@@ -371,11 +370,10 @@ async function executeE2eControlCommand(
     }
     case 'copyLogFilePath': {
       const element = getLogFileElement(appHostTreeProvider, command.appHostPath);
-      const logFilePath = getRequiredElementStringProperty(element, 'logFilePath', 'Aspire extension E2E log file command found a tree item without a log file path.');
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyLogFilePath', element);
       markStarted();
       await commandPromise;
-      return logFilePath;
+      return undefined;
     }
     case 'viewResourceLogs': {
       const element = getResourceElement(appHostTreeProvider, command.resourceName, command.appHostPath);
@@ -394,14 +392,14 @@ async function executeE2eControlCommand(
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyResourceName', element);
       markStarted();
       await commandPromise;
-      return command.resourceName;
+      return undefined;
     }
     case 'copyEndpointUrl': {
       const endpoint = getEndpointElement(appHostTreeProvider, command);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.copyEndpointUrl', endpoint.element);
       markStarted();
       await commandPromise;
-      return endpoint.url;
+      return undefined;
     }
     case 'openInIntegratedBrowser': {
       const endpoint = getEndpointElement(appHostTreeProvider, command);
@@ -1279,24 +1277,6 @@ function getLogFileElement(appHostTreeProvider: AspireAppHostTreeProvider, appHo
   }
 
   return element;
-}
-
-function getRequiredElementStringProperty(element: unknown, propertyName: string, errorMessage: string): string {
-  const value = getElementStringProperty(element, propertyName);
-  if (value === undefined) {
-    throw new Error(errorMessage);
-  }
-
-  return value;
-}
-
-function getElementStringProperty(element: unknown, propertyName: string): string | undefined {
-  if (!element || typeof element !== 'object' || !(propertyName in element)) {
-    return undefined;
-  }
-
-  const value = (element as Record<string, unknown>)[propertyName];
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 function getActiveEditorInfo(): { uri?: string; fileName?: string; text?: string } {
