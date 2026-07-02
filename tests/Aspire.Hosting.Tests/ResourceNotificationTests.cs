@@ -44,6 +44,34 @@ public class ResourceNotificationTests
         });
     }
 
+    [Fact]
+    public void TerminatedStateIsTerminalAndBuildable()
+    {
+        Assert.Contains(KnownResourceStates.Terminated, KnownResourceStates.TerminalStates);
+        Assert.Contains(KnownResourceStates.Terminated, KnownResourceStates.BuildableStates);
+    }
+
+    [Fact]
+    public async Task WaitForResourceHealthyAsyncStopOnResourceUnavailableThrowsWhenResourceIsTerminated()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var waitTask = notificationService.WaitForResourceHealthyAsync(resource.Name, WaitBehavior.StopOnResourceUnavailable);
+
+        await notificationService.PublishUpdateAsync(resource, s => s with
+        {
+            State = KnownResourceStates.Terminated
+        }).DefaultTimeout();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        {
+            await waitTask;
+        }).DefaultTimeout();
+
+        Assert.Equal("Stopped waiting for resource 'myResource' to become healthy because it entered the 'Terminated' state.", ex.Message);
+    }
+
     [Theory]
     [InlineData(typeof(ProjectResource), KnownResourceTypes.Project)]
     [InlineData(typeof(ContainerResource), KnownResourceTypes.Container)]
@@ -499,6 +527,68 @@ public class ResourceNotificationTests
 
         Assert.True(notificationService.TryGetCurrentState(resource.Name, out var completedWaitingEvent));
         Assert.DoesNotContain(completedWaitingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesThrowsWhenCompletionDependencyIsTerminated()
+    {
+        var dependency = new CustomResource("dependency");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency, WaitType.WaitForCompletion));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(resource, cts.Token);
+
+        await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                GetWaitingForDependencies(re).SequenceEqual(new[] { dependency.Name }),
+            cts.Token).DefaultTimeout();
+
+        await notificationService.PublishUpdateAsync(dependency, s => s with
+        {
+            State = "terminated"
+        }).DefaultTimeout();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        {
+            await waitTask;
+        }).DefaultTimeout();
+
+        Assert.Equal("Resource 'resource' stopped waiting for dependency resource 'dependency' because it was terminated.", ex.Message);
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesThrowsWhenStartedDependencyIsTerminated()
+    {
+        var dependency = new CustomResource("dependency");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency, WaitType.WaitUntilStarted));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(resource, cts.Token);
+
+        await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                GetWaitingForDependencies(re).SequenceEqual(new[] { dependency.Name }),
+            cts.Token).DefaultTimeout();
+
+        await notificationService.PublishUpdateAsync(dependency, s => s with
+        {
+            State = "terminated"
+        }).DefaultTimeout();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        {
+            await waitTask;
+        }).DefaultTimeout();
+
+        Assert.Equal("Resource 'resource' stopped waiting for dependency resource 'dependency' because it entered the 'terminated' state prematurely.", ex.Message);
     }
 
     [Fact]
@@ -1102,6 +1192,70 @@ public class ResourceNotificationTests
         // The wait task should propagate the exception
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => waitTask.DefaultTimeout());
         Assert.Equal("ResourceReady failed", ex.Message);
+    }
+
+    [Fact]
+    public async Task WaitForResourceHealthyAsyncStopOnResourceUnavailableThrowsWhenResourceTerminates()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var waitTask = notificationService.WaitForResourceHealthyAsync(
+            resource.Name,
+            WaitBehavior.StopOnResourceUnavailable);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Terminated
+        }).DefaultTimeout();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => waitTask.DefaultTimeout());
+        Assert.Equal("Stopped waiting for resource 'myResource' to become healthy because it entered the 'Terminated' state.", ex.Message);
+    }
+
+    [Fact]
+    public async Task WaitForResourceHealthyAsyncStopOnResourceUnavailableThrowsWhenResourceTerminatesAfterHealthy()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var waitTask = notificationService.WaitForResourceHealthyAsync(
+            resource.Name,
+            WaitBehavior.StopOnResourceUnavailable);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        Assert.False(waitTask.IsCompleted);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Terminated
+        }).DefaultTimeout();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => waitTask.DefaultTimeout());
+        Assert.Equal("Stopped waiting for resource 'myResource' to become healthy because it entered the 'Terminated' state.", ex.Message);
+    }
+
+    [Fact]
+    public async Task WaitForResourceHealthyAsyncStopOnResourceUnavailableUsesResourceStateComparer()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var waitTask = notificationService.WaitForResourceHealthyAsync(
+            resource.Name,
+            WaitBehavior.StopOnResourceUnavailable);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = "terminated"
+        }).DefaultTimeout();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => waitTask.DefaultTimeout());
+        Assert.Equal("Stopped waiting for resource 'myResource' to become healthy because it entered the 'terminated' state.", ex.Message);
     }
 
     [Fact]
