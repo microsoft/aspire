@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes.Annotations;
 using Aspire.Hosting.Kubernetes.Resources;
 
 namespace Aspire.Hosting.Kubernetes.Extensions;
@@ -200,12 +203,42 @@ internal static class ResourceExtensions
             return podTemplateSpec;
         }
 
+        // Look up first-class persistent volume bindings on the workload. When a
+        // ContainerMountAnnotation matches a binding by name, the publisher routes the
+        // pod's volumes[] entry through the binding's generated PVC instead of the
+        // environment's default storage type.
+        Dictionary<string, KubernetesPersistentVolumeBindingAnnotation>? bindingsByVolumeName = null;
+        if (context.TargetResource.TryGetAnnotationsOfType<KubernetesPersistentVolumeBindingAnnotation>(out var volumeBindings))
+        {
+            bindingsByVolumeName = new Dictionary<string, KubernetesPersistentVolumeBindingAnnotation>(StringComparer.Ordinal);
+            foreach (var binding in volumeBindings)
+            {
+                bindingsByVolumeName[binding.Volume.Name] = binding;
+            }
+        }
+
         foreach (var volume in context.Volumes)
         {
             var podVolume = new VolumeV1
             {
                 Name = volume.Name,
             };
+
+            if (bindingsByVolumeName is not null && bindingsByVolumeName.TryGetValue(volume.Name, out var binding))
+            {
+                // Route the pod's volumes[] entry through the PV resource's canonical
+                // PVC name. We call GetClaimName() rather than reading GeneratedClaim
+                // because this method runs during the workload-compose loop, while
+                // GeneratedClaim is only populated later by ProcessPersistentVolumeResources.
+                // Centralizing name derivation on the resource keeps this claimName
+                // in lockstep with BuildPersistentVolumeClaim's metadata.name.
+                podVolume.PersistentVolumeClaim = new()
+                {
+                    ClaimName = binding.Volume.GetClaimName(),
+                };
+                podTemplateSpec.Spec.Volumes.Add(podVolume);
+                continue;
+            }
 
             switch (context.Parent.DefaultStorageType.ToLowerInvariant())
             {
@@ -222,7 +255,14 @@ internal static class ResourceExtensions
                     break;
 
                 case "pvc":
-                    _ = CreatePersistentVolume(context, volume);
+                    // Only emit a PersistentVolumeClaim — the cluster's StorageClass
+                    // (named by DefaultStorageClassName or the cluster default) drives
+                    // dynamic provisioning of the backing PersistentVolume. Statically
+                    // pre-provisioned PVs are only emitted by the first-class
+                    // KubernetesPersistentVolumeResource path above; emitting a bare PV
+                    // here would be missing a PersistentVolumeSource (csi/hostPath/local
+                    // /nfs/...) and would be rejected by `kubectl apply`. See
+                    // https://kubernetes.io/docs/concepts/storage/persistent-volumes/#dynamic.
                     var pvc = CreatePersistentVolumeClaim(context, volume);
                     podVolume.PersistentVolumeClaim = new()
                     {
@@ -404,50 +444,6 @@ internal static class ResourceExtensions
         return container;
     }
 #pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
-    private static PersistentVolume CreatePersistentVolume(KubernetesResource context, VolumeMountV1 volume)
-    {
-        var pvName = context.TargetResource.Name.ToPvName(volume.Name);
-
-        if (context.PersistentVolumes.FirstOrDefault(pv => pv.Metadata.Name == pvName) is { } existingVolume)
-        {
-            return existingVolume;
-        }
-
-        var newPv = new PersistentVolume
-        {
-            Metadata =
-            {
-                Name = pvName,
-                Labels = context.Labels.ToDictionary(),
-            },
-            Spec = new()
-            {
-                Capacity = new()
-                {
-                    ["storage"] = context.Parent.DefaultStorageSize,
-                },
-                AccessModes = { context.Parent.DefaultStorageReadWritePolicy },
-            },
-        };
-
-        if (!string.IsNullOrEmpty(context.Parent.DefaultStorageClassName))
-        {
-            newPv.Spec.StorageClassName = context.Parent.DefaultStorageClassName;
-        }
-
-        if (context.Parent.DefaultStorageType.Equals("hostpath", StringComparison.OrdinalIgnoreCase))
-        {
-            newPv.Spec.HostPath = new()
-            {
-                Path = volume.Name,
-            };
-        }
-
-        context.PersistentVolumes.Add(newPv);
-
-        return newPv;
-    }
 
     private static PersistentVolumeClaim CreatePersistentVolumeClaim(KubernetesResource context, VolumeMountV1 volume)
     {

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
@@ -479,6 +480,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         // Process Gateway API resources
         await ProcessGatewayResources(appModel, deploymentTargets, logger, context.CancellationToken).ConfigureAwait(false);
+
+        // Process first-class persistent volume resources
+        await ProcessPersistentVolumeResources(appModel, context.CancellationToken).ConfigureAwait(false);
     }
 
     private static IContainerRegistry? GetContainerRegistry(KubernetesEnvironmentResource environment, DistributedApplicationModel appModel)
@@ -863,6 +867,74 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             await BuildGatewayObjects(gatewayResource, deploymentTargets, logger, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private async Task ProcessPersistentVolumeResources(DistributedApplicationModel model, CancellationToken cancellationToken)
+    {
+        var volumeResources = model.Resources
+            .OfType<KubernetesPersistentVolumeResource>()
+            .Where(v => v.Parent == this);
+
+        foreach (var volumeResource in volumeResources)
+        {
+            volumeResource.GeneratedClaim = await BuildPersistentVolumeClaim(volumeResource, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<PersistentVolumeClaim> BuildPersistentVolumeClaim(
+        KubernetesPersistentVolumeResource volumeResource,
+        CancellationToken cancellationToken)
+    {
+        var claim = new PersistentVolumeClaim
+        {
+            Metadata =
+            {
+                Name = volumeResource.GetClaimName(),
+            },
+            Spec = new PersistentVolumeClaimSpecV1
+            {
+                Resources = new VolumeResourceRequirementsV1(),
+            },
+        };
+
+        foreach (var (key, value) in volumeResource.VolumeAnnotations)
+        {
+            claim.Metadata.Annotations[key] = await ResolveExpressionAsync(value, volumeResource.Name, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Resolve access modes, falling back to the env-wide policy when none configured.
+        if (volumeResource.AccessModes.Count == 0)
+        {
+            claim.Spec.AccessModes.Add(DefaultStorageReadWritePolicy);
+        }
+        else
+        {
+            foreach (var mode in volumeResource.AccessModes)
+            {
+                claim.Spec.AccessModes.Add(mode.ToKubernetesString());
+            }
+        }
+
+        // Capacity falls back to the env-wide default, matching the legacy emission path.
+        var capacity = volumeResource.Capacity is { } capacityExpression
+            ? await ResolveExpressionAsync(capacityExpression, volumeResource.Name, cancellationToken).ConfigureAwait(false)
+            : DefaultStorageSize;
+        claim.Spec.Resources.Requests.Add("storage", capacity);
+
+        if (volumeResource.StorageClassName is { } storageClassExpression)
+        {
+            var storageClass = await ResolveExpressionAsync(storageClassExpression, volumeResource.Name, cancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(storageClass))
+            {
+                claim.Spec.StorageClassName = storageClass;
+            }
+        }
+        else if (!string.IsNullOrEmpty(DefaultStorageClassName))
+        {
+            claim.Spec.StorageClassName = DefaultStorageClassName;
+        }
+
+        return claim;
     }
 
     private async Task BuildGatewayObjects(

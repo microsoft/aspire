@@ -2,10 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Globalization;
 using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes.Annotations;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
@@ -47,7 +49,6 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     internal Dictionary<string, string> Labels { get; private set; } = [];
     internal List<string> Commands { get; } = [];
     internal List<VolumeMountV1> Volumes { get; } = [];
-    internal List<PersistentVolume> PersistentVolumes { get; } = [];
     internal List<PersistentVolumeClaim> PersistentVolumeClaims { get; } = [];
 #pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     internal List<(ProbeType Type, ProbeV1 Probe)> Probes { get; } = [];
@@ -125,11 +126,6 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             yield return Service;
         }
 
-        foreach (var volume in PersistentVolumes)
-        {
-            yield return volume;
-        }
-
         foreach (var volumeClaim in PersistentVolumeClaims)
         {
             yield return volumeClaim;
@@ -167,7 +163,12 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private void CreateApplication()
     {
-        if (resource is IResourceWithConnectionString)
+        // Promote to a StatefulSet when the workload is bound to a first-class persistent
+        // volume — Kubernetes requires stable identity and ordered rollout for pods that
+        // share named PVCs. The historical IResourceWithConnectionString rule remains so
+        // existing integrations that imply state continue to render as StatefulSets.
+        if (resource is IResourceWithConnectionString ||
+            resource.HasAnnotationOfType<KubernetesPersistentVolumeBindingAnnotation>())
         {
             Workload = resource.ToStatefulSet(this);
             return;
