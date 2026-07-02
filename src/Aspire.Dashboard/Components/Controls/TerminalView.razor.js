@@ -492,13 +492,25 @@ function applyRoleAwareLayout(state) {
     const body = root.parentElement;
     if (!body) return;
 
+    // Bail when the terminal container has been laid out to zero — most
+    // commonly because ConsoleLogs flipped this view to display:none while
+    // Console is active. Running the layout at zero would pin body.style
+    // width/height to 0px (fixed mode) or resize the xterm grid to 1x1
+    // (fit mode), and neither necessarily gets reversed when the browser
+    // relayouts the container back to a real size. ConsoleLogs re-invokes
+    // refreshLayout on the way back to Terminal view, so we recover with
+    // a real size then.
+    const { width: probeW, height: probeH } = getAvailableBodySpace(state);
+    if (probeW <= 0 || probeH <= 0) return;
+
     // Bump generation: any RAF callbacks queued by prior layout calls
     // become stale and will bail when they run.
     const generation = ++state.layoutGeneration;
 
     const haveProducerDims = !!state.client && state.client.width > 0 && state.client.height > 0;
     const isSecondary = !!state.client && !state.client.isPrimary && haveProducerDims;
-    const { width: availableW, height: availableH } = getAvailableBodySpace(state);
+    const availableW = probeW;
+    const availableH = probeH;
 
     if (!isSecondary) {
         // Primary, no-primary, or pre-handshake: clear any leftover
