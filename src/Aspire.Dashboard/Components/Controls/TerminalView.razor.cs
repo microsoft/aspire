@@ -66,16 +66,6 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [Parameter]
     public EventCallback<TerminalToolbarState> OnToolbarStateChanged { get; set; }
 
-    /// <summary>
-    /// Raised when the JS side reports that the workload (PTY) has exited.
-    /// The host page subscribes so it can auto-switch the view back to the
-    /// resource's console logs — the workload has stopped producing
-    /// terminal bytes and the final exit code / hosting messages live in
-    /// the console log stream.
-    /// </summary>
-    [Parameter]
-    public EventCallback<TerminalExitInfo> OnExited { get; set; }
-
     [Inject]
     public required IJSRuntime JS { get; init; }
 
@@ -239,23 +229,6 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         {
             // Component disposed mid-call; nothing to do.
         }
-    }
-
-    /// <summary>
-    /// Invoked by the JS terminal when the workload (PTY) exits. The JS side
-    /// also writes a "[workload exited with code N]" line into the xterm
-    /// buffer; this callback exists so the host page can react beyond the
-    /// in-terminal message (e.g. flip the visible view back to console logs).
-    /// </summary>
-    [JSInvokable]
-    public Task OnTerminalExited(int terminalId, int generation, int exitCode)
-    {
-        if (IsStaleTerminalCallback(terminalId, generation))
-        {
-            return Task.CompletedTask;
-        }
-
-        return OnExited.InvokeAsync(new TerminalExitInfo { TerminalId = terminalId, Generation = generation, ExitCode = exitCode });
     }
 
     /// <summary>
@@ -500,18 +473,3 @@ public sealed record TerminalToolbarState
 /// host page's size dropdown).
 /// </summary>
 public sealed record TerminalSizePreset(string Value, string Label, int Cols, int Rows);
-
-/// <summary>
-/// Payload pushed up from the JS terminal when the workload (PTY) exits.
-/// </summary>
-public sealed record TerminalExitInfo
-{
-    /// <summary>The JS-side terminal id that emitted the exit notification.</summary>
-    public int TerminalId { get; init; }
-
-    /// <summary>Reconnect generation that emitted the exit notification.</summary>
-    public int Generation { get; init; }
-
-    /// <summary>The workload's exit code, or <c>-1</c> when the JS side did not receive one.</summary>
-    public int ExitCode { get; init; }
-}

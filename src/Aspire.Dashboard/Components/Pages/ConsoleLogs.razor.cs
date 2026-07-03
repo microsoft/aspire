@@ -1373,12 +1373,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         StateHasChanged();
     }
 
-    private Task OnTerminalExitedAsync(Controls.TerminalExitInfo info)
-    {
-        Logger.LogDebug("Terminal for resource '{ResourceName}' exited with code {ExitCode}.", _terminalResourceName, info.ExitCode);
-        return Task.CompletedTask;
-    }
-
     private Task HandleViewChangedAsync(string? newView)
     {
         if (newView is null)

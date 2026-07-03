@@ -1138,19 +1138,6 @@ function connectClient(state, wsUrl) {
         try {
             state.term?.write(`\r\n[workload exited with code ${code}]\r\n`);
         } catch { /* ignore */ }
-        // Notify the .NET host that the workload (PTY) has exited so the
-        // page can flip back to the Console logs view. We deliberately use
-        // a separate JSInvokable rather than overloading the toolbar
-        // snapshot because the toolbar status (connecting/primary/viewer/
-        // no-primary) describes the consumer-side WebSocket and primary
-        // ownership — it doesn't directly signal producer exit.
-        if (state.dotNetRef) {
-            try {
-                state.dotNetRef.invokeMethodAsync('OnTerminalExited', state.id, myGeneration, code ?? -1);
-            } catch (e) {
-                dbg(state, 'client.onExit: dotNet invoke failed', { error: e?.message });
-            }
-        }
     };
 
     client.onClose = (ev) => {

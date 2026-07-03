@@ -127,29 +127,10 @@ items rendered inside the toolbar's options (⋯) `AspireMenuButton`:
 - The page defaults to **Console** on resource selection so any pre-PTY
   hosting messages — `WaitFor` notifications, startup failures, image
   pull progress — are visible immediately.
-- The page **auto-switches to Terminal** the first time the JS terminal
-  reports a non-`connecting` toolbar status (PTY attached). Reconnects do
-  not re-trigger the auto-switch.
-- The page **auto-switches back to Console** on either of two triggers,
-  so the user sees the final log lines including the hosting exit
-  message:
-  - The JS terminal raises `client.onExit` (PTY exited cleanly from the
-    guest side, e.g. `exit` at the shell).
-  - `OnResourceChanged` observes the resource snapshot transitioning
-    from a running state to a stopped/finished state (e.g. the user
-    presses **Stop** in the dashboard or the resource crashes before
-    the PTY reports exit). This path deliberately does **not** synthesize
-    a `connecting` toolbar status to re-arm the attach edge — a stale
-    in-flight `primary` snapshot arriving after we flip to Console
-    would then look like a fresh attach and yank the user back to
-    Terminal. Instead the `_selectedTerminalResourceStopped` gate
-    suppresses the auto-switch until the resource leaves the stopped
-    state, and the genuine WebSocket close → open on restart drives a
-    real `connecting → connected` edge which the auto-switch picks up.
-- Once the user manually picks a view from the menu the page
-  **latches** their choice for the rest of that resource's session and
-  ignores subsequent auto-switch triggers. The latch resets when a
-  different resource is selected.
+- The view is purely user-controlled: the page never auto-switches
+  between Console and Terminal. The user picks the view from the ⋯
+  menu and the page stays on that view until they pick the other one,
+  or a different resource is selected (which resets to Console).
 - Both views stay mounted across flips (visibility is toggled with
   `display:none` on a wrapper `<div>`); the log subscription and the
   xterm/HMP1 consumer session are kept alive so neither view loses
