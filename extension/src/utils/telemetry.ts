@@ -175,11 +175,15 @@ function sanitizeTelemetryValue(value: string, preserveGuids: boolean): string {
         .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<email>')
         // Home-directory redaction. The username is a single path segment that can legitimately
         // contain spaces (e.g. `C:\Users\Alice Smith\project` or `/Users/Alice Smith/project`), so
-        // match either a run of space-separated words that is still followed by the same-type path
-        // separator (the username continues) OR a single whitespace-free run (the historical
-        // behavior). Requiring the trailing separator for the multi-word form keeps us from
-        // swallowing following, unrelated tokens — the inner character classes exclude the
-        // separator, so a subsequent `\segment` or `/segment` is never consumed as part of the name.
+        // first handle values that are exactly a home directory. For embedded paths, match either a
+        // run of space-separated words that is still followed by the same-type path separator (the
+        // username continues) OR a single whitespace-free run (the historical behavior). Requiring
+        // the trailing separator for the embedded multi-word form keeps us from swallowing following,
+        // unrelated tokens — the inner character classes exclude the separator, so a subsequent
+        // `\segment` or `/segment` is never consumed as part of the name.
+        .replace(/^([A-Za-z]:)\\+Users\\+[^\\\s"']+(?: +[^\\\s"']+)*$/g, (_, drive: string) => `${drive}\\Users\\<user>`)
+        .replace(/^\/Users\/[^/\s"']+(?: +[^/\s"']+)*$/g, '/Users/<user>')
+        .replace(/^\/home\/[^/\s"']+(?: +[^/\s"']+)*$/g, '/home/<user>')
         .replace(/\b([A-Za-z]:)\\+Users\\+(?:[^\\\s"']+(?: +[^\\\s"']+)*(?=\\)|[^\\\s"']+)/g, (_, drive: string) => `${drive}\\Users\\<user>`)
         .replace(/(^|[^A-Za-z0-9_/-])\/Users\/(?:[^/\s"']+(?: +[^/\s"']+)*(?=\/)|[^/\s"']+)/g, '$1/Users/<user>')
         .replace(/(^|[^A-Za-z0-9_/-])\/home\/(?:[^/\s"']+(?: +[^/\s"']+)*(?=\/)|[^/\s"']+)/g, '$1/home/<user>')

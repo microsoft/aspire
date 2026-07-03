@@ -168,6 +168,22 @@ suite('telemetry utilities', () => {
             'posix /Users/<user>/project win C:\\Users\\<user>\\project home /home/<user>/project');
     });
 
+    test('sendTelemetryEvent redacts exact home directories that contain spaces', () => {
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: '/Users/Alice Smith',
+        });
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: 'C:\\Users\\Alice Smith',
+        });
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: '/home/Alice Smith',
+        });
+
+        assert.strictEqual(fake.events[0].properties?.command, '/Users/<user>');
+        assert.strictEqual(fake.events[1].properties?.command, 'C:\\Users\\<user>');
+        assert.strictEqual(fake.events[2].properties?.command, '/home/<user>');
+    });
+
     test('sendTelemetryEvent does not over-redact path segments after a spaced home username', () => {
         // Only the username segment should be redacted. A following, unrelated path segment (which may
         // itself contain spaces) and adjacent tokens must survive because redaction stops at the
