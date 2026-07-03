@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.DependencyInjection;
 using SamplesIntegrationTests;
 using SamplesIntegrationTests.Infrastructure;
 using Xunit;
@@ -38,11 +39,27 @@ public class GodotPlaygroundTests(ITestOutputHelper testOutput)
         Assert.InRange(port, 1, 65535);
         Assert.NotEqual(7000, port);
         Assert.True(Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri), $"Expected a valid endpoint URI, got '{endpoint}'.");
+        Assert.NotNull(endpointUri);
         Assert.Equal("udp", endpointUri.Scheme);
         Assert.Equal("localhost", endpointUri.Host);
         Assert.Equal(port, endpointUri.Port);
 
         app.EnsureNoErrorsLogged();
         await app.StopAsync();
+    }
+
+    [Fact]
+    public async Task WhitespaceGodotBinFallsBackToDefaultExecutable()
+    {
+        var appHost = await DistributedApplicationTestFactory.CreateAsync(typeof(Projects.Godot_AppHost), testOutput, builder =>
+        {
+            builder.Configuration["GODOT_BIN"] = "   ";
+        });
+        await using var app = await appHost.BuildAsync();
+
+        var applicationModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var godotServer = Assert.Single(applicationModel.Resources.OfType<ExecutableResource>(), r => r.Name == "godot-server");
+
+        Assert.Equal(OperatingSystem.IsWindows() ? "godot.exe" : "godot", godotServer.Command);
     }
 }
