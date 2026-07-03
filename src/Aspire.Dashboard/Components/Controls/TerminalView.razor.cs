@@ -183,7 +183,12 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         }
         catch (JSDisconnectedException)
         {
-            // Component disposed during initialization
+            // Component disposed during initialization. Clear _initStarted so
+            // that if a later render *does* fire (e.g. reconnection scenarios
+            // that re-mount the JS module), OnAfterRenderAsync's
+            // `_initStarted && _terminalId == 0` short-circuit doesn't
+            // permanently wedge us with no terminal.
+            _initStarted = false;
         }
     }
 

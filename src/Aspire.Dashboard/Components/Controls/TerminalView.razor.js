@@ -1052,10 +1052,17 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
         });
     });
 
+    // User input auto-promotes to primary. Consolidating the toolbar
+    // into the ⋯ menu removed the explicit "Take control" button, so we
+    // rely on the same auto-promote path as font/size changes: if the
+    // viewer types (or pastes, or hits Enter), they take primary before
+    // the input goes out. Server drops non-primary input, so promoting
+    // first ensures the keystroke lands. No-ops when we're already
+    // primary or the client isn't connected yet.
     term.onData((data) => {
-        if (state.client) {
-            state.client.sendInput(textEncoder.encode(data));
-        }
+        if (!state.client) return;
+        maybeAutoPromote(state);
+        state.client.sendInput(textEncoder.encode(data));
     });
 
     // Re-layout on container size change (window resize, sidebar collapse,

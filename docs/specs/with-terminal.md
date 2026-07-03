@@ -121,8 +121,8 @@ stream.
 For a terminal-enabled resource the dashboard `ConsoleLogs` page mounts
 **both** `LogViewer` (the resource's standard log stream) and
 `TerminalView` (the interactive xterm.js terminal) at the same time and
-flips between them via a pair of checkable **Console logs** / **Terminal**
-items rendered inside the toolbar's options (⋯) `AspireMenuButton`:
+flips between them via a pair of **Console logs** / **Terminal** items
+rendered inside the toolbar's options (⋯) `AspireMenuButton`:
 
 - The page defaults to **Console** on resource selection so any pre-PTY
   hosting messages — `WaitFor` notifications, startup failures, image

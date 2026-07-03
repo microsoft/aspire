@@ -642,8 +642,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     : _terminalSizePresets;
                 foreach (var preset in displayPresets)
                 {
-                    // Capture the value locally so the click handler doesn't
-                    // see whatever `preset` ends up as after the foreach.
                     var value = preset.Value;
                     nested.Add(new()
                     {
