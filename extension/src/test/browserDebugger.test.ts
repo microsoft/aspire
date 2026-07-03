@@ -1,16 +1,22 @@
 import * as assert from 'assert';
+import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { browserDebuggerExtension } from '../debugger/languages/browser';
+import { cleanupRun } from '../debugger/runCleanupRegistry';
 import { AspireResourceExtendedDebugConfiguration, BrowserLaunchConfiguration } from '../dcp/types';
 
 suite('Browser Debugger Tests', () => {
-    teardown(() => sinon.restore());
+    teardown(() => {
+        cleanupRun('run-1');
+        sinon.restore();
+    });
 
     test('configures js-debug browser launch with isolated profile and clean-exit flags', async () => {
+        const rmStub = sinon.stub(fs.promises, 'rm').resolves();
         const launchConfig: BrowserLaunchConfiguration = {
             type: 'browser',
             mode: 'Debug',
@@ -40,6 +46,9 @@ suite('Browser Debugger Tests', () => {
         assert.strictEqual(debugConfig.program, undefined);
         assert.strictEqual(debugConfig.args, undefined);
         assert.strictEqual(debugConfig.cwd, undefined);
+
+        cleanupRun('run-1');
+        assert.strictEqual(rmStub.calledOnceWithExactly(path.join(os.tmpdir(), 'aspire-vscode-browser-debug', 'run-1'), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }), true);
     });
 
     test('defaults to Edge and preserves user runtime args', async () => {
@@ -118,7 +127,7 @@ suite('Browser Debugger Tests', () => {
         aspireDebugSession.dispose();
     });
 
-    test('does not send sessionTerminated for a same-named browser session from another parent', async () => {
+    test('does not send sessionTerminated for a browser child session from another parent', async () => {
         let startDebugSession: ((session: vscode.DebugSession) => void) | undefined;
         let terminateDebugSession: ((session: vscode.DebugSession) => void) | undefined;
         sinon.stub(vscode.debug, 'onDidStartDebugSession').callsFake(listener => {
@@ -166,10 +175,61 @@ suite('Browser Debugger Tests', () => {
         terminateDebugSession(createDebugSession('same-name-different-parent-session-id', {
             type: 'pwa-msedge',
             request: 'launch',
-            name: 'Browser: https://localhost:5001',
+            name: 'Page title from another browser',
         }, otherParentDebugSession));
 
         assert.strictEqual(dcpServer.sendNotification.called, false);
+
+        aspireDebugSession.dispose();
+    });
+
+    test('sends sessionTerminated for a browser child session with a different target name', async () => {
+        let startDebugSession: ((session: vscode.DebugSession) => void) | undefined;
+        let terminateDebugSession: ((session: vscode.DebugSession) => void) | undefined;
+        sinon.stub(vscode.debug, 'onDidStartDebugSession').callsFake(listener => {
+            startDebugSession = listener;
+            return { dispose: () => { } };
+        });
+        sinon.stub(vscode.debug, 'onDidTerminateDebugSession').callsFake(listener => {
+            terminateDebugSession = listener;
+            return { dispose: () => { } };
+        });
+        sinon.stub(vscode.debug, 'startDebugging').callsFake(async (_folder, configuration) => {
+            assert.ok(startDebugSession);
+            startDebugSession(createDebugSession('browser-session-id', configuration as vscode.DebugConfiguration));
+            return true;
+        });
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+
+        const dcpServer = {
+            sendNotification: sinon.stub()
+        };
+        const parentDebugSession = createDebugSession('aspire-session-id', {
+            type: 'aspire',
+            request: 'launch',
+            name: 'Aspire',
+            program: '/workspace/apphost.cs',
+        });
+        const terminalProvider = {
+            isDebugConfigEnvironmentLoggingEnabled: () => false,
+        };
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, dcpServer as any, terminalProvider as any, () => { });
+        const debugConfig = createDebugConfig();
+        debugConfig.sendSessionTerminatedOnDebugSessionEnd = true;
+        debugConfig.sessionTerminatedDcpId = 'dcp-1';
+        debugConfig.debugSessionId = null;
+
+        const resourceDebugSession = await aspireDebugSession.startAndGetDebugSession(debugConfig);
+
+        assert.ok(resourceDebugSession);
+        assert.ok(terminateDebugSession);
+        terminateDebugSession(createDebugSession('js-debug-child-session-id', {
+            type: 'pwa-msedge',
+            request: 'launch',
+            name: 'Page title from browser target',
+        }, resourceDebugSession.session));
+
+        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
 
         aspireDebugSession.dispose();
     });

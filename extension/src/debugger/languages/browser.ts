@@ -1,9 +1,11 @@
+import { promises as fs } from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isBrowserLaunchConfiguration } from "../../dcp/types";
 import { browserDisplayName, browserLabel, invalidLaunchConfiguration } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
+import { registerRunCleanup } from "../runCleanupRegistry";
 
 const defaultBrowserRuntimeArgs = [
     '--no-first-run',
@@ -36,7 +38,13 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
         debugConfiguration.sourceMaps = true;
         debugConfiguration.resolveSourceMapLocations = ['**', '!**/node_modules/**'];
         debugConfiguration.runtimeArgs = mergeRuntimeArgs(debugConfiguration.runtimeArgs, defaultBrowserRuntimeArgs);
-        debugConfiguration.userDataDir = getBrowserUserDataDir(_launchOptions.runId);
+        const userDataDir = getBrowserUserDataDir(_launchOptions.runId);
+        debugConfiguration.userDataDir = userDataDir;
+        registerRunCleanup(debugConfiguration.runId, () => {
+            void fs.rm(userDataDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }).catch(error => {
+                extensionLogOutputChannel.warn(`Failed to delete browser debug profile directory '${userDataDir}': ${error instanceof Error ? error.message : String(error)}`);
+            });
+        });
         // Browser/js-debug child sessions do not reliably carry Aspire's custom
         // configuration fields, so AspireDebugSession sends the DCP termination
         // notification from the VS Code session end event instead of adapter output.

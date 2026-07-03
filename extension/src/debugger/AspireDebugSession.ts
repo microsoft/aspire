@@ -620,7 +620,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
               // carry the Aspire-specific configuration fields, so scope the fallback
               // to the session we just started instead of matching globally by name.
               if (terminatedSession.id !== session.id
-                && (terminatedSession.parentSession?.id !== session.id || terminatedSession.name !== session.name)) {
+                && terminatedSession.parentSession?.id !== session.id) {
                 return;
               }
 
