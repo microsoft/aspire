@@ -10,6 +10,7 @@ internal sealed class TestDotNetSdkInstaller : IDotNetSdkInstaller
     public Func<CancellationToken, bool>? CheckAsyncCallback { get; set; }
     public Func<string, CancellationToken, bool>? CheckAsyncWithVersionCallback { get; set; }
     public Func<CancellationToken, Task>? InstallAsyncCallback { get; set; }
+    public string DotNetExecutablePath { get; set; } = "dotnet";
 
     public Task<bool> CheckAsync(CancellationToken cancellationToken = default)
     {

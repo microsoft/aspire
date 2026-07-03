@@ -62,8 +62,7 @@ internal sealed class DotNetRuntimeSelector(
             case DotNetRuntimeMode.System:
                 if (systemSdkAvailable)
                 {
-                    _mode = DotNetRuntimeMode.System;
-                    _dotNetExecutablePath = "dotnet";
+                    SetDotNetMode(DotNetRuntimeMode.System, "dotnet");
                     return true;
                 }
                 else if (!disablePrivateSdk)
@@ -87,8 +86,7 @@ internal sealed class DotNetRuntimeSelector(
                     logger.LogWarning("Private SDK requested but disabled by environment variable");
                     if (systemSdkAvailable)
                     {
-                        _mode = DotNetRuntimeMode.System;
-                        _dotNetExecutablePath = "dotnet";
+                        SetDotNetMode(DotNetRuntimeMode.System, "dotnet");
                         return true;
                     }
                     return false;
@@ -98,8 +96,7 @@ internal sealed class DotNetRuntimeSelector(
                 var customPath = settings?.DotNet?.CustomPath;
                 if (!string.IsNullOrEmpty(customPath) && File.Exists(customPath))
                 {
-                    _mode = DotNetRuntimeMode.Custom;
-                    _dotNetExecutablePath = customPath;
+                    SetDotNetMode(DotNetRuntimeMode.Custom, customPath);
                     return true;
                 }
                 logger.LogError("Custom dotnet path not found: {Path}", customPath);
@@ -108,6 +105,17 @@ internal sealed class DotNetRuntimeSelector(
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Sets the dotnet mode and executable path, keeping <see cref="IDotNetSdkInstaller"/> in sync so
+    /// subsequent SDK availability checks use the same executable.
+    /// </summary>
+    private void SetDotNetMode(DotNetRuntimeMode mode, string executablePath)
+    {
+        _mode = mode;
+        _dotNetExecutablePath = executablePath;
+        sdkInstaller.DotNetExecutablePath = executablePath;
     }
 
     /// <inheritdoc />
@@ -180,13 +188,12 @@ internal sealed class DotNetRuntimeSelector(
         // Check if private SDK already exists and works
         if (File.Exists(privateDotNetPath))
         {
-            _mode = DotNetRuntimeMode.Private;
-            _dotNetExecutablePath = privateDotNetPath;
-            
+            SetDotNetMode(DotNetRuntimeMode.Private, privateDotNetPath);
+
             // Set environment variables to isolate the private SDK
             _environmentVariables["DOTNET_ROOT"] = privateSdkPath;
             _environmentVariables["DOTNET_HOST_PATH"] = privateDotNetPath;
-            
+
             return true;
         }
 
@@ -216,13 +223,12 @@ internal sealed class DotNetRuntimeSelector(
         // Check again if SDK was installed by another process while we were waiting for the lock
         if (File.Exists(privateDotNetPath))
         {
-            _mode = DotNetRuntimeMode.Private;
-            _dotNetExecutablePath = privateDotNetPath;
-            
+            SetDotNetMode(DotNetRuntimeMode.Private, privateDotNetPath);
+
             // Set environment variables to isolate the private SDK
             _environmentVariables["DOTNET_ROOT"] = privateSdkPath;
             _environmentVariables["DOTNET_HOST_PATH"] = privateDotNetPath;
-            
+
             return true;
         }
 
@@ -242,14 +248,13 @@ internal sealed class DotNetRuntimeSelector(
             if (File.Exists(privateDotNetPath))
             {
                 console.MarkupLine($"[green]Successfully installed private .NET SDK to {privateSdkPath}[/]");
-                
-                _mode = DotNetRuntimeMode.Private;
-                _dotNetExecutablePath = privateDotNetPath;
-                
+
+                SetDotNetMode(DotNetRuntimeMode.Private, privateDotNetPath);
+
                 // Set environment variables to isolate the private SDK
                 _environmentVariables["DOTNET_ROOT"] = privateSdkPath;
                 _environmentVariables["DOTNET_HOST_PATH"] = privateDotNetPath;
-                
+
                 return true;
             }
             else

@@ -9,6 +9,13 @@ namespace Aspire.Cli.DotNet;
 internal interface IDotNetSdkInstaller
 {
     /// <summary>
+    /// Gets or sets the path to the dotnet executable to use for SDK checks.
+    /// Defaults to "dotnet" (system PATH). Can be updated by <see cref="IDotNetRuntimeSelector"/>
+    /// after it selects a private or custom SDK to ensure checks use the correct executable.
+    /// </summary>
+    string DotNetExecutablePath { get; set; }
+
+    /// <summary>
     /// Checks if the .NET SDK is available on the system PATH.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>

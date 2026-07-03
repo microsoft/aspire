@@ -146,6 +146,7 @@ public class DotNetRuntimeSelectorTests
     {
         public bool CheckResult { get; set; } = true;
         public string? LastCheckedVersion { get; private set; }
+        public string DotNetExecutablePath { get; set; } = "dotnet";
 
         public Task<bool> CheckAsync(CancellationToken cancellationToken = default)
         {

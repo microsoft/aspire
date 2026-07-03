@@ -20,12 +20,15 @@ internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration conf
     public const string MinimumSdkVersion = "9.0.302";
 
     /// <inheritdoc />
+    public string DotNetExecutablePath { get; set; } = "dotnet";
+
+    /// <inheritdoc />
     public Task<bool> CheckAsync(CancellationToken cancellationToken = default)
     {
         // Check for configuration override first
         var overrideVersion = configuration["overrideMinimumSdkVersion"];
         var minimumVersion = !string.IsNullOrEmpty(overrideVersion) ? overrideVersion : MinimumSdkVersion;
-        
+
         return CheckAsync(minimumVersion, cancellationToken);
     }
 
@@ -48,7 +51,7 @@ internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration conf
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName = "dotnet",
+                    FileName = DotNetExecutablePath,
                     Arguments = arguments,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
