@@ -251,15 +251,23 @@ internal class AppHostRpcTarget(
     {
         var (fileId, filePath) = fileUploadStore.CreateEntry(request.FileName);
 
-        // Copy the file from the source path to the managed upload store location.
-        var sourceStream = new FileStream(request.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
-        await using (sourceStream.ConfigureAwait(false))
+        try
         {
-            var destStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
-            await using (destStream.ConfigureAwait(false))
+            // Copy the file from the source path to the managed upload store location.
+            var sourceStream = new FileStream(request.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
+            await using (sourceStream.ConfigureAwait(false))
             {
-                await sourceStream.CopyToAsync(destStream, cancellationToken).ConfigureAwait(false);
+                var destStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
+                await using (destStream.ConfigureAwait(false))
+                {
+                    await sourceStream.CopyToAsync(destStream, cancellationToken).ConfigureAwait(false);
+                }
             }
+        }
+        catch
+        {
+            fileUploadStore.RemoveEntry(fileId);
+            throw;
         }
 
         return new UploadFileResponse { FileId = fileId };
