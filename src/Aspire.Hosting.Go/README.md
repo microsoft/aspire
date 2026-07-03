@@ -96,8 +96,39 @@ builder.AddGoApp("api", "../go-api")
 
 This launches:
 ```sh
-dlv --headless=true --listen=127.0.0.1:2345 --api-version=2 debug .
+dlv --headless=true --listen=127.0.0.1:2345 --api-version=2 --accept-multiclient debug .
 ```
+
+`WithDelveServer` passes `--accept-multiclient` by default so the Delve server remains available
+after a debugger detaches. Set `AcceptMulticlient = false` if you need Delve to exit when the first
+debugger disconnects. To customize Delve server flags, use the options overload:
+
+```csharp
+builder.AddGoApp("api", "../go-api")
+    .WithDelveServer(options =>
+    {
+        options.Log = true;
+        options.LogOutput = "rpc,dap,debugger";
+    });
+```
+
+If an IDE fails to attach, enable Delve logging first and inspect the resource logs. Some IDE and
+remote-environment combinations can cause Delve to reject the connection because it appears to come
+from a different operating system user. If the logs show that the same-user check is failing, you
+can disable that check:
+
+```csharp
+builder.AddGoApp("api", "../go-api")
+    .WithDelveServer(options =>
+    {
+        options.OnlySameUser = false;
+        options.Log = true;
+        options.LogOutput = "rpc,dap,debugger";
+    });
+```
+
+`OnlySameUser = false` maps to `--only-same-user=false`. Use it only when needed; the Delve listener
+remains bound to `127.0.0.1`.
 
 **GoLand** — create a **Go Remote** run/debug configuration (**Edit | Run Configurations**):
 - **Host**: `localhost`
