@@ -902,7 +902,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task UploadFile_EmptyStream_ReturnsFileId()
+    public async Task UploadFile_EmptyStream_ThrowsInvalidArgument()
     {
         var dashboardServiceData = CreateDashboardServiceData();
         using var fileUploadStore = new FileUploadStore();
@@ -912,10 +912,9 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
         requestStream.Complete(); // empty stream
 
-        var response = await dashboardService.UploadFile(requestStream, context);
+        var ex = await Assert.ThrowsAsync<RpcException>(() => dashboardService.UploadFile(requestStream, context));
 
-        Assert.NotNull(response.FileId);
-        Assert.NotEmpty(response.FileId);
+        Assert.Equal(StatusCode.InvalidArgument, ex.StatusCode);
     }
 
     [Fact]

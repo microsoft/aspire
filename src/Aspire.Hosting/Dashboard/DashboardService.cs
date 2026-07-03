@@ -499,75 +499,63 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         var maxTotalUploadBytes = GetMaxFileUploadSize(configuration);
 
         var cancellationToken = context.CancellationToken;
-        string? fileName = null;
         long totalBytesWritten = 0;
+        string? fileId = null;
+        FileStream? fileStream = null;
 
-        var (fileId, fileStream) = await CreateFileStream().ConfigureAwait(false);
         try
         {
-            await using (fileStream.ConfigureAwait(false))
+            while (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
             {
-                while (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
+                var chunk = requestStream.Current;
+
+                // The first chunk carries the file name — create the store entry and file stream.
+                if (fileStream is null)
                 {
-                    var chunk = requestStream.Current;
-
-                    // The first chunk carries the file name.
-                    if (fileName is null && !string.IsNullOrEmpty(chunk.FileName))
+                    if (string.IsNullOrEmpty(chunk.FileName))
                     {
-                        fileName = chunk.FileName;
+                        throw new RpcException(new Status(StatusCode.InvalidArgument, "First chunk must include a file name."));
                     }
 
-                    if (!chunk.Data.IsEmpty)
-                    {
-                        totalBytesWritten += chunk.Data.Length;
-                        if (totalBytesWritten > maxTotalUploadBytes)
-                        {
-                            throw new RpcException(new Status(StatusCode.ResourceExhausted, $"Upload exceeds maximum allowed size of {maxTotalUploadBytes} bytes."));
-                        }
-
-                        await fileStream.WriteAsync(chunk.Data.Memory, cancellationToken).ConfigureAwait(false);
-                    }
+                    string path;
+                    (fileId, path) = fileUploadStore.CreateEntry(chunk.FileName);
+                    fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
                 }
+
+                if (!chunk.Data.IsEmpty)
+                {
+                    totalBytesWritten += chunk.Data.Length;
+                    if (totalBytesWritten > maxTotalUploadBytes)
+                    {
+                        throw new RpcException(new Status(StatusCode.ResourceExhausted, $"Upload exceeds maximum allowed size of {maxTotalUploadBytes} bytes."));
+                    }
+
+                    await fileStream.WriteAsync(chunk.Data.Memory, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            if (fileStream is null)
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Upload stream is empty."));
             }
         }
         catch
         {
-            fileUploadStore.RemoveEntry(fileId);
+            if (fileId is not null)
+            {
+                fileUploadStore.RemoveEntry(fileId);
+            }
+
             throw;
+        }
+        finally
+        {
+            if (fileStream is not null)
+            {
+                await fileStream.DisposeAsync().ConfigureAwait(false);
+            }
         }
 
         return new UploadFileResponse { FileId = fileId };
-
-        async ValueTask<(string FileId, FileStream Stream)> CreateFileStream()
-        {
-            // Read the first message to get the file name before creating the file entry.
-            if (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
-            {
-                var firstChunk = requestStream.Current;
-                fileName = firstChunk.FileName;
-                var (id, path) = fileUploadStore.CreateEntry(fileName ?? "unknown");
-
-                var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
-
-                if (!firstChunk.Data.IsEmpty)
-                {
-                    totalBytesWritten += firstChunk.Data.Length;
-                    if (totalBytesWritten > maxTotalUploadBytes)
-                    {
-                        await fs.DisposeAsync().ConfigureAwait(false);
-                        fileUploadStore.RemoveEntry(id);
-                        throw new RpcException(new Status(StatusCode.ResourceExhausted, $"Upload exceeds maximum allowed size of {maxTotalUploadBytes} bytes."));
-                    }
-
-                    await fs.WriteAsync(firstChunk.Data.Memory, cancellationToken).ConfigureAwait(false);
-                }
-
-                return (id, fs);
-            }
-
-            // Empty stream — create entry with placeholder name.
-            var (emptyId, emptyPath) = fileUploadStore.CreateEntry("unknown");
-            return (emptyId, new FileStream(emptyPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true));
-        }
     }
 }
