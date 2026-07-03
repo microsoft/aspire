@@ -53,6 +53,25 @@ internal sealed class FileUploadStore : IDisposable
     }
 
     /// <summary>
+    /// Removes a file entry and deletes the associated file on disk.
+    /// Used to clean up after failed uploads.
+    /// </summary>
+    public void RemoveEntry(string fileId)
+    {
+        if (_files.TryRemove(fileId, out var entry))
+        {
+            try
+            {
+                File.Delete(entry.FilePath);
+            }
+            catch
+            {
+                // Best effort cleanup.
+            }
+        }
+    }
+
+    /// <summary>
     /// Resolves a JSON-encoded file reference array into InputFileDto entries.
     /// Returns null if the value is empty, malformed, or contains no resolvable files.
     /// </summary>

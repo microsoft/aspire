@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting.Dashboard;
@@ -915,6 +916,59 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         Assert.NotNull(response.FileId);
         Assert.NotEmpty(response.FileId);
+    }
+
+    [Fact]
+    public async Task UploadFile_ThenResolveFileReferences_ResolvesCorrectly()
+    {
+        var dashboardServiceData = CreateDashboardServiceData();
+        using var fileUploadStore = new FileUploadStore();
+        var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
+
+        // Upload a file
+        var data = Encoding.UTF8.GetBytes("certificate-content");
+        var context = TestServerCallContext.Create();
+        var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
+        requestStream.AddMessage(new UploadFileChunk { FileName = "cert.pem", Data = ByteString.CopyFrom(data) });
+        requestStream.Complete();
+
+        var uploadResponse = await dashboardService.UploadFile(requestStream, context);
+
+        // Resolve the file reference using the same store
+        var json = $"[{{\"Id\":\"{uploadResponse.FileId}\",\"Name\":\"cert.pem\"}}]";
+        var resolvedFiles = fileUploadStore.ResolveFileReferences(json, "CertInput", NullLogger.Instance);
+
+        Assert.NotNull(resolvedFiles);
+        var file = Assert.Single(resolvedFiles);
+        Assert.Equal(uploadResponse.FileId, file.Id);
+        Assert.Equal("cert.pem", file.Name);
+        Assert.True(File.Exists(file.FilePath));
+
+        // Verify the file content was written correctly
+        var content = await File.ReadAllBytesAsync(file.FilePath);
+        Assert.Equal(data, content);
+    }
+
+    [Fact]
+    public void ResolveFileReferences_UnknownId_ReturnsNull()
+    {
+        using var fileUploadStore = new FileUploadStore();
+        var json = "[{\"Id\":\"nonexistent-id\",\"Name\":\"file.txt\"}]";
+
+        var result = fileUploadStore.ResolveFileReferences(json, "TestInput", NullLogger.Instance);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ResolveFileReferences_MalformedJson_ReturnsNull()
+    {
+        using var fileUploadStore = new FileUploadStore();
+        var json = "not-valid-json";
+
+        var result = fileUploadStore.ResolveFileReferences(json, "TestInput", NullLogger.Instance);
+
+        Assert.Null(result);
     }
 
     private static DashboardServiceImpl CreateDashboardService(

@@ -503,29 +503,37 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         long totalBytesWritten = 0;
 
         var (fileId, fileStream) = await CreateFileStream().ConfigureAwait(false);
-        await using (fileStream.ConfigureAwait(false))
+        try
         {
-            while (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
+            await using (fileStream.ConfigureAwait(false))
             {
-                var chunk = requestStream.Current;
-
-                // The first chunk carries the file name.
-                if (fileName is null && !string.IsNullOrEmpty(chunk.FileName))
+                while (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
                 {
-                    fileName = chunk.FileName;
-                }
+                    var chunk = requestStream.Current;
 
-                if (!chunk.Data.IsEmpty)
-                {
-                    totalBytesWritten += chunk.Data.Length;
-                    if (totalBytesWritten > maxTotalUploadBytes)
+                    // The first chunk carries the file name.
+                    if (fileName is null && !string.IsNullOrEmpty(chunk.FileName))
                     {
-                        throw new RpcException(new Status(StatusCode.ResourceExhausted, $"Upload exceeds maximum allowed size of {maxTotalUploadBytes} bytes."));
+                        fileName = chunk.FileName;
                     }
 
-                    await fileStream.WriteAsync(chunk.Data.Memory, cancellationToken).ConfigureAwait(false);
+                    if (!chunk.Data.IsEmpty)
+                    {
+                        totalBytesWritten += chunk.Data.Length;
+                        if (totalBytesWritten > maxTotalUploadBytes)
+                        {
+                            throw new RpcException(new Status(StatusCode.ResourceExhausted, $"Upload exceeds maximum allowed size of {maxTotalUploadBytes} bytes."));
+                        }
+
+                        await fileStream.WriteAsync(chunk.Data.Memory, cancellationToken).ConfigureAwait(false);
+                    }
                 }
             }
+        }
+        catch
+        {
+            fileUploadStore.RemoveEntry(fileId);
+            throw;
         }
 
         return new UploadFileResponse { FileId = fileId };
@@ -547,6 +555,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                     if (totalBytesWritten > maxTotalUploadBytes)
                     {
                         await fs.DisposeAsync().ConfigureAwait(false);
+                        fileUploadStore.RemoveEntry(id);
                         throw new RpcException(new Status(StatusCode.ResourceExhausted, $"Upload exceeds maximum allowed size of {maxTotalUploadBytes} bytes."));
                     }
 

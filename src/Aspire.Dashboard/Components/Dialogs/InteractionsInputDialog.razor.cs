@@ -36,6 +36,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
+    private readonly CancellationTokenSource _disposalCts = new();
     private InteractionsInputsDialogViewModel? _content;
     private EditContext _editContext = default!;
     private ValidationMessageStore _validationMessages = default!;
@@ -227,12 +228,15 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             : Loc[nameof(Resources.Dialogs.InteractionFilePlaceholder)];
     }
 
+    // Maximum number of files that can be selected in a single file input change event.
+    private const int MaxFileCount = 100;
+
     private async Task OnInputFileChangeAsync(InputViewModel inputModel, InputFileChangeEventArgs args)
     {
         var maxFileSize = GetMaxFileSize(inputModel);
         var fileReferences = new List<FileReferenceViewModel>();
 
-        foreach (var file in args.GetMultipleFiles())
+        foreach (var file in args.GetMultipleFiles(MaxFileCount))
         {
             if (file.Size > maxFileSize)
             {
@@ -241,7 +245,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             }
 
             using var stream = file.OpenReadStream(maxFileSize);
-            var fileId = await DashboardClient.UploadFileAsync(stream, file.Name, file.Size, CancellationToken.None);
+            var fileId = await DashboardClient.UploadFileAsync(stream, file.Name, file.Size, _disposalCts.Token);
             fileReferences.Add(new FileReferenceViewModel { Id = fileId, Name = file.Name });
         }
 
@@ -277,6 +281,8 @@ public partial class InteractionsInputDialog : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _disposalCts.Cancel();
+        _disposalCts.Dispose();
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);
     }
 }
