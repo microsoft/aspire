@@ -627,14 +627,21 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Console)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewConsoleOption)],
-                Icon = new Icons.Regular.Size16.TextBulletListLtr()
+                // Bare tick on the active view; no icon on the inactive one so
+                // the menu doesn't look like a checkbox list — same pattern as
+                // the Terminal dimensions submenu below.
+                Icon = _activeView == ConsoleLogsView.Console
+                    ? new Icons.Regular.Size16.Checkmark()
+                    : null
             });
 
             _logsMenuItems.Add(new()
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Terminal)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)],
-                Icon = new Icons.Regular.Size16.Prompt()
+                Icon = _activeView == ConsoleLogsView.Terminal
+                    ? new Icons.Regular.Size16.Checkmark()
+                    : null
             });
 
             _logsMenuItems.Add(new()
