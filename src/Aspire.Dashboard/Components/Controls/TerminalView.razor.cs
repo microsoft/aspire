@@ -104,6 +104,28 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             await InitializeTerminalAsync(initResource!, initReplica);
             _connectedResourceName = initResource;
             _connectedReplicaIndex = initReplica;
+
+            if (!string.Equals(ResourceName, _connectedResourceName, StringComparison.Ordinal) ||
+                ReplicaIndex != _connectedReplicaIndex)
+            {
+                var newResource = ResourceName;
+                var newReplica = ReplicaIndex;
+                try
+                {
+                    await ReconnectAsync(newResource, newReplica);
+                }
+                catch (JSDisconnectedException)
+                {
+                    return;
+                }
+                catch (Exception)
+                {
+                    return;
+                }
+
+                _connectedResourceName = newResource;
+                _connectedReplicaIndex = newReplica;
+            }
             return;
         }
 
@@ -165,6 +187,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 
             _selfRef ??= DotNetObjectReference.Create(this);
 
+            _connectedGeneration = -1;
             _terminalId = await _jsModule.InvokeAsync<int>(
                 "initTerminal", _terminalElement, BuildWebSocketUrl(resourceName, replicaIndex), _selfRef);
         }
@@ -197,12 +220,20 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             {
                 await _jsModule.InvokeVoidAsync("disposeTerminal", _terminalId);
                 _terminalId = 0;
+                _connectedGeneration = -1;
                 return;
             }
 
             ResourceName = newResourceName;
             ReplicaIndex = newReplicaIndex;
-            await _jsModule.InvokeVoidAsync("reconnectTerminal", _terminalId, BuildWebSocketUrl(newResourceName, newReplicaIndex));
+            var generation = await _jsModule.InvokeAsync<int>(
+                "reconnectTerminal",
+                _terminalId,
+                BuildWebSocketUrl(newResourceName, newReplicaIndex));
+            if (generation > 0)
+            {
+                _connectedGeneration = generation;
+            }
         }
         catch (JSDisconnectedException)
         {
@@ -219,21 +250,12 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [JSInvokable]
     public Task OnTerminalExited(int terminalId, int generation, int exitCode)
     {
-        // Drop stale notifications that arrive after this view was rebound to
-        // a different resource/replica. Terminal id alone is not enough:
-        // reconnectTerminal keeps the same id and only bumps the generation,
-        // so an old-connection onExit could otherwise fire OnExited on the
-        // newly rebound resource.
-        if (_terminalId != 0 && terminalId != _terminalId)
-        {
-            return Task.CompletedTask;
-        }
-        if (generation < _connectedGeneration)
+        if (IsStaleTerminalCallback(terminalId, generation))
         {
             return Task.CompletedTask;
         }
 
-        return OnExited.InvokeAsync(new TerminalExitInfo { TerminalId = terminalId, ExitCode = exitCode });
+        return OnExited.InvokeAsync(new TerminalExitInfo { TerminalId = terminalId, Generation = generation, ExitCode = exitCode });
     }
 
     /// <summary>
@@ -245,25 +267,35 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     [JSInvokable]
     public Task OnTerminalStateChanged(TerminalToolbarState state)
     {
-        // Drop stale snapshots that arrive after this view was rebound to a
-        // different resource/replica. reconnectTerminal keeps the same
-        // terminal id and only bumps the generation, so the id check alone
-        // would let a superseded connection's snapshot through. Adopt the
-        // latest generation we see so subsequent stale callbacks are dropped.
-        if (_terminalId != 0 && state.TerminalId != _terminalId)
+        if (IsStaleTerminalCallback(state.TerminalId, state.Generation))
         {
             return Task.CompletedTask;
-        }
-        if (state.Generation < _connectedGeneration)
-        {
-            return Task.CompletedTask;
-        }
-        if (state.Generation > _connectedGeneration)
-        {
-            _connectedGeneration = state.Generation;
         }
 
         return OnToolbarStateChanged.InvokeAsync(state);
+    }
+
+    private bool IsStaleTerminalCallback(int terminalId, int generation)
+    {
+        // Drop stale callbacks that arrive after this view was rebound. The
+        // terminal id changes when initTerminal allocates a new xterm host;
+        // explicit reconnect keeps the id but bumps the JS-side generation.
+        if (_terminalId != 0 && terminalId != _terminalId)
+        {
+            return true;
+        }
+
+        if (generation < _connectedGeneration)
+        {
+            return true;
+        }
+
+        if (generation > _connectedGeneration)
+        {
+            _connectedGeneration = generation;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -476,6 +508,9 @@ public sealed record TerminalExitInfo
 {
     /// <summary>The JS-side terminal id that emitted the exit notification.</summary>
     public int TerminalId { get; init; }
+
+    /// <summary>Reconnect generation that emitted the exit notification.</summary>
+    public int Generation { get; init; }
 
     /// <summary>The workload's exit code, or <c>-1</c> when the JS side did not receive one.</summary>
     public int ExitCode { get; init; }

@@ -448,6 +448,7 @@ public partial class ConsoleLogsTests
         await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
         {
             TerminalId = 1,
+            Generation = 2,
             Status = "connecting",
             Connected = false,
             IsPrimary = false,
@@ -456,6 +457,7 @@ public partial class ConsoleLogsTests
         await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
         {
             TerminalId = 1,
+            Generation = 2,
             Status = "primary",
             Connected = true,
             IsPrimary = true,
@@ -516,6 +518,11 @@ public partial class ConsoleLogsTests
             FontPx = 14,
         }));
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+        cut.WaitForAssertion(() =>
+        {
+            var menuButton = GetConsoleLogsSettingsMenu(cut);
+            Assert.Contains(menuButton.Instance.Items, item => item.Text == Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize);
+        });
 
         // Resource transitions to Exited (manual stop) — push a fresh snapshot
         // with the same name/properties but a stopped KnownResourceState.
@@ -535,6 +542,12 @@ public partial class ConsoleLogsTests
 
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
         Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
+        cut.WaitForAssertion(() =>
+        {
+            var menuButton = GetConsoleLogsSettingsMenu(cut);
+            Assert.DoesNotContain(menuButton.Instance.Items, item => item.Text == Resources.ConsoleLogs.TerminalToolbarDecreaseFontSize);
+            Assert.Contains(menuButton.Instance.Items, item => item.Text == Resources.ConsoleLogs.DownloadLogs);
+        });
     }
 
     [Fact]
@@ -808,6 +821,7 @@ public partial class ConsoleLogsTests
         await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
         {
             TerminalId = 1,
+            Generation = 2,
             Status = "connecting",
             Connected = false,
             IsPrimary = false,
@@ -819,6 +833,7 @@ public partial class ConsoleLogsTests
         await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
         {
             TerminalId = 1,
+            Generation = 2,
             Status = "primary",
             Connected = true,
             IsPrimary = true,
@@ -827,6 +842,128 @@ public partial class ConsoleLogsTests
 
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
         Assert.Equal(ConsoleLogs.ConsoleLogsView.Terminal, instance.ActiveViewForTest);
+    }
+
+    [Fact]
+    public async Task TerminalResource_CleanExit_StalePreviousGenerationToolbarSnapshotAfterReconnectDoesNotFlipBack()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        var terminalView = cut.FindComponent<TerminalView>().Instance;
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Generation = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+
+        await cut.InvokeAsync(() => terminalView.OnTerminalExited(terminalId: 1, generation: 1, exitCode: 0));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
+
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Generation = 2,
+            Status = "connecting",
+            Connected = false,
+            IsPrimary = false,
+            FontPx = 14,
+        }));
+
+        // This primary snapshot belongs to the connection that already exited.
+        // The generation guard must keep it from looking like the generation-2
+        // reconnect completed.
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Generation = 1,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+
+        Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
+
+        await cut.InvokeAsync(() => terminalView.OnTerminalStateChanged(new TerminalToolbarState
+        {
+            TerminalId = 1,
+            Generation = 2,
+            Status = "primary",
+            Connected = true,
+            IsPrimary = true,
+            FontPx = 14,
+        }));
+
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+    }
+
+    [Fact]
+    public void TerminalView_InitialRender_ReconnectsWhenResourceChangesDuringInitialization()
+    {
+        var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
+        var initTerminal = module.Setup<int>("initTerminal", _ => true);
+        var reconnectTerminal = module.Setup<int>("reconnectTerminal", _ => true);
+        reconnectTerminal.SetResult(2);
+
+        var cut = RenderComponent<TerminalView>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "first-resource");
+            builder.Add(p => p.ReplicaIndex, 0);
+        });
+
+        cut.SetParametersAndRender(builder =>
+        {
+            builder.Add(p => p.ResourceName, "second-resource");
+            builder.Add(p => p.ReplicaIndex, 1);
+        });
+
+        initTerminal.SetResult(1);
+
+        cut.WaitForAssertion(() =>
+        {
+            var init = Assert.Single(initTerminal.Invocations);
+            var reconnect = Assert.Single(reconnectTerminal.Invocations);
+            var initUrl = Assert.IsType<string>(init.Arguments[1]);
+            var reconnectUrl = Assert.IsType<string>(reconnect.Arguments[1]);
+
+            Assert.Contains("resource=first-resource", initUrl);
+            Assert.Contains("replica=0", initUrl);
+            Assert.Equal(1, reconnect.Arguments[0]);
+            Assert.Contains("resource=second-resource", reconnectUrl);
+            Assert.Contains("replica=1", reconnectUrl);
+        });
     }
 
     private static (AngleSharp.Dom.IElement Console, AngleSharp.Dom.IElement Terminal) FindViewWrappers(
@@ -847,6 +984,14 @@ public partial class ConsoleLogsTests
         Assert.NotNull(consoleWrapper);
         Assert.NotNull(terminalWrapper);
         return (consoleWrapper!, terminalWrapper!);
+    }
+
+    private static Bunit.IRenderedComponent<Aspire.Dashboard.Components.AspireMenuButton> GetConsoleLogsSettingsMenu(
+        Bunit.IRenderedComponent<Components.Pages.ConsoleLogs> cut)
+    {
+        return Assert.Single(
+            cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>(),
+            menu => menu.Instance.Title == Resources.ConsoleLogs.ConsoleLogsSettings);
     }
 
     private static AngleSharp.Dom.IElement? FindWrapperWithDisplayStyle(AngleSharp.Dom.IElement start)
@@ -877,6 +1022,7 @@ public partial class ConsoleLogsTests
         // about runtime terminal behaviour.
         var module = JSInterop.SetupModule("/Components/Controls/TerminalView.razor.js");
         module.Setup<int>("initTerminal", _ => true).SetResult(1);
+        module.Setup<int>("reconnectTerminal", _ => true).SetResult(2);
         module.SetupVoid("disposeTerminal", _ => true).SetVoidResult();
         module.SetupVoid("refreshLayout", _ => true).SetVoidResult();
         module.SetupVoid("refreshToolbarState", _ => true).SetVoidResult();

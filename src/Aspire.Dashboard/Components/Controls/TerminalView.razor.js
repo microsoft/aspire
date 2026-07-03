@@ -1199,11 +1199,13 @@ function connectClient(state, wsUrl) {
             scheduleReconnect(state);
         }
     }
+
+    return myGeneration;
 }
 
 export function reconnectTerminal(id, wsUrl) {
     const state = terminals.get(id);
-    if (!state) return;
+    if (!state) return 0;
 
     dbg(state, 'reconnectTerminal (Razor explicit)', { wsUrl });
 
@@ -1211,7 +1213,7 @@ export function reconnectTerminal(id, wsUrl) {
     // Reset the backoff so we connect immediately rather than waiting
     // for the next pending auto-reconnect timer slot.
     state.reconnect.attempts = 0;
-    connectClient(state, wsUrl);
+    return connectClient(state, wsUrl);
 }
 
 export function disposeTerminal(id) {
