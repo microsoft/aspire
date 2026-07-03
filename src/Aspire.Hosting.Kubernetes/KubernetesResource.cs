@@ -663,15 +663,24 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
     private static string GetEndpointValue(EndpointMapping mapping, EndpointProperty property, bool embedded = false)
     {
-        var (scheme, _, host, port, _, _, _) = mapping;
+        var (scheme, _, host, targetPort, _, _, exposedPort) = mapping;
+
+        // In Kubernetes a Service publishes `port` and forwards traffic to the pod's `targetPort`.
+        // Other resources reach this resource through the Service, so the client-facing address must
+        // use the Service (exposed) port, not the container's listening port. When no distinct
+        // exposed port was configured (`port == targetPort`, or the deployment tool assigns it),
+        // ServicePort is null and we fall back to the target port. Only EndpointProperty.TargetPort
+        // surfaces the container's listening port. This mirrors the Azure Container Apps publisher.
+        // See: https://github.com/microsoft/aspire/issues/18321
+        var servicePort = exposedPort ?? targetPort;
 
         return property switch
         {
-            EndpointProperty.Url => GetHostValue($"{scheme}://", suffix: GetPortSuffix()),
+            EndpointProperty.Url => GetHostValue($"{scheme}://", suffix: GetPortSuffix(servicePort)),
             EndpointProperty.Host or EndpointProperty.IPV4Host => GetHostValue(),
-            EndpointProperty.Port => GetPort(),
-            EndpointProperty.HostAndPort => GetHostValue(suffix: GetPortSuffix()),
-            EndpointProperty.TargetPort => GetPort(),
+            EndpointProperty.Port => GetPort(servicePort),
+            EndpointProperty.HostAndPort => GetHostValue(suffix: GetPortSuffix(servicePort)),
+            EndpointProperty.TargetPort => GetPort(targetPort),
             EndpointProperty.Scheme => scheme,
             _ => throw new NotSupportedException(),
         };
@@ -681,7 +690,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             return $"{prefix}{host}{suffix}";
         }
 
-        string GetPort()
+        string GetPort(HelmValue port)
         {
             var rawPort = embedded ? port.Expression ?? port.ValueString : port.ToScalar();
 
@@ -690,7 +699,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 : rawPort;
         }
 
-        string GetPortSuffix()
+        string GetPortSuffix(HelmValue port)
         {
             var portValue = port switch
             {

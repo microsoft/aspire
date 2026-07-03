@@ -528,6 +528,52 @@ public class KubernetesPublisherTests()
     }
 
     [Fact]
+    public async Task KubernetesEndpointReferenceUsesServicePortNotTargetPort()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/18321
+        // When an endpoint has a distinct exposed `port` and container `targetPort`, a reference to
+        // that endpoint must resolve to the Kubernetes Service `port` (what clients connect to), not
+        // the container `targetPort`. The generated Service maps port -> targetPort, so a URL using
+        // the targetPort points at a port the Service is not listening on.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        builder.AddKubernetesEnvironment("k8s");
+
+        var questdb = builder.AddContainer("questdb", "questdb/questdb:9.4.1")
+            .WithHttpEndpoint(port: 9002, targetPort: 9000, name: "http");
+
+        builder.AddContainer("web", "questdb/questdb:9.4.1")
+            .WithEnvironment("QDB_CLIENT_CONF", questdb.GetEndpoint("http"));
+
+        var app = builder.Build();
+        app.Run();
+
+        // Assert. values.yaml holds the resolved reference URL (must use service port 9002), while
+        // questdb/service.yaml shows the Service mapping port 9002 -> targetPort 9000.
+        var expectedFiles = new[]
+        {
+            "values.yaml",
+            "templates/questdb/service.yaml",
+            "templates/web/config.yaml"
+        };
+        SettingsTask settingsTask = default!;
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+        await settingsTask;
+    }
+
+    [Fact]
     public async Task PublishAsync_HandlesConditionalReferenceExpression()
     {
         using var tempDir = new TestTempDirectory();
