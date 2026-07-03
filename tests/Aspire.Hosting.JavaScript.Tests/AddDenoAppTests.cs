@@ -229,6 +229,250 @@ public class AddDenoAppTests
             arg => Assert.Equal("--my-arg1", arg));
     }
 
+    // Helper: build a Deno resource, apply the given flag configuration, and evaluate the emitted argument list.
+    private static async Task<IReadOnlyList<string>> GetDenoArgsAsync(Action<IResourceBuilder<DenoAppResource>> configure, string entrypoint = "main.ts")
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var deno = builder.AddDenoApp("denoapp", ".", entrypoint);
+        configure(deno);
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var denoResource = Assert.Single(appModel.Resources.OfType<DenoAppResource>());
+
+        return await ArgumentEvaluator.GetArgumentListAsync(denoResource);
+    }
+
+    [Fact]
+    public async Task WithDenoAllowAll_False_DropsBlanketGrant()
+    {
+        // Least-privilege: explicitly opting out of -A must not emit any allow-all flag; only `run <script>`.
+        var args = await GetDenoArgsAsync(d => d.WithDenoAllowAll(false));
+
+        Assert.Collection(args,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("main.ts", a));
+    }
+
+    [Fact]
+    public async Task WithDenoGranularPermissions_EmitInCanonicalOrderWithValues()
+    {
+        // Configured out of canonical order and across allow/deny to prove deterministic ordering
+        // (net, read, write, run, env, sys, ffi; allow before deny) independent of call order.
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoAllowEnv("PORT", "HOME")
+            .WithDenoDenyNet("evil.example")
+            .WithDenoAllowNet("localhost:8080", "api.internal")
+            .WithDenoAllowRead("/etc/app")
+            .WithDenoDenyWrite()
+            .WithDenoAllowRun("git")
+            .WithDenoAllowSys()
+            .WithDenoAllowFfi("./native.so"));
+
+        Assert.Collection(args,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("--allow-net=localhost:8080,api.internal", a),
+            a => Assert.Equal("--deny-net=evil.example", a),
+            a => Assert.Equal("--allow-read=/etc/app", a),
+            a => Assert.Equal("--deny-write", a),
+            a => Assert.Equal("--allow-run=git", a),
+            a => Assert.Equal("--allow-env=PORT,HOME", a),
+            a => Assert.Equal("--allow-sys", a),
+            a => Assert.Equal("--allow-ffi=./native.so", a),
+            a => Assert.Equal("main.ts", a));
+    }
+
+    [Fact]
+    public async Task WithDenoAllowAll_True_KeepsDenyFlagsButDropsRedundantAllows()
+    {
+        // -A subsumes granular allows; a deny flag still narrows it and must be preserved.
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoAllowAll()
+            .WithDenoAllowNet("localhost")
+            .WithDenoDenyWrite("/etc"));
+
+        Assert.Collection(args,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("-A", a),
+            a => Assert.Equal("--deny-write=/etc", a),
+            a => Assert.Equal("main.ts", a));
+    }
+
+    [Fact]
+    public async Task WithDenoResolutionFlags_EmitConfigImportMapLockNodeModulesDir()
+    {
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoAllowAll(false)
+            .WithDenoConfig("deno.json")
+            .WithDenoImportMap("import_map.json")
+            .WithDenoLock("deno.lock")
+            .WithDenoNodeModulesDir("auto"));
+
+        Assert.Collection(args,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("--config", a),
+            a => Assert.Equal("deno.json", a),
+            a => Assert.Equal("--import-map", a),
+            a => Assert.Equal("import_map.json", a),
+            a => Assert.Equal("--lock", a),
+            a => Assert.Equal("deno.lock", a),
+            a => Assert.Equal("--node-modules-dir=auto", a),
+            a => Assert.Equal("main.ts", a));
+    }
+
+    [Fact]
+    public async Task WithDenoNoLock_OverridesLockAndEmitsNoLock()
+    {
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoAllowAll(false)
+            .WithDenoLock("deno.lock")
+            .WithDenoNoLock()
+            .WithDenoNodeModulesDir());
+
+        Assert.Collection(args,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("--no-lock", a),
+            a => Assert.Equal("--node-modules-dir", a),
+            a => Assert.Equal("main.ts", a));
+    }
+
+    [Fact]
+    public async Task WithDenoUnstable_NormalizesBareAndQualifiedFeatures()
+    {
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoAllowAll(false)
+            .WithDenoUnstable("kv", "worker-options")
+            .WithDenoUnstable("--unstable-sloppy-imports"));
+
+        Assert.Collection(args,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("--unstable-kv", a),
+            a => Assert.Equal("--unstable-worker-options", a),
+            a => Assert.Equal("--unstable-sloppy-imports", a),
+            a => Assert.Equal("main.ts", a));
+    }
+
+    [Fact]
+    public async Task WithDenoWatchAndInspect_EmitInRuntimeFlagPosition()
+    {
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoAllowAll(false)
+            .WithDenoWatch()
+            .WithDenoInspectBrk("127.0.0.1:9229"));
+
+        Assert.Collection(args,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("--watch", a),
+            a => Assert.Equal("--inspect-brk=127.0.0.1:9229", a),
+            a => Assert.Equal("main.ts", a));
+    }
+
+    [Fact]
+    public async Task WithDenoWatchHmr_EmitsWatchHmrFlag()
+    {
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoAllowAll(false)
+            .WithDenoWatch(hmr: true)
+            .WithDenoInspectWait());
+
+        Assert.Collection(args,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("--watch-hmr", a),
+            a => Assert.Equal("--inspect-wait", a),
+            a => Assert.Equal("main.ts", a));
+    }
+
+    [Fact]
+    public async Task WithDenoScriptArgs_AreEmittedAfterEntrypoint()
+    {
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoScriptArgs("--port", "5000", "serve"));
+
+        // Default -A grant preserved; script args follow the entrypoint.
+        Assert.Collection(args,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("-A", a),
+            a => Assert.Equal("main.ts", a),
+            a => Assert.Equal("--port", a),
+            a => Assert.Equal("5000", a),
+            a => Assert.Equal("serve", a));
+    }
+
+    [Fact]
+    public async Task WithDenoServe_EmitsServeMode()
+    {
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoServe()
+            .WithDenoAllowNet("0.0.0.0:8000")
+            .WithDenoScriptArgs("--config-arg"), entrypoint: "server.ts");
+
+        Assert.Collection(args,
+            a => Assert.Equal("serve", a),
+            a => Assert.Equal("--allow-net=0.0.0.0:8000", a),
+            a => Assert.Equal("server.ts", a),
+            a => Assert.Equal("--config-arg", a));
+    }
+
+    [Fact]
+    public async Task WithDenoTask_EmitsTaskModeAndIgnoresPermissionFlags()
+    {
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoTask("dev")
+            .WithDenoAllowNet("localhost") // permissions belong to the task; must not be emitted
+            .WithDenoConfig("deno.json")   // resolution flags are still valid for `deno task`
+            .WithDenoScriptArgs("--flag"));
+
+        Assert.Collection(args,
+            a => Assert.Equal("task", a),
+            a => Assert.Equal("--config", a),
+            a => Assert.Equal("deno.json", a),
+            a => Assert.Equal("dev", a),
+            a => Assert.Equal("--flag", a));
+    }
+
+    [Fact]
+    public async Task WithDenoRuntimeArgs_EscapeHatch_InjectsBeforeEntrypoint()
+    {
+        // AddExecutable-replacement escape hatch: any flag not covered by a dedicated method can be injected raw
+        // before the script, giving parity with AddExecutable("name", "deno", workdir, args...).
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoAllowAll(false)
+            .WithDenoRuntimeArgs("--v8-flags=--max-old-space-size=4096", "--seed", "42"));
+
+        Assert.Collection(args,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("--v8-flags=--max-old-space-size=4096", a),
+            a => Assert.Equal("--seed", a),
+            a => Assert.Equal("42", a),
+            a => Assert.Equal("main.ts", a));
+    }
+
+    [Fact]
+    public async Task AddDenoApp_ReplacesAddExecutable_FullPolyglotConfiguration()
+    {
+        // A NetScript-style configuration that previously required dropping back to
+        // AddExecutable("gateway", "deno", workdir, "run", "--allow-net", ... , "main.ts", "--serve")
+        // is now fully expressible through AddDenoApp + fluent flags, and yields an equivalent arg vector.
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoAllowNet("0.0.0.0:8000", "db:5432")
+            .WithDenoAllowEnv("PORT", "DATABASE_URL")
+            .WithDenoAllowRead("./config")
+            .WithDenoConfig("deno.json")
+            .WithDenoUnstable("kv")
+            .WithDenoScriptArgs("--serve"), entrypoint: "main.ts");
+
+        Assert.Collection(args,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("--allow-net=0.0.0.0:8000,db:5432", a),
+            a => Assert.Equal("--allow-read=./config", a),
+            a => Assert.Equal("--allow-env=PORT,DATABASE_URL", a),
+            a => Assert.Equal("--config", a),
+            a => Assert.Equal("deno.json", a),
+            a => Assert.Equal("--unstable-kv", a),
+            a => Assert.Equal("main.ts", a),
+            a => Assert.Equal("--serve", a));
+    }
+
     [Fact]
     public void AddDenoApp_UsesDenoCommand()
     {

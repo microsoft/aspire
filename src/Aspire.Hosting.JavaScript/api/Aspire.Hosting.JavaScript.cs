@@ -71,6 +71,96 @@ namespace Aspire.Hosting
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 
         [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoAllowAll(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, bool enabled = true) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoAllowEnv(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] variables) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoAllowFfi(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] libraries) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoAllowNet(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] hosts) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoAllowRead(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] paths) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoAllowRun(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] programs) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoAllowSys(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] apis) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoAllowWrite(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] paths) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoConfig(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, string configFile) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoDenyEnv(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] variables) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoDenyFfi(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] libraries) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoDenyNet(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] hosts) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoDenyRead(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] paths) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoDenyRun(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] programs) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoDenySys(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] apis) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoDenyWrite(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] paths) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoImportMap(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, string importMapFile) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoInspect(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, string? hostPort = null) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoInspectBrk(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, string? hostPort = null) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoInspectWait(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, string? hostPort = null) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoLock(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, string lockFile) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoNodeModulesDir(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, string? mode = null) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoNoLock(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoRun(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoRuntimeArgs(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] args) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoScriptArgs(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] args) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoServe(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoTask(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, string taskName) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoUnstable(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, params string[] features) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> WithDenoWatch(this ApplicationModel.IResourceBuilder<JavaScript.DenoAppResource> builder, bool hmr = false) { throw null; }
+
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<TResource> WithNpm<TResource>(this ApplicationModel.IResourceBuilder<TResource> resource, bool install = true, string? installCommand = null, string[]? installArgs = null)
             where TResource : JavaScript.JavaScriptAppResource { throw null; }
 

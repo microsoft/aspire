@@ -26,7 +26,7 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Provides extension methods for adding JavaScript applications to an <see cref="IDistributedApplicationBuilder"/>.
 /// </summary>
-public static class JavaScriptHostingExtensions
+public static partial class JavaScriptHostingExtensions
 {
     private const string BrowserCapability = "browser";
     private const string DefaultNodeVersion = "22";
@@ -711,10 +711,17 @@ public static class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
-    /// This method executes the script directly using <c>deno run -A &lt;script&gt;</c>. Deno natively runs JavaScript and
-    /// TypeScript files so no transpile step is required. Deno's built-in OpenTelemetry integration is enabled via the
-    /// <c>OTEL_DENO</c> environment variable, so traces, metrics, and logs flow to the Aspire dashboard with no
-    /// application-level SDK wiring.
+    /// By default this method executes the script directly using <c>deno run -A &lt;script&gt;</c>. Deno natively runs
+    /// JavaScript and TypeScript files so no transpile step is required. Deno's built-in OpenTelemetry integration is
+    /// enabled via the <c>OTEL_DENO</c> environment variable, so traces, metrics, and logs flow to the Aspire dashboard
+    /// with no application-level SDK wiring.
+    ///
+    /// The full Deno flag surface (granular permissions, <c>--config</c>/<c>--import-map</c>/<c>--lock</c>, unstable
+    /// features, <c>--watch</c>, inspector flags, script args, and the <c>run</c>/<c>task</c>/<c>serve</c> sub-command
+    /// modes) can be configured with the fluent <c>WithDeno*</c> methods (for example <see cref="WithDenoAllowNet"/>,
+    /// <see cref="WithDenoConfig"/>, <see cref="WithDenoUnstable"/>, <see cref="WithDenoServe"/>). Configuring any of
+    /// these fully replaces the default arg vector, so a Deno workload never has to fall back to <c>AddExecutable</c>.
+    /// See <c>docs/deno-flag-surface.md</c> for capabilities Aspire's model cannot express.
     ///
     /// If the application directory contains a <c>package.json</c>, <c>deno.json</c>, or <c>deno.jsonc</c> file, Deno will
     /// be added as the default package manager. When publishing to a container, the default base image is
@@ -744,8 +751,19 @@ public static class JavaScriptHostingExtensions
             .WithDenoDefaults()
             .WithArgs(c =>
             {
+                // An explicit Deno command-line annotation (configured via the WithDeno* fluent flag methods)
+                // takes precedence and fully controls the emitted argument list, including the sub-command mode
+                // (run/task/serve), granular permissions, resolution flags, unstable flags, watch/inspect, and
+                // script args. This is the surface that replaces dropping back to AddExecutable.
+                if (c.Resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var denoCommandLine))
+                {
+                    foreach (var arg in BuildDenoArgs(denoCommandLine, scriptPath))
+                    {
+                        c.Args.Add(arg);
+                    }
+                }
                 // If the JavaScriptRunScriptAnnotation is present, use that to run the app via `deno task <name>`.
-                if (c.Resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var runCommand) &&
+                else if (c.Resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var runCommand) &&
                     c.Resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
                 {
                     if (!string.IsNullOrEmpty(packageManager.ScriptCommand))
@@ -767,8 +785,8 @@ public static class JavaScriptHostingExtensions
                     // environment variables (PORT, OTLP endpoints, cert paths) and the app reads them with
                     // Deno.env / opens sockets with Deno.serve, both of which throw NotCapable without an explicit
                     // grant. `-A` (allow-all) is used to keep the developer experience on par with Node/Bun, whose
-                    // runtimes are permissive by default. Users who want least-privilege can add explicit
-                    // permission flags via WithArgs.
+                    // runtimes are permissive by default. Users who want least-privilege can opt out with
+                    // WithDenoAllowAll(false) and add explicit permission flags via the WithDeno* methods.
                     c.Args.Add("run");
                     c.Args.Add("-A");
                     c.Args.Add(scriptPath);
@@ -823,7 +841,7 @@ public static class JavaScriptHostingExtensions
                             // See https://github.com/denoland/deno_docker
                             .User("deno")
                             .EmptyLine()
-                            .Entrypoint([resource.Command, "run", "-A", scriptPath]);
+                            .Entrypoint(BuildDenoEntrypoint(dockerfileContext.Resource, resource.Command, scriptPath));
                 });
             });
 
