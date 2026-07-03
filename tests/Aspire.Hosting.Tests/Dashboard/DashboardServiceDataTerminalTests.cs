@@ -202,7 +202,8 @@ public class DashboardServiceDataTerminalTests
             loggerService,
             NullLogger<DashboardServiceData>.Instance,
             new ResourceCommandService(notifications, loggerService, new ServiceCollection().BuildServiceProvider()),
-            interactions);
+            interactions,
+            new FileUploadStore());
         return (data, notifications, resource);
     }
 

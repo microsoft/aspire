@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
@@ -19,18 +20,21 @@ internal sealed class DashboardServiceData : IDisposable
     private readonly ResourceCommandService _resourceCommandService;
     private readonly InteractionService _interactionService;
     private readonly ResourceLoggerService _resourceLoggerService;
+    private readonly FileUploadStore _fileUploadStore;
 
     public DashboardServiceData(
         ResourceNotificationService resourceNotificationService,
         ResourceLoggerService resourceLoggerService,
         ILogger<DashboardServiceData> logger,
         ResourceCommandService resourceCommandService,
-        InteractionService interactionService)
+        InteractionService interactionService,
+        FileUploadStore fileUploadStore)
     {
         _resourceLoggerService = resourceLoggerService;
         _resourcePublisher = new ResourcePublisher(_cts.Token);
         _resourceCommandService = resourceCommandService;
         _interactionService = interactionService;
+        _fileUploadStore = fileUploadStore;
         var cancellationToken = _cts.Token;
 
         Task.Run(async () =>
@@ -212,7 +216,7 @@ internal sealed class DashboardServiceData : IDisposable
                             serviceProvider,
                             logger,
                             inputsInfo,
-                            request.InputsDialog.InputItems.Select(i => new InputDto(i.Name, i.Value, DashboardService.MapInputType(i.InputType), i.FileName)).ToList(),
+                            request.InputsDialog.InputItems.Select(i => MapInputDto(i)).ToList(),
                             request.ResponseUpdate,
                             interaction.CancellationToken);
 
@@ -225,7 +229,42 @@ internal sealed class DashboardServiceData : IDisposable
             cancellationToken).ConfigureAwait(false);
     }
 
-    public record InputDto(string Name, string Value, InputType InputType, string? FileName = null);
+    private InputDto MapInputDto(Aspire.DashboardService.Proto.V1.InteractionInput i)
+    {
+        var inputType = DashboardService.MapInputType(i.InputType);
+
+        // For file inputs, Value contains a JSON array of objects with file IDs and names.
+        // Parse it, resolve each ID to the temp file path, and build InputFileDto entries.
+        if (inputType == InputType.File && !string.IsNullOrEmpty(i.Value))
+        {
+            var fileRefs = JsonSerializer.Deserialize<FileReference[]>(i.Value);
+            if (fileRefs is { Length: > 0 })
+            {
+                var files = new InputFileDto[fileRefs.Length];
+                for (var idx = 0; idx < fileRefs.Length; idx++)
+                {
+                    var fileRef = fileRefs[idx];
+                    var filePath = _fileUploadStore.GetFilePath(fileRef.Id) ?? fileRef.Id;
+                    var fileName = fileRef.Name ?? _fileUploadStore.GetFileName(fileRef.Id) ?? fileRef.Id;
+                    files[idx] = new InputFileDto(fileRef.Id, fileName, filePath);
+                }
+
+                return new InputDto(i.Name, i.Value, inputType, files);
+            }
+        }
+
+        return new InputDto(i.Name, i.Value, inputType);
+    }
+
+    private sealed class FileReference
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+    }
+
+    public record InputFileDto(string Id, string Name, string FilePath);
+
+    public record InputDto(string Name, string Value, InputType InputType, IReadOnlyList<InputFileDto>? Files = null);
 
     public static void ProcessInputs(IServiceProvider serviceProvider, ILogger logger, Interaction.InputsInteractionInfo inputsInfo, List<InputDto> inputDtos, bool dependencyChange, CancellationToken cancellationToken)
     {
@@ -251,10 +290,13 @@ internal sealed class DashboardServiceData : IDisposable
             {
                 modelInput.Value = incomingValue;
 
-                // For File inputs, propagate the original file name from the client.
-                if (requestInput.InputType == InputType.File)
+                // For File inputs, build InteractionFile instances from the resolved file info.
+                if (requestInput.InputType == InputType.File && requestInput.Files is { Count: > 0 })
                 {
-                    modelInput.SetFileName(requestInput.FileName);
+                    var interactionFiles = requestInput.Files
+                        .Select(f => new InteractionFile(f.Id, f.Name, f.FilePath))
+                        .ToArray();
+                    modelInput.SetFiles(interactionFiles);
                 }
 
                 // If we're processing updates because of a dependency change, check to see if this input is depended on.

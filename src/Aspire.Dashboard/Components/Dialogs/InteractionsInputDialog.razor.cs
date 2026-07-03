@@ -12,7 +12,6 @@ using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
-using DialogsResources = Aspire.Dashboard.Resources.Dialogs;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
@@ -33,6 +32,9 @@ public partial class InteractionsInputDialog : IAsyncDisposable
 
     [Inject]
     public required IJSRuntime JS { get; init; }
+
+    [Inject]
+    public required IDashboardClient DashboardClient { get; init; }
 
     private InteractionsInputsDialogViewModel? _content;
     private EditContext _editContext = default!;
@@ -181,22 +183,6 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             string.IsNullOrWhiteSpace(inputModel.Value);
     }
 
-    private string GetFileChooserPlaceholder(InputViewModel inputModel) =>
-        string.IsNullOrEmpty(inputModel.Input.Placeholder)
-            ? Loc[nameof(DialogsResources.InteractionFileChooserPlaceholder)]
-            : inputModel.Input.Placeholder;
-
-    private string GetFileChooserBrowseLabel(InputViewModel inputModel)
-    {
-        var label = !string.IsNullOrEmpty(inputModel.Input.Label)
-            ? inputModel.Input.Label
-            : inputModel.Input.Name;
-
-        return string.IsNullOrEmpty(label)
-            ? Loc[nameof(DialogsResources.InteractionFileChooserBrowse)]
-            : Loc[nameof(DialogsResources.InteractionFileChooserBrowseLabel), label];
-    }
-
     private async Task SubmitAsync()
     {
         // The workflow is:
@@ -218,58 +204,32 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     // Default maximum number of bytes to accept from an uploaded file.
     private const long DefaultMaxUploadedFileBytes = 1024 * 1024; // 1 MB
 
-    private async Task OnFileSelected(IEnumerable<FluentInputFileEventArgs> args, InputViewModel inputModel)
+    private static long GetMaxFileSize(InputViewModel inputModel) =>
+        inputModel.Input.MaxFileSize > 0 ? inputModel.Input.MaxFileSize : DefaultMaxUploadedFileBytes;
+
+    private async Task OnFileInputCompleted(InputViewModel inputModel, IEnumerable<FluentInputFileEventArgs> args)
     {
-        var file = args.FirstOrDefault();
-        if (file?.Stream != null)
+        var files = args.Where(a => a.Stream != null).ToList();
+        if (files.Count > 0)
         {
-            var maxBytes = inputModel.Input.MaxFileSize > 0 ? inputModel.Input.MaxFileSize : DefaultMaxUploadedFileBytes;
-
-            // Save the uploaded file to a temp directory on disk. The AppHost reads the file
-            // directly from this path, avoiding gRPC message size limits for large files.
-            // Use a process-specific subdirectory to prevent symlink attacks on multi-user systems.
-            var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-uploads-{Environment.ProcessId}");
-            Directory.CreateDirectory(tempDir);
-            var tempFilePath = Path.Combine(tempDir, Guid.NewGuid().ToString());
-
-            await using (var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+            var fileReferences = new List<FileReferenceViewModel>();
+            foreach (var file in files)
             {
-                long totalBytesWritten = 0;
-                var buffer = new byte[81920];
-                int bytesRead;
-
-                while ((bytesRead = await file.Stream.ReadAsync(buffer).ConfigureAwait(false)) > 0)
-                {
-                    if (totalBytesWritten + bytesRead > maxBytes)
-                    {
-                        // Write only up to the limit, then stop.
-                        var remaining = (int)(maxBytes - totalBytesWritten);
-                        if (remaining > 0)
-                        {
-                            await fileStream.WriteAsync(buffer.AsMemory(0, remaining)).ConfigureAwait(false);
-                        }
-                        break;
-                    }
-
-                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead)).ConfigureAwait(false);
-                    totalBytesWritten += bytesRead;
-                }
+                var fileId = await DashboardClient.UploadFileAsync(file.Stream!, file.Name, CancellationToken.None);
+                fileReferences.Add(new FileReferenceViewModel { Id = fileId, Name = file.Name });
             }
 
-            inputModel.Value = tempFilePath;
-            inputModel.FileDisplayName = file.Name;
-
-            _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.Value)));
-            _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.FileDisplayName)));
+            inputModel.SetFileReferences(fileReferences);
         }
         else
         {
-            inputModel.Value = string.Empty;
-            inputModel.FileDisplayName = string.Empty;
-
-            _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.Value)));
-            _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.FileDisplayName)));
+            inputModel.SetFileReferences([]);
         }
+
+        await InvokeAsync(() =>
+        {
+            _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.Value)));
+        });
     }
 
     private async Task ToggleSecretTextVisibilityAsync(InputViewModel inputModel)

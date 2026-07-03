@@ -106,6 +106,7 @@ internal sealed class DashboardServiceHost : IHostedService
             builder.Services.AddSingleton(resourceNotificationService);
             builder.Services.AddSingleton(resourceLoggerService);
             builder.Services.AddSingleton(interactionService);
+            builder.Services.AddSingleton<FileUploadStore>();
 
             builder.WebHost.ConfigureKestrel(ConfigureKestrel);
 

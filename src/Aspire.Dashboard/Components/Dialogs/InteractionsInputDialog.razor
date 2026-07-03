@@ -162,33 +162,36 @@
                             </InteractionInputField>
                             break;
                         case InputType.File:
-                            <InteractionInputField ForId="@_elementRefs[localItem]?.Id"
+                            var inputId = $"FileUploadButton-{_inputDialogInputViewModels.IndexOf(localItem)}";
+                            <InteractionInputField ForId="@inputId"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"
                                                    Context="input">
-                                <div class="file-chooser-container">
-                                    <FluentTextField @ref="@_elementRefs[input.ViewModel]"
-                                                     @bind-Value="input.ViewModel.FileDisplayName"
-                                                     Placeholder="@GetFileChooserPlaceholder(input.ViewModel)"
-                                                     Required="input.ViewModel.Input.Required"
-                                                     ReadOnly="true"
-                                                     Disabled="input.ViewModel.InputDisabled"
-                                                     aria-describedby="@input.DescriptionId" />
-                                    <FluentInputFile AnchorId="@($"file-chooser-{input.ViewModel.Input.Name}")"
-                                                     DragDropZoneVisible="false"
-                                                     Multiple="false"
-                                                     Mode="InputFileMode.Stream"
-                                                     OnCompleted="@(e => OnFileSelected(e, input.ViewModel))"
-                                                     Disabled="input.ViewModel.InputDisabled" />
-                                    <FluentButton Id="@($"file-chooser-{input.ViewModel.Input.Name}")"
+                                <FluentInputFile @ref="@_elementRefs[input.ViewModel]"
+                                                 DragDropZoneVisible="false"
+                                                 Mode="InputFileMode.Stream"
+                                                 AnchorId="@inputId"
+                                                 Multiple="@input.ViewModel.Input.AllowMultipleFiles"
+                                                 MaximumFileSize="@GetMaxFileSize(input.ViewModel)"
+                                                 OnCompleted="@(args => OnFileInputCompleted(input.ViewModel, args))" />
+                                @if (input.ViewModel.FileReferences.Count > 0)
+                                {
+                                    @foreach (var fileRef in input.ViewModel.FileReferences)
+                                    {
+                                        <div class="uploaded-file-container">
+                                            <FluentIcon Icon="Icons.Filled.Size16.Document" Style="vertical-align: text-bottom;" Color="Color.Accent" />
+                                            <span>@fileRef.Name</span>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <FluentButton Id="@inputId" Appearance="Appearance.Accent"
                                                   IconStart="@(new Icons.Regular.Size16.FolderOpen())"
-                                                  Appearance="Appearance.Outline"
-                                                  Disabled="input.ViewModel.InputDisabled"
-                                                  Title="@GetFileChooserBrowseLabel(input.ViewModel)"
-                                                  aria-label="@GetFileChooserBrowseLabel(input.ViewModel)">
-                                        @Loc[nameof(Dialogs.InteractionFileChooserBrowse)]
+                                                  aria-label="@input.ViewModel.Input.Label">
+                                        @input.ViewModel.Input.Placeholder
                                     </FluentButton>
-                                </div>
+                                }
                             </InteractionInputField>
                             break;
                         default:

@@ -149,6 +149,7 @@ public class DefaultTerminalConnectionResolverTests
         public Task ReconnectAsync() => Task.CompletedTask;
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
         public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<string> UploadFileAsync(Stream fileStream, string fileName, CancellationToken cancellationToken) => throw new NotImplementedException();
         public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
         public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
         public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken) => throw new NotImplementedException();

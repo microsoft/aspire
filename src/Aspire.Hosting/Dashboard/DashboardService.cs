@@ -23,7 +23,7 @@ namespace Aspire.Hosting.Dashboard;
 /// required beyond a single request. Longer-scoped data is stored in <see cref="DashboardServiceData"/>.
 /// </remarks>
 [Authorize(Policy = ResourceServiceApiKeyAuthorization.PolicyName)]
-internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger)
+internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, FileUploadStore fileUploadStore)
     : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceBase
 {
     // gRPC has a maximum receive size of 4MB. Force logs into batches to avoid exceeding receive size.
@@ -229,9 +229,9 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         {
             dto.MaxFileSize = input.MaxFileSize.Value;
         }
-        if (input.FileName != null)
+        if (input.AllowMultipleFiles)
         {
-            dto.FileName = input.FileName;
+            dto.AllowMultipleFiles = true;
         }
         dto.ValidationErrors.AddRange(input.ValidationErrors);
         return dto;
@@ -473,6 +473,58 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         {
             logger.LogError(ex, "Error executing service method '{Method}'.", serverCallContext.Method);
             throw;
+        }
+    }
+
+    public override async Task<UploadFileResponse> UploadFile(IAsyncStreamReader<UploadFileChunk> requestStream, ServerCallContext context)
+    {
+        var cancellationToken = context.CancellationToken;
+        string? fileName = null;
+        string? fileId = null;
+        string? filePath = null;
+
+        await using var fileStream = await CreateFileStream().ConfigureAwait(false);
+
+        while (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
+        {
+            var chunk = requestStream.Current;
+
+            // The first chunk carries the file name.
+            if (fileName is null && !string.IsNullOrEmpty(chunk.FileName))
+            {
+                fileName = chunk.FileName;
+            }
+
+            if (!chunk.Data.IsEmpty)
+            {
+                chunk.Data.WriteTo(fileStream);
+            }
+        }
+
+        return new UploadFileResponse { FileId = fileId ?? string.Empty };
+
+        async ValueTask<FileStream> CreateFileStream()
+        {
+            // Read the first message to get the file name before creating the file entry.
+            if (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
+            {
+                var firstChunk = requestStream.Current;
+                fileName = firstChunk.FileName;
+                (fileId, filePath) = fileUploadStore.CreateEntry(fileName ?? "unknown");
+
+                var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
+
+                if (!firstChunk.Data.IsEmpty)
+                {
+                    firstChunk.Data.WriteTo(fs);
+                }
+
+                return fs;
+            }
+
+            // Empty stream — create entry with placeholder name.
+            (fileId, filePath) = fileUploadStore.CreateEntry("unknown");
+            return new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
         }
     }
 }

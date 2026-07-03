@@ -24,7 +24,6 @@ public sealed class InputViewModel
         if (Input is not null && !ShouldUseIncomingValue(Input, input))
         {
             input.Value = Input.Value;
-            input.FileName = Input.FileName;
         }
 
         Input = input;
@@ -110,11 +109,15 @@ public sealed class InputViewModel
     // Used to track secret text visibility state
     public bool IsSecretTextVisible { get; set; }
 
-    // Used to display the original filename for File inputs while Value holds the temp file path.
-    public string? FileDisplayName
+    // Tracks the uploaded file references for File inputs.
+    // When set, serializes the collection to JSON on the underlying Input.Value.
+    public List<FileReferenceViewModel> FileReferences { get; } = [];
+
+    public void SetFileReferences(IEnumerable<FileReferenceViewModel> files)
     {
-        get => Input.FileName;
-        set => Input.FileName = value ?? string.Empty;
+        FileReferences.Clear();
+        FileReferences.AddRange(files);
+        Input.Value = System.Text.Json.JsonSerializer.Serialize(FileReferences);
     }
 
     private static bool OptionsEqual(List<SelectViewModel<string>> existing, List<SelectViewModel<string>> incoming)
@@ -145,4 +148,10 @@ public sealed class InputViewModel
         // Azure Subscription ID becoming editable after tenant-specific subscriptions are loaded.
         return (current.Loading && !incoming.Loading) || current.Disabled || incoming.Disabled;
     }
+}
+
+public sealed class FileReferenceViewModel
+{
+    public required string Id { get; set; }
+    public required string Name { get; set; }
 }

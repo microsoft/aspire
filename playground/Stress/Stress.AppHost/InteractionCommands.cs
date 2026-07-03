@@ -509,9 +509,9 @@ internal static class InteractionCommands
                 foreach (var updatedInput in result.Data)
                 {
                     var value = updatedInput.Value;
-                    if (updatedInput.InputType == InputType.File && !string.IsNullOrEmpty(value))
+                    if (updatedInput.InputType == InputType.File && updatedInput.Files is { Count: > 0 })
                     {
-                        value += $" (FileName: {updatedInput.FileName})";
+                        value += $" (Files: {string.Join(", ", updatedInput.Files.Select(f => f.Name))})";
                     }
                     logger.LogInformation("Input: {Name} = {Value}", updatedInput.Name, value);
                 }
@@ -982,6 +982,84 @@ internal static class InteractionCommands
                 {
                     Message = "Running automated task..."
                 }
+            })
+            .WithCommand("file-upload", "File upload", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+                var fileInput = new InteractionInput
+                {
+                    Name = "File",
+                    InputType = InputType.File,
+                    Label = "File",
+                    Placeholder = "Select a file to upload",
+                    Required = true
+                };
+                var result = await interactionService.PromptInputAsync(
+                    "File upload",
+                    "Select a file to upload.",
+                    fileInput,
+                    cancellationToken: commandContext.CancellationToken);
+
+                if (result.Canceled)
+                {
+                    return CommandResults.Failure("Canceled");
+                }
+
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
+                var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
+
+                var input = result.Data;
+                var file = input.Files?[0];
+                logger.LogInformation("File: {Id} (Name: {Name})", file?.Id, file?.Name);
+
+                return CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Prompts the user to upload a single file.",
+                IconName = "DocumentArrowUp",
+                IconVariant = IconVariant.Regular
+            })
+            .WithCommand("file-upload-multiple", "File upload (multiple)", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+                var fileInput = new InteractionInput
+                {
+                    Name = "Files",
+                    InputType = InputType.File,
+                    Label = "Files",
+                    Placeholder = "Select files to upload",
+                    AllowMultipleFiles = true,
+                    Required = true
+                };
+                var result = await interactionService.PromptInputAsync(
+                    "File upload (multiple)",
+                    "Select one or more files to upload.",
+                    fileInput,
+                    cancellationToken: commandContext.CancellationToken);
+
+                if (result.Canceled)
+                {
+                    return CommandResults.Failure("Canceled");
+                }
+
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
+                var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
+
+                var input = result.Data;
+                if (input.Files is { Count: > 0 })
+                {
+                    foreach (var file in input.Files)
+                    {
+                        logger.LogInformation("File: {Id} (Name: {Name})", file.Id, file.Name);
+                    }
+                }
+
+                return CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Prompts the user to upload multiple files.",
+                IconName = "DocumentArrowUp",
+                IconVariant = IconVariant.Regular
             });
 
         return resource;

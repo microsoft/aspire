@@ -1014,6 +1014,47 @@ internal sealed class DashboardClient : IDashboardClient
         }
     }
 
+    public async Task<string> UploadFileAsync(Stream fileStream, string fileName, CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        using var call = _client!.UploadFile(headers: _headers, cancellationToken: combinedTokens.Token);
+
+        const int chunkSize = 64 * 1024; // 64 KB chunks
+        var buffer = new byte[chunkSize];
+        var isFirst = true;
+
+        int bytesRead;
+        while ((bytesRead = await fileStream.ReadAsync(buffer, combinedTokens.Token).ConfigureAwait(false)) > 0)
+        {
+            var chunk = new UploadFileChunk
+            {
+                Data = Google.Protobuf.ByteString.CopyFrom(buffer, 0, bytesRead)
+            };
+
+            if (isFirst)
+            {
+                chunk.FileName = fileName;
+                isFirst = true;
+            }
+
+            await call.RequestStream.WriteAsync(chunk, combinedTokens.Token).ConfigureAwait(false);
+            isFirst = false;
+        }
+
+        // Handle case where the file was empty — still send filename.
+        if (isFirst)
+        {
+            await call.RequestStream.WriteAsync(new UploadFileChunk { FileName = fileName }, combinedTokens.Token).ConfigureAwait(false);
+        }
+
+        await call.RequestStream.CompleteAsync().ConfigureAwait(false);
+
+        var response = await call.ResponseAsync.ConfigureAwait(false);
+        return response.FileId;
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _state, StateDisposed) is not StateDisposed)

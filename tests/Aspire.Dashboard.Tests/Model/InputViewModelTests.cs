@@ -391,25 +391,21 @@ public class InputViewModelTests
     [Fact]
     public void InputViewModel_FileChooser_DefaultsToEmptyValue()
     {
-        // Arrange
         var input = new InteractionInput
         {
             Label = "Select File",
             InputType = InputType.File
         };
 
-        // Act
         var viewModel = new InputViewModel(input);
 
-        // Assert
         Assert.True(string.IsNullOrEmpty(viewModel.Value));
-        Assert.True(string.IsNullOrEmpty(viewModel.FileDisplayName));
+        Assert.Empty(viewModel.FileReferences);
     }
 
     [Fact]
-    public void InputViewModel_FileChooser_FileDisplayNameIsIndependentOfValue()
+    public void InputViewModel_FileChooser_SetFileReferencesSerializesToValue()
     {
-        // Arrange
         var input = new InteractionInput
         {
             Label = "Select File",
@@ -417,38 +413,41 @@ public class InputViewModelTests
         };
         var viewModel = new InputViewModel(input);
 
-        // Act
-        viewModel.Value = "/tmp/aspire-uploads/abc123";
-        viewModel.FileDisplayName = "readme.txt";
+        viewModel.SetFileReferences([
+            new FileReferenceViewModel { Id = "abc123", Name = "readme.txt" }
+        ]);
 
-        // Assert - Value holds the file path, FileDisplayName holds the user-facing name
-        Assert.Equal("/tmp/aspire-uploads/abc123", viewModel.Value);
-        Assert.Equal("readme.txt", viewModel.FileDisplayName);
+        Assert.Single(viewModel.FileReferences);
+        Assert.Equal("readme.txt", viewModel.FileReferences[0].Name);
+        Assert.Contains("abc123", viewModel.Value);
+        Assert.Contains("readme.txt", viewModel.Value);
     }
 
     [Fact]
-    public void InputViewModel_FileChooser_SetInputPreservesFileDisplayNameWhenValueIsPreserved()
+    public void InputViewModel_FileChooser_SetInputPreservesFileReferencesWhenValueIsPreserved()
     {
         var initialInput = new InteractionInput
         {
             Label = "Select File",
             InputType = InputType.File,
-            Value = "/upload/local"
+            Value = "[{\"Id\":\"id1\",\"Name\":\"local-file.txt\"}]"
         };
         var viewModel = new InputViewModel(initialInput);
-        viewModel.FileDisplayName = "local-file.txt";
+        viewModel.SetFileReferences([
+            new FileReferenceViewModel { Id = "id1", Name = "local-file.txt" }
+        ]);
 
         var newInput = new InteractionInput
         {
             Label = "Select Another File",
             InputType = InputType.File,
             Value = string.Empty,
-            FileName = string.Empty
         };
 
         viewModel.SetInput(newInput);
 
-        Assert.Equal("/upload/local", viewModel.Value);
-        Assert.Equal("local-file.txt", viewModel.FileDisplayName);
+        Assert.Equal("[{\"Id\":\"id1\",\"Name\":\"local-file.txt\"}]", viewModel.Value);
+        Assert.Single(viewModel.FileReferences);
+        Assert.Equal("local-file.txt", viewModel.FileReferences[0].Name);
     }
 }

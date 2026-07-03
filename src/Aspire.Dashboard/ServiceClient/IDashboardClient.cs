@@ -87,6 +87,8 @@ public interface IDashboardClient : IAsyncDisposable
     IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken);
 
     Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken);
+
+    Task<string> UploadFileAsync(Stream fileStream, string fileName, CancellationToken cancellationToken);
 }
 
 /// <summary>

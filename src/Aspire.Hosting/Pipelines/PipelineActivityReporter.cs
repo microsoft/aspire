@@ -430,7 +430,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                                     matchingInput = inputsInfo.Inputs[i];
                                 }
 
-                                dtos.Add(new InputDto(matchingInput.Name, responseAnswer.Value ?? "", matchingInput.InputType, responseAnswer.FileName));
+                                dtos.Add(new InputDto(matchingInput.Name, responseAnswer.Value ?? "", matchingInput.InputType));
                             }
 
                             DashboardServiceData.ProcessInputs(

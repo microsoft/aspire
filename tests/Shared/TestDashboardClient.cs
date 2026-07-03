@@ -74,6 +74,11 @@ public class TestDashboardClient : IDashboardClient
         return _resourceCommandsChannel.Reader.ReadAsync(cancellationToken).AsTask();
     }
 
+    public Task<string> UploadFileAsync(Stream fileStream, string fileName, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(Guid.NewGuid().ToString("N"));
+    }
+
     public async IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         if (_consoleLogsChannelProvider == null)

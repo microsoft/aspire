@@ -432,7 +432,7 @@ message InteractionInput {
     string name = 14;
     bool disabled = 15;
     int64 max_file_size = 16;
-    string file_name = 17;
+    bool allow_multiple_files = 17;
 }
 enum MessageIntent {
     MESSAGE_INTENT_NONE = 0;
@@ -454,10 +454,24 @@ enum InputType {
 
 ////////////////////////////////////////////
 
+message UploadFileChunk {
+    bytes data = 1;
+    // The original file name provided by the user (sent in the first chunk).
+    string file_name = 2;
+}
+
+message UploadFileResponse {
+    // An opaque reference ID for the uploaded file. Used as the Value for file inputs.
+    string file_id = 1;
+}
+
+////////////////////////////////////////////
+
 service DashboardService {
     rpc GetApplicationInformation(ApplicationInformationRequest) returns (ApplicationInformationResponse);
     rpc WatchResources(WatchResourcesRequest) returns (stream WatchResourcesUpdate);
     rpc WatchResourceConsoleLogs(WatchResourceConsoleLogsRequest) returns (stream WatchResourceConsoleLogsUpdate);
     rpc ExecuteResourceCommand(ResourceCommandRequest) returns (ResourceCommandResponse);
     rpc WatchInteractions(stream WatchInteractionsRequestUpdate) returns (stream WatchInteractionsResponseUpdate);
+    rpc UploadFile(stream UploadFileChunk) returns (UploadFileResponse);
 }

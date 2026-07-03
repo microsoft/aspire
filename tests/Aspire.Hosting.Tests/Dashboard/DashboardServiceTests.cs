@@ -39,7 +39,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         var resourceNotificationService = CreateResourceNotificationService(resourceLoggerService);
         var dashboardServiceData = CreateDashboardServiceData(resourceLoggerService: resourceLoggerService, resourceNotificationService: resourceNotificationService);
-        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance);
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance, new FileUploadStore());
 
         var logger = resourceLoggerService.GetLogger("test-resource");
 
@@ -92,7 +92,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var resourceLoggerService = new ResourceLoggerService();
         var resourceNotificationService = CreateResourceNotificationService(resourceLoggerService);
         var dashboardServiceData = CreateDashboardServiceData(resourceLoggerService: resourceLoggerService, resourceNotificationService: resourceNotificationService);
-        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance);
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance, new FileUploadStore());
 
         var logger = resourceLoggerService.GetLogger("test-resource");
 
@@ -144,7 +144,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var resourceLoggerService = new ResourceLoggerService();
         var resourceNotificationService = CreateResourceNotificationService(resourceLoggerService);
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, resourceLoggerService: resourceLoggerService, resourceNotificationService: resourceNotificationService);
-        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>());
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>(), new FileUploadStore());
 
         var testResource = new TestResource("test-resource");
         using var applicationBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper: testOutputHelper);
@@ -248,7 +248,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var resourceLoggerService = new ResourceLoggerService();
         var resourceNotificationService = CreateResourceNotificationService(resourceLoggerService);
         using var dashboardServiceData = CreateDashboardServiceData(resourceLoggerService: resourceLoggerService, resourceNotificationService: resourceNotificationService);
-        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance);
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance, new FileUploadStore());
 
         InteractionInputCollection? capturedArguments = null;
         var testResource = new TestResource("test-resource");
@@ -311,7 +311,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var resourceLoggerService = new ResourceLoggerService();
         var resourceNotificationService = CreateResourceNotificationService(resourceLoggerService);
         using var dashboardServiceData = CreateDashboardServiceData(resourceLoggerService: resourceLoggerService, resourceNotificationService: resourceNotificationService);
-        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance);
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance, new FileUploadStore());
 
         var executed = false;
         var testResource = new TestResource("test-resource");
@@ -368,7 +368,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var resourceLoggerService = new ResourceLoggerService();
         var resourceNotificationService = CreateResourceNotificationService(resourceLoggerService);
         using var dashboardServiceData = CreateDashboardServiceData(resourceLoggerService: resourceLoggerService, resourceNotificationService: resourceNotificationService);
-        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance);
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), NullLogger<DashboardServiceImpl>.Instance, new FileUploadStore());
 
         var executed = false;
         var testResource = new TestResource("test-resource");
@@ -445,7 +445,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new ServiceCollection().BuildServiceProvider(),
             new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
-        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>());
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>(), new FileUploadStore());
 
         var cts = new CancellationTokenSource();
         var context = TestServerCallContext.Create(cancellationToken: cts.Token);
@@ -515,7 +515,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new ServiceCollection().BuildServiceProvider(),
             new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
-        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>());
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>(), new FileUploadStore());
 
         var cts = new CancellationTokenSource();
         var context = TestServerCallContext.Create(cancellationToken: cts.Token);
@@ -562,7 +562,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new ServiceCollection().BuildServiceProvider(),
             new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
-        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>());
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>(), new FileUploadStore());
 
         var cts = new CancellationTokenSource();
         var context = TestServerCallContext.Create(cancellationToken: cts.Token);
@@ -621,7 +621,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new ServiceCollection().BuildServiceProvider(),
             new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
-        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>());
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>(), new FileUploadStore());
 
         var cts = new CancellationTokenSource();
         var context = TestServerCallContext.Create(cancellationToken: cts.Token);
@@ -658,7 +658,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new ServiceCollection().BuildServiceProvider(),
             new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
-        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>());
+        var dashboardService = new DashboardServiceImpl(dashboardServiceData, new TestHostEnvironment(), new TestHostApplicationLifetime(), new ConfigurationBuilder().Build(), loggerFactory.CreateLogger<DashboardServiceImpl>(), new FileUploadStore());
 
         var cts = new CancellationTokenSource();
         var context = TestServerCallContext.Create(cancellationToken: cts.Token);
@@ -718,7 +718,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             hostEnvironment,
             new TestHostApplicationLifetime(),
             configuration,
-            NullLogger<DashboardServiceImpl>.Instance);
+            NullLogger<DashboardServiceImpl>.Instance, new FileUploadStore());
 
         var context = TestServerCallContext.Create();
 
@@ -747,7 +747,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             hostEnvironment,
             new TestHostApplicationLifetime(),
             configuration,
-            NullLogger<DashboardServiceImpl>.Instance);
+            NullLogger<DashboardServiceImpl>.Instance, new FileUploadStore());
 
         var context = TestServerCallContext.Create();
 
@@ -777,7 +777,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new TestHostEnvironment(),
             new TestHostApplicationLifetime(),
             configuration,
-            NullLogger<DashboardServiceImpl>.Instance);
+            NullLogger<DashboardServiceImpl>.Instance, new FileUploadStore());
 
         var context = TestServerCallContext.Create();
 
@@ -811,7 +811,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             resourceLoggerService,
             loggerFactory.CreateLogger<DashboardServiceData>(),
             new ResourceCommandService(resourceNotificationService, resourceLoggerService, new ServiceCollection().BuildServiceProvider()),
-            interactionService);
+            interactionService,
+            new FileUploadStore());
     }
 
     private static ResourceNotificationService CreateResourceNotificationService(ResourceLoggerService resourceLoggerService)

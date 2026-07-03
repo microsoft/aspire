@@ -267,7 +267,6 @@ internal static class InteractionExports
             Disabled = input.Disabled,
             MaxLength = input.MaxLength,
             MaxFileSize = input.MaxFileSize,
-            FileName = input.FileName,
             // DynamicLoading is intentionally omitted: it holds the non-serializable LoadCallback delegate.
         };
     }

@@ -284,7 +284,6 @@ public sealed class LoadInputContext
 public sealed class InteractionInput
 {
     private string _name = null!;
-    private string? _fileName;
     private bool _required;
     private InputLoadOptions? _dynamicLoading;
 
@@ -299,7 +298,7 @@ public sealed class InteractionInput
 
     internal void SetRequired(bool required) => _required = required;
 
-    internal void SetFileName(string? fileName) => _fileName = fileName;
+    internal void SetFiles(IReadOnlyList<InteractionFile>? files) => Files = files;
 
     internal void SetDynamicLoading(InputLoadOptions? dynamicLoading) => _dynamicLoading = dynamicLoading;
 
@@ -401,6 +400,11 @@ public sealed class InteractionInput
     }
 
     /// <summary>
+    /// Gets or sets a value indicating whether multiple files can be selected. Only used by <see cref="InputType.File"/> inputs.
+    /// </summary>
+    public bool AllowMultipleFiles { get; init; }
+
+    /// <summary>
     /// Gets or sets the maximum file size in bytes for <see cref="InputType.File"/> inputs.
     /// If not specified, the Dashboard upload UI applies a default limit of 1 MB.
     /// This limit is not enforced when the file path is provided directly (e.g. via the CLI).
@@ -420,15 +424,48 @@ public sealed class InteractionInput
     }
 
     /// <summary>
-    /// Gets or sets the original file name for <see cref="InputType.File"/> inputs.
-    /// When a file is selected, <see cref="Value"/> holds the file path on disk and this property
-    /// holds the user-facing file name (e.g. "readme.txt").
+    /// Gets the files associated with this <see cref="InputType.File"/> input.
+    /// Populated after the user selects file(s) and the interaction completes.
     /// </summary>
-    public string? FileName
+    public IReadOnlyList<InteractionFile>? Files { get; private set; }
+}
+
+/// <summary>
+/// Represents a file selected by the user for an <see cref="InputType.File"/> input.
+/// </summary>
+public sealed class InteractionFile
+{
+    private readonly string _filePath;
+
+    internal InteractionFile(string id, string name, string filePath)
     {
-        get => _fileName;
-        init => _fileName = value;
+        Id = id;
+        Name = name;
+        _filePath = filePath;
     }
+
+    /// <summary>
+    /// Gets the unique identifier for the uploaded file.
+    /// </summary>
+    public string Id { get; }
+
+    /// <summary>
+    /// Gets the original file name as provided by the user (e.g. "readme.txt").
+    /// </summary>
+    public string Name { get; }
+
+    /// <summary>
+    /// Opens a read-only stream for the file content.
+    /// </summary>
+    /// <returns>A <see cref="Stream"/> for reading the file.</returns>
+    public Stream OpenRead() => new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, useAsync: true);
+
+    /// <summary>
+    /// Reads all bytes of the file asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A byte array containing the file content.</returns>
+    public Task<byte[]> ReadAllBytesAsync(CancellationToken cancellationToken = default) => File.ReadAllBytesAsync(_filePath, cancellationToken);
 }
 
 /// <summary>
