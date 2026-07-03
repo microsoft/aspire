@@ -253,8 +253,7 @@ internal class AppHostRpcTarget(
     {
         var maxUploadSize = Dashboard.DashboardService.GetMaxFileUploadSize(configuration);
 
-        var fileInfo = new FileInfo(request.FilePath);
-        if (fileInfo.Length > maxUploadSize)
+        if (request.Data.Length > maxUploadSize)
         {
             throw new InvalidOperationException($"File '{request.FileName}' exceeds the maximum upload size of {maxUploadSize} bytes.");
         }
@@ -263,15 +262,10 @@ internal class AppHostRpcTarget(
 
         try
         {
-            // Copy the file from the source path to the managed upload store location.
-            var sourceStream = new FileStream(request.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 81920, useAsync: true);
-            await using (sourceStream.ConfigureAwait(false))
+            var destStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
+            await using (destStream.ConfigureAwait(false))
             {
-                var destStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
-                await using (destStream.ConfigureAwait(false))
-                {
-                    await sourceStream.CopyToAsync(destStream, cancellationToken).ConfigureAwait(false);
-                }
+                await destStream.WriteAsync(request.Data, cancellationToken).ConfigureAwait(false);
             }
         }
         catch

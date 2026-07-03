@@ -964,7 +964,7 @@ internal class PublishingPromptInputAnswer
 
 internal sealed class UploadFileRequest
 {
-    public required string FilePath { get; set; }
+    public required byte[] Data { get; set; }
     public required string FileName { get; set; }
 }
 

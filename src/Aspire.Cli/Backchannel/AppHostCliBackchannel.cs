@@ -559,11 +559,13 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Uploading file {FileName} from {FilePath}", fileName, filePath);
 
+        var data = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
+
         var response = await rpc.InvokeWithProfilingAsync<UploadFileResponse>(
             profilingTelemetry,
             "apphost",
             "UploadFileAsync",
-            [new UploadFileRequest { FilePath = filePath, FileName = fileName }],
+            [new UploadFileRequest { Data = data, FileName = fileName }],
             cancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("File uploaded with ID {FileId}", response.FileId);
