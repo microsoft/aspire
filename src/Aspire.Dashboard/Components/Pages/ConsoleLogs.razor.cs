@@ -591,21 +591,12 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Console)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewConsoleOption)],
-                // Bare tick on the active view; no icon on the inactive one so
-                // the menu doesn't look like a checkbox list — same pattern as
-                // the Terminal dimensions submenu below.
-                Icon = _activeView == ConsoleLogsView.Console
-                    ? new Icons.Regular.Size16.Checkmark()
-                    : null
             });
 
             _logsMenuItems.Add(new()
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Terminal)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)],
-                Icon = _activeView == ConsoleLogsView.Terminal
-                    ? new Icons.Regular.Size16.Checkmark()
-                    : null
             });
 
             _logsMenuItems.Add(new()
@@ -626,7 +617,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             var fontPx = terminalState?.FontPx ?? 0;
             var fontControlsEnabled = terminalState?.FontControlsEnabled ?? false;
             var sizeSelectEnabled = terminalState?.SizeSelectEnabled ?? false;
-            var currentSizeKey = terminalState?.SizeKey;
 
             _logsMenuItems.Add(new()
             {
@@ -659,11 +649,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     {
                         OnClick = () => TerminalSizeChangedAsync(value),
                         Text = preset.Label,
-                        // Bare tick on the active preset; no icon on the others
-                        // so the menu doesn't look like a checkbox list.
-                        Icon = string.Equals(currentSizeKey, value, StringComparison.Ordinal)
-                            ? new Icons.Regular.Size16.Checkmark()
-                            : null,
                         IsDisabled = !sizeSelectEnabled,
                     });
                 }

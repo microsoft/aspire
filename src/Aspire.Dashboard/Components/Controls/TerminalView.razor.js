@@ -321,6 +321,16 @@ function ensureTerminalStyles() {
   position: relative;
   overflow: hidden;
   background: #0d1117;
+  /*
+   * Breathing room between the frame border and xterm's text so the
+   * output isn't flush against the edge (matches native terminal UX).
+   * Combined with box-sizing: border-box (inherited from the wildcard
+   * rule above), the padding shrinks the content area xterm renders
+   * into — the JS layout math in layoutTerminal / pinBodyToNatural adds
+   * TERMINAL_BODY_PADDING_PX * 2 back when pinning the body to the
+   * natural rendered dims so the frame keeps hugging the grid.
+   */
+  padding: 6px;
 }
 
 .aspire-terminal-host .xterm:focus,
@@ -451,13 +461,24 @@ function safeFit(state) {
 }
 
 const FRAME_BORDER_PX = 2;
+// CSS `padding` on #terminal-body — kept in sync with the value in the
+// injected stylesheet. box-sizing is border-box, so the content area
+// xterm actually renders into is smaller than the outer body box by
+// TERMINAL_BODY_PADDING_PX * 2 on each axis. getAvailableBodySpace
+// returns the xterm-content area (padding subtracted) so callers can
+// pass it straight to computeOptimalFont / fit(); fit-mode's body-pin
+// and pinBodyToNatural add the padding back when they set the outer
+// body dimensions.
+const TERMINAL_BODY_PADDING_PX = 6;
 function getAvailableBodySpace(state) {
     const titlebarH = state.terminalTitlebar ? state.terminalTitlebar.offsetHeight : 0;
     const stageW = state.terminalContainer ? state.terminalContainer.clientWidth : 0;
     const stageH = state.terminalContainer ? state.terminalContainer.clientHeight : 0;
+    const outerW = Math.max(0, stageW - FRAME_BORDER_PX * 2);
+    const outerH = Math.max(0, stageH - titlebarH - FRAME_BORDER_PX * 2);
     return {
-        width: Math.max(0, stageW - FRAME_BORDER_PX * 2),
-        height: Math.max(0, stageH - titlebarH - FRAME_BORDER_PX * 2),
+        width: Math.max(0, outerW - TERMINAL_BODY_PADDING_PX * 2),
+        height: Math.max(0, outerH - TERMINAL_BODY_PADDING_PX * 2),
     };
 }
 
@@ -543,9 +564,11 @@ function applyRoleAwareLayout(state) {
                           state.fixedDims.cols === expectedCols && state.fixedDims.rows === expectedRows);
             });
         } else {
-            // Font-driven: pin body to available, fit() picks cols×rows.
-            const bodyW = `${availableW}px`;
-            const bodyH = `${availableH}px`;
+            // Font-driven: pin body to fill the pane (content + padding on
+            // each side, since body is border-box); fit() picks cols×rows
+            // for the padded content area.
+            const bodyW = `${availableW + TERMINAL_BODY_PADDING_PX * 2}px`;
+            const bodyH = `${availableH + TERMINAL_BODY_PADDING_PX * 2}px`;
             if (body.style.width !== bodyW || body.style.height !== bodyH) {
                 body.style.width = bodyW;
                 body.style.height = bodyH;
@@ -630,8 +653,11 @@ function pinBodyToNatural(state, root, body) {
     const w = screenEl.offsetWidth;
     const h = screenEl.offsetHeight;
     if (w > 0 && h > 0) {
-        const bodyW = `${w}px`;
-        const bodyH = `${h}px`;
+        // body is border-box with padding, so pin the outer size to
+        // (screen dims + padding on each side) — the content area then
+        // matches the xterm-screen dims exactly.
+        const bodyW = `${w + TERMINAL_BODY_PADDING_PX * 2}px`;
+        const bodyH = `${h + TERMINAL_BODY_PADDING_PX * 2}px`;
         if (body.style.width !== bodyW || body.style.height !== bodyH) {
             body.style.width = bodyW;
             body.style.height = bodyH;
