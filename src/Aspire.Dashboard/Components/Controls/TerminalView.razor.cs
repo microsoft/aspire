@@ -92,8 +92,16 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             var initResource = ResourceName;
             var initReplica = ReplicaIndex;
             await InitializeTerminalAsync(initResource!, initReplica);
-            _connectedResourceName = initResource;
-            _connectedReplicaIndex = initReplica;
+            // Only record the connected resource/replica when JS init actually
+            // produced a terminal. If _terminalId is still 0, InitializeTerminalAsync
+            // caught an exception; leaving _connectedResourceName null lets the
+            // rebind branch below (and future renders) notice and retry rather
+            // than silently masking the failure.
+            if (_terminalId != 0)
+            {
+                _connectedResourceName = initResource;
+                _connectedReplicaIndex = initReplica;
+            }
 
             if (!string.Equals(ResourceName, _connectedResourceName, StringComparison.Ordinal) ||
                 ReplicaIndex != _connectedReplicaIndex)
@@ -188,6 +196,18 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             // that re-mount the JS module), OnAfterRenderAsync's
             // `_initStarted && _terminalId == 0` short-circuit doesn't
             // permanently wedge us with no terminal.
+            _initStarted = false;
+        }
+        catch (Exception)
+        {
+            // Defensive: any other JS-side error (e.g. JSException while
+            // importing the module or during initTerminal) must not bubble
+            // out of a Blazor lifecycle method — that can tear down the
+            // SignalR circuit and take the whole dashboard tab with it.
+            // Clear _initStarted so a subsequent render can retry, and leave
+            // _terminalId == 0 so the firstRender path in OnAfterRenderAsync
+            // does not record a connected resource for a terminal that was
+            // never created.
             _initStarted = false;
         }
     }
