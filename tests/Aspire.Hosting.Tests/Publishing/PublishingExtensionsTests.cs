@@ -3,17 +3,17 @@
 
 #pragma warning disable ASPIREPIPELINES001
 
-using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests.Publishing;
 
 [Trait("Partition", "4")]
-public class PublishingExtensionsTests : IDisposable
+public class PublishingExtensionsTests
 {
     private readonly InteractionService _interactionService = PublishingActivityReporterTests.CreateInteractionService();
-    private readonly FileUploadStore _fileUploadStore = new();
+    private readonly InMemoryFileUploadStore _fileUploadStore = new();
 
     [Fact]
     public async Task PublishingStepExtensions_CreateTask_WorksCorrectly()
@@ -127,10 +127,5 @@ public class PublishingExtensionsTests : IDisposable
     private PipelineActivityReporter CreatePublishingReporter()
     {
         return new PipelineActivityReporter(_interactionService, _fileUploadStore, NullLogger<PipelineActivityReporter>.Instance);
-    }
-
-    public void Dispose()
-    {
-        _fileUploadStore.Dispose();
     }
 }

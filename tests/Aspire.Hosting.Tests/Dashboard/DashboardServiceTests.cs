@@ -26,17 +26,8 @@ using Resource = Aspire.Hosting.ApplicationModel.Resource;
 namespace Aspire.Hosting.Tests.Dashboard;
 
 [Trait("Partition", "3")]
-public class DashboardServiceTests(ITestOutputHelper testOutputHelper) : IDisposable
+public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 {
-    private readonly List<FileUploadStore> _fileUploadStores = [];
-
-    public void Dispose()
-    {
-        foreach (var store in _fileUploadStores)
-        {
-            store.Dispose();
-        }
-    }
 
     [Fact]
     public async Task WatchResourceConsoleLogs_NoFollow_ResultsEnd()
@@ -985,7 +976,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper) : IDispos
         IHostEnvironment? hostEnvironment = null,
         IConfiguration? configuration = null,
         ILogger<DashboardServiceImpl>? logger = null,
-        FileUploadStore? fileUploadStore = null)
+        IFileUploadStore? fileUploadStore = null)
     {
         return new DashboardServiceImpl(
             dashboardServiceData,
@@ -993,10 +984,10 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper) : IDispos
             new TestHostApplicationLifetime(),
             configuration ?? new ConfigurationBuilder().Build(),
             logger ?? NullLogger<DashboardServiceImpl>.Instance,
-            fileUploadStore ?? new FileUploadStore());
+            fileUploadStore ?? new InMemoryFileUploadStore());
     }
 
-    private DashboardServiceData CreateDashboardServiceData(
+    private static DashboardServiceData CreateDashboardServiceData(
         ResourceLoggerService? resourceLoggerService = null,
         ResourceNotificationService? resourceNotificationService = null,
         ILoggerFactory? loggerFactory = null,
@@ -1011,16 +1002,13 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper) : IDispos
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build());
 
-        var fileUploadStore = new FileUploadStore();
-        _fileUploadStores.Add(fileUploadStore);
-
         return new DashboardServiceData(
             resourceNotificationService,
             resourceLoggerService,
             loggerFactory.CreateLogger<DashboardServiceData>(),
             new ResourceCommandService(resourceNotificationService, resourceLoggerService, new ServiceCollection().BuildServiceProvider()),
             interactionService,
-            fileUploadStore);
+            new InMemoryFileUploadStore());
     }
 
     private static ResourceNotificationService CreateResourceNotificationService(ResourceLoggerService resourceLoggerService)

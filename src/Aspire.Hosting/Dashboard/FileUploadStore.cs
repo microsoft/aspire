@@ -11,7 +11,7 @@ namespace Aspire.Hosting.Dashboard;
 /// <summary>
 /// Stores uploaded files from the Dashboard and maps file IDs to their temporary paths on disk.
 /// </summary>
-internal sealed class FileUploadStore : IDisposable
+internal sealed class FileUploadStore : IFileUploadStore, IDisposable
 {
     private readonly ConcurrentDictionary<string, FileUploadEntry> _files = new(StringComparer.Ordinal);
     private readonly string _uploadDirectory;

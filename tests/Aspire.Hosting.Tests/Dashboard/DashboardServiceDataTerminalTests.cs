@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Tests.Helpers;
+using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -203,7 +204,7 @@ public class DashboardServiceDataTerminalTests
             NullLogger<DashboardServiceData>.Instance,
             new ResourceCommandService(notifications, loggerService, new ServiceCollection().BuildServiceProvider()),
             interactions,
-            new FileUploadStore());
+            new InMemoryFileUploadStore());
         return (data, notifications, resource);
     }
 

@@ -19,7 +19,7 @@ internal sealed class DashboardServiceData : IDisposable
     private readonly ResourceCommandService _resourceCommandService;
     private readonly InteractionService _interactionService;
     private readonly ResourceLoggerService _resourceLoggerService;
-    private readonly FileUploadStore _fileUploadStore;
+    private readonly IFileUploadStore _fileUploadStore;
     private readonly ILogger<DashboardServiceData> _logger;
 
     public DashboardServiceData(
@@ -28,7 +28,7 @@ internal sealed class DashboardServiceData : IDisposable
         ILogger<DashboardServiceData> logger,
         ResourceCommandService resourceCommandService,
         InteractionService interactionService,
-        FileUploadStore fileUploadStore)
+        IFileUploadStore fileUploadStore)
     {
         _resourceLoggerService = resourceLoggerService;
         _resourcePublisher = new ResourcePublisher(_cts.Token);
@@ -120,7 +120,6 @@ internal sealed class DashboardServiceData : IDisposable
     {
         _cts.Cancel();
         _cts.Dispose();
-        _fileUploadStore.Dispose();
     }
 
     internal async Task<(ExecuteCommandResultType result, string? message, ApplicationModel.CommandResultData? value, InteractionInputCollection? invalidArguments)> ExecuteCommandAsync(string resourceId, string type, ExecuteResourceCommandOptions options, CancellationToken cancellationToken)

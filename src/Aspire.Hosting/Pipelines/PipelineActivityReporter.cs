@@ -18,12 +18,12 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
     private readonly ConcurrentDictionary<string, ReportingStep> _steps = new();
     private readonly ConcurrentDictionary<string, string> _stepIdsByTitle = new(StringComparer.Ordinal);
     private readonly InteractionService _interactionService;
-    private readonly FileUploadStore _fileUploadStore;
+    private readonly IFileUploadStore _fileUploadStore;
     private readonly ILogger<PipelineActivityReporter> _logger;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _interactionServiceSubscriber;
 
-    public PipelineActivityReporter(InteractionService interactionService, FileUploadStore fileUploadStore, ILogger<PipelineActivityReporter> logger)
+    public PipelineActivityReporter(InteractionService interactionService, IFileUploadStore fileUploadStore, ILogger<PipelineActivityReporter> logger)
     {
         _interactionService = interactionService;
         _fileUploadStore = fileUploadStore;
