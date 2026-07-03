@@ -1,7 +1,15 @@
+import * as os from "node:os";
+import * as path from "node:path";
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isBrowserLaunchConfiguration } from "../../dcp/types";
 import { browserDisplayName, browserLabel, invalidLaunchConfiguration } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
+
+const defaultBrowserRuntimeArgs = [
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-background-mode'
+];
 
 export const browserDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'browser',
@@ -16,22 +24,25 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
     getSupportedFileTypes: () => [],
     getProjectFile: () => '',
     createDebugSessionConfigurationCallback: async (launchConfig, _args, _env, _launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
-        if (!isBrowserLaunchConfiguration(launchConfig)) {
+        if (!isBrowserLaunchConfiguration(launchConfig) || !launchConfig.url) {
             extensionLogOutputChannel.info(`The resource type was not browser for ${JSON.stringify(launchConfig)}`);
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
         }
 
-        // Map browser name to VS Code js-debug adapter type (pwa- prefix required)
-        const browser = launchConfig.browser || 'msedge';
-        debugConfiguration.type = `pwa-${browser}`;
+        debugConfiguration.type = getBrowserDebugAdapter(launchConfig.browser);
         debugConfiguration.request = 'launch';
         debugConfiguration.url = launchConfig.url;
         debugConfiguration.webRoot = launchConfig.web_root;
         debugConfiguration.sourceMaps = true;
         debugConfiguration.resolveSourceMapLocations = ['**', '!**/node_modules/**'];
-        // Use an auto-managed temp user data directory so multiple browser debuggers
-        // can run concurrently without conflicting
-        debugConfiguration.userDataDir = true;
+        debugConfiguration.runtimeArgs = mergeRuntimeArgs(debugConfiguration.runtimeArgs, defaultBrowserRuntimeArgs);
+        debugConfiguration.userDataDir = getBrowserUserDataDir(_launchOptions.runId);
+        // Browser/js-debug child sessions do not reliably carry Aspire's custom
+        // configuration fields, so AspireDebugSession sends the DCP termination
+        // notification from the VS Code session end event instead of adapter output.
+        debugConfiguration.debugSessionId = null;
+        debugConfiguration.sessionTerminatedDcpId = _launchOptions.debugSessionId;
+        debugConfiguration.sendSessionTerminatedOnDebugSessionEnd = true;
 
         // Remove program/args/cwd since browser debugging doesn't use them
         delete debugConfiguration.program;
@@ -39,3 +50,41 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
         delete debugConfiguration.cwd;
     }
 };
+
+function getBrowserDebugAdapter(browser: string | undefined): string {
+    const normalizedBrowser = browser?.trim().toLowerCase();
+    switch (normalizedBrowser) {
+        case undefined:
+        case '':
+        case 'edge':
+        case 'msedge':
+        case 'microsoft-edge':
+        case 'microsoftedge':
+            return 'pwa-msedge';
+        case 'chrome':
+        case 'google-chrome':
+        case 'chromium':
+            return 'pwa-chrome';
+        default:
+            return normalizedBrowser.startsWith('pwa-') ? normalizedBrowser : `pwa-${normalizedBrowser}`;
+    }
+}
+
+function mergeRuntimeArgs(existingRuntimeArgs: unknown, argsToAdd: string[]): string[] {
+    const runtimeArgs = Array.isArray(existingRuntimeArgs)
+        ? existingRuntimeArgs.filter((arg): arg is string => typeof arg === 'string')
+        : typeof existingRuntimeArgs === 'string' ? [existingRuntimeArgs] : [];
+
+    for (const arg of argsToAdd) {
+        if (!runtimeArgs.includes(arg)) {
+            runtimeArgs.push(arg);
+        }
+    }
+
+    return runtimeArgs;
+}
+
+function getBrowserUserDataDir(runId: string): string {
+    const runSegment = runId.replace(/[^a-zA-Z0-9._-]/g, '-');
+    return path.join(os.tmpdir(), 'aspire-vscode-browser-debug', runSegment);
+}

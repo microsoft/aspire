@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
 import { promises as fs } from "fs";
 import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler } from "./adapterTracker";
-import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProjectLaunchConfiguration, StartAppHostOptions } from "../dcp/types";
+import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProjectLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
 import { spawnCliProcess } from "./languages/cli";
@@ -66,6 +66,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   private _appHostDebugSession?: AspireResourceDebugSession = undefined;
   private _resourceDebugSessions: AspireResourceDebugSession[] = [];
   private _trackedDebugAdapters: string[] = [];
+  private readonly _sentSessionTerminations = new Set<string>();
   private _rpcClient?: ICliRpcClient;
   private _dashboardDebugSession: vscode.DebugSession | null = null;
   private _dashboardUrl: string | undefined;
@@ -124,6 +125,23 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
   async stopDebugging(): Promise<void> {
     await vscode.debug.stopDebugging(this._session);
+  }
+
+  sendSessionTerminated(runId: string, dcpId: string, exitCode: number = 0): void {
+    const key = `${dcpId}\n${runId}`;
+    if (this._sentSessionTerminations.has(key)) {
+      return;
+    }
+
+    this._sentSessionTerminations.add(key);
+    const notification: SessionTerminatedNotification = {
+      notification_type: 'sessionTerminated',
+      session_id: runId,
+      dcp_id: dcpId,
+      exit_code: exitCode
+    };
+
+    this._dcpServer.sendNotification(notification);
   }
 
   handleMessage(message: any): void {
@@ -582,6 +600,23 @@ export class AspireDebugSession implements vscode.DebugAdapter {
             session: session,
             stopSession: disposalFunction
           };
+
+          if (debugConfig.sendSessionTerminatedOnDebugSessionEnd) {
+            const dcpId = debugConfig.sessionTerminatedDcpId ?? debugConfig.debugSessionId;
+            if (dcpId) {
+              let terminationDisposable: vscode.Disposable | undefined;
+              terminationDisposable = vscode.debug.onDidTerminateDebugSession(terminatedSession => {
+                // js-debug can terminate a browser child session that does not carry the
+                // Aspire-specific configuration fields, so fall back to the session name.
+                if (terminatedSession.id !== session.id && terminatedSession.name !== session.name) {
+                  return;
+                }
+
+                terminationDisposable?.dispose();
+                this.sendSessionTerminated(debugConfig.runId, dcpId);
+              });
+            }
+          }
 
           this._resourceDebugSessions.push(vsCodeDebugSession);
           this._disposables.push({
