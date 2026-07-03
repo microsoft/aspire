@@ -256,7 +256,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     }
 
     [Fact]
-    public async Task PublishCommand_FileChooserPrompt_RejectsMissingPathAndSendsFileMetadata()
+    public async Task PublishCommand_FilePrompt_RejectsMissingPathAndSendsFileMetadata()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var selectedFile = Path.Combine(workspace.WorkspaceRoot.FullName, "artifact.zip");
@@ -299,7 +299,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     }
 
     [Fact]
-    public async Task PublishCommand_FileChooserPrompt_TreatsOptionalWhitespaceAsEmpty()
+    public async Task PublishCommand_FilePrompt_TreatsOptionalWhitespaceAsEmpty()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();

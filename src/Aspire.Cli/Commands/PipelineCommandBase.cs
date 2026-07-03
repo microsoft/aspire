@@ -941,7 +941,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             InputType.Number => await HandleNumberInputAsync(input, promptText, cancellationToken),
 
-            InputType.File => await HandleFileChooserInputAsync(input, promptText, backchannel, cancellationToken),
+            InputType.File => await HandleFileInputAsync(input, promptText, backchannel, cancellationToken),
 
             _ => await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken)
         };
@@ -1003,7 +1003,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             cancellationToken: cancellationToken);
     }
 
-    private async Task<string?> HandleFileChooserInputAsync(PublishingPromptInput input, string promptText, IAppHostCliBackchannel backchannel, CancellationToken cancellationToken)
+    private async Task<string?> HandleFileInputAsync(PublishingPromptInput input, string promptText, IAppHostCliBackchannel backchannel, CancellationToken cancellationToken)
     {
         ValidationResult Validator(string value)
         {

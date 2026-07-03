@@ -3107,7 +3107,7 @@ class AbstractInteractionService:
         return typing.cast(InteractionInputBuilder, result)
 
     def create_file_input(self, name: str, *, options: CreateInteractionInputOptions | None = None) -> InteractionInputBuilder:
-        """Creates a file chooser input."""
+        """Creates a file input."""
         rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
         rpc_args['name'] = name
         if options is not None:

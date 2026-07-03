@@ -205,7 +205,7 @@ internal static class InteractionExports
     }
 
     /// <summary>
-    /// Creates a file chooser input.
+    /// Creates a file input.
     /// </summary>
     [AspireExport]
     public static InteractionInputBuilder CreateFileInput(this IInteractionService interactionService, string name, CreateInteractionInputOptions? options = null)
@@ -540,7 +540,7 @@ internal sealed class CreateInteractionInputOptions
     public int? MaxLength { get; init; }
 
     /// <summary>
-    /// Gets or sets the maximum file size in bytes for file chooser inputs.
+    /// Gets or sets the maximum file size in bytes for file inputs.
     /// </summary>
     public long? MaxFileSize { get; init; }
 

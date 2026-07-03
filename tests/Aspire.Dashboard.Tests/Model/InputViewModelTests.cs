@@ -389,7 +389,7 @@ public class InputViewModelTests
     }
 
     [Fact]
-    public void InputViewModel_FileChooser_DefaultsToEmptyValue()
+    public void InputViewModel_File_DefaultsToEmptyValue()
     {
         var input = new InteractionInput
         {
@@ -404,7 +404,7 @@ public class InputViewModelTests
     }
 
     [Fact]
-    public void InputViewModel_FileChooser_SetFileReferencesSerializesToValue()
+    public void InputViewModel_File_SetFileReferencesSerializesToValue()
     {
         var input = new InteractionInput
         {
@@ -424,7 +424,7 @@ public class InputViewModelTests
     }
 
     [Fact]
-    public void InputViewModel_FileChooser_SetInputPreservesFileReferencesWhenValueIsPreserved()
+    public void InputViewModel_File_SetInputPreservesFileReferencesWhenValueIsPreserved()
     {
         var initialInput = new InteractionInput
         {

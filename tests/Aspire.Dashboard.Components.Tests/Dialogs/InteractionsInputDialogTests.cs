@@ -17,7 +17,7 @@ namespace Aspire.Dashboard.Components.Tests.Dialogs;
 public sealed class InteractionsInputDialogTests : DashboardTestContext
 {
     [Fact]
-    public async Task Render_FileChooserUsesFallbackPlaceholderAndScopedBrowseLabel()
+    public async Task Render_FileUsesFallbackPlaceholderAndScopedBrowseLabel()
     {
         var cut = SetUpDialog(out var dialogService);
         var interaction = new WatchInteractionsResponseUpdate

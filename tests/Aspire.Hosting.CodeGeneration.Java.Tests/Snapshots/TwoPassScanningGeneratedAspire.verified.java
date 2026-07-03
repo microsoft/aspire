@@ -15501,7 +15501,7 @@ public class IInteractionService extends HandleWrapperBase {
         return createFileInput(name, null);
     }
 
-    /** Creates a file chooser input. */
+    /** Creates a file input. */
     public InteractionInputBuilder createFileInput(String name, CreateInteractionInputOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));

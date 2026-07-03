@@ -215,7 +215,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     private static long GetMaxFileSize(InputViewModel inputModel) =>
         inputModel.Input.MaxFileSize > 0 ? inputModel.Input.MaxFileSize : DefaultMaxUploadedFileBytes;
 
-    private string GetFileChooserButtonText(InputViewModel inputModel)
+    private string GetFileButtonText(InputViewModel inputModel)
     {
         if (!string.IsNullOrEmpty(inputModel.Input.Placeholder))
         {
@@ -223,8 +223,8 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         }
 
         return inputModel.Input.AllowMultipleFiles
-            ? Loc[nameof(Resources.Dialogs.InteractionFileChooserPlaceholderMultiple)]
-            : Loc[nameof(Resources.Dialogs.InteractionFileChooserPlaceholder)];
+            ? Loc[nameof(Resources.Dialogs.InteractionFilePlaceholderMultiple)]
+            : Loc[nameof(Resources.Dialogs.InteractionFilePlaceholder)];
     }
 
     private async Task OnInputFileChangeAsync(InputViewModel inputModel, InputFileChangeEventArgs args)

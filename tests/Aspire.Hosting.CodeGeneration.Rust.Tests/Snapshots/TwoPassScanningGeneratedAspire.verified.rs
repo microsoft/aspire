@@ -12254,7 +12254,7 @@ impl IInteractionService {
         Ok(InteractionInputBuilder::new(handle, self.client.clone()))
     }
 
-    /// Creates a file chooser input.
+    /// Creates a file input.
     pub fn create_file_input(&self, name: &str, options: Option<CreateInteractionInputOptions>) -> Result<InteractionInputBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("interactionService".to_string(), self.handle.to_json());

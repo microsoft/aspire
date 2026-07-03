@@ -858,36 +858,36 @@ namespace Aspire.Dashboard.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Browse.
         /// </summary>
-        public static string InteractionFileChooserBrowse {
+        public static string InteractionFileBrowse {
             get {
-                return ResourceManager.GetString("InteractionFileChooserBrowse", resourceCulture);
+                return ResourceManager.GetString("InteractionFileBrowse", resourceCulture);
             }
         }
 
         /// <summary>
         ///   Looks up a localized string similar to Browse for {0}.
         /// </summary>
-        public static string InteractionFileChooserBrowseLabel {
+        public static string InteractionFileBrowseLabel {
             get {
-                return ResourceManager.GetString("InteractionFileChooserBrowseLabel", resourceCulture);
+                return ResourceManager.GetString("InteractionFileBrowseLabel", resourceCulture);
             }
         }
         
         /// <summary>
         ///   Looks up a localized string similar to Choose a file....
         /// </summary>
-        public static string InteractionFileChooserPlaceholder {
+        public static string InteractionFilePlaceholder {
             get {
-                return ResourceManager.GetString("InteractionFileChooserPlaceholder", resourceCulture);
+                return ResourceManager.GetString("InteractionFilePlaceholder", resourceCulture);
             }
         }
 
         /// <summary>
         ///   Looks up a localized string similar to Choose files....
         /// </summary>
-        public static string InteractionFileChooserPlaceholderMultiple {
+        public static string InteractionFilePlaceholderMultiple {
             get {
-                return ResourceManager.GetString("InteractionFileChooserPlaceholderMultiple", resourceCulture);
+                return ResourceManager.GetString("InteractionFilePlaceholderMultiple", resourceCulture);
             }
         }
         

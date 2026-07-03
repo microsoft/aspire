@@ -931,7 +931,7 @@ export interface CreateInteractionInputOptions {
     disabled?: boolean | null;
     /** Gets or sets the maximum length for text inputs. */
     maxLength?: number | null;
-    /** Gets or sets the maximum file size in bytes for file chooser inputs. */
+    /** Gets or sets the maximum file size in bytes for file inputs. */
     maxFileSize?: number | null;
     /** Gets or sets a value indicating whether multiple files can be selected. Only used by file inputs. */
     allowMultipleFiles?: boolean | null;
@@ -12764,7 +12764,7 @@ export interface InteractionService {
      */
     createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
     /**
-     * Creates a file chooser input.
+     * Creates a file input.
      * @param options Additional options.
      */
     createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
@@ -12833,7 +12833,7 @@ export interface InteractionServicePromise extends PromiseLike<InteractionServic
      */
     createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
     /**
-     * Creates a file chooser input.
+     * Creates a file input.
      * @param options Additional options.
      */
     createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
@@ -13090,7 +13090,7 @@ class InteractionServiceImpl implements InteractionService {
     }
 
     /**
-     * Creates a file chooser input.
+     * Creates a file input.
      * @param options Additional options.
      */
     createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {

@@ -1264,7 +1264,7 @@ public class InteractionServiceTests
     }
 
     [Fact]
-    public async Task PromptInputsAsync_FileChooserWithValue_PassesValidation()
+    public async Task PromptInputsAsync_FileWithValue_PassesValidation()
     {
         var interactionService = CreateInteractionService();
 
@@ -1284,7 +1284,7 @@ public class InteractionServiceTests
     }
 
     [Fact]
-    public async Task PromptInputsAsync_FileChooserRequiredEmpty_ReturnErrors()
+    public async Task PromptInputsAsync_FileRequiredEmpty_ReturnErrors()
     {
         var interactionService = CreateInteractionService();
 
@@ -1307,7 +1307,7 @@ public class InteractionServiceTests
     }
 
     [Fact]
-    public async Task PromptInputsAsync_FileChooserOptionalEmpty_PassesValidation()
+    public async Task PromptInputsAsync_FileOptionalEmpty_PassesValidation()
     {
         var interactionService = CreateInteractionService();
 

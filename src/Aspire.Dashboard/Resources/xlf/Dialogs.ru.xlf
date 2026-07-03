@@ -504,12 +504,22 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">ОК</target>
         <note />
       </trans-unit>
-      <trans-unit id="InteractionFileChooserBrowseLabel">
+      <trans-unit id="InteractionFileBrowse">
+        <source>Browse</source>
+        <target state="new">Browse</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionFileBrowseLabel">
         <source>Browse for {0}</source>
         <target state="new">Browse for {0}</target>
         <note />
       </trans-unit>
-      <trans-unit id="InteractionFileChooserPlaceholderMultiple">
+      <trans-unit id="InteractionFilePlaceholder">
+        <source>Choose a file...</source>
+        <target state="new">Choose a file...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionFilePlaceholderMultiple">
         <source>Choose files...</source>
         <target state="new">Choose files...</target>
         <note />
@@ -523,16 +533,6 @@ For more information about using AI agents with the dashboard, including setting
         <source>{0} for {1}</source>
         <target state="new">{0} for {1}</target>
         <note>{0} is the data type display name. {1} is the parent resource display name.</note>
-      </trans-unit>
-      <trans-unit id="InteractionFileChooserBrowse">
-        <source>Browse</source>
-        <target state="new">Browse</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InteractionFileChooserPlaceholder">
-        <source>Choose a file...</source>
-        <target state="new">Choose a file...</target>
-        <note />
       </trans-unit>
       <trans-unit id="ManageDataDialogTitle">
         <source>Manage logs and telemetry</source>

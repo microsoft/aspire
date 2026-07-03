@@ -18090,7 +18090,7 @@ func (s *interactionService) CreateChoiceInput(name string, options ...*CreateCh
 	return &interactionInputBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// CreateFileInput creates a file chooser input.
+// CreateFileInput creates a file input.
 func (s *interactionService) CreateFileInput(name string, options ...*CreateFileInputOptions) InteractionInputBuilder {
 	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
