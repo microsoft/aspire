@@ -502,7 +502,7 @@ public class ResourceNotificationTests
     }
 
     [Fact]
-    public async Task WaitForDependenciesThrowsWhenCompletionDependencyExitsWithoutExitCode()
+    public async Task WaitForDependenciesWaitsWhenCompletionDependencyExitsWithoutExitCode()
     {
         var dependency = new CustomResource("dependency");
         var resource = new CustomResource("resource");
@@ -524,12 +524,13 @@ public class ResourceNotificationTests
             State = "exited"
         }).DefaultTimeout();
 
-        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        await notificationService.PublishUpdateAsync(dependency, s => s with
         {
-            await waitTask;
+            State = "exited",
+            ExitCode = 0
         }).DefaultTimeout();
 
-        Assert.Equal("Resource 'resource' stopped waiting for dependency resource 'dependency' because it entered the 'exited' state without reporting an exit code, expected '0'.", ex.Message);
+        await waitTask.DefaultTimeout();
     }
 
     [Fact]

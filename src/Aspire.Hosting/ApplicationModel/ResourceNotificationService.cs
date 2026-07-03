@@ -330,8 +330,8 @@ public class ResourceNotificationService : IDisposable
         {
             var resourceEvent = await WaitForResourceCoreAsync(
                 dependency.Name,
-                re => re.ResourceId == resourceId && IsKnownTerminalState(re.Snapshot),
-                $"Resource '{displayName}' failed to reach a terminal state before the operation was cancelled.",
+                re => re.ResourceId == resourceId && IsCompletionStateReady(re.Snapshot),
+                $"Resource '{displayName}' failed to reach a completed terminal state before the operation was cancelled.",
                 waitCondition: "terminal",
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             var snapshot = resourceEvent.Snapshot;
@@ -373,9 +373,24 @@ public class ResourceNotificationService : IDisposable
                 await onDependencyReady(resourceId).ConfigureAwait(false);
             }
 
-            static bool IsKnownTerminalState(CustomResourceSnapshot snapshot) =>
-                KnownResourceStates.TerminalStates.Contains(snapshot.State?.Text, StringComparers.ResourceState) ||
-                snapshot.ExitCode is not null;
+            static bool IsCompletionStateReady(CustomResourceSnapshot snapshot)
+            {
+                var state = snapshot.State?.Text;
+                if (string.Equals(state, KnownResourceStates.FailedToStart, StringComparisons.ResourceState))
+                {
+                    return true;
+                }
+
+                if (string.Equals(state, KnownResourceStates.Finished, StringComparisons.ResourceState) ||
+                    string.Equals(state, KnownResourceStates.Exited, StringComparisons.ResourceState))
+                {
+                    // DCP can report the terminal state before the exit code. Keep waiting
+                    // for the follow-up snapshot so a successful process is not failed as unknown.
+                    return snapshot.ExitCode is not null;
+                }
+
+                return false;
+            }
         }
     }
 
