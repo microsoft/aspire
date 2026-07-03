@@ -1372,6 +1372,23 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             return Task.CompletedTask;
         }
 
+        // Menu items for Terminal are only rendered when the current
+        // resource supports terminal (see UpdateMenuButtons — Terminal
+        // menu items are gated on _selectedResourceHasTerminal). But
+        // a Terminal click can still land here after the selection has
+        // moved to a non-terminal resource (e.g. the user clicked
+        // Terminal on the menu, then the resource-selector re-selected
+        // a shell-less resource before this handler ran). Switching to
+        // Terminal in that state hides the search/menu toolbar (the
+        // razor markup only renders it for Console view or
+        // terminal-enabled resources) and leaves the page in a broken
+        // state until the user selects another resource. Fall back to
+        // Console when the current selection can't host a terminal.
+        if (parsed == ConsoleLogsView.Terminal && !_selectedResourceHasTerminal)
+        {
+            parsed = ConsoleLogsView.Console;
+        }
+
         _activeView = parsed;
         UpdateMenuButtons();
         StateHasChanged();
