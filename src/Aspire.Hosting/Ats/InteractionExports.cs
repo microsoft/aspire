@@ -316,6 +316,7 @@ internal sealed class InteractionInputBuilder
             MaxLength = options?.MaxLength,
             MaxFileSize = options?.MaxFileSize,
             AllowMultipleFiles = options?.AllowMultipleFiles ?? false,
+            FileFilter = options?.FileFilter,
         };
 
         return new InteractionInputBuilder(input);
@@ -548,6 +549,11 @@ internal sealed class CreateInteractionInputOptions
     /// Gets or sets a value indicating whether multiple files can be selected. Only used by file inputs.
     /// </summary>
     public bool? AllowMultipleFiles { get; init; }
+
+    /// <summary>
+    /// Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute.
+    /// </summary>
+    public string? FileFilter { get; init; }
 }
 
 /// <summary>

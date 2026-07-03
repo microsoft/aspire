@@ -433,6 +433,7 @@ message InteractionInput {
     bool disabled = 15;
     int64 max_file_size = 16;
     bool allow_multiple_files = 17;
+    string file_filter = 18;
 }
 enum MessageIntent {
     MESSAGE_INTENT_NONE = 0;

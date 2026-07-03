@@ -335,10 +335,10 @@
     <value>Close</value>
   </data>
   <data name="InteractionFilePlaceholder" xml:space="preserve">
-    <value>Choose a file...</value>
+    <value>Choose a file</value>
   </data>
   <data name="InteractionFilePlaceholderMultiple" xml:space="preserve">
-    <value>Choose files...</value>
+    <value>Choose files</value>
   </data>
   <data name="InteractionFileBrowse" xml:space="preserve">
     <value>Browse</value>

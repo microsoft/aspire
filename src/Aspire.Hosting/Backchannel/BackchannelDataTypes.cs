@@ -914,6 +914,11 @@ internal sealed class PublishingPromptInput
     public bool AllowMultipleFiles { get; init; }
 
     /// <summary>
+    /// Gets the file type filter for File inputs. Uses the same format as the HTML accept attribute.
+    /// </summary>
+    public string? FileFilter { get; init; }
+
+    /// <summary>
     /// Gets the maximum file size in bytes for File inputs. Null means no explicit limit.
     /// </summary>
     public long? MaxFileSize { get; init; }

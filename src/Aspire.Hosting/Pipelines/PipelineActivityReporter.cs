@@ -350,6 +350,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                     Loading = input.DynamicLoadingState?.Loading ?? false,
                     Disabled = input.Disabled,
                     AllowMultipleFiles = input.AllowMultipleFiles,
+                    FileFilter = input.FileFilter,
                     MaxFileSize = input.MaxFileSize
                 }).ToList();
 

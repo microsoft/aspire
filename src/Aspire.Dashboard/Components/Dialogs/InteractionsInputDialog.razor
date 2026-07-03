@@ -171,6 +171,7 @@
                                                  DragDropZoneVisible="false"
                                                  Mode="InputFileMode.Stream"
                                                  AnchorId="@inputId"
+                                                 Accept="@input.ViewModel.Input.FileFilter"
                                                  Multiple="@input.ViewModel.Input.AllowMultipleFiles"
                                                  MaximumFileSize="@GetMaxFileSize(input.ViewModel)"
                                                  OnInputFileChange="@(args => OnInputFileChangeAsync(input.ViewModel, args))" />

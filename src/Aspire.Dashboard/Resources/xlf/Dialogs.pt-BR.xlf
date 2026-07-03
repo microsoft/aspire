@@ -515,13 +515,13 @@ For more information about using AI agents with the dashboard, including setting
         <note />
       </trans-unit>
       <trans-unit id="InteractionFilePlaceholder">
-        <source>Choose a file...</source>
-        <target state="new">Choose a file...</target>
+        <source>Choose a file</source>
+        <target state="new">Choose a file</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionFilePlaceholderMultiple">
-        <source>Choose files...</source>
-        <target state="new">Choose files...</target>
+        <source>Choose files</source>
+        <target state="new">Choose files</target>
         <note />
       </trans-unit>
       <trans-unit id="ManageDataAllDataCheckboxLabel">

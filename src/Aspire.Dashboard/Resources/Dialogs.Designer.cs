@@ -874,7 +874,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Choose a file....
+        ///   Looks up a localized string similar to Choose a file.
         /// </summary>
         public static string InteractionFilePlaceholder {
             get {
@@ -883,7 +883,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Choose files....
+        ///   Looks up a localized string similar to Choose files.
         /// </summary>
         public static string InteractionFilePlaceholderMultiple {
             get {

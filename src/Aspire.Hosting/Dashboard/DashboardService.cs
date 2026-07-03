@@ -243,6 +243,10 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         {
             dto.AllowMultipleFiles = true;
         }
+        if (!string.IsNullOrEmpty(input.FileFilter))
+        {
+            dto.FileFilter = input.FileFilter;
+        }
         dto.ValidationErrors.AddRange(input.ValidationErrors);
         return dto;
     }

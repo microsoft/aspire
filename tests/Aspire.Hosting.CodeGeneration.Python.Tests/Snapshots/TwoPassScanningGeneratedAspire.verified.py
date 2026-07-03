@@ -1828,6 +1828,7 @@ class CreateInteractionInputOptions(typing.TypedDict, total=False):
     MaxLength: int | None
     MaxFileSize: int | None
     AllowMultipleFiles: bool | None
+    FileFilter: str | None
 
 class DynamicLoadingOptions(typing.TypedDict, total=False):
     AlwaysLoadOnStart: bool | None
@@ -1918,6 +1919,7 @@ class InteractionInput(typing.TypedDict, total=False):
     Disabled: bool
     MaxLength: int | None
     AllowMultipleFiles: bool
+    FileFilter: str | None
     MaxFileSize: int | None
 
 class InteractionInputsDialogOptions(typing.TypedDict, total=False):

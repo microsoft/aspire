@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -983,82 +984,104 @@ internal static class InteractionCommands
                     Message = "Running automated task..."
                 }
             })
-            .WithCommand("file-upload", "File upload", executeCommand: async commandContext =>
+            .WithCommand("import-config", "Import configuration", executeCommand: async commandContext =>
             {
                 var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var fileInput = new InteractionInput
                 {
-                    Name = "File",
+                    Name = "ConfigFile",
                     InputType = InputType.File,
-                    Label = "File",
-                    Placeholder = "Select a file to upload",
-                    Required = true
+                    Label = "Configuration file",
+                    Placeholder = "Select a JSON or YAML configuration file",
+                    Required = true,
+                    FileFilter = ".json,.yaml,.yml",
+                    MaxFileSize = 5 * 1024 * 1024 // 5 MB
                 };
                 var result = await interactionService.PromptInputAsync(
-                    "File upload",
-                    "Select a file to upload.",
+                    "Import configuration",
+                    "Select a configuration file to import. The file will be validated and applied to the resource.",
                     fileInput,
                     cancellationToken: commandContext.CancellationToken);
 
                 if (result.Canceled)
                 {
-                    return CommandResults.Failure("Canceled");
+                    return CommandResults.Failure("Import canceled.");
                 }
+
+                var input = result.Data;
+                if (input.Files is not { Count: > 0 })
+                {
+                    return CommandResults.Failure("No file was uploaded.");
+                }
+
+                var file = input.Files[0];
+                var content = await file.ReadAllBytesAsync(commandContext.CancellationToken);
 
                 var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
+                logger.LogInformation("Imported configuration from '{FileName}' ({Size} bytes)", file.Name, content.Length);
 
-                var input = result.Data;
-                var file = input.Files?[0];
-                logger.LogInformation("File: {Id} (Name: {Name})", file?.Id, file?.Name);
-
-                return CommandResults.Success();
+                return CommandResults.Success($"Successfully imported **{file.Name}** ({content.Length:N0} bytes).");
             }, new CommandOptions
             {
-                Description = "Prompts the user to upload a single file.",
+                Description = "Import a configuration file (JSON/YAML) into the resource.",
                 IconName = "DocumentArrowUp",
                 IconVariant = IconVariant.Regular
             })
-            .WithCommand("file-upload-multiple", "File upload (multiple)", executeCommand: async commandContext =>
+            .WithCommand("upload-certificates", "Upload certificates", executeCommand: async commandContext =>
             {
                 var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var fileInput = new InteractionInput
                 {
-                    Name = "Files",
+                    Name = "Certificates",
                     InputType = InputType.File,
-                    Label = "Files",
-                    Placeholder = "Select files to upload",
+                    Label = "Certificate files",
+                    Placeholder = "Select .pem or .pfx certificate files",
                     AllowMultipleFiles = true,
+                    FileFilter = ".pem,.pfx,.crt",
+                    MaxFileSize = 1 * 1024 * 1024, // 1 MB
                     Required = true
                 };
                 var result = await interactionService.PromptInputAsync(
-                    "File upload (multiple)",
-                    "Select one or more files to upload.",
+                    "Upload certificates",
+                    "Select one or more certificate files to install. Supported formats: `.pem`, `.pfx`, `.crt`.",
                     fileInput,
+                    options: new InputsDialogInteractionOptions { EnableMessageMarkdown = true },
                     cancellationToken: commandContext.CancellationToken);
 
                 if (result.Canceled)
                 {
-                    return CommandResults.Failure("Canceled");
+                    return CommandResults.Failure("Certificate upload canceled.");
+                }
+
+                var input = result.Data;
+                if (input.Files is not { Count: > 0 })
+                {
+                    return CommandResults.Failure("No certificates were uploaded.");
                 }
 
                 var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
-                var input = result.Data;
-                if (input.Files is { Count: > 0 })
+                var fileDetails = new List<object>();
+                foreach (var file in input.Files)
                 {
-                    foreach (var file in input.Files)
-                    {
-                        logger.LogInformation("File: {Id} (Name: {Name})", file.Id, file.Name);
-                    }
+                    var bytes = await file.ReadAllBytesAsync(commandContext.CancellationToken);
+                    logger.LogInformation("Installed certificate '{FileName}' ({Size} bytes)", file.Name, bytes.Length);
+                    fileDetails.Add(new { name = file.Name, size = bytes.Length });
                 }
 
-                return CommandResults.Success();
+                var json = JsonSerializer.Serialize(fileDetails, new JsonSerializerOptions { WriteIndented = true });
+                var resultData = new CommandResultData
+                {
+                    Value = json,
+                    Format = CommandResultFormat.Json
+                };
+                return CommandResults.Success($"Installed {input.Files.Count} certificate(s).", resultData);
             }, new CommandOptions
             {
-                Description = "Prompts the user to upload multiple files.",
-                IconName = "DocumentArrowUp",
+                Description = "Upload TLS certificate files to install on the resource.",
+                IconName = "CertificateAdd",
                 IconVariant = IconVariant.Regular
             });
 

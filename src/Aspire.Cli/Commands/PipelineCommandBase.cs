@@ -1036,6 +1036,18 @@ internal abstract class PipelineCommandBase : BaseCommand
                 }
             }
 
+            if (!string.IsNullOrEmpty(input.FileFilter))
+            {
+                var extension = Path.GetExtension(fullPath);
+                var filters = input.FileFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                // Only validate against extension filters (e.g. ".pem"), skip MIME type patterns (e.g. "image/*").
+                var extensionFilters = filters.Where(f => f.StartsWith('.'));
+                if (extensionFilters.Any() && !extensionFilters.Any(f => f.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return ValidationResult.Error($"'{Path.GetFileName(fullPath)}' does not match the accepted file types ({input.FileFilter}).");
+                }
+            }
+
             return ValidationResult.Success();
         }
 

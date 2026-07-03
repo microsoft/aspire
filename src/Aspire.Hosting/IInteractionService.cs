@@ -405,6 +405,13 @@ public sealed class InteractionInput
     public bool AllowMultipleFiles { get; init; }
 
     /// <summary>
+    /// Gets or sets the file type filter for <see cref="InputType.File"/> inputs.
+    /// Uses the same format as the HTML <c>accept</c> attribute, e.g. <c>".pem,.pfx,.crt"</c> or <c>"image/*"</c>.
+    /// When set, the file picker restricts selectable files and the CLI validates that chosen files match.
+    /// </summary>
+    public string? FileFilter { get; init; }
+
+    /// <summary>
     /// Gets or sets the maximum file size in bytes for <see cref="InputType.File"/> inputs.
     /// If not specified, the server applies the configured upload limit (default 100 MB).
     /// When specified, the value is capped at the server-side upload limit.
