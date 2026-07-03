@@ -245,7 +245,7 @@ public static class KubernetesPersistentVolumeExtensions
     ///     .WithCapacity("20Gi");
     ///
     /// var pg = builder.AddPostgres("pg")
-    ///     .WithDataVolume()              // ContainerMountAnnotation source = "pg-data"
+    ///     .WithDataVolume("pg-data")     // ContainerMountAnnotation source = "pg-data"
     ///     .WithPersistentVolume(pgData); // matches by name "pg-data"
     /// </code>
     /// </example>

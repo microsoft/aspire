@@ -79,10 +79,10 @@ public sealed class KubernetesDeployWithPersistentVolumeTests(ITestOutputHelper 
 
                 // Pass an explicit volume name to WithDataVolume so the auto-generated
                 // "{AppHost}.{hash}-pg-data" form is not used. The auto-generated name
-                // contains a dot ('.'), which the Kubernetes publisher currently
-                // propagates verbatim into the StatefulSet podSpec volumes[].name slot;
-                // K8s rejects dots there ("DNS_LABEL"). Tracked as a follow-up bug
-                // against the WithPersistentVolume name-match binding.
+                // contains a dot ('.'), and Kubernetes requires podSpec volumes[].name
+                // to be a DNS_LABEL (RFC 1123: lowercase alphanumerics and '-' only, no
+                // dots). See
+                // https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names.
                 var postgres = builder.AddPostgres("pg")
                     .WithDataVolume("pg-data")
                     .WithPersistentVolume(pgData);

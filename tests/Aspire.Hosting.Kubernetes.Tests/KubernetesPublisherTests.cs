@@ -805,9 +805,13 @@ public class KubernetesPublisherTests()
 
             var content = await File.ReadAllTextAsync(filePath);
 
-            // Empty `{ }` mappings are the failure mode the bug fixes address; assert against
-            // them explicitly so a regression is obvious without snapshot-diffing.
-            Assert.DoesNotContain("{}", content);
+            // Empty `{ }` mappings on the specific spec fields that Kubernetes rejects are
+            // the failure mode the bug fixes address; assert against them explicitly so a
+            // regression is obvious without snapshot-diffing. Uses the targeted helper
+            // because valid Kubernetes YAML routinely contains `{}` shorthand (e.g.
+            // `emptyDir: {}`, `resources: {}`), which a bare Assert.DoesNotContain("{}")
+            // would flag as a false positive.
+            AssertNoBuggyEmptyMappings(content);
 
             settingsTask = settingsTask is null
                 ? Verify(content, "yaml")
