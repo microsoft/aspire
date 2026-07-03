@@ -2471,7 +2471,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
     });
 
     test('attachDebuggerToResource uses AssemblyName when the project file declares one', async () => {
-        const directory = fs.mkdtempSync(path.join(process.cwd(), '.assembly-name-test-'));
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'assembly-name-test-'));
         const projectPath = path.join(directory, 'ProjectFileName.csproj');
         fs.writeFileSync(projectPath, `
 <Project Sdk="Microsoft.NET.Sdk">
@@ -2601,7 +2601,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         ];
 
         for (const testCase of testCases) {
-            const directory = fs.mkdtempSync(path.join(process.cwd(), '.assembly-name-test-'));
+            const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'assembly-name-test-'));
             const projectPath = path.join(directory, testCase.fileName);
             fs.writeFileSync(projectPath, testCase.markup);
             const provider = makeTreeProvider([
@@ -2652,7 +2652,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         ];
 
         for (const assemblyNameMarkup of testCases) {
-            const directory = fs.mkdtempSync(path.join(process.cwd(), '.assembly-name-test-'));
+            const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'assembly-name-test-'));
             const projectPath = path.join(directory, 'ProjectFileName.csproj');
             fs.writeFileSync(projectPath, `
 <Project Sdk="Microsoft.NET.Sdk">
