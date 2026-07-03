@@ -476,7 +476,19 @@ function buildChrome(state) {
 }
 
 function safeFit(state) {
+    const term = state.term;
+    const before = term ? { cols: term.cols, rows: term.rows, fontSize: term.options?.fontSize } : null;
     try { state.fitAddon?.fit(); } catch { /* ignore — happens during teardown */ }
+    const after = term ? { cols: term.cols, rows: term.rows, fontSize: term.options?.fontSize } : null;
+    console.log('[TERMDIAG] safeFit', {
+        before, after,
+        currentFontPx: state.currentFontPx,
+        fitFontPx: state.fitFontPx,
+        sizeMode: state.sizeMode,
+        avail: getAvailableBodySpace(state),
+        isPrimary: !!state.client?.isPrimary,
+        producerDims: state.client ? { w: state.client.width, h: state.client.height } : null,
+    });
 }
 
 function updateDimsReadout(state) {
@@ -759,23 +771,38 @@ function setFontSize(state, newSize) {
 }
 
 function setSizeMode(state, mode, dims) {
+    console.log('[TERMDIAG] setSizeMode', {
+        requested: { mode, dims },
+        currentSizeMode: state.sizeMode,
+        currentFontPx: state.currentFontPx,
+        fitFontPx: state.fitFontPx,
+        termFontSize: state.term?.options?.fontSize,
+        termCols: state.term?.cols,
+        termRows: state.term?.rows,
+        cellWRatio: state.cellWRatio,
+        cellHRatio: state.cellHRatio,
+        isPrimary: !!state.client?.isPrimary,
+        producer: state.client ? { w: state.client.width, h: state.client.height } : null,
+    });
     if (mode === state.sizeMode &&
         ((mode === 'font') ||
          (mode === 'fixed' && dims && state.fixedDims &&
           dims.cols === state.fixedDims.cols && dims.rows === state.fixedDims.rows))) {
+        console.log('[TERMDIAG] setSizeMode early-return');
         return;
     }
     state.sizeMode = mode;
     state.fixedDims = mode === 'fixed' ? dims : null;
-    // Fixed mode calls computeOptimalFont and overwrites currentFontPx with
-    // the auto-sized font that fills the preset grid. When we leave fixed
-    // mode for Fit, currentFontPx would still hold that (typically larger)
-    // font — restore the user's chosen Fit font so fit() and the toolbar
-    // preview agree.
     if (mode === 'font') {
         state.currentFontPx = state.fitFontPx;
     }
     applyRoleAwareLayout(state);
+    console.log('[TERMDIAG] setSizeMode after layout', {
+        currentFontPx: state.currentFontPx,
+        termFontSize: state.term?.options?.fontSize,
+        termCols: state.term?.cols,
+        termRows: state.term?.rows,
+    });
 }
 
 // Computes the current toolbar state snapshot and (when changed) pushes
