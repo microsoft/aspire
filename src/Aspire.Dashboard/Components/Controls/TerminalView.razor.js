@@ -604,7 +604,21 @@ function applyRoleAwareLayout(state) {
             if (term.options.fontSize !== state.currentFontPx) {
                 term.options.fontSize = state.currentFontPx;
             }
+            console.log('[TERMDIAG] font branch pre-fit', {
+                availableW, availableH,
+                bodyW, bodyH,
+                fontSize: term.options.fontSize,
+                currentFontPx: state.currentFontPx,
+                fitFontPx: state.fitFontPx,
+                termColsBefore: term.cols,
+                termRowsBefore: term.rows,
+            });
             safeFit(state);
+            console.log('[TERMDIAG] font branch post-fit', {
+                termCols: term.cols,
+                termRows: term.rows,
+                fontSize: term.options.fontSize,
+            });
         }
         notifyToolbar(state);
         return;
@@ -736,24 +750,42 @@ function setFontSize(state, newSize) {
 }
 
 function setSizeMode(state, mode, dims) {
+    console.log('[TERMDIAG] setSizeMode called', {
+        mode, dims,
+        current: {
+            sizeMode: state.sizeMode,
+            fixedDims: state.fixedDims,
+            currentFontPx: state.currentFontPx,
+            fitFontPx: state.fitFontPx,
+            cellWRatio: state.cellWRatio,
+            cellHRatio: state.cellHRatio,
+            termCols: state.term?.cols,
+            termRows: state.term?.rows,
+            isSecondary: !!state.client && !state.client.isPrimary && state.client.width > 0,
+            isPrimary: !!state.client?.isPrimary,
+            producerDims: state.client ? { w: state.client.width, h: state.client.height } : null,
+        }
+    });
     if (mode === state.sizeMode &&
         ((mode === 'font') ||
          (mode === 'fixed' && dims && state.fixedDims &&
           dims.cols === state.fixedDims.cols && dims.rows === state.fixedDims.rows))) {
+        console.log('[TERMDIAG] setSizeMode early-return (no change)');
         return;
     }
     state.sizeMode = mode;
     state.fixedDims = mode === 'fixed' ? dims : null;
-    // Fixed mode calls computeOptimalFont and overwrites currentFontPx with
-    // the auto-sized font that fills the preset grid. When we leave fixed
-    // mode for Fit, currentFontPx would still hold that (typically larger)
-    // font and fit() would run at the wrong size — producing a much smaller
-    // grid than the toolbar predicted from fitFontPx. Restore the user's
-    // chosen Fit font so fit() and the preview agree.
     if (mode === 'font') {
+        console.log('[TERMDIAG] resetting currentFontPx', { was: state.currentFontPx, now: state.fitFontPx });
         state.currentFontPx = state.fitFontPx;
     }
     applyRoleAwareLayout(state);
+    console.log('[TERMDIAG] after applyRoleAwareLayout', {
+        currentFontPx: state.currentFontPx,
+        termFontSize: state.term?.options?.fontSize,
+        termCols: state.term?.cols,
+        termRows: state.term?.rows,
+    });
 }
 
 // Computes the current toolbar state snapshot and (when changed) pushes
