@@ -598,14 +598,15 @@ export class AspireDebugSession implements vscode.DebugAdapter {
               this.sendSessionTerminated(debugConfig.runId, dcpIdForSessionTermination);
             }
           };
+          const finishSession = () => {
+            sendSessionTerminated();
+            cleanupRun(debugConfig.runId);
+          };
 
           const disposalFunction = () => {
             extensionLogOutputChannel.info(`Stopping debug session: ${session.name} (run id: ${session.configuration.runId})`);
             vscode.debug.stopDebugging(session);
-            sendSessionTerminated();
-
-            // Run any cleanup registered by resource-type extensions (e.g. func host for Azure Functions)
-            cleanupRun(debugConfig.runId);
+            finishSession();
           };
 
           const vsCodeDebugSession: AspireResourceDebugSession = {
@@ -616,15 +617,14 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
           if (dcpIdForSessionTermination) {
             terminationDisposable = vscode.debug.onDidTerminateDebugSession(terminatedSession => {
-              // js-debug can terminate a nested browser child session that does not
-              // carry the Aspire-specific configuration fields, so scope the fallback
-              // to the session we just started instead of matching globally by name.
-              if (terminatedSession.id !== session.id
-                && terminatedSession.parentSession?.id !== session.id) {
+              // js-debug can terminate target/page child sessions while the browser
+              // debug session is still alive, so only the root session is the DCP
+              // lifetime signal.
+              if (terminatedSession.id !== session.id) {
                 return;
               }
 
-              sendSessionTerminated();
+              finishSession();
             });
           }
 
