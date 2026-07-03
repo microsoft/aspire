@@ -149,6 +149,8 @@ export const goDisplayName = (program: string) => `Go: ${program}`;
 export const goLabel = 'Go';
 export const bunDisplayName = (script: string) => `Bun: ${script}`;
 export const bunLabel = 'Bun';
+export const denoDisplayName = (script: string) => `Deno: ${script}`;
+export const denoLabel = 'Deno';
 export const nodeDisplayName = (script: string) => `Node.js: ${script}`;
 export const nodeLabel = 'Node.js';
 export const dontShowAgainLabel = vscode.l10n.t("Don't Show Again");
