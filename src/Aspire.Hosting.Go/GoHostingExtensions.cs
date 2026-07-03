@@ -709,21 +709,21 @@ public static class GoHostingExtensions
     /// </summary>
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
-    /// <param name="parameter">The Delve server port or options.</param>
+    /// <param name="portOrOptions">The Delve server port or options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withDelveServer")]
-    internal static IResourceBuilder<T> WithDelveServerExport<T>(this IResourceBuilder<T> builder, [AspireUnion(typeof(int), typeof(GoDelveServerOptions))] object? parameter = null)
+    internal static IResourceBuilder<T> WithDelveServerExport<T>(this IResourceBuilder<T> builder, [AspireUnion(typeof(int), typeof(GoDelveServerOptions))] object? portOrOptions = null)
         where T : GoAppResource
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return parameter switch
+        return portOrOptions switch
         {
             null => builder.ApplyWithDelveServer(new GoDelveServerOptions()),
             int port => builder.WithDelveServer(port),
             GoDelveServerOptions options => builder.ApplyWithDelveServer(options),
-            _ => throw new ArgumentException("Parameter must be an int or a GoDelveServerOptions.", nameof(parameter))
+            _ => throw new ArgumentException("Value must be an int port or GoDelveServerOptions.", nameof(portOrOptions))
         };
     }
 
