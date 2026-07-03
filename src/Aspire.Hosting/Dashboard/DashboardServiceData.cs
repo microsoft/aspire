@@ -120,6 +120,7 @@ internal sealed class DashboardServiceData : IDisposable
     {
         _cts.Cancel();
         _cts.Dispose();
+        _fileUploadStore.Dispose();
     }
 
     internal async Task<(ExecuteCommandResultType result, string? message, ApplicationModel.CommandResultData? value, InteractionInputCollection? invalidArguments)> ExecuteCommandAsync(string resourceId, string type, ExecuteResourceCommandOptions options, CancellationToken cancellationToken)

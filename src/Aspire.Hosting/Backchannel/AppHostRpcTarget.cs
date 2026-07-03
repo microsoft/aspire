@@ -7,6 +7,7 @@ using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -22,7 +23,8 @@ internal class AppHostRpcTarget(
     IHostApplicationLifetime lifetime,
     DistributedApplicationOptions options,
     AppHostStartupState startupState,
-    FileUploadStore fileUploadStore)
+    FileUploadStore fileUploadStore,
+    IConfiguration configuration)
 {
     private readonly CancellationTokenSource _shutdownCts = new();
 
@@ -249,6 +251,14 @@ internal class AppHostRpcTarget(
     /// </summary>
     public async Task<UploadFileResponse> UploadFileAsync(UploadFileRequest request, CancellationToken cancellationToken = default)
     {
+        var maxUploadSize = Dashboard.DashboardService.GetMaxFileUploadSize(configuration);
+
+        var fileInfo = new FileInfo(request.FilePath);
+        if (fileInfo.Length > maxUploadSize)
+        {
+            throw new InvalidOperationException($"File '{request.FileName}' exceeds the maximum upload size of {maxUploadSize} bytes.");
+        }
+
         var (fileId, filePath) = fileUploadStore.CreateEntry(request.FileName);
 
         try

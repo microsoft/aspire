@@ -14,9 +14,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Aspire.Hosting.Tests.Publishing;
 
 [Trait("Partition", "4")]
-public class PublishingActivityReporterTests
+public class PublishingActivityReporterTests : IDisposable
 {
     private readonly InteractionService _interactionService = CreateInteractionService();
+    private readonly FileUploadStore _fileUploadStore = new();
 
     [Fact]
     public async Task CreateStepAsync_CreatesStepAndEmitsActivity()
@@ -1323,7 +1324,12 @@ public class PublishingActivityReporterTests
 
     private PipelineActivityReporter CreatePublishingReporter()
     {
-        return new PipelineActivityReporter(_interactionService, new FileUploadStore(), NullLogger<PipelineActivityReporter>.Instance);
+        return new PipelineActivityReporter(_interactionService, _fileUploadStore, NullLogger<PipelineActivityReporter>.Instance);
+    }
+
+    public void Dispose()
+    {
+        _fileUploadStore.Dispose();
     }
 
     internal static InteractionService CreateInteractionService()

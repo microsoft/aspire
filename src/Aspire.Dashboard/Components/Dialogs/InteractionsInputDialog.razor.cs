@@ -244,9 +244,16 @@ public partial class InteractionsInputDialog : IAsyncDisposable
                 continue;
             }
 
-            using var stream = file.OpenReadStream(maxFileSize);
-            var fileId = await DashboardClient.UploadFileAsync(stream, file.Name, file.Size, _disposalCts.Token);
-            fileReferences.Add(new FileReferenceViewModel { Id = fileId, Name = file.Name });
+            try
+            {
+                using var stream = file.OpenReadStream(maxFileSize);
+                var fileId = await DashboardClient.UploadFileAsync(stream, file.Name, file.Size, _disposalCts.Token);
+                fileReferences.Add(new FileReferenceViewModel { Id = fileId, Name = file.Name });
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = "Upload failed" });
+            }
         }
 
         inputModel.SetFileReferences(fileReferences);
