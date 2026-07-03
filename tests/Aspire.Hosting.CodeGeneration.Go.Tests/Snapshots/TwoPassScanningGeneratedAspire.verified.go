@@ -186,7 +186,7 @@ const (
 	InputTypeChoice InputType = "Choice"
 	InputTypeBoolean InputType = "Boolean"
 	InputTypeNumber InputType = "Number"
-	InputTypeFileChooser InputType = "FileChooser"
+	InputTypeFile InputType = "File"
 )
 
 // HealthStatus represents HealthStatus.
@@ -292,8 +292,8 @@ type InteractionInput struct {
 	AllowCustomChoice *bool `json:"AllowCustomChoice,omitempty"`
 	Disabled bool `json:"Disabled,omitempty"`
 	MaxLength *float64 `json:"MaxLength,omitempty"`
+	AllowMultipleFiles *bool `json:"AllowMultipleFiles,omitempty"`
 	MaxFileSize *float64 `json:"MaxFileSize,omitempty"`
-	FileName *string `json:"FileName,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -311,8 +311,8 @@ func (d *InteractionInput) ToMap() map[string]any {
 	if d.AllowCustomChoice != nil { m["AllowCustomChoice"] = serializeValue(d.AllowCustomChoice) }
 	m["Disabled"] = serializeValue(d.Disabled)
 	if d.MaxLength != nil { m["MaxLength"] = serializeValue(d.MaxLength) }
+	if d.AllowMultipleFiles != nil { m["AllowMultipleFiles"] = serializeValue(d.AllowMultipleFiles) }
 	if d.MaxFileSize != nil { m["MaxFileSize"] = serializeValue(d.MaxFileSize) }
-	if d.FileName != nil { m["FileName"] = serializeValue(d.FileName) }
 	return m
 }
 
@@ -472,6 +472,7 @@ type CreateInteractionInputOptions struct {
 	Disabled *bool `json:"Disabled,omitempty"`
 	MaxLength *float64 `json:"MaxLength,omitempty"`
 	MaxFileSize *float64 `json:"MaxFileSize,omitempty"`
+	AllowMultipleFiles *bool `json:"AllowMultipleFiles,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -487,6 +488,7 @@ func (d *CreateInteractionInputOptions) ToMap() map[string]any {
 	if d.Disabled != nil { m["Disabled"] = serializeValue(d.Disabled) }
 	if d.MaxLength != nil { m["MaxLength"] = serializeValue(d.MaxLength) }
 	if d.MaxFileSize != nil { m["MaxFileSize"] = serializeValue(d.MaxFileSize) }
+	if d.AllowMultipleFiles != nil { m["AllowMultipleFiles"] = serializeValue(d.AllowMultipleFiles) }
 	return m
 }
 
@@ -18010,7 +18012,7 @@ type InteractionService interface {
 	handleReference
 	CreateBooleanInput(name string, options ...*CreateBooleanInputOptions) InteractionInputBuilder
 	CreateChoiceInput(name string, options ...*CreateChoiceInputOptions) InteractionInputBuilder
-	CreateFileChooserInput(name string, options ...*CreateFileChooserInputOptions) InteractionInputBuilder
+	CreateFileInput(name string, options ...*CreateFileInputOptions) InteractionInputBuilder
 	CreateNumberInput(name string, options ...*CreateNumberInputOptions) InteractionInputBuilder
 	CreateSecretInput(name string, options ...*CreateSecretInputOptions) InteractionInputBuilder
 	CreateTextInput(name string, options ...*CreateTextInputOptions) InteractionInputBuilder
@@ -18088,8 +18090,8 @@ func (s *interactionService) CreateChoiceInput(name string, options ...*CreateCh
 	return &interactionInputBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// CreateFileChooserInput creates a file chooser input.
-func (s *interactionService) CreateFileChooserInput(name string, options ...*CreateFileChooserInputOptions) InteractionInputBuilder {
+// CreateFileInput creates a file chooser input.
+func (s *interactionService) CreateFileInput(name string, options ...*CreateFileInputOptions) InteractionInputBuilder {
 	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -18097,19 +18099,19 @@ func (s *interactionService) CreateFileChooserInput(name string, options ...*Cre
 	}
 	reqArgs["name"] = serializeValue(name)
 	if len(options) > 0 {
-		merged := &CreateFileChooserInputOptions{}
+		merged := &CreateFileInputOptions{}
 		for _, opt := range options {
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createFileChooserInput", reqArgs)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createFileInput", reqArgs)
 	if err != nil {
 		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	href, ok := result.(handleReference)
 	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting/createFileChooserInput returned unexpected type %T", result)
+		err := fmt.Errorf("aspire: Aspire.Hosting/createFileInput returned unexpected type %T", result)
 		return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &interactionInputBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
@@ -29387,12 +29389,12 @@ func (o *CreateNumberInputOptions) ToMap() map[string]any {
 	return m
 }
 
-// CreateFileChooserInputOptions carries optional parameters for CreateFileChooserInput.
-type CreateFileChooserInputOptions struct {
+// CreateFileInputOptions carries optional parameters for CreateFileInput.
+type CreateFileInputOptions struct {
 	Options *CreateInteractionInputOptions `json:"options,omitempty"`
 }
 
-func (o *CreateFileChooserInputOptions) ToMap() map[string]any {
+func (o *CreateFileInputOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.Options != nil { m["options"] = serializeValue(o.Options) }

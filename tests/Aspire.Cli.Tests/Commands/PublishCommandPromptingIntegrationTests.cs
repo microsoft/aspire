@@ -294,8 +294,8 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
 
         var completedPrompt = Assert.Single(promptBackchannel.CompletedPrompts);
         var answer = Assert.Single(completedPrompt.Answers);
-        Assert.Equal(Path.GetFullPath(selectedFile), answer.Value);
-        Assert.Equal("artifact.zip", answer.FileName);
+        Assert.NotNull(answer.Value);
+        Assert.Contains("\"Name\":\"artifact.zip\"", answer.Value);
     }
 
     [Fact]

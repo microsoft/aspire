@@ -427,6 +427,10 @@ public sealed class InteractionInput
     /// Gets the files associated with this <see cref="InputType.File"/> input.
     /// Populated after the user selects file(s) and the interaction completes.
     /// </summary>
+    // Excluded from the ATS surface: InteractionFile holds non-serializable methods (OpenRead, ReadAllBytesAsync)
+    // and refers to server-local file paths. Polyglot app hosts receive file metadata through the manually defined
+    // InteractionInputFile interface in base.mts, populated by ToResultInput.
+    [AspireExportIgnore(Reason = "InteractionFile contains non-serializable methods and server-local paths; polyglot callers use InteractionInputFile from base.mts.")]
     public IReadOnlyList<InteractionFile>? Files { get; private set; }
 }
 

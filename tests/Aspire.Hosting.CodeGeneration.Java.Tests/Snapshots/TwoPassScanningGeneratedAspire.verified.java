@@ -7767,6 +7767,7 @@ public class CreateInteractionInputOptions implements JsonSerializable {
     private Boolean disabled;
     private Double maxLength;
     private Double maxFileSize;
+    private Boolean allowMultipleFiles;
 
     public String getLabel() { return label; }
     public void setLabel(String value) { this.label = value; }
@@ -7788,6 +7789,8 @@ public class CreateInteractionInputOptions implements JsonSerializable {
     public void setMaxLength(Double value) { this.maxLength = value; }
     public Double getMaxFileSize() { return maxFileSize; }
     public void setMaxFileSize(Double value) { this.maxFileSize = value; }
+    public Boolean getAllowMultipleFiles() { return allowMultipleFiles; }
+    public void setAllowMultipleFiles(Boolean value) { this.allowMultipleFiles = value; }
 
     @SuppressWarnings("unchecked")
     public static CreateInteractionInputOptions fromMap(Map<String, Object> map) {
@@ -7812,6 +7815,8 @@ public class CreateInteractionInputOptions implements JsonSerializable {
         value.setMaxLength(maxLengthValue == null ? null : ((Number) maxLengthValue).doubleValue());
         var maxFileSizeValue = map.get("MaxFileSize");
         value.setMaxFileSize(maxFileSizeValue == null ? null : ((Number) maxFileSizeValue).doubleValue());
+        var allowMultipleFilesValue = map.get("AllowMultipleFiles");
+        value.setAllowMultipleFiles(allowMultipleFilesValue == null ? null : (Boolean) allowMultipleFilesValue);
         return value;
     }
 
@@ -7827,6 +7832,7 @@ public class CreateInteractionInputOptions implements JsonSerializable {
         map.put("Disabled", AspireClient.serializeValue(disabled));
         map.put("MaxLength", AspireClient.serializeValue(maxLength));
         map.put("MaxFileSize", AspireClient.serializeValue(maxFileSize));
+        map.put("AllowMultipleFiles", AspireClient.serializeValue(allowMultipleFiles));
         return map;
     }
 }
@@ -15491,19 +15497,19 @@ public class IInteractionService extends HandleWrapperBase {
         return (InteractionInputBuilder) result;
     }
 
-    public InteractionInputBuilder createFileChooserInput(String name) {
-        return createFileChooserInput(name, null);
+    public InteractionInputBuilder createFileInput(String name) {
+        return createFileInput(name, null);
     }
 
     /** Creates a file chooser input. */
-    public InteractionInputBuilder createFileChooserInput(String name, CreateInteractionInputOptions options) {
+    public InteractionInputBuilder createFileInput(String name, CreateInteractionInputOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
         reqArgs.put("name", AspireClient.serializeValue(name));
         if (options != null) {
             reqArgs.put("options", AspireClient.serializeValue(options));
         }
-        var result = getClient().invokeCapability("Aspire.Hosting/createFileChooserInput", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting/createFileInput", reqArgs);
         return (InteractionInputBuilder) result;
     }
 
@@ -16328,7 +16334,7 @@ public enum InputType implements WireValueEnum {
     CHOICE("Choice"),
     BOOLEAN("Boolean"),
     NUMBER("Number"),
-    FILE_CHOOSER("FileChooser");
+    FILE("File");
 
     private final String value;
 
@@ -16485,8 +16491,8 @@ public class InteractionInput implements JsonSerializable {
     private Boolean allowCustomChoice;
     private boolean disabled;
     private Double maxLength;
+    private Boolean allowMultipleFiles;
     private Double maxFileSize;
-    private String fileName;
 
     public String getName() { return name; }
     public void setName(String value) { this.name = value; }
@@ -16512,10 +16518,10 @@ public class InteractionInput implements JsonSerializable {
     public void setDisabled(boolean value) { this.disabled = value; }
     public Double getMaxLength() { return maxLength; }
     public void setMaxLength(Double value) { this.maxLength = value; }
+    public Boolean getAllowMultipleFiles() { return allowMultipleFiles; }
+    public void setAllowMultipleFiles(Boolean value) { this.allowMultipleFiles = value; }
     public Double getMaxFileSize() { return maxFileSize; }
     public void setMaxFileSize(Double value) { this.maxFileSize = value; }
-    public String getFileName() { return fileName; }
-    public void setFileName(String value) { this.fileName = value; }
 
     @SuppressWarnings("unchecked")
     public static InteractionInput fromMap(Map<String, Object> map) {
@@ -16544,10 +16550,10 @@ public class InteractionInput implements JsonSerializable {
         value.setDisabled((Boolean) disabledValue);
         var maxLengthValue = map.get("MaxLength");
         value.setMaxLength(maxLengthValue == null ? null : ((Number) maxLengthValue).doubleValue());
+        var allowMultipleFilesValue = map.get("AllowMultipleFiles");
+        value.setAllowMultipleFiles(allowMultipleFilesValue == null ? null : (Boolean) allowMultipleFilesValue);
         var maxFileSizeValue = map.get("MaxFileSize");
         value.setMaxFileSize(maxFileSizeValue == null ? null : ((Number) maxFileSizeValue).doubleValue());
-        var fileNameValue = map.get("FileName");
-        value.setFileName(fileNameValue == null ? null : (String) fileNameValue);
         return value;
     }
 
@@ -16565,8 +16571,8 @@ public class InteractionInput implements JsonSerializable {
         map.put("AllowCustomChoice", AspireClient.serializeValue(allowCustomChoice));
         map.put("Disabled", AspireClient.serializeValue(disabled));
         map.put("MaxLength", AspireClient.serializeValue(maxLength));
+        map.put("AllowMultipleFiles", AspireClient.serializeValue(allowMultipleFiles));
         map.put("MaxFileSize", AspireClient.serializeValue(maxFileSize));
-        map.put("FileName", AspireClient.serializeValue(fileName));
         return map;
     }
 }

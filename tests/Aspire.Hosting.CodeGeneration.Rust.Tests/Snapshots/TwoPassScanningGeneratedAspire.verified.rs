@@ -420,8 +420,8 @@ pub enum InputType {
     Boolean,
     #[serde(rename = "Number")]
     Number,
-    #[serde(rename = "FileChooser")]
-    FileChooser,
+    #[serde(rename = "File")]
+    File,
 }
 
 impl std::fmt::Display for InputType {
@@ -432,7 +432,7 @@ impl std::fmt::Display for InputType {
             Self::Choice => write!(f, "Choice"),
             Self::Boolean => write!(f, "Boolean"),
             Self::Number => write!(f, "Number"),
-            Self::FileChooser => write!(f, "FileChooser"),
+            Self::File => write!(f, "File"),
         }
     }
 }
@@ -678,10 +678,10 @@ pub struct InteractionInput {
     pub disabled: bool,
     #[serde(rename = "MaxLength", skip_serializing_if = "Option::is_none")]
     pub max_length: Option<f64>,
+    #[serde(rename = "AllowMultipleFiles", skip_serializing_if = "Option::is_none")]
+    pub allow_multiple_files: Option<bool>,
     #[serde(rename = "MaxFileSize", skip_serializing_if = "Option::is_none")]
     pub max_file_size: Option<f64>,
-    #[serde(rename = "FileName", skip_serializing_if = "Option::is_none")]
-    pub file_name: Option<String>,
 }
 
 impl InteractionInput {
@@ -713,11 +713,11 @@ impl InteractionInput {
         if let Some(ref v) = self.max_length {
             map.insert("MaxLength".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
+        if let Some(ref v) = self.allow_multiple_files {
+            map.insert("AllowMultipleFiles".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(ref v) = self.max_file_size {
             map.insert("MaxFileSize".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        if let Some(ref v) = self.file_name {
-            map.insert("FileName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map
     }
@@ -956,6 +956,8 @@ pub struct CreateInteractionInputOptions {
     pub max_length: Option<f64>,
     #[serde(rename = "MaxFileSize", skip_serializing_if = "Option::is_none")]
     pub max_file_size: Option<f64>,
+    #[serde(rename = "AllowMultipleFiles", skip_serializing_if = "Option::is_none")]
+    pub allow_multiple_files: Option<bool>,
 }
 
 impl CreateInteractionInputOptions {
@@ -990,6 +992,9 @@ impl CreateInteractionInputOptions {
         }
         if let Some(ref v) = self.max_file_size {
             map.insert("MaxFileSize".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.allow_multiple_files {
+            map.insert("AllowMultipleFiles".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map
     }
@@ -12250,14 +12255,14 @@ impl IInteractionService {
     }
 
     /// Creates a file chooser input.
-    pub fn create_file_chooser_input(&self, name: &str, options: Option<CreateInteractionInputOptions>) -> Result<InteractionInputBuilder, Box<dyn std::error::Error>> {
+    pub fn create_file_input(&self, name: &str, options: Option<CreateInteractionInputOptions>) -> Result<InteractionInputBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("interactionService".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
         if let Some(ref v) = options {
             args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
-        let result = self.client.invoke_capability("Aspire.Hosting/createFileChooserInput", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting/createFileInput", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(InteractionInputBuilder::new(handle, self.client.clone()))
     }
