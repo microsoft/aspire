@@ -744,6 +744,15 @@ function setSizeMode(state, mode, dims) {
     }
     state.sizeMode = mode;
     state.fixedDims = mode === 'fixed' ? dims : null;
+    // Fixed mode calls computeOptimalFont and overwrites currentFontPx with
+    // the auto-sized font that fills the preset grid. When we leave fixed
+    // mode for Fit, currentFontPx would still hold that (typically larger)
+    // font and fit() would run at the wrong size — producing a much smaller
+    // grid than the toolbar predicted from fitFontPx. Restore the user's
+    // chosen Fit font so fit() and the preview agree.
+    if (mode === 'font') {
+        state.currentFontPx = state.fitFontPx;
+    }
     applyRoleAwareLayout(state);
 }
 
