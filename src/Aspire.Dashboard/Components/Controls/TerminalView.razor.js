@@ -725,8 +725,32 @@ function calibrateRatios(state) {
     const h = screenEl.offsetHeight;
     const fs = term.options.fontSize || state.currentFontPx;
     if (w > 0 && h > 0 && term.cols > 0 && term.rows > 0 && fs > 0) {
-        state.cellWRatio = (w / term.cols) / fs;
-        state.cellHRatio = (h / term.rows) / fs;
+        const newW = (w / term.cols) / fs;
+        const newH = (h / term.rows) / fs;
+        // Guard against transient stale readings. When fontSize was just
+        // changed (e.g. fit→fixed switch that jumped 13→26), xterm's DOM
+        // may not have re-rendered yet, so .xterm-screen still reflects
+        // the *old* fontSize's cell metrics. Dividing that stale pixel
+        // width by the new fontSize yields a ratio ~half of the true
+        // value. That corrupt ratio then makes the Fit menu preview
+        // report roughly double the real grid. See line 1101 for the
+        // matching onResize RAF-deferred calibration guard.
+        //
+        // Heuristic: once we have a plausible baseline, reject any new
+        // sample that swings by more than 40% in either direction. Real
+        // xterm cell metrics per fontSize are stable across small font
+        // deltas (that's the whole reason we cache a ratio) so a 40%
+        // jump is diagnostic of a stale-render sample, not a real change.
+        const CALIBRATION_JUMP_TOLERANCE = 0.4;
+        const withinTolerance = (oldV, newV) => {
+            if (oldV <= 0) return true;
+            const delta = Math.abs(newV - oldV) / oldV;
+            return delta <= CALIBRATION_JUMP_TOLERANCE;
+        };
+        if (withinTolerance(state.cellWRatio, newW) && withinTolerance(state.cellHRatio, newH)) {
+            state.cellWRatio = newW;
+            state.cellHRatio = newH;
+        }
     }
 }
 
