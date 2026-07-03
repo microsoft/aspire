@@ -316,6 +316,21 @@ function ensureTerminalStyles() {
   letter-spacing: 0.2px;
 }
 
+/*
+ * Live cols × rows readout on the right side of the titlebar. Kept in
+ * sync from term.onResize so it always shows the grid the PTY sees.
+ */
+.aspire-terminal-host #terminal-dims {
+  flex: 0 0 auto;
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid #30363d;
+  color: var(--aspire-term-fg-muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
 .aspire-terminal-host #terminal-body {
   flex: 0 0 auto;
   position: relative;
@@ -439,7 +454,10 @@ function buildChrome(state) {
     const titleText = document.createElement('span');
     titleText.id = 'terminal-title';
     titleText.textContent = 'terminal';
-    titlebar.appendChild(titleText);
+    const dimsText = document.createElement('span');
+    dimsText.id = 'terminal-dims';
+    dimsText.textContent = '';
+    titlebar.append(titleText, dimsText);
 
     const body = document.createElement('div');
     body.id = 'terminal-body';
@@ -453,11 +471,21 @@ function buildChrome(state) {
     state.terminalFrame = frame;
     state.terminalTitlebar = titlebar;
     state.titleText = titleText;
+    state.dimsText = dimsText;
     state.terminalBody = body;
 }
 
 function safeFit(state) {
     try { state.fitAddon?.fit(); } catch { /* ignore — happens during teardown */ }
+}
+
+function updateDimsReadout(state) {
+    if (!state.dimsText || !state.term) return;
+    const cols = state.term.cols | 0;
+    const rows = state.term.rows | 0;
+    // xterm briefly reports 0x0 during teardown; suppress that instead of
+    // flashing a zero-sized readout at the user.
+    state.dimsText.textContent = cols > 0 && rows > 0 ? `${cols} × ${rows}` : '';
 }
 
 const FRAME_BORDER_PX = 2;
@@ -901,6 +929,7 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
         terminalFrame: null,
         terminalTitlebar: null,
         titleText: null,
+        dimsText: null,
         terminalBody: null,
     };
 
@@ -981,6 +1010,7 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
     requestAnimationFrame(() => {
         calibrateRatios(state);
         applyRoleAwareLayout(state);
+        updateDimsReadout(state);
     });
 
     // OSC 0 / OSC 2 / OSC 1 — terminal apps push window/icon titles via
@@ -1001,6 +1031,7 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
     term.onResize(({ cols, rows }) => {
         if (state.client) state.client.sendResize(cols, rows);
         calibrateRatios(state);
+        updateDimsReadout(state);
         notifyToolbar(state);
     });
 
