@@ -34,7 +34,7 @@ public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHel
                 capturedWorkingDirectory = workingDirectory;
             }
         };
-        var startTime = new DateTimeOffset(Process.GetCurrentProcess().StartTime);
+        var startTime = ProcessStartTimeHelper.GetCurrentProcessStartTime();
         var signaler = CreateService(workspace, dcpDirectory.FullName, executionFactory);
 
         var result = await signaler.TryStopProcessTreeWithDcpAsync(Environment.ProcessId, startTime, includeStartTime: true, CancellationToken.None);
@@ -70,7 +70,7 @@ public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHel
 
         var result = await signaler.TryStopProcessTreeWithDcpAsync(
             Environment.ProcessId,
-            new DateTimeOffset(Process.GetCurrentProcess().StartTime),
+            ProcessStartTimeHelper.GetCurrentProcessStartTime(),
             includeStartTime: false,
             CancellationToken.None);
 
@@ -98,7 +98,7 @@ public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHel
         };
         var signaler = CreateService(workspace, mutableDcpDirectory.FullName, executionFactory, bundleService);
 
-        var result = await signaler.TryStopProcessTreeWithDcpAsync(Environment.ProcessId, new DateTimeOffset(Process.GetCurrentProcess().StartTime), includeStartTime: false, CancellationToken.None);
+        var result = await signaler.TryStopProcessTreeWithDcpAsync(Environment.ProcessId, ProcessStartTimeHelper.GetCurrentProcessStartTime(), includeStartTime: false, CancellationToken.None);
 
         Assert.True(result);
         Assert.Equal(leasedDcpPath, executionFactory.LastFileName);
@@ -129,7 +129,7 @@ public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHel
                     ProcessId = int.MaxValue,
                     StartedAt = null,
                     CliProcessId = cliProcess.Id,
-                    CliStartedAt = new DateTimeOffset(cliProcess.StartTime)
+                    CliStartedAt = GetProcessStartTime(cliProcess)
                 },
                 requestRpcStopAsync: null,
                 CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(2));
@@ -182,6 +182,13 @@ public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHel
         var process = Process.Start(startInfo);
         Assert.NotNull(process);
         return process;
+    }
+
+    private static DateTimeOffset GetProcessStartTime(Process process)
+    {
+        var startTime = ProcessStartTimeHelper.TryGetProcessStartTime(process.Id);
+        Assert.NotNull(startTime);
+        return startTime.Value;
     }
 
     private static async Task StopProcessAsync(Process process)

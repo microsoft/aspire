@@ -41,23 +41,34 @@ internal static class ParentProcessWatchdog
         return ParentProcessLivenessMonitor.Start(
             parentPid,
             expectedStartTimeUnix,
-            async stopToken =>
-            {
-                // Parent is gone: ask the in-flight operation to stop, then hard-exit if it doesn't.
-                try
-                {
-                    if (!operationCts.IsCancellationRequested)
-                    {
-                        operationCts.Cancel();
-                    }
-                }
-                catch (ObjectDisposedException)
-                {
-                    // The operation already completed and disposed its CTS; nothing left to cancel.
-                }
+            stopToken => OnParentExitedAsync(operationCts, stopToken, s_forceExitGracePeriod, Environment.Exit));
+    }
 
-                await Task.Delay(s_forceExitGracePeriod, stopToken).ConfigureAwait(false);
-                Environment.Exit(TerminatedExitCode);
-            });
+    internal static async Task OnParentExitedAsync(
+        CancellationTokenSource operationCts,
+        CancellationToken stopToken,
+        TimeSpan forceExitGracePeriod,
+        Action<int> exit)
+    {
+        // Parent is gone: ask the in-flight operation to stop, then hard-exit if it doesn't.
+        try
+        {
+            if (!operationCts.IsCancellationRequested)
+            {
+                operationCts.Cancel();
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+            // The operation already completed and disposed its CTS; nothing left to cancel.
+        }
+        catch (AggregateException)
+        {
+            // Cancellation callbacks run synchronously from Cancel(). A faulty callback must not skip
+            // the force-exit backstop because that is what prevents aspire-managed from leaking.
+        }
+
+        await Task.Delay(forceExitGracePeriod, stopToken).ConfigureAwait(false);
+        exit(TerminatedExitCode);
     }
 }

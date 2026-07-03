@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 
 namespace Aspire.Hosting.Tests;
 
@@ -39,16 +40,17 @@ public class ProcessStartTimeHelperTests
         Assert.NotNull(process);
 
         var pid = process.Id;
-        var startedUnix = ((DateTimeOffset)process.StartTime).ToUnixTimeSeconds();
+        var startedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixSeconds(process.Id);
+        Assert.NotNull(startedUnix);
 
         Assert.True(ProcessStartTimeHelper.IsProcessRunning(pid));
-        Assert.True(ProcessStartTimeHelper.IsProcessRunning(pid, startedUnix));
+        Assert.True(ProcessStartTimeHelper.IsProcessRunning(pid, startedUnix.Value));
 
         process.Kill(entireProcessTree: true);
         process.WaitForExit();
 
         Assert.False(ProcessStartTimeHelper.IsProcessRunning(pid));
-        Assert.False(ProcessStartTimeHelper.IsProcessRunning(pid, startedUnix));
+        Assert.False(ProcessStartTimeHelper.IsProcessRunning(pid, startedUnix.Value));
     }
 
     [Fact]
@@ -63,6 +65,33 @@ public class ProcessStartTimeHelperTests
         var fromPid = ProcessStartTimeHelper.TryGetProcessStartTimeUnixSeconds(Environment.ProcessId);
         Assert.NotNull(fromPid);
         Assert.Equal(ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds(), fromPid);
+    }
+
+    [Theory]
+    [InlineData("dotnet", 123456UL)]
+    [InlineData("process name with ) parenthesis", 987654UL)]
+    public void TryParseLinuxStatStartTicks_ParsesField22AfterProcessName(string processName, ulong expectedStartTicks)
+    {
+        var fields = Enumerable.Range(0, 20).Select(static i => i.ToString(CultureInfo.InvariantCulture)).ToArray();
+        fields[0] = "S";
+        fields[19] = expectedStartTicks.ToString(CultureInfo.InvariantCulture);
+        var stat = $"12345 ({processName}) {string.Join(' ', fields)}";
+
+        Assert.Equal(expectedStartTicks, ProcessStartTimeHelper.TryParseLinuxStatStartTicks(stat));
+    }
+
+    [Fact]
+    public void LinuxProcRoot_UsesCurrentProcessNamespace()
+    {
+        Assert.Equal("/proc", ProcessStartTimeHelper.LinuxProcRoot);
+    }
+
+    [Theory]
+    [InlineData("12345 missing-close-paren S 1 2 3")]
+    [InlineData("12345 (dotnet) S 1 2 3")]
+    public void TryParseLinuxStatStartTicks_Malformed_ReturnsNull(string stat)
+    {
+        Assert.Null(ProcessStartTimeHelper.TryParseLinuxStatStartTicks(stat));
     }
 
     [Theory]

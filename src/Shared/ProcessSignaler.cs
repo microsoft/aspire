@@ -62,8 +62,15 @@ internal static partial class ProcessSignaler
 
             if (expectedStartTime is not null)
             {
-                var processStartTime = process.StartTime;
-                if (!AreClose(expectedStartTime, processStartTime))
+                var processStartTime = ProcessStartTimeHelper.TryGetProcessStartTime(pid);
+                if (processStartTime is null)
+                {
+                    logger.LogDebug("Could not inspect process {Pid} start time. Treating it as not running.", pid);
+                    process.Dispose();
+                    return null;
+                }
+
+                if (!AreClose(expectedStartTime, processStartTime.Value))
                 {
                     logger.LogDebug("Process {Pid} start time {ProcessStartTime} does not match expected start time {ExpectedStartTime}", pid, processStartTime, expectedStartTime);
                     process.Dispose();
@@ -104,6 +111,9 @@ internal static partial class ProcessSignaler
     }
 
     internal static bool AreClose(DateTimeOffset? expectedStartTime, DateTime processStartTime, TimeSpan? tolerance = default)
+        => AreClose(expectedStartTime, new DateTimeOffset(processStartTime), tolerance);
+
+    internal static bool AreClose(DateTimeOffset? expectedStartTime, DateTimeOffset processStartTime, TimeSpan? tolerance = default)
     {
         if (expectedStartTime is null)
         {
@@ -112,10 +122,10 @@ internal static partial class ProcessSignaler
 
         // Truncate both sides to whole seconds before comparing. The expected start time
         // may already be at second granularity (e.g. from the orphan detector via ToUnixTimeSeconds()),
-        // and the OS-reported start time has sub-second precision that would cause false mismatches.
+        // and the OS-reported start time can have sub-second precision that would cause false mismatches.
         // The truncate-and-compare math lives in the dependency-free ProcessStartTimeHelper so the
         // RemoteHost and aspire-managed watchdogs (which cannot reference ProcessSignaler) share it.
-        var processStartTruncated = new DateTimeOffset(processStartTime).ToUnixTimeSeconds();
+        var processStartTruncated = processStartTime.ToUnixTimeSeconds();
         var expectedSeconds = ((DateTimeOffset)expectedStartTime).ToUnixTimeSeconds();
 
         return ProcessStartTimeHelper.AreClose(expectedSeconds, processStartTruncated, tolerance);

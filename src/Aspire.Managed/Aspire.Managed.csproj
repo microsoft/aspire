@@ -5,6 +5,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ApplicationIcon>$(MSBuildThisFileDirectory)..\Shared\Aspire.ico</ApplicationIcon>
     <AssemblyName>aspire-managed</AssemblyName>
 
@@ -56,6 +57,10 @@
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Shared\KnownConfigNames.cs" />
     <Compile Include="$(SharedDir)ProcessStartTimeHelper.cs" Link="Shared\ProcessStartTimeHelper.cs" />
     <Compile Include="$(SharedDir)ParentProcessLivenessMonitor.cs" Link="Shared\ParentProcessLivenessMonitor.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Managed.Tests" />
   </ItemGroup>
 
   <!-- Exclude unwanted files from publish output -->

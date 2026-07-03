@@ -398,7 +398,7 @@ internal sealed class AppHostLauncher(
             }
         }
 
-        var childStartedAt = new DateTimeOffset(childProcess.StartTime);
+        var childStartedAt = ProcessStartTimeHelper.TryGetProcessStartTime(childProcess.Id) ?? new DateTimeOffset(childProcess.StartTime);
         logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.Id);
 
         var startTime = timeProvider.GetUtcNow();

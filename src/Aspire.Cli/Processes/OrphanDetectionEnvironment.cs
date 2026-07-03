@@ -7,10 +7,10 @@ using Aspire.Hosting;
 namespace Aspire.Cli.Processes;
 
 /// <summary>
-/// Stamps a launching process's identity (PID plus start time, as whole Unix seconds) into a child
-/// process's environment so the child's parent-liveness watchdog / orphan detector can verify the
-/// parent by PID <em>and</em> start time and therefore survive PID reuse. Centralizes the env-var
-/// writing that would otherwise be duplicated at every process-launch site.
+/// Stamps a launching process's identity (PID plus a stable start-time value) into a child process's
+/// environment so the child's parent-liveness watchdog / orphan detector can verify the parent by PID
+/// <em>and</em> start time and therefore survive PID reuse. Centralizes the env-var writing that would
+/// otherwise be duplicated at every process-launch site.
 /// </summary>
 internal static class OrphanDetectionEnvironment
 {
@@ -47,9 +47,9 @@ internal static class OrphanDetectionEnvironment
     /// <param name="environment">The child environment to stamp.</param>
     /// <param name="pid">The parent process id.</param>
     /// <param name="startTimeUnixSeconds">
-    /// The parent's start time in whole Unix seconds, or <see langword="null"/> when it could not be
-    /// read. When <see langword="null"/> only the PID is written; the watchdog then falls back to a
-    /// PID-only existence check.
+    /// The parent's stable start time in whole Unix seconds, or <see langword="null"/> when it could
+    /// not be read. When <see langword="null"/> only the PID is written; the watchdog then falls back
+    /// to a PID-only existence check.
     /// </param>
     /// <param name="pidKey">The variable name to write the parent PID under.</param>
     /// <param name="startedKey">The variable name to write the parent start time under.</param>

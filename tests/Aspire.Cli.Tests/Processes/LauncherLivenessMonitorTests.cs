@@ -55,7 +55,7 @@ public class LauncherLivenessMonitorTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ASPIRE_LAUNCHER_PID"] = Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
-                ["ASPIRE_LAUNCHER_STARTED"] = ((DateTimeOffset)Process.GetCurrentProcess().StartTime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
+                ["ASPIRE_LAUNCHER_STARTED"] = ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds().ToString(CultureInfo.InvariantCulture),
             })
             .Build();
         using var runCts = new CancellationTokenSource();
@@ -99,10 +99,17 @@ public class LauncherLivenessMonitorTests
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ASPIRE_LAUNCHER_PID"] = launcher.Id.ToString(CultureInfo.InvariantCulture),
-                ["ASPIRE_LAUNCHER_STARTED"] = ((DateTimeOffset)launcher.StartTime).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
+                ["ASPIRE_LAUNCHER_STARTED"] = GetProcessStartTimeUnixSeconds(launcher).ToString(CultureInfo.InvariantCulture),
             })
             .Build();
     }
 
     private static Process StartLongRunningProcess() => TestProcesses.StartLongRunning();
+
+    private static long GetProcessStartTimeUnixSeconds(Process process)
+    {
+        var startTime = ProcessStartTimeHelper.TryGetProcessStartTimeUnixSeconds(process.Id);
+        Assert.NotNull(startTime);
+        return startTime.Value;
+    }
 }

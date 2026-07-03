@@ -882,7 +882,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             AppHostPath = appHostPath,
             ProcessId = Environment.ProcessId,
             CliProcessId = cliProcessId,
-            StartedAt = new DateTimeOffset(Process.GetCurrentProcess().StartTime),
+            StartedAt = ProcessStartTimeHelper.TryGetProcessStartTime(Environment.ProcessId) ?? new DateTimeOffset(Process.GetCurrentProcess().StartTime),
             CliStartedAt = cliStartedAt,
             CliLogFilePath = configuration[KnownConfigNames.CliLogFilePath]
         });

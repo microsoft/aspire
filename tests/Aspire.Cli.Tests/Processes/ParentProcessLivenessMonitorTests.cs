@@ -19,7 +19,7 @@ public class ParentProcessLivenessMonitorTests
         // advanced proves it: with the immediate probe the callback still fires; if detection depended on
         // the timer, WaitForNextTickAsync would never complete and this would time out.
         using var parent = StartLongRunningProcess();
-        var parentStartedUnix = ((DateTimeOffset)parent.StartTime).ToUnixTimeSeconds();
+        var parentStartedUnix = GetProcessStartTimeUnixSeconds(parent);
         var parentPid = parent.Id;
 
         parent.Kill(entireProcessTree: true);
@@ -45,7 +45,7 @@ public class ParentProcessLivenessMonitorTests
     public async Task ParentExit_InvokesCallback()
     {
         using var parent = StartLongRunningProcess();
-        var parentStartedUnix = ((DateTimeOffset)parent.StartTime).ToUnixTimeSeconds();
+        var parentStartedUnix = GetProcessStartTimeUnixSeconds(parent);
 
         var exitedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var monitor = ParentProcessLivenessMonitor.Start(
@@ -67,7 +67,7 @@ public class ParentProcessLivenessMonitorTests
     public async Task ParentAlive_DoesNotInvokeCallback()
     {
         // The current process stands in for a parent that stays alive.
-        var parentStartedUnix = ((DateTimeOffset)Process.GetCurrentProcess().StartTime).ToUnixTimeSeconds();
+        var parentStartedUnix = ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds();
 
         var invoked = false;
         await using (var monitor = ParentProcessLivenessMonitor.Start(
@@ -91,7 +91,7 @@ public class ParentProcessLivenessMonitorTests
     public async Task Dispose_DisarmsBeforeParentExit()
     {
         using var parent = StartLongRunningProcess();
-        var parentStartedUnix = ((DateTimeOffset)parent.StartTime).ToUnixTimeSeconds();
+        var parentStartedUnix = GetProcessStartTimeUnixSeconds(parent);
 
         var invoked = false;
         var monitor = ParentProcessLivenessMonitor.Start(
@@ -117,7 +117,7 @@ public class ParentProcessLivenessMonitorTests
     public async Task ParentExit_CallbackFailureDoesNotFaultDispose()
     {
         using var parent = StartLongRunningProcess();
-        var parentStartedUnix = ((DateTimeOffset)parent.StartTime).ToUnixTimeSeconds();
+        var parentStartedUnix = GetProcessStartTimeUnixSeconds(parent);
 
         var callbackInvokedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var monitor = ParentProcessLivenessMonitor.Start(
@@ -153,4 +153,11 @@ public class ParentProcessLivenessMonitorTests
     }
 
     private static Process StartLongRunningProcess() => TestProcesses.StartLongRunning();
+
+    private static long GetProcessStartTimeUnixSeconds(Process process)
+    {
+        var startTime = ProcessStartTimeHelper.TryGetProcessStartTimeUnixSeconds(process.Id);
+        Assert.NotNull(startTime);
+        return startTime.Value;
+    }
 }

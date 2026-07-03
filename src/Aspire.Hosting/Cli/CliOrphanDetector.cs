@@ -17,8 +17,7 @@ internal sealed class CliOrphanDetector(IConfiguration configuration, IHostAppli
 
     internal Func<int, long, bool> IsProcessRunningWithStartTime { get; set; } = (int pid, long expectedStartTimeUnix) =>
     {
-        using var process = ProcessSignaler.TryGetRunningProcess(pid, DateTimeOffset.FromUnixTimeSeconds(expectedStartTimeUnix), logger);
-        return process is not null;
+        return ProcessStartTimeHelper.IsProcessRunning(pid, expectedStartTimeUnix);
     };
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

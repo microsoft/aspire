@@ -35,8 +35,7 @@ public class ProcessSignalerTests(ITestOutputHelper testOutputHelper)
         var currentProcess = Process.GetCurrentProcess();
 
         // Simulate what the CLI does: truncate to unix seconds
-        var truncatedStartTime = DateTimeOffset.FromUnixTimeSeconds(
-            ((DateTimeOffset)currentProcess.StartTime).ToUnixTimeSeconds());
+        var truncatedStartTime = DateTimeOffset.FromUnixTimeSeconds(ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds());
 
         using var result = ProcessSignaler.TryGetRunningProcess(
             currentProcess.Id, truncatedStartTime, logger);
@@ -45,4 +44,3 @@ public class ProcessSignalerTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(currentProcess.Id, result.Id);
     }
 }
-

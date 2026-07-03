@@ -46,7 +46,7 @@ public class OrphanedAppHostCollectorTests
                 AppHostPath = "/tmp/AppHost.csproj",
                 ProcessId = 4242,
                 CliProcessId = Environment.ProcessId,
-                CliStartedAt = new DateTimeOffset(Process.GetCurrentProcess().StartTime),
+                CliStartedAt = ProcessStartTimeHelper.GetCurrentProcessStartTime(),
             },
         };
 
@@ -81,7 +81,7 @@ public class OrphanedAppHostCollectorTests
         using var cliProcess = Process.Start(psi);
         Assert.NotNull(cliProcess);
 
-        var cliStartedAt = new DateTimeOffset(cliProcess.StartTime);
+        var cliStartedAt = GetProcessStartTime(cliProcess);
         cliProcess.Kill(entireProcessTree: true);
         cliProcess.WaitForExit();
 
@@ -254,8 +254,15 @@ public class OrphanedAppHostCollectorTests
                 // Live: the current process's real start time matches, so the launching CLI still looks alive.
                 CliStartedAt = orphaned
                     ? DateTimeOffset.FromUnixTimeSeconds(1)
-                    : new DateTimeOffset(Process.GetCurrentProcess().StartTime),
+                    : ProcessStartTimeHelper.GetCurrentProcessStartTime(),
             },
         };
+    }
+
+    private static DateTimeOffset GetProcessStartTime(Process process)
+    {
+        var startTime = ProcessStartTimeHelper.TryGetProcessStartTime(process.Id);
+        Assert.NotNull(startTime);
+        return startTime.Value;
     }
 }

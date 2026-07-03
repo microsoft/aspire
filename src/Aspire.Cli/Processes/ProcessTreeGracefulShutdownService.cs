@@ -154,8 +154,8 @@ internal sealed class ProcessTreeGracefulShutdownService(
         if (appHostInfo.CliProcessId is int cliPid)
         {
             logger.LogDebug("Requesting AppHost process tree shutdown via root CLI PID {Pid}", cliPid);
-            // CliStartedAt is recorded with second-level precision, so validate it locally with tolerance
-            // instead of passing it to DCP's millisecond-precision process-start-time option.
+            // CliStartedAt is recorded with second-level precision, so validate it locally instead of
+            // passing it to DCP's millisecond-precision process-start-time option.
             return await RequestProcessTreeGracefulShutdownAsync(cliPid, appHostInfo.CliStartedAt, includeStartTimeForDcp: false, cancellationToken).ConfigureAwait(false);
         }
 
