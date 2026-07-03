@@ -680,6 +680,8 @@ pub struct InteractionInput {
     pub max_length: Option<f64>,
     #[serde(rename = "AllowMultipleFiles", skip_serializing_if = "Option::is_none")]
     pub allow_multiple_files: Option<bool>,
+    #[serde(rename = "FileFilter", skip_serializing_if = "Option::is_none")]
+    pub file_filter: Option<String>,
     #[serde(rename = "MaxFileSize", skip_serializing_if = "Option::is_none")]
     pub max_file_size: Option<f64>,
 }
@@ -715,6 +717,9 @@ impl InteractionInput {
         }
         if let Some(ref v) = self.allow_multiple_files {
             map.insert("AllowMultipleFiles".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.file_filter {
+            map.insert("FileFilter".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         if let Some(ref v) = self.max_file_size {
             map.insert("MaxFileSize".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
@@ -958,6 +963,8 @@ pub struct CreateInteractionInputOptions {
     pub max_file_size: Option<f64>,
     #[serde(rename = "AllowMultipleFiles", skip_serializing_if = "Option::is_none")]
     pub allow_multiple_files: Option<bool>,
+    #[serde(rename = "FileFilter", skip_serializing_if = "Option::is_none")]
+    pub file_filter: Option<String>,
 }
 
 impl CreateInteractionInputOptions {
@@ -995,6 +1002,9 @@ impl CreateInteractionInputOptions {
         }
         if let Some(ref v) = self.allow_multiple_files {
             map.insert("AllowMultipleFiles".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.file_filter {
+            map.insert("FileFilter".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map
     }

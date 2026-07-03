@@ -109,7 +109,8 @@ internal sealed class FileUploadStore : IDisposable
                 logger.LogWarning("Received unknown file ID '{FileId}' in interaction input '{InputName}'. Skipping.", fileRef.Id, inputName);
                 continue;
             }
-            files.Add(new InputFileDto(fileRef.Id, fileRef.Name, filePath));
+            var fileName = string.IsNullOrEmpty(fileRef.Name) ? GetFileName(fileRef.Id) ?? "" : fileRef.Name;
+            files.Add(new InputFileDto(fileRef.Id, fileName, filePath));
         }
 
         return files.Count > 0 ? files : null;

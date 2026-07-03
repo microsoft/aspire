@@ -26,8 +26,18 @@ using Resource = Aspire.Hosting.ApplicationModel.Resource;
 namespace Aspire.Hosting.Tests.Dashboard;
 
 [Trait("Partition", "3")]
-public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
+public class DashboardServiceTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
+    private readonly List<FileUploadStore> _fileUploadStores = [];
+
+    public void Dispose()
+    {
+        foreach (var store in _fileUploadStores)
+        {
+            store.Dispose();
+        }
+    }
+
     [Fact]
     public async Task WatchResourceConsoleLogs_NoFollow_ResultsEnd()
     {
@@ -986,7 +996,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             fileUploadStore ?? new FileUploadStore());
     }
 
-    private static DashboardServiceData CreateDashboardServiceData(
+    private DashboardServiceData CreateDashboardServiceData(
         ResourceLoggerService? resourceLoggerService = null,
         ResourceNotificationService? resourceNotificationService = null,
         ILoggerFactory? loggerFactory = null,
@@ -1001,13 +1011,16 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new ServiceCollection().BuildServiceProvider(),
             new ConfigurationBuilder().Build());
 
+        var fileUploadStore = new FileUploadStore();
+        _fileUploadStores.Add(fileUploadStore);
+
         return new DashboardServiceData(
             resourceNotificationService,
             resourceLoggerService,
             loggerFactory.CreateLogger<DashboardServiceData>(),
             new ResourceCommandService(resourceNotificationService, resourceLoggerService, new ServiceCollection().BuildServiceProvider()),
             interactionService,
-            new FileUploadStore());
+            fileUploadStore);
     }
 
     private static ResourceNotificationService CreateResourceNotificationService(ResourceLoggerService resourceLoggerService)

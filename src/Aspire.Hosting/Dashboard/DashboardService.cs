@@ -545,6 +545,14 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         }
         catch
         {
+            // Dispose the stream before removing the entry so the file handle is closed
+            // before attempting deletion — on Windows, open handles prevent file deletion.
+            if (fileStream is not null)
+            {
+                await fileStream.DisposeAsync().ConfigureAwait(false);
+                fileStream = null;
+            }
+
             if (fileId is not null)
             {
                 fileUploadStore.RemoveEntry(fileId);

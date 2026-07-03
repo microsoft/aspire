@@ -856,24 +856,6 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Browse.
-        /// </summary>
-        public static string InteractionFileBrowse {
-            get {
-                return ResourceManager.GetString("InteractionFileBrowse", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Browse for {0}.
-        /// </summary>
-        public static string InteractionFileBrowseLabel {
-            get {
-                return ResourceManager.GetString("InteractionFileBrowseLabel", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Choose a file.
         /// </summary>
         public static string InteractionFilePlaceholder {

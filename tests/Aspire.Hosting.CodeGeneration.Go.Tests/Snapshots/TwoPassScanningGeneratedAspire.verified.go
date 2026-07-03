@@ -293,6 +293,7 @@ type InteractionInput struct {
 	Disabled bool `json:"Disabled,omitempty"`
 	MaxLength *float64 `json:"MaxLength,omitempty"`
 	AllowMultipleFiles *bool `json:"AllowMultipleFiles,omitempty"`
+	FileFilter *string `json:"FileFilter,omitempty"`
 	MaxFileSize *float64 `json:"MaxFileSize,omitempty"`
 }
 
@@ -312,6 +313,7 @@ func (d *InteractionInput) ToMap() map[string]any {
 	m["Disabled"] = serializeValue(d.Disabled)
 	if d.MaxLength != nil { m["MaxLength"] = serializeValue(d.MaxLength) }
 	if d.AllowMultipleFiles != nil { m["AllowMultipleFiles"] = serializeValue(d.AllowMultipleFiles) }
+	if d.FileFilter != nil { m["FileFilter"] = serializeValue(d.FileFilter) }
 	if d.MaxFileSize != nil { m["MaxFileSize"] = serializeValue(d.MaxFileSize) }
 	return m
 }
@@ -473,6 +475,7 @@ type CreateInteractionInputOptions struct {
 	MaxLength *float64 `json:"MaxLength,omitempty"`
 	MaxFileSize *float64 `json:"MaxFileSize,omitempty"`
 	AllowMultipleFiles *bool `json:"AllowMultipleFiles,omitempty"`
+	FileFilter *string `json:"FileFilter,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -489,6 +492,7 @@ func (d *CreateInteractionInputOptions) ToMap() map[string]any {
 	if d.MaxLength != nil { m["MaxLength"] = serializeValue(d.MaxLength) }
 	if d.MaxFileSize != nil { m["MaxFileSize"] = serializeValue(d.MaxFileSize) }
 	if d.AllowMultipleFiles != nil { m["AllowMultipleFiles"] = serializeValue(d.AllowMultipleFiles) }
+	if d.FileFilter != nil { m["FileFilter"] = serializeValue(d.FileFilter) }
 	return m
 }
 
