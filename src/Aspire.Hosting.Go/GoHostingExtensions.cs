@@ -102,7 +102,7 @@ public static class GoHostingExtensions
                 if (hasDelve)
                 {
                     // Delve debug mode — global flags MUST precede the subcommand per the Delve CLI:
-                    //   dlv --headless=true --listen=127.0.0.1:PORT --api-version=2 debug [--build-flags=...] <pkg> [-- args]
+                    //   dlv --headless=true --listen=127.0.0.1:PORT --api-version=2 debug [--continue] [--build-flags=...] <pkg> [-- args]
                     // See: https://www.jetbrains.com/help/go/attach-to-running-go-processes-with-debugger.html
                     ctx.Args.Add("--headless=true");
                     ctx.Args.Add($"--listen=127.0.0.1:{delveAnnotation!.Port}");
@@ -125,6 +125,10 @@ public static class GoHostingExtensions
                     }
 
                     ctx.Args.Add("debug");
+                    if (delveAnnotation.Continue)
+                    {
+                        ctx.Args.Add("--continue");
+                    }
 
                     var buildFlags = BuildFlagsString(ctx.Resource);
                     if (buildFlags.Length > 0)

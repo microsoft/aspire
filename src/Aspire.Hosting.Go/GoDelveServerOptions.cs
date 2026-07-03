@@ -30,6 +30,14 @@ public sealed class GoDelveServerOptions
     public bool? OnlySameUser { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether Delve continues the debuggee immediately after startup. Defaults to <c>false</c>.
+    /// </summary>
+    /// <remarks>
+    /// Enable this when you want the Go application to run normally under Delve and attach a debugger later.
+    /// </remarks>
+    public bool Continue { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether Delve debug server logging is enabled. Defaults to <c>false</c>.
     /// </summary>
     public bool Log { get; set; }
