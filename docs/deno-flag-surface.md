@@ -104,6 +104,26 @@ grant is missing) do not apply: Aspire runs the process non-interactively with s
 for the dashboard. Always grant the permissions the workload needs explicitly (or use `-A`) rather than
 relying on interactive permission prompts.
 
+## Published container image
+
+`AddDenoApp` generates a multi-stage Dockerfile (when the app directory has no hand-written
+`Dockerfile`) tuned for Deno's execution model:
+
+- **Dependency pre-caching.** The build stage runs `deno cache <entrypoint>` (or
+  `deno cache --frozen <entrypoint>` when a `deno.lock` is present) to resolve the entrypoint's full
+  module graph — remote URLs and `npm:`/`jsr:` specifiers — into `DENO_DIR`. `DENO_DIR` is pinned to
+  `/deno-dir` in both stages and copied `--from=build` into the runtime stage, so the image starts
+  offline / air-gapped and avoids a cold-start dependency fetch. There is no `node_modules` stage:
+  Deno caches under `DENO_DIR` rather than a project-local folder.
+- **`NODE_ENV=production`.** Set in the runtime stage (and in run mode via the resource defaults) so
+  Deno's Node-compatibility mode — `npm:` resolution and package.json `exports` conditions — behaves
+  like the Node/Bun variants.
+- **Native OpenTelemetry.** `OTEL_DENO=true` is exported by default and flows to the OTLP endpoint
+  configured by `WithOtlpExporter`. Native OTel is **stable** on the Deno versions the pinned
+  `denoland/deno:2` tag resolves to (verified on Deno 2.9.0), so **no `--unstable-otel` flag is
+  emitted** — the env var alone activates trace/metric/log export. The run-mode command and the
+  published container entrypoint stay consistent.
+
 ## Escape hatch
 
 Any Deno flag without a dedicated method (for example `--v8-flags=...`, `--seed`, `--cached-only`,

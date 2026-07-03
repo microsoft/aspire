@@ -110,6 +110,53 @@ public class AddDenoAppTests
     }
 
     [Fact]
+    public async Task VerifyDockerfile_PreCachesDependenciesAndShipsDenoDir()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts");
+
+        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+
+        // The build stage must pre-cache the entrypoint's dependency graph into DENO_DIR so the published
+        // image runs offline / air-gapped without a cold-start fetch. Without a deno.lock, plain `deno cache`.
+        Assert.Contains("RUN deno cache main.ts", dockerfileContents);
+        // DENO_DIR must be pinned deterministically in both stages...
+        Assert.Contains("ENV DENO_DIR=/deno-dir", dockerfileContents);
+        // ...and the populated cache copied into the runtime stage.
+        Assert.Contains("COPY --from=build /deno-dir /deno-dir", dockerfileContents);
+        // GAP #3: NODE_ENV must be set for Deno's npm-compatibility mode, mirroring the Bun publish block.
+        Assert.Contains("ENV NODE_ENV=production", dockerfileContents);
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_UsesFrozenCacheWhenDenoLockExists()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+        // A committed lockfile means the build should fail fast on drift rather than silently re-resolve.
+        File.WriteAllText(Path.Combine(appDir, "deno.lock"), "{}");
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts");
+
+        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+
+        Assert.Contains("RUN deno cache --frozen main.ts", dockerfileContents);
+        Assert.DoesNotContain("RUN deno cache main.ts", dockerfileContents);
+    }
+
+    [Fact]
     public void AddDenoApp_DoesNotAddDenoPackageManagerWhenNoManifest()
     {
         using var tempDir = new TestTempDirectory();

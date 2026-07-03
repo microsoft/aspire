@@ -817,14 +817,30 @@ public static partial class JavaScriptHostingExtensions
 
                     // Deno ships its own runtime, so both stages default to the same Deno image. Unlike the Bun
                     // variant there is no separate production-dependency install stage: Deno caches remote and
-                    // npm dependencies under DENO_DIR and fetches them lazily, so a single build -> runtime copy
-                    // is sufficient.
+                    // npm dependencies under DENO_DIR. We pre-populate that cache in the build stage and copy it
+                    // into the runtime stage so the published image starts offline / air-gapped without a
+                    // cold-start dependency fetch.
                     var baseBuildImage = baseImageAnnotation?.BuildImage ?? DefaultDenoImage;
-                    dockerfileContext.Builder
+                    var buildStage = dockerfileContext.Builder
                         .From(baseBuildImage, "build")
+                        .EmptyLine()
+                        // Pin DENO_DIR to a deterministic path so the runtime stage can copy the cache
+                        // regardless of the base image's own default. The official denoland/deno image
+                        // already uses /deno-dir, but a custom build image (WithDockerfileBaseImage) may not.
+                        .Env("DENO_DIR", "/deno-dir")
                         .EmptyLine()
                         .WorkDir("/app")
                         .Copy(".", ".");
+
+                    // Pre-cache the entrypoint's full module graph (remote + npm dependencies) into DENO_DIR at
+                    // build time. Use `--frozen` when a deno.lock is present so the build fails fast on a stale
+                    // lockfile instead of silently re-resolving.
+                    var denoCacheCommand = File.Exists(Path.Combine(resource.WorkingDirectory, "deno.lock"))
+                        ? $"deno cache --frozen {scriptPath}"
+                        : $"deno cache {scriptPath}";
+                    buildStage
+                        .EmptyLine()
+                        .Run(denoCacheCommand);
 
                     var logger = dockerfileContext.Services.GetService<ILogger<JavaScriptAppResource>>();
                     dockerfileContext.Builder.AddContainerFilesStages(dockerfileContext.Resource, logger);
@@ -833,9 +849,19 @@ public static partial class JavaScriptHostingExtensions
                     dockerfileContext.Builder
                         .From(baseRuntimeImage, "runtime")
                             .EmptyLine()
+                            // Match the build stage's DENO_DIR so the copied cache is discovered at runtime.
+                            .Env("DENO_DIR", "/deno-dir")
+                            .EmptyLine()
                             .WorkDir("/app")
                             .CopyFrom("build", "/app", "/app")
+                            // Ship the pre-populated dependency cache so `deno run` at container start resolves
+                            // everything locally instead of re-fetching from the network.
+                            .CopyFrom("build", "/deno-dir", "/deno-dir")
                             .AddContainerFiles(dockerfileContext.Resource, "/app", logger)
+                            .EmptyLine()
+                            // Deno honors NODE_ENV in its Node-compatibility mode (npm: specifiers, package.json
+                            // "exports" conditions) exactly as Node/Bun do. Match the Bun publish block.
+                            .Env("NODE_ENV", "production")
                             .EmptyLine()
                             // The official denoland/deno images provide a non-root `deno` user.
                             // See https://github.com/denoland/deno_docker
@@ -899,8 +925,18 @@ public static partial class JavaScriptHostingExtensions
             // application-level SDK required. Unlike the Node/Bun variants (which need an in-process OpenTelemetry
             // SDK), this is the headline Deno hosting win. The instrumentation is resilient to an unavailable
             // collector, so it is safe to enable unconditionally.
+            //
+            // No `--unstable-otel` flag is emitted: native OTel is STABLE on the Deno versions the pinned
+            // `denoland/deno:2` tag resolves to. Verified empirically on Deno 2.9.0 (2026-07) — `OTEL_DENO=true`
+            // alone activates and exports traces/metrics/logs; `--unstable-otel` is no longer listed by
+            // `deno run --help=unstable` and is only a backward-compat no-op. OTEL_DENO accepts only the literal
+            // "true"/"false" (not "1"), which is what we emit.
             // See https://docs.deno.com/runtime/fundamentals/open_telemetry/
             .WithEnvironment("OTEL_DENO", "true")
+            // Deno honors NODE_ENV in its Node-compatibility mode (npm: specifier resolution, package.json
+            // "exports" conditions) the same way Node/Bun do. Mirror the Bun defaults so npm-compat behaves.
+            // See https://docs.deno.com/runtime/reference/env_variables/
+            .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
             .WithCertificateTrustConfiguration((ctx) =>
             {
                 if (ctx.Scope == CertificateTrustScope.Append)

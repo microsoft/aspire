@@ -9,6 +9,7 @@
   ],
   "env": {
     "OTEL_DENO": "true",
+    "NODE_ENV": "production",
     "PORT": "{denoapp.bindings.http.targetPort}"
   },
   "bindings": {
