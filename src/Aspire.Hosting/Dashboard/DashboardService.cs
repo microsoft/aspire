@@ -128,7 +128,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                                 .SelectMany(i => i.DynamicLoading?.DependsOnInputs ?? [])
                                 .ToList();
 
-                            var maxFileUploadSize = configuration.GetValue<long?>(KnownConfigNames.MaxFileUploadSize);
+                            var maxFileUploadSize = GetMaxFileUploadSize(configuration);
                             var inputInstances = inputs.Inputs.Select(input => CreateInteractionInputDto(input, updateStateOnChangeInputs, maxFileUploadSize)).ToList();
                             change.InputsDialog.InputItems.AddRange(inputInstances);
                         }
@@ -273,6 +273,14 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.DashboardService.Proto.V1.InputType.File => InputType.File,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
+    }
+
+    /// <summary>
+    /// Gets the maximum file upload size from configuration, defaulting to 100 MB.
+    /// </summary>
+    internal static long GetMaxFileUploadSize(IConfiguration configuration)
+    {
+        return configuration.GetValue<long?>(KnownConfigNames.MaxFileUploadSize) ?? 100 * 1024 * 1024;
     }
 
     public override async Task WatchResources(
@@ -488,11 +496,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
     public override async Task<UploadFileResponse> UploadFile(IAsyncStreamReader<UploadFileChunk> requestStream, ServerCallContext context)
     {
-        // Enforce a maximum total upload size to prevent unbounded writes from misbehaving clients.
-        // Configurable via ASPIRE_MAX_FILE_UPLOAD_SIZE environment variable (in bytes). Defaults to 100 MB.
-        const long defaultMaxTotalUploadBytes = 100 * 1024 * 1024; // 100 MB
-        var maxTotalUploadBytes = configuration.GetValue<long?>(KnownConfigNames.MaxFileUploadSize)
-            ?? defaultMaxTotalUploadBytes;
+        var maxTotalUploadBytes = GetMaxFileUploadSize(configuration);
 
         var cancellationToken = context.CancellationToken;
         string? fileName = null;
