@@ -1146,7 +1146,7 @@ function connectClient(state, wsUrl) {
         // ownership — it doesn't directly signal producer exit.
         if (state.dotNetRef) {
             try {
-                state.dotNetRef.invokeMethodAsync('OnTerminalExited', state.id, code ?? -1);
+                state.dotNetRef.invokeMethodAsync('OnTerminalExited', state.id, myGeneration, code ?? -1);
             } catch (e) {
                 dbg(state, 'client.onExit: dotNet invoke failed', { error: e?.message });
             }

@@ -20,6 +20,14 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     private int _terminalId;
     private string? _connectedResourceName;
     private int _connectedReplicaIndex = -1;
+    // Highest reconnect generation we've observed from JS via a toolbar
+    // snapshot. The JS side bumps `state.reconnect.generation` on every
+    // initTerminal / reconnectTerminal / auto-reconnect. `reconnectTerminal`
+    // keeps the same terminal id, so terminal id alone can't tell us whether
+    // a late-arriving `onExit` or `OnTerminalStateChanged` callback belongs
+    // to the currently bound connection or to a superseded one. Any callback
+    // whose generation is below _connectedGeneration is stale and dropped.
+    private int _connectedGeneration = -1;
     // Guards against concurrent or re-entrant initialization. OnAfterRenderAsync
     // can fire again while the first InitializeTerminalAsync await is still in
     // flight (Blazor does not serialize OnAfterRenderAsync calls when re-renders
@@ -84,9 +92,18 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         if (firstRender)
         {
             _initStarted = true;
-            await InitializeTerminalAsync();
-            _connectedResourceName = ResourceName;
-            _connectedReplicaIndex = ReplicaIndex;
+            // Snapshot the resource/replica values BEFORE the JS init await:
+            // parameter push from the parent can change ResourceName/
+            // ReplicaIndex while initTerminal is in flight. Recording the
+            // *post-await* field values would falsely mark the terminal as
+            // connected to the new resource, so the rebind branch below
+            // would never fire and the JS terminal would keep streaming
+            // the previous resource.
+            var initResource = ResourceName;
+            var initReplica = ReplicaIndex;
+            await InitializeTerminalAsync(initResource!, initReplica);
+            _connectedResourceName = initResource;
+            _connectedReplicaIndex = initReplica;
             return;
         }
 
@@ -139,7 +156,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         }
     }
 
-    private async Task InitializeTerminalAsync()
+    private async Task InitializeTerminalAsync(string resourceName, int replicaIndex)
     {
         try
         {
@@ -149,7 +166,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             _selfRef ??= DotNetObjectReference.Create(this);
 
             _terminalId = await _jsModule.InvokeAsync<int>(
-                "initTerminal", _terminalElement, BuildWebSocketUrl(ResourceName!, ReplicaIndex), _selfRef);
+                "initTerminal", _terminalElement, BuildWebSocketUrl(resourceName, replicaIndex), _selfRef);
         }
         catch (JSDisconnectedException)
         {
@@ -169,7 +186,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             ReplicaIndex = newReplicaIndex;
             if (!string.IsNullOrEmpty(newResourceName))
             {
-                await InitializeTerminalAsync();
+                await InitializeTerminalAsync(newResourceName, newReplicaIndex);
             }
             return;
         }
@@ -200,12 +217,18 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// in-terminal message (e.g. flip the visible view back to console logs).
     /// </summary>
     [JSInvokable]
-    public Task OnTerminalExited(int terminalId, int exitCode)
+    public Task OnTerminalExited(int terminalId, int generation, int exitCode)
     {
         // Drop stale notifications that arrive after this view was rebound to
-        // a different resource/replica — the previous JS terminal id is no
-        // longer relevant to the currently displayed resource.
+        // a different resource/replica. Terminal id alone is not enough:
+        // reconnectTerminal keeps the same id and only bumps the generation,
+        // so an old-connection onExit could otherwise fire OnExited on the
+        // newly rebound resource.
         if (_terminalId != 0 && terminalId != _terminalId)
+        {
+            return Task.CompletedTask;
+        }
+        if (generation < _connectedGeneration)
         {
             return Task.CompletedTask;
         }
@@ -223,11 +246,21 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     public Task OnTerminalStateChanged(TerminalToolbarState state)
     {
         // Drop stale snapshots that arrive after this view was rebound to a
-        // different resource/replica (the JS side bumps `generation` on every
-        // (re)connect; the id changes when initTerminal allocates a new one).
+        // different resource/replica. reconnectTerminal keeps the same
+        // terminal id and only bumps the generation, so the id check alone
+        // would let a superseded connection's snapshot through. Adopt the
+        // latest generation we see so subsequent stale callbacks are dropped.
         if (_terminalId != 0 && state.TerminalId != _terminalId)
         {
             return Task.CompletedTask;
+        }
+        if (state.Generation < _connectedGeneration)
+        {
+            return Task.CompletedTask;
+        }
+        if (state.Generation > _connectedGeneration)
+        {
+            _connectedGeneration = state.Generation;
         }
 
         return OnToolbarStateChanged.InvokeAsync(state);

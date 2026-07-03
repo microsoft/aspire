@@ -1190,8 +1190,22 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 // sequence onto the dispatcher so those two writers are
                 // serialized and neither observes a torn intermediate state.
                 var stoppedSnapshot = resource.IsStopped();
+                var resourceName = resource.Name;
                 await InvokeAsync(() =>
                 {
+                    // Re-check the selected resource on the dispatcher too.
+                    // The outer check ran on the resource-subscription thread;
+                    // the user (or a rapid resource change) can have switched
+                    // to a different resource before this lambda runs. Writing
+                    // _selectedTerminalResourceStopped / _activeView based on
+                    // the old resource's stopped snapshot would corrupt the
+                    // newly selected resource's view state.
+                    if (!_selectedResourceHasTerminal ||
+                        !string.Equals(resourceName, PageViewModel.SelectedResource.Id?.InstanceId, StringComparisons.ResourceName))
+                    {
+                        return;
+                    }
+
                     var wasStopped = _selectedTerminalResourceStopped;
                     _selectedTerminalResourceStopped = stoppedSnapshot;
 
@@ -1211,6 +1225,12 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                         // in the auto-switch logic suppresses any spurious
                         // edges in the meantime.
                         _activeView = ConsoleLogsView.Console;
+                        // Rebuild the ⋯ menu so the terminal-only items
+                        // (font ±, dimensions) are dropped now that we're
+                        // back on Console. OnTerminalExitedAsync — the
+                        // sibling flip-to-Console path — does the same
+                        // before StateHasChanged.
+                        UpdateMenuButtons();
                         StateHasChanged();
                     }
                 });

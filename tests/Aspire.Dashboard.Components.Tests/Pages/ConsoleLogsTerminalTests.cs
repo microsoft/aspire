@@ -381,7 +381,7 @@ public partial class ConsoleLogsTests
 
         // PTY exits → page flips back to Console so the final log lines and
         // hosting exit messages are visible.
-        await cut.InvokeAsync(() => terminalView.OnTerminalExited(terminalId: 1, exitCode: 0));
+        await cut.InvokeAsync(() => terminalView.OnTerminalExited(terminalId: 1, generation: 1, exitCode: 0));
 
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
         Assert.Equal(ConsoleLogs.ConsoleLogsView.Console, instance.ActiveViewForTest);
@@ -438,7 +438,7 @@ public partial class ConsoleLogsTests
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
 
         // Resource stops → PTY exits → flip back to Console.
-        await cut.InvokeAsync(() => terminalView.OnTerminalExited(terminalId: 1, exitCode: 0));
+        await cut.InvokeAsync(() => terminalView.OnTerminalExited(terminalId: 1, generation: 1, exitCode: 0));
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
 
         // Resource restarts: the terminal host process is recreated, so the
@@ -730,7 +730,7 @@ public partial class ConsoleLogsTests
 
         // Clean exit from the JS side (user typed `exit`) — page flips back
         // to Console.
-        await cut.InvokeAsync(() => terminalView.OnTerminalExited(1, 0));
+        await cut.InvokeAsync(() => terminalView.OnTerminalExited(1, 1, 0));
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
 
         // Stale in-flight primary snapshot lands after onExit. Without the
@@ -797,7 +797,7 @@ public partial class ConsoleLogsTests
         }));
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
 
-        await cut.InvokeAsync(() => terminalView.OnTerminalExited(1, 0));
+        await cut.InvokeAsync(() => terminalView.OnTerminalExited(1, 1, 0));
         cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
 
         // Genuine reconnect: WS reopens, JS emits "connecting" first. That
