@@ -1277,7 +1277,7 @@ public class InteractionServiceTests
             interactionService,
             interaction.InteractionId,
             new InteractionCompletionState { Complete = true, State = new[] { input } },
-            inputs: [new InputDto("File", "file-content-here", InputType.File)]);
+            inputs: [new InputDto("File", "file-content-here", InputType.File, Files: [new InputFileDto("file1", "test.txt", "/tmp/test.txt")])]);
 
         Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
         Assert.Empty(input.ValidationErrors);
