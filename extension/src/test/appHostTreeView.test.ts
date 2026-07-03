@@ -2530,6 +2530,19 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
                 expectedProcessName: 'Default.Assembly',
             },
             {
+                fileName: 'ProjectWithLaterDefault.csproj',
+                markup: `
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>First.Assembly</AssemblyName>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AssemblyName>Final.Assembly</AssemblyName>
+  </PropertyGroup>
+</Project>`,
+                expectedProcessName: 'Final.Assembly',
+            },
+            {
                 fileName: 'ProjectFileName.csproj',
                 markup: `
 <Project Sdk="Microsoft.NET.Sdk">

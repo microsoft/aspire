@@ -571,6 +571,7 @@ async function resolveDotNetProjectProcessName(projectPath: string, fallbackProc
 function getUnconditionalAssemblyName(projectFileContent: string): string | undefined {
     const conditionalAncestorRanges = getConditionalAssemblyNameAncestorRanges(projectFileContent);
     const assemblyNameRegex = /<AssemblyName\b([^>]*)>([^<]+)<\/AssemblyName\s*>/ig;
+    let assemblyName: string | undefined;
     for (const match of projectFileContent.matchAll(assemblyNameRegex)) {
         const index = match.index ?? -1;
         const attributes = match[1];
@@ -578,10 +579,10 @@ function getUnconditionalAssemblyName(projectFileContent: string): string | unde
             continue;
         }
 
-        return match[2].trim();
+        assemblyName = match[2].trim();
     }
 
-    return undefined;
+    return assemblyName;
 }
 
 function getConditionalAssemblyNameAncestorRanges(projectFileContent: string): { start: number; end: number }[] {
