@@ -132,11 +132,6 @@
         <target state="new">Decrease font size</target>
         <note />
       </trans-unit>
-      <trans-unit id="TerminalToolbarFontSize">
-        <source>Font size</source>
-        <target state="new">Font size</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TerminalToolbarGridSize">
         <source>Terminal dimensions</source>
         <target state="new">Terminal dimensions</target>

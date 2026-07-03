@@ -189,9 +189,6 @@
   <data name="ConsoleLogsNoWrapLogs" xml:space="preserve">
     <value>Don't wrap log lines</value>
   </data>
-  <data name="TerminalToolbarFontSize" xml:space="preserve">
-    <value>Font size</value>
-  </data>
   <data name="TerminalToolbarDecreaseFontSize" xml:space="preserve">
     <value>Decrease font size</value>
   </data>

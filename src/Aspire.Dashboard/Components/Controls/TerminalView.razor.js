@@ -750,8 +750,9 @@ function calibrateRatios(state) {
         // the *old* fontSize's cell metrics. Dividing that stale pixel
         // width by the new fontSize yields a ratio ~half of the true
         // value. That corrupt ratio then makes the Fit menu preview
-        // report roughly double the real grid. See line 1101 for the
-        // matching onResize RAF-deferred calibration guard.
+        // report roughly double the real grid. See the term.onResize
+        // handler in initTerminal for the matching RAF-deferred
+        // calibration guard.
         //
         // Heuristic: once we have a plausible baseline, reject any new
         // sample that swings by more than 40% in either direction. Real

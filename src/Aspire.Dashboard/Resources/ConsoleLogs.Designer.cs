@@ -183,12 +183,6 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
-        public static string TerminalToolbarFontSize {
-            get {
-                return ResourceManager.GetString("TerminalToolbarFontSize", resourceCulture);
-            }
-        }
-        
         public static string TerminalToolbarDecreaseFontSize {
             get {
                 return ResourceManager.GetString("TerminalToolbarDecreaseFontSize", resourceCulture);
