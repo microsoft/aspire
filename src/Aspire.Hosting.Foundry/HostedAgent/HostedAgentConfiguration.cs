@@ -18,6 +18,8 @@ namespace Aspire.Hosting.Foundry;
 [AspireExport(ExposeProperties = true)]
 public partial class HostedAgentConfiguration(string image)
 {
+    private const string DefaultContainerProtocolVersion = "2.0.0";
+
     /// <summary>
     /// The description of the hosted agent.
     /// </summary>
@@ -28,6 +30,7 @@ public partial class HostedAgentConfiguration(string image)
     /// </summary>
     public IDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>()
     {
+        { "enableVnextExperience", "true" },
         { "DeployedBy", "Aspire Hosting Framework" },
         { "DeployedOn", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) }
     };
@@ -49,7 +52,7 @@ public partial class HostedAgentConfiguration(string image)
     /// </summary>
     [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
     public IList<ProtocolVersionRecord> ContainerProtocolVersions { get; init; } = [
-        new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "1.0.0")
+        new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, DefaultContainerProtocolVersion)
     ];
 
     private decimal _cpu = 2.0m;

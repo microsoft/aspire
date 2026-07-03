@@ -3,6 +3,7 @@
 
 using System.ComponentModel;
 using System.Data.Common;
+using Azure.AI.Extensions.OpenAI;
 using Azure.AI.Projects;
 using Azure.Identity;
 using Microsoft.Agents.AI;
@@ -45,14 +46,25 @@ WeatherForecast[] GetWeatherForecast()
     return forecast;
 }
 
-DefaultAzureCredential credential = new();
+DefaultAzureCredential credential = new(new DefaultAzureCredentialOptions
+{
+    ExcludeManagedIdentityCredential = string.Equals(
+        Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
+        "Development",
+        StringComparison.OrdinalIgnoreCase)
+});
+
+var foundryProjectClient = new AIProjectClient(projectUri, credential);
+var searchAgentReference = new AgentReference(name: Environment.GetEnvironmentVariable("SEARCHAGENT_AGENTNAME"));
+var responseClient = foundryProjectClient.ProjectOpenAIClient.GetProjectResponsesClientForAgent(searchAgentReference);
+var searchAgent = responseClient.AsIChatClient(deploymentName).AsAIAgent(Environment.GetEnvironmentVariable("SEARCHAGENT_AGENTNAME"), description: "I can search the web.");
 
 AIAgent agent = new AIProjectClient(projectUri, credential)
     .AsAIAgent(
         model: deploymentName,
         name: "WeatherAgent",
         instructions: """You are the Weather Intelligence Agent that can return weather forecast using your tools.""",
-        tools: [AIFunctionFactory.Create(GetWeatherForecast)]);
+        tools: [AIFunctionFactory.Create(GetWeatherForecast), searchAgent.AsAIFunction()]);
 
 // Bind to the port allocated by Aspire via the DEFAULT_AD_PORT environment variable.
 string port = Environment.GetEnvironmentVariable("DEFAULT_AD_PORT") ?? "8088";
@@ -60,10 +72,12 @@ string port = Environment.GetEnvironmentVariable("DEFAULT_AD_PORT") ?? "8088";
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls($"http://+:{port}");
 builder.Services.AddFoundryResponses(agent);
+builder.Services.AddDevTemporaryLocalContributorSetup(); // Local Docker debugging only - must not be used in production.
 
 var app = builder.Build();
 
 app.MapFoundryResponses();
+app.MapDevTemporaryLocalAgentEndpoint();
 app.MapGet("/liveness", () => Results.Ok("Healthy"));
 app.MapGet("/readiness", () => Results.Ok("Ready"));
 
