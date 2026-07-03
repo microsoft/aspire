@@ -538,6 +538,23 @@ public class MauiPrerequisiteCheckTests
     }
 
     [Fact]
+    public async Task ProcessRunner_TimesOutWhenExitedProcessLeavesOutputStreamsOpen()
+    {
+        var processRunner = new ProcessRunner();
+        var (fileName, arguments) = CreateProcessWithChildThatInheritsOutputHandles();
+
+        var exception = await Assert.ThrowsAsync<TimeoutException>(
+            () => processRunner.RunAsync(
+                fileName,
+                arguments,
+                workingDirectory: null,
+                timeout: TimeSpan.FromMilliseconds(500),
+                cancellationToken: CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(15)));
+
+        Assert.Contains("did not complete within", exception.Message);
+    }
+
+    [Fact]
     public async Task PrerequisiteFailureRunsBeforeBuildQueue()
     {
         await using var env = await PrerequisiteTestEnvironment.CreateAsync([
@@ -587,6 +604,17 @@ public class MauiPrerequisiteCheckTests
 
         await env.PublishBeforeResourceStartedAsync(env.Android);
         Assert.Equal(0, checker.CheckCount);
+    }
+
+    private static (string FileName, IReadOnlyList<string> Arguments) CreateProcessWithChildThatInheritsOutputHandles()
+    {
+        // Start a shell that exits successfully after launching a longer-lived child. The child inherits
+        // the redirected stderr pipe, so the parent's successful exit is not enough to finish ReadToEndAsync:
+        //   sh -c "sleep 3 &"
+        //   cmd /c start "" /b cmd /c "ping -n 4 127.0.0.1 > nul"
+        return OperatingSystem.IsWindows()
+            ? ("cmd.exe", ["/c", "start \"\" /b cmd /c \"ping -n 4 127.0.0.1 > nul\""])
+            : ("/bin/sh", ["-c", "sleep 3 &"]);
     }
 
     private sealed class PrerequisiteTestEnvironment : IAsyncDisposable

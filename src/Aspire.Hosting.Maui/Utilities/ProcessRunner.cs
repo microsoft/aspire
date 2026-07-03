@@ -44,10 +44,9 @@ internal sealed class ProcessRunner : IProcessRunner
         try
         {
             await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
-            var stdout = await stdoutTask.ConfigureAwait(false);
-            var stderr = await stderrTask.ConfigureAwait(false);
+            var output = await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(timeoutCts.Token).ConfigureAwait(false);
 
-            return new ProcessResult(process.ExitCode, stdout, stderr);
+            return new ProcessResult(process.ExitCode, output[0], output[1]);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
