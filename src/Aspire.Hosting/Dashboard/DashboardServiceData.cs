@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
@@ -236,48 +235,17 @@ internal sealed class DashboardServiceData : IDisposable
         var inputType = DashboardService.MapInputType(i.InputType);
 
         // For file inputs, Value contains a JSON array of objects with file IDs and names.
-        // Parse it, resolve each ID to the temp file path, and build InputFileDto entries.
-        if (inputType == InputType.File && !string.IsNullOrEmpty(i.Value))
+        // Resolve each ID to the temp file path and build InputFileDto entries.
+        if (inputType == InputType.File)
         {
-            FileReference[]? fileRefs;
-            try
+            var files = _fileUploadStore.ResolveFileReferences(i.Value, i.Name, _logger);
+            if (files is not null)
             {
-                fileRefs = JsonSerializer.Deserialize<FileReference[]>(i.Value);
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogWarning(ex, "Failed to deserialize file references for interaction input '{InputName}'. Treating as empty.", i.Name);
-                return new InputDto(i.Name, i.Value, inputType);
-            }
-
-            if (fileRefs is { Length: > 0 })
-            {
-                var files = new List<InputFileDto>(fileRefs.Length);
-                for (var idx = 0; idx < fileRefs.Length; idx++)
-                {
-                    var fileRef = fileRefs[idx];
-                    var filePath = _fileUploadStore.GetFilePath(fileRef.Id);
-                    if (filePath is null)
-                    {
-                        // Unknown file ID — skip to prevent using client-supplied IDs as arbitrary file paths.
-                        _logger.LogWarning("Received unknown file ID '{FileId}' in interaction input '{InputName}'. Skipping.", fileRef.Id, i.Name);
-                        continue;
-                    }
-                    var fileName = fileRef.Name ?? _fileUploadStore.GetFileName(fileRef.Id) ?? fileRef.Id;
-                    files.Add(new InputFileDto(fileRef.Id, fileName, filePath));
-                }
-
-                return new InputDto(i.Name, i.Value, inputType, files.ToArray());
+                return new InputDto(i.Name, i.Value, inputType, files);
             }
         }
 
         return new InputDto(i.Name, i.Value, inputType);
-    }
-
-    private sealed class FileReference
-    {
-        public string Id { get; set; } = "";
-        public string Name { get; set; } = "";
     }
 
     public record InputFileDto(string Id, string Name, string FilePath);

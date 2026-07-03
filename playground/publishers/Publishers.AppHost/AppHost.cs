@@ -16,8 +16,8 @@ IResourceBuilder<IComputeEnvironmentResource>? environment = (publisher, target)
 {
     ("default", "kube") => builder.AddKubernetesEnvironment("env"),
     ("default", "azure") => builder.AddAzureContainerAppEnvironment("env"),
-    ("default", _) => builder.AddDockerComposeEnvironment("env"),
     (_, "publish-test") => builder.AddPublishTestResource("env"),
+    ("default", _) => builder.AddDockerComposeEnvironment("env"),
     _ => null
 };
 

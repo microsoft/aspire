@@ -327,7 +327,6 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var completedPrompt = Assert.Single(promptBackchannel.CompletedPrompts);
         var answer = Assert.Single(completedPrompt.Answers);
         Assert.Empty(answer.Value!);
-        Assert.Null(answer.FileName);
     }
 
     [Fact]

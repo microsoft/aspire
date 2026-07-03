@@ -2,6 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using static Aspire.Hosting.Dashboard.DashboardServiceData;
 
 namespace Aspire.Hosting.Dashboard;
 
@@ -49,6 +52,51 @@ internal sealed class FileUploadStore : IDisposable
         return _files.TryGetValue(fileId, out var entry) ? entry.OriginalFileName : null;
     }
 
+    /// <summary>
+    /// Resolves a JSON-encoded file reference array into InputFileDto entries.
+    /// Returns null if the value is empty, malformed, or contains no resolvable files.
+    /// </summary>
+    public IReadOnlyList<InputFileDto>? ResolveFileReferences(string? jsonValue, string inputName, ILogger logger)
+    {
+        if (string.IsNullOrEmpty(jsonValue))
+        {
+            return null;
+        }
+
+        FileReference[]? fileRefs;
+        try
+        {
+            fileRefs = JsonSerializer.Deserialize<FileReference[]>(jsonValue);
+        }
+        catch (JsonException ex)
+        {
+            logger.LogWarning(ex, "Failed to deserialize file references for interaction input '{InputName}'. Treating as empty.", inputName);
+            return null;
+        }
+
+        if (fileRefs is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        var files = new List<InputFileDto>(fileRefs.Length);
+        for (var idx = 0; idx < fileRefs.Length; idx++)
+        {
+            var fileRef = fileRefs[idx];
+            var filePath = GetFilePath(fileRef.Id);
+            if (filePath is null)
+            {
+                // Unknown file ID — skip to prevent using client-supplied IDs as arbitrary file paths.
+                logger.LogWarning("Received unknown file ID '{FileId}' in interaction input '{InputName}'. Skipping.", fileRef.Id, inputName);
+                continue;
+            }
+            var fileName = fileRef.Name ?? GetFileName(fileRef.Id) ?? fileRef.Id;
+            files.Add(new InputFileDto(fileRef.Id, fileName, filePath));
+        }
+
+        return files.Count > 0 ? files : null;
+    }
+
     public void Dispose()
     {
         try
@@ -65,4 +113,12 @@ internal sealed class FileUploadStore : IDisposable
     }
 
     private sealed record FileUploadEntry(string FilePath, string OriginalFileName);
+
+    // Shared type used by ResolveFileReferences for JSON deserialization of file input values.
+    // The shape matches what the Dashboard sends: [{"Id":"...","Name":"..."}]
+    private sealed class FileReference
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
+    }
 }

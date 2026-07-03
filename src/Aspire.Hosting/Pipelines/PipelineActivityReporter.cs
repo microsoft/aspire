@@ -5,7 +5,6 @@
 
 using System.Collections.Concurrent;
 using System.Globalization;
-using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dashboard;
@@ -488,47 +487,16 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
     {
         var value = responseAnswer.Value ?? "";
 
-        if (matchingInput.InputType == InputType.File && !string.IsNullOrEmpty(value))
+        if (matchingInput.InputType == InputType.File)
         {
-            FileReference[]? fileRefs;
-            try
+            var files = _fileUploadStore.ResolveFileReferences(value, matchingInput.Name, _logger);
+            if (files is not null)
             {
-                fileRefs = JsonSerializer.Deserialize<FileReference[]>(value);
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogWarning(ex, "Failed to deserialize file references for interaction input '{InputName}'. Treating as empty.", matchingInput.Name);
-                return new InputDto(matchingInput.Name, value, matchingInput.InputType);
-            }
-
-            if (fileRefs is { Length: > 0 })
-            {
-                var files = new List<InputFileDto>(fileRefs.Length);
-                for (var idx = 0; idx < fileRefs.Length; idx++)
-                {
-                    var fileRef = fileRefs[idx];
-                    var filePath = _fileUploadStore.GetFilePath(fileRef.Id);
-                    if (filePath is null)
-                    {
-                        // Unknown file ID — skip to prevent using client-supplied IDs as arbitrary file paths.
-                        _logger.LogWarning("Received unknown file ID '{FileId}' in interaction input '{InputName}'. Skipping.", fileRef.Id, matchingInput.Name);
-                        continue;
-                    }
-                    var fileName = fileRef.Name ?? _fileUploadStore.GetFileName(fileRef.Id) ?? fileRef.Id;
-                    files.Add(new InputFileDto(fileRef.Id, fileName, filePath));
-                }
-
-                return new InputDto(matchingInput.Name, value, matchingInput.InputType, files.ToArray());
+                return new InputDto(matchingInput.Name, value, matchingInput.InputType, files);
             }
         }
 
         return new InputDto(matchingInput.Name, value, matchingInput.InputType);
-    }
-
-    private sealed class FileReference
-    {
-        public string Id { get; set; } = "";
-        public string Name { get; set; } = "";
     }
 
     public async ValueTask DisposeAsync()

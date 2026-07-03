@@ -406,7 +406,8 @@ public sealed class InteractionInput
 
     /// <summary>
     /// Gets or sets the maximum file size in bytes for <see cref="InputType.File"/> inputs.
-    /// If not specified, the Dashboard upload UI applies a default limit of 1 MB.
+    /// If not specified, the server applies the configured upload limit (default 100 MB).
+    /// When specified, the value is capped at the server-side upload limit.
     /// This limit is not enforced when the file path is provided directly (e.g. via the CLI).
     /// </summary>
     public long? MaxFileSize
