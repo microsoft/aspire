@@ -153,11 +153,11 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithContainerFiles<T>(this ApplicationModel.IResourceBuilder<T> builder, string destinationPath, System.Collections.Generic.IEnumerable<ApplicationModel.ContainerFileSystemItem> entries, int? defaultOwner = null, int? defaultGroup = null, System.IO.UnixFileMode? umask = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Exposed to ATS via the WithContainerFilesCallbackExport shim, which accepts integer file-mode options and lets polyglot callbacks build the IEnumerable<ContainerFileSystemItem> result through ContainerFileSystemCallbackContext factory methods (createFile/createDirectory/createCertificateFile).")]
+        [AspireExportIgnore(Reason = "ContainerFileSystemCallbackContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
         public static ApplicationModel.IResourceBuilder<T> WithContainerFiles<T>(this ApplicationModel.IResourceBuilder<T> builder, string destinationPath, System.Func<ApplicationModel.ContainerFileSystemCallbackContext, System.Threading.CancellationToken, System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<ApplicationModel.ContainerFileSystemItem>>> callback, int? defaultOwner = null, int? defaultGroup = null, System.IO.UnixFileMode? umask = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Exposed to ATS via the WithContainerFilesExport shim overload, which accepts integer file-mode options (ContainerFilesOptions) in place of the UnixFileMode parameter.")]
+        [AspireExportIgnore(Reason = "Uses UnixFileMode parameter which is not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<T> WithContainerFiles<T>(this ApplicationModel.IResourceBuilder<T> builder, string destinationPath, string sourcePath, int? defaultOwner = null, int? defaultGroup = null, System.IO.UnixFileMode? umask = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
@@ -417,10 +417,7 @@ namespace Aspire.Hosting
 
         public string PublisherName { get { throw null; } set { } }
 
-        [System.Obsolete("Use Services instead.")]
         public System.IServiceProvider ServiceProvider { get { throw null; } }
-
-        public System.IServiceProvider Services { get { throw null; } }
     }
 
     [AspireExport]
@@ -434,10 +431,7 @@ namespace Aspire.Hosting
 
         public string? PublisherName { get { throw null; } }
 
-        [System.Obsolete("Use Services instead.")]
         public System.IServiceProvider? ServiceProvider { get { throw null; } set { } }
-
-        public System.IServiceProvider? Services { get { throw null; } set { } }
     }
 
     public enum DistributedApplicationOperation
@@ -628,6 +622,7 @@ namespace Aspire.Hosting
         ITempFileSystemService TempDirectory { get; }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial interface IInteractionService
     {
         bool IsAvailable { get; }
@@ -638,10 +633,9 @@ namespace Aspire.Hosting
         System.Threading.Tasks.Task<InteractionResult<InteractionInputCollection>> PromptInputsAsync(string title, string? message, System.Collections.Generic.IReadOnlyList<InteractionInput> inputs, InputsDialogInteractionOptions? options = null, System.Threading.CancellationToken cancellationToken = default);
         System.Threading.Tasks.Task<InteractionResult<bool>> PromptMessageBoxAsync(string title, string message, MessageBoxInteractionOptions? options = null, System.Threading.CancellationToken cancellationToken = default);
         System.Threading.Tasks.Task<InteractionResult<bool>> PromptNotificationAsync(string title, string message, NotificationInteractionOptions? options = null, System.Threading.CancellationToken cancellationToken = default);
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        System.Threading.Tasks.Task<InteractionResult<bool>> PromptProgressAsync(string message, string? title = null, ProgressInteractionOptions? options = null, System.Threading.CancellationToken cancellationToken = default);
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class InputLoadOptions
     {
         public bool AlwaysLoadOnStart { get { throw null; } init { } }
@@ -651,11 +645,13 @@ namespace Aspire.Hosting
         public required System.Func<LoadInputContext, System.Threading.Tasks.Task> LoadCallback { get { throw null; } init { } }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class InputsDialogInteractionOptions : InteractionOptions
     {
         public System.Func<InputsDialogValidationContext, System.Threading.Tasks.Task>? ValidationCallback { get { throw null; } set { } }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(ExposeProperties = true)]
     public sealed partial class InputsDialogValidationContext
     {
@@ -663,6 +659,7 @@ namespace Aspire.Hosting
 
         public required InteractionInputCollection Inputs { get { throw null; } init { } }
 
+        [AspireExportIgnore(Reason = "IServiceProvider is not part of the polyglot validation surface.")]
         public required System.IServiceProvider Services { get { throw null; } init { } }
 
         public void AddValidationError(InteractionInput input, string errorMessage) { }
@@ -671,16 +668,17 @@ namespace Aspire.Hosting
         public void AddValidationError(string inputName, string errorMessage) { }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public enum InputType
     {
         Text = 0,
         SecretText = 1,
         Choice = 2,
         Boolean = 3,
-        Number = 4,
-        File = 5
+        Number = 4
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireDto]
     [System.Diagnostics.DebuggerDisplay("Name = {Name}, InputType = {InputType}, Required = {Required}, Value = {Value}")]
     public sealed partial class InteractionInput
@@ -691,18 +689,13 @@ namespace Aspire.Hosting
 
         public bool Disabled { get { throw null; } set { } }
 
-        [AspireExportIgnore(Reason = "InputLoadOptions carries a non-serializable callback and is never populated on interaction results.")]
         public InputLoadOptions? DynamicLoading { get { throw null; } init { } }
 
         public bool EnableDescriptionMarkdown { get { throw null; } init { } }
 
-        public string? FileName { get { throw null; } init { } }
-
         public required InputType InputType { get { throw null; } init { } }
 
         public string? Label { get { throw null; } init { } }
-
-        public long? MaxFileSize { get { throw null; } init { } }
 
         public int? MaxLength { get { throw null; } init { } }
 
@@ -717,6 +710,7 @@ namespace Aspire.Hosting
         public string? Value { get { throw null; } set { } }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     [System.Diagnostics.DebuggerDisplay("Count = {Count}")]
     public sealed partial class InteractionInputCollection : System.Collections.Generic.IReadOnlyList<InteractionInput>, System.Collections.Generic.IEnumerable<InteractionInput>, System.Collections.IEnumerable, System.Collections.Generic.IReadOnlyCollection<InteractionInput>
@@ -751,11 +745,7 @@ namespace Aspire.Hosting
         public bool TryGetByName(string name, out InteractionInput? input) { throw null; }
     }
 
-    public static partial class InteractionInputExtensions
-    {
-        public static System.Threading.Tasks.ValueTask<System.IO.Stream?> OpenFileStreamAsync(this InteractionInput input, System.Threading.CancellationToken cancellationToken = default) { throw null; }
-    }
-
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class InteractionOptions
     {
         public bool? EnableMessageMarkdown { get { throw null; } set { } }
@@ -776,6 +766,7 @@ namespace Aspire.Hosting
         public static InteractionResult<T> Ok<T>(T result) { throw null; }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class InteractionResult<T>
     {
         internal InteractionResult() { }
@@ -863,6 +854,7 @@ namespace Aspire.Hosting
         public System.Collections.Generic.Dictionary<string, LaunchProfile> Profiles { get { throw null; } set { } }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class LoadInputContext
     {
         public required InteractionInputCollection AllInputs { get { throw null; } init { } }
@@ -882,11 +874,13 @@ namespace Aspire.Hosting
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class MessageBoxInteractionOptions : InteractionOptions
     {
         public MessageIntent? Intent { get { throw null; } set { } }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public enum MessageIntent
     {
         None = 0,
@@ -904,6 +898,7 @@ namespace Aspire.Hosting
         public MissingParameterValueException(string message) { }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class NotificationInteractionOptions : InteractionOptions
     {
         public MessageIntent? Intent { get { throw null; } set { } }
@@ -935,6 +930,7 @@ namespace Aspire.Hosting
         HttpJson = 2
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class ParameterProcessor
     {
         public ParameterProcessor(ApplicationModel.ResourceNotificationService notificationService, ApplicationModel.ResourceLoggerService loggerService, IInteractionService interactionService, Microsoft.Extensions.Logging.ILogger<ParameterProcessor> logger, DistributedApplicationExecutionContext executionContext, Pipelines.IDeploymentStateManager deploymentStateManager, IUserSecretsManager userSecretsManager) { }
@@ -976,28 +972,16 @@ namespace Aspire.Hosting
 
         public static ApplicationModel.ParameterResource CreateParameter(IDistributedApplicationBuilder builder, string name, bool secret) { throw null; }
 
-        [System.Obsolete("PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.")]
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> PublishAsConnectionString<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.ContainerResource, ApplicationModel.IResourceWithConnectionString { throw null; }
 
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         [AspireExportIgnore(Reason = "Complex Func delegate with InteractionInput — not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> WithCustomInput(this ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> builder, System.Func<ApplicationModel.ParameterResource, InteractionInput> createInput) { throw null; }
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> WithDescription(this ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> builder, string description, bool enableMarkdown = false) { throw null; }
-    }
-
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public sealed partial class ProgressContext
-    {
-        public required System.Threading.CancellationToken CancellationToken { get { throw null; } init { } }
-    }
-
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public partial class ProgressInteractionOptions : InteractionOptions
-    {
-        public System.Func<ProgressContext, System.Threading.Tasks.Task>? Work { get { throw null; } set { } }
     }
 
     public static partial class ProjectResourceBuilderExtensions
@@ -1038,7 +1022,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> PublishAsDockerFile<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource>>? configure = null)
             where T : ApplicationModel.ProjectResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Uses Func<EndpointAnnotation, bool> which is not ATS-compatible. The ATS-friendly implementation is in src/Aspire.Hosting/Ats/CoreExports.cs and accepts endpoint names instead of a predicate.")]
+        [AspireExportIgnore(Reason = "Uses Func<EndpointAnnotation, bool> which is not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> WithEndpointsInEnvironment(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> builder, System.Func<ApplicationModel.EndpointAnnotation, bool> filter) { throw null; }
 
         [AspireExport]
@@ -1058,7 +1042,7 @@ namespace Aspire.Hosting
     public static partial class RequiredCommandResourceExtensions
     {
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport("withRequiredCommandValidation", MethodName = "withRequiredCommandValidation")]
+        [AspireExportIgnore(Reason = "RequiredCommandValidationContext exposes IServiceProvider — not usable from polyglot hosts.")]
         public static ApplicationModel.IResourceBuilder<T> WithRequiredCommand<T>(this ApplicationModel.IResourceBuilder<T> builder, string command, System.Func<ApplicationModel.RequiredCommandValidationContext, System.Threading.Tasks.Task<ApplicationModel.RequiredCommandValidationResult>> validationCallback, string? helpLink = null)
             where T : ApplicationModel.IResource { throw null; }
 
@@ -1101,7 +1085,7 @@ namespace Aspire.Hosting
             where T : ApplicationModel.IContainerFilesDestinationResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport]
+        [AspireExportIgnore(Reason = "HttpsEndpointUpdateCallbackContext exposes IServiceProvider and IResource — not usable from polyglot hosts.")]
         public static ApplicationModel.IResourceBuilder<TResource> SubscribeHttpsEndpointsUpdate<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, System.Action<ApplicationModel.HttpsEndpointUpdateCallbackContext> callback)
             where TResource : ApplicationModel.IResource { throw null; }
 
@@ -1333,7 +1317,7 @@ namespace Aspire.Hosting
             where TResource : ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResourceWithArgs { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport]
+        [AspireExportIgnore(Reason = "HttpsCertificateConfigurationCallbackAnnotationContext exposes IServiceProvider and IResource — not usable from polyglot hosts.")]
         public static ApplicationModel.IResourceBuilder<TResource> WithHttpsCertificateConfiguration<TResource>(this ApplicationModel.IResourceBuilder<TResource> builder, System.Func<ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext, System.Threading.Tasks.Task> callback)
             where TResource : ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResourceWithArgs { throw null; }
 
@@ -1525,14 +1509,6 @@ namespace Aspire.Hosting
         public abstract string Path { get; }
 
         public abstract void Dispose();
-    }
-
-    public static partial class TerminalResourceBuilderExtensions
-    {
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETERMINAL001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the parameterless withTerminal dispatcher export.")]
-        public static ApplicationModel.IResourceBuilder<T> WithTerminal<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.TerminalOptions>? configure = null)
-            where T : ApplicationModel.IResource { throw null; }
     }
 
     public static partial class VolumeNameGenerator
@@ -1748,6 +1724,7 @@ namespace Aspire.Hosting.ApplicationModel
     [AspireDto]
     public partial class CommandOptions
     {
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public System.Collections.Generic.IReadOnlyList<InteractionInput> Arguments { get { throw null; } set { } }
 
         public string? ConfirmationMessage { get { throw null; } set { } }
@@ -1763,23 +1740,12 @@ namespace Aspire.Hosting.ApplicationModel
         [System.Obsolete("Use Arguments to describe invocation arguments and ExecuteCommandContext.Arguments to read them.")]
         public object? Parameter { get { throw null; } set { } }
 
-        public CommandProgressOptions? Progress { get { throw null; } set { } }
-
         public System.Func<UpdateCommandStateContext, ResourceCommandState>? UpdateState { get { throw null; } set { } }
 
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public System.Func<InputsDialogValidationContext, System.Threading.Tasks.Task>? ValidateArguments { get { throw null; } set { } }
 
         public ResourceCommandVisibility Visibility { get { throw null; } set { } }
-    }
-
-    [AspireDto]
-    public partial class CommandProgressOptions
-    {
-        public bool HideCancelButton { get { throw null; } set { } }
-
-        public string? Message { get { throw null; } set { } }
-
-        public string? Title { get { throw null; } set { } }
     }
 
     [AspireDto]
@@ -1876,7 +1842,6 @@ namespace Aspire.Hosting.ApplicationModel
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(ExposeProperties = true)]
     public sealed partial class ContainerBuildOptionsCallbackContext
     {
         public ContainerBuildOptionsCallbackContext(IResource resource, System.IServiceProvider services, Microsoft.Extensions.Logging.ILogger logger, System.Threading.CancellationToken cancellationToken, DistributedApplicationExecutionContext executionContext) { }
@@ -1959,29 +1924,20 @@ namespace Aspire.Hosting.ApplicationModel
         public System.IO.UnixFileMode? Umask { get { throw null; } set { } }
     }
 
-    [AspireExport]
     public sealed partial class ContainerFileSystemCallbackContext
     {
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "HttpsCertificateContext is an experimental certificate-specific type that is not yet part of the ATS surface.")]
         public ContainerFileSystemCallbackHttpsCertificateContext? HttpsCertificateContext { get { throw null; } set { } }
 
-        [AspireExport]
         public required IResource Model { get { throw null; } init { } }
 
-        [System.Obsolete("Use Services instead.")]
-        public System.IServiceProvider ServiceProvider { get { throw null; } init { } }
-
-        [AspireExport]
-        public required System.IServiceProvider Services { get { throw null; } init { } }
+        public required System.IServiceProvider ServiceProvider { get { throw null; } init { } }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class ContainerFileSystemCallbackHttpsCertificateContext
     {
         public ReferenceExpression CertificatePath { get { throw null; } init { } }
-
-        public ReferenceExpression CertificateWithKeyPath { get { throw null; } init { } }
 
         public ReferenceExpression KeyPath { get { throw null; } init { } }
 
@@ -1990,7 +1946,6 @@ namespace Aspire.Hosting.ApplicationModel
         public ReferenceExpression PfxPath { get { throw null; } init { } }
     }
 
-    [AspireExport]
     public abstract partial class ContainerFileSystemItem
     {
         public int? Group { get { throw null; } set { } }
@@ -2668,11 +2623,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public required string ResourceName { get { throw null; } init { } }
 
-        [System.Obsolete("Use Services instead.")]
-        [AspireExportIgnore(Reason = "Obsolete alias for Services. The service provider is exposed to polyglot hosts via Services (services).")]
-        public System.IServiceProvider ServiceProvider { get { throw null; } init { } }
-
-        public required System.IServiceProvider Services { get { throw null; } init { } }
+        [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command callbacks.")]
+        public required System.IServiceProvider ServiceProvider { get { throw null; } init { } }
     }
 
     [AspireDto]
@@ -2770,21 +2722,6 @@ namespace Aspire.Hosting.ApplicationModel
         public System.DateTime? LastRunAt { get { throw null; } init { } }
     }
 
-    public sealed partial class HiddenAnnotation : IResourceAnnotation
-    {
-        public HiddenAnnotation(HiddenBehavior behavior) { }
-
-        public HiddenBehavior Behavior { get { throw null; } }
-
-        public System.Collections.Generic.List<int> SuccessfulExitCodes { get { throw null; } init { } }
-    }
-
-    public enum HiddenBehavior
-    {
-        Always = 0,
-        OnCompletion = 1
-    }
-
     public partial record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestExpressionProvider
     {
         string IManifestExpressionProvider.ValueExpression { get { throw null; } }
@@ -2811,8 +2748,6 @@ namespace Aspire.Hosting.ApplicationModel
 
     public sealed partial class HttpCommandRequestContext
     {
-        public InteractionInputCollection Arguments { get { throw null; } init { } }
-
         public required System.Threading.CancellationToken CancellationToken { get { throw null; } init { } }
 
         public required EndpointReference Endpoint { get { throw null; } init { } }
@@ -2823,16 +2758,11 @@ namespace Aspire.Hosting.ApplicationModel
 
         public required string ResourceName { get { throw null; } init { } }
 
-        [System.Obsolete("Use Services instead.")]
-        public System.IServiceProvider ServiceProvider { get { throw null; } init { } }
-
-        public required System.IServiceProvider Services { get { throw null; } init { } }
+        public required System.IServiceProvider ServiceProvider { get { throw null; } init { } }
     }
 
     public sealed partial class HttpCommandResultContext
     {
-        public InteractionInputCollection Arguments { get { throw null; } init { } }
-
         public required System.Threading.CancellationToken CancellationToken { get { throw null; } init { } }
 
         public required EndpointReference Endpoint { get { throw null; } init { } }
@@ -2843,10 +2773,7 @@ namespace Aspire.Hosting.ApplicationModel
 
         public required System.Net.Http.HttpResponseMessage Response { get { throw null; } init { } }
 
-        [System.Obsolete("Use Services instead.")]
-        public System.IServiceProvider ServiceProvider { get { throw null; } init { } }
-
-        public required System.IServiceProvider Services { get { throw null; } init { } }
+        public required System.IServiceProvider ServiceProvider { get { throw null; } init { } }
     }
 
     public enum HttpCommandResultMode
@@ -2876,35 +2803,24 @@ namespace Aspire.Hosting.ApplicationModel
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport]
     public sealed partial class HttpsCertificateConfigurationCallbackAnnotationContext
     {
         public required System.Collections.Generic.List<object> Arguments { get { throw null; } init { } }
 
-        [AspireExport]
         public required System.Threading.CancellationToken CancellationToken { get { throw null; } init { } }
 
-        [AspireExport]
         public required ReferenceExpression CertificatePath { get { throw null; } init { } }
-
-        [AspireExport]
-        public required ReferenceExpression CertificateWithKeyPath { get { throw null; } init { } }
 
         public required System.Collections.Generic.Dictionary<string, object> EnvironmentVariables { get { throw null; } init { } }
 
-        [AspireExport]
         public required DistributedApplicationExecutionContext ExecutionContext { get { throw null; } init { } }
 
-        [AspireExport]
         public required ReferenceExpression KeyPath { get { throw null; } init { } }
 
-        [AspireExportIgnore(Reason = "Password is typed as IValueProvider, which has no ATS-exported representation and no guaranteed concrete type to expose it as. The certificate paths (exposed as ReferenceExpression) cover the common configuration scenarios.")]
         public required IValueProvider? Password { get { throw null; } init { } }
 
-        [AspireExport]
         public required ReferenceExpression PfxPath { get { throw null; } init { } }
 
-        [AspireExport]
         public required IResource Resource { get { throw null; } init { } }
     }
 
@@ -2913,8 +2829,6 @@ namespace Aspire.Hosting.ApplicationModel
     public partial class HttpsCertificateExecutionConfigurationContext
     {
         public required ReferenceExpression CertificatePath { get { throw null; } init { } }
-
-        public required ReferenceExpression CertificateWithKeyPath { get { throw null; } init { } }
 
         public required ReferenceExpression KeyPath { get { throw null; } init { } }
 
@@ -2925,10 +2839,6 @@ namespace Aspire.Hosting.ApplicationModel
     public partial class HttpsCertificateExecutionConfigurationData : IExecutionConfigurationData
     {
         public required System.Security.Cryptography.X509Certificates.X509Certificate2 Certificate { get { throw null; } init { } }
-
-        public required ReferenceExpression CertificateWithKeyPathReference { get { throw null; } set { } }
-
-        public bool IsCertificateWithKeyPathReferenced { get { throw null; } }
 
         public bool IsKeyPathReferenced { get { throw null; } }
 
@@ -2942,7 +2852,6 @@ namespace Aspire.Hosting.ApplicationModel
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(ExposeProperties = true)]
     public sealed partial class HttpsEndpointUpdateCallbackContext
     {
         public required System.Threading.CancellationToken CancellationToken { get { throw null; } init { } }
@@ -3071,6 +2980,7 @@ namespace Aspire.Hosting.ApplicationModel
         public System.IServiceProvider Services { get { throw null; } }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class InputGeneratorAnnotation : IResourceAnnotation
     {
         public InputGeneratorAnnotation(System.Func<ParameterResource, InteractionInput> inputGenerator) { }
@@ -3491,8 +3401,6 @@ namespace Aspire.Hosting.ApplicationModel
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class ProcessCommandResultContext
     {
-        public InteractionInputCollection Arguments { get { throw null; } init { } }
-
         public required System.Threading.CancellationToken CancellationToken { get { throw null; } init { } }
 
         public required int ExitCode { get { throw null; } init { } }
@@ -3505,10 +3413,7 @@ namespace Aspire.Hosting.ApplicationModel
 
         public required string ResourceName { get { throw null; } init { } }
 
-        [System.Obsolete("Use Services instead.")]
-        public System.IServiceProvider ServiceProvider { get { throw null; } init { } }
-
-        public required System.IServiceProvider Services { get { throw null; } init { } }
+        public required System.IServiceProvider ServiceProvider { get { throw null; } init { } }
 
         public required int TotalOutputLineCount { get { throw null; } init { } }
 
@@ -3533,17 +3438,6 @@ namespace Aspire.Hosting.ApplicationModel
         public string? StandardInputContent { get { throw null; } init { } }
 
         public string? WorkingDirectory { get { throw null; } init { } }
-    }
-
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Arguments = {string.Join(\" \", Arguments)}")]
-    public sealed partial class ProjectLaunchArgsOverrideAnnotation : IResourceAnnotation
-    {
-        public ProjectLaunchArgsOverrideAnnotation(System.Collections.Generic.IReadOnlyList<string> arguments, string? leadingResourceArgumentToRemove = null) { }
-
-        public System.Collections.Generic.IReadOnlyList<string> Arguments { get { throw null; } }
-
-        public string? LeadingResourceArgumentToRemove { get { throw null; } }
     }
 
     [System.Diagnostics.DebuggerDisplay("{DebuggerToString(),nq}")]
@@ -3747,7 +3641,6 @@ namespace Aspire.Hosting.ApplicationModel
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(ExposeProperties = true, ExposeMethods = true)]
     public sealed partial class RequiredCommandValidationContext
     {
         public RequiredCommandValidationContext(string resolvedPath, System.IServiceProvider services, System.Threading.CancellationToken cancellationToken) { }
@@ -3757,14 +3650,9 @@ namespace Aspire.Hosting.ApplicationModel
         public string ResolvedPath { get { throw null; } }
 
         public System.IServiceProvider Services { get { throw null; } }
-
-        public RequiredCommandValidationResult Failure(string validationMessage) { throw null; }
-
-        public RequiredCommandValidationResult Success() { throw null; }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(ExposeProperties = true)]
     public sealed partial class RequiredCommandValidationResult
     {
         internal RequiredCommandValidationResult() { }
@@ -3820,13 +3708,6 @@ namespace Aspire.Hosting.ApplicationModel
 
     public sealed partial class ResourceAnnotationCollection : System.Collections.ObjectModel.Collection<IResourceAnnotation>
     {
-        protected override void ClearItems() { }
-
-        protected override void InsertItem(int index, IResourceAnnotation item) { }
-
-        protected override void RemoveItem(int index) { }
-
-        protected override void SetItem(int index, IResourceAnnotation item) { }
     }
 
     public enum ResourceAnnotationMutationBehavior
@@ -3842,6 +3723,7 @@ namespace Aspire.Hosting.ApplicationModel
 
         public ResourceCommandAnnotation(string name, string displayName, System.Func<UpdateCommandStateContext, ResourceCommandState> updateState, System.Func<ExecuteCommandContext, System.Threading.Tasks.Task<ExecuteCommandResult>> executeCommand, string? displayDescription, object? parameter, string? confirmationMessage, string? iconName, IconVariant? iconVariant, bool isHighlighted) { }
 
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public System.Collections.Generic.IReadOnlyList<InteractionInput> Arguments { get { throw null; } }
 
         public string? ConfirmationMessage { get { throw null; } }
@@ -3863,10 +3745,9 @@ namespace Aspire.Hosting.ApplicationModel
         [System.Obsolete("Use Arguments to describe invocation arguments and ExecuteCommandContext.Arguments to read them.")]
         public object? Parameter { get { throw null; } }
 
-        public CommandProgressOptions? Progress { get { throw null; } }
-
         public System.Func<UpdateCommandStateContext, ResourceCommandState> UpdateState { get { throw null; } }
 
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public System.Func<InputsDialogValidationContext, System.Threading.Tasks.Task>? ValidateArguments { get { throw null; } }
 
         public ResourceCommandVisibility Visibility { get { throw null; } }
@@ -4034,12 +3915,12 @@ namespace Aspire.Hosting.ApplicationModel
         public static bool TryGetUrls(this IResource resource, out System.Collections.Generic.IEnumerable<ResourceUrlAnnotation>? urls) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
+        [AspireExportIgnore(Reason = "ContainerBuildOptionsCallbackContext exposes IResource and IServiceProvider — .NET runtime types not usable from polyglot hosts.")]
         public static IResourceBuilder<T> WithContainerBuildOptions<T>(this IResourceBuilder<T> builder, System.Action<ContainerBuildOptionsCallbackContext> callback)
             where T : IResource, IComputeResource { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExport]
+        [AspireExportIgnore(Reason = "ContainerBuildOptionsCallbackContext exposes IResource and IServiceProvider — .NET runtime types not usable from polyglot hosts.")]
         public static IResourceBuilder<T> WithContainerBuildOptions<T>(this IResourceBuilder<T> builder, System.Func<ContainerBuildOptionsCallbackContext, System.Threading.Tasks.Task> callback)
             where T : IResource, IComputeResource { throw null; }
     }
@@ -4122,13 +4003,7 @@ namespace Aspire.Hosting.ApplicationModel
     [System.Diagnostics.DebuggerDisplay("{Value}", Name = "{Name}")]
     public sealed partial record ResourcePropertySnapshot(string Name, object? Value)
     {
-        public string? DisplayName { get { throw null; } init { } }
-
-        public bool IsHighlighted { get { throw null; } init { } }
-
         public bool IsSensitive { get { throw null; } init { } }
-
-        public int? SortOrder { get { throw null; } init { } }
     }
 
     [AspireExport(ExposeProperties = true)]
@@ -4222,72 +4097,14 @@ namespace Aspire.Hosting.ApplicationModel
         public EndpointReference? GetEndpoint(string name) { throw null; }
     }
 
-    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, IsInitialized = {IsInitialized}, ReplicaCount = {TerminalHosts.Count}")]
-    public sealed partial class TerminalAnnotation : IResourceAnnotation
-    {
-        public TerminalAnnotation(TerminalOptions options) { }
-
-        public bool IsInitialized { get { throw null; } }
-
-        public TerminalOptions Options { get { throw null; } }
-
-        public System.Collections.Generic.IReadOnlyList<TerminalHostResource> TerminalHosts { get { throw null; } }
-    }
-
-    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, ParentReplicaIndex = {ParentReplicaIndex}, ReplicaId = {ReplicaId}")]
-    public sealed partial class TerminalHostLayout
-    {
-        public TerminalHostLayout(string replicaId, int parentReplicaIndex, string producerUdsPath, string consumerUdsPath, string controlUdsPath, string metadataPath) { }
-
-        public string ConsumerUdsPath { get { throw null; } }
-
-        public string ControlUdsPath { get { throw null; } }
-
-        public string MetadataPath { get { throw null; } }
-
-        public int ParentReplicaIndex { get { throw null; } }
-
-        public string ParentReplicaIndexString { get { throw null; } }
-
-        public string ProducerUdsPath { get { throw null; } }
-
-        public string ReplicaId { get { throw null; } }
-    }
-
-    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Parent = {Parent.Name}, ParentReplicaIndex = {ParentReplicaIndex}")]
-    public sealed partial class TerminalHostResource : ExecutableResource, IResourceWithParent<IResource>, IResourceWithParent, IResource
-    {
-        public TerminalHostResource(string name, IResource parent, TerminalHostLayout layout) : base(default!, default!, default!) { }
-
-        public TerminalHostLayout Layout { get { throw null; } }
-
-        public IResource Parent { get { throw null; } }
-
-        public int ParentReplicaIndex { get { throw null; } }
-    }
-
-    public sealed partial class TerminalOptions
-    {
-        public int Columns { get { throw null; } set { } }
-
-        public int Rows { get { throw null; } set { } }
-
-        public string? Shell { get { throw null; } set { } }
-
-        public bool ShowTerminalHost { get { throw null; } set { } }
-    }
-
     [AspireExport(ExposeProperties = true)]
     public sealed partial class UpdateCommandStateContext
     {
         [AspireExportIgnore(Reason = "CustomResourceSnapshot contains object-valued properties that are not statically representable in polyglot SDKs. Use ResourceSnapshotData for the curated ATS projection.")]
         public required CustomResourceSnapshot ResourceSnapshot { get { throw null; } init { } }
 
-        [System.Obsolete("Use Services instead.")]
-        [AspireExportIgnore(Reason = "Obsolete alias for Services. The service provider is exposed to polyglot hosts via Services (services).")]
-        public System.IServiceProvider ServiceProvider { get { throw null; } init { } }
-
-        public required System.IServiceProvider Services { get { throw null; } init { } }
+        [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command state callbacks.")]
+        public required System.IServiceProvider ServiceProvider { get { throw null; } init { } }
     }
 
     public enum UrlDisplayLocation

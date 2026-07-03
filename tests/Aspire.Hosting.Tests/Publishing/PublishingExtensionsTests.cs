@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES001
 
+using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -124,6 +125,6 @@ public class PublishingExtensionsTests
 
     private PipelineActivityReporter CreatePublishingReporter()
     {
-        return new PipelineActivityReporter(_interactionService, NullLogger<PipelineActivityReporter>.Instance);
+        return new PipelineActivityReporter(_interactionService, new FileUploadStore(), NullLogger<PipelineActivityReporter>.Instance);
     }
 }

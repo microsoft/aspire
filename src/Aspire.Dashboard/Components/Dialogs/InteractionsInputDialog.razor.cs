@@ -215,6 +215,18 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     private static long GetMaxFileSize(InputViewModel inputModel) =>
         inputModel.Input.MaxFileSize > 0 ? inputModel.Input.MaxFileSize : DefaultMaxUploadedFileBytes;
 
+    private string GetFileChooserButtonText(InputViewModel inputModel)
+    {
+        if (!string.IsNullOrEmpty(inputModel.Input.Placeholder))
+        {
+            return inputModel.Input.Placeholder;
+        }
+
+        return inputModel.Input.AllowMultipleFiles
+            ? Loc[nameof(Resources.Dialogs.InteractionFileChooserPlaceholderMultiple)]
+            : Loc[nameof(Resources.Dialogs.InteractionFileChooserPlaceholder)];
+    }
+
     private async Task OnInputFileChangeAsync(InputViewModel inputModel, InputFileChangeEventArgs args)
     {
         var maxFileSize = GetMaxFileSize(inputModel);
@@ -224,12 +236,12 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         {
             if (file.Size > maxFileSize)
             {
-                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = "File exceeds the maximum allowed size" });
+                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = $"'{file.Name}' exceeds the maximum size of {FileSizeFormatHelpers.FormatFileSize(maxFileSize)}" });
                 continue;
             }
 
             using var stream = file.OpenReadStream(maxFileSize);
-            var fileId = await DashboardClient.UploadFileAsync(stream, file.Name, CancellationToken.None);
+            var fileId = await DashboardClient.UploadFileAsync(stream, file.Name, file.Size, CancellationToken.None);
             fileReferences.Add(new FileReferenceViewModel { Id = fileId, Name = file.Name });
         }
 

@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Pipelines;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -1322,7 +1323,7 @@ public class PublishingActivityReporterTests
 
     private PipelineActivityReporter CreatePublishingReporter()
     {
-        return new PipelineActivityReporter(_interactionService, NullLogger<PipelineActivityReporter>.Instance);
+        return new PipelineActivityReporter(_interactionService, new FileUploadStore(), NullLogger<PipelineActivityReporter>.Instance);
     }
 
     internal static InteractionService CreateInteractionService()

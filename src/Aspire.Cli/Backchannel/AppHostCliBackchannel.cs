@@ -26,6 +26,7 @@ internal interface IAppHostCliBackchannel
     Task CompletePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
     Task UpdatePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken);
     Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken);
+    Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken);
 }
 
 internal sealed class AppHostCliBackchannel(
@@ -547,6 +548,25 @@ internal sealed class AppHostCliBackchannel(
             cancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("Received {StepCount} pipeline steps.", response.Steps.Length);
+
+        return response;
+    }
+
+    public async Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity();
+        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Uploading file {FileName} from {FilePath}", fileName, filePath);
+
+        var response = await rpc.InvokeWithProfilingAsync<UploadFileResponse>(
+            profilingTelemetry,
+            "apphost",
+            "UploadFileAsync",
+            [new UploadFileRequest { FilePath = filePath, FileName = fileName }],
+            cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("File uploaded with ID {FileId}", response.FileId);
 
         return response;
     }

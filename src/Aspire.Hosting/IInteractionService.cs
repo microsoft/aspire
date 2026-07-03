@@ -435,13 +435,11 @@ public sealed class InteractionInput
 /// </summary>
 public sealed class InteractionFile
 {
-    private readonly string _filePath;
-
     internal InteractionFile(string id, string name, string filePath)
     {
         Id = id;
         Name = name;
-        _filePath = filePath;
+        FilePath = filePath;
     }
 
     /// <summary>
@@ -455,17 +453,22 @@ public sealed class InteractionFile
     public string Name { get; }
 
     /// <summary>
+    /// Gets the full path to the uploaded file on disk.
+    /// </summary>
+    public string FilePath { get; }
+
+    /// <summary>
     /// Opens a read-only stream for the file content.
     /// </summary>
     /// <returns>A <see cref="Stream"/> for reading the file.</returns>
-    public Stream OpenRead() => new FileStream(_filePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, useAsync: true);
+    public Stream OpenRead() => new FileStream(FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 4096, useAsync: true);
 
     /// <summary>
     /// Reads all bytes of the file asynchronously.
     /// </summary>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A byte array containing the file content.</returns>
-    public Task<byte[]> ReadAllBytesAsync(CancellationToken cancellationToken = default) => File.ReadAllBytesAsync(_filePath, cancellationToken);
+    public Task<byte[]> ReadAllBytesAsync(CancellationToken cancellationToken = default) => File.ReadAllBytesAsync(FilePath, cancellationToken);
 }
 
 /// <summary>

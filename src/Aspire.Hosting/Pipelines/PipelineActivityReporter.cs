@@ -5,6 +5,7 @@
 
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dashboard;
@@ -18,13 +19,15 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
     private readonly ConcurrentDictionary<string, ReportingStep> _steps = new();
     private readonly ConcurrentDictionary<string, string> _stepIdsByTitle = new(StringComparer.Ordinal);
     private readonly InteractionService _interactionService;
+    private readonly FileUploadStore _fileUploadStore;
     private readonly ILogger<PipelineActivityReporter> _logger;
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly Task _interactionServiceSubscriber;
 
-    public PipelineActivityReporter(InteractionService interactionService, ILogger<PipelineActivityReporter> logger)
+    public PipelineActivityReporter(InteractionService interactionService, FileUploadStore fileUploadStore, ILogger<PipelineActivityReporter> logger)
     {
         _interactionService = interactionService;
+        _fileUploadStore = fileUploadStore;
         _logger = logger;
         _interactionServiceSubscriber = Task.Run(() => SubscribeToInteractionsAsync(_cancellationTokenSource.Token));
     }
@@ -346,7 +349,9 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                     AllowCustomChoice = input.AllowCustomChoice,
                     UpdateStateOnChange = updateStateOnChangeInputs.Any(i => string.Equals(i, input.Name, StringComparisons.InteractionInputName)),
                     Loading = input.DynamicLoadingState?.Loading ?? false,
-                    Disabled = input.Disabled
+                    Disabled = input.Disabled,
+                    AllowMultipleFiles = input.AllowMultipleFiles,
+                    MaxFileSize = input.MaxFileSize
                 }).ToList();
 
                 var activity = new PublishingActivity
@@ -430,7 +435,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                                     matchingInput = inputsInfo.Inputs[i];
                                 }
 
-                                dtos.Add(new InputDto(matchingInput.Name, responseAnswer.Value ?? "", matchingInput.InputType));
+                                dtos.Add(CreateInputDto(matchingInput, responseAnswer));
                             }
 
                             DashboardServiceData.ProcessInputs(
@@ -473,6 +478,41 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                 },
                 cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Creates an InputDto, resolving file references from the FileUploadStore for File inputs.
+    /// The CLI sends Value as JSON [{"Id":"...","Name":"..."}] matching the dashboard format.
+    /// </summary>
+    private InputDto CreateInputDto(InteractionInput matchingInput, PublishingPromptInputAnswer responseAnswer)
+    {
+        var value = responseAnswer.Value ?? "";
+
+        if (matchingInput.InputType == InputType.File && !string.IsNullOrEmpty(value))
+        {
+            var fileRefs = JsonSerializer.Deserialize<FileReference[]>(value);
+            if (fileRefs is { Length: > 0 })
+            {
+                var files = new InputFileDto[fileRefs.Length];
+                for (var idx = 0; idx < fileRefs.Length; idx++)
+                {
+                    var fileRef = fileRefs[idx];
+                    var filePath = _fileUploadStore.GetFilePath(fileRef.Id) ?? fileRef.Id;
+                    var fileName = fileRef.Name ?? _fileUploadStore.GetFileName(fileRef.Id) ?? fileRef.Id;
+                    files[idx] = new InputFileDto(fileRef.Id, fileName, filePath);
+                }
+
+                return new InputDto(matchingInput.Name, value, matchingInput.InputType, files);
+            }
+        }
+
+        return new InputDto(matchingInput.Name, value, matchingInput.InputType);
+    }
+
+    private sealed class FileReference
+    {
+        public string Id { get; set; } = "";
+        public string Name { get; set; } = "";
     }
 
     public async ValueTask DisposeAsync()

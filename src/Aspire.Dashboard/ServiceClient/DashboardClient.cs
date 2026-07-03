@@ -1014,7 +1014,7 @@ internal sealed class DashboardClient : IDashboardClient
         }
     }
 
-    public async Task<string> UploadFileAsync(Stream fileStream, string fileName, CancellationToken cancellationToken)
+    public async Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, CancellationToken cancellationToken)
     {
         EnsureInitialized();
 
@@ -1024,10 +1024,17 @@ internal sealed class DashboardClient : IDashboardClient
         const int chunkSize = 64 * 1024; // 64 KB chunks
         var buffer = new byte[chunkSize];
         var isFirst = true;
+        long totalBytesRead = 0;
 
         int bytesRead;
         while ((bytesRead = await fileStream.ReadAsync(buffer, combinedTokens.Token).ConfigureAwait(false)) > 0)
         {
+            totalBytesRead += bytesRead;
+            if (totalBytesRead > expectedSize)
+            {
+                throw new InvalidOperationException($"File '{fileName}' exceeded the expected size of {expectedSize} bytes.");
+            }
+
             var chunk = new UploadFileChunk
             {
                 Data = Google.Protobuf.ByteString.CopyFrom(buffer, 0, bytesRead)

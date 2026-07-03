@@ -2,12 +2,20 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Aspire.DashboardService.Proto.V1;
 
 namespace Aspire.Dashboard.Model.Interaction;
 
 public sealed class InputViewModel
 {
+    private static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     public InteractionInput Input { get; private set; } = default!;
 
     public InputViewModel(InteractionInput input)
@@ -117,7 +125,7 @@ public sealed class InputViewModel
     {
         FileReferences.Clear();
         FileReferences.AddRange(files);
-        Input.Value = System.Text.Json.JsonSerializer.Serialize(FileReferences.Where(f => f.Id is not null));
+        Input.Value = JsonSerializer.Serialize(FileReferences.Where(f => f.Id is not null), s_jsonSerializerOptions);
     }
 
     private static bool OptionsEqual(List<SelectViewModel<string>> existing, List<SelectViewModel<string>> incoming)
@@ -155,6 +163,6 @@ public sealed class FileReferenceViewModel
     public string? Id { get; set; }
     public required string Name { get; set; }
 
-    [System.Text.Json.Serialization.JsonIgnore]
+    [JsonIgnore]
     public string? ErrorMessage { get; set; }
 }

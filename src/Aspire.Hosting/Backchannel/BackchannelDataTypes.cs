@@ -907,6 +907,16 @@ internal sealed class PublishingPromptInput
     public bool Loading { get; init; }
 
     public bool Disabled { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether multiple files can be selected for File inputs.
+    /// </summary>
+    public bool AllowMultipleFiles { get; init; }
+
+    /// <summary>
+    /// Gets the maximum file size in bytes for File inputs. Null means no explicit limit.
+    /// </summary>
+    public long? MaxFileSize { get; init; }
 }
 
 /// <summary>
@@ -946,6 +956,27 @@ internal class PublishingPromptInputAnswer
     public string? Name { get; set; }
     public string? Value { get; set; }
     public string? FileName { get; set; }
+}
+
+internal sealed class UploadFileRequest
+{
+    public required string FilePath { get; set; }
+    public required string FileName { get; set; }
+}
+
+internal sealed class UploadFileResponse
+{
+    public required string FileId { get; set; }
+}
+
+/// <summary>
+/// Represents a file reference as serialized in interaction input values.
+/// Matches the JSON format: [{"Id":"...","Name":"..."}]
+/// </summary>
+internal sealed class FileReferenceDto
+{
+    public required string Id { get; set; }
+    public required string Name { get; set; }
 }
 
 /// <summary>

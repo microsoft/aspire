@@ -909,6 +909,9 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
 
     public Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken) =>
         Task.FromResult(new GetPipelineStepsResponse { Steps = [] });
+
+    public Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken) =>
+        Task.FromResult(new UploadFileResponse { FileId = Guid.NewGuid().ToString("N") });
 }
 
 // Data structures for tracking prompts

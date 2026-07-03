@@ -881,6 +881,15 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("InteractionFileChooserPlaceholder", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Choose files....
+        /// </summary>
+        public static string InteractionFileChooserPlaceholderMultiple {
+            get {
+                return ResourceManager.GetString("InteractionFileChooserPlaceholderMultiple", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to OK.

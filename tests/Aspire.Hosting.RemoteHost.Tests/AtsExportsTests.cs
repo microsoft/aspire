@@ -134,14 +134,21 @@ public class AtsExportsTests
 
         var data = await interactionService.Interactions.Reader.ReadAsync();
         data.Inputs["artifact"].Value = "/repo/artifact.zip";
-        data.Inputs["artifact"].SetFileName("artifact.zip");
+
+        var tempDir = Directory.CreateTempSubdirectory();
+        var tempFile = Path.Combine(tempDir.FullName, "artifact.zip");
+        await File.WriteAllTextAsync(tempFile, "test content");
+        data.Inputs["artifact"].SetFiles([new InteractionFile("file-1", "artifact.zip", tempFile)]);
+
         data.CompletionTcs.SetResult(InteractionResult.Ok(data.Inputs));
 
         var result = await promptTask;
 
         Assert.False(result.Canceled);
         Assert.Equal("/repo/artifact.zip", result.Inputs["artifact"].Value);
-        Assert.Equal("artifact.zip", result.Inputs["artifact"].FileName);
+        Assert.NotNull(result.Inputs["artifact"].Files);
+        var file = Assert.Single(result.Inputs["artifact"].Files!);
+        Assert.Equal("artifact.zip", file.Name);
         Assert.Equal(1024, result.Inputs["artifact"].MaxFileSize);
     }
 

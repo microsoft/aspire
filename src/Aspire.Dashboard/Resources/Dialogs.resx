@@ -337,6 +337,9 @@
   <data name="InteractionFileChooserPlaceholder" xml:space="preserve">
     <value>Choose a file...</value>
   </data>
+  <data name="InteractionFileChooserPlaceholderMultiple" xml:space="preserve">
+    <value>Choose files...</value>
+  </data>
   <data name="InteractionFileChooserBrowse" xml:space="preserve">
     <value>Browse</value>
   </data>
