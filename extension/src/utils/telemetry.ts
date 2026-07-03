@@ -171,24 +171,10 @@ function preservesStructuralTelemetryIds(key: string): boolean {
 }
 
 function sanitizeTelemetryValue(value: string, preserveGuids: boolean): string {
-    const sanitized = value
-        .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<email>')
-        // Home-directory redaction. The username is a single path segment that can legitimately
-        // contain spaces (e.g. `C:\Users\Alice Smith\project` or `/Users/Alice Smith/project`), so
-        // first handle values that are exactly a home directory. For embedded paths, match either a
-        // run of space-separated words that is still followed by the same-type path separator (the
-        // username continues) OR a single whitespace-free run (the historical behavior). Requiring
-        // the trailing separator for the embedded multi-word form keeps us from swallowing following,
-        // unrelated tokens — the inner character classes exclude the separator, so a subsequent
-        // `\segment` or `/segment` is never consumed as part of the name.
-        .replace(/^([A-Za-z]:)\\+Users\\+[^\\\s"']+(?: +[^\\\s"']+)*$/g, (_, drive: string) => `${drive}\\Users\\<user>`)
-        .replace(/^\/Users\/[^/\s"']+(?: +[^/\s"']+)*$/g, '/Users/<user>')
-        .replace(/^\/home\/[^/\s"']+(?: +[^/\s"']+)*$/g, '/home/<user>')
-        .replace(/\b([A-Za-z]:)\\+Users\\+(?:[^\\\s"']+(?: +[^\\\s"']+)*(?=\\)|[^\\\s"']+)/g, (_, drive: string) => `${drive}\\Users\\<user>`)
-        .replace(/(^|[^A-Za-z0-9_/-])\/Users\/(?:[^/\s"']+(?: +[^/\s"']+)*(?=\/)|[^/\s"']+)/g, '$1/Users/<user>')
-        .replace(/(^|[^A-Za-z0-9_/-])\/home\/(?:[^/\s"']+(?: +[^/\s"']+)*(?=\/)|[^/\s"']+)/g, '$1/home/<user>')
-        .replace(/\b(password|passwd|pwd|token|secret|api[_-]?key|client[_-]?secret|account[_-]?key|shared[_-]?access[_-]?key|sharedaccesskey|connection[_-]?string|connectionstring|key)(\s*[:=]\s*)[^&\s"',;}]+/gi, '$1$2<redacted>')
-        .replace(/([?&]sig=)[^&\s"',;}]+/gi, '$1<redacted>')
+    const sanitized = redactHomeDirectories(value
+        .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<email>'))
+        .replace(/\b(password|passwd|pwd|token|secret|sig|api[_-]?key|client[_-]?secret|account[_-]?key|shared[_-]?access[_-]?key|sharedaccesskey|connection[_-]?string|connectionstring|key)(\s*[:=]\s*)(?:(["'])([^&\s"',;}]+)\3|([^&\s"',;}]+))/gi, (_match: string, key: string, separator: string, quote: string | undefined) => `${key}${separator}${quote ?? ''}<redacted>${quote ?? ''}`)
+        .replace(/([?&]sig=)(?:(["'])([^&\s"',;}]+)\2|([^&\s"',;}]+))/gi, (_match: string, prefix: string, quote: string | undefined) => `${prefix}${quote ?? ''}<redacted>${quote ?? ''}`)
         .replace(/\b(authorization\s*:\s*bearer\s+)[^\s"',;}]+/gi, '$1<redacted>')
         .replace(/\b(bearer\s+)[A-Za-z0-9._~+/=-]+/gi, '$1<redacted>');
 
@@ -201,6 +187,28 @@ function sanitizeTelemetryValue(value: string, preserveGuids: boolean): string {
     }
 
     return sanitized.replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi, '<guid>');
+}
+
+function redactHomeDirectories(value: string): string {
+    const terminalUserName = '[^/\\\\\\s"\':;,&-][^/\\\\\\s"\':;,&]*(?: +[^/\\\\\\s"\':;,&-][^/\\\\\\s"\':;,&]*){0,2}';
+    const terminalBoundary = '(?=$|["\']|\\s+--|\\s+[A-Za-z_][A-Za-z0-9_.-]*=)';
+    const windowsHomePattern = new RegExp(`\\b([A-Za-z]:)\\\\+Users\\\\+(?:[^\\\\\\s"']+(?: +[^\\\\\\s"']+)*(?=\\\\)|${terminalUserName}${terminalBoundary}|[^\\\\\\s"']+)`, 'g');
+    const macHomePattern = new RegExp(`(^|[^A-Za-z0-9_/-])/Users/(?:[^/\\s"']+(?: +[^/\\s"']+)*(?=/)|${terminalUserName}${terminalBoundary}|[^/\\s"']+)`, 'g');
+    const linuxHomePattern = new RegExp(`(^|[^A-Za-z0-9_/-])/home/(?:[^/\\s"']+(?: +[^/\\s"']+)*(?=/)|${terminalUserName}${terminalBoundary}|[^/\\s"']+)`, 'g');
+
+    return value
+        // Home-directory redaction. The username is a single path segment that can legitimately
+        // contain spaces (e.g. `C:\Users\Alice Smith\project` or `/Users/Alice Smith/project`), so
+        // first handle values that are exactly a home directory. For embedded paths, match either a
+        // run of space-separated words that is still followed by the same-type path separator (the
+        // username continues), a terminal path segment ending before a safe command boundary, OR a
+        // single whitespace-free run (the historical behavior).
+        .replace(/^([A-Za-z]:)\\+Users\\+[^\\\s"']+(?: +[^\\\s"']+)*$/g, (_, drive: string) => `${drive}\\Users\\<user>`)
+        .replace(/^\/Users\/[^/\s"']+(?: +[^/\s"']+)*$/g, '/Users/<user>')
+        .replace(/^\/home\/[^/\s"']+(?: +[^/\s"']+)*$/g, '/home/<user>')
+        .replace(windowsHomePattern, (_match: string, drive: string) => `${drive}\\Users\\<user>`)
+        .replace(macHomePattern, '$1/Users/<user>')
+        .replace(linuxHomePattern, '$1/home/<user>');
 }
 
 /**

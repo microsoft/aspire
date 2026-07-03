@@ -184,6 +184,32 @@ suite('telemetry utilities', () => {
         assert.strictEqual(fake.events[2].properties?.command, '/home/<user>');
     });
 
+    test('sendTelemetryEvent redacts embedded terminal home directories that contain spaces', () => {
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: 'cwd=/Users/Alice Smith --flag',
+        });
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: 'cwd="C:\\Users\\Alice Smith" --flag',
+        });
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: 'cwd=/home/Alice Smith',
+        });
+
+        assert.strictEqual(fake.events[0].properties?.command, 'cwd=/Users/<user> --flag');
+        assert.strictEqual(fake.events[1].properties?.command, 'cwd="C:\\Users\\<user>" --flag');
+        assert.strictEqual(fake.events[2].properties?.command, 'cwd=/home/<user>');
+    });
+
+    test('sendTelemetryEvent redacts quoted secrets', () => {
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: '--token="secret" token=\'secret\' password=\'secret\' https://storage.example/?sig="signature"&next=1',
+        });
+
+        assert.strictEqual(
+            fake.events[0].properties?.command,
+            '--token="<redacted>" token=\'<redacted>\' password=\'<redacted>\' https://storage.example/?sig="<redacted>"&next=1');
+    });
+
     test('sendTelemetryEvent does not over-redact path segments after a spaced home username', () => {
         // Only the username segment should be redacted. A following, unrelated path segment (which may
         // itself contain spaces) and adjacent tokens must survive because redaction stops at the

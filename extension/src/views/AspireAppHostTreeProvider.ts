@@ -596,11 +596,21 @@ function getConditionalAssemblyNameAncestorRanges(projectFileContent: string): {
 
 function getElementRanges(projectFileContent: string, elementName: string, shouldInclude: (attributes: string) => boolean): { start: number; end: number }[] {
     const ranges: { start: number; end: number }[] = [];
-    const elementRegex = new RegExp(`<${elementName}\\b([^>]*)>[\\s\\S]*?<\\/${elementName}\\s*>`, 'ig');
+    const stack: { start: number; include: boolean }[] = [];
+    const elementRegex = new RegExp(`<(/?)${elementName}\\b([^>]*)>`, 'ig');
     for (const match of projectFileContent.matchAll(elementRegex)) {
-        if (shouldInclude(match[1])) {
-            const start = match.index ?? 0;
-            ranges.push({ start, end: start + match[0].length });
+        const isClosingElement = match[1] === '/';
+        if (isClosingElement) {
+            const openElement = stack.pop();
+            if (openElement?.include) {
+                ranges.push({ start: openElement.start, end: (match.index ?? 0) + match[0].length });
+            }
+            continue;
+        }
+
+        if (!/\/\s*>$/.test(match[0])) {
+            const attributes = match[2];
+            stack.push({ start: match.index ?? 0, include: shouldInclude(attributes) });
         }
     }
 

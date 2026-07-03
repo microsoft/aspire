@@ -2611,6 +2611,27 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
 </Project>`,
                 expectedProcessName: 'ProjectChooseOnly',
             },
+            {
+                fileName: 'ProjectNestedChooseOnly.csproj',
+                markup: `
+<Project Sdk="Microsoft.NET.Sdk">
+  <Choose>
+    <When Condition="'$(TargetFramework)' == 'net8.0'">
+      <Choose>
+        <When Condition="'$(Configuration)' == 'Debug'">
+          <PropertyGroup>
+            <AssemblyName>Inner.Conditional</AssemblyName>
+          </PropertyGroup>
+        </When>
+      </Choose>
+      <PropertyGroup>
+        <AssemblyName>Outer.Conditional</AssemblyName>
+      </PropertyGroup>
+    </When>
+  </Choose>
+</Project>`,
+                expectedProcessName: 'ProjectNestedChooseOnly',
+            },
         ];
 
         for (const testCase of testCases) {
