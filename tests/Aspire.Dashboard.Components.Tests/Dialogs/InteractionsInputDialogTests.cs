@@ -4,6 +4,7 @@
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model.Interaction;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,17 +46,15 @@ public sealed class InteractionsInputDialogTests : DashboardTestContext
 
         cut.WaitForAssertion(() =>
         {
-            var textField = Assert.Single(cut.FindAll("fluent-text-field"));
-            Assert.Equal("Choose a file...", textField.GetAttribute("placeholder"));
-
-            var browseButton = Assert.Single(cut.FindAll("fluent-button"), button => button.TextContent.Contains("Browse", StringComparison.Ordinal));
-            Assert.Equal("Browse for Artifact", browseButton.GetAttribute("title"));
-            Assert.Equal("Browse for Artifact", browseButton.GetAttribute("aria-label"));
+            var browseButton = cut.Find("#FileUploadButton-0");
+            Assert.Equal("Artifact", browseButton.GetAttribute("aria-label"));
         });
     }
 
     private IRenderedFragment SetUpDialog(out IDialogService dialogService)
     {
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient());
+
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentTextField(this);

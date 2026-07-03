@@ -480,51 +480,51 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
     {
         var cancellationToken = context.CancellationToken;
         string? fileName = null;
-        string? fileId = null;
-        string? filePath = null;
 
-        await using var fileStream = await CreateFileStream().ConfigureAwait(false);
-
-        while (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
+        var (fileId, fileStream) = await CreateFileStream().ConfigureAwait(false);
+        await using (fileStream.ConfigureAwait(false))
         {
-            var chunk = requestStream.Current;
-
-            // The first chunk carries the file name.
-            if (fileName is null && !string.IsNullOrEmpty(chunk.FileName))
+            while (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
             {
-                fileName = chunk.FileName;
-            }
+                var chunk = requestStream.Current;
 
-            if (!chunk.Data.IsEmpty)
-            {
-                chunk.Data.WriteTo(fileStream);
+                // The first chunk carries the file name.
+                if (fileName is null && !string.IsNullOrEmpty(chunk.FileName))
+                {
+                    fileName = chunk.FileName;
+                }
+
+                if (!chunk.Data.IsEmpty)
+                {
+                    chunk.Data.WriteTo(fileStream);
+                }
             }
         }
 
-        return new UploadFileResponse { FileId = fileId ?? string.Empty };
+        return new UploadFileResponse { FileId = fileId };
 
-        async ValueTask<FileStream> CreateFileStream()
+        async ValueTask<(string FileId, FileStream Stream)> CreateFileStream()
         {
             // Read the first message to get the file name before creating the file entry.
             if (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
             {
                 var firstChunk = requestStream.Current;
                 fileName = firstChunk.FileName;
-                (fileId, filePath) = fileUploadStore.CreateEntry(fileName ?? "unknown");
+                var (id, path) = fileUploadStore.CreateEntry(fileName ?? "unknown");
 
-                var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
+                var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
 
                 if (!firstChunk.Data.IsEmpty)
                 {
                     firstChunk.Data.WriteTo(fs);
                 }
 
-                return fs;
+                return (id, fs);
             }
 
             // Empty stream — create entry with placeholder name.
-            (fileId, filePath) = fileUploadStore.CreateEntry("unknown");
-            return new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
+            var (emptyId, emptyPath) = fileUploadStore.CreateEntry("unknown");
+            return (emptyId, new FileStream(emptyPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true));
         }
     }
 }

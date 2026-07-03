@@ -140,6 +140,10 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             {
                 _validationMessages.Add(field, $"{inputModel.Input.Label} is required.");
             }
+            foreach (var erroredFile in inputModel.FileReferences.Where(f => f.ErrorMessage is not null))
+            {
+                _validationMessages.Add(field, $"{erroredFile.Name}: {erroredFile.ErrorMessage}");
+            }
         }
 
         _editContext.NotifyValidationStateChanged();
@@ -154,6 +158,10 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             if (IsMissingRequiredValue(inputModel))
             {
                 _validationMessages.Add(field, $"{inputModel.Input.Label} is required.");
+            }
+            foreach (var erroredFile in inputModel.FileReferences.Where(f => f.ErrorMessage is not null))
+            {
+                _validationMessages.Add(field, $"{erroredFile.Name}: {erroredFile.ErrorMessage}");
             }
 
             if (inputModel.Input.UpdateStateOnChange)
@@ -207,29 +215,35 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     private static long GetMaxFileSize(InputViewModel inputModel) =>
         inputModel.Input.MaxFileSize > 0 ? inputModel.Input.MaxFileSize : DefaultMaxUploadedFileBytes;
 
-    private async Task OnFileInputCompleted(InputViewModel inputModel, IEnumerable<FluentInputFileEventArgs> args)
+    private async Task OnInputFileChangeAsync(InputViewModel inputModel, InputFileChangeEventArgs args)
     {
-        var files = args.Where(a => a.Stream != null).ToList();
-        if (files.Count > 0)
+        var maxFileSize = GetMaxFileSize(inputModel);
+        var fileReferences = new List<FileReferenceViewModel>();
+
+        foreach (var file in args.GetMultipleFiles())
         {
-            var fileReferences = new List<FileReferenceViewModel>();
-            foreach (var file in files)
+            if (file.Size > maxFileSize)
             {
-                var fileId = await DashboardClient.UploadFileAsync(file.Stream!, file.Name, CancellationToken.None);
-                fileReferences.Add(new FileReferenceViewModel { Id = fileId, Name = file.Name });
+                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = "File exceeds the maximum allowed size" });
+                continue;
             }
 
-            inputModel.SetFileReferences(fileReferences);
-        }
-        else
-        {
-            inputModel.SetFileReferences([]);
+            using var stream = file.OpenReadStream(maxFileSize);
+            var fileId = await DashboardClient.UploadFileAsync(stream, file.Name, CancellationToken.None);
+            fileReferences.Add(new FileReferenceViewModel { Id = fileId, Name = file.Name });
         }
 
-        await InvokeAsync(() =>
+        inputModel.SetFileReferences(fileReferences);
+
+        var field = GetFieldIdentifier(inputModel);
+        _validationMessages.Clear(field);
+
+        foreach (var erroredFile in fileReferences.Where(f => f.ErrorMessage is not null))
         {
-            _editContext.NotifyFieldChanged(new FieldIdentifier(inputModel, nameof(inputModel.Value)));
-        });
+            _validationMessages.Add(field, $"{erroredFile.Name}: {erroredFile.ErrorMessage}");
+        }
+
+        _editContext.NotifyValidationStateChanged();
     }
 
     private async Task ToggleSecretTextVisibilityAsync(InputViewModel inputModel)

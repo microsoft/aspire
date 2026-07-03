@@ -110,14 +110,14 @@ public sealed class InputViewModel
     public bool IsSecretTextVisible { get; set; }
 
     // Tracks the uploaded file references for File inputs.
-    // When set, serializes the collection to JSON on the underlying Input.Value.
+    // When set, serializes successful references (Id != null) to JSON on the underlying Input.Value.
     public List<FileReferenceViewModel> FileReferences { get; } = [];
 
     public void SetFileReferences(IEnumerable<FileReferenceViewModel> files)
     {
         FileReferences.Clear();
         FileReferences.AddRange(files);
-        Input.Value = System.Text.Json.JsonSerializer.Serialize(FileReferences);
+        Input.Value = System.Text.Json.JsonSerializer.Serialize(FileReferences.Where(f => f.Id is not null));
     }
 
     private static bool OptionsEqual(List<SelectViewModel<string>> existing, List<SelectViewModel<string>> incoming)
@@ -152,6 +152,9 @@ public sealed class InputViewModel
 
 public sealed class FileReferenceViewModel
 {
-    public required string Id { get; set; }
+    public string? Id { get; set; }
     public required string Name { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? ErrorMessage { get; set; }
 }
