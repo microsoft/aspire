@@ -782,6 +782,29 @@ function flushToolbarState(state) {
     }
 }
 
+// Ask xterm's fit addon what dimensions it would apply right now given
+// the current DOM state. Returns null when the terminal element isn't
+// laid out (hidden/detached), or when propose or the terminal aren't
+// available yet. This is more reliable than multiplying cached ratios
+// by a target font because it always reads the *current* container
+// size and font metrics — no drift between calibration and now.
+function tryProposeFitDimensions(state) {
+    const term = state.term;
+    const fitAddon = state.fitAddon;
+    if (!term || !fitAddon || typeof fitAddon.proposeDimensions !== 'function') {
+        return null;
+    }
+    try {
+        const dims = fitAddon.proposeDimensions();
+        if (!dims || !isFinite(dims.cols) || !isFinite(dims.rows) || dims.cols <= 0 || dims.rows <= 0) {
+            return null;
+        }
+        return { cols: dims.cols, rows: dims.rows };
+    } catch {
+        return null;
+    }
+}
+
 function buildToolbarSnapshot(state) {
     const client = state.client;
     const term = state.term;
@@ -808,20 +831,20 @@ function buildToolbarSnapshot(state) {
         : 'auto';
 
     // Predict what grid Fit mode would produce right now, using the
-    // last font size the user picked for font-driven mode. This lets the
-    // toolbar show a real preview on the Fit entry even while a fixed
-    // preset is currently locking the actual term.cols/rows. Requires
-    // calibration to have run at least once (cellWRatio/cellHRatio > 0).
-    //
-    // When we're already in fit mode, skip the prediction and reuse the
-    // live term.cols/rows — that's what fit *actually* produced, and it
-    // avoids any drift in cellWRatio (which is derived from offsetWidth
-    // measurements that can lag one frame behind term.resize dispatches).
+    // last font size the user picked for font-driven mode. Prefer
+    // `fitAddon.proposeDimensions()` when the terminal is laid out —
+    // it's the official xterm API for "what would fit produce given
+    // the current DOM" and matches what `fitAddon.fit()` will actually
+    // apply. Falls back to the cellWRatio/cellHRatio prediction only
+    // when propose can't run (e.g. terminal is hidden via display:none,
+    // in which case getBoundingClientRect returns 0×0 and propose
+    // returns undefined).
     let fitCols = 0;
     let fitRows = 0;
-    if (state.sizeMode === 'font' && term && term.cols > 0 && term.rows > 0) {
-        fitCols = term.cols;
-        fitRows = term.rows;
+    const proposed = state.fitAddon ? tryProposeFitDimensions(state) : null;
+    if (proposed) {
+        fitCols = proposed.cols;
+        fitRows = proposed.rows;
     } else if (state.cellWRatio > 0 && state.cellHRatio > 0 && state.fitFontPx > 0) {
         const { width: availW, height: availH } = getAvailableBodySpace(state);
         if (availW > 0 && availH > 0) {
