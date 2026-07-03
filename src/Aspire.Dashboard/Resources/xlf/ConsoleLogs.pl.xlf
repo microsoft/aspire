@@ -127,11 +127,6 @@
         <target state="translated">Stan dziennika usługi</target>
         <note />
       </trans-unit>
-      <trans-unit id="TerminalToolbarCurrentGrid">
-        <source>Current terminal grid</source>
-        <target state="new">Current terminal grid</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TerminalToolbarDecreaseFontSize">
         <source>Decrease font size</source>
         <target state="new">Decrease font size</target>

@@ -204,9 +204,6 @@
   <data name="TerminalToolbarGridSizeAuto" xml:space="preserve">
     <value>Fit</value>
   </data>
-  <data name="TerminalToolbarCurrentGrid" xml:space="preserve">
-    <value>Current terminal grid</value>
-  </data>
   <data name="ConsoleLogsViewConsoleOption" xml:space="preserve">
     <value>Console logs</value>
     <comment>Option in the View dropdown that shows the resource's console logs.</comment>

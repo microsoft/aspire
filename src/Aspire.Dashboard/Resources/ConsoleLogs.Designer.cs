@@ -213,12 +213,6 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
-        public static string TerminalToolbarCurrentGrid {
-            get {
-                return ResourceManager.GetString("TerminalToolbarCurrentGrid", resourceCulture);
-            }
-        }
-        
         public static string ConsoleLogsViewConsoleOption {
             get {
                 return ResourceManager.GetString("ConsoleLogsViewConsoleOption", resourceCulture);
