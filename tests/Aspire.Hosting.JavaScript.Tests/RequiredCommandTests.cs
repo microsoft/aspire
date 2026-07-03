@@ -10,15 +10,66 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Aspire.Hosting.JavaScript.Tests;
 
 // Package-manager selection (WithNpm/WithBun/WithYarn/WithPnpm) is last-wins via
-// JavaScriptPackageManagerAnnotation, and the integration-managed required commands are resolved from that
-// single source of truth in a BeforeStart hook (so a later selection fully replaces an earlier one). Without
-// that, a Bun-only app (AddViteApp(...).WithBun()) kept the default node/npm requirements and surfaced false
-// "missing required command" banners. See https://github.com/microsoft/aspire/issues/18625.
+// JavaScriptPackageManagerAnnotation, and the integration-managed required commands are resolved in a BeforeStart
+// hook (so a later selection fully replaces an earlier one). Run-script apps use the package manager as their
+// runtime; direct-script apps preserve their fixed runtime and add the package manager for install. Without that,
+// package-manager changes could surface false "missing required command" banners or hide real runtime
+// prerequisites. See https://github.com/microsoft/aspire/issues/18625.
 //
 // Required commands are materialized on BeforeStartEvent, so every test builds the app and publishes that
 // event (via GetRequiredCommandsAsync) before inspecting the resulting RequiredCommandAnnotations.
 public class RequiredCommandTests
 {
+    [Fact]
+    public async Task AddNodeApp_DefaultsToNode()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var app = builder.AddNodeApp("app", tempDir.Path, "server.js");
+
+        Assert.Equal(["node"], await GetRequiredCommandsAsync(builder, app.Resource));
+    }
+
+    [Fact]
+    public async Task AddNodeApp_WithBun_RequiresNodeAndBun()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // WithBun selects Bun for install, but a Node direct-script app still launches as `node server.js`.
+        var app = builder.AddNodeApp("app", tempDir.Path, "server.js")
+            .WithBun();
+
+        Assert.Equal(["bun", "node"], await GetRequiredCommandsAsync(builder, app.Resource));
+    }
+
+    [Fact]
+    public async Task AddNodeApp_WithNpm_RequiresNodeAndNpm()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var app = builder.AddNodeApp("app", tempDir.Path, "server.js")
+            .WithNpm();
+
+        Assert.Equal(["node", "npm"], await GetRequiredCommandsAsync(builder, app.Resource));
+    }
+
+    [Fact]
+    public async Task AddNodeApp_WithRunScript_WithBun_RequiresOnlyBun()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        // WithRunScript routes launch through the package manager, so Bun replaces the Node runtime.
+        var app = builder.AddNodeApp("app", tempDir.Path, "server.js")
+            .WithRunScript("start")
+            .WithBun();
+
+        Assert.Equal(["bun"], await GetRequiredCommandsAsync(builder, app.Resource));
+    }
+
     [Fact]
     public async Task AddViteApp_DefaultsToNodeAndNpm()
     {
@@ -108,6 +159,18 @@ public class RequiredCommandTests
         var app = builder.AddBunApp("app", tempDir.Path, "server.ts");
 
         Assert.Equal(["bun"], await GetRequiredCommandsAsync(builder, app.Resource));
+    }
+
+    [Fact]
+    public async Task AddBunApp_WithNpm_RequiresBunNodeAndNpm()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var app = builder.AddBunApp("app", tempDir.Path, "server.ts")
+            .WithNpm();
+
+        Assert.Equal(["bun", "node", "npm"], await GetRequiredCommandsAsync(builder, app.Resource));
     }
 
     [Fact]

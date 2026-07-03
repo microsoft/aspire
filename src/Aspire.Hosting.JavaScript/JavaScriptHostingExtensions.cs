@@ -34,13 +34,16 @@ public static class JavaScriptHostingExtensions
     private const string DefaultJavaScriptRunScriptName = "dev";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
 
-    // Help links surfaced when a required command is missing. Declared once so WithNodeDefaults,
-    // WithBunDefaults, and ResolveRequiredCommands stay in sync.
+    // Help links surfaced when a required command is missing. Declared once so ResolveHelpLink stays in sync.
     private const string NodeHelpLink = "https://nodejs.org/en/download/";
     private const string NpmHelpLink = "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm";
     private const string BunHelpLink = "https://bun.sh/docs/installation";
     private const string YarnHelpLink = "https://yarnpkg.com/getting-started/install";
     private const string PnpmHelpLink = "https://pnpm.io/installation";
+
+    // npm/yarn/pnpm are Node CLIs: whether they install packages or launch the app's run script, they spawn
+    // node, so node must be on PATH too. bun is a full Node replacement and needs no node.
+    private static readonly string[] s_nodeBasedPackageManagers = ["npm", "yarn", "pnpm"];
 
     // This is the order of config files that Vite will look for by default
     // See https://github.com/vitejs/vite/blob/main/packages/vite/src/node/constants.ts#L97
@@ -297,7 +300,7 @@ public static class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithNodeDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
         builder.WithOtlpExporter()
-            .WithRequiredCommandsFromPackageManager("node", NodeHelpLink)
+            .WithRequiredCommandsFromPackageManager("node")
             .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
             .WithCertificateTrustConfiguration((ctx) =>
             {
@@ -326,27 +329,24 @@ public static class JavaScriptHostingExtensions
                 return Task.CompletedTask;
             });
 
-    // Registers a hook that materializes the resource's required commands just before start, deriving them
-    // from the final (last-wins) package-manager selection. Required commands are a run-mode concern: they are
-    // validated against the local PATH by RequiredCommandValidationEventingSubscriber on
-    // BeforeResourceStartedEvent, which fires after BeforeStartEvent. Resolving them here - rather than eagerly
-    // as each With* method runs - lets the package-manager selection settle first, so a later selection fully
-    // replaces an earlier one without having to remove stale RequiredCommandAnnotations. For example
-    // AddViteApp(...).WithBun() ends up requiring only `bun`, not the default node/npm, even though the default
-    // WithNpm ran first. See https://github.com/microsoft/aspire/issues/18625.
+    // Registers a hook that materializes the resource's required commands just before start. Required commands
+    // are a run-mode concern: they are validated against the local PATH by
+    // RequiredCommandValidationEventingSubscriber on BeforeResourceStartedEvent, which fires after
+    // BeforeStartEvent. Resolving them here - rather than eagerly as each With* method runs - lets the
+    // package-manager selection settle first, so a later selection fully replaces an earlier one without having
+    // to remove stale RequiredCommandAnnotations. See https://github.com/microsoft/aspire/issues/18625.
     //
-    // runtimeCommand/runtimeHelpLink describe the runtime the app was created with (node for
-    // AddNodeApp/AddViteApp/AddJavaScriptApp, bun for AddBunApp) and are the required command when no package
-    // manager was selected (e.g. a bare AddNodeApp whose directory has no package.json).
+    // runtimeCommand is the executable the app was created to run with (node for
+    // AddNodeApp/AddViteApp/AddJavaScriptApp, bun for AddBunApp); it launches the app whenever the app is not
+    // routed through a package-manager run script.
     private static IResourceBuilder<TResource> WithRequiredCommandsFromPackageManager<TResource>(
         this IResourceBuilder<TResource> builder,
-        string runtimeCommand,
-        string runtimeHelpLink) where TResource : JavaScriptAppResource
+        string runtimeCommand) where TResource : JavaScriptAppResource
     {
         var resource = builder.Resource;
         builder.ApplicationBuilder.OnBeforeStart((_, _) =>
         {
-            foreach (var (command, helpLink) in ResolveRequiredCommands(resource, runtimeCommand, runtimeHelpLink))
+            foreach (var (command, helpLink) in ResolveRequiredCommands(resource, runtimeCommand))
             {
                 // Idempotent: skip commands already present so an unexpected second publish of BeforeStartEvent
                 // cannot add duplicate RequiredCommandAnnotations for the same command.
@@ -362,30 +362,56 @@ public static class JavaScriptHostingExtensions
         return builder;
     }
 
-    // Projects the resource's selected package manager onto the set of executables that must be on PATH.
-    // Package-manager selection is last-wins via JavaScriptPackageManagerAnnotation, so the required commands
-    // are a pure function of that single source of truth:
-    //   - npm/yarn/pnpm are Node CLIs and the tools they launch (vite, etc.) run on node, so node is required too.
-    //   - bun is a full Node replacement - it runs both install and scripts (including the node-shebang `vite`
-    //     bin) - so node is NOT required. See https://github.com/microsoft/aspire/issues/18625.
-    //   - no package manager (a bare AddNodeApp/AddBunApp with no package.json): only the app's runtime is required.
-    private static IEnumerable<(string Command, string? HelpLink)> ResolveRequiredCommands(IResource resource, string runtimeCommand, string runtimeHelpLink)
+    // Resolves the executables that must be on PATH for the app to install and run, from how the app is actually
+    // launched. Two independent axes:
+    //   - Runtime: apps that launch via a named package-manager run script (npm run dev / bun run dev) - which is
+    //     every AddViteApp/AddJavaScriptApp, plus AddNodeApp/AddBunApp when WithRunScript is used - are launched by
+    //     the package manager, so the package manager is the runtime. Apps that invoke a script file directly
+    //     (AddNodeApp "server.js" / AddBunApp "server.ts" with no run script) are launched by their fixed runtime
+    //     (node/bun) regardless of any package manager.
+    //   - Install: a selected package manager also runs at install time, so it must be on PATH even when a
+    //     different runtime launches the app - e.g. AddNodeApp(...).WithBun() runs `node server.js` but installs
+    //     with `bun`, so both node and bun are required.
+    // npm/yarn/pnpm additionally require node (they are Node CLIs); bun does not. This projection is what fixes
+    // https://github.com/microsoft/aspire/issues/18625 (AddViteApp(...).WithBun() requires only bun) without
+    // dropping the runtime for direct-script apps.
+    private static IEnumerable<(string Command, string? HelpLink)> ResolveRequiredCommands(IResource resource, string runtimeCommand)
     {
-        if (!resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
+        resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager);
+
+        // A package manager only replaces the runtime when the app launches through a run script; otherwise the
+        // runtime executes the script file directly.
+        var launchesViaRunScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _);
+        var runCommand = launchesViaRunScript && packageManager is not null
+            ? packageManager.ExecutableName
+            : runtimeCommand;
+
+        var commands = new HashSet<string>(StringComparer.Ordinal) { runCommand };
+
+        if (packageManager is not null)
         {
-            return [(runtimeCommand, runtimeHelpLink)];
+            commands.Add(packageManager.ExecutableName);
         }
 
-        return packageManager.ExecutableName switch
+        if (commands.Overlaps(s_nodeBasedPackageManagers))
         {
-            "bun" => [("bun", BunHelpLink)],
-            "npm" => [("node", NodeHelpLink), ("npm", NpmHelpLink)],
-            "yarn" => [("node", NodeHelpLink), ("yarn", YarnHelpLink)],
-            "pnpm" => [("node", NodeHelpLink), ("pnpm", PnpmHelpLink)],
-            // Unknown/custom package manager: it still runs on node, but we have no specific install help link.
-            var executable => [("node", NodeHelpLink), (executable, null)],
-        };
+            commands.Add("node");
+        }
+
+        return commands.Select(static command => (command, ResolveHelpLink(command)));
     }
+
+    // Maps a required executable to the install/help link surfaced when the command is missing on PATH.
+    private static string? ResolveHelpLink(string command) => command switch
+    {
+        "node" => NodeHelpLink,
+        "npm" => NpmHelpLink,
+        "bun" => BunHelpLink,
+        "yarn" => YarnHelpLink,
+        "pnpm" => PnpmHelpLink,
+        // Unknown/custom package manager: no specific install help link.
+        _ => null,
+    };
 
     // The default Docker image used for AddBunApp build and runtime stages.
     // Pinned to the major version tag to keep generated Dockerfiles deterministic
@@ -700,7 +726,7 @@ public static class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithBunDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
         builder.WithOtlpExporter()
-            .WithRequiredCommandsFromPackageManager("bun", BunHelpLink)
+            .WithRequiredCommandsFromPackageManager("bun")
             // Bun honors NODE_ENV for module resolution and runtime mode the same way Node does.
             // See https://bun.com/docs/runtime/env
             .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
