@@ -479,25 +479,8 @@ function safeFit(state) {
     const term = state.term;
     const before = term ? { cols: term.cols, rows: term.rows, fontSize: term.options?.fontSize } : null;
     try { state.fitAddon?.fit(); } catch { /* ignore — happens during teardown */ }
-    const after = term ? { cols: term.cols, rows: term.rows, fontSize: term.options?.fontSize } : null;
-    // Cache the actual dims fit() produced at fitFontPx. The toolbar's
-    // Fit preview shown while in fixed mode uses ratio math against
-    // cellWRatio/cellHRatio, but xterm's cell measurement includes
-    // sub-pixel padding that ratio math can't recover perfectly — that
-    // makes the ratio-based preview drift 1-2 rows off the real fit
-    // result. When we have a real observation from an actual fit() at
-    // the fit font size, prefer that over the extrapolated estimate.
-    if (term && after && after.cols > 0 && after.rows > 0 &&
-        state.currentFontPx === state.fitFontPx) {
-        const avail = getAvailableBodySpace(state);
-        state.lastFitObservation = {
-            cols: after.cols,
-            rows: after.rows,
-            availW: avail.width,
-            availH: avail.height,
-        };
-    }
     if (window.__aspireTerminalDebug) {
+        const after = term ? { cols: term.cols, rows: term.rows, fontSize: term.options?.fontSize } : null;
         console.log('[TERMDIAG] safeFit', {
             before, after,
             currentFontPx: state.currentFontPx,
@@ -749,10 +732,10 @@ function calibrateRatios(state) {
         // may not have re-rendered yet, so .xterm-screen still reflects
         // the *old* fontSize's cell metrics. Dividing that stale pixel
         // width by the new fontSize yields a ratio ~half of the true
-        // value. That corrupt ratio then makes the Fit menu preview
-        // report roughly double the real grid. See the term.onResize
-        // handler in initTerminal for the matching RAF-deferred
-        // calibration guard.
+        // value. That corrupt ratio then feeds computeOptimalFont, which
+        // picks a wildly wrong font for the target grid. See the
+        // term.onResize handler in initTerminal for the matching
+        // RAF-deferred calibration guard.
         //
         // Heuristic: once we have a plausible baseline, reject any new
         // sample that swings by more than 40% in either direction. Real
@@ -915,49 +898,6 @@ function buildToolbarSnapshot(state) {
         ? `${state.fixedDims.cols}x${state.fixedDims.rows}`
         : 'auto';
 
-    // Predict what grid Fit mode would produce right now. The cellWRatio
-    // and cellHRatio calibrated from xterm's actual rendered geometry
-    // are font-size-independent (pixels-per-cell / fontPx), so
-    // multiplying by fitFontPx gives the true cell size fit mode
-    // *would* use — regardless of what font size is currently applied
-    // in fixed mode. This is why we don't use fitAddon.proposeDimensions
-    // here: propose uses the CURRENT cell size (fixed-mode's bigger
-    // font), so it would under-report the cols/rows fit would produce.
-    let fitCols = 0;
-    let fitRows = 0;
-    // When already in fit mode with a rendered xterm grid, the live term
-    // dims ARE the fit dims by definition. Prefer those over ratio math
-    // — they're exactly what fit() produced, so the preview label and
-    // the actual grid can never disagree.
-    if (state.sizeMode === 'font' && term && term.cols > 0 && term.rows > 0 &&
-        state.currentFontPx === state.fitFontPx) {
-        fitCols = term.cols;
-        fitRows = term.rows;
-    } else if (state.lastFitObservation) {
-        // In fixed mode, ratio-math extrapolation is 1-2 rows off from
-        // what fit() actually produces (sub-pixel cell padding that
-        // ratio math can't recover exactly). If we have a cached real
-        // fit observation from a previous fit-mode run, scale it by the
-        // avail-space delta so the preview matches what clicking Fit
-        // will really produce.
-        const obs = state.lastFitObservation;
-        const { width: availW, height: availH } = getAvailableBodySpace(state);
-        if (availW > 0 && availH > 0 && obs.availW > 0 && obs.availH > 0) {
-            fitCols = Math.max(1, Math.round(obs.cols * (availW / obs.availW)));
-            fitRows = Math.max(1, Math.round(obs.rows * (availH / obs.availH)));
-        }
-    } else if (state.cellWRatio > 0 && state.cellHRatio > 0 && state.fitFontPx > 0) {
-        const { width: availW, height: availH } = getAvailableBodySpace(state);
-        if (availW > 0 && availH > 0) {
-            const cellW = state.cellWRatio * state.fitFontPx;
-            const cellH = state.cellHRatio * state.fitFontPx;
-            if (cellW > 0 && cellH > 0) {
-                fitCols = Math.max(1, Math.floor(availW / cellW));
-                fitRows = Math.max(1, Math.floor(availH / cellH));
-            }
-        }
-    }
-
     return {
         terminalId: state.id,
         // Generation lets the .NET side discard stale snapshots that arrive
@@ -981,8 +921,6 @@ function buildToolbarSnapshot(state) {
         sizeSelectEnabled: isPrimary || canTakeControl,
         cols: term && term.cols ? term.cols : 0,
         rows: term && term.rows ? term.rows : 0,
-        fitCols,
-        fitRows,
     };
 }
 
@@ -1041,19 +979,14 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
         sizeMode: 'font',
         fixedDims: null,
         currentFontPx: DEFAULT_FONT_PX,
-        // Font size that "Fit" mode would use, tracked separately from
+        // Font size that "Fit" mode uses, tracked separately from
         // currentFontPx because fixed-preset layout overwrites the latter
         // with the auto-calculated optimal font. Preserving the user's last
-        // font-mode font here lets the toolbar preview show what cols x rows
-        // Fit would produce, without actually leaving fixed mode.
+        // font-mode font here lets setSizeMode('font') restore it when the
+        // user flips back to Fit.
         fitFontPx: DEFAULT_FONT_PX,
         cellWRatio: 0,
         cellHRatio: 0,
-        // Last observed real fit() result at fitFontPx, used to make the
-        // fixed-mode Fit menu preview match what clicking Fit will
-        // actually produce. Populated by safeFit() whenever fit runs at
-        // the fit font size.
-        lastFitObservation: null,
         layoutGeneration: 0,
         // Toolbar push state. _toolbarFlushPending coalesces bursts via RAF;
         // _lastToolbarJson lets us short-circuit no-op snapshots so we don't

@@ -637,10 +637,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             if (_terminalSizePresets.Count > 0)
             {
                 var nested = new List<MenuButtonItem>();
-                var displayPresets = terminalState is not null
-                    ? GetTerminalSizePresetsForDisplay(terminalState)
-                    : _terminalSizePresets;
-                foreach (var preset in displayPresets)
+                foreach (var preset in _terminalSizePresets)
                 {
                     var value = preset.Value;
                     nested.Add(new()
@@ -1428,27 +1425,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             return Task.CompletedTask;
         }
         return _terminalViewRef.SetSizeModeAsync(newKey);
-    }
-
-    // Rebuild the presets list for rendering so the "Fit" (auto) entry shows
-    // the cols x rows Fit mode *would* produce right now — using the JS-side
-    // FitCols/FitRows preview rather than the actual current grid dims, which
-    // may be locked by a fixed preset. Called from the menu builder on each
-    // UpdateMenuButtons pass; the list is short (~6 items) and only allocates
-    // when there is a Fit preview to fold in.
-    private IReadOnlyList<Controls.TerminalSizePreset> GetTerminalSizePresetsForDisplay(Controls.TerminalToolbarState state)
-    {
-        if (state.FitCols <= 0 || state.FitRows <= 0)
-        {
-            return _terminalSizePresets;
-        }
-
-        var baseAutoLabel = Loc[nameof(Dashboard.Resources.ConsoleLogs.TerminalToolbarGridSizeAuto)];
-        var autoLabel = $"{baseAutoLabel} ({state.FitCols}×{state.FitRows})";
-
-        return _terminalSizePresets
-            .Select(p => p.Value == "auto" ? p with { Label = autoLabel } : p)
-            .ToList();
     }
 
     // IComponentWithTelemetry impl
