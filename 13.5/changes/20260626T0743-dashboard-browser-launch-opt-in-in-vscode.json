@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The VS Code extension no longer auto-opens the Aspire Dashboard when an AppHost starts. Configure the preferred launch behavior — notification, external browser, integrated browser, or browser-debug — using the new `aspire.dashboardBrowser` setting or the per-launch `dashboardBrowser` property in `launch.json`. Legacy `aspire.enableAspireDashboardAutoLaunch` settings are preserved for backward compatibility.",
-  "docsPrs": [],
+  "docsPrs": [
+    1323
+  ],
   "docsRequired": true,
   "emoji": "🔔",
   "firstMergedAt": "2026-06-26T07:43:09Z",
