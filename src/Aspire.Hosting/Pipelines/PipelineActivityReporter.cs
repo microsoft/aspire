@@ -493,16 +493,22 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
             var fileRefs = JsonSerializer.Deserialize<FileReference[]>(value);
             if (fileRefs is { Length: > 0 })
             {
-                var files = new InputFileDto[fileRefs.Length];
+                var files = new List<InputFileDto>(fileRefs.Length);
                 for (var idx = 0; idx < fileRefs.Length; idx++)
                 {
                     var fileRef = fileRefs[idx];
-                    var filePath = _fileUploadStore.GetFilePath(fileRef.Id) ?? fileRef.Id;
+                    var filePath = _fileUploadStore.GetFilePath(fileRef.Id);
+                    if (filePath is null)
+                    {
+                        // Unknown file ID — skip to prevent using client-supplied IDs as arbitrary file paths.
+                        _logger.LogWarning("Received unknown file ID '{FileId}' in interaction input '{InputName}'. Skipping.", fileRef.Id, matchingInput.Name);
+                        continue;
+                    }
                     var fileName = fileRef.Name ?? _fileUploadStore.GetFileName(fileRef.Id) ?? fileRef.Id;
-                    files[idx] = new InputFileDto(fileRef.Id, fileName, filePath);
+                    files.Add(new InputFileDto(fileRef.Id, fileName, filePath));
                 }
 
-                return new InputDto(matchingInput.Name, value, matchingInput.InputType, files);
+                return new InputDto(matchingInput.Name, value, matchingInput.InputType, files.ToArray());
             }
         }
 

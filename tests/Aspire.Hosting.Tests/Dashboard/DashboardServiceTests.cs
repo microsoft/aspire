@@ -9,7 +9,9 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Tests.Utils.Grpc;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.ConsoleLogs;
+using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
+using Grpc.Core;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -156,24 +158,24 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             executeCommand: c => Task.FromResult(CommandResults.Success()),
             commandOptions: new()
             {
-                UpdateState = c => Aspire.Hosting.ApplicationModel.ResourceCommandState.Enabled,
+                UpdateState = c => Hosting.ApplicationModel.ResourceCommandState.Enabled,
                 Description = "Display description!",
                 Parameter = new[] { "One", "Two" },
                 Arguments =
                 [
-                    new Aspire.Hosting.InteractionInput
+                    new InteractionInput
                     {
                         Name = "selector",
                         Label = "Selector",
                         Description = "CSS selector to click.",
-                        InputType = Aspire.Hosting.InputType.Text,
+                        InputType = InputType.Text,
                         Required = true,
                         Placeholder = "#submit"
                     }
                 ],
                 ConfirmationMessage = "Confirmation message!",
                 IconName = "Icon name!",
-                IconVariant = Aspire.Hosting.ApplicationModel.IconVariant.Filled,
+                IconVariant = Hosting.ApplicationModel.IconVariant.Filled,
                 IsHighlighted = true
             });
 #pragma warning restore CS0618
@@ -183,8 +185,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             executeCommand: c => Task.FromResult(CommandResults.Success()),
             commandOptions: new()
             {
-                UpdateState = c => Aspire.Hosting.ApplicationModel.ResourceCommandState.Enabled,
-                Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api
+                UpdateState = c => Hosting.ApplicationModel.ResourceCommandState.Enabled,
+                Visibility = ResourceCommandVisibility.Api
             });
 
         logger.LogInformation("Publishing resource.");
@@ -230,7 +232,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("selector", argumentInput.Name);
         Assert.Equal("Selector", argumentInput.Label);
         Assert.Equal("CSS selector to click.", argumentInput.Description);
-        Assert.Equal(Aspire.DashboardService.Proto.V1.InputType.Text, argumentInput.InputType);
+        Assert.Equal(DashboardService.Proto.V1.InputType.Text, argumentInput.InputType);
         Assert.True(argumentInput.Required);
         Assert.Equal("#submit", argumentInput.Placeholder);
         Assert.Equal("Confirmation message!", commandData.ConfirmationMessage);
@@ -264,7 +266,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             },
             commandOptions: new()
             {
-                Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api,
+                Visibility = ResourceCommandVisibility.Api,
                 Arguments =
                 [
                     new InteractionInput
@@ -327,7 +329,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             },
             commandOptions: new()
             {
-                Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api,
+                Visibility = ResourceCommandVisibility.Api,
                 Arguments =
                 [
                     new InteractionInput
@@ -384,7 +386,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             },
             commandOptions: new()
             {
-                Visibility = Aspire.Hosting.ApplicationModel.ResourceCommandVisibility.Api,
+                Visibility = ResourceCommandVisibility.Api,
                 Arguments =
                 [
                     new InteractionInput
@@ -443,7 +445,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -513,7 +515,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -532,7 +534,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var resultTask = interactionService.PromptInputAsync(
             title: "Title!",
             message: "Message!",
-            new Aspire.Hosting.InteractionInput { Name = "Input", InputType = Aspire.Hosting.InputType.Text });
+            new InteractionInput { Name = "Input", InputType = InputType.Text });
 
         // Assert
         logger.LogInformation("Reading result from writer.");
@@ -560,7 +562,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -579,7 +581,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         var resultTask = interactionService.PromptInputAsync(
             title: "Title!",
             message: "Message!",
-            new Aspire.Hosting.InteractionInput { Name = "Input", InputType = Aspire.Hosting.InputType.Text, Label = "Input" });
+            new InteractionInput { Name = "Input", InputType = InputType.Text, Label = "Input" });
 
         // Assert
         logger.LogInformation("Reading result from writer.");
@@ -619,7 +621,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -656,7 +658,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<InteractionService>(),
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build());
         using var dashboardServiceData = CreateDashboardServiceData(loggerFactory: loggerFactory, interactionService: interactionService);
         var dashboardService = CreateDashboardService(dashboardServiceData, logger: loggerFactory.CreateLogger<DashboardServiceImpl>());
 
@@ -776,11 +778,151 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("MyApp", response.ApplicationName);
     }
 
+    [Theory]
+    [InlineData(InputType.File, 0, -1, 0)]       // File, no input max, no server limit → 0
+    [InlineData(InputType.File, 0, 50, 50)]      // File, no input max, 50 MB server limit → 50 MB
+    [InlineData(InputType.File, 5, 100, 5)]      // File, 5 MB input max below 100 MB server → uses input
+    [InlineData(InputType.File, 200, 100, 100)]  // File, 200 MB input max exceeds 100 MB server → capped
+    [InlineData(InputType.File, 50, -1, 50)]     // File, 50 MB input max, no server limit → uses input
+    [InlineData(InputType.Text, 0, 100, 0)]      // Non-file, server limit not applied → 0
+    public void CreateInteractionInputDto_MaxFileSize_RespectsLimits(
+        InputType inputType, int inputMaxFileSizeMB, int serverLimitMB, int expectedMB)
+    {
+        var input = inputMaxFileSizeMB > 0
+            ? new InteractionInput { Name = "TestInput", Label = "Test Input", InputType = inputType, MaxFileSize = inputMaxFileSizeMB * 1024 * 1024 }
+            : new InteractionInput { Name = "TestInput", Label = "Test Input", InputType = inputType };
+
+        long? serverLimit = serverLimitMB >= 0 ? serverLimitMB * 1024L * 1024 : null;
+        var dto = DashboardServiceImpl.CreateInteractionInputDto(input, maxFileUploadSize: serverLimit);
+
+        Assert.Equal(expectedMB * 1024L * 1024, dto.MaxFileSize);
+    }
+
+    [Fact]
+    public async Task UploadFile_WithinSizeLimit_Succeeds()
+    {
+        var dashboardServiceData = CreateDashboardServiceData();
+        using var fileUploadStore = new FileUploadStore();
+        var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
+
+        var data = new byte[1024]; // 1 KB
+        Array.Fill(data, (byte)'A');
+
+        var context = TestServerCallContext.Create();
+        var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
+        requestStream.AddMessage(new UploadFileChunk { FileName = "test.txt", Data = ByteString.CopyFrom(data) });
+        requestStream.Complete();
+
+        var response = await dashboardService.UploadFile(requestStream, context);
+
+        Assert.NotNull(response.FileId);
+        Assert.NotEmpty(response.FileId);
+        Assert.NotNull(fileUploadStore.GetFilePath(response.FileId));
+    }
+
+    [Fact]
+    public async Task UploadFile_ExceedsConfiguredSizeLimit_ThrowsResourceExhausted()
+    {
+        var dashboardServiceData = CreateDashboardServiceData();
+        using var fileUploadStore = new FileUploadStore();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.MaxFileUploadSize] = "1024" // 1 KB limit
+            })
+            .Build();
+        var dashboardService = CreateDashboardService(dashboardServiceData, configuration: configuration, fileUploadStore: fileUploadStore);
+
+        var data = new byte[2048]; // 2 KB - exceeds the 1 KB limit
+        Array.Fill(data, (byte)'A');
+
+        var context = TestServerCallContext.Create();
+        var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
+        requestStream.AddMessage(new UploadFileChunk { FileName = "large.txt", Data = ByteString.CopyFrom(data) });
+        requestStream.Complete();
+
+        var ex = await Assert.ThrowsAsync<RpcException>(() => dashboardService.UploadFile(requestStream, context));
+        Assert.Equal(StatusCode.ResourceExhausted, ex.StatusCode);
+    }
+
+    [Fact]
+    public async Task UploadFile_ExceedsLimitAcrossMultipleChunks_ThrowsResourceExhausted()
+    {
+        var dashboardServiceData = CreateDashboardServiceData();
+        using var fileUploadStore = new FileUploadStore();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.MaxFileUploadSize] = "1500" // 1500 bytes limit
+            })
+            .Build();
+        var dashboardService = CreateDashboardService(dashboardServiceData, configuration: configuration, fileUploadStore: fileUploadStore);
+
+        var chunk1 = new byte[1024]; // 1 KB
+        var chunk2 = new byte[1024]; // 1 KB - total 2 KB exceeds 1500
+        Array.Fill(chunk1, (byte)'A');
+        Array.Fill(chunk2, (byte)'B');
+
+        var context = TestServerCallContext.Create();
+        var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
+        requestStream.AddMessage(new UploadFileChunk { FileName = "large.txt", Data = ByteString.CopyFrom(chunk1) });
+        requestStream.AddMessage(new UploadFileChunk { Data = ByteString.CopyFrom(chunk2) });
+        requestStream.Complete();
+
+        var ex = await Assert.ThrowsAsync<RpcException>(() => dashboardService.UploadFile(requestStream, context));
+        Assert.Equal(StatusCode.ResourceExhausted, ex.StatusCode);
+    }
+
+    [Fact]
+    public async Task UploadFile_ConfiguredSizeLimit_AllowsWithinLimitUploads()
+    {
+        var dashboardServiceData = CreateDashboardServiceData();
+        using var fileUploadStore = new FileUploadStore();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.MaxFileUploadSize] = "10485760" // 10 MB
+            })
+            .Build();
+        var dashboardService = CreateDashboardService(dashboardServiceData, configuration: configuration, fileUploadStore: fileUploadStore);
+
+        var data = new byte[1024 * 1024]; // 1 MB - within 10 MB limit
+        Array.Fill(data, (byte)'A');
+
+        var context = TestServerCallContext.Create();
+        var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
+        requestStream.AddMessage(new UploadFileChunk { FileName = "medium.bin", Data = ByteString.CopyFrom(data) });
+        requestStream.Complete();
+
+        var response = await dashboardService.UploadFile(requestStream, context);
+
+        Assert.NotNull(response.FileId);
+        Assert.NotEmpty(response.FileId);
+    }
+
+    [Fact]
+    public async Task UploadFile_EmptyStream_ReturnsFileId()
+    {
+        var dashboardServiceData = CreateDashboardServiceData();
+        using var fileUploadStore = new FileUploadStore();
+        var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
+
+        var context = TestServerCallContext.Create();
+        var requestStream = new TestAsyncStreamReader<UploadFileChunk>(context);
+        requestStream.Complete(); // empty stream
+
+        var response = await dashboardService.UploadFile(requestStream, context);
+
+        Assert.NotNull(response.FileId);
+        Assert.NotEmpty(response.FileId);
+    }
+
     private static DashboardServiceImpl CreateDashboardService(
         DashboardServiceData dashboardServiceData,
         IHostEnvironment? hostEnvironment = null,
         IConfiguration? configuration = null,
-        ILogger<DashboardServiceImpl>? logger = null)
+        ILogger<DashboardServiceImpl>? logger = null,
+        FileUploadStore? fileUploadStore = null)
     {
         return new DashboardServiceImpl(
             dashboardServiceData,
@@ -788,7 +930,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new TestHostApplicationLifetime(),
             configuration ?? new ConfigurationBuilder().Build(),
             logger ?? NullLogger<DashboardServiceImpl>.Instance,
-            new FileUploadStore());
+            fileUploadStore ?? new FileUploadStore());
     }
 
     private static DashboardServiceData CreateDashboardServiceData(
@@ -804,7 +946,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             NullLogger<InteractionService>.Instance,
             new DistributedApplicationOptions(),
             new ServiceCollection().BuildServiceProvider(),
-            new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+            new ConfigurationBuilder().Build());
 
         return new DashboardServiceData(
             resourceNotificationService,

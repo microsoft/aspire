@@ -1043,7 +1043,6 @@ internal sealed class DashboardClient : IDashboardClient
             if (isFirst)
             {
                 chunk.FileName = fileName;
-                isFirst = true;
             }
 
             await call.RequestStream.WriteAsync(chunk, combinedTokens.Token).ConfigureAwait(false);

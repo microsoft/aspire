@@ -128,7 +128,8 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                                 .SelectMany(i => i.DynamicLoading?.DependsOnInputs ?? [])
                                 .ToList();
 
-                            var inputInstances = inputs.Inputs.Select(input => CreateInteractionInputDto(input, updateStateOnChangeInputs)).ToList();
+                            var maxFileUploadSize = configuration.GetValue<long?>(KnownConfigNames.MaxFileUploadSize);
+                            var inputInstances = inputs.Inputs.Select(input => CreateInteractionInputDto(input, updateStateOnChangeInputs, maxFileUploadSize)).ToList();
                             change.InputsDialog.InputItems.AddRange(inputInstances);
                         }
                         else if (interaction.InteractionInfo is ProgressInteractionInfo)
@@ -183,7 +184,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         };
     }
 
-    internal static Aspire.DashboardService.Proto.V1.InteractionInput CreateInteractionInputDto(Aspire.Hosting.InteractionInput input, IReadOnlyList<string>? updateStateOnChangeInputs = null)
+    internal static Aspire.DashboardService.Proto.V1.InteractionInput CreateInteractionInputDto(Aspire.Hosting.InteractionInput input, IReadOnlyList<string>? updateStateOnChangeInputs = null, long? maxFileUploadSize = null)
     {
         var updateStateOnChange = updateStateOnChangeInputs?.Any(i => string.Equals(i, input.Name, StringComparisons.InteractionInputName)) == true;
 
@@ -227,7 +228,16 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         }
         if (input.MaxFileSize != null)
         {
-            dto.MaxFileSize = input.MaxFileSize.Value;
+            // Cap the per-input MaxFileSize at the configured server-side upload limit.
+            var effectiveMaxFileSize = maxFileUploadSize.HasValue
+                ? Math.Min(input.MaxFileSize.Value, maxFileUploadSize.Value)
+                : input.MaxFileSize.Value;
+            dto.MaxFileSize = effectiveMaxFileSize;
+        }
+        else if (maxFileUploadSize.HasValue && input.InputType == InputType.File)
+        {
+            // If no per-input limit is set but a server-side limit exists, apply it.
+            dto.MaxFileSize = maxFileUploadSize.Value;
         }
         if (input.AllowMultipleFiles)
         {
@@ -478,8 +488,15 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
     public override async Task<UploadFileResponse> UploadFile(IAsyncStreamReader<UploadFileChunk> requestStream, ServerCallContext context)
     {
+        // Enforce a maximum total upload size to prevent unbounded writes from misbehaving clients.
+        // Configurable via ASPIRE_MAX_FILE_UPLOAD_SIZE environment variable (in bytes). Defaults to 100 MB.
+        const long defaultMaxTotalUploadBytes = 100 * 1024 * 1024; // 100 MB
+        var maxTotalUploadBytes = configuration.GetValue<long?>(KnownConfigNames.MaxFileUploadSize)
+            ?? defaultMaxTotalUploadBytes;
+
         var cancellationToken = context.CancellationToken;
         string? fileName = null;
+        long totalBytesWritten = 0;
 
         var (fileId, fileStream) = await CreateFileStream().ConfigureAwait(false);
         await using (fileStream.ConfigureAwait(false))
@@ -496,6 +513,12 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
                 if (!chunk.Data.IsEmpty)
                 {
+                    totalBytesWritten += chunk.Data.Length;
+                    if (totalBytesWritten > maxTotalUploadBytes)
+                    {
+                        throw new RpcException(new Status(StatusCode.ResourceExhausted, $"Upload exceeds maximum allowed size of {maxTotalUploadBytes} bytes."));
+                    }
+
                     chunk.Data.WriteTo(fileStream);
                 }
             }
@@ -516,6 +539,13 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
                 if (!firstChunk.Data.IsEmpty)
                 {
+                    totalBytesWritten += firstChunk.Data.Length;
+                    if (totalBytesWritten > maxTotalUploadBytes)
+                    {
+                        await fs.DisposeAsync().ConfigureAwait(false);
+                        throw new RpcException(new Status(StatusCode.ResourceExhausted, $"Upload exceeds maximum allowed size of {maxTotalUploadBytes} bytes."));
+                    }
+
                     firstChunk.Data.WriteTo(fs);
                 }
 

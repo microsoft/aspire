@@ -15,9 +15,10 @@ internal sealed class FileUploadStore : IDisposable
 
     public FileUploadStore()
     {
-        // Use a process-specific subdirectory to prevent symlink attacks on multi-user systems.
-        _uploadDirectory = Path.Combine(Path.GetTempPath(), $"aspire-uploads-{Environment.ProcessId}");
-        Directory.CreateDirectory(_uploadDirectory);
+        // Use CreateTempSubdirectory to atomically create a randomly named directory with
+        // restrictive permissions, avoiding predictable paths that are vulnerable to symlink attacks.
+        var tempDir = Directory.CreateTempSubdirectory("aspire-uploads-");
+        _uploadDirectory = tempDir.FullName;
     }
 
     /// <summary>

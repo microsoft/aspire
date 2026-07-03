@@ -551,8 +551,8 @@ internal class InteractionService : IInteractionService
                                 }
                                 break;
                             case InputType.File:
-                                // File chooser values are file paths on disk; basic validation that the value is not empty is handled above.
-                                // The consumer opens the file via OpenFileStreamAsync().
+                                // File input values contain serialized JSON file references (id + name).
+                                // The consumer reads files via InteractionFile.OpenRead() / ReadAllBytesAsync() on the Files collection.
                                 break;
                             default:
                                 break;

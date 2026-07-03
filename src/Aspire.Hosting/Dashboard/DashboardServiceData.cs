@@ -21,6 +21,7 @@ internal sealed class DashboardServiceData : IDisposable
     private readonly InteractionService _interactionService;
     private readonly ResourceLoggerService _resourceLoggerService;
     private readonly FileUploadStore _fileUploadStore;
+    private readonly ILogger<DashboardServiceData> _logger;
 
     public DashboardServiceData(
         ResourceNotificationService resourceNotificationService,
@@ -35,6 +36,7 @@ internal sealed class DashboardServiceData : IDisposable
         _resourceCommandService = resourceCommandService;
         _interactionService = interactionService;
         _fileUploadStore = fileUploadStore;
+        _logger = logger;
         var cancellationToken = _cts.Token;
 
         Task.Run(async () =>
@@ -240,16 +242,22 @@ internal sealed class DashboardServiceData : IDisposable
             var fileRefs = JsonSerializer.Deserialize<FileReference[]>(i.Value);
             if (fileRefs is { Length: > 0 })
             {
-                var files = new InputFileDto[fileRefs.Length];
+                var files = new List<InputFileDto>(fileRefs.Length);
                 for (var idx = 0; idx < fileRefs.Length; idx++)
                 {
                     var fileRef = fileRefs[idx];
-                    var filePath = _fileUploadStore.GetFilePath(fileRef.Id) ?? fileRef.Id;
+                    var filePath = _fileUploadStore.GetFilePath(fileRef.Id);
+                    if (filePath is null)
+                    {
+                        // Unknown file ID — skip to prevent using client-supplied IDs as arbitrary file paths.
+                        _logger.LogWarning("Received unknown file ID '{FileId}' in interaction input '{InputName}'. Skipping.", fileRef.Id, i.Name);
+                        continue;
+                    }
                     var fileName = fileRef.Name ?? _fileUploadStore.GetFileName(fileRef.Id) ?? fileRef.Id;
-                    files[idx] = new InputFileDto(fileRef.Id, fileName, filePath);
+                    files.Add(new InputFileDto(fileRef.Id, fileName, filePath));
                 }
 
-                return new InputDto(i.Name, i.Value, inputType, files);
+                return new InputDto(i.Name, i.Value, inputType, files.ToArray());
             }
         }
 
