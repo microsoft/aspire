@@ -125,7 +125,11 @@ public sealed class InputViewModel
     {
         FileReferences.Clear();
         FileReferences.AddRange(files);
-        Input.Value = JsonSerializer.Serialize(FileReferences.Where(f => f.Id is not null), s_jsonSerializerOptions);
+        var successfulRefs = FileReferences.Where(f => f.Id is not null).ToList();
+        // Use empty string (not "[]") when no files were accepted, so required-field checks work correctly.
+        Input.Value = successfulRefs.Count > 0
+            ? JsonSerializer.Serialize(successfulRefs, s_jsonSerializerOptions)
+            : string.Empty;
     }
 
     private static bool OptionsEqual(List<SelectViewModel<string>> existing, List<SelectViewModel<string>> incoming)

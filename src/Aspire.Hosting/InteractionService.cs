@@ -553,6 +553,8 @@ internal class InteractionService : IInteractionService
                             case InputType.File:
                                 // File input values contain serialized JSON file references (id + name).
                                 // The consumer reads files via InteractionFile.OpenRead() / ReadAllBytesAsync() on the Files collection.
+                                // Required-field validation is handled by the string.IsNullOrEmpty(value) check above.
+                                // The Dashboard sets Value to empty string when no files are accepted (via SetFileReferences).
                                 break;
                             default:
                                 break;

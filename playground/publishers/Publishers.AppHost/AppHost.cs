@@ -12,8 +12,6 @@ builder.Configuration.AddCommandLine(args, new Dictionary<string, string> { ["--
 var target = builder.Configuration["Deployment:Target"];
 var publisher = builder.ExecutionContext.PublisherName;
 
-System.Diagnostics.Debugger.Launch();
-
 IResourceBuilder<IComputeEnvironmentResource>? environment = (publisher, target) switch
 {
     ("default", "kube") => builder.AddKubernetesEnvironment("env"),

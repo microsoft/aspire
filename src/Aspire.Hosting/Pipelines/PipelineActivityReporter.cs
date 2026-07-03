@@ -490,7 +490,17 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
 
         if (matchingInput.InputType == InputType.File && !string.IsNullOrEmpty(value))
         {
-            var fileRefs = JsonSerializer.Deserialize<FileReference[]>(value);
+            FileReference[]? fileRefs;
+            try
+            {
+                fileRefs = JsonSerializer.Deserialize<FileReference[]>(value);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to deserialize file references for interaction input '{InputName}'. Treating as empty.", matchingInput.Name);
+                return new InputDto(matchingInput.Name, value, matchingInput.InputType);
+            }
+
             if (fileRefs is { Length: > 0 })
             {
                 var files = new List<InputFileDto>(fileRefs.Length);

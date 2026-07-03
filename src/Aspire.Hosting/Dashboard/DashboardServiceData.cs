@@ -239,7 +239,17 @@ internal sealed class DashboardServiceData : IDisposable
         // Parse it, resolve each ID to the temp file path, and build InputFileDto entries.
         if (inputType == InputType.File && !string.IsNullOrEmpty(i.Value))
         {
-            var fileRefs = JsonSerializer.Deserialize<FileReference[]>(i.Value);
+            FileReference[]? fileRefs;
+            try
+            {
+                fileRefs = JsonSerializer.Deserialize<FileReference[]>(i.Value);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to deserialize file references for interaction input '{InputName}'. Treating as empty.", i.Name);
+                return new InputDto(i.Name, i.Value, inputType);
+            }
+
             if (fileRefs is { Length: > 0 })
             {
                 var files = new List<InputFileDto>(fileRefs.Length);
@@ -299,12 +309,20 @@ internal sealed class DashboardServiceData : IDisposable
                 modelInput.Value = incomingValue;
 
                 // For File inputs, build InteractionFile instances from the resolved file info.
-                if (requestInput.InputType == InputType.File && requestInput.Files is { Count: > 0 })
+                if (requestInput.InputType == InputType.File)
                 {
-                    var interactionFiles = requestInput.Files
-                        .Select(f => new InteractionFile(f.Id, f.Name, f.FilePath))
-                        .ToArray();
-                    modelInput.SetFiles(interactionFiles);
+                    if (requestInput.Files is { Count: > 0 })
+                    {
+                        var interactionFiles = requestInput.Files
+                            .Select(f => new InteractionFile(f.Id, f.Name, f.FilePath))
+                            .ToArray();
+                        modelInput.SetFiles(interactionFiles);
+                    }
+                    else
+                    {
+                        // Clear stale file references when the selection is empty.
+                        modelInput.SetFiles([]);
+                    }
                 }
 
                 // If we're processing updates because of a dependency change, check to see if this input is depended on.

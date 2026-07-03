@@ -236,7 +236,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         {
             if (file.Size > maxFileSize)
             {
-                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = $"'{file.Name}' exceeds the maximum size of {FileSizeFormatHelpers.FormatFileSize(maxFileSize)}" });
+                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = $"Exceeds the maximum size of {FileSizeFormatHelpers.FormatFileSize(maxFileSize)}" });
                 continue;
             }
 

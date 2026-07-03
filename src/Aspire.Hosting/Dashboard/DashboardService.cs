@@ -519,7 +519,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                         throw new RpcException(new Status(StatusCode.ResourceExhausted, $"Upload exceeds maximum allowed size of {maxTotalUploadBytes} bytes."));
                     }
 
-                    chunk.Data.WriteTo(fileStream);
+                    await fileStream.WriteAsync(chunk.Data.Memory, cancellationToken).ConfigureAwait(false);
                 }
             }
         }
@@ -546,7 +546,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                         throw new RpcException(new Status(StatusCode.ResourceExhausted, $"Upload exceeds maximum allowed size of {maxTotalUploadBytes} bytes."));
                     }
 
-                    firstChunk.Data.WriteTo(fs);
+                    await fs.WriteAsync(firstChunk.Data.Memory, cancellationToken).ConfigureAwait(false);
                 }
 
                 return (id, fs);
