@@ -812,9 +812,17 @@ function buildToolbarSnapshot(state) {
     // toolbar show a real preview on the Fit entry even while a fixed
     // preset is currently locking the actual term.cols/rows. Requires
     // calibration to have run at least once (cellWRatio/cellHRatio > 0).
+    //
+    // When we're already in fit mode, skip the prediction and reuse the
+    // live term.cols/rows — that's what fit *actually* produced, and it
+    // avoids any drift in cellWRatio (which is derived from offsetWidth
+    // measurements that can lag one frame behind term.resize dispatches).
     let fitCols = 0;
     let fitRows = 0;
-    if (state.cellWRatio > 0 && state.cellHRatio > 0 && state.fitFontPx > 0) {
+    if (state.sizeMode === 'font' && term && term.cols > 0 && term.rows > 0) {
+        fitCols = term.cols;
+        fitRows = term.rows;
+    } else if (state.cellWRatio > 0 && state.cellHRatio > 0 && state.fitFontPx > 0) {
         const { width: availW, height: availH } = getAvailableBodySpace(state);
         if (availW > 0 && availH > 0) {
             const cellW = state.cellWRatio * state.fitFontPx;
@@ -1028,11 +1036,20 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
     // viewers' fit() calls don't disturb the producer. Push fresh dims to
     // the toolbar and recalibrate ratios so future fixed-mode font calcs
     // stay accurate.
+    //
+    // Recalibration is deferred one RAF because xterm dispatches onResize
+    // *before* it re-renders .xterm-screen; measuring offsetWidth here
+    // would divide the old rendered width by the new cols count and yield
+    // a cellWRatio ~half of the true value. That in turn made the toolbar's
+    // Fit preview report roughly double the real cols×rows.
     term.onResize(({ cols, rows }) => {
         if (state.client) state.client.sendResize(cols, rows);
-        calibrateRatios(state);
         updateDimsReadout(state);
-        notifyToolbar(state);
+        requestAnimationFrame(() => {
+            if (state.term !== term) return;
+            calibrateRatios(state);
+            notifyToolbar(state);
+        });
     });
 
     term.onData((data) => {
