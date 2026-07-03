@@ -10,8 +10,10 @@ var matchmaker = builder.AddProject<Projects.Godot_Matchmaker>("matchmaker")
 // Read Godot binary path from configuration; fall back to a platform-appropriate default.
 // On machines without Godot installed, the godot-server resource is marked WithExplicitStart()
 // so the AppHost starts normally and the resource only runs when manually triggered.
-var godotBin = builder.Configuration["GODOT_BIN"]
-    ?? (OperatingSystem.IsWindows() ? "godot.exe" : "godot");
+var configuredGodotBin = builder.Configuration["GODOT_BIN"];
+var godotBin = string.IsNullOrWhiteSpace(configuredGodotBin)
+    ? (OperatingSystem.IsWindows() ? "godot.exe" : "godot")
+    : configuredGodotBin;
 
 var godotServer = builder.AddExecutable("godot-server", godotBin, "../GameServer", "--headless", "--script", "server.gd")
     // Expose the UDP game-server port and propagate it as GODOT_SERVER_PORT so the GDScript can

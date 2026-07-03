@@ -16,7 +16,7 @@ internal static class DistributedApplicationTestFactory
     /// <summary>
     /// Creates an <see cref="IDistributedApplicationTestingBuilder"/> for the specified app host assembly.
     /// </summary>
-    public static async Task<IDistributedApplicationTestingBuilder> CreateAsync(Type appHostProgramType, ITestOutputHelper? testOutput)
+    public static async Task<IDistributedApplicationTestingBuilder> CreateAsync(Type appHostProgramType, ITestOutputHelper? testOutput, Action<IDistributedApplicationTestingBuilder>? configureBuilder = null)
     {
         var builder = await DistributedApplicationTestingBuilder.CreateAsync(appHostProgramType);
 
@@ -27,6 +27,8 @@ internal static class DistributedApplicationTestFactory
 
         builder.WithRandomParameterValues();
         builder.WithRandomVolumeNames();
+
+        configureBuilder?.Invoke(builder);
 
         builder.Services.AddLogging(logging =>
         {
