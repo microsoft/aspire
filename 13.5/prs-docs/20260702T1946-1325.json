@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "CI/tooling update to the aspire.dev repo itself (upgrades gh-aw agentic workflow tooling); no product documentation content changed",
+  "mergedAt": "2026-07-02T19:46:08Z",
+  "number": 1325,
+  "runDate": "2026-07-03T00:24:30Z",
+  "status": "excluded",
+  "title": "Upgrade gh-aw to v0.81.6 and remove unused agentic workflows"
+}
