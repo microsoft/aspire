@@ -93,6 +93,13 @@ internal static class IDistributedApplicationBuilderExtensions
                                 c.Input.Options = options;
                             }
                         }
+                    },
+                    new InteractionInput
+                    {
+                        Name = "CertificateFile",
+                        Label = "Certificate file",
+                        InputType = InputType.File,
+                        Required = true
                     }
                 ],
                 new InputsDialogInteractionOptions
@@ -119,9 +126,10 @@ internal static class IDistributedApplicationBuilderExtensions
                 },
                 cancellationToken: context.CancellationToken);
 
-            var appName = multiInputResult.Canceled ? "default-app" : (multiInputResult.Data?.FirstOrDefault(i => i.Label == "Application Name")?.Value ?? "default-app");
-            var appVersion = multiInputResult.Canceled ? "1.0.0" : (multiInputResult.Data?.FirstOrDefault(i => i.Label == "Application Version")?.Value ?? "1.0.0");
-            var sslType = multiInputResult.Canceled ? "self-signed" : (multiInputResult.Data?.FirstOrDefault(i => i.Label == "SSL Certificate Type")?.Value ?? "self-signed");
+            var appName = multiInputResult.Canceled ? "default-app" : (multiInputResult.Data?["ApplicationName"]?.Value ?? "default-app");
+            var appVersion = multiInputResult.Canceled ? "1.0.0" : (multiInputResult.Data?["ApplicationVersion"]?.Value ?? "1.0.0");
+            var sslType = multiInputResult.Canceled ? "self-signed" : (multiInputResult.Data?["SSLCertificateType"]?.Value ?? "self-signed");
+            var certFiles = multiInputResult.Canceled ? null : multiInputResult.Data?["CertificateFile"]?.Files;
 
             // Test Text input
             var envResult = await interactionService.PromptInputAsync(

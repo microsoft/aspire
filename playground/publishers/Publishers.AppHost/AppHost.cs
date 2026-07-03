@@ -12,12 +12,14 @@ builder.Configuration.AddCommandLine(args, new Dictionary<string, string> { ["--
 var target = builder.Configuration["Deployment:Target"];
 var publisher = builder.ExecutionContext.PublisherName;
 
+System.Diagnostics.Debugger.Launch();
+
 IResourceBuilder<IComputeEnvironmentResource>? environment = (publisher, target) switch
 {
     ("default", "kube") => builder.AddKubernetesEnvironment("env"),
     ("default", "azure") => builder.AddAzureContainerAppEnvironment("env"),
-    ("default", "publish-test") => builder.AddPublishTestResource("env"),
     ("default", _) => builder.AddDockerComposeEnvironment("env"),
+    (_, "publish-test") => builder.AddPublishTestResource("env"),
     _ => null
 };
 
