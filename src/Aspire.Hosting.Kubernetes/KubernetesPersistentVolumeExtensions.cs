@@ -221,7 +221,7 @@ public static class KubernetesPersistentVolumeExtensions
 
     /// <summary>
     /// Binds a workload to a Kubernetes <see cref="KubernetesPersistentVolumeResource"/>
-    /// using <em>name matching</em>. The workload must already declare a volume with
+    /// using name matching. The workload must already declare a volume with
     /// a matching <c>source</c> name (typically via <c>WithVolume("name", "/path")</c>
     /// or an integration helper such as Postgres'
     /// <c>WithDataVolume()</c>). The publisher rewrites that volume's pod-spec entry
