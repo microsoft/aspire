@@ -559,6 +559,9 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Uploading file {FileName} from {FilePath}", fileName, filePath);
 
+        // Known limitation: the entire file is loaded into memory because StreamJsonRpc does not
+        // support streaming byte payloads. The server-side upload limit (default 100 MB) bounds
+        // worst-case memory usage. The Dashboard path uses gRPC streaming and avoids this.
         var data = await File.ReadAllBytesAsync(filePath, cancellationToken).ConfigureAwait(false);
 
         var response = await rpc.InvokeWithProfilingAsync<UploadFileResponse>(
