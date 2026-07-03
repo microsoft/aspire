@@ -998,6 +998,35 @@ public class KubernetesPublisherTests()
             .AppendContentAsFile(pvcContent, "yaml");
     }
 
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_ThrowsWhenBoundAcrossEnvironments()
+    {
+        // A persistent volume declared on one Kubernetes environment cannot be bound
+        // by a workload assigned to a different environment: the two charts render
+        // into separate namespaces/clusters, so the workload's claimName would
+        // reference a PVC that does not exist alongside it. Fail fast at publish time
+        // with a clear message rather than silently emitting broken YAML.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var envA = builder.AddKubernetesEnvironment("envA");
+        var envB = builder.AddKubernetesEnvironment("envB");
+
+        var data = envA.AddPersistentVolume("data").WithCapacity("5Gi");
+
+        builder.AddContainer("service", "nginx")
+            .WithComputeEnvironment(envB)
+            .WithVolume("data", "/var/lib/data")
+            .WithPersistentVolume(data);
+
+        var app = builder.Build();
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
+        Assert.Contains("service", ex.Message);
+        Assert.Contains("envA", ex.Message);
+        Assert.Contains("envB", ex.Message);
+        Assert.Contains("data", ex.Message);
+    }
+
     /// <summary>
     /// Asserts that the rendered YAML does not contain known-buggy empty <c>{}</c>
     /// mappings that Kubernetes rejects on apply. Some <c>{}</c> mappings — such as

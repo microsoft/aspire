@@ -9,6 +9,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
+using Aspire.Hosting.Kubernetes.Annotations;
 using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Pipelines;
@@ -455,6 +456,30 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             if (DashboardEnabled && Dashboard?.Resource.OtlpGrpcEndpoint is EndpointReference otlpGrpcEndpoint)
             {
                 ConfigureOtlp(r, otlpGrpcEndpoint);
+            }
+
+            // Fail the publish if this workload binds a persistent volume owned by a
+            // different Kubernetes environment. The two charts would render into
+            // separate namespaces/clusters, so the workload's claimName reference would
+            // resolve to a PVC that does not exist alongside it — Kubernetes would fail
+            // to schedule the pod with "persistentvolumeclaim not found". Detect and
+            // surface it here where we have both the resolved workload compute
+            // environment and the annotated PV.
+            if (r.TryGetAnnotationsOfType<KubernetesPersistentVolumeBindingAnnotation>(out var pvBindings))
+            {
+                foreach (var binding in pvBindings)
+                {
+                    if (binding.Volume.Parent != this)
+                    {
+                        throw new InvalidOperationException(
+                            $"Resource '{r.Name}' is assigned to Kubernetes environment '{Name}' but binds " +
+                            $"persistent volume '{binding.Volume.Name}' which belongs to environment " +
+                            $"'{binding.Volume.Parent.Name}'. A workload can only bind persistent volumes " +
+                            $"declared on its own environment. Move the AddPersistentVolume call to " +
+                            $"'{Name}', or assign the workload to '{binding.Volume.Parent.Name}' with " +
+                            $"WithComputeEnvironment.");
+                    }
+                }
             }
 
             // Create a Kubernetes compute resource for the resource
