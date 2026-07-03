@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREEXTENSION001
+#pragma warning disable ASPIRECOMMAND001
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -32,6 +33,14 @@ public static class JavaScriptHostingExtensions
     private const string DefaultNodeVersion = "22";
     private const string DefaultJavaScriptRunScriptName = "dev";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
+
+    // Help links surfaced when a required command is missing. Declared once so WithNodeDefaults,
+    // WithBunDefaults, and ResolveRequiredCommands stay in sync.
+    private const string NodeHelpLink = "https://nodejs.org/en/download/";
+    private const string NpmHelpLink = "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm";
+    private const string BunHelpLink = "https://bun.sh/docs/installation";
+    private const string YarnHelpLink = "https://yarnpkg.com/getting-started/install";
+    private const string PnpmHelpLink = "https://pnpm.io/installation";
 
     // This is the order of config files that Vite will look for by default
     // See https://github.com/vitejs/vite/blob/main/packages/vite/src/node/constants.ts#L97
@@ -288,7 +297,7 @@ public static class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithNodeDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
         builder.WithOtlpExporter()
-            .WithRequiredCommand("node", "https://nodejs.org/en/download/")
+            .WithRequiredCommandsFromPackageManager("node", NodeHelpLink)
             .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
             .WithCertificateTrustConfiguration((ctx) =>
             {
@@ -316,6 +325,67 @@ public static class JavaScriptHostingExtensions
 
                 return Task.CompletedTask;
             });
+
+    // Registers a hook that materializes the resource's required commands just before start, deriving them
+    // from the final (last-wins) package-manager selection. Required commands are a run-mode concern: they are
+    // validated against the local PATH by RequiredCommandValidationEventingSubscriber on
+    // BeforeResourceStartedEvent, which fires after BeforeStartEvent. Resolving them here - rather than eagerly
+    // as each With* method runs - lets the package-manager selection settle first, so a later selection fully
+    // replaces an earlier one without having to remove stale RequiredCommandAnnotations. For example
+    // AddViteApp(...).WithBun() ends up requiring only `bun`, not the default node/npm, even though the default
+    // WithNpm ran first. See https://github.com/microsoft/aspire/issues/18625.
+    //
+    // runtimeCommand/runtimeHelpLink describe the runtime the app was created with (node for
+    // AddNodeApp/AddViteApp/AddJavaScriptApp, bun for AddBunApp) and are the required command when no package
+    // manager was selected (e.g. a bare AddNodeApp whose directory has no package.json).
+    private static IResourceBuilder<TResource> WithRequiredCommandsFromPackageManager<TResource>(
+        this IResourceBuilder<TResource> builder,
+        string runtimeCommand,
+        string runtimeHelpLink) where TResource : JavaScriptAppResource
+    {
+        var resource = builder.Resource;
+        builder.ApplicationBuilder.OnBeforeStart((_, _) =>
+        {
+            foreach (var (command, helpLink) in ResolveRequiredCommands(resource, runtimeCommand, runtimeHelpLink))
+            {
+                // Idempotent: skip commands already present so an unexpected second publish of BeforeStartEvent
+                // cannot add duplicate RequiredCommandAnnotations for the same command.
+                if (!resource.Annotations.OfType<RequiredCommandAnnotation>().Any(a => string.Equals(a.Command, command, StringComparison.Ordinal)))
+                {
+                    resource.Annotations.Add(new RequiredCommandAnnotation(command) { HelpLink = helpLink });
+                }
+            }
+
+            return Task.CompletedTask;
+        });
+
+        return builder;
+    }
+
+    // Projects the resource's selected package manager onto the set of executables that must be on PATH.
+    // Package-manager selection is last-wins via JavaScriptPackageManagerAnnotation, so the required commands
+    // are a pure function of that single source of truth:
+    //   - npm/yarn/pnpm are Node CLIs and the tools they launch (vite, etc.) run on node, so node is required too.
+    //   - bun is a full Node replacement - it runs both install and scripts (including the node-shebang `vite`
+    //     bin) - so node is NOT required. See https://github.com/microsoft/aspire/issues/18625.
+    //   - no package manager (a bare AddNodeApp/AddBunApp with no package.json): only the app's runtime is required.
+    private static IEnumerable<(string Command, string? HelpLink)> ResolveRequiredCommands(IResource resource, string runtimeCommand, string runtimeHelpLink)
+    {
+        if (!resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager))
+        {
+            return [(runtimeCommand, runtimeHelpLink)];
+        }
+
+        return packageManager.ExecutableName switch
+        {
+            "bun" => [("bun", BunHelpLink)],
+            "npm" => [("node", NodeHelpLink), ("npm", NpmHelpLink)],
+            "yarn" => [("node", NodeHelpLink), ("yarn", YarnHelpLink)],
+            "pnpm" => [("node", NodeHelpLink), ("pnpm", PnpmHelpLink)],
+            // Unknown/custom package manager: it still runs on node, but we have no specific install help link.
+            var executable => [("node", NodeHelpLink), (executable, null)],
+        };
+    }
 
     // The default Docker image used for AddBunApp build and runtime stages.
     // Pinned to the major version tag to keep generated Dockerfiles deterministic
@@ -630,7 +700,7 @@ public static class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithBunDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
         builder.WithOtlpExporter()
-            .WithRequiredCommand("bun", "https://bun.sh/docs/installation")
+            .WithRequiredCommandsFromPackageManager("bun", BunHelpLink)
             // Bun honors NODE_ENV for module resolution and runtime mode the same way Node does.
             // See https://bun.com/docs/runtime/env
             .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
@@ -1681,8 +1751,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation([installCommand, .. installArgs ?? []])
             {
                 ProductionInstallArgs = "--omit=dev"
-            })
-            .WithRequiredCommand("npm", "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm");
+            });
 
         AddInstaller(resource, install);
         return resource;
@@ -1748,8 +1817,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--production"
-            })
-            .WithRequiredCommand("bun", "https://bun.sh/docs/installation");
+            });
 
         if (!resource.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out _))
         {
@@ -1827,8 +1895,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--production"
-            })
-            .WithRequiredCommand("yarn", "https://yarnpkg.com/getting-started/install");
+            });
 
         AddInstaller(resource, install);
         return resource;
@@ -1904,8 +1971,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--prod"
-            })
-            .WithRequiredCommand("pnpm", "https://pnpm.io/installation");
+            });
 
         AddInstaller(resource, install);
         return resource;
