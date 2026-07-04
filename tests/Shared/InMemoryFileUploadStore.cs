@@ -2,10 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
-using System.Text.Json;
-using Aspire.Hosting.Dashboard;
-using Microsoft.Extensions.Logging;
-using static Aspire.Hosting.Dashboard.DashboardServiceData;
 
 namespace Aspire.Hosting.Utils;
 
@@ -13,7 +9,7 @@ namespace Aspire.Hosting.Utils;
 /// An in-memory implementation of <see cref="IFileUploadStore"/> for tests.
 /// Does not write to disk or implement IDisposable.
 /// </summary>
-internal sealed class InMemoryFileUploadStore : IFileUploadStore
+internal sealed class TestFileUploadStore : IFileUploadStore
 {
     private readonly ConcurrentDictionary<string, FileEntry> _files = new(StringComparer.Ordinal);
 
@@ -42,49 +38,5 @@ internal sealed class InMemoryFileUploadStore : IFileUploadStore
         _files.TryRemove(fileId, out _);
     }
 
-    public IReadOnlyList<InputFileDto>? ResolveFileReferences(string? jsonValue, string inputName, ILogger logger)
-    {
-        if (string.IsNullOrEmpty(jsonValue))
-        {
-            return null;
-        }
-
-        FileReference[]? fileRefs;
-        try
-        {
-            fileRefs = JsonSerializer.Deserialize<FileReference[]>(jsonValue);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-
-        if (fileRefs is not { Length: > 0 })
-        {
-            return null;
-        }
-
-        var files = new List<InputFileDto>(fileRefs.Length);
-        for (var idx = 0; idx < fileRefs.Length; idx++)
-        {
-            var fileRef = fileRefs[idx];
-            var filePath = GetFilePath(fileRef.Id);
-            if (filePath is null)
-            {
-                continue;
-            }
-            var fileName = string.IsNullOrEmpty(fileRef.Name) ? GetFileName(fileRef.Id) ?? "" : fileRef.Name;
-            files.Add(new InputFileDto(fileRef.Id, fileName, filePath));
-        }
-
-        return files.Count > 0 ? files : null;
-    }
-
     private sealed record FileEntry(string FilePath, string OriginalFileName);
-
-    private sealed class FileReference
-    {
-        public string Id { get; set; } = "";
-        public string Name { get; set; } = "";
-    }
 }

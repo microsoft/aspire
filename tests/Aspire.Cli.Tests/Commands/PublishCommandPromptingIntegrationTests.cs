@@ -793,6 +793,144 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Should show: [bold]Environment Name[/]
         Assert.Equal("[bold]Environment Name[/]", promptCall.PromptText);
     }
+
+    [Fact]
+    public async Task PublishCommand_FilePrompt_RejectsOversizedFileAndRePrompts()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Create a file that exceeds the max size (maxFileSize = 10 bytes)
+        var oversizedFile = Path.Combine(workspace.WorkspaceRoot.FullName, "large.bin");
+        await File.WriteAllTextAsync(oversizedFile, new string('x', 100));
+
+        var validFile = Path.Combine(workspace.WorkspaceRoot.FullName, "small.bin");
+        await File.WriteAllTextAsync(validFile, "ok");
+
+        var relativeOversized = Path.GetRelativePath(Directory.GetCurrentDirectory(), oversizedFile);
+        var relativeValid = Path.GetRelativePath(Directory.GetCurrentDirectory(), validFile);
+
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("file-prompt-1", "Upload", InputTypes.File, "Select file:", isRequired: true, maxFileSize: 10);
+        consoleService.SetupSequentialResponses(
+            (relativeOversized, ResponseType.String),
+            (relativeValid, ResponseType.String));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Single(consoleService.FilePathPromptCalls);
+        var validationError = Assert.Single(consoleService.ValidationFailures);
+        Assert.Equal("'large.bin' exceeds the maximum size of 10 B.", validationError);
+
+        var completedPrompt = Assert.Single(promptBackchannel.CompletedPrompts);
+        var answer = Assert.Single(completedPrompt.Answers);
+        Assert.Equal("[{\"Id\":\"testfileid0000000000000000000000\",\"Name\":\"small.bin\"}]", answer.Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_FilePrompt_RejectsWrongExtensionAndRePrompts()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var wrongExtFile = Path.Combine(workspace.WorkspaceRoot.FullName, "cert.txt");
+        await File.WriteAllTextAsync(wrongExtFile, "not a pem");
+
+        var correctFile = Path.Combine(workspace.WorkspaceRoot.FullName, "cert.pem");
+        await File.WriteAllTextAsync(correctFile, "pem content");
+
+        var relativeWrong = Path.GetRelativePath(Directory.GetCurrentDirectory(), wrongExtFile);
+        var relativeCorrect = Path.GetRelativePath(Directory.GetCurrentDirectory(), correctFile);
+
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("file-prompt-1", "Certificate", InputTypes.File, "Select certificate:", isRequired: true, fileFilter: ".pem,.crt");
+        consoleService.SetupSequentialResponses(
+            (relativeWrong, ResponseType.String),
+            (relativeCorrect, ResponseType.String));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Single(consoleService.FilePathPromptCalls);
+        var validationError = Assert.Single(consoleService.ValidationFailures);
+        Assert.Equal("'cert.txt' does not match the accepted file types (.pem,.crt).", validationError);
+
+        var completedPrompt = Assert.Single(promptBackchannel.CompletedPrompts);
+        var answer = Assert.Single(completedPrompt.Answers);
+        Assert.Equal("[{\"Id\":\"testfileid0000000000000000000000\",\"Name\":\"cert.pem\"}]", answer.Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_FilePrompt_SuccessfulUpload()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var validFile = Path.Combine(workspace.WorkspaceRoot.FullName, "deploy.zip");
+        await File.WriteAllTextAsync(validFile, "zip content");
+
+        var relativePath = Path.GetRelativePath(Directory.GetCurrentDirectory(), validFile);
+
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("file-prompt-1", "Package", InputTypes.File, "Select package:", isRequired: true, maxFileSize: 1024, fileFilter: ".zip,.tar.gz");
+        consoleService.SetupStringPromptResponse(relativePath);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(consoleService.ValidationFailures);
+
+        var filePromptCall = Assert.Single(consoleService.FilePathPromptCalls);
+        Assert.Equal("[bold]Select package:[/]\nPackage: ", filePromptCall.PromptText);
+
+        var (uploadedFilePath, uploadedFileName) = Assert.Single(promptBackchannel.UploadedFiles);
+        Assert.Equal(Path.GetFullPath(validFile), uploadedFilePath);
+        Assert.Equal("deploy.zip", uploadedFileName);
+
+        var completedPrompt = Assert.Single(promptBackchannel.CompletedPrompts);
+        var answer = Assert.Single(completedPrompt.Answers);
+        Assert.Equal("[{\"Id\":\"testfileid0000000000000000000000\",\"Name\":\"deploy.zip\"}]", answer.Value);
+    }
 }
 
 // Test implementation of IAppHostCliBackchannel that simulates prompt interactions
@@ -804,10 +942,11 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
 
     public List<PromptData> ReceivedPrompts { get; } = [];
     public List<PromptCompletion> CompletedPrompts { get; } = [];
+    public List<(string FilePath, string FileName)> UploadedFiles { get; } = [];
 
-    public void AddPrompt(string promptId, string label, string inputType, string message, bool isRequired, IReadOnlyList<KeyValuePair<string, string>>? options = null, string? defaultValue = null, IReadOnlyList<string>? validationErrors = null)
+    public void AddPrompt(string promptId, string label, string inputType, string message, bool isRequired, IReadOnlyList<KeyValuePair<string, string>>? options = null, string? defaultValue = null, IReadOnlyList<string>? validationErrors = null, long? maxFileSize = null, string? fileFilter = null)
     {
-        _promptsToSend.Add(new PromptData(promptId, [new PromptInputData(promptId, label, inputType, isRequired, options, defaultValue, validationErrors)], message));
+        _promptsToSend.Add(new PromptData(promptId, [new PromptInputData(promptId, label, inputType, isRequired, options, defaultValue, validationErrors, maxFileSize, fileFilter)], message));
     }
 
     public void AddMultiInputPrompt(string promptId, string title, string message, IReadOnlyList<PromptInputData> inputs)
@@ -834,7 +973,9 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
                 Required = input.IsRequired,
                 Options = input.Options,
                 Value = input.Value,
-                ValidationErrors = input.ValidationErrors
+                ValidationErrors = input.ValidationErrors,
+                MaxFileSize = input.MaxFileSize,
+                FileFilter = input.FileFilter
             }).ToList();
 
             yield return new PublishingActivity
@@ -909,12 +1050,15 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
     public Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken) =>
         Task.FromResult(new GetPipelineStepsResponse { Steps = [] });
 
-    public Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken) =>
-        Task.FromResult(new UploadFileResponse { FileId = Guid.NewGuid().ToString("N") });
+    public Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken)
+    {
+        UploadedFiles.Add((filePath, fileName));
+        return Task.FromResult(new UploadFileResponse { FileId = "testfileid0000000000000000000000" });
+    }
 }
 
 // Data structures for tracking prompts
-internal sealed record PromptInputData(string Name, string Label, string InputType, bool IsRequired, IReadOnlyList<KeyValuePair<string, string>>? Options = null, string? Value = null, IReadOnlyList<string>? ValidationErrors = null);
+internal sealed record PromptInputData(string Name, string Label, string InputType, bool IsRequired, IReadOnlyList<KeyValuePair<string, string>>? Options = null, string? Value = null, IReadOnlyList<string>? ValidationErrors = null, long? MaxFileSize = null, string? FileFilter = null);
 internal sealed record PromptData(string PromptId, IReadOnlyList<PromptInputData> Inputs, string Message, string? Title = null);
 internal sealed record PromptCompletion(string PromptId, PublishingPromptInputAnswer[] Answers, bool UpdateResponse);
 

@@ -238,7 +238,7 @@ internal sealed class DashboardServiceData : IDisposable
         // Resolve each ID to the temp file path and build InputFileDto entries.
         if (inputType == InputType.File)
         {
-            var files = _fileUploadStore.ResolveFileReferences(i.Value, i.Name, _logger);
+            var files = FileUploadStore.ResolveFileReferences(_fileUploadStore, i.Value, i.Name, _logger);
             if (files is not null)
             {
                 return new InputDto(i.Name, i.Value, inputType, files);

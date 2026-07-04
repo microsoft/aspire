@@ -162,7 +162,7 @@
                             </InteractionInputField>
                             break;
                         case InputType.File:
-                            var inputId = $"FileUploadButton-{_inputDialogInputViewModels.IndexOf(localItem)}";
+                            var inputId = $"{_elementRefs[localItem]?.Id}-FileUploadButton";
                             <InteractionInputField ForId="@inputId"
                                                    InputViewModel="@localItem"
                                                    MarkdownProcessor="@_markdownProcessor"

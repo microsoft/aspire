@@ -17,7 +17,7 @@ namespace Aspire.Hosting.Tests.Publishing;
 public class PublishingActivityReporterTests
 {
     private readonly InteractionService _interactionService = CreateInteractionService();
-    private readonly InMemoryFileUploadStore _fileUploadStore = new();
+    private readonly TestFileUploadStore _fileUploadStore = new();
 
     [Fact]
     public async Task CreateStepAsync_CreatesStepAndEmitsActivity()

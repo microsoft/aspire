@@ -75,7 +75,7 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     /// Resolves a JSON-encoded file reference array into InputFileDto entries.
     /// Returns null if the value is empty, malformed, or contains no resolvable files.
     /// </summary>
-    public IReadOnlyList<InputFileDto>? ResolveFileReferences(string? jsonValue, string inputName, ILogger logger)
+    public static IReadOnlyList<InputFileDto>? ResolveFileReferences(IFileUploadStore store, string? jsonValue, string inputName, ILogger logger)
     {
         if (string.IsNullOrEmpty(jsonValue))
         {
@@ -102,14 +102,14 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
         for (var idx = 0; idx < fileRefs.Length; idx++)
         {
             var fileRef = fileRefs[idx];
-            var filePath = GetFilePath(fileRef.Id);
+            var filePath = store.GetFilePath(fileRef.Id);
             if (filePath is null)
             {
                 // Unknown file ID — skip to prevent using client-supplied IDs as arbitrary file paths.
                 logger.LogWarning("Received unknown file ID '{FileId}' in interaction input '{InputName}'. Skipping.", fileRef.Id, inputName);
                 continue;
             }
-            var fileName = string.IsNullOrEmpty(fileRef.Name) ? GetFileName(fileRef.Id) ?? "" : fileRef.Name;
+            var fileName = string.IsNullOrEmpty(fileRef.Name) ? store.GetFileName(fileRef.Id) ?? "" : fileRef.Name;
             files.Add(new InputFileDto(fileRef.Id, fileName, filePath));
         }
 

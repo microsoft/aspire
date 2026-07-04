@@ -1,10 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.Extensions.Logging;
-using static Aspire.Hosting.Dashboard.DashboardServiceData;
-
-namespace Aspire.Hosting.Dashboard;
+namespace Aspire.Hosting;
 
 /// <summary>
 /// Stores uploaded files and maps file IDs to their paths or content.
@@ -30,10 +27,4 @@ internal interface IFileUploadStore
     /// Removes a file entry. Used to clean up after failed uploads.
     /// </summary>
     void RemoveEntry(string fileId);
-
-    /// <summary>
-    /// Resolves a JSON-encoded file reference array into InputFileDto entries.
-    /// Returns null if the value is empty, malformed, or contains no resolvable files.
-    /// </summary>
-    IReadOnlyList<InputFileDto>? ResolveFileReferences(string? jsonValue, string inputName, ILogger logger);
 }

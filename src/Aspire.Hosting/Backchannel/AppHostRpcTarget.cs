@@ -3,7 +3,6 @@
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;

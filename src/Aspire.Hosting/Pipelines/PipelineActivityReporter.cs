@@ -490,7 +490,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
 
         if (matchingInput.InputType == InputType.File)
         {
-            var files = _fileUploadStore.ResolveFileReferences(value, matchingInput.Name, _logger);
+            var files = FileUploadStore.ResolveFileReferences(_fileUploadStore, value, matchingInput.Name, _logger);
             if (files is not null)
             {
                 return new InputDto(matchingInput.Name, value, matchingInput.InputType, files);

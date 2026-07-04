@@ -15,6 +15,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
+using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -1032,7 +1033,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                 var fileInfo = new FileInfo(fullPath);
                 if (fileInfo.Length > maxSize)
                 {
-                    return ValidationResult.Error($"'{Path.GetFileName(fullPath)}' exceeds the maximum size of {FileSizeFormatHelpers.FormatFileSize(maxSize)}.");
+                    return ValidationResult.Error($"'{Path.GetFileName(fullPath)}' exceeds the maximum size of {FormatHelpers.FormatFileSize(maxSize)}.");
                 }
             }
 

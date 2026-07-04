@@ -936,7 +936,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
 
         // Resolve the file reference using the same store
         var json = $"[{{\"Id\":\"{uploadResponse.FileId}\",\"Name\":\"cert.pem\"}}]";
-        var resolvedFiles = fileUploadStore.ResolveFileReferences(json, "CertInput", NullLogger.Instance);
+        var resolvedFiles = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "CertInput", NullLogger.Instance);
 
         Assert.NotNull(resolvedFiles);
         var file = Assert.Single(resolvedFiles);
@@ -955,7 +955,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         using var fileUploadStore = new FileUploadStore();
         var json = "[{\"Id\":\"nonexistent-id\",\"Name\":\"file.txt\"}]";
 
-        var result = fileUploadStore.ResolveFileReferences(json, "TestInput", NullLogger.Instance);
+        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "TestInput", NullLogger.Instance);
 
         Assert.Null(result);
     }
@@ -966,7 +966,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         using var fileUploadStore = new FileUploadStore();
         var json = "not-valid-json";
 
-        var result = fileUploadStore.ResolveFileReferences(json, "TestInput", NullLogger.Instance);
+        var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "TestInput", NullLogger.Instance);
 
         Assert.Null(result);
     }
@@ -984,7 +984,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             new TestHostApplicationLifetime(),
             configuration ?? new ConfigurationBuilder().Build(),
             logger ?? NullLogger<DashboardServiceImpl>.Instance,
-            fileUploadStore ?? new InMemoryFileUploadStore());
+            fileUploadStore ?? new TestFileUploadStore());
     }
 
     private static DashboardServiceData CreateDashboardServiceData(
@@ -1008,7 +1008,7 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             loggerFactory.CreateLogger<DashboardServiceData>(),
             new ResourceCommandService(resourceNotificationService, resourceLoggerService, new ServiceCollection().BuildServiceProvider()),
             interactionService,
-            new InMemoryFileUploadStore());
+            new TestFileUploadStore());
     }
 
     private static ResourceNotificationService CreateResourceNotificationService(ResourceLoggerService resourceLoggerService)

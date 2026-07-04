@@ -110,6 +110,10 @@ public partial class InteractionsInputDialog : IAsyncDisposable
                     selectInput.FocusAsync();
                 }
             }
+
+            // Re-render so that ref-derived IDs (e.g. File input button) pick up
+            // the now-populated _elementRefs values assigned by @ref after first render.
+            StateHasChanged();
         }
     }
 
@@ -210,11 +214,8 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         await Dialog.CancelAsync();
     }
 
-    // Default maximum number of bytes to accept from an uploaded file.
-    private const long DefaultMaxUploadedFileBytes = 1024 * 1024; // 1 MB
-
     private static long GetMaxFileSize(InputViewModel inputModel) =>
-        inputModel.Input.MaxFileSize > 0 ? inputModel.Input.MaxFileSize : DefaultMaxUploadedFileBytes;
+        inputModel.Input.MaxFileSize > 0 ? inputModel.Input.MaxFileSize : InputViewModel.DefaultMaxUploadedFileBytes;
 
     private string GetFileButtonText(InputViewModel inputModel)
     {
@@ -240,7 +241,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         {
             if (file.Size > maxFileSize)
             {
-                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = $"Exceeds the maximum size of {FileSizeFormatHelpers.FormatFileSize(maxFileSize)}" });
+                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = $"Exceeds the maximum size of {FormatHelpers.FormatFileSize(maxFileSize)}" });
                 continue;
             }
 
