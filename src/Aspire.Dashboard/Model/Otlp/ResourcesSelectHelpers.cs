@@ -24,6 +24,16 @@ public static class ResourcesSelectHelpers
         }
         else if (instanceIdMatches.Count == 0)
         {
+            var displayNameMatches = allowedMatches.Where(e => string.Equals(name, e.Name, StringComparisons.ResourceName)).ToList();
+            if (displayNameMatches.Count == 1)
+            {
+                return SingleMatch(resources, logger, name, displayNameMatches[0]);
+            }
+            else if (displayNameMatches.Count > 1)
+            {
+                return MultipleMatches(allowedMatches, logger, name, displayNameMatches);
+            }
+
             // Fallback to matching on resource name. This is commonly used when there is only one instance of the resource.
             var replicaSetMatches = allowedMatches.Where(e => e.Id?.Type != OtlpResourceType.Instance && string.Equals(name, e.Id?.ReplicaSetName, StringComparisons.ResourceName)).ToList();
 

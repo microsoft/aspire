@@ -231,6 +231,104 @@ public partial class StructuredLogsTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_RouteReplicaDisplayNameBeforeTelemetryArrives_FiltersLogsWhenResourcesArrive()
+    {
+        SetupStructureLogsServices();
+
+        var selectedInstanceId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var siblingInstanceId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var selectedResourceName = $"TestApp-{selectedInstanceId.ToString("N")[^8..]}";
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        var uri = navigationManager.ToAbsoluteUri(DashboardUrls.StructuredLogsUrl(resource: selectedResourceName));
+        navigationManager.NavigateTo(uri.OriginalString);
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<StructuredLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, selectedResourceName);
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var viewModel = Services.GetRequiredService<StructuredLogsViewModel>();
+        viewModel.StartIndex = 0;
+        viewModel.Count = 100;
+        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+
+        telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "OtherApp", instanceId: "other-instance"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(name: "test-scope"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "Other resource log")
+                        }
+                    }
+                }
+            }
+        });
+
+        cut.WaitForAssertion(() => Assert.Empty(viewModel.GetLogs().Items));
+
+        telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "TestApp", instanceId: selectedInstanceId.ToString()),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(name: "test-scope"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "Selected resource log")
+                        }
+                    }
+                }
+            },
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "TestApp", instanceId: siblingInstanceId.ToString()),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(name: "test-scope"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "Sibling resource log")
+                        }
+                    }
+                }
+            }
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(selectedResourceName, cut.Instance.PageViewModel.SelectedResource.Name);
+            Assert.Equal("TestApp", viewModel.ResourceKey?.Name);
+            Assert.Equal(selectedInstanceId.ToString(), viewModel.ResourceKey?.InstanceId);
+
+            var logs = viewModel.GetLogs();
+            var log = Assert.Single(logs.Items);
+            Assert.Equal("TestApp", log.ResourceView.ResourceKey.Name);
+            Assert.Equal(selectedInstanceId.ToString(), log.ResourceView.ResourceKey.InstanceId);
+            Assert.Equal(1, logs.TotalItemCount);
+        });
+    }
+
+    [Fact]
     public void Render_FiltersWithSpecialCharacters_SuccessfullyParsed()
     {
         // Arrange

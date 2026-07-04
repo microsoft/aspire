@@ -265,6 +265,23 @@ public sealed class ResourcesSelectHelpersTests
         Assert.Equal(OtlpResourceType.ResourceGrouping, app.Id!.Type);
     }
 
+    [Fact]
+    public void GetResource_DisplayNameWithShortGuid_GetInstance()
+    {
+        var instanceId1 = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var instanceId2 = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var appVMs = ResourcesSelectHelpers.CreateResources(new List<OtlpResource>
+        {
+            CreateOtlpResource(name: "app", instanceId: instanceId1.ToString()),
+            CreateOtlpResource(name: "app", instanceId: instanceId2.ToString())
+        });
+
+        var app = appVMs.GetResource(NullLogger.Instance, "app-11111111", canSelectGrouping: true, null!);
+
+        Assert.Equal($"app-{instanceId1}", app.Id!.InstanceId);
+        Assert.Equal(OtlpResourceType.Instance, app.Id!.Type);
+    }
+
     private static OtlpResource CreateOtlpResource(string name, string? instanceId)
     {
         var resource = new Resource();
