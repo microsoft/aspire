@@ -1,5 +1,7 @@
 import { TelemetryReporter } from '@vscode/extension-telemetry';
+import * as fs from 'fs';
 import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import {
     CommonTelemetryProperties,
@@ -147,14 +149,53 @@ function mergeProperties<E extends KnownTelemetryEventName>(properties?: EventPr
 }
 
 function getReporterCommonProperties(context: vscode.ExtensionContext): Record<string, string> {
-    return {
+    const properties: Record<string, string> = {
         'common.extname': context.extension.id,
         'common.extversion': String(context.extension.packageJSON.version ?? ''),
+        'common.vscodemachineid': vscode.env.machineId,
+        'common.vscodesessionid': vscode.env.sessionId,
+        'common.vscodeversion': vscode.version,
         'common.os': os.platform(),
         'common.nodeArch': os.arch(),
         'common.platformversion': os.release().replace(/^(\d+)(\.\d+)?(\.\d+)?(.*)/, '$1$2$3'),
+        'common.product': vscode.env.appHost,
+        'common.uikind': getUiKind(),
+        'common.remotename': vscode.env.remoteName ?? 'none',
+        'common.isnewappinstall': String(vscode.env.isNewAppInstall),
         'common.telemetryclientversion': '1.5.1',
     };
+
+    const commit = getVsCodeCommitHash();
+    if (commit !== undefined) {
+        properties['common.vscodecommithash'] = commit;
+    }
+
+    return properties;
+}
+
+function getUiKind(): string {
+    switch (vscode.env.uiKind) {
+        case vscode.UIKind.Desktop:
+            return 'desktop';
+        case vscode.UIKind.Web:
+            return 'web';
+        default:
+            return String(vscode.env.uiKind);
+    }
+}
+
+function getVsCodeCommitHash(): string | undefined {
+    if (!vscode.env.appRoot) {
+        return undefined;
+    }
+
+    const productJsonPath = path.join(vscode.env.appRoot, 'product.json');
+    if (!fs.existsSync(productJsonPath)) {
+        return undefined;
+    }
+
+    const product = JSON.parse(fs.readFileSync(productJsonPath, 'utf8')) as { commit?: unknown };
+    return typeof product.commit === 'string' ? product.commit : undefined;
 }
 
 function sanitizeTelemetryProperties(properties: Record<string, string>): Record<string, string> {
@@ -167,7 +208,11 @@ function sanitizeTelemetryProperties(properties: Record<string, string>): Record
 }
 
 function preservesStructuralTelemetryIds(key: string): boolean {
-    return key === 'operation_id' || key === 'asset_id' || key === 'dashboard_correlated_with';
+    return key === 'operation_id' ||
+        key === 'asset_id' ||
+        key === 'dashboard_correlated_with' ||
+        key === 'common.vscodemachineid' ||
+        key === 'common.vscodesessionid';
 }
 
 function sanitizeTelemetryValue(value: string, preserveGuids: boolean): string {

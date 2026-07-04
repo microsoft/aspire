@@ -210,19 +210,27 @@ suite('telemetry utilities', () => {
 
     test('sendTelemetryEvent redacts the current home directory before shell and punctuation boundaries', () => {
         const originalHome = process.env.HOME;
+        const originalUserProfile = process.env.USERPROFILE;
+        const homeDirectory = process.platform === 'win32' ? 'C:\\Users\\Alice Smith' : '/Users/Alice Smith';
+        const expectedHomeDirectory = process.platform === 'win32' ? 'C:\\Users\\<user>' : '/Users/<user>';
 
         try {
-            process.env.HOME = '/Users/Alice Smith';
+            if (process.platform === 'win32') {
+                process.env.USERPROFILE = homeDirectory;
+            }
+            else {
+                process.env.HOME = homeDirectory;
+            }
 
             sendTelemetryEvent('aspire/vscode/command/invoked', {
-                command: 'open /Users/Alice Smith | cat',
+                command: `open ${homeDirectory} | cat`,
             });
             sendTelemetryEvent('aspire/vscode/command/invoked', {
-                command: 'path is /Users/Alice Smith, ok building /Users/Alice Smith failed',
+                command: `path is ${homeDirectory}, ok building ${homeDirectory} failed`,
             });
 
-            assert.strictEqual(fake.events[0].properties?.command, 'open /Users/<user> | cat');
-            assert.strictEqual(fake.events[1].properties?.command, 'path is /Users/<user>, ok building /Users/<user> failed');
+            assert.strictEqual(fake.events[0].properties?.command, `open ${expectedHomeDirectory} | cat`);
+            assert.strictEqual(fake.events[1].properties?.command, `path is ${expectedHomeDirectory}, ok building ${expectedHomeDirectory} failed`);
         }
         finally {
             if (originalHome === undefined) {
@@ -230,6 +238,13 @@ suite('telemetry utilities', () => {
             }
             else {
                 process.env.HOME = originalHome;
+            }
+
+            if (originalUserProfile === undefined) {
+                delete process.env.USERPROFILE;
+            }
+            else {
+                process.env.USERPROFILE = originalUserProfile;
             }
         }
     });
@@ -387,6 +402,31 @@ suite('telemetry utilities', () => {
             assert.strictEqual(fake.events[0].isDangerous, true);
             assert.strictEqual(fake.events[0].properties?.['common.extname'], 'microsoft-aspire.aspire-vscode');
             assert.strictEqual(fake.events[0].properties?.['common.extversion'], '1.2.3');
+            assert.strictEqual(fake.events[0].properties?.['common.vscodemachineid'], vscode.env.machineId);
+            assert.strictEqual(fake.events[0].properties?.['common.vscodesessionid'], vscode.env.sessionId);
+            assert.strictEqual(fake.events[0].properties?.['common.vscodeversion'], vscode.version);
+            assert.strictEqual(fake.events[0].properties?.['common.product'], vscode.env.appHost);
+            let expectedUiKind: string;
+            switch (vscode.env.uiKind) {
+                case vscode.UIKind.Desktop:
+                    expectedUiKind = 'desktop';
+                    break;
+                case vscode.UIKind.Web:
+                    expectedUiKind = 'web';
+                    break;
+                default:
+                    expectedUiKind = String(vscode.env.uiKind);
+                    break;
+            }
+            assert.strictEqual(fake.events[0].properties?.['common.uikind'], expectedUiKind);
+            assert.strictEqual(fake.events[0].properties?.['common.remotename'], vscode.env.remoteName ?? 'none');
+            assert.strictEqual(fake.events[0].properties?.['common.isnewappinstall'], String(vscode.env.isNewAppInstall));
+            if (vscode.env.appRoot) {
+                const productJsonPath = path.join(vscode.env.appRoot, 'product.json');
+                if (fs.existsSync(productJsonPath)) {
+                    assert.strictEqual(fake.events[0].properties?.['common.vscodecommithash'], readJsonFile<{ commit: string }>(productJsonPath).commit);
+                }
+            }
             assert.strictEqual(fake.events[0].properties?.['common.telemetryclientversion'], getExtensionTelemetryPackageVersion());
         }
         finally {
