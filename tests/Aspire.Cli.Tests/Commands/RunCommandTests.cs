@@ -395,6 +395,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var cts = new CancellationTokenSource();
         var interactionService = new TestInteractionService();
+        var timeProvider = new FakeTimeProvider();
 
         var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
         var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
@@ -407,6 +408,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         };
 
         var startupReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var teardownStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var teardownCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var projectFactory = new TestAppHostProjectFactory
@@ -427,7 +429,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                     // Stand in for the dotnet run shutdown ladder, which takes real time to kill the process
                     // tree. The CLI must not exit until this has finished. CancellationToken.None is
                     // deliberate: this represents teardown work that the same signal cannot itself cancel.
-                    await Task.Delay(TimeSpan.FromMilliseconds(500), CancellationToken.None);
+                    teardownStarted.TrySetResult();
+                    await Task.Delay(RunCommand.s_gracefulShutdownBudget + TimeSpan.FromSeconds(1), timeProvider, CancellationToken.None);
                     teardownCompleted.TrySetResult();
                 }
 
@@ -440,6 +443,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interactionService;
             options.ProjectLocatorFactory = _ => projectLocator;
             options.AppHostProjectFactory = _ => projectFactory;
+            options.TimeProvider = timeProvider;
             options.ConfigurationCallback += config => config[KnownConfigNames.CliRunDetached] = "true";
         });
 
@@ -452,6 +456,15 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         // Once the run is in the startup window (no backchannel yet), deliver the termination signal.
         await startupReached.Task.WaitAsync(TimeSpan.FromSeconds(30));
         cts.Cancel();
+        await teardownStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+
+        // The detached child must outlive the graceful-shutdown budget; otherwise a TERM-ignoring
+        // AppHost can still be pre-kill when the CLI child exits.
+        timeProvider.Advance(RunCommand.s_gracefulShutdownBudget + TimeSpan.FromMilliseconds(100));
+        await Task.Yield();
+        Assert.False(pendingCommand.IsCompleted, "Detached child exited before the force-kill window elapsed.");
+
+        timeProvider.Advance(TimeSpan.FromSeconds(1));
 
         var exitCode = await pendingCommand.DefaultTimeout();
 

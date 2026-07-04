@@ -46,7 +46,28 @@ public class OrphanedAppHostCollectorTests
                 AppHostPath = "/tmp/AppHost.csproj",
                 ProcessId = 4242,
                 CliProcessId = Environment.ProcessId,
-                CliStartedAt = ProcessStartTimeHelper.GetCurrentProcessStartTime(),
+                CliStartedAt = GetCurrentProcessRuntimeStartTime(),
+            },
+        };
+
+        Assert.False(OrphanedAppHostCollector.IsOrphaned(connection));
+    }
+
+    [Fact]
+    public void IsOrphaned_LiveCliProcessWithAdjacentRuntimeStartTime_ReturnsFalse()
+    {
+        // The AppHost backchannel reports ASPIRE_CLI_STARTED, which is intentionally stamped from
+        // Process.StartTime for released-AppHost compatibility. Different processes can observe that
+        // runtime value on adjacent Unix seconds, so the collector must use the same tolerant legacy
+        // comparison as the AppHost orphan detectors.
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/tmp/AppHost.csproj",
+                ProcessId = 4242,
+                CliProcessId = Environment.ProcessId,
+                CliStartedAt = GetCurrentProcessRuntimeStartTime().AddSeconds(1),
             },
         };
 
@@ -254,10 +275,13 @@ public class OrphanedAppHostCollectorTests
                 // Live: the current process's real start time matches, so the launching CLI still looks alive.
                 CliStartedAt = orphaned
                     ? DateTimeOffset.FromUnixTimeSeconds(1)
-                    : ProcessStartTimeHelper.GetCurrentProcessStartTime(),
+                    : GetCurrentProcessRuntimeStartTime(),
             },
         };
     }
+
+    private static DateTimeOffset GetCurrentProcessRuntimeStartTime()
+        => DateTimeOffset.FromUnixTimeSeconds(ProcessStartTimeHelper.GetCurrentProcessRuntimeStartTimeUnixSeconds());
 
     private static DateTimeOffset GetProcessStartTime(Process process)
     {

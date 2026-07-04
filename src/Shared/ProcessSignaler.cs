@@ -19,6 +19,22 @@ internal static partial class ProcessSignaler
             return; // Process is not running or does not match the expected start time
         }
 
+        RequestGracefulShutdown(pid, logger);
+    }
+
+    public static void RequestGracefulShutdownWithRuntimeStartTime(int pid, DateTimeOffset expectedStartTime, TimeSpan tolerance, ILogger logger)
+    {
+        using var process = TryGetRunningProcessWithRuntimeStartTime(pid, expectedStartTime, tolerance, logger);
+        if (process is null)
+        {
+            return; // Process is not running or does not match the expected start time
+        }
+
+        RequestGracefulShutdown(pid, logger);
+    }
+
+    private static void RequestGracefulShutdown(int pid, ILogger logger)
+    {
         logger.LogDebug("Requesting graceful shutdown of process {Pid}...", pid);
 
         if (OperatingSystem.IsWindows())
@@ -82,6 +98,58 @@ internal static partial class ProcessSignaler
                     process.Dispose();
                     return null;
                 }
+            }
+
+            return process;
+        }
+        catch (ArgumentException)
+        {
+            // Process doesn't exist - already terminated.
+            process?.Dispose();
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            // Process has already exited.
+            process?.Dispose();
+            return null;
+        }
+        catch (Win32Exception ex)
+        {
+            // Process inspection can race with process exit. On macOS, StartTime can throw:
+            //   Win32Exception (3): Unable to retrieve the specified information about the process or thread. It may have exited or may be privileged.
+            // If we cannot inspect the process enough to prove it is the expected target, do
+            // not signal or kill it.
+            logger.LogDebug(ex, "Could not inspect process {Pid}. Treating it as not running.", pid);
+            process?.Dispose();
+            return null;
+        }
+    }
+
+    public static Process? TryGetRunningProcessWithRuntimeStartTime(int pid, DateTimeOffset expectedStartTime, TimeSpan tolerance, ILogger logger)
+    {
+        Process? process = null;
+        try
+        {
+            process = Process.GetProcessById(pid);
+            if (process.HasExited)
+            {
+                process.Dispose();
+                return null;
+            }
+
+            var expectedStartTimeUnix = expectedStartTime.ToUnixTimeSeconds();
+            if (!ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(pid, expectedStartTimeUnix, tolerance))
+            {
+                logger.LogDebug("Process {Pid} legacy start time does not match expected start time {ExpectedStartTime}.", pid, expectedStartTime);
+                process.Dispose();
+                return null;
+            }
+
+            if (process.HasExited)
+            {
+                process.Dispose();
+                return null;
             }
 
             return process;

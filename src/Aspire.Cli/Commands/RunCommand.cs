@@ -88,6 +88,12 @@ internal sealed class RunCommand : BaseCommand
     // silently dropping the CTRL_C_EVENT.
     internal static readonly TimeSpan s_gracefulShutdownBudget = TimeSpan.FromSeconds(5);
 
+    // Detached-start children do not have a parent process left to finish cleanup after they exit.
+    // Give the AppHost run task enough time to consume the full graceful budget, escalate to kill,
+    // and drain the signaler so the child does not recreate the process leak that the backstop is
+    // meant to prevent.
+    private static readonly TimeSpan s_detachedAppHostTeardownTimeout = s_gracefulShutdownBudget + TimeSpan.FromSeconds(3);
+
     // Guest AppHosts can bring up the temporary server/backchannel and then fail immediately
     // afterward when the guest startup process hits a syntax, pre-execute, or model validation
     // error. Keep guest AppHost startup waits alive briefly so those failures are reported instead of hidden.
@@ -626,7 +632,7 @@ internal sealed class RunCommand : BaseCommand
                 {
                     runCts?.Cancel();
                     // CancellationToken.None is deliberate: root token is already cancelled.
-                    await detachedAppHostRun.WaitAsync(s_appHostStartupCancellationTimeout, _timeProvider, CancellationToken.None).ConfigureAwait(false);
+                    await detachedAppHostRun.WaitAsync(s_detachedAppHostTeardownTimeout, _timeProvider, CancellationToken.None).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {

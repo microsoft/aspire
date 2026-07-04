@@ -82,7 +82,18 @@ internal sealed class OrphanedAppHostCollector(
             return false;
         }
 
-        var cliStartedUnix = connection.AppHostInfo.CliStartedAt?.ToUnixTimeSeconds();
-        return !ProcessStartTimeHelper.IsProcessRunning(cliPid, cliStartedUnix);
+        if (connection.AppHostInfo.CliStartedAt is { } cliStartedAt)
+        {
+            // AppHostInfo.CliStartedAt is populated from ASPIRE_CLI_STARTED for backchannel
+            // compatibility with released AppHosts. That variable intentionally stays in the
+            // Process.StartTime clock domain, so compare it with the legacy verifier instead of
+            // the Linux /proc-based stable verifier.
+            return !ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(
+                cliPid,
+                cliStartedAt.ToUnixTimeSeconds(),
+                TimeSpan.FromSeconds(1));
+        }
+
+        return !ProcessStartTimeHelper.IsProcessRunning(cliPid);
     }
 }

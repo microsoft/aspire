@@ -877,12 +877,17 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             cliStartedAt = DateTimeOffset.FromUnixTimeSeconds(parsedCliStartedAt);
         }
 
+        using var currentProcess = Process.GetCurrentProcess();
+        // StartedAt is the legacy backchannel field, and released AppHosts populate it from
+        // Process.StartTime. Keep that runtime-domain value for mixed-version CLI compatibility.
+        // StableStartedAt carries the current /proc-backed PID identity for exact reuse checks.
         return Task.FromResult(new AppHostInformation
         {
             AppHostPath = appHostPath,
             ProcessId = Environment.ProcessId,
             CliProcessId = cliProcessId,
-            StartedAt = ProcessStartTimeHelper.TryGetProcessStartTime(Environment.ProcessId) ?? new DateTimeOffset(Process.GetCurrentProcess().StartTime),
+            StartedAt = new DateTimeOffset(currentProcess.StartTime),
+            StableStartedAt = ProcessStartTimeHelper.TryGetProcessStartTime(Environment.ProcessId),
             CliStartedAt = cliStartedAt,
             CliLogFilePath = configuration[KnownConfigNames.CliLogFilePath]
         });

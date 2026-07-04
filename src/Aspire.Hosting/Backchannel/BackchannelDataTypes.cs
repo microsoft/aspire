@@ -1447,14 +1447,33 @@ internal sealed class AppHostInformation
     public int? CliProcessId { get; init; }
 
     /// <summary>
-    /// Gets or sets when the AppHost process started.
+    /// Gets or sets when the AppHost process started using the legacy <see cref="Process.StartTime"/> clock domain.
     /// </summary>
+    /// <remarks>
+    /// Released AppHosts only report this field. On Linux it can differ from the stable PID-identity
+    /// value by an adjacent Unix second, so callers that verify process identity should prefer
+    /// <see cref="StableStartedAt"/> when it is present and use a runtime-start-time verifier for this
+    /// fallback field.
+    /// </remarks>
     public DateTimeOffset? StartedAt { get; init; }
+
+    /// <summary>
+    /// Gets or sets when the AppHost process started using the stable PID-identity clock domain.
+    /// </summary>
+    /// <remarks>
+    /// Current AppHosts report this additive field so callers can perform exact PID-reuse checks while
+    /// still accepting older AppHosts that only sent <see cref="StartedAt"/>.
+    /// </remarks>
+    public DateTimeOffset? StableStartedAt { get; init; }
 
     /// <summary>
     /// Gets or sets when the CLI process that launched the AppHost started.
     /// This value is only set when the AppHost is launched via the Aspire CLI.
     /// </summary>
+    /// <remarks>
+    /// This value comes from <c>ASPIRE_CLI_STARTED</c>, which is intentionally stamped from
+    /// <see cref="Process.StartTime"/> for released-AppHost compatibility.
+    /// </remarks>
     public DateTimeOffset? CliStartedAt { get; init; }
 
     /// <summary>
@@ -1731,4 +1750,3 @@ internal sealed class ResourceLogBatch
     /// </summary>
     public required ResourceLogLine[] Lines { get; init; }
 }
-
