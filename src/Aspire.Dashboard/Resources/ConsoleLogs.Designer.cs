@@ -74,13 +74,13 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsNoLogsFound", resourceCulture);
             }
         }
-        
+
         public static string ConsoleLogsNoLogsMatchFilter {
             get {
                 return ResourceManager.GetString("ConsoleLogsNoLogsMatchFilter", resourceCulture);
             }
         }
-        
+
         public static string ConsoleLogsTextFilter {
             get {
                 return ResourceManager.GetString("ConsoleLogsTextFilter", resourceCulture);

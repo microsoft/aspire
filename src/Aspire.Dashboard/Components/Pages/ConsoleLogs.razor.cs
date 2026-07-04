@@ -659,21 +659,25 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         else
         {
             // Console-view items: preserved from the original menu.
+            var isDownloadLogsDisabled = PageViewModel.SelectedResource is null && !_isSubscribedToAll;
+
             _logsMenuItems.Add(new()
             {
-                IsDisabled = PageViewModel.SelectedResource is null && !_isSubscribedToAll,
+                IsDisabled = isDownloadLogsDisabled,
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogs)],
                 Icon = new Icons.Regular.Size16.ArrowDownload(),
                 NestedMenuItems =
                 [
                     new()
                     {
+                        IsDisabled = isDownloadLogsDisabled,
                         OnClick = DownloadTextLogsAsync,
                         Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogsAsText)],
                         Icon = new Icons.Regular.Size16.DocumentText()
                     },
                     new()
                     {
+                        IsDisabled = isDownloadLogsDisabled,
                         OnClick = DownloadCsvLogsAsync,
                         Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogsAsCsv)],
                         Icon = new Icons.Regular.Size16.DocumentTable()
