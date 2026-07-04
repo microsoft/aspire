@@ -247,6 +247,40 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
+    public void UpdateResources_MultipleRunningReplicas_UsesLeastHealthyReplicaForParentHealth()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        var healthyChild = CreateReplicaChild(
+            parent,
+            "syndule-api--0000001",
+            "Running",
+            ImmutableArray.Create(new HealthReportViewModel("Ready", HealthStatus.Healthy, "Ready", null)));
+        var unhealthyChild = CreateReplicaChild(
+            parent,
+            "syndule-api--0000002",
+            "Running",
+            ImmutableArray.Create(new HealthReportViewModel("Ready", HealthStatus.Unhealthy, "Not ready", null)));
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, healthyChild, unhealthyChild], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Running", updatedParent.State);
+            Assert.Equal(KnownResourceState.Running, updatedParent.KnownState);
+            Assert.Equal(HealthStatus.Unhealthy, updatedParent.HealthStatus);
+        });
+    }
+
+    [Fact]
     public void UpdateResources_ChildResourceWithDifferentDisplayName_DoesNotUpdateParentState()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);

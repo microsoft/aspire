@@ -454,10 +454,19 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             .Where(child => !ReferenceEquals(child, parent) && IsReplicaChild(parent, child))
             .ToList();
 
-        return children.FirstOrDefault(r => r.IsRunningState()) ??
-            children.FirstOrDefault(r => r.IsUnusableTransitoryState()) ??
-            children.FirstOrDefault(r => r.IsRuntimeUnhealthy() || r.IsFailedToStart()) ??
-            children.FirstOrDefault(r => !r.HasNoState());
+        return GetMostRelevantReplica(children.Where(r => r.IsRunningState())) ??
+            GetMostRelevantReplica(children.Where(r => r.IsUnusableTransitoryState())) ??
+            GetMostRelevantReplica(children.Where(r => r.IsRuntimeUnhealthy() || r.IsFailedToStart())) ??
+            GetMostRelevantReplica(children.Where(r => !r.HasNoState()));
+
+        static ResourceViewModel? GetMostRelevantReplica(IEnumerable<ResourceViewModel> replicas)
+        {
+            return replicas
+                .OrderBy(r => r.HealthStatus ?? HealthStatus.Unhealthy)
+                .ThenBy(r => r.ReplicaIndex)
+                .ThenBy(r => r.Name, StringComparers.ResourceName)
+                .FirstOrDefault();
+        }
     }
 
     private static bool IsReplicaChild(ResourceViewModel parent, ResourceViewModel child)
