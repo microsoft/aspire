@@ -202,6 +202,88 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
+    public void UpdateResources_ReplicaHealthChanged_UpdatesParentHealthStatus()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        var child = CreateReplicaChild(
+            parent,
+            "syndule-api--0000007",
+            "Running",
+            ImmutableArray.Create(new HealthReportViewModel("Ready", HealthStatus.Healthy, "Ready", null)));
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, child], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal(HealthStatus.Healthy, updatedParent.HealthStatus);
+        });
+
+        channel.Writer.TryWrite([
+            new ResourceViewModelChange(
+                ResourceViewModelChangeType.Upsert,
+                CreateReplicaChild(
+                    parent,
+                    "syndule-api--0000007",
+                    "Running",
+                    ImmutableArray.Create(new HealthReportViewModel("Ready", HealthStatus.Unhealthy, "Not ready", null))))
+        ]);
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Running", updatedParent.State);
+            Assert.Equal(KnownResourceState.Running, updatedParent.KnownState);
+            Assert.Equal(HealthStatus.Unhealthy, updatedParent.HealthStatus);
+        });
+    }
+
+    [Fact]
+    public void UpdateResources_ChildResourceWithDifferentDisplayName_DoesNotUpdateParentState()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("worker", "Project", "Scaled to zero", null);
+        var child = CreateChild(parent, "worker-sidecar", "Running", displayName: "worker-sidecar");
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, child], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Scaled to zero", updatedParent.State);
+            Assert.Null(updatedParent.KnownState);
+        });
+
+        channel.Writer.TryWrite([
+            new ResourceViewModelChange(
+                ResourceViewModelChangeType.Upsert,
+                CreateChild(parent, "worker-sidecar", "Starting", displayName: "worker-sidecar"))
+        ]);
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Scaled to zero", updatedParent.State);
+            Assert.Null(updatedParent.KnownState);
+        });
+    }
+
+    [Fact]
     public void FilterResources()
     {
         // Arrange
@@ -511,14 +593,19 @@ public partial class ResourcesTests : DashboardTestContext
         };
     }
 
-    private static ResourceViewModel CreateReplicaChild(ResourceViewModel parent, string childName, string? state)
+    private static ResourceViewModel CreateReplicaChild(ResourceViewModel parent, string childName, string? state, ImmutableArray<HealthReportViewModel>? healthReports = null)
+    {
+        return CreateChild(parent, childName, state, parent.DisplayName, healthReports);
+    }
+
+    private static ResourceViewModel CreateChild(ResourceViewModel parent, string childName, string? state, string displayName, ImmutableArray<HealthReportViewModel>? healthReports = null)
     {
         return CreateResource(
             childName,
             parent.ResourceType,
             state,
-            null,
-            displayName: parent.DisplayName,
+            healthReports,
+            displayName: displayName,
             properties: new Dictionary<string, ResourcePropertyViewModel>
             {
                 [KnownProperties.Resource.ParentName] = CreateParentNameProperty(parent.Name)

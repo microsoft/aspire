@@ -429,7 +429,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 displayedParent.KnownState == updatedParent.KnownState &&
                 string.Equals(displayedParent.StateStyle, updatedParent.StateStyle, StringComparison.Ordinal) &&
                 displayedParent.StartTimeStamp == updatedParent.StartTimeStamp &&
-                displayedParent.StopTimeStamp == updatedParent.StopTimeStamp))
+                displayedParent.StopTimeStamp == updatedParent.StopTimeStamp &&
+                displayedParent.HealthStatus == updatedParent.HealthStatus &&
+                displayedParent.HealthReports.SequenceEqual(updatedParent.HealthReports)))
             {
                 continue;
             }

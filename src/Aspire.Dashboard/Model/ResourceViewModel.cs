@@ -176,7 +176,7 @@ public sealed class ResourceViewModel
             Relationships = Relationships,
             Properties = Properties,
             Commands = Commands,
-            HealthReports = HealthReports,
+            HealthReports = stateSource.HealthReports,
             IsHidden = IsHidden,
             SupportsDetailedTelemetry = SupportsDetailedTelemetry,
             IconName = IconName,
