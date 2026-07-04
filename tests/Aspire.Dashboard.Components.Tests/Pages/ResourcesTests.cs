@@ -386,6 +386,62 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Contains(filteredResources, r => r.Name == "Resource3");
     }
 
+    [Fact]
+    public void UpdateResources_ParentResourceStateTracksRunningChildResourceState()
+    {
+        // Arrange
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parentName = "identityserver";
+        var childName = "identityserver--0000003";
+        var childProperties = CreateParentProperties(parentName);
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource(parentName, "AzureContainerApp", "Scaled to zero", null, stateStyle: "info"),
+            CreateResource(childName, "Container", "Scaled to zero", null, properties: childProperties, displayName: parentName),
+        };
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: () => channel);
+
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        Assert.Equal("Scaled to zero", cut.Instance.GetFilteredResources().Single(r => r.Name == parentName).State);
+
+        // Act
+        channel.Writer.TryWrite([
+            new ResourceViewModelChange(
+                ResourceViewModelChangeType.Upsert,
+                CreateResource(childName, "Container", "Running", null, properties: childProperties, displayName: parentName))
+        ]);
+
+        // Assert
+        cut.WaitForAssertion(() =>
+        {
+            var parent = cut.Instance.GetFilteredResources().Single(r => r.Name == parentName);
+            Assert.Equal("Running", parent.State);
+            Assert.Equal(KnownResourceState.Running, parent.KnownState);
+        });
+
+        // Act
+        channel.Writer.TryWrite([
+            new ResourceViewModelChange(
+                ResourceViewModelChangeType.Upsert,
+                CreateResource(childName, "Container", "Scaled to zero", null, properties: childProperties, displayName: parentName))
+        ]);
+
+        // Assert
+        cut.WaitForAssertion(() =>
+        {
+            var parent = cut.Instance.GetFilteredResources().Single(r => r.Name == parentName);
+            Assert.Equal("Scaled to zero", parent.State);
+            Assert.Null(parent.KnownState);
+        });
+    }
+
     private static ResourceViewModel CreateResource(
         string name,
         string type,
@@ -394,7 +450,8 @@ public partial class ResourcesTests : DashboardTestContext
         bool isHidden = false,
         string? stateStyle = null,
         ImmutableDictionary<string, ResourcePropertyViewModel>? properties = null,
-        int? replicaIndex = null)
+        int? replicaIndex = null,
+        string? displayName = null)
     {
         return new ResourceViewModel
         {
@@ -402,7 +459,7 @@ public partial class ResourcesTests : DashboardTestContext
             ResourceType = type,
             State = state,
             KnownState = state is not null && Enum.TryParse<KnownResourceState>(state, out var knownState) ? knownState : null,
-            DisplayName = name,
+            DisplayName = displayName ?? name,
             Uid = name,
             ReplicaIndex = replicaIndex ?? 0,
             HealthReports = healthReports ?? [],
@@ -419,6 +476,20 @@ public partial class ResourcesTests : DashboardTestContext
             Commands = [],
             IsHidden = isHidden,
         };
+    }
+
+    private static ImmutableDictionary<string, ResourcePropertyViewModel> CreateParentProperties(string parentName)
+    {
+        return ImmutableDictionary<string, ResourcePropertyViewModel>.Empty.Add(
+            KnownProperties.Resource.ParentName,
+            new ResourcePropertyViewModel(
+                KnownProperties.Resource.ParentName,
+                ProtobufValue.ForString(parentName),
+                isValueSensitive: false,
+                knownProperty: null,
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false));
     }
 
     [Fact]

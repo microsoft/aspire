@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
@@ -113,6 +114,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
+    // Keep raw snapshots so an inferred replica-set parent state can be reverted when all replicas scale back down.
+    private readonly ConcurrentDictionary<string, ResourceViewModel> _rawResourceByName = new(StringComparers.ResourceName);
     private readonly HashSet<string> _collapsedResourceNames = new(StringComparers.ResourceName);
     private readonly TaskCompletionSource _loadingTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _isFilterPopupVisible;
@@ -317,9 +320,18 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                         }
                         else if (changeType == ResourceViewModelChangeType.Delete)
                         {
-                            var removed = _resourceByName.TryRemove(resource.Name, out _);
+                            var removed = _rawResourceByName.TryRemove(resource.Name, out _);
+                            UpdateEffectiveResourceStateCache();
                             Debug.Assert(removed, "Cannot remove unknown resource.");
                         }
+                    }
+
+                    if (PageViewModel.SelectedResource is { } selectedResource &&
+                        _resourceByName.TryGetValue(selectedResource.Name, out var updatedSelectedResource) &&
+                        !ReferenceEquals(selectedResource, updatedSelectedResource))
+                    {
+                        PageViewModel.SelectedResource = updatedSelectedResource;
+                        selectedResourceHasChanged = true;
                     }
 
                     UpdateMaxHighlightedCount();
@@ -355,30 +367,99 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private bool UpdateFromResource(ResourceViewModel resource, Func<string, bool> resourceTypeVisible, Func<string, bool> stateVisible, Func<string, bool> healthStatusVisible)
     {
-        // This is ok from threadsafty perspective because we are the only thread that's modifying resources.
+        // This is ok from a thread-safety perspective because we are the only thread that's modifying resources.
         bool added;
-        if (_resourceByName.TryGetValue(resource.Name, out _))
+        if (_rawResourceByName.TryGetValue(resource.Name, out _))
         {
             added = false;
-            _resourceByName[resource.Name] = resource;
+            _rawResourceByName[resource.Name] = resource;
         }
         else
         {
-            added = _resourceByName.TryAdd(resource.Name, resource);
+            added = _rawResourceByName.TryAdd(resource.Name, resource);
         }
 
-        // Don't add Parameter to resource type filters. Parameters have their own dedicated view
-        // and are excluded from the Table and Graph views regardless of the type filter.
-        if (!resource.IsParameter)
+        UpdateEffectiveResourceStateCache();
+
+        foreach (var effectiveResource in _resourceByName.Values)
         {
-            PageViewModel.ResourceTypesToVisibility.AddOrUpdate(resource.ResourceType, resourceTypeVisible(resource.ResourceType), (_, _) => resourceTypeVisible(resource.ResourceType));
+            // Don't add Parameter to resource type filters. Parameters have their own dedicated view
+            // and are excluded from the Table and Graph views regardless of the type filter.
+            if (!effectiveResource.IsParameter)
+            {
+                PageViewModel.ResourceTypesToVisibility.AddOrUpdate(effectiveResource.ResourceType, resourceTypeVisible(effectiveResource.ResourceType), (_, _) => resourceTypeVisible(effectiveResource.ResourceType));
+            }
+            PageViewModel.ResourceStatesToVisibility.AddOrUpdate(effectiveResource.State ?? string.Empty, stateVisible(effectiveResource.State ?? string.Empty), (_, _) => stateVisible(effectiveResource.State ?? string.Empty));
+            PageViewModel.ResourceHealthStatusesToVisibility.AddOrUpdate(effectiveResource.HealthStatus?.Humanize() ?? string.Empty, healthStatusVisible(effectiveResource.HealthStatus?.Humanize() ?? string.Empty), (_, _) => healthStatusVisible(effectiveResource.HealthStatus?.Humanize() ?? string.Empty));
         }
-        PageViewModel.ResourceStatesToVisibility.AddOrUpdate(resource.State ?? string.Empty, stateVisible(resource.State ?? string.Empty), (_, _) => stateVisible(resource.State ?? string.Empty));
-        PageViewModel.ResourceHealthStatusesToVisibility.AddOrUpdate(resource.HealthStatus?.Humanize() ?? string.Empty, healthStatusVisible(resource.HealthStatus?.Humanize() ?? string.Empty), (_, _) => healthStatusVisible(resource.HealthStatus?.Humanize() ?? string.Empty));
 
         UpdateMenuButtons();
 
         return added;
+    }
+
+    private void UpdateEffectiveResourceStateCache()
+    {
+        var effectiveResources = new Dictionary<string, ResourceViewModel>(StringComparers.ResourceName);
+
+        foreach (var resource in _rawResourceByName.Values)
+        {
+            effectiveResources[resource.Name] = TryCreateEffectiveReplicaParentResource(resource, out var effectiveResource)
+                ? effectiveResource
+                : resource;
+        }
+
+        foreach (var resourceName in _resourceByName.Keys)
+        {
+            if (!effectiveResources.ContainsKey(resourceName))
+            {
+                _resourceByName.TryRemove(resourceName, out _);
+            }
+        }
+
+        foreach (var (resourceName, resource) in effectiveResources)
+        {
+            _resourceByName[resourceName] = resource;
+        }
+    }
+
+    private bool TryCreateEffectiveReplicaParentResource(ResourceViewModel resource, [NotNullWhen(true)] out ResourceViewModel? effectiveResource)
+    {
+        effectiveResource = null;
+
+        if (!CanShowReplicaRunningState(resource))
+        {
+            return false;
+        }
+
+        foreach (var child in _rawResourceByName.Values)
+        {
+            // Replica resources are nested under the parent resource and keep the same display name.
+            if (string.Equals(child.GetResourcePropertyValue(KnownProperties.Resource.ParentName), resource.Name, StringComparisons.ResourceName) &&
+                string.Equals(child.DisplayName, resource.DisplayName, StringComparisons.ResourceName) &&
+                child.KnownState is KnownResourceState.Running)
+            {
+                effectiveResource = resource.WithState(KnownResourceState.Running.ToString(), stateStyle: null, KnownResourceState.Running);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool CanShowReplicaRunningState(ResourceViewModel resource)
+    {
+        if (resource.StateStyle is "error" or "warning")
+        {
+            return false;
+        }
+
+        return resource.KnownState is null
+            or KnownResourceState.Unknown
+            or KnownResourceState.NotStarted
+            or KnownResourceState.Starting
+            or KnownResourceState.Building
+            or KnownResourceState.Waiting;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

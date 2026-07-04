@@ -139,6 +139,35 @@ public sealed class ResourceViewModel
         return IsHidden || KnownState is KnownResourceState.Hidden;
     }
 
+    internal ResourceViewModel WithState(string? state, string? stateStyle, KnownResourceState? knownState)
+    {
+        return new ResourceViewModel
+        {
+            Name = Name,
+            ResourceType = ResourceType,
+            DisplayName = DisplayName,
+            Uid = Uid,
+            ReplicaIndex = ReplicaIndex,
+            State = state,
+            StateStyle = stateStyle,
+            CreationTimeStamp = CreationTimeStamp,
+            StartTimeStamp = StartTimeStamp,
+            StopTimeStamp = StopTimeStamp,
+            Environment = Environment,
+            Urls = Urls,
+            Volumes = Volumes,
+            Relationships = Relationships,
+            Properties = Properties,
+            Commands = Commands,
+            HealthReports = HealthReports,
+            KnownState = knownState,
+            IsHidden = IsHidden,
+            SupportsDetailedTelemetry = SupportsDetailedTelemetry,
+            IconName = IconName,
+            IconVariant = IconVariant
+        };
+    }
+
     internal static HealthStatus? ComputeHealthStatus(ImmutableArray<HealthReportViewModel> healthReports, KnownResourceState? state)
     {
         if (state != KnownResourceState.Running)
