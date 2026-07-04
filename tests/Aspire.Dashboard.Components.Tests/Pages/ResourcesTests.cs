@@ -113,6 +113,54 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
+    public void UpdateResources_ChildResourceRunning_UpdatesParentState()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        var child = CreateResource(
+            "syndule-api--0000007",
+            "Azure Container App",
+            "Scaled to zero",
+            null,
+            displayName: parent.DisplayName,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.ParentName] = CreateParentNameProperty(parent.Name)
+            }.ToImmutableDictionary());
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, child], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        channel.Writer.TryWrite([
+            new ResourceViewModelChange(
+                ResourceViewModelChangeType.Upsert,
+                CreateResource(
+                    "syndule-api--0000007",
+                    "Azure Container App",
+                    "Running",
+                    null,
+                    displayName: parent.DisplayName,
+                    properties: new Dictionary<string, ResourcePropertyViewModel>
+                    {
+                        [KnownProperties.Resource.ParentName] = CreateParentNameProperty(parent.Name)
+                    }.ToImmutableDictionary()))
+        ]);
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Running", updatedParent.State);
+            Assert.Equal(KnownResourceState.Running, updatedParent.KnownState);
+        });
+    }
+
+    [Fact]
     public void FilterResources()
     {
         // Arrange
@@ -394,7 +442,8 @@ public partial class ResourcesTests : DashboardTestContext
         bool isHidden = false,
         string? stateStyle = null,
         ImmutableDictionary<string, ResourcePropertyViewModel>? properties = null,
-        int? replicaIndex = null)
+        int? replicaIndex = null,
+        string? displayName = null)
     {
         return new ResourceViewModel
         {
@@ -402,7 +451,7 @@ public partial class ResourcesTests : DashboardTestContext
             ResourceType = type,
             State = state,
             KnownState = state is not null && Enum.TryParse<KnownResourceState>(state, out var knownState) ? knownState : null,
-            DisplayName = name,
+            DisplayName = displayName ?? name,
             Uid = name,
             ReplicaIndex = replicaIndex ?? 0,
             HealthReports = healthReports ?? [],
@@ -419,6 +468,18 @@ public partial class ResourcesTests : DashboardTestContext
             Commands = [],
             IsHidden = isHidden,
         };
+    }
+
+    private static ResourcePropertyViewModel CreateParentNameProperty(string parentName)
+    {
+        return new ResourcePropertyViewModel(
+            KnownProperties.Resource.ParentName,
+            ProtobufValue.ForString(parentName),
+            isValueSensitive: false,
+            knownProperty: null,
+            sortOrder: 0,
+            displayName: null,
+            isHighlighted: false);
     }
 
     [Fact]

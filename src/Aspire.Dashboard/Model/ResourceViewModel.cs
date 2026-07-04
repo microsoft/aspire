@@ -155,6 +155,35 @@ public sealed class ResourceViewModel
               ?? Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy;
     }
 
+    internal ResourceViewModel WithStateFrom(ResourceViewModel stateSource)
+    {
+        return new ResourceViewModel
+        {
+            Name = Name,
+            ResourceType = ResourceType,
+            DisplayName = DisplayName,
+            Uid = Uid,
+            ReplicaIndex = ReplicaIndex,
+            State = stateSource.State,
+            KnownState = stateSource.KnownState,
+            StateStyle = stateSource.StateStyle,
+            CreationTimeStamp = CreationTimeStamp,
+            StartTimeStamp = stateSource.StartTimeStamp,
+            StopTimeStamp = stateSource.StopTimeStamp,
+            Environment = Environment,
+            Urls = Urls,
+            Volumes = Volumes,
+            Relationships = Relationships,
+            Properties = Properties,
+            Commands = Commands,
+            HealthReports = HealthReports,
+            IsHidden = IsHidden,
+            SupportsDetailedTelemetry = SupportsDetailedTelemetry,
+            IconName = IconName,
+            IconVariant = IconVariant
+        };
+    }
+
     public static string GetResourceName(ResourceViewModel resource, IDictionary<string, ResourceViewModel> allResources)
     {
         return GetResourceName(resource, allResources.Values);

@@ -285,6 +285,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 var added = UpdateFromResource(resource);
                 Debug.Assert(added, "Should not receive duplicate resources in initial snapshot data.");
             }
+            UpdateParentReplicaStates();
 
             UpdateMaxHighlightedCount();
             await _dataGrid.SafeRefreshDataAsync();
@@ -295,6 +296,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 await foreach (var changes in subscription.WithCancellation(_cts.Token).ConfigureAwait(false))
                 {
                     var selectedResourceHasChanged = false;
+                    var resourcesMayAffectParentReplicaState = false;
+
+                    bool IsResourceTypeVisible(string type) => !PageViewModel.ResourceTypesToVisibility.TryGetValue(type, out var value) || value;
+                    bool IsStateVisible(string state) => !PageViewModel.ResourceStatesToVisibility.TryGetValue(state, out var value) || value;
+                    bool IsHealthStatusVisible(string healthStatus) => !PageViewModel.ResourceHealthStatusesToVisibility.TryGetValue(healthStatus, out var value) || value;
 
                     foreach (var (changeType, resource) in changes)
                     {
@@ -305,21 +311,29 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                                 // The new type/state/health status should be visible if it's either
                                 // 1) new, or
                                 // 2) previously visible
-                                t => !PageViewModel.ResourceTypesToVisibility.TryGetValue(t, out var value) || value,
-                                s => !PageViewModel.ResourceStatesToVisibility.TryGetValue(s, out var value) || value,
-                                s => !PageViewModel.ResourceHealthStatusesToVisibility.TryGetValue(s, out var value) || value);
+                                IsResourceTypeVisible,
+                                IsStateVisible,
+                                IsHealthStatusVisible);
 
                             if (string.Equals(PageViewModel.SelectedResource?.Name, resource.Name, StringComparisons.ResourceName))
                             {
                                 PageViewModel.SelectedResource = resource;
                                 selectedResourceHasChanged = true;
                             }
+
+                            resourcesMayAffectParentReplicaState = true;
                         }
                         else if (changeType == ResourceViewModelChangeType.Delete)
                         {
                             var removed = _resourceByName.TryRemove(resource.Name, out _);
                             Debug.Assert(removed, "Cannot remove unknown resource.");
+                            resourcesMayAffectParentReplicaState = true;
                         }
+                    }
+
+                    if (resourcesMayAffectParentReplicaState)
+                    {
+                        selectedResourceHasChanged |= UpdateParentReplicaStates(IsResourceTypeVisible, IsStateVisible, IsHealthStatusVisible);
                     }
 
                     UpdateMaxHighlightedCount();
@@ -379,6 +393,68 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         UpdateMenuButtons();
 
         return added;
+    }
+
+    private bool UpdateParentReplicaStates()
+    {
+        var preselectedHiddenResourceTypes = HiddenTypes?.Split(' ').Select(StringUtils.Unescape).ToHashSet();
+        var preselectedHiddenResourceStates = HiddenStates?.Split(' ').Select(StringUtils.Unescape).ToHashSet();
+        var preselectedHiddenResourceHealthStates = HiddenHealthStates?.Split(' ').Select(StringUtils.Unescape).ToHashSet();
+
+        return UpdateParentReplicaStates(
+            type => preselectedHiddenResourceTypes is null || !preselectedHiddenResourceTypes.Contains(type),
+            state => preselectedHiddenResourceStates is null || !preselectedHiddenResourceStates.Contains(state),
+            healthStatus => preselectedHiddenResourceHealthStates is null || !preselectedHiddenResourceHealthStates.Contains(healthStatus));
+    }
+
+    private bool UpdateParentReplicaStates(Func<string, bool> resourceTypeVisible, Func<string, bool> stateVisible, Func<string, bool> healthStatusVisible)
+    {
+        var selectedResourceHasChanged = false;
+
+        foreach (var parent in _resourceByName.Values.ToList())
+        {
+            var stateSource = GetReplicaStateSource(parent);
+            if (stateSource is null ||
+                (string.Equals(parent.State, stateSource.State, StringComparison.Ordinal) &&
+                parent.KnownState == stateSource.KnownState &&
+                string.Equals(parent.StateStyle, stateSource.StateStyle, StringComparison.Ordinal) &&
+                parent.StartTimeStamp == stateSource.StartTimeStamp &&
+                parent.StopTimeStamp == stateSource.StopTimeStamp))
+            {
+                continue;
+            }
+
+            var updatedParent = parent.WithStateFrom(stateSource);
+            UpdateFromResource(updatedParent, resourceTypeVisible, stateVisible, healthStatusVisible);
+
+            if (string.Equals(PageViewModel.SelectedResource?.Name, updatedParent.Name, StringComparisons.ResourceName))
+            {
+                PageViewModel.SelectedResource = updatedParent;
+                selectedResourceHasChanged = true;
+            }
+        }
+
+        return selectedResourceHasChanged;
+    }
+
+    private ResourceViewModel? GetReplicaStateSource(ResourceViewModel parent)
+    {
+        var children = _resourceByName.Values
+            .Where(child => !ReferenceEquals(child, parent) && IsReplicaChild(parent, child))
+            .ToList();
+
+        return children.FirstOrDefault(r => r.IsRunningState()) ??
+            children.FirstOrDefault(r => r.IsUnusableTransitoryState()) ??
+            children.FirstOrDefault(r => r.IsRuntimeUnhealthy() || r.IsFailedToStart()) ??
+            children.FirstOrDefault(r => !r.HasNoState());
+    }
+
+    private static bool IsReplicaChild(ResourceViewModel parent, ResourceViewModel child)
+    {
+        // Replica child rows are modeled as nested resources with the same display name as the parent.
+        // Ordinary child relationships can have independent lifetimes and shouldn't affect parent state.
+        return string.Equals(child.GetResourcePropertyValue(KnownProperties.Resource.ParentName), parent.Name, StringComparisons.ResourceName) &&
+            string.Equals(child.DisplayName, parent.DisplayName, StringComparisons.ResourceName);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
