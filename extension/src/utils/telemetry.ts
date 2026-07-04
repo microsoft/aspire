@@ -173,8 +173,8 @@ function preservesStructuralTelemetryIds(key: string): boolean {
 function sanitizeTelemetryValue(value: string, preserveGuids: boolean): string {
     const sanitized = redactHomeDirectories(value
         .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<email>'))
-        .replace(/\b(password|passwd|pwd|token|secret|sig|api[_-]?key|client[_-]?secret|account[_-]?key|shared[_-]?access[_-]?key|sharedaccesskey|connection[_-]?string|connectionstring|key)(\s*[:=]\s*)(?:(["'])([^&\s"',;}]+)\3|([^&\s"',;}]+))/gi, (_match: string, key: string, separator: string, quote: string | undefined) => `${key}${separator}${quote ?? ''}<redacted>${quote ?? ''}`)
-        .replace(/([?&]sig=)(?:(["'])([^&\s"',;}]+)\2|([^&\s"',;}]+))/gi, (_match: string, prefix: string, quote: string | undefined) => `${prefix}${quote ?? ''}<redacted>${quote ?? ''}`)
+        .replace(/\b(password|passwd|pwd|token|secret|sig|api[_-]?key|client[_-]?secret|account[_-]?key|shared[_-]?access[_-]?key|sharedaccesskey|connection[_-]?string|connectionstring|key)(\s*[:=]\s*)(?:(["'])([^"']*)\3|([^&\s"',;}]+))/gi, (_match: string, key: string, separator: string, quote: string | undefined) => `${key}${separator}${quote ?? ''}<redacted>${quote ?? ''}`)
+        .replace(/([?&]sig=)(?:(["'])([^"']*)\2|([^&\s"',;}]+))/gi, (_match: string, prefix: string, quote: string | undefined) => `${prefix}${quote ?? ''}<redacted>${quote ?? ''}`)
         .replace(/\b(authorization\s*:\s*bearer\s+)[^\s"',;}]+/gi, '$1<redacted>')
         .replace(/\b(bearer\s+)[A-Za-z0-9._~+/=-]+/gi, '$1<redacted>');
 
@@ -190,17 +190,18 @@ function sanitizeTelemetryValue(value: string, preserveGuids: boolean): string {
 }
 
 function redactHomeDirectories(value: string): string {
-    const terminalUserName = '[^/\\\\\\s"\':;,&-][^/\\\\\\s"\':;,&]*(?: +[^/\\\\\\s"\':;,&-][^/\\\\\\s"\':;,&]*){0,2}';
-    const terminalBoundary = '(?=$|["\']|\\s+--|\\s+[A-Za-z_][A-Za-z0-9_.-]*=)';
-    const windowsHomePattern = new RegExp(`\\b([A-Za-z]:)\\\\+Users\\\\+(?:[^\\\\\\s"']+(?: +[^\\\\\\s"']+)*(?=\\\\)|${terminalUserName}${terminalBoundary}|[^\\\\\\s"']+)`, 'g');
-    const macHomePattern = new RegExp(`(^|[^A-Za-z0-9_/-])/Users/(?:[^/\\s"']+(?: +[^/\\s"']+)*(?=/)|${terminalUserName}${terminalBoundary}|[^/\\s"']+)`, 'g');
-    const linuxHomePattern = new RegExp(`(^|[^A-Za-z0-9_/-])/home/(?:[^/\\s"']+(?: +[^/\\s"']+)*(?=/)|${terminalUserName}${terminalBoundary}|[^/\\s"']+)`, 'g');
+    const terminalUserName = '[^/\\\\\\s"\':;,&|<>-][^/\\\\\\s"\':;,&|<>]*(?: +[^/\\\\\\s"\':;,&|<>-][^/\\\\\\s"\':;,&|<>]*){0,3}';
+    const terminalBoundary = '(?=$|["\']|\\s+--|\\s+-[A-Za-z0-9]|\\s+(?:&&|\\|\\||[|;,])|\\s+[A-Za-z_][A-Za-z0-9_.-]*=)';
+    const windowsHomePattern = new RegExp(`\\b([A-Za-z]:)\\\\+Users\\\\+(?:[^\\\\\\s"']+(?: +[^\\\\\\s"']+)*(?=\\\\)|${terminalUserName}${terminalBoundary}|[^\\\\\\s"':;,&|<>]+)`, 'g');
+    const macHomePattern = new RegExp(`(^|[^A-Za-z0-9_/-])/Users/(?:[^/\\s"']+(?: +[^/\\s"']+)*(?=/)|${terminalUserName}${terminalBoundary}|[^/\\s"':;,&|<>]+)`, 'g');
+    const linuxHomePattern = new RegExp(`(^|[^A-Za-z0-9_/-])/home/(?:[^/\\s"']+(?: +[^/\\s"']+)*(?=/)|${terminalUserName}${terminalBoundary}|[^/\\s"':;,&|<>]+)`, 'g');
 
-    return value
+    return redactCurrentHomeDirectory(value)
         // Home-directory redaction. The username is a single path segment that can legitimately
-        // contain spaces (e.g. `C:\Users\Alice Smith\project` or `/Users/Alice Smith/project`), so
-        // first handle values that are exactly a home directory. For embedded paths, match either a
-        // run of space-separated words that is still followed by the same-type path separator (the
+        // contain spaces (e.g. `C:\Users\Alice Smith\project` or `/Users/Alice Smith/project`). Start
+        // with the literal current home directory so command delimiters like `|`, `&&`, and free-form
+        // words after a path do not confuse the generic best-effort patterns below. Then match either
+        // a run of space-separated words that is still followed by the same-type path separator (the
         // username continues), a terminal path segment ending before a safe command boundary, OR a
         // single whitespace-free run (the historical behavior).
         .replace(/^([A-Za-z]:)\\+Users\\+[^\\\s"']+(?: +[^\\\s"']+)*$/g, (_, drive: string) => `${drive}\\Users\\<user>`)
@@ -209,6 +210,23 @@ function redactHomeDirectories(value: string): string {
         .replace(windowsHomePattern, (_match: string, drive: string) => `${drive}\\Users\\<user>`)
         .replace(macHomePattern, '$1/Users/<user>')
         .replace(linuxHomePattern, '$1/home/<user>');
+}
+
+function redactCurrentHomeDirectory(value: string): string {
+    const homeDirectory = os.homedir().replace(/[\\/]+$/, '');
+    const lastSeparatorIndex = Math.max(homeDirectory.lastIndexOf('/'), homeDirectory.lastIndexOf('\\'));
+    if (lastSeparatorIndex <= 0) {
+        return value;
+    }
+
+    const replacement = `${homeDirectory.slice(0, lastSeparatorIndex + 1)}<user>`;
+    const flags = /^[A-Za-z]:[\\/]/.test(homeDirectory) ? 'gi' : 'g';
+
+    return value.replace(new RegExp(`${escapeRegExp(homeDirectory)}(?=$|[\\\\/\\s"':;,&|()<>])`, flags), replacement);
+}
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**

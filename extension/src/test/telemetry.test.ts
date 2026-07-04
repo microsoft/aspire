@@ -194,10 +194,44 @@ suite('telemetry utilities', () => {
         sendTelemetryEvent('aspire/vscode/command/invoked', {
             command: 'cwd=/home/Alice Smith',
         });
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: 'cwd=/Users/Alice Smith -f',
+        });
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: 'cwd=/Users/Alice Bob Carol Dave --flag',
+        });
 
         assert.strictEqual(fake.events[0].properties?.command, 'cwd=/Users/<user> --flag');
         assert.strictEqual(fake.events[1].properties?.command, 'cwd="C:\\Users\\<user>" --flag');
         assert.strictEqual(fake.events[2].properties?.command, 'cwd=/home/<user>');
+        assert.strictEqual(fake.events[3].properties?.command, 'cwd=/Users/<user> -f');
+        assert.strictEqual(fake.events[4].properties?.command, 'cwd=/Users/<user> --flag');
+    });
+
+    test('sendTelemetryEvent redacts the current home directory before shell and punctuation boundaries', () => {
+        const originalHome = process.env.HOME;
+
+        try {
+            process.env.HOME = '/Users/Alice Smith';
+
+            sendTelemetryEvent('aspire/vscode/command/invoked', {
+                command: 'open /Users/Alice Smith | cat',
+            });
+            sendTelemetryEvent('aspire/vscode/command/invoked', {
+                command: 'path is /Users/Alice Smith, ok building /Users/Alice Smith failed',
+            });
+
+            assert.strictEqual(fake.events[0].properties?.command, 'open /Users/<user> | cat');
+            assert.strictEqual(fake.events[1].properties?.command, 'path is /Users/<user>, ok building /Users/<user> failed');
+        }
+        finally {
+            if (originalHome === undefined) {
+                delete process.env.HOME;
+            }
+            else {
+                process.env.HOME = originalHome;
+            }
+        }
     });
 
     test('sendTelemetryEvent redacts quoted secrets', () => {
@@ -208,6 +242,16 @@ suite('telemetry utilities', () => {
         assert.strictEqual(
             fake.events[0].properties?.command,
             '--token="<redacted>" token=\'<redacted>\' password=\'<redacted>\' https://storage.example/?sig="<redacted>"&next=1');
+    });
+
+    test('sendTelemetryEvent redacts quoted secrets that contain spaces', () => {
+        sendTelemetryEvent('aspire/vscode/command/invoked', {
+            command: '--token="secret value" token=\'secret value\' https://storage.example/?sig="secret value"&next=1',
+        });
+
+        assert.strictEqual(
+            fake.events[0].properties?.command,
+            '--token="<redacted>" token=\'<redacted>\' https://storage.example/?sig="<redacted>"&next=1');
     });
 
     test('sendTelemetryEvent does not over-redact path segments after a spaced home username', () => {
