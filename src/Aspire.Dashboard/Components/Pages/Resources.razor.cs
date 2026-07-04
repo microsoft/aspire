@@ -116,6 +116,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     // Keep raw snapshots so an inferred replica-set parent state can be reverted when all replicas scale back down.
     private readonly ConcurrentDictionary<string, ResourceViewModel> _rawResourceByName = new(StringComparers.ResourceName);
+    private readonly ConcurrentDictionary<string, ResourceViewModel> _effectiveReplicaParentSourceByName = new(StringComparers.ResourceName);
     private readonly HashSet<string> _collapsedResourceNames = new(StringComparers.ResourceName);
     private readonly TaskCompletionSource _loadingTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _isFilterPopupVisible;
@@ -285,10 +286,12 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             // Apply snapshot.
             foreach (var resource in snapshot)
             {
-                var added = UpdateFromResource(resource);
+                var added = UpdateRawResource(resource);
                 Debug.Assert(added, "Should not receive duplicate resources in initial snapshot data.");
             }
 
+            UpdateEffectiveResourceStateCache();
+            UpdateResourceFiltersFromUrl();
             UpdateMaxHighlightedCount();
             await _dataGrid.SafeRefreshDataAsync();
 
@@ -303,14 +306,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                     {
                         if (changeType == ResourceViewModelChangeType.Upsert)
                         {
-                            UpdateFromResource(
-                                resource,
-                                // The new type/state/health status should be visible if it's either
-                                // 1) new, or
-                                // 2) previously visible
-                                t => !PageViewModel.ResourceTypesToVisibility.TryGetValue(t, out var value) || value,
-                                s => !PageViewModel.ResourceStatesToVisibility.TryGetValue(s, out var value) || value,
-                                s => !PageViewModel.ResourceHealthStatusesToVisibility.TryGetValue(s, out var value) || value);
+                            UpdateRawResource(resource);
 
                             if (string.Equals(PageViewModel.SelectedResource?.Name, resource.Name, StringComparisons.ResourceName))
                             {
@@ -321,10 +317,18 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                         else if (changeType == ResourceViewModelChangeType.Delete)
                         {
                             var removed = _rawResourceByName.TryRemove(resource.Name, out _);
-                            UpdateEffectiveResourceStateCache();
                             Debug.Assert(removed, "Cannot remove unknown resource.");
                         }
                     }
+
+                    UpdateEffectiveResourceStateCache();
+                    UpdateResourceFilters(
+                        // The new type/state/health status should be visible if it's either
+                        // 1) new, or
+                        // 2) previously visible
+                        resourceTypeVisible: t => !PageViewModel.ResourceTypesToVisibility.TryGetValue(t, out var value) || value,
+                        stateVisible: s => !PageViewModel.ResourceStatesToVisibility.TryGetValue(s, out var value) || value,
+                        healthStatusVisible: s => !PageViewModel.ResourceHealthStatusesToVisibility.TryGetValue(s, out var value) || value);
 
                     if (PageViewModel.SelectedResource is { } selectedResource &&
                         _resourceByName.TryGetValue(selectedResource.Name, out var updatedSelectedResource) &&
@@ -352,35 +356,20 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
     }
 
-    private bool UpdateFromResource(ResourceViewModel resource)
+    private void UpdateResourceFiltersFromUrl()
     {
         var preselectedHiddenResourceTypes = HiddenTypes?.Split(' ').Select(StringUtils.Unescape).ToHashSet();
         var preselectedHiddenResourceStates = HiddenStates?.Split(' ').Select(StringUtils.Unescape).ToHashSet();
         var preselectedHiddenResourceHealthStates = HiddenHealthStates?.Split(' ').Select(StringUtils.Unescape).ToHashSet();
 
-        return UpdateFromResource(
-            resource,
+        UpdateResourceFilters(
             type => preselectedHiddenResourceTypes is null || !preselectedHiddenResourceTypes.Contains(type),
             state => preselectedHiddenResourceStates is null || !preselectedHiddenResourceStates.Contains(state),
             healthStatus => preselectedHiddenResourceHealthStates is null || !preselectedHiddenResourceHealthStates.Contains(healthStatus));
     }
 
-    private bool UpdateFromResource(ResourceViewModel resource, Func<string, bool> resourceTypeVisible, Func<string, bool> stateVisible, Func<string, bool> healthStatusVisible)
+    private void UpdateResourceFilters(Func<string, bool> resourceTypeVisible, Func<string, bool> stateVisible, Func<string, bool> healthStatusVisible)
     {
-        // This is ok from a thread-safety perspective because we are the only thread that's modifying resources.
-        bool added;
-        if (_rawResourceByName.TryGetValue(resource.Name, out _))
-        {
-            added = false;
-            _rawResourceByName[resource.Name] = resource;
-        }
-        else
-        {
-            added = _rawResourceByName.TryAdd(resource.Name, resource);
-        }
-
-        UpdateEffectiveResourceStateCache();
-
         foreach (var effectiveResource in _resourceByName.Values)
         {
             // Don't add Parameter to resource type filters. Parameters have their own dedicated view
@@ -394,19 +383,69 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
 
         UpdateMenuButtons();
+    }
 
+    private bool UpdateRawResource(ResourceViewModel resource)
+    {
+        // This is ok from a thread-safety perspective because we are the only thread that's modifying resources.
+        bool added;
+        if (_rawResourceByName.TryGetValue(resource.Name, out _))
+        {
+            added = false;
+            _rawResourceByName[resource.Name] = resource;
+        }
+        else
+        {
+            added = _rawResourceByName.TryAdd(resource.Name, resource);
+        }
+
+        _effectiveReplicaParentSourceByName.TryRemove(resource.Name, out _);
         return added;
     }
 
     private void UpdateEffectiveResourceStateCache()
     {
         var effectiveResources = new Dictionary<string, ResourceViewModel>(StringComparers.ResourceName);
+        var runningReplicaDisplayNamesByParent = new Dictionary<string, HashSet<string>>(StringComparers.ResourceName);
 
         foreach (var resource in _rawResourceByName.Values)
         {
-            effectiveResources[resource.Name] = TryCreateEffectiveReplicaParentResource(resource, out var effectiveResource)
-                ? effectiveResource
-                : resource;
+            if (resource.KnownState is KnownResourceState.Running &&
+                resource.GetResourcePropertyValue(KnownProperties.Resource.ParentName) is { } parentName)
+            {
+                if (!runningReplicaDisplayNamesByParent.TryGetValue(parentName, out var displayNames))
+                {
+                    displayNames = new HashSet<string>(StringComparers.ResourceName);
+                    runningReplicaDisplayNamesByParent.Add(parentName, displayNames);
+                }
+
+                displayNames.Add(resource.DisplayName);
+            }
+        }
+
+        var effectiveReplicaParentNames = new HashSet<string>(StringComparers.ResourceName);
+
+        foreach (var resource in _rawResourceByName.Values)
+        {
+            if (TryCreateEffectiveReplicaParentResource(resource, runningReplicaDisplayNamesByParent, out var effectiveResource))
+            {
+                effectiveReplicaParentNames.Add(resource.Name);
+                if (_resourceByName.TryGetValue(resource.Name, out var currentEffectiveResource) &&
+                    _effectiveReplicaParentSourceByName.TryGetValue(resource.Name, out var currentSourceResource) &&
+                    ReferenceEquals(currentSourceResource, resource))
+                {
+                    effectiveResources[resource.Name] = currentEffectiveResource;
+                }
+                else
+                {
+                    effectiveResources[resource.Name] = effectiveResource;
+                    _effectiveReplicaParentSourceByName[resource.Name] = resource;
+                }
+            }
+            else
+            {
+                effectiveResources[resource.Name] = resource;
+            }
         }
 
         foreach (var resourceName in _resourceByName.Keys)
@@ -421,9 +460,20 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         {
             _resourceByName[resourceName] = resource;
         }
+
+        foreach (var resourceName in _effectiveReplicaParentSourceByName.Keys)
+        {
+            if (!effectiveReplicaParentNames.Contains(resourceName))
+            {
+                _effectiveReplicaParentSourceByName.TryRemove(resourceName, out _);
+            }
+        }
     }
 
-    private bool TryCreateEffectiveReplicaParentResource(ResourceViewModel resource, [NotNullWhen(true)] out ResourceViewModel? effectiveResource)
+    private static bool TryCreateEffectiveReplicaParentResource(
+        ResourceViewModel resource,
+        Dictionary<string, HashSet<string>> runningReplicaDisplayNamesByParent,
+        [NotNullWhen(true)] out ResourceViewModel? effectiveResource)
     {
         effectiveResource = null;
 
@@ -432,16 +482,12 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             return false;
         }
 
-        foreach (var child in _rawResourceByName.Values)
+        // Replica resources are nested under the parent resource and keep the same display name.
+        if (runningReplicaDisplayNamesByParent.TryGetValue(resource.Name, out var displayNames) &&
+            displayNames.Contains(resource.DisplayName))
         {
-            // Replica resources are nested under the parent resource and keep the same display name.
-            if (string.Equals(child.GetResourcePropertyValue(KnownProperties.Resource.ParentName), resource.Name, StringComparisons.ResourceName) &&
-                string.Equals(child.DisplayName, resource.DisplayName, StringComparisons.ResourceName) &&
-                child.KnownState is KnownResourceState.Running)
-            {
-                effectiveResource = resource.WithState(KnownResourceState.Running.ToString(), stateStyle: null, KnownResourceState.Running);
-                return true;
-            }
+            effectiveResource = resource.WithState(KnownResourceState.Running.ToString(), stateStyle: null, KnownResourceState.Running);
+            return true;
         }
 
         return false;
@@ -674,10 +720,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         await _loadingTcs.Task;
 
         // If filters were saved in page state, resource filters now need to be recomputed since the URL has changed.
-        foreach (var resourceViewModel in _resourceByName)
-        {
-            UpdateFromResource(resourceViewModel.Value);
-        }
+        UpdateResourceFiltersFromUrl();
 
         if (ResourceName is not null)
         {
