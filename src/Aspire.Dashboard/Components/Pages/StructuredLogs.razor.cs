@@ -279,6 +279,14 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _resources = TelemetryRepository.GetResources();
         _resourceViewModels = ResourcesSelectHelpers.CreateResources(_resources);
         _resourceViewModels.Insert(0, _allResource);
+
+        if (ResourceName is not null)
+        {
+            PageViewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, PageViewModel.SelectedResource);
+        }
+
+        ViewModel.ResourceKey = GetSelectedResourceKey();
+        UpdateSubscription();
     }
 
     private Task HandleSelectedResourceChangedAsync()
@@ -302,11 +310,13 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private void UpdateSubscription()
     {
+        var selectedResourceKey = GetSelectedResourceKey();
+
         // Subscribe to updates.
-        if (_logsSubscription is null || _logsSubscription.ResourceKey != PageViewModel.SelectedResource.Id?.GetResourceKey())
+        if (_logsSubscription is null || _logsSubscription.ResourceKey != selectedResourceKey)
         {
             _logsSubscription?.Dispose();
-            _logsSubscription = TelemetryRepository.OnNewLogs(PageViewModel.SelectedResource.Id?.GetResourceKey(), SubscriptionType.Read, async () =>
+            _logsSubscription = TelemetryRepository.OnNewLogs(selectedResourceKey, SubscriptionType.Read, async () =>
             {
                 ViewModel.ClearData();
                 await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
@@ -367,7 +377,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             entry,
             DialogService,
             DialogService.CreateDialogCallback(this, HandleFilterDialog),
-            propertyKeys: TelemetryRepository.GetLogPropertyKeys(PageViewModel.SelectedResource.Id?.GetResourceKey()),
+            propertyKeys: TelemetryRepository.GetLogPropertyKeys(GetSelectedResourceKey()),
             knownKeys: KnownStructuredLogFields.AllFields,
             getFieldValues: TelemetryRepository.GetLogsFieldValues,
             FilterLoc);
@@ -520,7 +530,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public async Task UpdateViewModelFromQueryAsync(StructuredLogsPageViewModel viewModel)
     {
         viewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource);
-        ViewModel.ResourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
+        ViewModel.ResourceKey = GetSelectedResourceKey();
 
         if (LogLevelText is not null && Enum.TryParse<LogLevel>(LogLevelText, ignoreCase: true, out var logLevel))
         {
@@ -548,6 +558,23 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         }
 
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
+
+    private ResourceKey? GetSelectedResourceKey()
+    {
+        if (PageViewModel.SelectedResource.Id is { } selectedResource)
+        {
+            return selectedResource.GetResourceKey();
+        }
+
+        // The route can restore a resource filter before telemetry has recreated the
+        // corresponding dropdown option after reconnecting to a restarted AppHost.
+        if (ResourceName is not null)
+        {
+            return new ResourceKey(ResourceName, InstanceId: null);
+        }
+
+        return null;
     }
 
     private bool IsGenAILogEntry(OtlpLogEntry logEntry)

@@ -150,6 +150,87 @@ public partial class StructuredLogsTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_RouteResourceBeforeTelemetryArrives_FiltersLogsWhenResourcesArrive()
+    {
+        SetupStructureLogsServices();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        var uri = navigationManager.ToAbsoluteUri(DashboardUrls.StructuredLogsUrl(resource: "TestApp"));
+        navigationManager.NavigateTo(uri.OriginalString);
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<StructuredLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "TestApp");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var viewModel = Services.GetRequiredService<StructuredLogsViewModel>();
+        viewModel.StartIndex = 0;
+        viewModel.Count = 100;
+        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+
+        telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "OtherApp", instanceId: "other-instance"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(name: "test-scope"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "Other resource log")
+                        }
+                    }
+                }
+            }
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("TestApp", viewModel.ResourceKey?.Name);
+            Assert.Empty(viewModel.GetLogs().Items);
+        });
+
+        telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "TestApp", instanceId: "app-instance"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(name: "test-scope"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "Selected resource log")
+                        }
+                    }
+                }
+            }
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("TestApp", cut.Instance.PageViewModel.SelectedResource.Name);
+            Assert.Equal("TestApp", viewModel.ResourceKey?.Name);
+
+            var logs = viewModel.GetLogs();
+            var log = Assert.Single(logs.Items);
+            Assert.Equal("TestApp", log.ResourceView.ResourceKey.Name);
+            Assert.Equal(1, logs.TotalItemCount);
+        });
+    }
+
+    [Fact]
     public void Render_FiltersWithSpecialCharacters_SuccessfullyParsed()
     {
         // Arrange
