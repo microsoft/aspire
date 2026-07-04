@@ -42,6 +42,16 @@ public static class ResourcesSelectHelpers
             }
             else if (displayNameMatches.Count == 0)
             {
+                var priorReplicaDisplayNameMatches = allowedMatches.Where(e => IsPriorReplicaDisplayNameMatch(name, e.Id)).ToList();
+                if (priorReplicaDisplayNameMatches.Count == 1)
+                {
+                    return SingleMatch(resources, logger, name, priorReplicaDisplayNameMatches[0]);
+                }
+                else if (priorReplicaDisplayNameMatches.Count > 1)
+                {
+                    return MultipleMatches(allowedMatches, logger, name, priorReplicaDisplayNameMatches);
+                }
+
                 // No matches found so return the passed in fallback.
                 return SingleMatch(resources, logger, name, fallbackViewModel, fallback: true);
             }
@@ -53,6 +63,31 @@ public static class ResourcesSelectHelpers
         else
         {
             return MultipleMatches(allowedMatches, logger, name, instanceIdMatches);
+        }
+
+        static bool IsPriorReplicaDisplayNameMatch(string name, ResourceTypeDetails? details)
+        {
+            if (details is not { Type: OtlpResourceType.Singleton, InstanceId: { } instanceId, ReplicaSetName: { } replicaSetName })
+            {
+                return false;
+            }
+
+            if (!name.StartsWith(replicaSetName + "-", StringComparisons.ResourceName))
+            {
+                return false;
+            }
+
+            // A route can be restored from a previous multi-replica session before
+            // enough telemetry has arrived to recreate the replica dropdown entries.
+            // Example:
+            //   route:      TestApp-11111111
+            //   singleton:  TestApp-11111111-1111-1111-1111-111111111111
+            // Treat that route as the singleton until a sibling arrives and the
+            // normal display-name match can take over.
+            var routeInstanceSuffix = name[(replicaSetName.Length + 1)..];
+            return routeInstanceSuffix.Length == 8 &&
+                routeInstanceSuffix.All(char.IsAsciiHexDigit) &&
+                instanceId.EndsWith(routeInstanceSuffix, StringComparisons.ResourceName);
         }
 
         static SelectViewModel<ResourceTypeDetails> SingleMatch(ICollection<SelectViewModel<ResourceTypeDetails>> resources, ILogger logger, string name, SelectViewModel<ResourceTypeDetails> match, bool fallback = false)

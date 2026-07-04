@@ -47,6 +47,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private Subscription? _logsSubscription;
     private bool _resourceChanged;
     private bool _routeResourceSelectionPending;
+    private bool _resourceSelectionChangePending;
     private string? _elementIdBeforeDetailsViewOpened;
     private string? _pendingFocusElementId;
     private AspirePageContentLayout? _contentLayout;
@@ -281,12 +282,16 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _resourceViewModels = ResourcesSelectHelpers.CreateResources(_resources);
         _resourceViewModels.Insert(0, _allResource);
 
-        if (ResourceName is not null)
+        if (ResourceName is not null && !_resourceSelectionChangePending)
         {
             PageViewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, PageViewModel.SelectedResource);
+            _routeResourceSelectionPending = PageViewModel.SelectedResource.Id is null;
+        }
+        else if (ResourceName is null)
+        {
+            _routeResourceSelectionPending = false;
         }
 
-        _routeResourceSelectionPending = ResourceName is not null && PageViewModel.SelectedResource.Id is null;
         ViewModel.ResourceKey = GetSelectedResourceKey();
         UpdateSubscription();
     }
@@ -295,6 +300,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         _resourceChanged = true;
         _routeResourceSelectionPending = false;
+        _resourceSelectionChangePending = true;
 
         return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
@@ -534,6 +540,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         viewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource);
         _routeResourceSelectionPending = ResourceName is not null && viewModel.SelectedResource.Id is null;
+        _resourceSelectionChangePending = false;
         ViewModel.ResourceKey = GetSelectedResourceKey();
 
         if (LogLevelText is not null && Enum.TryParse<LogLevel>(LogLevelText, ignoreCase: true, out var logLevel))
@@ -573,7 +580,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
         // The route can restore a resource filter before telemetry has recreated the
         // corresponding dropdown option after reconnecting to a restarted AppHost.
-        if (ResourceName is not null)
+        if (_routeResourceSelectionPending && ResourceName is not null)
         {
             return new ResourceKey(ResourceName, InstanceId: null);
         }

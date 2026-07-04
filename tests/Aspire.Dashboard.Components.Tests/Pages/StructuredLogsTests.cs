@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -297,7 +298,24 @@ public partial class StructuredLogsTests : DashboardTestContext
                         }
                     }
                 }
-            },
+            }
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("TestApp", cut.Instance.PageViewModel.SelectedResource.Name);
+            Assert.Equal("TestApp", viewModel.ResourceKey?.Name);
+            Assert.Equal(selectedInstanceId.ToString(), viewModel.ResourceKey?.InstanceId);
+
+            var logs = viewModel.GetLogs();
+            var log = Assert.Single(logs.Items);
+            Assert.Equal("TestApp", log.ResourceView.ResourceKey.Name);
+            Assert.Equal(selectedInstanceId.ToString(), log.ResourceView.ResourceKey.InstanceId);
+            Assert.Equal(1, logs.TotalItemCount);
+        });
+
+        telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
             new ResourceLogs
             {
                 Resource = CreateResource(name: "TestApp", instanceId: siblingInstanceId.ToString()),
@@ -318,14 +336,107 @@ public partial class StructuredLogsTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Equal(selectedResourceName, cut.Instance.PageViewModel.SelectedResource.Name);
-            Assert.Equal("TestApp", viewModel.ResourceKey?.Name);
-            Assert.Equal(selectedInstanceId.ToString(), viewModel.ResourceKey?.InstanceId);
 
             var logs = viewModel.GetLogs();
             var log = Assert.Single(logs.Items);
-            Assert.Equal("TestApp", log.ResourceView.ResourceKey.Name);
             Assert.Equal(selectedInstanceId.ToString(), log.ResourceView.ResourceKey.InstanceId);
             Assert.Equal(1, logs.TotalItemCount);
+        });
+    }
+
+    [Fact]
+    public async Task Render_MobilePendingResourceSelection_ResourceUpdateDoesNotRestoreRouteResource()
+    {
+        SetupStructureLogsServices();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(resource: "TestApp"));
+
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "TestApp", instanceId: "test-instance"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(name: "test-scope"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "Route resource log")
+                        }
+                    }
+                }
+            },
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "OtherApp", instanceId: "other-instance"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(name: "test-scope"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "Pending selection log")
+                        }
+                    }
+                }
+            }
+        });
+
+        var cut = RenderComponent<StructuredLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "TestApp");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+        var page = cut.Instance;
+
+        Assert.Equal("TestApp", page.PageViewModel.SelectedResource.Name);
+
+        page.PageViewModel.SelectedResource = new SelectViewModel<ResourceTypeDetails>
+        {
+            Id = ResourceTypeDetails.CreateSingleton("OtherApp-other-instance", "OtherApp"),
+            Name = "OtherApp"
+        };
+
+        await InvokeHandleSelectedResourceChangedAsync(cut, page);
+
+        var layout = cut.FindComponent<AspirePageContentLayout>().Instance;
+        Assert.Contains(nameof(PageExtensions.AfterViewModelChangedAsync), layout.DialogCloseListeners.Keys);
+        Assert.EndsWith(DashboardUrls.StructuredLogsUrl(resource: "TestApp"), navigationManager.Uri);
+
+        telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "ThirdApp", instanceId: "third-instance"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(name: "test-scope"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "Resource refresh trigger")
+                        }
+                    }
+                }
+            }
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("OtherApp", page.PageViewModel.SelectedResource.Name);
+            Assert.Equal("OtherApp", page.ViewModel.ResourceKey?.Name);
+            Assert.Equal("other-instance", page.ViewModel.ResourceKey?.InstanceId);
         });
     }
 
@@ -522,5 +633,15 @@ public partial class StructuredLogsTests : DashboardTestContext
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);
         Services.AddSingleton<StructuredLogsViewModel>();
+    }
+
+    private static Task InvokeHandleSelectedResourceChangedAsync(IRenderedComponent<StructuredLogs> cut, StructuredLogs page)
+    {
+        return cut.InvokeAsync(() =>
+        {
+            var method = typeof(StructuredLogs).GetMethod("HandleSelectedResourceChangedAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.NotNull(method);
+            return (Task)method.Invoke(page, null)!;
+        });
     }
 }

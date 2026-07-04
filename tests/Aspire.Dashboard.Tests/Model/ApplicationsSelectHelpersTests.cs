@@ -283,6 +283,36 @@ public sealed class ResourcesSelectHelpersTests
     }
 
     [Fact]
+    public void GetResource_PriorReplicaDisplayNameWithSingleArrivedReplica_GetInstance()
+    {
+        var instanceId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var appVMs = ResourcesSelectHelpers.CreateResources(new List<OtlpResource>
+        {
+            CreateOtlpResource(name: "app", instanceId: instanceId.ToString())
+        });
+
+        var app = appVMs.GetResource(NullLogger.Instance, "app-11111111", canSelectGrouping: true, null!);
+
+        Assert.Equal($"app-{instanceId}", app.Id!.InstanceId);
+        Assert.Equal(OtlpResourceType.Singleton, app.Id!.Type);
+    }
+
+    [Fact]
+    public void GetResource_PriorReplicaDisplayNameWithPartialSuffix_GetFallback()
+    {
+        var instanceId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var fallback = new SelectViewModel<ResourceTypeDetails> { Id = null, Name = "All" };
+        var appVMs = ResourcesSelectHelpers.CreateResources(new List<OtlpResource>
+        {
+            CreateOtlpResource(name: "app", instanceId: instanceId.ToString())
+        });
+
+        var app = appVMs.GetResource(NullLogger.Instance, "app-1", canSelectGrouping: true, fallback);
+
+        Assert.Same(fallback, app);
+    }
+
+    [Fact]
     public void GetResource_DisplayNameCollisionWithReplicaSetName_ReturnsExactReplicaSet()
     {
         var appVMs = new List<SelectViewModel<ResourceTypeDetails>>
