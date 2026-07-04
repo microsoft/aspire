@@ -112,6 +112,16 @@
         <target state="translated">İndirme günlükleri</target>
         <note />
       </trans-unit>
+      <trans-unit id="DownloadLogsAsCsv">
+        <source>Download as CSV</source>
+        <target state="new">Download as CSV</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DownloadLogsAsText">
+        <source>Download as text</source>
+        <target state="new">Download as text</target>
+        <note />
+      </trans-unit>
       <trans-unit id="LogStatusLabel">
         <source>Service log status</source>
         <target state="translated">Hizmet günlüğü durumu</target>

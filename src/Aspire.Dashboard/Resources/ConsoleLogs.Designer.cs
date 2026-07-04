@@ -128,6 +128,18 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("DownloadLogs", resourceCulture);
             }
         }
+
+        public static string DownloadLogsAsText {
+            get {
+                return ResourceManager.GetString("DownloadLogsAsText", resourceCulture);
+            }
+        }
+
+        public static string DownloadLogsAsCsv {
+            get {
+                return ResourceManager.GetString("DownloadLogsAsCsv", resourceCulture);
+            }
+        }
         
         public static string ConsoleLogsSettings {
             get {
