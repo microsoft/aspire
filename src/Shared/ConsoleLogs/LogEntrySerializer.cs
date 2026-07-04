@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text;
 
 namespace Aspire.Shared.ConsoleLogs;
 
@@ -47,7 +48,9 @@ internal static class LogEntrySerializer
     /// <param name="stream">The stream to write to.</param>
     public static void WriteLogEntriesToCsvStream(IList<LogEntry> entries, Stream stream)
     {
-        using var writer = new StreamWriter(stream, leaveOpen: true);
+        // Emit a UTF-8 BOM so spreadsheet applications (e.g. Excel) detect the encoding and
+        // render non-ASCII characters correctly.
+        using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true), leaveOpen: true);
 
         writer.Write("Resource,Timestamp,Message");
         writer.Write("\r\n");
@@ -76,11 +79,22 @@ internal static class LogEntrySerializer
     }
 
     /// <summary>
-    /// Escapes a CSV field per RFC 4180: fields containing a comma, double quote or line break are
-    /// wrapped in double quotes, and any embedded double quotes are doubled.
+    /// Escapes a CSV field for safe output:
+    /// <list type="bullet">
+    /// <item>Mitigates CSV/formula injection by prefixing fields that begin with a character a
+    /// spreadsheet could interpret as a formula (<c>= + - @</c>, tab or carriage return) with a
+    /// single quote so they are treated as text.</item>
+    /// <item>Quotes per RFC 4180: fields containing a comma, double quote or line break are wrapped
+    /// in double quotes, and any embedded double quotes are doubled.</item>
+    /// </list>
     /// </summary>
     private static string EscapeCsvField(string value)
     {
+        if (value.Length > 0 && Array.IndexOf(s_formulaInjectionChars, value[0]) >= 0)
+        {
+            value = string.Concat("'", value);
+        }
+
         if (value.IndexOfAny(s_csvSpecialChars) < 0)
         {
             return value;
@@ -90,4 +104,5 @@ internal static class LogEntrySerializer
     }
 
     private static readonly char[] s_csvSpecialChars = [',', '"', '\r', '\n'];
+    private static readonly char[] s_formulaInjectionChars = ['=', '+', '-', '@', '\t', '\r'];
 }

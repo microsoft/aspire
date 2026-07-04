@@ -13,7 +13,10 @@ public class LogEntrySerializerTests
     {
         using var stream = new MemoryStream();
         LogEntrySerializer.WriteLogEntriesToCsvStream(entries, stream);
-        return Encoding.UTF8.GetString(stream.ToArray());
+        stream.Position = 0;
+        // detectEncodingFromByteOrderMarks strips the UTF-8 BOM so content assertions compare the text only.
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
     }
 
     private static LogEntry CreateEntry(string content, string? resourcePrefix = null)
@@ -30,6 +33,19 @@ public class LogEntrySerializerTests
 
         // Assert
         Assert.Equal("Resource,Timestamp,Message\r\n", csv);
+    }
+
+    [Fact]
+    public void WriteLogEntriesToCsvStream_WritesUtf8Bom()
+    {
+        // Arrange & Act
+        using var stream = new MemoryStream();
+        LogEntrySerializer.WriteLogEntriesToCsvStream([], stream);
+        var bytes = stream.ToArray();
+
+        // Assert - the stream starts with the UTF-8 BOM (EF BB BF).
+        Assert.True(bytes.Length >= 3);
+        Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes[..3]);
     }
 
     [Fact]
@@ -69,6 +85,30 @@ public class LogEntrySerializerTests
     [InlineData("has\"quote", "\"has\"\"quote\"")]
     [InlineData("plain", "plain")]
     public void WriteLogEntriesToCsvStream_EscapesSpecialCharacters(string message, string expectedField)
+    {
+        // Arrange
+        var entry = CreateEntry(message, resourcePrefix: "res");
+
+        // Act
+        var csv = SerializeToCsv([entry]);
+
+        // Assert
+        Assert.Equal(
+            "Resource,Timestamp,Message\r\n" +
+            $"res,,{expectedField}\r\n",
+            csv);
+    }
+
+    [Theory]
+    [InlineData("=SUM(A1:A2)", "'=SUM(A1:A2)")]
+    [InlineData("+1234567890", "'+1234567890")]
+    [InlineData("-1234567890", "'-1234567890")]
+    [InlineData("@cmd", "'@cmd")]
+    // A field that both begins with a formula character and contains a comma is prefixed and then quoted.
+    [InlineData("=1,2", "\"'=1,2\"")]
+    // A formula character that is not the first character is left untouched.
+    [InlineData("a=b", "a=b")]
+    public void WriteLogEntriesToCsvStream_PrefixesFormulaInjectionFields(string message, string expectedField)
     {
         // Arrange
         var entry = CreateEntry(message, resourcePrefix: "res");
