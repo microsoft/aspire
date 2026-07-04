@@ -18,6 +18,7 @@ public class OrphanDetectionEnvironmentTests
 
         Assert.Equal(Environment.ProcessId.ToString(CultureInfo.InvariantCulture), environment[KnownConfigNames.CliProcessId]);
         Assert.NotNull(ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(environment[KnownConfigNames.CliProcessStarted]));
+        Assert.NotNull(ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(environment[KnownConfigNames.CliProcessStartedStable]));
     }
 
     [Fact]
@@ -30,6 +31,7 @@ public class OrphanDetectionEnvironmentTests
         Assert.Equal(Environment.ProcessId.ToString(CultureInfo.InvariantCulture), environment[KnownConfigNames.CliLauncherProcessId]);
         Assert.NotNull(ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(environment[KnownConfigNames.CliLauncherProcessStarted]));
         Assert.False(environment.ContainsKey(KnownConfigNames.CliProcessId));
+        Assert.False(environment.ContainsKey(KnownConfigNames.CliProcessStartedStable));
     }
 
     [Fact]
@@ -45,6 +47,7 @@ public class OrphanDetectionEnvironmentTests
         Assert.Equal("999", environment[KnownConfigNames.CliProcessId]);
         // The caller did not supply a start time, so it is still stamped even under overwrite: false.
         Assert.NotNull(ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(environment[KnownConfigNames.CliProcessStarted]));
+        Assert.NotNull(ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(environment[KnownConfigNames.CliProcessStartedStable]));
     }
 
     [Fact]
@@ -80,6 +83,7 @@ public class OrphanDetectionEnvironmentTests
 
         Assert.Equal("4321", environment[KnownConfigNames.CliProcessId]);
         Assert.False(environment.ContainsKey(KnownConfigNames.CliProcessStarted));
+        Assert.False(environment.ContainsKey(KnownConfigNames.CliProcessStartedStable));
     }
 
     [Fact]
@@ -95,5 +99,6 @@ public class OrphanDetectionEnvironmentTests
 
         Assert.Equal("999", environment[KnownConfigNames.CliProcessId]);
         Assert.Equal("111", environment[KnownConfigNames.CliProcessStarted]);
+        Assert.Equal("1000", environment[KnownConfigNames.CliProcessStartedStable]);
     }
 }

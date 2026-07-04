@@ -35,13 +35,25 @@ internal static class ParentProcessWatchdog
             return null;
         }
 
-        var expectedStartTimeUnix = ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(
-            Environment.GetEnvironmentVariable(KnownConfigNames.CliProcessStarted));
+        var expectedStartTimeUnix = GetExpectedParentStartTimeUnixSeconds(Environment.GetEnvironmentVariable, out var useRuntimeStartTime);
 
         return ParentProcessLivenessMonitor.Start(
             parentPid,
             expectedStartTimeUnix,
-            stopToken => OnParentExitedAsync(operationCts, stopToken, s_forceExitGracePeriod, Environment.Exit));
+            stopToken => OnParentExitedAsync(operationCts, stopToken, s_forceExitGracePeriod, Environment.Exit),
+            useRuntimeStartTime: useRuntimeStartTime);
+    }
+
+    internal static long? GetExpectedParentStartTimeUnixSeconds(Func<string, string?> getEnvironmentVariable, out bool useRuntimeStartTime)
+    {
+        if (ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(getEnvironmentVariable(KnownConfigNames.CliProcessStartedStable)) is { } stableStartTimeUnix)
+        {
+            useRuntimeStartTime = false;
+            return stableStartTimeUnix;
+        }
+
+        useRuntimeStartTime = true;
+        return ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(getEnvironmentVariable(KnownConfigNames.CliProcessStarted));
     }
 
     internal static async Task OnParentExitedAsync(

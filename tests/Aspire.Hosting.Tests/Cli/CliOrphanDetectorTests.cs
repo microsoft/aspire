@@ -70,7 +70,38 @@ public class CliOrphanDetectorTests(ITestOutputHelper testOutputHelper)
 
         var loggerFactory = CreateLoggerFactory(testOutputHelper);
         var detector = CreateCliOrphanDetector(loggerFactory, configuration, lifetime);
-        detector.IsProcessRunningWithStartTime = (pid, startTime) => false;
+        detector.IsProcessRunningWithLegacyStartTime = (pid, startTime) => false;
+
+        await detector.StartAsync(CancellationToken.None).DefaultTimeout();
+        await stopSignalTcs.Task.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task CliOrphanDetectorPrefersStableTimestampDetectionWhenProvided()
+    {
+        var legacyStartTime = DateTime.Now.AddMinutes(-5);
+        var legacyStartTimeUnixSeconds = ((DateTimeOffset)legacyStartTime).ToUnixTimeSeconds();
+        var stableStartTimeUnixSeconds = legacyStartTimeUnixSeconds + 1;
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "ASPIRE_CLI_PID", "1111" },
+                { "ASPIRE_CLI_STARTED", legacyStartTimeUnixSeconds.ToString() },
+                { "ASPIRE_CLI_STARTED_STABLE", stableStartTimeUnixSeconds.ToString() }
+            })
+            .Build();
+
+        var stopSignalTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var lifetime = new HostLifetimeStub(() => stopSignalTcs.TrySetResult());
+
+        var loggerFactory = CreateLoggerFactory(testOutputHelper);
+        var detector = CreateCliOrphanDetector(loggerFactory, configuration, lifetime);
+        detector.IsProcessRunningWithStartTime = (pid, startTime) =>
+        {
+            Assert.Equal(stableStartTimeUnixSeconds, startTime);
+            return false;
+        };
+        detector.IsProcessRunningWithLegacyStartTime = (_, _) => throw new InvalidOperationException("Stable start time should be preferred.");
 
         await detector.StartAsync(CancellationToken.None).DefaultTimeout();
         await stopSignalTcs.Task.DefaultTimeout();
@@ -107,7 +138,7 @@ public class CliOrphanDetectorTests(ITestOutputHelper testOutputHelper)
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 { "ASPIRE_CLI_PID", "1111" },
-                { "ASPIRE_CLI_STARTED", expectedStartTimeUnix.ToString() }
+                { "ASPIRE_CLI_STARTED_STABLE", expectedStartTimeUnix.ToString() }
             })
             .Build();
         var fakeTimeProvider = new FakeTimeProvider(DateTimeOffset.Now);
@@ -164,7 +195,7 @@ public class CliOrphanDetectorTests(ITestOutputHelper testOutputHelper)
         var detector = CreateCliOrphanDetector(loggerFactory, configuration, lifetime);
 
         // Simulate process with different start time (PID reuse scenario)
-        detector.IsProcessRunningWithStartTime = (pid, startTime) =>
+        detector.IsProcessRunningWithLegacyStartTime = (pid, startTime) =>
         {
             // Process exists but has different start time - indicates PID reuse
             return false;

@@ -25,6 +25,15 @@ internal static partial class ProcessStartTimeHelper
         => GetCurrentProcessStartTime().ToUnixTimeSeconds();
 
     /// <summary>
+    /// Gets the current process's start time as reported by <see cref="Process.StartTime"/>.
+    /// </summary>
+    public static long GetCurrentProcessRuntimeStartTimeUnixSeconds()
+    {
+        using var process = Process.GetCurrentProcess();
+        return new DateTimeOffset(process.StartTime).ToUnixTimeSeconds();
+    }
+
+    /// <summary>
     /// Gets the current process's start time using the same platform-specific source as
     /// <see cref="TryGetProcessStartTime"/>.
     /// </summary>
@@ -45,6 +54,24 @@ internal static partial class ProcessStartTimeHelper
     /// <returns>The start time, or <see langword="null"/> when the process cannot be inspected (already exited, privileged, etc.).</returns>
     public static long? TryGetProcessStartTimeUnixSeconds(int pid)
         => TryGetProcessStartTime(pid)?.ToUnixTimeSeconds();
+
+    /// <summary>
+    /// Gets the start time, as whole Unix seconds, of the process with the given <paramref name="pid"/>
+    /// using <see cref="Process.StartTime"/>.
+    /// </summary>
+    /// <returns>The start time, or <see langword="null"/> when the process cannot be inspected (already exited, privileged, etc.).</returns>
+    public static long? TryGetRuntimeProcessStartTimeUnixSeconds(int pid)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            return new DateTimeOffset(process.StartTime).ToUnixTimeSeconds();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or Win32Exception)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Gets the start time of the process with the given <paramref name="pid"/>.
@@ -126,6 +153,46 @@ internal static partial class ProcessStartTimeHelper
             }
 
             return true;
+        }
+        catch (ArgumentException)
+        {
+            // Process doesn't exist - already terminated.
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            // Process has already exited.
+            return false;
+        }
+        catch (Win32Exception)
+        {
+            // Could not inspect the process (e.g. it exited mid-check, or is privileged). Without
+            // proof of identity, do not report it as the expected running process.
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Determines whether a process matches a legacy start time that was produced from
+    /// <see cref="Process.StartTime"/>.
+    /// </summary>
+    public static bool IsProcessRunningWithRuntimeStartTime(int pid, long expectedStartTimeUnixSeconds, TimeSpan? tolerance = null)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(pid);
+            if (process.HasExited)
+            {
+                return false;
+            }
+
+            if (TryGetRuntimeProcessStartTimeUnixSeconds(pid) is not { } actual ||
+                !AreClose(expectedStartTimeUnixSeconds, actual, tolerance))
+            {
+                return false;
+            }
+
+            return !process.HasExited;
         }
         catch (ArgumentException)
         {

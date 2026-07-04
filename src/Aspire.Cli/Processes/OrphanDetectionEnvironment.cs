@@ -70,11 +70,26 @@ internal static class OrphanDetectionEnvironment
             environment[pidKey] = pid.ToString(CultureInfo.InvariantCulture);
         }
 
+        var isCliParentIdentity = pidKey == KnownConfigNames.CliProcessId && startedKey == KnownConfigNames.CliProcessStarted;
+        var startedForLegacyConsumers = isCliParentIdentity
+            ? ProcessStartTimeHelper.TryGetRuntimeProcessStartTimeUnixSeconds(pid) ?? startTimeUnixSeconds
+            : startTimeUnixSeconds;
+
         // The start time can be unavailable (target already exited, privileged, etc.); only stamp it
         // when it is known so a stale/empty value never masquerades as a verified identity.
-        if (startTimeUnixSeconds is { } started && (overwrite || !environment.ContainsKey(startedKey)))
+        if (startedForLegacyConsumers is { } started && (overwrite || !environment.ContainsKey(startedKey)))
         {
             environment[startedKey] = started.ToString(CultureInfo.InvariantCulture);
+        }
+
+        if (isCliParentIdentity &&
+            startTimeUnixSeconds is { } stableStarted &&
+            (overwrite || !environment.ContainsKey(KnownConfigNames.CliProcessStartedStable)))
+        {
+            // ASPIRE_CLI_STARTED is consumed by released AppHosts and must remain compatible with their
+            // Process.StartTime-based verifier. Current AppHosts prefer this companion value, which is
+            // stable on Linux because it is derived from /proc start ticks.
+            environment[KnownConfigNames.CliProcessStartedStable] = stableStarted.ToString(CultureInfo.InvariantCulture);
         }
     }
 }

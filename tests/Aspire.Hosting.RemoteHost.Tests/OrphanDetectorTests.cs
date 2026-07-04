@@ -114,8 +114,39 @@ public class OrphanDetectorTests
 
         var detector = new OrphanDetector(configuration, lifetime, NullLogger<OrphanDetector>.Instance)
         {
-            IsProcessRunning = _ => throw new InvalidOperationException("Start time from ASPIRE_CLI_STARTED should select the start-time path."),
-            IsProcessRunningWithStartTime = (_, _) => false,
+            IsProcessRunning = _ => throw new InvalidOperationException("Start time from ASPIRE_CLI_STARTED should select the legacy start-time path."),
+            IsProcessRunningWithStartTime = (_, _) => throw new InvalidOperationException("Legacy ASPIRE_CLI_STARTED should not use the stable start-time path."),
+            IsProcessRunningWithLegacyStartTime = (_, _) => false,
+        };
+
+        await detector.StartAsync(CancellationToken.None).WaitAsync(s_timeout);
+        await stopTcs.Task.WaitAsync(s_timeout);
+    }
+
+    [Fact]
+    public async Task PrefersStableAspireCliStartedWhenRemoteStartedMissing()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["REMOTE_APP_HOST_PID"] = "1111",
+                ["ASPIRE_CLI_STARTED"] = "1700000000",
+                ["ASPIRE_CLI_STARTED_STABLE"] = "1700000001",
+            })
+            .Build();
+
+        var stopTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var lifetime = new HostLifetimeStub(() => stopTcs.TrySetResult());
+
+        var detector = new OrphanDetector(configuration, lifetime, NullLogger<OrphanDetector>.Instance)
+        {
+            IsProcessRunning = _ => throw new InvalidOperationException("Start time from ASPIRE_CLI_STARTED_STABLE should select the start-time path."),
+            IsProcessRunningWithStartTime = (_, startTime) =>
+            {
+                Assert.Equal(1700000001, startTime);
+                return false;
+            },
+            IsProcessRunningWithLegacyStartTime = (_, _) => throw new InvalidOperationException("Stable ASPIRE_CLI_STARTED_STABLE should be preferred."),
         };
 
         await detector.StartAsync(CancellationToken.None).WaitAsync(s_timeout);

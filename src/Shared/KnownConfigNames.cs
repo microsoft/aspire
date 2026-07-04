@@ -40,6 +40,7 @@ internal static class KnownConfigNames
 
     public const string CliProcessId = "ASPIRE_CLI_PID";
     public const string CliProcessStarted = "ASPIRE_CLI_STARTED";
+    public const string CliProcessStartedStable = "ASPIRE_CLI_STARTED_STABLE";
 
     // Identity (PID + start time) of the foreground CLI that spawned a detached `aspire start` /
     // `aspire run --detach` child. The detached child watches this during startup and tears the

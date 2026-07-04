@@ -67,6 +67,14 @@ public class ProcessStartTimeHelperTests
         Assert.Equal(ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds(), fromPid);
     }
 
+    [Fact]
+    public void IsProcessRunningWithRuntimeStartTime_CurrentProcess_ReturnsTrue()
+    {
+        var startedUnix = ProcessStartTimeHelper.GetCurrentProcessRuntimeStartTimeUnixSeconds();
+
+        Assert.True(ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(Environment.ProcessId, startedUnix));
+    }
+
     [Theory]
     [InlineData("dotnet", 123456UL)]
     [InlineData("process name with ) parenthesis", 987654UL)]

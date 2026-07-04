@@ -20,9 +20,10 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
         int parentPid,
         long? parentStartedUnixSeconds,
         Func<CancellationToken, Task> onParentExited,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        bool useRuntimeStartTime)
     {
-        _monitorTask = MonitorAsync(parentPid, parentStartedUnixSeconds, onParentExited, timeProvider, _stopCts.Token);
+        _monitorTask = MonitorAsync(parentPid, parentStartedUnixSeconds, onParentExited, timeProvider, useRuntimeStartTime, _stopCts.Token);
     }
 
     /// <summary>
@@ -37,9 +38,10 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
         int parentPid,
         long? parentStartedUnixSeconds,
         Func<CancellationToken, Task> onParentExited,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        bool useRuntimeStartTime = false)
     {
-        return new ParentProcessLivenessMonitor(parentPid, parentStartedUnixSeconds, onParentExited, timeProvider ?? TimeProvider.System);
+        return new ParentProcessLivenessMonitor(parentPid, parentStartedUnixSeconds, onParentExited, timeProvider ?? TimeProvider.System, useRuntimeStartTime);
     }
 
     private static async Task MonitorAsync(
@@ -47,6 +49,7 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
         long? parentStartedUnixSeconds,
         Func<CancellationToken, Task> onParentExited,
         TimeProvider timeProvider,
+        bool useRuntimeStartTime,
         CancellationToken stopToken)
     {
         try
@@ -70,7 +73,10 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
                 // first; ThrowIfCancellationRequested preserves that when we probe before the timer.
                 stopToken.ThrowIfCancellationRequested();
 
-                if (ProcessStartTimeHelper.IsProcessRunning(parentPid, parentStartedUnixSeconds))
+                var isProcessRunning = useRuntimeStartTime && parentStartedUnixSeconds is { } legacyStartTime
+                    ? ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(parentPid, legacyStartTime, TimeSpan.FromSeconds(1))
+                    : ProcessStartTimeHelper.IsProcessRunning(parentPid, parentStartedUnixSeconds);
+                if (isProcessRunning)
                 {
                     continue;
                 }

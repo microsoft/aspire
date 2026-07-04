@@ -29,6 +29,11 @@ internal sealed class OrphanDetector : BackgroundService
     // aspire-managed processes under high process churn).
     internal Func<int, long, bool> IsProcessRunningWithStartTime { get; set; } = static (pid, expectedStartTimeUnix) => ProcessStartTimeHelper.IsProcessRunning(pid, expectedStartTimeUnix);
 
+    internal Func<int, long, bool> IsProcessRunningWithLegacyStartTime { get; set; } = static (pid, expectedStartTimeUnix) =>
+    {
+        return ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(pid, expectedStartTimeUnix, TimeSpan.FromSeconds(1));
+    };
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
@@ -43,11 +48,19 @@ internal sealed class OrphanDetector : BackgroundService
 
             _logger.LogDebug("Monitoring parent process PID: {ParentPid}", pid);
 
-            // Prefer REMOTE_APP_HOST_STARTED but fall back to ASPIRE_CLI_STARTED (the launcher sets both
-            // to the same value). When neither is present we degrade to PID-only detection.
+            // Prefer start times that current CLIs produce from /proc. ASPIRE_CLI_STARTED is kept in the
+            // Process.StartTime clock domain for released AppHosts, so only use it with the legacy verifier.
+            // When no start time is present, degrade to PID-only detection.
             long? expectedStartTimeUnix = null;
+            var useLegacyStartTime = false;
             var startTimeString = _configuration[KnownConfigNames.RemoteAppHostProcessStarted]
-                ?? _configuration[KnownConfigNames.CliProcessStarted];
+                ?? _configuration[KnownConfigNames.CliProcessStartedStable];
+            if (startTimeString is null)
+            {
+                startTimeString = _configuration[KnownConfigNames.CliProcessStarted];
+                useLegacyStartTime = true;
+            }
+
             if (ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(startTimeString) is { } parsedStartTime)
             {
                 expectedStartTimeUnix = parsedStartTime;
@@ -62,9 +75,12 @@ internal sealed class OrphanDetector : BackgroundService
 
             do
             {
-                var isProcessStillRunning = expectedStartTimeUnix is { } expected
-                    ? IsProcessRunningWithStartTime(pid, expected)
-                    : IsProcessRunning(pid);
+                var isProcessStillRunning = expectedStartTimeUnix switch
+                {
+                    { } expected when useLegacyStartTime => IsProcessRunningWithLegacyStartTime(pid, expected),
+                    { } expected => IsProcessRunningWithStartTime(pid, expected),
+                    _ => IsProcessRunning(pid)
+                };
 
                 if (!isProcessStillRunning)
                 {

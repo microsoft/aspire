@@ -1,12 +1,42 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting;
 using Xunit;
 
 namespace Aspire.Managed.Tests;
 
 public class ParentProcessWatchdogTests
 {
+    [Fact]
+    public void GetExpectedParentStartTimeUnixSeconds_PrefersStableValue()
+    {
+        var environment = new Dictionary<string, string?>
+        {
+            [KnownConfigNames.CliProcessStarted] = "1000",
+            [KnownConfigNames.CliProcessStartedStable] = "1001"
+        };
+
+        var startTime = ParentProcessWatchdog.GetExpectedParentStartTimeUnixSeconds(environment.GetValueOrDefault, out var useRuntimeStartTime);
+
+        Assert.Equal(1001, startTime);
+        Assert.False(useRuntimeStartTime);
+    }
+
+    [Fact]
+    public void GetExpectedParentStartTimeUnixSeconds_UsesRuntimeComparisonForLegacyValue()
+    {
+        var environment = new Dictionary<string, string?>
+        {
+            [KnownConfigNames.CliProcessStarted] = "1000"
+        };
+
+        var startTime = ParentProcessWatchdog.GetExpectedParentStartTimeUnixSeconds(environment.GetValueOrDefault, out var useRuntimeStartTime);
+
+        Assert.Equal(1000, startTime);
+        Assert.True(useRuntimeStartTime);
+    }
+
     [Fact]
     public async Task ParentExitedCallback_StillForceExitsWhenCancellationCallbackThrows()
     {
