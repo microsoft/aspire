@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -329,6 +330,99 @@ public partial class StructuredLogsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_RouteResourceBeforeTelemetryArrives_SerializesRouteResourceFilter()
+    {
+        SetupStructureLogsServices();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(resource: "TestApp"));
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<StructuredLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "TestApp");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+        var page = cut.Instance;
+
+        Assert.Equal("TestApp", page.ViewModel.ResourceKey?.Name);
+        Assert.Null(page.PageViewModel.SelectedResource.Id);
+
+        await cut.InvokeAsync(() => page.AfterViewModelChangedAsync(layout: null, waitToApplyMobileChange: true));
+
+        var state = page.ConvertViewModelToSerializable();
+        Assert.Equal("TestApp", state.SelectedResource);
+        Assert.EndsWith("/structuredlogs/resource/TestApp", navigationManager.Uri);
+    }
+
+    [Fact]
+    public async Task Render_RouteResourceAfterTelemetryArrives_AllSelectionClearsSerializedResource()
+    {
+        SetupStructureLogsServices();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(resource: "TestApp"));
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<StructuredLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "TestApp");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+        var page = cut.Instance;
+        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+
+        telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "TestApp", instanceId: "app-instance"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(name: "test-scope"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "Selected resource log")
+                        }
+                    }
+                }
+            }
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("TestApp", page.ViewModel.ResourceKey?.Name);
+            Assert.NotNull(page.PageViewModel.SelectedResource.Id);
+        });
+
+        var allResourceLabel = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.ControlsStrings>>()[nameof(Dashboard.Resources.ControlsStrings.LabelAll)].Value;
+
+        await cut.InvokeAsync(() =>
+        {
+            var resourceSelect = cut.FindComponent<ResourceSelect>();
+            var innerSelect = resourceSelect.Find("fluent-select");
+            innerSelect.Change(allResourceLabel);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var state = page.ConvertViewModelToSerializable();
+            Assert.Null(state.SelectedResource);
+            Assert.EndsWith("/structuredlogs", navigationManager.Uri);
+        });
+    }
+
+    [Fact]
     public void Render_FiltersWithSpecialCharacters_SuccessfullyParsed()
     {
         // Arrange
@@ -422,6 +516,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
         JSInterop.SetupVoid("initializeContinuousScroll").SetVoidResult();
+        JSInterop.SetupVoid("resetContinuousScrollPosition").SetVoidResult();
         JSInterop.SetupVoid("focusElement", _ => true);
 
         FluentUISetupHelpers.AddCommonDashboardServices(this);

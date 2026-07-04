@@ -46,6 +46,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private Subscription? _resourcesSubscription;
     private Subscription? _logsSubscription;
     private bool _resourceChanged;
+    private bool _routeResourceSelectionPending;
     private string? _elementIdBeforeDetailsViewOpened;
     private string? _pendingFocusElementId;
     private AspirePageContentLayout? _contentLayout;
@@ -285,6 +286,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             PageViewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, PageViewModel.SelectedResource);
         }
 
+        _routeResourceSelectionPending = ResourceName is not null && PageViewModel.SelectedResource.Id is null;
         ViewModel.ResourceKey = GetSelectedResourceKey();
         UpdateSubscription();
     }
@@ -292,6 +294,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private Task HandleSelectedResourceChangedAsync()
     {
         _resourceChanged = true;
+        _routeResourceSelectionPending = false;
 
         return this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
@@ -522,7 +525,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         return new StructuredLogsPageState
         {
             LogLevelText = PageViewModel.SelectedLogLevel.Id?.ToString().ToLowerInvariant(),
-            SelectedResource = PageViewModel.SelectedResource.Id is not null ? PageViewModel.SelectedResource.Name : null,
+            SelectedResource = PageViewModel.SelectedResource.Id is not null ? PageViewModel.SelectedResource.Name : (_routeResourceSelectionPending ? ResourceName : null),
             Filters = ViewModel.Filters
         };
     }
@@ -530,6 +533,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public async Task UpdateViewModelFromQueryAsync(StructuredLogsPageViewModel viewModel)
     {
         viewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource);
+        _routeResourceSelectionPending = ResourceName is not null && viewModel.SelectedResource.Id is null;
         ViewModel.ResourceKey = GetSelectedResourceKey();
 
         if (LogLevelText is not null && Enum.TryParse<LogLevel>(LogLevelText, ignoreCase: true, out var logLevel))
