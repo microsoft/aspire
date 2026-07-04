@@ -6,7 +6,7 @@ workload no longer has to fall back to a raw `AddExecutable("name", "deno", work
 
 ## Emitted command shape
 
-```
+```text
 deno <run|task|serve> [runtime-flags] <entrypoint|task> [script-args]
 ```
 
