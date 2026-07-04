@@ -157,6 +157,205 @@ public class AddDenoAppTests
     }
 
     [Fact]
+    public async Task VerifyDockerfile_CacheUsesConfiguredResolutionAndLockFlags()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "custom.lock"), "{}");
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoConfig("deno.json")
+            .WithDenoImportMap("import_map.json")
+            .WithDenoLock("custom.lock")
+            .WithDenoNodeModulesDir("auto");
+
+        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        Assert.Equal(
+            "RUN deno cache --config deno.json --import-map import_map.json --lock custom.lock --node-modules-dir=auto --frozen main.ts",
+            GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_CacheUsesNoLockWhenConfigured()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "deno.lock"), "{}");
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoNoLock();
+
+        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        Assert.Equal("RUN deno cache --no-lock main.ts", GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_CacheUsesUnstableFlags()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoConfig("deno.json")
+            .WithDenoUnstable("sloppy-imports");
+
+        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        Assert.Equal(
+            "RUN deno cache --config deno.json --unstable-sloppy-imports main.ts",
+            GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_CacheQuotesShellArguments()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "custom lock's.lock"), "{}");
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main file's.ts")
+            .WithDenoConfig("deno config.json")
+            .WithDenoImportMap("import map.json")
+            .WithDenoLock("custom lock's.lock");
+
+        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        Assert.Equal(
+            """RUN deno cache --config 'deno config.json' --import-map 'import map.json' --lock 'custom lock'"'"'s.lock' --frozen 'main file'"'"'s.ts'""",
+            GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_EntrypointDoesNotIncludeDevelopmentFlags()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoWatch()
+            .WithDenoInspectWait("127.0.0.1:9229");
+
+        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        Assert.Equal("""ENTRYPOINT ["deno","run","-A","main.ts"]""", GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_ServeEntrypointBindsEndpointTargetPort()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var denoApp = builder.AddDenoApp("js", appDir, "server.ts")
+            .WithDenoServe()
+            .WithHttpEndpoint(targetPort: 5173);
+
+        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        Assert.Equal(
+            """ENTRYPOINT ["deno","serve","-A","--host","0.0.0.0","--port","5173","server.ts"]""",
+            GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_ServeEntrypointPreservesPreconfiguredEndpointTargetPort()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var denoApp = builder.AddDenoApp("js", appDir, "server.ts")
+            .WithHttpEndpoint(targetPort: 5173)
+            .WithDenoServe();
+
+        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        Assert.Equal(
+            """ENTRYPOINT ["deno","serve","-A","--host","0.0.0.0","--port","5173","server.ts"]""",
+            GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_ServeDefaultEndpointPinsDenoDefaultPort()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var denoApp = builder.AddDenoApp("js", appDir, "server.ts")
+            .WithDenoServe();
+
+        var httpEndpoint = denoApp.Resource.GetEndpoint("http");
+        Assert.Equal(8000, httpEndpoint.EndpointAnnotation.TargetPort);
+
+        var manifest = await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        Assert.Equal(8000, manifest["bindings"]!["http"]!["targetPort"]!.GetValue<int>());
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        Assert.Equal(
+            """ENTRYPOINT ["deno","serve","-A","--host","0.0.0.0","--port","8000","server.ts"]""",
+            GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_ServeDefaultEndpointAvoidsExistingDefaultPort()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir1 = Path.Combine(tempDir.Path, "js1");
+        var appDir2 = Path.Combine(tempDir.Path, "js2");
+        Directory.CreateDirectory(appDir1);
+        Directory.CreateDirectory(appDir2);
+
+        _ = builder.AddDenoApp("js1", appDir1, "server.ts")
+            .WithDenoServe();
+        var denoApp2 = builder.AddDenoApp("js2", appDir2, "server.ts")
+            .WithDenoServe();
+
+        var httpEndpoint = denoApp2.Resource.GetEndpoint("http");
+        Assert.Equal(8001, httpEndpoint.EndpointAnnotation.TargetPort);
+
+        await ManifestUtils.GetManifest(denoApp2.Resource, tempDir.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js2.Dockerfile"));
+        Assert.Equal(
+            """ENTRYPOINT ["deno","serve","-A","--host","0.0.0.0","--port","8001","server.ts"]""",
+            GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
     public void AddDenoApp_DoesNotAddDenoPackageManagerWhenNoManifest()
     {
         using var tempDir = new TestTempDirectory();
@@ -450,14 +649,38 @@ public class AddDenoAppTests
     {
         var args = await GetDenoArgsAsync(d => d
             .WithDenoServe()
+            .WithHttpEndpoint(targetPort: 5173)
             .WithDenoAllowNet("0.0.0.0:8000")
             .WithDenoScriptArgs("--config-arg"), entrypoint: "server.ts");
 
         Assert.Collection(args,
             a => Assert.Equal("serve", a),
             a => Assert.Equal("--allow-net=0.0.0.0:8000", a),
+            a => Assert.Equal("--host", a),
+            a => Assert.Equal("localhost", a),
+            a => Assert.Equal("--port", a),
+            a => Assert.Equal("5173", a),
             a => Assert.Equal("server.ts", a),
             a => Assert.Equal("--config-arg", a));
+    }
+
+    [Fact]
+    public async Task WithDenoServe_PreservesPreconfiguredEndpointTargetPort()
+    {
+        var args = await GetDenoArgsAsync(d =>
+        {
+            d.WithHttpEndpoint(targetPort: 5173);
+            d.WithDenoServe();
+        }, entrypoint: "server.ts");
+
+        Assert.Collection(args,
+            a => Assert.Equal("serve", a),
+            a => Assert.Equal("-A", a),
+            a => Assert.Equal("--host", a),
+            a => Assert.Equal("localhost", a),
+            a => Assert.Equal("--port", a),
+            a => Assert.Equal("5173", a),
+            a => Assert.Equal("server.ts", a));
     }
 
     [Fact]
@@ -565,7 +788,7 @@ public class AddDenoAppTests
         var dirs = ReferenceExpression.Create($"/etc/ssl/aspire/certs");
         var ctx = new CertificateTrustConfigurationCallbackAnnotationContext
         {
-            ExecutionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            ExecutionContext = CreateRunExecutionContext(builder.Services),
             Resource = denoApp.Resource,
             Arguments = [],
             EnvironmentVariables = envVars,
@@ -592,7 +815,7 @@ public class AddDenoAppTests
         var envVars = new Dictionary<string, object>();
         var ctx = new CertificateTrustConfigurationCallbackAnnotationContext
         {
-            ExecutionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            ExecutionContext = CreateRunExecutionContext(builder.Services),
             Resource = denoApp.Resource,
             Arguments = [],
             EnvironmentVariables = envVars,
@@ -604,8 +827,35 @@ public class AddDenoAppTests
 
         await annotation.Callback(ctx);
 
-        // Override/System scopes route TLS verification through the OS trust store via DENO_TLS_CA_STORE=system.
+        Assert.Same(ctx.CertificateBundlePath, envVars["DENO_CERT"]);
+        Assert.False(envVars.ContainsKey("DENO_TLS_CA_STORE"));
+    }
+
+    [Fact]
+    public async Task AddDenoApp_ConfiguresCertificateTrustForSystemScope()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var denoApp = builder.AddDenoApp("denoapp", ".", "main.ts");
+
+        Assert.True(denoApp.Resource.TryGetLastAnnotation<CertificateTrustConfigurationCallbackAnnotation>(out var annotation));
+
+        var envVars = new Dictionary<string, object>();
+        var ctx = new CertificateTrustConfigurationCallbackAnnotationContext
+        {
+            ExecutionContext = CreateRunExecutionContext(builder.Services),
+            Resource = denoApp.Resource,
+            Arguments = [],
+            EnvironmentVariables = envVars,
+            CertificateBundlePath = ReferenceExpression.Create($"/etc/ssl/aspire/bundle.crt"),
+            CertificateDirectoriesPath = ReferenceExpression.Create($"/etc/ssl/aspire/certs"),
+            Scope = CertificateTrustScope.System,
+            CancellationToken = default,
+        };
+
+        await annotation.Callback(ctx);
+
         Assert.Equal("system", envVars["DENO_TLS_CA_STORE"]);
+        Assert.False(envVars.ContainsKey("DENO_CERT"));
     }
 
     [Fact]
@@ -709,6 +959,15 @@ public class AddDenoAppTests
             out var launchConfigs));
         return Assert.Single(launchConfigs);
     }
+
+    private static DistributedApplicationExecutionContext CreateRunExecutionContext(IServiceCollection services) =>
+        new(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            Services = services.BuildServiceProvider()
+        });
+
+    private static string GetDockerfileLine(string dockerfileContents, string prefix)
+        => dockerfileContents.Split('\n').Select(line => line.TrimEnd('\r')).Single(line => line.StartsWith(prefix, StringComparison.Ordinal));
 
 #pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only
 }

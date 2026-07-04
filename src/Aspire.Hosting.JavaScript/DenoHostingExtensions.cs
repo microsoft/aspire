@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.JavaScript;
 
@@ -18,6 +19,8 @@ namespace Aspire.Hosting;
 /// </remarks>
 public static partial class JavaScriptHostingExtensions
 {
+    private const int DenoServeDefaultPort = 8000;
+
     private static DenoCommandLineAnnotation GetOrAddDenoAnnotation(IResourceBuilder<DenoAppResource> builder)
     {
         if (!builder.Resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var annotation))
@@ -294,7 +297,8 @@ public static partial class JavaScriptHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         GetOrAddDenoAnnotation(builder).Mode = DenoCommandMode.Serve;
-        return builder;
+        builder.WithHttpEndpoint(env: "PORT");
+        return builder.WithEndpoint("http", e => e.TargetPort ??= GetNextDenoServeDefaultPort(builder), createIfNotExists: false);
     }
 
     // ---- Script / raw args ------------------------------------------------------------------
@@ -332,9 +336,13 @@ public static partial class JavaScriptHostingExtensions
     /// Builds the ordered Deno argument list (excluding the <c>deno</c> executable itself) from a command-line
     /// annotation. Runtime flags precede the entrypoint; script args follow it, matching valid Deno CLI order.
     /// </summary>
-    private static List<string> BuildDenoArgs(DenoCommandLineAnnotation deno, string scriptPath)
+    private static List<object> BuildDenoArgs(
+        DenoCommandLineAnnotation deno,
+        string scriptPath,
+        DenoServeEndpointArguments? serveEndpointArguments = null,
+        bool includeDevelopmentFlags = true)
     {
-        var args = new List<string>();
+        var args = new List<object>();
 
         switch (deno.Mode)
         {
@@ -362,8 +370,20 @@ public static partial class JavaScriptHostingExtensions
         AppendPermissionFlags(args, deno);
         AppendResolutionFlags(args, deno);
         AppendUnstableFlags(args, deno);
-        AppendWatchFlags(args, deno);
-        AppendInspectFlags(args, deno);
+        if (includeDevelopmentFlags)
+        {
+            AppendWatchFlags(args, deno);
+            AppendInspectFlags(args, deno);
+        }
+
+        if (deno.Mode == DenoCommandMode.Serve && serveEndpointArguments is not null)
+        {
+            args.Add("--host");
+            args.Add(serveEndpointArguments.Host);
+            args.Add("--port");
+            args.Add(serveEndpointArguments.Port);
+        }
+
         args.AddRange(deno.RuntimeArgs);
 
         args.Add(scriptPath);
@@ -371,7 +391,7 @@ public static partial class JavaScriptHostingExtensions
         return args;
     }
 
-    private static void AppendPermissionFlags(List<string> args, DenoCommandLineAnnotation deno)
+    private static void AppendPermissionFlags(List<object> args, DenoCommandLineAnnotation deno)
     {
         var hasGranularAllow = deno.Permissions.Any(p => !p.Deny);
         // Default (AllowAll == null): grant -A only when the caller has not opted into any granular allow flag.
@@ -407,39 +427,44 @@ public static partial class JavaScriptHostingExtensions
             : $"{prefix}{permission.Name}={string.Join(",", permission.Values)}";
     }
 
-    private static void AppendResolutionFlags(List<string> args, DenoCommandLineAnnotation deno)
+    private static void AppendResolutionFlags(List<object> args, DenoCommandLineAnnotation deno)
+    {
+        args.AddRange(GetResolutionFlags(deno));
+    }
+
+    private static IEnumerable<string> GetResolutionFlags(DenoCommandLineAnnotation deno)
     {
         if (!string.IsNullOrEmpty(deno.ConfigFile))
         {
-            args.Add("--config");
-            args.Add(deno.ConfigFile);
+            yield return "--config";
+            yield return deno.ConfigFile;
         }
 
         if (!string.IsNullOrEmpty(deno.ImportMap))
         {
-            args.Add("--import-map");
-            args.Add(deno.ImportMap);
+            yield return "--import-map";
+            yield return deno.ImportMap;
         }
 
         if (deno.NoLock)
         {
-            args.Add("--no-lock");
+            yield return "--no-lock";
         }
         else if (!string.IsNullOrEmpty(deno.Lock))
         {
-            args.Add("--lock");
-            args.Add(deno.Lock);
+            yield return "--lock";
+            yield return deno.Lock;
         }
 
         if (deno.NodeModulesDirSet)
         {
-            args.Add(string.IsNullOrEmpty(deno.NodeModulesDirMode)
+            yield return string.IsNullOrEmpty(deno.NodeModulesDirMode)
                 ? "--node-modules-dir"
-                : $"--node-modules-dir={deno.NodeModulesDirMode}");
+                : $"--node-modules-dir={deno.NodeModulesDirMode}";
         }
     }
 
-    private static void AppendUnstableFlags(List<string> args, DenoCommandLineAnnotation deno)
+    private static void AppendUnstableFlags(List<object> args, DenoCommandLineAnnotation deno)
     {
         foreach (var flag in deno.UnstableFlags)
         {
@@ -447,7 +472,7 @@ public static partial class JavaScriptHostingExtensions
         }
     }
 
-    private static void AppendWatchFlags(List<string> args, DenoCommandLineAnnotation deno)
+    private static void AppendWatchFlags(List<object> args, DenoCommandLineAnnotation deno)
     {
         if (deno.WatchHmr)
         {
@@ -460,7 +485,7 @@ public static partial class JavaScriptHostingExtensions
         }
     }
 
-    private static void AppendInspectFlags(List<string> args, DenoCommandLineAnnotation deno)
+    private static void AppendInspectFlags(List<object> args, DenoCommandLineAnnotation deno)
     {
         if (deno.Inspect is not { } mode)
         {
@@ -478,15 +503,18 @@ public static partial class JavaScriptHostingExtensions
     }
 
     /// <summary>
-    /// Builds the container entrypoint array (<c>deno</c> plus args). Honors an explicit command-line annotation
-    /// so the published image matches the run-mode command; falls back to <c>deno run -A &lt;script&gt;</c>.
+    /// Builds the container entrypoint array (<c>deno</c> plus args). Honors publish-safe command-line flags from
+    /// the explicit Deno annotation, excluding development-only watch and inspector flags.
     /// </summary>
     private static string[] BuildDenoEntrypoint(IResource resource, string command, string scriptPath)
     {
         var entrypoint = new List<string> { command };
         if (resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno))
         {
-            entrypoint.AddRange(BuildDenoArgs(deno, scriptPath));
+            var serveEndpointArguments = deno.Mode == DenoCommandMode.Serve
+                ? GetDenoServeEndpointArguments(resource, isPublishMode: true, useLiteralTargetPort: true)
+                : null;
+            entrypoint.AddRange(BuildDenoArgs(deno, scriptPath, serveEndpointArguments, includeDevelopmentFlags: false).Cast<string>());
         }
         else
         {
@@ -497,4 +525,121 @@ public static partial class JavaScriptHostingExtensions
 
         return [.. entrypoint];
     }
+
+    private static string BuildDenoCacheCommand(IResource resource, string scriptPath, string workingDirectory)
+    {
+        var args = new List<string> { "deno", "cache" };
+        if (resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno))
+        {
+            args.AddRange(GetResolutionFlags(deno));
+            args.AddRange(deno.UnstableFlags);
+            if (ShouldUseFrozenLock(deno, workingDirectory))
+            {
+                args.Add("--frozen");
+            }
+        }
+        else if (File.Exists(Path.Combine(workingDirectory, "deno.lock")))
+        {
+            args.Add("--frozen");
+        }
+
+        args.Add(scriptPath);
+        return string.Join(' ', args.Select(QuoteDockerShellArgument));
+    }
+
+    private static string QuoteDockerShellArgument(string value)
+    {
+        if (value.Length == 0)
+        {
+            return "''";
+        }
+
+        if (value.All(IsUnquotedDockerShellArgumentCharacter))
+        {
+            return value;
+        }
+
+        // Dockerfile RUN uses /bin/sh -c. Single-quote each argument and use the standard
+        // POSIX shell escape sequence for embedded quotes:
+        //   import map's.json -> 'import map'"'"'s.json'
+        return $"'{value.Replace("'", "'\"'\"'", StringComparison.Ordinal)}'";
+    }
+
+    private static bool IsUnquotedDockerShellArgumentCharacter(char c) =>
+        c is >= 'a' and <= 'z'
+            or >= 'A' and <= 'Z'
+            or >= '0' and <= '9'
+            or '-'
+            or '_'
+            or '.'
+            or '/'
+            or ':'
+            or '=';
+
+    private static bool ShouldUseFrozenLock(DenoCommandLineAnnotation deno, string workingDirectory)
+    {
+        if (deno.NoLock)
+        {
+            return false;
+        }
+
+        var lockFile = string.IsNullOrEmpty(deno.Lock) ? "deno.lock" : deno.Lock;
+        return File.Exists(Path.Combine(workingDirectory, lockFile));
+    }
+
+    private static DenoServeEndpointArguments? GetDenoServeEndpointArguments(IResource resource, bool isPublishMode, bool useLiteralTargetPort = false)
+    {
+        if (resource is not IResourceWithEndpoints endpointsResource)
+        {
+            return null;
+        }
+
+        var endpoint = endpointsResource.GetEndpoint("http");
+        if (!endpoint.Exists)
+        {
+            return null;
+        }
+
+        var host = isPublishMode ? "0.0.0.0" : endpoint.EndpointAnnotation.TargetHost;
+        object port = useLiteralTargetPort
+            ? (endpoint.EndpointAnnotation.TargetPort ?? DenoServeDefaultPort).ToString(CultureInfo.InvariantCulture)
+            : endpoint.Property(EndpointProperty.TargetPort);
+
+        return new(host, port);
+    }
+
+    private static int GetNextDenoServeDefaultPort(IResourceBuilder<DenoAppResource> builder)
+    {
+        var usedPorts = new HashSet<int>();
+        foreach (var resource in builder.ApplicationBuilder.Resources)
+        {
+            if (!resource.TryGetEndpoints(out var endpoints))
+            {
+                continue;
+            }
+
+            foreach (var endpoint in endpoints)
+            {
+                if (endpoint.TargetPort is int targetPort)
+                {
+                    usedPorts.Add(targetPort);
+                }
+
+                if (endpoint.Port is int port)
+                {
+                    usedPorts.Add(port);
+                }
+            }
+        }
+
+        for (var port = DenoServeDefaultPort; ; port++)
+        {
+            if (!usedPorts.Contains(port))
+            {
+                return port;
+            }
+        }
+    }
+
+    private sealed record DenoServeEndpointArguments(string Host, object Port);
 }

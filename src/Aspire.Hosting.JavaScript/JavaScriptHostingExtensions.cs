@@ -757,7 +757,10 @@ public static partial class JavaScriptHostingExtensions
                 // script args. This is the surface that replaces dropping back to AddExecutable.
                 if (c.Resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var denoCommandLine))
                 {
-                    foreach (var arg in BuildDenoArgs(denoCommandLine, scriptPath))
+                    var serveEndpointArguments = denoCommandLine.Mode == DenoCommandMode.Serve
+                        ? GetDenoServeEndpointArguments(c.Resource, c.ExecutionContext.IsPublishMode)
+                        : null;
+                    foreach (var arg in BuildDenoArgs(denoCommandLine, scriptPath, serveEndpointArguments))
                     {
                         c.Args.Add(arg);
                     }
@@ -833,11 +836,10 @@ public static partial class JavaScriptHostingExtensions
                         .Copy(".", ".");
 
                     // Pre-cache the entrypoint's full module graph (remote + npm dependencies) into DENO_DIR at
-                    // build time. Use `--frozen` when a deno.lock is present so the build fails fast on a stale
-                    // lockfile instead of silently re-resolving.
-                    var denoCacheCommand = File.Exists(Path.Combine(resource.WorkingDirectory, "deno.lock"))
-                        ? $"deno cache --frozen {scriptPath}"
-                        : $"deno cache {scriptPath}";
+                    // build time. Mirror the Deno resolution/lock flags that affect module graph resolution so
+                    // cache validation sees the same config, import map, lockfile, and node_modules mode as the
+                    // runtime entrypoint.
+                    var denoCacheCommand = BuildDenoCacheCommand(dockerfileContext.Resource, scriptPath, resource.WorkingDirectory);
                     buildStage
                         .EmptyLine()
                         .Run(denoCacheCommand);
@@ -939,17 +941,24 @@ public static partial class JavaScriptHostingExtensions
             .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
             .WithCertificateTrustConfiguration((ctx) =>
             {
-                if (ctx.Scope == CertificateTrustScope.Append)
+                if (ctx.Scope is CertificateTrustScope.Append or CertificateTrustScope.Override)
                 {
-                    // DENO_CERT loads an additional PEM certificate file into Deno's trust store on top of its
-                    // built-in Mozilla root store, which is exactly the append semantics Aspire needs to make its
-                    // injected dev certificate trusted. See
+                    // DENO_CERT loads the configured PEM certificate file into Deno's trust store. Deno does not expose
+                    // a mode that strictly replaces its built-in Mozilla root store with this file, so Override still
+                    // relies on Deno's provided bundle support rather than dropping every other trusted root. See
                     // https://docs.deno.com/runtime/reference/env_variables/#special-environment-variables
                     ctx.EnvironmentVariables["DENO_CERT"] = ctx.CertificateBundlePath;
+
+                    if (ctx.Scope == CertificateTrustScope.Override)
+                    {
+                        var resourceLogger = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
+                        var logger = resourceLogger.GetLogger(ctx.Resource);
+                        logger.LogInformation("Certificate trust scope is set to 'Override', but Deno does not support replacing the built-in Mozilla root store; the configured certificate bundle will be provided through DENO_CERT.");
+                    }
                 }
-                else
+                else if (ctx.Scope == CertificateTrustScope.System)
                 {
-                    // Override/System scopes route TLS verification through the operating system trust store via
+                    // System scope routes TLS verification through the operating system trust store via
                     // DENO_TLS_CA_STORE=system (the default is the bundled "mozilla" store). See
                     // https://docs.deno.com/runtime/reference/env_variables/#special-environment-variables
                     ctx.EnvironmentVariables["DENO_TLS_CA_STORE"] = "system";

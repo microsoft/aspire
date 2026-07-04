@@ -1,17 +1,21 @@
-import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, JavaScriptRuntimeLaunchConfiguration, isJavaScriptRuntimeLaunchConfiguration } from "../../dcp/types";
-import { denoDisplayName, denoLabel, invalidLaunchConfiguration } from "../../loc/strings";
+import * as net from 'net';
+import * as vscode from 'vscode';
+import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, JavaScriptRuntimeLaunchConfiguration, LaunchOptions, isJavaScriptRuntimeLaunchConfiguration } from "../../dcp/types";
+import { denoDisplayName, denoInspectorPortAllocationFailed, denoLabel, invalidLaunchConfiguration } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
+import { registerRunCleanup } from "../runCleanupRegistry";
 import { getJavaScriptRuntimeDisplayName, getJavaScriptRuntimeTargetPath, jsRuntimeBaseFileTypes } from "./javascriptRuntime";
 
 // Deno exposes a V8 inspector; --inspect-wait blocks execution until a debugger attaches (unlike
 // --inspect-brk it guarantees no early code — including module top-level — runs before attach, which
-// is what makes IDE attach reliable). The inspector defaults to 127.0.0.1:9229.
-const denoInspectorDefaultPort = 9229;
+// is what makes IDE attach reliable).
+const denoInspectorHost = '127.0.0.1';
+const reservedDenoInspectorPorts = new Set<number>();
 
 // Deno sub-commands that accept runtime flags (so --inspect-wait must be inserted AFTER this token,
 // not before it — `deno --inspect-wait run` is invalid).
-const denoSubcommandsAcceptingRuntimeFlags = new Set(['run', 'serve', 'task', 'test', 'bench']);
+const denoSubcommandsAcceptingRuntimeFlags = new Set(['run', 'serve', 'test', 'bench']);
 
 function asDenoConfig(launchConfig: ExecutableLaunchConfiguration): JavaScriptRuntimeLaunchConfiguration {
     if (isJavaScriptRuntimeLaunchConfiguration(launchConfig) && launchConfig.type === 'deno') {
@@ -22,42 +26,128 @@ function asDenoConfig(launchConfig: ExecutableLaunchConfiguration): JavaScriptRu
     throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
 }
 
-// Matches any Deno inspector flag already present in the arg vector (e.g. a user-configured
-// WithDenoInspect*): --inspect, --inspect-brk, --inspect-wait, optionally with =host:port.
-const denoInspectFlagPattern = /^--inspect(-brk|-wait)?(=|$)/;
+interface DenoInspectFlag {
+    index: number;
+    flagName: string;
+    port?: number;
+}
 
-function parseInspectPort(args: string[]): number | undefined {
-    for (const arg of args) {
-        const match = /^--inspect(?:-brk|-wait)?=(?:.*:)?(\d+)$/.exec(arg);
-        if (match) {
-            return Number(match[1]);
+function findDenoInspectFlag(args: string[]): DenoInspectFlag | undefined {
+    for (let index = 0; index < args.length; index++) {
+        const arg = args[index];
+        const explicitPortMatch = /^(--inspect(?:-brk|-wait)?)=(?:.*:)?(\d+)$/.exec(arg);
+        if (explicitPortMatch) {
+            return {
+                index,
+                flagName: explicitPortMatch[1],
+                port: Number(explicitPortMatch[2])
+            };
         }
 
-        // A bare inspector flag (no host:port) uses Deno's default inspector port.
-        if (denoInspectFlagPattern.test(arg)) {
-            return denoInspectorDefaultPort;
+        const bareMatch = /^(--inspect(?:-brk|-wait)?)$/.exec(arg);
+        if (bareMatch) {
+            return {
+                index,
+                flagName: bareMatch[1],
+                port: undefined
+            };
         }
     }
 
     return undefined;
 }
 
-/**
- * Injects `--inspect-wait` into a Deno argument vector so VS Code's built-in js-debug (pwa-node) can
- * attach. The flag is placed immediately after the leading sub-command (run/serve/task/…) so it is
- * parsed as a runtime flag rather than a script argument. If the caller already configured an
- * inspector flag (WithDenoInspect*), the vector is returned unchanged.
- */
-function withDenoInspectWait(args: string[]): { runtimeArgs: string[]; port: number } {
-    const existingPort = parseInspectPort(args);
-    if (existingPort !== undefined) {
-        return { runtimeArgs: [...args], port: existingPort };
+async function getAvailableTcpPort(): Promise<number> {
+    return await new Promise<number>((resolve, reject) => {
+        const server = net.createServer();
+        server.unref();
+        server.once('error', reject);
+        server.listen(0, denoInspectorHost, () => {
+            const address = server.address();
+            if (!address || typeof address === 'string') {
+                server.close();
+                reject(new Error(denoInspectorPortAllocationFailed));
+                return;
+            }
+
+            const port = address.port;
+            server.close(error => error ? reject(error) : resolve(port));
+        });
+    });
+}
+
+async function allocateDenoInspectorPort(): Promise<number> {
+    for (let attempt = 0; attempt < 20; attempt++) {
+        const port = await getAvailableTcpPort();
+        if (!reservedDenoInspectorPorts.has(port)) {
+            reservedDenoInspectorPorts.add(port);
+            return port;
+        }
     }
 
+    throw new Error(denoInspectorPortAllocationFailed);
+}
+
+function registerDenoInspectorPortRelease(port: number, launchOptions: LaunchOptions): void {
+    let released = false;
+    const releasePort = () => {
+        if (!released) {
+            released = true;
+            reservedDenoInspectorPorts.delete(port);
+        }
+    };
+
+    let debugSessionTermination: vscode.Disposable | undefined;
+    const disposeRelease = () => {
+        releasePort();
+        debugSessionTermination?.dispose();
+    };
+
+    debugSessionTermination = vscode.debug.onDidTerminateDebugSession(session => {
+        if (session.configuration.runId === launchOptions.runId) {
+            disposeRelease();
+        }
+    });
+
+    registerRunCleanup(launchOptions.runId, disposeRelease);
+    launchOptions.debugSession.registerResourceCleanup({
+        dispose: disposeRelease
+    });
+}
+
+/**
+ * Injects `--inspect-wait` into a Deno argument vector so VS Code's built-in js-debug (pwa-node) can
+ * attach. The flag is placed immediately after a leading sub-command that accepts runtime flags
+ * (run/serve/test/bench) so it is parsed as a runtime flag rather than a script argument. `deno task`
+ * does not accept inspector flags, so task launches are left unchanged instead of generating an
+ * invalid command line. If the caller already configured an inspector flag (WithDenoInspect*), the
+ * vector is returned unchanged.
+ */
+async function withDenoInspectWait(args: string[], launchOptions: LaunchOptions): Promise<{ runtimeArgs: string[]; port?: number }> {
+    const existingInspectFlag = findDenoInspectFlag(args);
+    if (existingInspectFlag?.port !== undefined) {
+        return { runtimeArgs: [...args], port: existingInspectFlag.port };
+    }
+
+    if (existingInspectFlag !== undefined) {
+        const port = await allocateDenoInspectorPort();
+        registerDenoInspectorPortRelease(port, launchOptions);
+        const runtimeArgs = [...args];
+        runtimeArgs[existingInspectFlag.index] = `${existingInspectFlag.flagName}=${denoInspectorHost}:${port}`;
+        return { runtimeArgs, port };
+    }
+
+    if (args[0] === 'task') {
+        extensionLogOutputChannel.info('Skipping Deno inspector injection for deno task because Deno does not accept runtime inspector flags on the task subcommand.');
+        return { runtimeArgs: [...args] };
+    }
+
+    const port = await allocateDenoInspectorPort();
+    registerDenoInspectorPortRelease(port, launchOptions);
     const runtimeArgs = [...args];
     const insertAt = runtimeArgs.length > 0 && denoSubcommandsAcceptingRuntimeFlags.has(runtimeArgs[0]) ? 1 : 0;
-    runtimeArgs.splice(insertAt, 0, '--inspect-wait');
-    return { runtimeArgs, port: denoInspectorDefaultPort };
+    runtimeArgs.splice(insertAt, 0, `--inspect-wait=${denoInspectorHost}:${port}`);
+    return { runtimeArgs, port };
 }
 
 export const denoDebuggerExtension: ResourceDebuggerExtension = {
@@ -71,7 +161,7 @@ export const denoDebuggerExtension: ResourceDebuggerExtension = {
     // Deno runs TypeScript and JSX/TSX natively, so it supports the same file types as Bun.
     getSupportedFileTypes: () => [...jsRuntimeBaseFileTypes, '.jsx', '.tsx'],
     getProjectFile: (launchConfig) => getJavaScriptRuntimeTargetPath(asDenoConfig(launchConfig)),
-    createDebugSessionConfigurationCallback: async (launchConfig, args, _env, _launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
+    createDebugSessionConfigurationCallback: async (launchConfig, args, _env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
         const config = asDenoConfig(launchConfig);
         debugConfiguration.type = 'pwa-node';
         debugConfiguration.outputCapture = 'std';
@@ -86,13 +176,15 @@ export const denoDebuggerExtension: ResourceDebuggerExtension = {
         // runtimeExecutable + runtimeArgs and let it attach to the inspector.
         debugConfiguration.runtimeExecutable = config.runtime_executable || 'deno';
 
-        const { runtimeArgs, port } = withDenoInspectWait(args ?? []);
+        const { runtimeArgs, port } = await withDenoInspectWait(args ?? [], launchOptions);
         debugConfiguration.runtimeArgs = runtimeArgs;
 
-        // attachSimplePort tells js-debug to spawn the runtime and then attach to this inspector port
-        // rather than expecting a Node bootstrap. Paired with --inspect-wait this is the reliable
-        // Deno attach path.
-        debugConfiguration.attachSimplePort = port;
+        if (port !== undefined) {
+            // attachSimplePort tells js-debug to spawn the runtime and then attach to this inspector port
+            // rather than expecting a Node bootstrap. Paired with --inspect-wait this is the reliable
+            // Deno attach path.
+            debugConfiguration.attachSimplePort = port;
+        }
 
         // program/args are meaningless for the pwa-node simple-attach path; remove any defaults set
         // upstream so js-debug does not try to launch a node script.
