@@ -116,10 +116,11 @@ public class Program
         builder.Services.AddSingleton<IFeatures, Features>();
         builder.Services.AddSingleton<AspireCliTelemetry>();
         builder.Services.AddTransient<IDotNetCliRunner, DotNetCliRunner>();
-        builder.Services.AddSingleton<IDotNetSdkInstaller, DotNetSdkInstaller>();
-        
-        // .NET Runtime Selection and Process Launching
         builder.Services.AddSingleton<IDotNetRuntimeSelector, DotNetRuntimeSelector>();
+        builder.Services.AddSingleton<Lazy<IDotNetRuntimeSelector>>(sp => new Lazy<IDotNetRuntimeSelector>(sp.GetRequiredService<IDotNetRuntimeSelector>));
+        builder.Services.AddSingleton<IDotNetSdkInstaller, DotNetSdkInstaller>();
+
+        // .NET Runtime Selection and Process Launching
         builder.Services.AddSingleton<IProcessLauncher, ProcessLauncher>();
         
         builder.Services.AddTransient<IAppHostBackchannel, AppHostBackchannel>();
