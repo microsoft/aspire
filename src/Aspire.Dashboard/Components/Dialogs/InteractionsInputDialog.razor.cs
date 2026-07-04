@@ -110,10 +110,6 @@ public partial class InteractionsInputDialog : IAsyncDisposable
                     selectInput.FocusAsync();
                 }
             }
-
-            // Re-render so that ref-derived IDs (e.g. File input button) pick up
-            // the now-populated _elementRefs values assigned by @ref after first render.
-            StateHasChanged();
         }
     }
 
