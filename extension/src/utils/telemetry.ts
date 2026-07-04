@@ -242,11 +242,13 @@ function sanitizeTelemetryValue(value: string, preserveGuids: boolean): string {
 }
 
 function redactHomeDirectories(value: string): string {
-    const terminalUserName = '[^/\\\\\\s"\':;,&|<>-][^/\\\\\\s"\':;,&|<>]*(?: +[^/\\\\\\s"\':;,&|<>-][^/\\\\\\s"\':;,&|<>]*){0,3}';
-    const terminalBoundary = '(?=$|["\']|\\s+--|\\s+-[A-Za-z0-9]|\\s+(?:&&|\\|\\||[|;,])|\\s+[A-Za-z_][A-Za-z0-9_.-]*=)';
-    const windowsHomePattern = new RegExp(`\\b([A-Za-z]:)\\\\+Users\\\\+(?:[^\\\\\\s"']+(?: +[^\\\\\\s"']+)*(?=\\\\)|${terminalUserName}${terminalBoundary}|[^\\\\\\s"':;,&|<>]+)`, 'g');
-    const macHomePattern = new RegExp(`(^|[^A-Za-z0-9_/-])/Users/(?:[^/\\s"']+(?: +[^/\\s"']+)*(?=/)|${terminalUserName}${terminalBoundary}|[^/\\s"':;,&|<>]+)`, 'g');
-    const linuxHomePattern = new RegExp(`(^|[^A-Za-z0-9_/-])/home/(?:[^/\\s"']+(?: +[^/\\s"']+)*(?=/)|${terminalUserName}${terminalBoundary}|[^/\\s"':;,&|<>]+)`, 'g');
+    const windowsPathSegment = '[^\\\\\\s"\':;,&|<>]+';
+    const unixPathSegment = '[^/\\s"\':;,&|<>]+';
+    const terminalUserName = '[^/\\\\\\s"\':;,&|<>-][^/\\\\\\s"\':;,&|<>]*(?: +[^/\\\\\\s"\':;,&|<>-][^/\\\\\\s"\':;,&|<>]*){0,3}?';
+    const terminalBoundary = '(?=$|["\',;|]|\\s+--|\\s+-[A-Za-z0-9]|\\s+(?:&&|\\|\\||[|;,])|\\s+[A-Za-z_][A-Za-z0-9_.-]*=)';
+    const windowsHomePattern = new RegExp(`\\b([A-Za-z]:)\\\\+Users\\\\+(?!<user>)(?:${windowsPathSegment}(?: +${windowsPathSegment})*(?=\\\\)|${terminalUserName}${terminalBoundary}|${windowsPathSegment})`, 'g');
+    const macHomePattern = new RegExp(`(^|[^A-Za-z0-9_/-])/Users/(?!<user>)(?:${unixPathSegment}(?: +${unixPathSegment})*(?=/)|${terminalUserName}${terminalBoundary}|${unixPathSegment})`, 'g');
+    const linuxHomePattern = new RegExp(`(^|[^A-Za-z0-9_/-])/home/(?!<user>)(?:${unixPathSegment}(?: +${unixPathSegment})*(?=/)|${terminalUserName}${terminalBoundary}|${unixPathSegment})`, 'g');
 
     return redactCurrentHomeDirectory(value)
         // Home-directory redaction. The username is a single path segment that can legitimately

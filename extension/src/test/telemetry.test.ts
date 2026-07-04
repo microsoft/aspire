@@ -251,6 +251,37 @@ suite('telemetry utilities', () => {
         }
     });
 
+    test('sendTelemetryEvent redacts exact Windows current home directories before punctuation and words', () => {
+        const originalHome = process.env.HOME;
+        const originalUserProfile = process.env.USERPROFILE;
+
+        try {
+            process.env.HOME = 'C:\\Users\\Alice Smith';
+            process.env.USERPROFILE = 'C:\\Users\\Alice Smith';
+
+            sendTelemetryEvent('aspire/vscode/command/invoked', {
+                command: 'path is C:\\Users\\Alice Smith, ok building C:\\Users\\Alice Smith failed',
+            });
+
+            assert.strictEqual(fake.events[0].properties?.command, 'path is C:\\Users\\<user>, ok building C:\\Users\\<user> failed');
+        }
+        finally {
+            if (originalHome === undefined) {
+                delete process.env.HOME;
+            }
+            else {
+                process.env.HOME = originalHome;
+            }
+
+            if (originalUserProfile === undefined) {
+                delete process.env.USERPROFILE;
+            }
+            else {
+                process.env.USERPROFILE = originalUserProfile;
+            }
+        }
+    });
+
     test('sendTelemetryEvent redacts quoted secrets', () => {
         sendTelemetryEvent('aspire/vscode/command/invoked', {
             command: '--token="secret" token=\'secret\' password=\'secret\' https://storage.example/?sig="signature"&next=1',
