@@ -122,6 +122,16 @@
         <target state="translated">Stáhnout protokoly</target>
         <note />
       </trans-unit>
+      <trans-unit id="DownloadLogsAsCsv">
+        <source>Download as CSV</source>
+        <target state="new">Download as CSV</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DownloadLogsAsText">
+        <source>Download as text</source>
+        <target state="new">Download as text</target>
+        <note />
+      </trans-unit>
       <trans-unit id="LogStatusLabel">
         <source>Service log status</source>
         <target state="translated">Stav protokolu služby</target>
