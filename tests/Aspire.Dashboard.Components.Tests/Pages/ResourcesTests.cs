@@ -117,16 +117,7 @@ public partial class ResourcesTests : DashboardTestContext
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
-        var child = CreateResource(
-            "syndule-api--0000007",
-            "Azure Container App",
-            "Scaled to zero",
-            null,
-            displayName: parent.DisplayName,
-            properties: new Dictionary<string, ResourcePropertyViewModel>
-            {
-                [KnownProperties.Resource.ParentName] = CreateParentNameProperty(parent.Name)
-            }.ToImmutableDictionary());
+        var child = CreateReplicaChild(parent, "syndule-api--0000007", "Scaled to zero");
 
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, child], resourceChannelProvider: () => channel);
@@ -140,16 +131,7 @@ public partial class ResourcesTests : DashboardTestContext
         channel.Writer.TryWrite([
             new ResourceViewModelChange(
                 ResourceViewModelChangeType.Upsert,
-                CreateResource(
-                    "syndule-api--0000007",
-                    "Azure Container App",
-                    "Running",
-                    null,
-                    displayName: parent.DisplayName,
-                    properties: new Dictionary<string, ResourcePropertyViewModel>
-                    {
-                        [KnownProperties.Resource.ParentName] = CreateParentNameProperty(parent.Name)
-                    }.ToImmutableDictionary()))
+                CreateReplicaChild(parent, "syndule-api--0000007", "Running"))
         ]);
 
         cut.WaitForAssertion(() =>
@@ -157,6 +139,41 @@ public partial class ResourcesTests : DashboardTestContext
             var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
             Assert.Equal("Running", updatedParent.State);
             Assert.Equal(KnownResourceState.Running, updatedParent.KnownState);
+        });
+    }
+
+    [Fact]
+    public void UpdateResources_ChildResourceDeleted_RestoresParentState()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        var child = CreateReplicaChild(parent, "syndule-api--0000007", "Running");
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, child], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Running", updatedParent.State);
+            Assert.Equal(KnownResourceState.Running, updatedParent.KnownState);
+        });
+
+        channel.Writer.TryWrite([
+            new ResourceViewModelChange(ResourceViewModelChangeType.Delete, child)
+        ]);
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Scaled to zero", updatedParent.State);
+            Assert.Null(updatedParent.KnownState);
         });
     }
 
@@ -468,6 +485,20 @@ public partial class ResourcesTests : DashboardTestContext
             Commands = [],
             IsHidden = isHidden,
         };
+    }
+
+    private static ResourceViewModel CreateReplicaChild(ResourceViewModel parent, string childName, string? state)
+    {
+        return CreateResource(
+            childName,
+            parent.ResourceType,
+            state,
+            null,
+            displayName: parent.DisplayName,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.ParentName] = CreateParentNameProperty(parent.Name)
+            }.ToImmutableDictionary());
     }
 
     private static ResourcePropertyViewModel CreateParentNameProperty(string parentName)

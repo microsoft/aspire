@@ -113,6 +113,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
+    private readonly ConcurrentDictionary<string, ResourceViewModel> _sourceResourceByName = new(StringComparers.ResourceName);
     private readonly HashSet<string> _collapsedResourceNames = new(StringComparers.ResourceName);
     private readonly TaskCompletionSource _loadingTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _isFilterPopupVisible;
@@ -326,6 +327,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                         else if (changeType == ResourceViewModelChangeType.Delete)
                         {
                             var removed = _resourceByName.TryRemove(resource.Name, out _);
+                            _sourceResourceByName.TryRemove(resource.Name, out _);
                             Debug.Assert(removed, "Cannot remove unknown resource.");
                             resourcesMayAffectParentReplicaState = true;
                         }
@@ -354,7 +356,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
     }
 
-    private bool UpdateFromResource(ResourceViewModel resource)
+    private bool UpdateFromResource(ResourceViewModel resource, bool updateSource = true)
     {
         var preselectedHiddenResourceTypes = HiddenTypes?.Split(' ').Select(StringUtils.Unescape).ToHashSet();
         var preselectedHiddenResourceStates = HiddenStates?.Split(' ').Select(StringUtils.Unescape).ToHashSet();
@@ -364,12 +366,18 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             resource,
             type => preselectedHiddenResourceTypes is null || !preselectedHiddenResourceTypes.Contains(type),
             state => preselectedHiddenResourceStates is null || !preselectedHiddenResourceStates.Contains(state),
-            healthStatus => preselectedHiddenResourceHealthStates is null || !preselectedHiddenResourceHealthStates.Contains(healthStatus));
+            healthStatus => preselectedHiddenResourceHealthStates is null || !preselectedHiddenResourceHealthStates.Contains(healthStatus),
+            updateSource);
     }
 
-    private bool UpdateFromResource(ResourceViewModel resource, Func<string, bool> resourceTypeVisible, Func<string, bool> stateVisible, Func<string, bool> healthStatusVisible)
+    private bool UpdateFromResource(ResourceViewModel resource, Func<string, bool> resourceTypeVisible, Func<string, bool> stateVisible, Func<string, bool> healthStatusVisible, bool updateSource = true)
     {
-        // This is ok from threadsafty perspective because we are the only thread that's modifying resources.
+        // This is ok from thread-safety perspective because we are the only thread that's modifying resources.
+        if (updateSource)
+        {
+            _sourceResourceByName[resource.Name] = resource;
+        }
+
         bool added;
         if (_resourceByName.TryGetValue(resource.Name, out _))
         {
@@ -411,21 +419,22 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         var selectedResourceHasChanged = false;
 
-        foreach (var parent in _resourceByName.Values.ToList())
+        foreach (var parent in _sourceResourceByName.Values.ToList())
         {
             var stateSource = GetReplicaStateSource(parent);
-            if (stateSource is null ||
-                (string.Equals(parent.State, stateSource.State, StringComparison.Ordinal) &&
-                parent.KnownState == stateSource.KnownState &&
-                string.Equals(parent.StateStyle, stateSource.StateStyle, StringComparison.Ordinal) &&
-                parent.StartTimeStamp == stateSource.StartTimeStamp &&
-                parent.StopTimeStamp == stateSource.StopTimeStamp))
+            var updatedParent = stateSource is not null ? parent.WithStateFrom(stateSource) : parent;
+
+            if (!_resourceByName.TryGetValue(parent.Name, out var displayedParent) ||
+                (string.Equals(displayedParent.State, updatedParent.State, StringComparison.Ordinal) &&
+                displayedParent.KnownState == updatedParent.KnownState &&
+                string.Equals(displayedParent.StateStyle, updatedParent.StateStyle, StringComparison.Ordinal) &&
+                displayedParent.StartTimeStamp == updatedParent.StartTimeStamp &&
+                displayedParent.StopTimeStamp == updatedParent.StopTimeStamp))
             {
                 continue;
             }
 
-            var updatedParent = parent.WithStateFrom(stateSource);
-            UpdateFromResource(updatedParent, resourceTypeVisible, stateVisible, healthStatusVisible);
+            UpdateFromResource(updatedParent, resourceTypeVisible, stateVisible, healthStatusVisible, updateSource: false);
 
             if (string.Equals(PageViewModel.SelectedResource?.Name, updatedParent.Name, StringComparisons.ResourceName))
             {
@@ -439,7 +448,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private ResourceViewModel? GetReplicaStateSource(ResourceViewModel parent)
     {
-        var children = _resourceByName.Values
+        var children = _sourceResourceByName.Values
             .Where(child => !ReferenceEquals(child, parent) && IsReplicaChild(parent, child))
             .ToList();
 
@@ -671,7 +680,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         // If filters were saved in page state, resource filters now need to be recomputed since the URL has changed.
         foreach (var resourceViewModel in _resourceByName)
         {
-            UpdateFromResource(resourceViewModel.Value);
+            UpdateFromResource(resourceViewModel.Value, updateSource: false);
         }
 
         if (ResourceName is not null)
