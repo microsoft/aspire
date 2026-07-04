@@ -1,7 +1,9 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import type { TelemetryReporter } from '@vscode/extension-telemetry';
+import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { __resetCommonPropertiesForTests, __resetTelemetryReporterFactoryForTests, __setReporterForTests, __setTelemetryReporterFactoryForTests, classifyError, initializeTelemetry, isCommandCancellation, sendTelemetryErrorEvent, sendTelemetryEvent, setCommandInvocationListener, setCommonTelemetryProperties, withCommandTelemetry } from '../utils/telemetry';
 
@@ -430,6 +432,33 @@ suite('telemetry utilities', () => {
             assert.strictEqual(fake.events[0].properties?.['common.telemetryclientversion'], getExtensionTelemetryPackageVersion());
         }
         finally {
+            restoreFactory();
+        }
+    });
+
+    test('initializeTelemetry ignores malformed VS Code product metadata', () => {
+        restore();
+        const restoreFactory = __setTelemetryReporterFactoryForTests(() => fake as unknown as TelemetryReporter);
+        const appRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-vscode-product-'));
+        fs.writeFileSync(path.join(appRoot, 'product.json'), '{not valid json');
+        const appRootStub = sinon.stub(vscode.env, 'appRoot').value(appRoot);
+
+        try {
+            const subscriptions: vscode.Disposable[] = [];
+            assert.doesNotThrow(() => initializeTelemetry({
+                extension: {
+                    id: 'microsoft-aspire.aspire-vscode',
+                    packageJSON: {
+                        aiKey: 'test-key',
+                        version: '1.2.3'
+                    }
+                },
+                subscriptions
+            } as unknown as vscode.ExtensionContext));
+        }
+        finally {
+            appRootStub.restore();
+            fs.rmSync(appRoot, { recursive: true, force: true });
             restoreFactory();
         }
     });

@@ -194,8 +194,15 @@ function getVsCodeCommitHash(): string | undefined {
         return undefined;
     }
 
-    const product = JSON.parse(fs.readFileSync(productJsonPath, 'utf8')) as { commit?: unknown };
-    return typeof product.commit === 'string' ? product.commit : undefined;
+    try {
+        // This optional telemetry dimension must never block extension activation if VS Code's
+        // product metadata is missing, unreadable, or malformed.
+        const product = JSON.parse(fs.readFileSync(productJsonPath, 'utf8')) as { commit?: unknown };
+        return typeof product.commit === 'string' ? product.commit : undefined;
+    }
+    catch {
+        return undefined;
+    }
 }
 
 function sanitizeTelemetryProperties(properties: Record<string, string>): Record<string, string> {
