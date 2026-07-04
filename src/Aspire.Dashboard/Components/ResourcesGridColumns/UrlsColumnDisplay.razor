@@ -7,7 +7,9 @@
 }
 else if (DisplayedUrls.Count == 1)
 {
-    @WriteUrl(DisplayedUrls[0])
+    <div @onclick:stopPropagation="true" style="display: inline-block;">
+        @WriteUrl(DisplayedUrls[0])
+    </div>
 }
 else if (DisplayedUrls.Count > 1)
 {
@@ -18,6 +20,7 @@ else if (DisplayedUrls.Count > 1)
     var renderedUrls = DisplayedUrls.Take(maxRenderedUrls).ToList();
     var preOverflowedCount = DisplayedUrls.Count - renderedUrls.Count;
 
+    <div @onclick:stopPropagation="true">
     <FluentOverflow Class="url-overflow">
         <ChildContent>
             @for (var i = 0; i < renderedUrls.Count; i++)
@@ -61,6 +64,7 @@ else if (DisplayedUrls.Count > 1)
             </div>
         </OverflowTemplate>
     </FluentOverflow>
+</div>
 }
 
 @if (!string.IsNullOrEmpty(AdditionalMessage))
