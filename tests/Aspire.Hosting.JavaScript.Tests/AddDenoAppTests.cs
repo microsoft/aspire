@@ -689,13 +689,19 @@ public class AddDenoAppTests
         var args = await GetDenoArgsAsync(d => d
             .WithDenoTask("dev")
             .WithDenoAllowNet("localhost") // permissions belong to the task; must not be emitted
-            .WithDenoConfig("deno.json")   // resolution flags are still valid for `deno task`
+            .WithDenoConfig("deno.json")
+            .WithDenoImportMap("import_map.json") // Deno 2.5.6 rejects --import-map on `deno task`
+            .WithDenoLock("deno.lock")
+            .WithDenoNodeModulesDir("auto")
             .WithDenoScriptArgs("--flag"));
 
         Assert.Collection(args,
             a => Assert.Equal("task", a),
             a => Assert.Equal("--config", a),
             a => Assert.Equal("deno.json", a),
+            a => Assert.Equal("--lock", a),
+            a => Assert.Equal("deno.lock", a),
+            a => Assert.Equal("--node-modules-dir=auto", a),
             a => Assert.Equal("dev", a),
             a => Assert.Equal("--flag", a));
     }

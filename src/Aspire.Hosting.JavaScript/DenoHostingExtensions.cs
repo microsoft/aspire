@@ -348,9 +348,9 @@ public static partial class JavaScriptHostingExtensions
         {
             case DenoCommandMode.Task:
                 args.Add("task");
-                // Task-level permissions live in deno.json, so only resolution/unstable flags and the raw escape
-                // hatch are valid here.
-                AppendResolutionFlags(args, deno);
+                // Task-level permissions live in deno.json. Deno 2.5.6 also rejects `deno task --import-map ...`,
+                // while still accepting config and dependency-management flags such as --lock and --node-modules-dir.
+                AppendTaskResolutionFlags(args, deno);
                 AppendUnstableFlags(args, deno);
                 args.AddRange(deno.RuntimeArgs);
                 args.Add(deno.TaskName ?? scriptPath);
@@ -432,7 +432,15 @@ public static partial class JavaScriptHostingExtensions
         args.AddRange(GetResolutionFlags(deno));
     }
 
+    private static void AppendTaskResolutionFlags(List<object> args, DenoCommandLineAnnotation deno)
+    {
+        args.AddRange(GetResolutionFlags(deno, includeImportMap: false));
+    }
+
     private static IEnumerable<string> GetResolutionFlags(DenoCommandLineAnnotation deno)
+        => GetResolutionFlags(deno, includeImportMap: true);
+
+    private static IEnumerable<string> GetResolutionFlags(DenoCommandLineAnnotation deno, bool includeImportMap)
     {
         if (!string.IsNullOrEmpty(deno.ConfigFile))
         {
@@ -440,7 +448,7 @@ public static partial class JavaScriptHostingExtensions
             yield return deno.ConfigFile;
         }
 
-        if (!string.IsNullOrEmpty(deno.ImportMap))
+        if (includeImportMap && !string.IsNullOrEmpty(deno.ImportMap))
         {
             yield return "--import-map";
             yield return deno.ImportMap;
