@@ -125,7 +125,7 @@ public static class GoHostingExtensions
                     }
 
                     ctx.Args.Add("debug");
-                    if (delveAnnotation.Continue)
+                    if (delveAnnotation.ContinueOnStart)
                     {
                         ctx.Args.Add("--continue");
                     }
@@ -679,7 +679,8 @@ public static class GoHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
     /// Use this overload to configure Delve flags such as <see cref="GoDelveServerOptions.OnlySameUser"/>,
-    /// <see cref="GoDelveServerOptions.AcceptMulticlient"/>, and <see cref="GoDelveServerOptions.Log"/>.
+    /// <see cref="GoDelveServerOptions.AcceptMulticlient"/>, <see cref="GoDelveServerOptions.ContinueOnStart"/>,
+    /// and <see cref="GoDelveServerOptions.Log"/>.
     /// </remarks>
     /// <example>
     /// <code lang="csharp">

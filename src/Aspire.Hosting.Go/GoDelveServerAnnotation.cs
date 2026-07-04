@@ -14,7 +14,7 @@ internal sealed class GoDelveServerAnnotation(GoDelveServerOptions options) : IR
     public int Port { get; } = options.Port;
     public bool AcceptMulticlient { get; } = options.AcceptMulticlient;
     public bool? OnlySameUser { get; } = options.OnlySameUser;
-    public bool Continue { get; } = options.Continue;
+    public bool ContinueOnStart { get; } = options.ContinueOnStart;
     public bool Log { get; } = options.Log;
     public string LogOutput { get; } = options.LogOutput;
 }

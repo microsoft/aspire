@@ -422,14 +422,14 @@ public class AddGoAppTests
     }
 
     [Fact]
-    public async Task VerifyManifest_WithDelveServer_Continue()
+    public async Task VerifyManifest_WithDelveServer_ContinueOnStart()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
             .WithDelveServer(options =>
             {
-                options.Continue = true;
+                options.ContinueOnStart = true;
             });
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);

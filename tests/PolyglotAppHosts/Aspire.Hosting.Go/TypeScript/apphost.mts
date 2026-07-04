@@ -26,6 +26,6 @@ await managed.withAppArgs(['--config', 'prod.yaml']);
 
 // Go app with headless Delve server for remote debugging (GoLand / VS Code attach)
 const debugService = await builder.addGoApp('debug-service', '../go-debug-service');
-await debugService.withDelveServer({ port: 2345 });
+await debugService.withDelveServer(2345);
 
 await builder.build().run();

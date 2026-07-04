@@ -107,14 +107,14 @@ debugger disconnects. To customize Delve server flags, use the options overload:
 builder.AddGoApp("api", "../go-api")
     .WithDelveServer(options =>
     {
-        options.Continue = true;
+        options.ContinueOnStart = true;
         options.Log = true;
         options.LogOutput = "rpc,dap,debugger";
     });
 ```
 
-Set `Continue = true` when you want the Go application to run immediately under Delve and attach a
-debugger later.
+Set `ContinueOnStart = true` when you want the Go application to run immediately under Delve and
+attach a debugger later.
 
 If an IDE fails to attach, enable Delve logging first and inspect the resource logs. Some IDE and
 remote-environment combinations can cause Delve to reject the connection because it appears to come

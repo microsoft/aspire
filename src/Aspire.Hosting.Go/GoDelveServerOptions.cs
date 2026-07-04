@@ -35,7 +35,7 @@ public sealed class GoDelveServerOptions
     /// <remarks>
     /// Enable this when you want the Go application to run normally under Delve and attach a debugger later.
     /// </remarks>
-    public bool Continue { get; set; }
+    public bool ContinueOnStart { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether Delve debug server logging is enabled. Defaults to <c>false</c>.
