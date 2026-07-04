@@ -282,6 +282,21 @@ public sealed class ResourcesSelectHelpersTests
         Assert.Equal(OtlpResourceType.Instance, app.Id!.Type);
     }
 
+    [Fact]
+    public void GetResource_DisplayNameCollisionWithReplicaSetName_ReturnsExactReplicaSet()
+    {
+        var appVMs = new List<SelectViewModel<ResourceTypeDetails>>
+        {
+            new() { Name = "app-11111111", Id = ResourceTypeDetails.CreateReplicaInstance("app-full-instance-id", "app") },
+            new() { Name = "app-11111111", Id = ResourceTypeDetails.CreateResourceGrouping("app-11111111", isReplicaSet: true) }
+        };
+
+        var app = appVMs.GetResource(NullLogger.Instance, "app-11111111", canSelectGrouping: true, null!);
+
+        Assert.Equal("app-11111111", app.Id!.ReplicaSetName);
+        Assert.Equal(OtlpResourceType.ResourceGrouping, app.Id!.Type);
+    }
+
     private static OtlpResource CreateOtlpResource(string name, string? instanceId)
     {
         var resource = new Resource();
