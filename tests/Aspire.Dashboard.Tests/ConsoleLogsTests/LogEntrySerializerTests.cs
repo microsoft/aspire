@@ -104,6 +104,7 @@ public class LogEntrySerializerTests
     [InlineData("+1234567890", "'+1234567890")]
     [InlineData("-1234567890", "'-1234567890")]
     [InlineData("@cmd", "'@cmd")]
+    [InlineData("\n=SUM(A1:A2)", "\"'\n=SUM(A1:A2)\"")]
     // A field that both begins with a formula character and contains a comma is prefixed and then quoted.
     [InlineData("=1,2", "\"'=1,2\"")]
     // A formula character that is not the first character is left untouched.
