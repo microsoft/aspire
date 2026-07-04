@@ -143,6 +143,30 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
+    public void UpdateResources_InitialReplicaRunning_UpdatesParentState()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        var child = CreateReplicaChild(parent, "syndule-api--0000007", "Running");
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, child], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Running", updatedParent.State);
+            Assert.Equal(KnownResourceState.Running, updatedParent.KnownState);
+        });
+    }
+
+    [Fact]
     public void UpdateResources_ChildResourceDeleted_RestoresParentState()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
