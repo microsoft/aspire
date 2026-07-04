@@ -365,10 +365,7 @@ public class AddGoAppTests
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(options =>
-            {
-                options.AcceptMulticlient = false;
-            });
+            .WithDelveServer(acceptMulticlient: false);
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -395,10 +392,7 @@ public class AddGoAppTests
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(options =>
-            {
-                options.OnlySameUser = false;
-            });
+            .WithDelveServer(onlySameUser: false);
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -427,10 +421,7 @@ public class AddGoAppTests
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(options =>
-            {
-                options.ContinueOnStart = true;
-            });
+            .WithDelveServer(continueOnStart: true);
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 
@@ -459,11 +450,7 @@ public class AddGoAppTests
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
         var app = builder.AddGoApp("api", AppContext.BaseDirectory)
-            .WithDelveServer(options =>
-            {
-                options.Log = true;
-                options.LogOutput = "rpc,dap,debugger";
-            });
+            .WithDelveServer(log: true, logOutput: "rpc,dap,debugger");
 
         var manifest = await ManifestUtils.GetManifest(app.Resource);
 

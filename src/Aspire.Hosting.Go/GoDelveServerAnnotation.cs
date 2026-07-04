@@ -9,12 +9,18 @@ namespace Aspire.Hosting.Go;
 /// Annotation that configures the Go application to start a headless Delve debug server,
 /// enabling remote debugging from GoLand or any DAP-compatible client.
 /// </summary>
-internal sealed class GoDelveServerAnnotation(GoDelveServerOptions options) : IResourceAnnotation
+internal sealed class GoDelveServerAnnotation(
+    int port,
+    bool acceptMulticlient,
+    bool? onlySameUser,
+    bool continueOnStart,
+    bool log,
+    string logOutput) : IResourceAnnotation
 {
-    public int Port { get; } = options.Port;
-    public bool AcceptMulticlient { get; } = options.AcceptMulticlient;
-    public bool? OnlySameUser { get; } = options.OnlySameUser;
-    public bool ContinueOnStart { get; } = options.ContinueOnStart;
-    public bool Log { get; } = options.Log;
-    public string LogOutput { get; } = options.LogOutput;
+    public int Port { get; } = port;
+    public bool AcceptMulticlient { get; } = acceptMulticlient;
+    public bool? OnlySameUser { get; } = onlySameUser;
+    public bool ContinueOnStart { get; } = continueOnStart;
+    public bool Log { get; } = log;
+    public string LogOutput { get; } = logOutput;
 }
