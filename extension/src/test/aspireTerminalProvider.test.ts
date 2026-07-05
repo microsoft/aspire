@@ -5,7 +5,7 @@ import { AspireTerminalProvider, quoteShellArg, shellArg } from '../utils/Aspire
 import * as cliPathModule from '../utils/cliPath';
 import { EnvironmentVariables } from '../utils/environment';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { terminalCommandArgumentControlCharacters, terminalCommandUnsafeLiteral } from '../loc/strings';
+import { cliNotAvailable, terminalCommandArgumentControlCharacters, terminalCommandUnsafeLiteral } from '../loc/strings';
 
 suite('AspireTerminalProvider tests', () => {
     let terminalProvider: AspireTerminalProvider;
@@ -45,11 +45,12 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(result, '/usr/local/bin/aspire');
         });
 
-        test('returns "aspire" when CLI is not found', async () => {
+        test('throws when CLI is not found', async () => {
             resolveCliPathStub.resolves({ cliPath: 'aspire', available: false, source: 'not-found' });
 
-            const result = await terminalProvider.getAspireCliExecutablePath();
-            assert.strictEqual(result, 'aspire');
+            await assert.rejects(
+                terminalProvider.getAspireCliExecutablePath(),
+                (error: Error) => error.message === cliNotAvailable);
         });
 
         test('handles Windows-style paths', async () => {

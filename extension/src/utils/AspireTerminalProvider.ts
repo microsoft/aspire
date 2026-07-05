@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import * as childProcess from 'child_process';
-import { aspireTerminalName, dcpServerNotInitialized, rpcServerNotInitialized, terminalCommandArgumentControlCharacters, terminalCommandUnsafeLiteral } from '../loc/strings';
+import { aspireTerminalName, cliNotAvailable, dcpServerNotInitialized, rpcServerNotInitialized, terminalCommandUnsafeLiteral } from '../loc/strings';
 import { extensionLogOutputChannel } from './logging';
 import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { EnvironmentVariables, getEnvironmentWithoutE2EBridgeVariables } from './environment';
 import { resolveCliPath } from './cliPath';
+import { assertNoTerminalControlCharacters } from './terminalValidation';
 import path from 'path';
 
 export const enum AnsiColors {
@@ -427,6 +428,10 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
     async getAspireCliExecutablePath(): Promise<string> {
         const result = await resolveCliPath();
+        if (!result.available) {
+            throw new Error(cliNotAvailable);
+        }
+
         return result.cliPath;
     }
 
@@ -511,17 +516,6 @@ function isE2eTerminalCommandExecutionSuppressed(): boolean {
         !!process.env.ASPIRE_EXTENSION_E2E_STATE_FILE &&
         !!process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE &&
         process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_TERMINAL_COMMAND_EXECUTION === 'true';
-}
-
-export function assertNoTerminalControlCharacters(value: string): void {
-    // Shell quoting protects shell metacharacters after the command reaches the
-    // shell. C0 controls are terminal input first: in sendText fallback, ETX can
-    // abort the current line and CR/LF can submit following text as another
-    // command before shell parsing can make those bytes inert. Tab is allowed
-    // because shells treat it as ordinary whitespace inside quotes.
-    if (/[\x00-\x08\x0A-\x1F\x7F]/.test(value)) {
-        throw new Error(terminalCommandArgumentControlCharacters);
-    }
 }
 
 function validateLiteralSubcommandPart(value: string): string {
