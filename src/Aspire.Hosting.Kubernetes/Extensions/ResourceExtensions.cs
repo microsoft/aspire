@@ -235,6 +235,11 @@ internal static class ResourceExtensions
                 podVolume.PersistentVolumeClaim = new()
                 {
                     ClaimName = binding.Volume.GetClaimName(),
+                    // Propagate the mount's read-only flag to the pod's volume source so
+                    // Kubernetes rejects writes at the mount layer even if some other
+                    // container in the pod forgets to set volumeMounts[i].readOnly.
+                    // See https://kubernetes.io/docs/reference/kubernetes-api/config-and-storage-resources/persistent-volume-claim-v1/#PersistentVolumeClaimVolumeSource.
+                    ReadOnly = volume.ReadOnly == true ? true : null,
                 };
                 podTemplateSpec.Spec.Volumes.Add(podVolume);
                 continue;
@@ -313,6 +318,10 @@ internal static class ResourceExtensions
                 {
                     Name = volume.Name,
                     MountPath = volume.MountPath,
+                    // Only serialize readOnly when true; the K8s default is false and
+                    // emitting `readOnly: false` on every mount would churn every
+                    // published manifest that did not previously set it.
+                    ReadOnly = volume.ReadOnly == true ? true : null,
                 });
         }
 

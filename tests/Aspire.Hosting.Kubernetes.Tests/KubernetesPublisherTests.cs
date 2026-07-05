@@ -1032,6 +1032,64 @@ public class KubernetesPublisherTests()
     }
 
     [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_ReadOnlyFlag_PropagatesToVolumeMountAndPodVolume()
+    {
+        // The mount-path overload of WithPersistentVolume accepts an `isReadOnly`
+        // parameter. That flag must reach both the container's volumeMounts[i].readOnly
+        // (so the container sees the mount as read-only) AND the pod's
+        // volumes[i].persistentVolumeClaim.readOnly (so Kubernetes enforces read-only
+        // at the volume-source layer even if a co-scheduled container in the same
+        // pod forgot to set the mount flag). Prior to this test, both emission
+        // paths silently dropped the flag, so `isReadOnly: true` was a no-op.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var media = k8s.AddPersistentVolume("media")
+            .WithStorageClass("azurefile-csi")
+            .WithCapacity("50Gi")
+            .WithAccessMode(PersistentVolumeAccessMode.ReadOnlyMany);
+
+        builder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithPersistentVolume(media, "/srv/media", isReadOnly: true);
+
+        var app = builder.Build();
+        app.Run();
+
+        var statefulSetPath = Path.Combine(tempDir.Path, "templates", "api", "statefulset.yaml");
+        Assert.True(File.Exists(statefulSetPath), $"Expected StatefulSet manifest at {statefulSetPath}");
+        var content = await File.ReadAllTextAsync(statefulSetPath);
+        AssertNoBuggyEmptyMappings(content);
+
+        // Parse the emitted YAML and walk to the exact fields we care about so the
+        // assertion isn't satisfied by a `readOnly:` on some unrelated field
+        // (e.g. a securityContext) that happens to share the substring.
+        var yaml = new YamlStream();
+        using (var reader = new StringReader(content))
+        {
+            yaml.Load(reader);
+        }
+
+        var root = (YamlMappingNode)yaml.Documents[0].RootNode;
+        var podSpec = (YamlMappingNode)root["spec"]["template"]["spec"];
+
+        // Container mount side: containers[0].volumeMounts[?(@.name == "media")].readOnly == true
+        var container = (YamlMappingNode)((YamlSequenceNode)podSpec["containers"])[0];
+        var volumeMount = ((YamlSequenceNode)container["volumeMounts"])
+            .Cast<YamlMappingNode>()
+            .Single(m => ((YamlScalarNode)m["name"]).Value == "media");
+        Assert.Equal("true", ((YamlScalarNode)volumeMount["readOnly"]).Value);
+
+        // Pod volume-source side: spec.volumes[?(@.name == "media")].persistentVolumeClaim.readOnly == true
+        var podVolume = ((YamlSequenceNode)podSpec["volumes"])
+            .Cast<YamlMappingNode>()
+            .Single(v => ((YamlScalarNode)v["name"]).Value == "media");
+        var pvcSource = (YamlMappingNode)podVolume["persistentVolumeClaim"];
+        Assert.Equal("true", ((YamlScalarNode)pvcSource["readOnly"]).Value);
+    }
+
+    [Fact]
     public async Task PublishAsync_WithFirstClassPersistentVolume_ParameterOverloads_CaptureValuesInHelmChart()
     {
         // The parameterized overloads (WithStorageClass(ParameterResource),
