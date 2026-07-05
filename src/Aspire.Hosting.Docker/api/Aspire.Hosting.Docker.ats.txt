@@ -90,7 +90,6 @@ Aspire.Hosting.Docker.Resources.ComposeNodes/Service.readOnly(context: Aspire.Ho
 Aspire.Hosting.Docker.Resources.ComposeNodes/Service.restart(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service) -> string
 Aspire.Hosting.Docker.Resources.ComposeNodes/Service.secrets(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service) -> Aspire.Hosting/List<Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ServiceNodes.SecretReference>
 Aspire.Hosting.Docker.Resources.ComposeNodes/Service.securityOpt(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service) -> Aspire.Hosting/List<string>
-Aspire.Hosting.Docker.Resources.ComposeNodes/Service.shmSize(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service) -> string
 Aspire.Hosting.Docker.Resources.ComposeNodes/Service.setCapAdd(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service, value: Aspire.Hosting/List<string>) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service
 Aspire.Hosting.Docker.Resources.ComposeNodes/Service.setCapDrop(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service, value: Aspire.Hosting/List<string>) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service
 Aspire.Hosting.Docker.Resources.ComposeNodes/Service.setCgroupParent(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service, value: string) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service
@@ -140,6 +139,7 @@ Aspire.Hosting.Docker.Resources.ComposeNodes/Service.setUlimits(context: Aspire.
 Aspire.Hosting.Docker.Resources.ComposeNodes/Service.setUser(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service, value: string) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service
 Aspire.Hosting.Docker.Resources.ComposeNodes/Service.setVolumes(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service, value: Aspire.Hosting/List<Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ServiceNodes.Volume>) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service
 Aspire.Hosting.Docker.Resources.ComposeNodes/Service.setWorkingDir(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service, value: string) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service
+Aspire.Hosting.Docker.Resources.ComposeNodes/Service.shmSize(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service) -> string
 Aspire.Hosting.Docker.Resources.ComposeNodes/Service.stdinOpen(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service) -> boolean
 Aspire.Hosting.Docker.Resources.ComposeNodes/Service.stopGracePeriod(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service) -> string
 Aspire.Hosting.Docker.Resources.ComposeNodes/Service.stopSignal(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service) -> string
