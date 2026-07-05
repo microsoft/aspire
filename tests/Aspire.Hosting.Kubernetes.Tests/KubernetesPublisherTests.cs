@@ -1031,6 +1031,77 @@ public class KubernetesPublisherTests()
         Assert.Contains("data", ex.Message);
     }
 
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_ParameterOverloads_CaptureValuesInHelmChart()
+    {
+        // The parameterized overloads (WithStorageClass(ParameterResource),
+        // WithCapacity(ParameterResource), WithVolumeAnnotation(key, ParameterResource))
+        // go through the Helm placeholder / value-capture path: each parameter must
+        // render into the PVC manifest as `{{ .Values.parameters.<pv-name>.<param> }}`
+        // and land in values.yaml under `parameters.<pv-name>.<param>`. Literal-value
+        // overloads never exercise this path, so a regression here could silently
+        // break the generated PVC YAML or values.yaml without failing any other test.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        // Use unique parameter names per run to defeat any persistent state file lookup.
+        var suffix = Guid.NewGuid().ToString("N");
+        var storageClassName = $"storageclass{suffix}";
+        var capacityName = $"capacity{suffix}";
+        var backupTierName = $"backuptier{suffix}";
+
+        var storageClassParam = builder.AddParameter(storageClassName);
+        var capacityParam = builder.AddParameter(capacityName);
+        var backupTierParam = builder.AddParameter(backupTierName);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var data = k8s.AddPersistentVolume("data")
+            .WithStorageClass(storageClassParam)
+            .WithCapacity(capacityParam)
+            .WithAccessMode(PersistentVolumeAccessMode.ReadWriteOnce)
+            .WithVolumeAnnotation("backup.example.com/tier", backupTierParam);
+
+        builder.AddContainer("service", "nginx")
+            .WithVolume("data", "/var/lib/data")
+            .WithPersistentVolume(data);
+
+        var app = builder.Build();
+        app.Run();
+
+        var pvcPath = Path.Combine(tempDir.Path, "templates", "data", "data.yaml");
+        Assert.True(File.Exists(pvcPath), $"Expected PVC manifest at {pvcPath}");
+        var pvcContent = await File.ReadAllTextAsync(pvcPath);
+        AssertNoBuggyEmptyMappings(pvcContent);
+
+        // Every parameter must render as a Helm template reference scoped to the PV name,
+        // not as a raw ReferenceExpression placeholder ("{0}") or an inlined literal.
+        Assert.DoesNotContain("\"{0}\"", pvcContent);
+        Assert.Contains($"{{{{ .Values.parameters.data.{storageClassName} }}}}", pvcContent);
+        Assert.Contains($"{{{{ .Values.parameters.data.{capacityName} }}}}", pvcContent);
+        Assert.Contains($"{{{{ .Values.parameters.data.{backupTierName} }}}}", pvcContent);
+
+        var valuesPath = Path.Combine(tempDir.Path, "values.yaml");
+        Assert.True(File.Exists(valuesPath), $"Expected values.yaml at {valuesPath}");
+        var valuesContent = await File.ReadAllTextAsync(valuesPath);
+
+        // Consumers of the published Helm chart fill these in via --set / values overrides;
+        // each parameter must appear under parameters.data.<name>: so `helm template`
+        // won't substitute <no value>.
+        var parametersBlockRegex = new System.Text.RegularExpressions.Regex(
+            @"parameters:\s*[\r\n]+\s*data:\s*[\r\n]+(?:\s+\w+:.*[\r\n]+)*\s*" +
+            System.Text.RegularExpressions.Regex.Escape(storageClassName) + @"\s*:");
+        Assert.Matches(parametersBlockRegex, valuesContent);
+        Assert.Matches(
+            new System.Text.RegularExpressions.Regex(@"parameters:[\s\S]+data:[\s\S]+" +
+                System.Text.RegularExpressions.Regex.Escape(capacityName) + @"\s*:"),
+            valuesContent);
+        Assert.Matches(
+            new System.Text.RegularExpressions.Regex(@"parameters:[\s\S]+data:[\s\S]+" +
+                System.Text.RegularExpressions.Regex.Escape(backupTierName) + @"\s*:"),
+            valuesContent);
+    }
+
     /// <summary>
     /// Asserts that the rendered YAML does not contain known-buggy empty <c>{}</c>
     /// mappings that Kubernetes rejects on apply. Some <c>{}</c> mappings — such as
