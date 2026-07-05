@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Aspire.Cli.Configuration;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Semver;
 
 namespace Aspire.Cli.DotNet;
@@ -12,7 +13,7 @@ namespace Aspire.Cli.DotNet;
 /// <summary>
 /// Default implementation of <see cref="IDotNetSdkInstaller"/> that checks for dotnet on the system PATH.
 /// </summary>
-internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration configuration) : IDotNetSdkInstaller
+internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration configuration, IServiceProvider serviceProvider) : IDotNetSdkInstaller
 {
     /// <summary>
     /// The minimum .NET SDK version required for Aspire.
@@ -25,7 +26,7 @@ internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration conf
         // Check for configuration override first
         var overrideVersion = configuration["overrideMinimumSdkVersion"];
         var minimumVersion = !string.IsNullOrEmpty(overrideVersion) ? overrideVersion : MinimumSdkVersion;
-        
+
         return CheckAsync(minimumVersion, cancellationToken);
     }
 
@@ -40,6 +41,11 @@ internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration conf
 
         try
         {
+            // Use the runtime selector's dotnet path if available, so we check the correct SDK
+            // (e.g. a private SDK that was installed under ~/.aspire/sdk).
+            var runtimeSelector = serviceProvider.GetService<IDotNetRuntimeSelector>();
+            var dotNetExecutable = runtimeSelector?.DotNetExecutablePath ?? "dotnet";
+
             // Add --arch flag to ensure we only get SDKs that match the current architecture
             var currentArch = GetCurrentArchitecture();
             var arguments = $"--list-sdks --arch {currentArch}";
@@ -48,7 +54,7 @@ internal sealed class DotNetSdkInstaller(IFeatures features, IConfiguration conf
             {
                 StartInfo = new ProcessStartInfo
                 {
-                    FileName = "dotnet",
+                    FileName = dotNetExecutable,
                     Arguments = arguments,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
