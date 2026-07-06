@@ -62,11 +62,9 @@ suite('utils/cliCompatibility tests', () => {
             assert.strictEqual(isNoLogoUnsupportedOutput(['ls', noLogoOption], '', stderr), true);
         });
 
-        test('returns false when stderr mentions --nologo but is not an unrecognized-argument error', () => {
-            // E.g. help output, a diagnostic log line, or an unrelated error that happens to
-            // reference the option name. Without this guard we would mask the real failure.
-            const stderr = `error: failed to load apphost. See '${noLogoOption}' in help for details.`;
-            assert.strictEqual(isNoLogoUnsupportedOutput(['ls', noLogoOption], '', stderr), false);
+        test('returns true for localized unsupported-option output that mentions the token', () => {
+            const stderr = `No se encuentra el recurso '${noLogoOption}'.`;
+            assert.strictEqual(isNoLogoUnsupportedOutput(['ls', noLogoOption], '', stderr), true);
         });
 
         test('returns false when args do not contain a root --nologo even if stderr says so', () => {

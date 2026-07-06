@@ -19,16 +19,17 @@ export function removeRootNoLogoOption(args: readonly string[]): string[] {
     return [...args.slice(0, noLogoIndex), ...args.slice(noLogoIndex + 1)];
 }
 
-// Match System.CommandLine's unrecognized-option error so plain mentions of `--nologo` in
-// help text, diagnostic logs, or unrelated error messages do not trigger a spurious retry
-// that hides the real failure. The canonical text is e.g.:
-//   Unrecognized command or argument '--nologo'.
-// See: https://learn.microsoft.com/dotnet/standard/commandline/ (System.CommandLine).
 export function isNoLogoUnsupportedOutput(args: readonly string[], stdout: string, stderr: string): boolean {
     if (!hasRootNoLogoOption(args)) {
         return false;
     }
 
+    // This helper is only used after a hidden CLI probe failed. Older CLIs localize the
+    // unsupported-option message, but the rejected flag token itself is stable, e.g.:
+    //   English:  Unrecognized command or argument '--nologo'.
+    //   Spanish:  No se encuentra el recurso '--nologo'.
+    // Matching the token keeps the retry locale-independent while the args guard scopes it to
+    // commands where the extension actually passed `--nologo` as a root option.
     const combined = `${stdout}\n${stderr}`;
-    return combined.includes(noLogoOption) && /Unrecognized\s+(command\s+or\s+argument|option)/i.test(combined);
+    return combined.includes(noLogoOption);
 }
