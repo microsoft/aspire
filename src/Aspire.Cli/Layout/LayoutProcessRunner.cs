@@ -73,7 +73,9 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
         // hard-killed, preventing leaked aspire-managed processes. Does not override caller-set values.
         var effectiveEnvironment = WithOrphanDetectionEnvironment(environmentVariables);
 
-        var effectiveOptions = options ?? new ProcessInvocationOptions();
+        // Clone so the KillOnParentExit flip below never mutates the caller's options instance — the
+        // caller may reuse it across invocations. Falls back to a fresh instance when none was passed.
+        var effectiveOptions = options?.Clone() ?? new ProcessInvocationOptions();
 
         // Windows OS-level backstop that complements the cross-platform watchdog above: bind the child
         // to the CLI's kill-on-close job so the OS terminates it if the CLI dies, even when the child is

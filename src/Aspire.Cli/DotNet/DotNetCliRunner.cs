@@ -113,6 +113,26 @@ internal sealed class ProcessInvocationOptions
     /// force-kill mode.
     /// </summary>
     public IGracefulShutdownWindow? ShutdownService { get; set; }
+
+    /// <summary>
+    /// Creates a shallow copy so a caller-supplied instance can be layered with additional settings
+    /// without mutating the original, which the caller may reuse across invocations. The delegate and
+    /// service references are intentionally shared with the copy.
+    /// </summary>
+    public ProcessInvocationOptions Clone() => new()
+    {
+        StandardOutputCallback = StandardOutputCallback,
+        StandardErrorCallback = StandardErrorCallback,
+        NoLaunchProfile = NoLaunchProfile,
+        StartDebugSession = StartDebugSession,
+        Debug = Debug,
+        SuppressLogging = SuppressLogging,
+        KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
+        IsolateConsole = IsolateConsole,
+        KillOnParentExit = KillOnParentExit,
+        GracefulShutdownSignaler = GracefulShutdownSignaler,
+        ShutdownService = ShutdownService,
+    };
 }
 
 internal sealed class DotNetCliRunner(

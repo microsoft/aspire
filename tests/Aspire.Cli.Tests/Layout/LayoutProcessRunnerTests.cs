@@ -167,4 +167,30 @@ public class LayoutProcessRunnerTests
         Assert.NotNull(capturedOptions);
         Assert.True(capturedOptions.KillOnParentExit);
     }
+
+    [Fact]
+    public async Task StartAsync_WhenKillOnParentExitRequested_DoesNotMutateCallerOptions()
+    {
+        // The killOnParentExit flag is applied to a clone, never the caller's instance, so a caller that
+        // reuses a single ProcessInvocationOptions across calls is not silently bound to the kill-on-close
+        // job on a later invocation that happens to request it.
+        ProcessInvocationOptions? capturedOptions = null;
+        var factory = new TestProcessExecutionFactory
+        {
+            AssertionCallback = (_, _, _, options) => capturedOptions = options,
+            DefaultExitCode = 0,
+        };
+        var runner = new LayoutProcessRunner(factory);
+
+        var callerOptions = new ProcessInvocationOptions { KillOnParentExit = false };
+
+        await using var execution = await runner.StartAsync("tool", ["arg"], options: callerOptions, killOnParentExit: true);
+
+        Assert.NotNull(capturedOptions);
+        // The child was launched with the flag set...
+        Assert.True(capturedOptions.KillOnParentExit);
+        // ...but the caller's own instance was left untouched.
+        Assert.NotSame(callerOptions, capturedOptions);
+        Assert.False(callerOptions.KillOnParentExit);
+    }
 }
