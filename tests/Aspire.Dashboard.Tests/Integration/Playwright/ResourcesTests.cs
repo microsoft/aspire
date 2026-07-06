@@ -50,7 +50,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await page.SetViewportSizeAsync(320, 720);
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
 
-            var tableTab = page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = ControlsStrings.ChartContainerTableTab, Exact = true });
+            var tableTab = page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = ControlsStrings.ResourcesContainerTableTab, Exact = true });
             await Assertions.Expect(tableTab).ToBeVisibleAsync();
             await Assertions.Expect(tableTab).ToHaveAttributeAsync("aria-selected", "true");
 
