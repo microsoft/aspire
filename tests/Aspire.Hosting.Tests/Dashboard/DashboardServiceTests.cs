@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+
 using System.Text;
 using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
@@ -804,7 +806,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     public async Task UploadFile_WithinSizeLimit_Succeeds()
     {
         var dashboardServiceData = CreateDashboardServiceData();
-        using var fileUploadStore = new FileUploadStore();
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
         var data = new byte[1024]; // 1 KB
@@ -826,7 +829,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     public async Task UploadFile_ExceedsConfiguredSizeLimit_ThrowsResourceExhausted()
     {
         var dashboardServiceData = CreateDashboardServiceData();
-        using var fileUploadStore = new FileUploadStore();
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -851,7 +855,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     public async Task UploadFile_ExceedsLimitAcrossMultipleChunks_ThrowsResourceExhausted()
     {
         var dashboardServiceData = CreateDashboardServiceData();
-        using var fileUploadStore = new FileUploadStore();
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -879,7 +884,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     public async Task UploadFile_ConfiguredSizeLimit_AllowsWithinLimitUploads()
     {
         var dashboardServiceData = CreateDashboardServiceData();
-        using var fileUploadStore = new FileUploadStore();
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -906,7 +912,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     public async Task UploadFile_EmptyStream_ThrowsInvalidArgument()
     {
         var dashboardServiceData = CreateDashboardServiceData();
-        using var fileUploadStore = new FileUploadStore();
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
         var context = TestServerCallContext.Create();
@@ -922,7 +929,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     public async Task UploadFile_ThenResolveFileReferences_ResolvesCorrectly()
     {
         var dashboardServiceData = CreateDashboardServiceData();
-        using var fileUploadStore = new FileUploadStore();
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
         var dashboardService = CreateDashboardService(dashboardServiceData, fileUploadStore: fileUploadStore);
 
         // Upload a file
@@ -952,7 +960,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void ResolveFileReferences_UnknownId_ReturnsNull()
     {
-        using var fileUploadStore = new FileUploadStore();
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
         var json = "[{\"Id\":\"nonexistent-id\",\"Name\":\"file.txt\"}]";
 
         var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "TestInput", NullLogger.Instance);
@@ -963,7 +972,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void ResolveFileReferences_MalformedJson_ReturnsNull()
     {
-        using var fileUploadStore = new FileUploadStore();
+        using var fileSystemService = new TestFileSystemService();
+        using var fileUploadStore = new FileUploadStore(fileSystemService);
         var json = "not-valid-json";
 
         var result = FileUploadStore.ResolveFileReferences(fileUploadStore, json, "TestInput", NullLogger.Instance);

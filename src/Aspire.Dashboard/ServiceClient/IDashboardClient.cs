@@ -48,6 +48,13 @@ public interface IDashboardClient : IAsyncDisposable
     string ApplicationName { get; }
 
     /// <summary>
+    /// Gets whether the dashboard version is supported by the connected AppHost.
+    /// Returns <see langword="false"/> when the AppHost requires a newer dashboard API version
+    /// than this build supports.
+    /// </summary>
+    bool IsDashboardVersionSupported { get; }
+
+    /// <summary>
     /// Gets the current set of resources and a stream of updates.
     /// </summary>
     /// <remarks>

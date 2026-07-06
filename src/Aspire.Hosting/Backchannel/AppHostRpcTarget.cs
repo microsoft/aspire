@@ -250,7 +250,7 @@ internal class AppHostRpcTarget(
     /// </summary>
     public async Task<UploadFileResponse> UploadFileAsync(UploadFileRequest request, CancellationToken cancellationToken = default)
     {
-        var maxUploadSize = Dashboard.DashboardService.GetMaxFileUploadSize(configuration);
+        var maxUploadSize = FileUploadHelpers.GetMaxFileUploadSize(configuration);
 
         if (request.Data.Length > maxUploadSize)
         {

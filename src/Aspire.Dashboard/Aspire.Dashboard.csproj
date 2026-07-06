@@ -303,6 +303,7 @@
     <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" Link="Utils\KnownRelationshipTypes.cs" />
     <Compile Include="$(SharedDir)Model\ResourceSourceViewModel.cs" Link="Model\ResourceSourceViewModel.shared.cs" />
     <Compile Include="$(SharedDir)CircularBuffer.cs" Link="Otlp\Storage\CircularBuffer.cs" />
+    <Compile Include="$(SharedDir)DashboardApiVersions.cs" Link="Utils\DashboardApiVersions.cs" />
     <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="Utils\DashboardConfigNames.cs" />
     <Compile Include="$(SharedDir)DashboardExitCodes.cs" Link="Utils\DashboardExitCodes.cs" />
     <Compile Include="$(SharedDir)DurationFormatter.cs" Link="Utils\DurationFormatter.cs" />

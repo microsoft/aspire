@@ -931,6 +931,72 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         var answer = Assert.Single(completedPrompt.Answers);
         Assert.Equal("[{\"Id\":\"testfileid0000000000000000000000\",\"Name\":\"deploy.zip\"}]", answer.Value);
     }
+
+    [Fact]
+    public async Task FileInput_CompoundExtension_MatchesFilter()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var validFile = Path.Combine(workspace.WorkspaceRoot.FullName, "archive.tar.gz");
+        await File.WriteAllTextAsync(validFile, "gzip content");
+
+        var relativePath = Path.GetRelativePath(Directory.GetCurrentDirectory(), validFile);
+
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("file-prompt-1", "Archive", InputTypes.File, "Select archive:", isRequired: true, fileFilter: ".tar.gz,.zip");
+        consoleService.SetupStringPromptResponse(relativePath);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(consoleService.ValidationFailures);
+
+        var (uploadedFilePath, uploadedFileName) = Assert.Single(promptBackchannel.UploadedFiles);
+        Assert.Equal(Path.GetFullPath(validFile), uploadedFilePath);
+        Assert.Equal("archive.tar.gz", uploadedFileName);
+    }
+
+    [Fact]
+    public async Task PublishCommand_UnsupportedInputType_FailsWithError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("unsupported-prompt-1", "Unknown", "totally-unknown-type", "Answer:", isRequired: true);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(0, exitCode);
+        var error = Assert.Single(consoleService.DisplayedErrors);
+        Assert.Contains("Unsupported input type: totally-unknown-type", error);
+    }
 }
 
 // Test implementation of IAppHostCliBackchannel that simulates prompt interactions

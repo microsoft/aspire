@@ -872,6 +872,24 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("InteractionFilePlaceholderMultiple", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard Update Required.
+        /// </summary>
+        public static string InteractionUnsupportedVersionTitle {
+            get {
+                return ResourceManager.GetString("InteractionUnsupportedVersionTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to This action requires a newer version of the Aspire dashboard. Please update your Aspire tools to use this feature..
+        /// </summary>
+        public static string InteractionUnsupportedVersionMessage {
+            get {
+                return ResourceManager.GetString("InteractionUnsupportedVersionMessage", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to OK.

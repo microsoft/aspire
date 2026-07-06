@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -13,15 +15,12 @@ namespace Aspire.Hosting.Dashboard;
 /// </summary>
 internal sealed class FileUploadStore : IFileUploadStore, IDisposable
 {
-    private readonly ConcurrentDictionary<string, FileUploadEntry> _files = new(StringComparer.Ordinal);
-    private readonly string _uploadDirectory;
+    private readonly ConcurrentDictionary<string, TempFile> _files = new(StringComparer.Ordinal);
+    private readonly ITempFileSystemService _tempFileSystem;
 
-    public FileUploadStore()
+    public FileUploadStore(IFileSystemService fileSystemService)
     {
-        // Use CreateTempSubdirectory to atomically create a randomly named directory with
-        // restrictive permissions, avoiding predictable paths that are vulnerable to symlink attacks.
-        var tempDir = Directory.CreateTempSubdirectory("aspire-uploads-");
-        _uploadDirectory = tempDir.FullName;
+        _tempFileSystem = fileSystemService.TempDirectory;
     }
 
     /// <summary>
@@ -29,11 +28,17 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     /// </summary>
     public (string FileId, string FilePath) CreateEntry(string originalFileName)
     {
-        var fileId = Guid.NewGuid().ToString("N");
-        var filePath = Path.Combine(_uploadDirectory, fileId);
+        // Sanitize the file name to prevent path traversal attacks.
+        // Strip directory components for both Unix (/) and Windows (\) separators
+        // regardless of the current platform, since the name comes from a remote client.
+        var lastSep = originalFileName.AsSpan().LastIndexOfAny('/', '\\');
+        var safeName = lastSep >= 0 ? originalFileName[(lastSep + 1)..] : originalFileName;
 
-        _files[fileId] = new FileUploadEntry(filePath, originalFileName);
-        return (fileId, filePath);
+        var tempFile = _tempFileSystem.CreateTempFile(string.IsNullOrEmpty(safeName) ? null : safeName);
+        var fileId = Guid.NewGuid().ToString("N");
+
+        _files[fileId] = tempFile;
+        return (fileId, tempFile.Path);
     }
 
     /// <summary>
@@ -41,7 +46,7 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     /// </summary>
     public string? GetFilePath(string fileId)
     {
-        return _files.TryGetValue(fileId, out var entry) ? entry.FilePath : null;
+        return _files.TryGetValue(fileId, out var tempFile) ? tempFile.Path : null;
     }
 
     /// <summary>
@@ -49,7 +54,7 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     /// </summary>
     public string? GetFileName(string fileId)
     {
-        return _files.TryGetValue(fileId, out var entry) ? entry.OriginalFileName : null;
+        return _files.TryGetValue(fileId, out var tempFile) ? Path.GetFileName(tempFile.Path) : null;
     }
 
     /// <summary>
@@ -58,11 +63,11 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
     /// </summary>
     public void RemoveEntry(string fileId)
     {
-        if (_files.TryRemove(fileId, out var entry))
+        if (_files.TryRemove(fileId, out var tempFile))
         {
             try
             {
-                File.Delete(entry.FilePath);
+                tempFile.Dispose();
             }
             catch
             {
@@ -118,20 +123,19 @@ internal sealed class FileUploadStore : IFileUploadStore, IDisposable
 
     public void Dispose()
     {
-        try
+        foreach (var tempFile in _files.Values)
         {
-            if (Directory.Exists(_uploadDirectory))
+            try
             {
-                Directory.Delete(_uploadDirectory, recursive: true);
+                tempFile.Dispose();
+            }
+            catch
+            {
+                // Best effort cleanup.
             }
         }
-        catch
-        {
-            // Best effort cleanup.
-        }
+        _files.Clear();
     }
-
-    private sealed record FileUploadEntry(string FilePath, string OriginalFileName);
 
     // Shared type used by ResolveFileReferences for JSON deserialization of file input values.
     // The shape matches what the Dashboard sends: [{"Id":"...","Name":"..."}]

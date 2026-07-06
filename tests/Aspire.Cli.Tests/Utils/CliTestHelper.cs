@@ -554,9 +554,10 @@ internal sealed class CliServiceCollectionTestOptions
     public Func<IServiceProvider, IAppHostCliBackchannel> AppHostBackchannelFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         var logger = serviceProvider.GetRequiredService<ILogger<AppHostCliBackchannel>>();
+        var environment = serviceProvider.GetRequiredService<IEnvironment>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
-        return new AppHostCliBackchannel(logger, telemetry, profilingTelemetry);
+        return new AppHostCliBackchannel(logger, environment, telemetry, profilingTelemetry);
     };
 
     public Func<IServiceProvider, IExtensionRpcTarget> ExtensionRpcTargetFactory { get; set; } = (IServiceProvider serviceProvider) =>

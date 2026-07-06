@@ -13,6 +13,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting;
+using Aspire.Hosting.Dashboard;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Grpc.Net.Client.Configuration;
@@ -65,6 +66,7 @@ internal sealed class DashboardClient : IDashboardClient
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
     private ImmutableHashSet<Channel<WatchInteractionsResponseUpdate>> _outgoingInteractionChannels = [];
     private string? _applicationName;
+    private bool _isDashboardVersionSupported = true;
 
     private DashboardConnectionState _connectionState;
     private readonly object _connectionStateLock = new();
@@ -403,9 +405,14 @@ internal sealed class DashboardClient : IDashboardClient
 
             try
             {
-                var response = await _client!.GetApplicationInformationAsync(new(), headers: _headers, cancellationToken: cancellationToken);
+                var request = new ApplicationInformationRequest();
+                var response = await _client!.GetApplicationInformationAsync(request, headers: _headers, cancellationToken: cancellationToken);
 
                 _applicationName = response.ApplicationName;
+
+                // MinDashboardApiVersion is 0 when the server predates this field or hasn't set it,
+                // which means the dashboard is always considered supported.
+                _isDashboardVersionSupported = response.MinDashboardApiVersion <= DashboardApiVersions.Current;
 
                 SetConnectionState(DashboardConnectionState.Connected);
                 return;
@@ -757,6 +764,8 @@ internal sealed class DashboardClient : IDashboardClient
             ?? _dashboardOptions.ApplicationName
             ?? "Aspire";
     }
+
+    public bool IsDashboardVersionSupported => _isDashboardVersionSupported;
 
     public ResourceViewModel? GetResource(string resourceName)
     {

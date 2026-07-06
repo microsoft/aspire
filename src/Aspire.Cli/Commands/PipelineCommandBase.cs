@@ -906,10 +906,11 @@ internal abstract class PipelineCommandBase : BaseCommand
 
     private async Task<string?> HandleSingleInputAsync(PublishingPromptInput input, string promptText, IAppHostCliBackchannel backchannel, CancellationToken cancellationToken)
     {
-        if (!Enum.TryParse<InputType>(input.InputType, ignoreCase: true, out var inputType))
+        // The wire format uses hyphens (e.g. "secret-text") but the enum uses PascalCase (SecretText).
+        var normalizedType = input.InputType.Replace("-", "", StringComparison.Ordinal);
+        if (!Enum.TryParse<InputType>(normalizedType, ignoreCase: true, out var inputType))
         {
-            // Fallback to text if unknown type
-            inputType = InputType.Text;
+            throw new InvalidOperationException($"Unsupported input type: {input.InputType}");
         }
 
         // Display any validation errors.
@@ -944,7 +945,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             InputType.File => await HandleFileInputAsync(input, promptText, backchannel, cancellationToken),
 
-            _ => await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken)
+            _ => throw new InvalidOperationException($"Unsupported input type: {input.InputType}"),
         };
 
         return result;
@@ -1039,11 +1040,11 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             if (!string.IsNullOrEmpty(input.FileFilter))
             {
-                var extension = Path.GetExtension(fullPath);
+                var fileName = Path.GetFileName(fullPath);
                 var filters = input.FileFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                // Only validate against extension filters (e.g. ".pem"), skip MIME type patterns (e.g. "image/*").
+                // Only validate against extension filters (e.g. ".pem", ".tar.gz"), skip MIME type patterns (e.g. "image/*").
                 var extensionFilters = filters.Where(f => f.StartsWith('.'));
-                if (extensionFilters.Any() && !extensionFilters.Any(f => f.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+                if (extensionFilters.Any() && !extensionFilters.Any(f => fileName.EndsWith(f, StringComparison.OrdinalIgnoreCase)))
                 {
                     return ValidationResult.Error($"'{Path.GetFileName(fullPath)}' does not match the accepted file types ({input.FileFilter}).");
                 }

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+
 using System.Diagnostics;
 using System.Net;
 using Aspire.Hosting.ApplicationModel;
@@ -47,7 +49,8 @@ internal sealed class DashboardServiceHost : IHostedService
         ResourceNotificationService resourceNotificationService,
         ResourceLoggerService resourceLoggerService,
         ResourceCommandService resourceCommandService,
-        InteractionService interactionService)
+        InteractionService interactionService,
+        IFileSystemService fileSystemService)
     {
         _logger = loggerFactory.CreateLogger<DashboardServiceHost>();
 
@@ -106,6 +109,7 @@ internal sealed class DashboardServiceHost : IHostedService
             builder.Services.AddSingleton(resourceNotificationService);
             builder.Services.AddSingleton(resourceLoggerService);
             builder.Services.AddSingleton(interactionService);
+            builder.Services.AddSingleton(fileSystemService);
             builder.Services.AddSingleton<IFileUploadStore, FileUploadStore>();
 
             builder.WebHost.ConfigureKestrel(ConfigureKestrel);

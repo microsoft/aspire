@@ -17,6 +17,10 @@ message ApplicationInformationRequest {
 
 message ApplicationInformationResponse {
     string application_name = 1;
+    // The minimum dashboard API version required to fully support this AppHost's features.
+    // If the dashboard's current API version is lower than this value, it should display
+    // a warning to the user indicating that some features may not be available.
+    int32 min_dashboard_api_version = 2;
 }
 
 ////////////////////////////////////////////

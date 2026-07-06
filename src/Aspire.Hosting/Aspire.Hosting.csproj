@@ -20,6 +20,7 @@
     <Compile Include="$(SharedDir)CircularBuffer.cs" Link="CircularBuffer.cs" />
     <Compile Include="$(SharedDir)CompareHelpers.cs" Link="Utils\CompareHelpers.cs" />
     <Compile Include="$(SharedDir)CustomResourceSnapshotExtensions.cs" Link="CustomResourceSnapshotExtensions.cs" />
+    <Compile Include="$(SharedDir)DashboardApiVersions.cs" Link="Dashboard\DashboardApiVersions.cs" />
     <Compile Include="$(SharedDir)Model\KnownProperties.cs" Link="Dashboard\KnownProperties.cs" />
     <Compile Include="$(SharedDir)Model\KnownResourceTypes.cs" Link="Dashboard\KnownResourceTypes.cs" />
     <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" Link="Dashboard\KnownRelationshipTypes.cs" />
@@ -28,6 +29,7 @@
     <Compile Include="$(SharedDir)KnownResourceNames.cs" Link="Utils\KnownResourceNames.cs" />
     <Compile Include="$(SharedDir)KnownEndpointNames.cs" Link="Utils\KnownEndpointNames.cs" />
     <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" Link="ApplicationModel\EnvironmentVariableNameEncoder.cs" />
+    <Compile Include="$(SharedDir)FileUploadHelpers.cs" Link="Utils\FileUploadHelpers.cs" />
     <Compile Include="$(SharedDir)KnownAspNetCoreConfigNames.cs" Link="Utils\KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownContainerRuntimes.cs" Link="Utils\KnownContainerRuntimes.cs" />
