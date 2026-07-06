@@ -418,12 +418,18 @@ public class ResourceDetailsTests : DashboardTestContext
         var dialogsLoc = Services.GetRequiredService<IStringLocalizer<ResourcesDialogs>>();
 
         AssertTooltip(cut, resourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)].Value);
+
+        var maskButton = cut.Find($"fluent-button[aria-label='{controlsLoc[nameof(ControlsStrings.GridValueMaskShowValue)].Value}']");
+        maskButton.TriggerEvent("onfocusin", new FocusEventArgs());
         AssertTooltip(cut, controlsLoc[nameof(ControlsStrings.GridValueMaskShowValue)].Value);
+
+        var openTextVisualizerButton = cut.Find($"fluent-button[aria-label='{dialogsLoc[nameof(ResourcesDialogs.OpenInTextVisualizer)].Value}']");
+        openTextVisualizerButton.TriggerEvent("onfocusin", new FocusEventArgs());
         AssertTooltip(cut, dialogsLoc[nameof(ResourcesDialogs.OpenInTextVisualizer)].Value);
 
         Assert.Null(cut.Find($"fluent-button[aria-label='{resourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)].Value}']").GetAttribute("title"));
-        Assert.Null(cut.Find($"fluent-button[aria-label='{controlsLoc[nameof(ControlsStrings.GridValueMaskShowValue)].Value}']").GetAttribute("title"));
-        Assert.Null(cut.Find($"fluent-button[aria-label='{dialogsLoc[nameof(ResourcesDialogs.OpenInTextVisualizer)].Value}']").GetAttribute("title"));
+        Assert.Null(maskButton.GetAttribute("title"));
+        Assert.Null(openTextVisualizerButton.GetAttribute("title"));
     }
 
     [Fact]

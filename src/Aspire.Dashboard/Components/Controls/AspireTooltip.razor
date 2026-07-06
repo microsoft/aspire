@@ -16,6 +16,7 @@
 
     private IJSObjectReference? _jsModule;
     private bool _focusListenerInitialized;
+    private string? _initializedAnchor;
 
     [Parameter, EditorRequired]
     public required string Anchor { get; set; }
@@ -25,10 +26,20 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !string.IsNullOrWhiteSpace(Anchor) && !string.IsNullOrWhiteSpace(Text))
+        if (!string.IsNullOrWhiteSpace(Anchor) && !string.IsNullOrWhiteSpace(Text))
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", JsModulePath);
-            _focusListenerInitialized = await _jsModule.InvokeAsync<bool>("initializeAspireTooltip", Anchor);
+            _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", JsModulePath);
+
+            if (_initializedAnchor != Anchor)
+            {
+                if (_focusListenerInitialized && _initializedAnchor is not null)
+                {
+                    await _jsModule.InvokeVoidAsync("disposeAspireTooltip", _initializedAnchor);
+                }
+
+                _focusListenerInitialized = await _jsModule.InvokeAsync<bool>("initializeAspireTooltip", Anchor);
+                _initializedAnchor = _focusListenerInitialized ? Anchor : null;
+            }
         }
     }
 
@@ -40,7 +51,7 @@
             {
                 try
                 {
-                    await _jsModule.InvokeVoidAsync("disposeAspireTooltip", Anchor);
+                    await _jsModule.InvokeVoidAsync("disposeAspireTooltip", _initializedAnchor ?? Anchor);
                 }
                 catch (JSDisconnectedException)
                 {

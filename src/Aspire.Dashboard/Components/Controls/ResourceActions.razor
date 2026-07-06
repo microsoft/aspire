@@ -15,11 +15,14 @@
             <FluentButton Id="@GetHighlightedCommandButtonId(i)"
                           Appearance="Appearance.Lightweight"
                           aria-label="@highlightedCommandTooltip"
+                          @onfocusin="@(() => ShowTooltip(GetHighlightedCommandButtonId(i), highlightedCommandTooltip))"
+                          @onfocusout="@(() => HideTooltip(GetHighlightedCommandButtonId(i)))"
+                          @onmouseenter="@(() => ShowTooltip(GetHighlightedCommandButtonId(i), highlightedCommandTooltip))"
+                          @onmouseleave="@(() => HideTooltip(GetHighlightedCommandButtonId(i)))"
                           OnClick="@(() => CommandSelected.InvokeAsync(highlightedCommand))"
                           Disabled="@(highlightedCommand.State == CommandViewModelState.Disabled || IsCommandExecuting(Resource, highlightedCommand))">
                 <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(highlightedCommand.IconName, highlightedCommand.IconVariant)" Width="16px" />
             </FluentButton>
-            <AspireTooltip Anchor="@GetHighlightedCommandButtonId(i)" Text="@highlightedCommandTooltip" />
         }
         else
         {
@@ -31,10 +34,13 @@
     <FluentButton Id="@_consoleLogsButtonId"
                   Appearance="Appearance.Lightweight"
                   aria-label="@consoleLogsTooltip"
+                  @onfocusin="@(() => ShowTooltip(_consoleLogsButtonId, consoleLogsTooltip))"
+                  @onfocusout="@(() => HideTooltip(_consoleLogsButtonId))"
+                  @onmouseenter="@(() => ShowTooltip(_consoleLogsButtonId, consoleLogsTooltip))"
+                  @onmouseleave="@(() => HideTooltip(_consoleLogsButtonId))"
                   OnClick="@(() => NavigationManager.NavigateTo(Aspire.Dashboard.Utils.DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(Resource, ResourceByName))))">
         <FluentIcon Value="@s_consoleLogsIcon" />
     </FluentButton>
-    <AspireTooltip Anchor="@_consoleLogsButtonId" Text="@consoleLogsTooltip" />
 
     <FluentDivider Class="action-divider" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
 }
@@ -45,4 +51,14 @@
                   @ref="_menuButton"
                   MenuButtonId="@_menuButtonId"
                   Title="@ControlLoc[nameof(ControlsStrings.ActionsButtonText)]"
-                  UseTooltip="true" />
+                  SuppressNativeTooltip="true"
+                  UseTooltip="false"
+                  @onfocusin="@(() => ShowTooltip(_menuButtonId, ControlLoc[nameof(ControlsStrings.ActionsButtonText)].Value))"
+                  @onfocusout="@(() => HideTooltip(_menuButtonId))"
+                  @onmouseenter="@(() => ShowTooltip(_menuButtonId, ControlLoc[nameof(ControlsStrings.ActionsButtonText)].Value))"
+                  @onmouseleave="@(() => HideTooltip(_menuButtonId))" />
+
+@if (!string.IsNullOrWhiteSpace(_activeTooltipAnchor) && !string.IsNullOrWhiteSpace(_activeTooltipText))
+{
+    <AspireTooltip Anchor="@_activeTooltipAnchor" Text="@_activeTooltipText" />
+}

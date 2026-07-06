@@ -18,6 +18,8 @@ public partial class ResourceActions : ComponentBase
     private readonly string _highlightedCommandButtonIdPrefix = $"resource-actions-highlighted-command-{Guid.NewGuid():N}";
     private readonly string _consoleLogsButtonId = $"resource-actions-console-logs-{Guid.NewGuid():N}";
     private readonly string _menuButtonId = $"resource-actions-menu-{Guid.NewGuid():N}";
+    private string? _activeTooltipAnchor;
+    private string? _activeTooltipText;
     private AspireMenuButton? _menuButton;
 
     [Inject]
@@ -83,4 +85,19 @@ public partial class ResourceActions : ComponentBase
     }
 
     private string GetHighlightedCommandButtonId(int index) => $"{_highlightedCommandButtonIdPrefix}-{index}";
+
+    private void ShowTooltip(string anchor, string text)
+    {
+        _activeTooltipAnchor = anchor;
+        _activeTooltipText = text;
+    }
+
+    private void HideTooltip(string anchor)
+    {
+        if (_activeTooltipAnchor == anchor)
+        {
+            _activeTooltipAnchor = null;
+            _activeTooltipText = null;
+        }
+    }
 }

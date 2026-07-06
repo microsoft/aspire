@@ -21,7 +21,7 @@
     var useFluentTooltip = UseTooltip && !string.IsNullOrWhiteSpace(tooltipText);
 }
 
-<FluentButton Id="@MenuButtonId" Title="@(useFluentTooltip ? null : Title)" Appearance="@ButtonAppearance" IconStart="@IconStart" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
+<FluentButton Id="@MenuButtonId" Title="@(useFluentTooltip || SuppressNativeTooltip ? null : Title)" Appearance="@ButtonAppearance" IconStart="@IconStart" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
     @if (string.IsNullOrWhiteSpace(Text))
     {
         <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" />

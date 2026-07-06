@@ -30,10 +30,16 @@ export function initializeAspireTooltip(anchorId) {
         target.addEventListener("focusout", hide);
         target.addEventListener("focus", show);
         target.addEventListener("blur", hide);
+        target.addEventListener("mouseenter", show);
+        target.addEventListener("mouseleave", hide);
         target.addEventListener("keydown", onKeyDown);
     }
 
     anchor.__aspireTooltip = { show, hide, onKeyDown, focusTargets };
+
+    if (hasActiveInteraction(anchor)) {
+        show();
+    }
 
     return true;
 }
@@ -50,6 +56,8 @@ export function disposeAspireTooltip(anchorId) {
         target.removeEventListener("focusout", tooltip.hide);
         target.removeEventListener("focus", tooltip.show);
         target.removeEventListener("blur", tooltip.hide);
+        target.removeEventListener("mouseenter", tooltip.show);
+        target.removeEventListener("mouseleave", tooltip.hide);
         target.removeEventListener("keydown", tooltip.onKeyDown);
     }
 
@@ -67,4 +75,8 @@ function getShadowFocusTargets(anchor) {
 function getTooltips(anchorId) {
     return Array.from(document.querySelectorAll("fluent-tooltip"))
         .filter(tooltip => tooltip.getAttribute("anchor") === anchorId);
+}
+
+function hasActiveInteraction(anchor) {
+    return anchor.matches(":focus, :focus-within, :hover") || !!anchor.shadowRoot?.activeElement;
 }

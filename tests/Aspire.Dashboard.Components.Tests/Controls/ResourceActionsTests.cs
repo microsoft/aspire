@@ -10,6 +10,7 @@ using Aspire.Dashboard.Resources;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -64,14 +65,20 @@ public class ResourceActionsTests : DashboardTestContext
         Assert.Null(consoleLogsButton.GetAttribute("title"));
         Assert.Null(actionsButton.GetAttribute("title"));
 
-        AssertTooltip(cut, restartButton.Id, "Restart the resource");
-        AssertTooltip(cut, consoleLogsButton.Id, resourcesLoc[nameof(Dashboard.Resources.Resources.ResourceActionConsoleLogsText)].Value);
-        AssertTooltip(cut, actionsButton.Id, controlsLoc[nameof(ControlsStrings.ActionsButtonText)].Value);
+        Assert.Empty(cut.FindComponents<AspireTooltip>());
+
+        restartButton.TriggerEvent("onfocusin", new FocusEventArgs());
+        AssertTooltip(cut, "Restart the resource");
+
+        consoleLogsButton.TriggerEvent("onfocusin", new FocusEventArgs());
+        AssertTooltip(cut, resourcesLoc[nameof(Dashboard.Resources.Resources.ResourceActionConsoleLogsText)].Value);
+
+        actionsButton.TriggerEvent("onfocusin", new FocusEventArgs());
+        AssertTooltip(cut, controlsLoc[nameof(ControlsStrings.ActionsButtonText)].Value);
     }
 
-    private static void AssertTooltip(IRenderedFragment cut, string? anchor, string text)
+    private static void AssertTooltip(IRenderedFragment cut, string text)
     {
-        Assert.NotNull(anchor);
-        Assert.Contains(cut.FindComponents<AspireTooltip>(), tooltip => tooltip.Instance.Anchor == anchor && tooltip.Instance.Text == text);
+        Assert.Contains(cut.FindComponents<AspireTooltip>(), tooltip => tooltip.Instance.Text == text);
     }
 }

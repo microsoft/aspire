@@ -49,6 +49,9 @@ public partial class AspireMenuButton : FluentComponentBase
     public bool UseTooltip { get; set; }
 
     [Parameter]
+    public bool SuppressNativeTooltip { get; set; }
+
+    [Parameter]
     public string MenuButtonId { get; set; } = Identifier.NewId();
 
     [Parameter]
