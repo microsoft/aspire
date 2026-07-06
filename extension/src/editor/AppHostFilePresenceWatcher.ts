@@ -20,7 +20,7 @@ export class AppHostFilePresenceWatcher implements vscode.Disposable {
     private static readonly _changeDebounceMs = 250;
 
     private readonly _disposables: vscode.Disposable[] = [];
-    private _lastValue = false;
+    private _lastAppHostPath: string | undefined;
     private _changeTimer: NodeJS.Timeout | undefined;
     private _updateVersion = 0;
     private _updateTask: Promise<void> = Promise.resolve();
@@ -59,25 +59,25 @@ export class AppHostFilePresenceWatcher implements vscode.Disposable {
     }
 
     private async _update(version: number): Promise<void> {
-        const value = await this._anyVisibleEditorIsAppHost();
+        const appHostPath = await this._getVisibleAppHostPath();
         if (version !== this._updateVersion) {
             return;
         }
 
-        if (value === this._lastValue) {
+        if (appHostPath === this._lastAppHostPath) {
             return;
         }
-        this._lastValue = value;
-        this._repository.setAppHostFileOpen(value);
+        this._lastAppHostPath = appHostPath;
+        this._repository.setAppHostFileOpen(appHostPath !== undefined, appHostPath);
     }
 
-    private async _anyVisibleEditorIsAppHost(): Promise<boolean> {
+    private async _getVisibleAppHostPath(): Promise<string | undefined> {
         for (const editor of vscode.window.visibleTextEditors) {
             if (await getParserForDocument(editor.document)) {
-                return true;
+                return editor.document.uri.fsPath;
             }
         }
-        return false;
+        return undefined;
     }
 
     dispose(): void {

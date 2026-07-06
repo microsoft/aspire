@@ -194,6 +194,7 @@ export class AppHostDataRepository {
     private _viewMode: ViewMode = 'workspace';
     private _panelVisible = false;
     private _appHostFileOpen = false;
+    private _appHostFilePath: string | undefined;
     private _hasEverBeenDataActive = false;
 
     // ── Workspace mode state (describe --follow) ──
@@ -394,22 +395,30 @@ export class AppHostDataRepository {
     }
 
     /**
-     * Signals whether at least one visible editor currently shows an AppHost file.
+     * Signals whether at least one visible editor currently shows an AppHost file, and which
+     * AppHost file should be used when there is no workspace-scoped AppHost selection.
      *
      * When `true`, the repository will run the same data-source(s) it would when the
      * tree-view panel is visible.  This lets code-lens decorations on a freshly-created
      * AppHost file show live resource state without the user first opening the panel.
      */
-    setAppHostFileOpen(open: boolean): void {
-        if (this._appHostFileOpen === open) {
+    setAppHostFileOpen(open: boolean, appHostPath?: string): void {
+        const nextAppHostFilePath = open ? appHostPath : undefined;
+        if (this._appHostFileOpen === open && isSameOptionalAppHostPath(this._appHostFilePath, nextAppHostFilePath)) {
             return;
         }
         const wasDataActive = this._dataActive;
+        const previousDescribeAppHostPath = this._workspaceDescribeAppHostPath;
         this._appHostFileOpen = open;
+        this._appHostFilePath = nextAppHostFilePath;
         const becameDataActive = !wasDataActive && this._dataActive;
         const resumedFromInactive = becameDataActive && this._hasEverBeenDataActive;
         if (this._dataActive) {
             this._hasEverBeenDataActive = true;
+        }
+        if (!isSameOptionalAppHostPath(previousDescribeAppHostPath, this._workspaceDescribeAppHostPath)) {
+            this._stopDescribeWatch({ clearWorkspaceResources: true });
+            this._describeRestartDelay = 5000;
         }
         this._syncPolling(resumedFromInactive);
     }
@@ -638,6 +647,16 @@ export class AppHostDataRepository {
         }
 
         return this._workspaceAppHostDiscoveryComplete && this._workspaceAppHostPath !== undefined;
+    }
+
+    private get _workspaceDescribeAppHostPath(): string | undefined {
+        if (this._workspaceAppHostPath) {
+            return this._workspaceAppHostPath;
+        }
+
+        // With no workspace folders, workspace discovery cannot select an AppHost.
+        // Use the visible AppHost editor instead of falling back to the extension host cwd.
+        return !this._workspaceAppHostDiscoveryUsesWorkspaceRoot ? this._appHostFilePath : undefined;
     }
 
     private _syncPolling(refreshBeforeFollowOnResume = false): void {
@@ -884,8 +903,9 @@ export class AppHostDataRepository {
             if (includeDisabledCommands) {
                 args.push('--include-disabled-commands');
             }
-            if (this._workspaceAppHostPath) {
-                args.push('--apphost', this._workspaceAppHostPath);
+            const describeAppHostPath = this._workspaceDescribeAppHostPath;
+            if (describeAppHostPath) {
+                args.push('--apphost', describeAppHostPath);
             }
 
             extensionLogOutputChannel.info('Starting aspire describe --follow for workspace resources');
@@ -2359,6 +2379,10 @@ function isSameAppHostPath(left: string | undefined, right: string | undefined):
     }
 
     return getComparisonKey(path.normalize(left)) === getComparisonKey(path.normalize(right));
+}
+
+function isSameOptionalAppHostPath(left: string | undefined, right: string | undefined): boolean {
+    return (left === undefined && right === undefined) || isSameAppHostPath(left, right);
 }
 
 function isMatchingAppHostInstance(left: AppHostDisplayInfo, right: AppHostDisplayInfo): boolean {
