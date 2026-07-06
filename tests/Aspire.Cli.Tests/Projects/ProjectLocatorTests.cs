@@ -1198,6 +1198,32 @@ builder.Build().Run();");
     }
 
     [Fact]
+    public async Task UseOrFindAppHostProjectFileAsync_PreservesSilentDiscoveryWhenInvalidAppHostCsFallsBackToParentDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "using Aspire.Hosting;");
+
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "<Project Sdk=\"Aspire.AppHost.Sdk\"></Project>");
+
+        var interactionService = new TestInteractionService();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService);
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            appHostFile,
+            MultipleAppHostProjectsFoundBehavior.Throw,
+            createSettingsFile: false,
+            displayProgress: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(projectFile.FullName, result.SelectedProjectFile?.FullName);
+        Assert.Equal(0, interactionService.DisplayEmptyLineCount);
+    }
+
+    [Fact]
     public async Task UseOrFindAppHostProjectFileAsync_AllowsSingleFileAppHostWithSiblingCsproj()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
