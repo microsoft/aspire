@@ -260,6 +260,7 @@ internal sealed class AppHostLauncher(
         var fallbackHashes = new[] { rawCompactHash }
             .Concat(AppHostHelper.ComputeLegacyHashes(socketKeyPath))
             .Concat(AppHostHelper.ComputeLegacyHashes(appHostPath))
+            .Where(h => !string.Equals(h, expectedHash, StringComparison.Ordinal))
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
