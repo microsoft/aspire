@@ -1,9 +1,9 @@
 namespace DotnetProject.SharedLibrary;
 
 /// <summary>
-/// A trivial helper shared by both <c>DotnetProject.ApiService</c> and
-/// <c>DotnetProject.WorkerService</c>. Editing <see cref="Message"/> is the shared-library change that
-/// Session 6 uses to verify both services hot-reload together under <c>aspire run --watch</c>.
+/// A trivial helper shared by both <c>DotnetProject.ApiService</c> and <c>DotnetProject.WorkerService</c>. 
+/// Editing <see cref="Message"/> is the shared-library change that can be used to verify 
+/// both services hot-reload together under <c>aspire run --watch</c>.
 /// </summary>
 public static class Greeter
 {
