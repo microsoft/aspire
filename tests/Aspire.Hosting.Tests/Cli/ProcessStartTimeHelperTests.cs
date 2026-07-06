@@ -95,15 +95,10 @@ public class ProcessStartTimeHelperTests
     }
 
     [Fact]
-    public void GetCurrentProcessStartTime_OnLinux_IsBootRelativeWithoutBtime()
+    public void GetCurrentProcessStartTime_IsStartTicksTicksDividedByTicksPerSecond()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "Boot-relative /proc start-tick identity is Linux-specific.");
 
-        // The stable Linux identity is boot-relative: field 22 of /proc/<pid>/stat (start ticks since boot)
-        // divided by _SC_CLK_TCK, with NO /proc/stat btime added. Adding btime would re-express the value as
-        // wall-clock time and reintroduce the clock-sync drift the identity guard must survive, so assert the
-        // public value equals the pure boot-relative computation. Under the old btime-based code this would
-        // instead be a ~1.7-billion Unix-epoch value, so this test also guards against regressing to it.
         var startTicks = ProcessStartTimeHelper.TryGetLinuxProcessStartTicks(Environment.ProcessId, ProcessStartTimeHelper.LinuxProcRoot);
         Assert.NotNull(startTicks);
 

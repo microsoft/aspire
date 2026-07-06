@@ -76,17 +76,6 @@ internal static partial class ProcessStartTimeHelper
     /// <summary>
     /// Gets the start time of the process with the given <paramref name="pid"/>.
     /// </summary>
-    /// <remarks>
-    /// On Linux this deliberately uses boot-relative <c>/proc</c> start ticks (matching
-    /// <c>DcpProcessMonitor.GetLinuxProcessIdentityTimestamp</c>) instead of <see cref="Process.StartTime"/>
-    /// or any wall-clock time. The returned value is an opaque <em>seconds-since-boot</em> identity token,
-    /// not a real calendar time: field 22 of <c>/proc/&lt;pid&gt;/stat</c> is fixed at process start relative
-    /// to boot, so every process on the machine computes the same value for a given PID even after the wall
-    /// clock is stepped (NTP correction, container host clock sync). Using <see cref="Process.StartTime"/>
-    /// (which the runtime derives from an independently sampled boot time) or adding <c>/proc/stat</c>
-    /// <c>btime</c> (which itself shifts with wall-clock adjustments) would re-introduce that drift and let a
-    /// parent and child disagree about the same PID's start time, defeating the PID-reuse guard.
-    /// </remarks>
     /// <returns>The start time, or <see langword="null"/> when the process cannot be inspected (already exited, privileged, etc.).</returns>
     public static DateTimeOffset? TryGetProcessStartTime(int pid)
     {
@@ -262,14 +251,16 @@ internal static partial class ProcessStartTimeHelper
     /// Reads the raw start time of the process with the given <paramref name="pid"/> as clock ticks since
     /// boot (field 22 of <c>/proc/&lt;pid&gt;/stat</c>). This is the drift-immune building block for Linux
     /// process identity: the value is fixed at process start relative to boot, so every reader on the
-    /// machine observes the same number even after a wall-clock adjustment. Divide by
-    /// <see cref="GetLinuxClockTicksPerSecond"/> to obtain seconds since boot.
+    /// machine observes the same number even after a wall-clock adjustment. 
+    /// Divide by <see cref="GetLinuxClockTicksPerSecond"/> to obtain seconds since boot.
     /// </summary>
+    /// <remarks>
+    /// Using this is especially important for containers, where suspension and resumption of the host can cause
+    /// the wall clock to jump. 
+    /// </remarks>
     /// <param name="pid">The process to inspect.</param>
-    /// <param name="procRoot">
-    /// The <c>/proc</c> filesystem root to read from. Orphan/liveness detection must pass
-    /// <see cref="LinuxProcRoot"/> (the current namespace's <c>/proc</c>); only DCP host-process inspection
-    /// passes <c>HOST_PROC</c>.
+    /// <param name="procRoot"> The <c>/proc</c> filesystem root to read from. 
+    /// Normally /proc, but can be overridden for container environments to read the host process namespace.
     /// </param>
     /// <returns>The start ticks, or <see langword="null"/> when the stat file cannot be read or parsed.</returns>
     internal static ulong? TryGetLinuxProcessStartTicks(int pid, string procRoot)
