@@ -577,9 +577,15 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         if (session.configuration.runId === debugConfig.runId) {
           extensionLogOutputChannel.info(`Debug session started: ${session.name} (run id: ${session.configuration.runId})`);
           disposable.dispose();
+          const dcpIdForSessionTermination = debugConfig.sendSessionTerminatedOnDebugSessionEnd
+            ? debugConfig.sessionTerminatedDcpId ?? debugConfig.debugSessionId
+            : undefined;
 
           if (this._disposed) {
             extensionLogOutputChannel.info(`Stopping debug session that started after Aspire session disposal: ${session.name} (run id: ${session.configuration.runId})`);
+            if (dcpIdForSessionTermination) {
+              this.sendSessionTerminated(debugConfig.runId, dcpIdForSessionTermination);
+            }
             vscode.debug.stopDebugging(session);
             cleanupRun(debugConfig.runId);
             resolved = true;
@@ -587,9 +593,6 @@ export class AspireDebugSession implements vscode.DebugAdapter {
             return;
           }
 
-          const dcpIdForSessionTermination = debugConfig.sendSessionTerminatedOnDebugSessionEnd
-            ? debugConfig.sessionTerminatedDcpId ?? debugConfig.debugSessionId
-            : undefined;
           let terminationDisposable: vscode.Disposable | undefined;
           const sendSessionTerminated = () => {
             terminationDisposable?.dispose();
@@ -625,6 +628,9 @@ export class AspireDebugSession implements vscode.DebugAdapter {
               }
 
               finishSession();
+            });
+            this._disposables.push({
+              dispose: () => terminationDisposable?.dispose()
             });
           }
 

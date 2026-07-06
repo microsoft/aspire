@@ -25,9 +25,14 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
     },
     getSupportedFileTypes: () => [],
     getProjectFile: () => '',
-    createDebugSessionConfigurationCallback: async (launchConfig, _args, _env, _launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
-        if (!isBrowserLaunchConfiguration(launchConfig) || !launchConfig.url) {
+    createDebugSessionConfigurationCallback: async (launchConfig, _args, _env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
+        if (!isBrowserLaunchConfiguration(launchConfig)) {
             extensionLogOutputChannel.info(`The resource type was not browser for ${JSON.stringify(launchConfig)}`);
+            throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
+        }
+
+        if (!launchConfig.url) {
+            extensionLogOutputChannel.info(`Browser launch configuration did not include a URL for ${JSON.stringify(launchConfig)}`);
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
         }
 
@@ -38,7 +43,7 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
         debugConfiguration.sourceMaps = true;
         debugConfiguration.resolveSourceMapLocations = ['**', '!**/node_modules/**'];
         debugConfiguration.runtimeArgs = mergeRuntimeArgs(debugConfiguration.runtimeArgs, defaultBrowserRuntimeArgs);
-        const userDataDir = getBrowserUserDataDir(_launchOptions.runId);
+        const userDataDir = getBrowserUserDataDir(launchOptions.runId);
         debugConfiguration.userDataDir = userDataDir;
         registerRunCleanup(debugConfiguration.runId, () => {
             void fs.rm(userDataDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }).catch(error => {
@@ -49,7 +54,7 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
         // configuration fields, so AspireDebugSession sends the DCP termination
         // notification from the VS Code session end event instead of adapter output.
         debugConfiguration.debugSessionId = null;
-        debugConfiguration.sessionTerminatedDcpId = _launchOptions.debugSessionId;
+        debugConfiguration.sessionTerminatedDcpId = launchOptions.debugSessionId;
         debugConfiguration.sendSessionTerminatedOnDebugSessionEnd = true;
 
         // Remove program/args/cwd since browser debugging doesn't use them
