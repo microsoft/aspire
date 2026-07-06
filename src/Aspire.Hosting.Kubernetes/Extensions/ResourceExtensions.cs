@@ -153,6 +153,13 @@ internal static class ResourceExtensions
         var addedPorts = new HashSet<(string Port, string Protocol)>();
         foreach (var (_, mapping) in context.EndpointMappings)
         {
+            // De-duplication keys on the container target port (mapping.Port), not the exposed
+            // Service port (mapping.ServicePort). This assumes a container target port uniquely
+            // identifies a Service port, which holds because endpoint allocation does not let two
+            // endpoints on the same resource share a target port. If that assumption ever changes,
+            // two endpoints with the same target port but different Service ports would collapse to
+            // a single Service port entry here, and a by-name Ingress backend referencing the dropped
+            // endpoint would dangle.
             var portValue = mapping.Port.ValueString ?? mapping.Port.ToScalar();
             var portKey = (portValue, mapping.Protocol);
             if (!addedPorts.Add(portKey))

@@ -574,6 +574,103 @@ public class KubernetesPublisherTests()
     }
 
     [Fact]
+    public async Task KubernetesIngressAndGatewayRouteToServicePortForDistinctPorts()
+    {
+        // Companion to KubernetesEndpointReferenceUsesServicePortNotTargetPort (issue #18321).
+        // The GetEndpoint fix only touches service-to-service reference resolution; Ingress and
+        // Gateway backends resolve ports on separate code paths. This test locks in that all three
+        // stay consistent for an endpoint with a distinct exposed `port` (9002) and container
+        // `targetPort` (9000):
+        //   - service.yaml maps Service port 9002 -> targetPort 9000
+        //   - the Ingress backend references the Service port by NAME ("http"), so it is decoupled
+        //     from the numeric port and resolves through the Service to 9002 -> 9000
+        //   - the Gateway HTTPRoute backendRef uses the numeric Service port 9002 (not 9000)
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var k8s = builder.AddKubernetesEnvironment("k8s");
+
+        var ingress = k8s.AddIngress("ingress").WithIngressClass("nginx");
+        var gateway = k8s.AddGateway("gateway").WithGatewayClass("nginx");
+
+        var api = builder.AddContainer("api", "questdb/questdb:9.4.1")
+            .WithHttpEndpoint(port: 9002, targetPort: 9000, name: "http")
+            .WithExternalHttpEndpoints();
+
+        ingress.WithPath("/api", api.GetEndpoint("http"));
+        gateway.WithRoute("/api", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/api/service.yaml",
+            "templates/ingress/ingress.yaml",
+            "templates/gateway/route.yaml"
+        };
+        SettingsTask settingsTask = default!;
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task KubernetesProbeUsesContainerTargetPortNotServicePort()
+    {
+        // Guards EndpointProperty.TargetPort => GetPort(targetPort) in KubernetesResource.GetEndpointValue.
+        // Probes run against the pod directly (not through the Service), so when an endpoint has a
+        // distinct exposed `port` (9002) and container `targetPort` (9000), the generated probe must
+        // target the container port 9000. This is the inverse of issue #18321: client-facing
+        // references use the Service port, but the probe must keep using the container target port.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        builder.AddKubernetesEnvironment("k8s");
+
+#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        builder.AddContainer("api", "questdb/questdb:9.4.1")
+            .WithHttpEndpoint(port: 9002, targetPort: 9000, name: "http")
+            .WithHttpProbe(ProbeType.Readiness, "/ready");
+#pragma warning restore ASPIREPROBES001
+
+        var app = builder.Build();
+        app.Run();
+
+        // deployment.yaml carries the probe (httpGet.port must be 9000, the container port), while
+        // service.yaml shows the Service mapping port 9002 -> targetPort 9000.
+        var expectedFiles = new[]
+        {
+            "templates/api/deployment.yaml",
+            "templates/api/service.yaml"
+        };
+        SettingsTask settingsTask = default!;
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+        await settingsTask;
+    }
+
+    [Fact]
     public async Task PublishAsync_HandlesConditionalReferenceExpression()
     {
         using var tempDir = new TestTempDirectory();
