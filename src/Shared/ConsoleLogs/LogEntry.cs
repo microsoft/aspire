@@ -59,11 +59,39 @@ internal sealed class LogEntry
             return null;
         }
 
-        _strippedLogContent ??= TimestampParser.TryParseConsoleTimestamp(RawContent, out var timestampParseResult)
-            ? AnsiParser.StripControlSequences(timestampParseResult.Value.ModifiedText)
-            : GetStrippedRawContent();
+        return _strippedLogContent ??= StripLogContent(useCache: true);
+    }
 
-        return _strippedLogContent;
+    /// <summary>
+    /// Same as <see cref="GetStrippedLogContent"/> but does not memoize the result on the entry. Use
+    /// for one-off operations such as exports so that reading every row doesn't permanently populate
+    /// the per-entry cache and keep an extra full message string alive until the entry is evicted.
+    /// </summary>
+    /// <remarks>
+    /// If the stripped value has already been cached (e.g. by filtering), that cached value is reused.
+    /// </remarks>
+    public string? GetStrippedLogContentUncached()
+    {
+        if (RawContent is null)
+        {
+            return null;
+        }
+
+        return _strippedLogContent ?? StripLogContent(useCache: false);
+    }
+
+    private string StripLogContent(bool useCache)
+    {
+        if (TimestampParser.TryParseConsoleTimestamp(RawContent!, out var timestampParseResult))
+        {
+            return AnsiParser.StripControlSequences(timestampParseResult.Value.ModifiedText);
+        }
+
+        // No timestamp was parsed; fall back to the stripped raw content. When not caching, avoid
+        // populating the raw-content cache too, but still reuse it if it already exists.
+        return useCache
+            ? GetStrippedRawContent()!
+            : _strippedRawContent ?? AnsiParser.StripControlSequences(RawContent!);
     }
 
     public DateTime? Timestamp { get; private set; }

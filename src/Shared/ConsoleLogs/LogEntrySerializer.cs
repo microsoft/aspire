@@ -70,7 +70,9 @@ internal static class LogEntrySerializer
             writer.Write(',');
             writer.Write(EscapeCsvField(timestamp));
             writer.Write(',');
-            writer.Write(EscapeCsvField(entry.GetStrippedLogContent() ?? string.Empty));
+            // Use the non-caching strip path: a one-off export shouldn't permanently populate the
+            // per-entry stripped-content cache for every retained row.
+            writer.Write(EscapeCsvField(entry.GetStrippedLogContentUncached() ?? string.Empty));
             // CSV (RFC 4180) records are separated by CRLF.
             writer.Write("\r\n");
         }
@@ -82,7 +84,7 @@ internal static class LogEntrySerializer
     /// Escapes a CSV field for safe output:
     /// <list type="bullet">
     /// <item>Mitigates CSV/formula injection by prefixing fields that begin with a character a
-    /// spreadsheet could interpret as a formula (<c>= + - @</c>, tab or carriage return) with a
+    /// spreadsheet could interpret as a formula (<c>= + - @</c>, tab or line break) with a
     /// single quote so they are treated as text.</item>
     /// <item>Quotes per RFC 4180: fields containing a comma, double quote or line break are wrapped
     /// in double quotes, and any embedded double quotes are doubled.</item>
@@ -104,5 +106,5 @@ internal static class LogEntrySerializer
     }
 
     private static readonly char[] s_csvSpecialChars = [',', '"', '\r', '\n'];
-    private static readonly char[] s_formulaInjectionChars = ['=', '+', '-', '@', '\t', '\r'];
+    private static readonly char[] s_formulaInjectionChars = ['=', '+', '-', '@', '\t', '\r', '\n'];
 }
