@@ -75,6 +75,25 @@ public class VsCodeExtensionCheckTests
     }
 
     [Fact]
+    public void Detect_FindsExtension_ViaDefaultHomeExtensionsDirectory()
+    {
+        using var home = new TempDirectory();
+        // Exercise the default desktop extensions root (~/.vscode/extensions) rather than the
+        // VSCODE_EXTENSIONS override, guarding GetExtensionDirectories path composition.
+        Directory.CreateDirectory(Path.Combine(home.Path, ".vscode", "extensions", "microsoft-aspire.aspire-vscode-1.2.3"));
+
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["TERM_PROGRAM"] = "vscode"
+        });
+
+        var detection = VsCodeExtensionCheck.Detect(environment, home.DirectoryInfo);
+
+        Assert.True(detection.VsCodeInstalled);
+        Assert.True(detection.ExtensionInstalled);
+    }
+
+    [Fact]
     public void Detect_MatchesExtensionFolder_CaseInsensitively()
     {
         using var home = new TempDirectory();

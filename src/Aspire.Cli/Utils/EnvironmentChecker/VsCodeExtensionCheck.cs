@@ -139,10 +139,16 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
 
         try
         {
+            // IgnoreInaccessible lets the probe skip an unreadable extension folder and keep scanning
+            // the rest, instead of throwing and reporting the whole extensions root as "not found" (a
+            // false warning even when the Aspire extension is installed alongside an inaccessible one).
+            // The parameterless EnumerateDirectories overload uses legacy behavior that throws instead.
+            var enumerationOptions = new EnumerationOptions { IgnoreInaccessible = true };
+
             // Installed extensions live in per-version folders named "<publisher>.<name>-<version>",
             // lowercased by VS Code, for example "microsoft-aspire.aspire-vscode-1.2.3". A case-insensitive
             // prefix match tolerates any installed version without spawning the VS Code CLI.
-            foreach (var directory in Directory.EnumerateDirectories(extensionsDirectory))
+            foreach (var directory in Directory.EnumerateDirectories(extensionsDirectory, "*", enumerationOptions))
             {
                 var folderName = Path.GetFileName(directory);
                 if (folderName.StartsWith(ExtensionId + "-", StringComparison.OrdinalIgnoreCase))
