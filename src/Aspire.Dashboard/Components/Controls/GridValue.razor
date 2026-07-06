@@ -64,11 +64,13 @@
 
         @if (EnableMasking)
         {
+            var maskButtonTooltip = (IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)]).Value;
+
             <FluentButton Appearance="Appearance.Lightweight"
                           IconEnd="@(IsMasked ? _unmaskIcon : _maskIcon)"
-                          Title="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
+                          Title="@maskButtonTooltip"
                           OnClick="ToggleMaskStateAsync"
-                          aria-label="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
+                          aria-label="@maskButtonTooltip"
                           Class="grid-value-mask-button" />
         }
 

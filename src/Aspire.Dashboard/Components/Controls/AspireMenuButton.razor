@@ -9,9 +9,19 @@
         { "aria-expanded", _visible },
         { "onkeydown", (KeyboardEventArgs args) => OnKeyDown(args) }
     };
+
+    if (!string.IsNullOrWhiteSpace(Title) &&
+        string.IsNullOrWhiteSpace(Text) &&
+        !additionalButtonAttributes.ContainsKey("aria-label"))
+    {
+        additionalButtonAttributes["aria-label"] = Title;
+    }
+
+    var tooltipText = Title ?? string.Empty;
+    var useFluentTooltip = UseTooltip && !string.IsNullOrWhiteSpace(tooltipText);
 }
 
-<FluentButton Id="@MenuButtonId" Title="@Title" Appearance="@ButtonAppearance" IconStart="@IconStart" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
+<FluentButton Id="@MenuButtonId" Title="@(useFluentTooltip ? null : Title)" Appearance="@ButtonAppearance" IconStart="@IconStart" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
     @if (string.IsNullOrWhiteSpace(Text))
     {
         <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" />
@@ -26,5 +36,10 @@
         }
     }
 </FluentButton>
+
+@if (useFluentTooltip)
+{
+    <AspireTooltip Anchor="@MenuButtonId" Text="@tooltipText" />
+}
 
 <AspireMenu Anchor="@MenuButtonId" @bind-Open="@_visible" Items="_items" />

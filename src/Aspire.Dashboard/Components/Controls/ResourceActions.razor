@@ -10,8 +10,13 @@
         if (i < _highlightedCommands.Count)
         {
             var highlightedCommand = _highlightedCommands[i];
+            var highlightedCommandTooltip = !string.IsNullOrEmpty(highlightedCommand.GetDisplayDescription()) ? highlightedCommand.GetDisplayDescription()! : highlightedCommand.GetDisplayName();
 
-            <FluentButton Appearance="Appearance.Lightweight" Title="@(!string.IsNullOrEmpty(highlightedCommand.GetDisplayDescription()) ? highlightedCommand.GetDisplayDescription() : highlightedCommand.GetDisplayName())" OnClick="@(() => CommandSelected.InvokeAsync(highlightedCommand))" Disabled="@(highlightedCommand.State == CommandViewModelState.Disabled || IsCommandExecuting(Resource, highlightedCommand))">
+            <FluentButton Appearance="Appearance.Lightweight"
+                          Title="@highlightedCommandTooltip"
+                          aria-label="@highlightedCommandTooltip"
+                          OnClick="@(() => CommandSelected.InvokeAsync(highlightedCommand))"
+                          Disabled="@(highlightedCommand.State == CommandViewModelState.Disabled || IsCommandExecuting(Resource, highlightedCommand))">
                 <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(highlightedCommand.IconName, highlightedCommand.IconVariant)" Width="16px" />
             </FluentButton>
         }
@@ -21,7 +26,11 @@
         }
     }
 
-    <FluentButton Appearance="Appearance.Lightweight" Title="@Loc[nameof(Resources.ResourceActionConsoleLogsText)]" OnClick="@(() => NavigationManager.NavigateTo(Aspire.Dashboard.Utils.DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(Resource, ResourceByName))))">
+    var consoleLogsTooltip = Loc[nameof(Resources.ResourceActionConsoleLogsText)].Value;
+    <FluentButton Appearance="Appearance.Lightweight"
+                  Title="@consoleLogsTooltip"
+                  aria-label="@consoleLogsTooltip"
+                  OnClick="@(() => NavigationManager.NavigateTo(Aspire.Dashboard.Utils.DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(Resource, ResourceByName))))">
         <FluentIcon Value="@s_consoleLogsIcon" />
     </FluentButton>
 
@@ -32,4 +41,5 @@
                   Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
                   Items="@_menuItems"
                   @ref="_menuButton"
-                  Title="@ControlLoc[nameof(ControlsStrings.ActionsButtonText)]" />
+                  Title="@ControlLoc[nameof(ControlsStrings.ActionsButtonText)]"
+                  UseTooltip="false" />

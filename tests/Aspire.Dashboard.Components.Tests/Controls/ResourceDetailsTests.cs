@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -393,6 +394,32 @@ public class ResourceDetailsTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_ActionControlsProvideKeyboardAccessibleTooltips()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var resource = ModelTestHelpers.CreateResource(
+            "app1",
+            environment: new List<EnvironmentVariableViewModel>
+            {
+                new EnvironmentVariableViewModel("envvar1", "value!", fromSpec: true)
+            }.ToImmutableArray());
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.ShowSpecOnlyToggle, true);
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        var resourcesLoc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.Resources>>();
+        var controlsLoc = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>();
+
+        AssertTooltip(cut, resourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)].Value);
+        Assert.NotNull(cut.Find($"fluent-button[aria-label='{controlsLoc[nameof(ControlsStrings.GridValueMaskShowValue)].Value}']"));
+    }
+
+    [Fact]
     public void Render_NotStartedStateDescription_ShowsDescription()
     {
         ResourceSetupHelpers.SetupResourceDetails(this);
@@ -607,6 +634,11 @@ public class ResourceDetailsTests : DashboardTestContext
     private static int ProducerDefinedDisplaySortOrder(int producerSortOrder)
     {
         return KnownResourcePropertySortOrder.ConnectionString + 1 + producerSortOrder;
+    }
+
+    private static void AssertTooltip(IRenderedFragment cut, string text)
+    {
+        Assert.Contains(cut.FindComponents<AspireTooltip>(), tooltip => tooltip.Instance.Text == text);
     }
 
     [Fact]

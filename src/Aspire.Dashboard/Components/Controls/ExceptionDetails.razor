@@ -7,9 +7,11 @@
 
 @if (!string.IsNullOrWhiteSpace(ExceptionText))
 {
+    var exceptionDetailsTooltip = Loc[nameof(ControlsStrings.ExceptionDetailsTitle)].Value;
     <FluentButton Appearance="Appearance.Lightweight"
                   OnClick="OnExceptionDetailsClickedAsync"
-                  Title="@Loc[nameof(ControlsStrings.ExceptionDetailsTitle)]"
+                  Title="@exceptionDetailsTooltip"
+                  aria-label="@exceptionDetailsTooltip"
                   Class="exception-details-button">
         <FluentIcon Icon="Icons.Filled.Size16.DocumentError"
                     Color="Color.Accent" />

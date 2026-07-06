@@ -243,6 +243,31 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
+    public void ResourceToolbarButtons_RenderKeyboardAccessibleTooltips()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        var loc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.Resources>>();
+
+        AssertTooltip(cut, "resourceFilterButton", loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)].Value);
+        AssertTooltip(cut, "resourcesGraphZoomInButton", loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)].Value);
+        AssertTooltip(cut, "resourcesGraphZoomOutButton", loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)].Value);
+        AssertTooltip(cut, "resourcesGraphResetButton", loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)].Value);
+
+        Assert.Null(cut.Find("#resourceFilterButton").GetAttribute("title"));
+        Assert.Null(cut.Find("#resourcesGraphZoomInButton").GetAttribute("title"));
+        Assert.Null(cut.Find("#resourcesGraphZoomOutButton").GetAttribute("title"));
+        Assert.Null(cut.Find("#resourcesGraphResetButton").GetAttribute("title"));
+    }
+
+    [Fact]
     public void ResourceFilters_ApplyExistingFiltersOnInitialRender()
     {
         // Arrange
@@ -337,6 +362,11 @@ public partial class ResourcesTests : DashboardTestContext
 
         var healthSelect = filterComponents.First(f => f.Instance.Id == "resource-health-states");
         Assert.Equal(healthStates, healthSelect.Instance.Values.ToImmutableSortedDictionary() /* sort for equality comparison */);
+    }
+
+    private static void AssertTooltip(IRenderedFragment cut, string anchor, string text)
+    {
+        Assert.Contains(cut.FindComponents<AspireTooltip>(), tooltip => tooltip.Instance.Anchor == anchor && tooltip.Instance.Text == text);
     }
 
     [Fact]
