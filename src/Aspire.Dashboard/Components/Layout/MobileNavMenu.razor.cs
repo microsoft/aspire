@@ -81,15 +81,14 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     public async Task CloseMobileNavMenuFromKeyboardAsync()
     {
         CloseNavMenu();
-        await InvokeAsync(StateHasChanged);
         await JS.InvokeVoidAsync("focusElement", MainLayout.NavigationButtonId);
     }
 
     [JSInvokable]
-    public async Task CloseMobileNavMenuFromFocusLossAsync()
+    public Task CloseMobileNavMenuFromFocusLossAsync()
     {
         CloseNavMenu();
-        await InvokeAsync(StateHasChanged);
+        return Task.CompletedTask;
     }
 
     private async ValueTask DisposeKeyboardNavigationAsync()

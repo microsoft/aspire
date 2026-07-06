@@ -12,11 +12,26 @@ public class BlazorAssetsTests
     [InlineData("11")]
     public void BlazorWebJs_DoesNotSendUnsupportedKeyboardEventProperties(string runtimeMajorVersion)
     {
-        var blazorWebJs = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "wwwroot", "framework", $"blazor.web.{runtimeMajorVersion}.js"));
+        var blazorWebJsPath = Path.Combine(GetRepoRoot(), "src", "Aspire.Dashboard", "wwwroot", "framework", $"blazor.web.{runtimeMajorVersion}.js");
+        Assert.True(File.Exists(blazorWebJsPath), $"Expected generated Blazor asset at {blazorWebJsPath}");
+
+        var blazorWebJs = File.ReadAllText(blazorWebJsPath);
 
         Assert.Contains("keydown", blazorWebJs, StringComparison.Ordinal);
         Assert.False(
             blazorWebJs.Contains("isComposing", StringComparison.Ordinal),
             "The dashboard Blazor script must not emit KeyboardEvent.isComposing because the server event parser rejects the unknown property.");
+    }
+
+    private static string GetRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "Aspire.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        Assert.NotNull(directory);
+        return directory.FullName;
     }
 }

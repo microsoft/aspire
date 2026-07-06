@@ -72,9 +72,9 @@ public class MobileNavMenuTests : DashboardTestContext
     public async Task CloseMobileNavMenuFromFocusLossAsync_ClosesMenuWithoutRestoringFocus()
     {
         var closeNavMenuCalled = false;
-        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), () => closeNavMenuCalled = true);
+        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), () => closeNavMenuCalled = true, isNavMenuOpen: false);
 
-        await cut.Instance.CloseMobileNavMenuFromFocusLossAsync();
+        await cut.InvokeAsync(cut.Instance.CloseMobileNavMenuFromFocusLossAsync);
 
         Assert.True(closeNavMenuCalled);
         Assert.DoesNotContain(JSInterop.Invocations, invocation => invocation.Identifier == "focusElement");
@@ -83,11 +83,11 @@ public class MobileNavMenuTests : DashboardTestContext
     [Fact]
     public async Task CloseMobileNavMenuFromKeyboardAsync_ClosesMenuAndRestoresFocus()
     {
-        JSInterop.SetupVoid("focusElement", _ => true);
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
         var closeNavMenuCalled = false;
-        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), () => closeNavMenuCalled = true);
+        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), () => closeNavMenuCalled = true, isNavMenuOpen: false);
 
-        await cut.Instance.CloseMobileNavMenuFromKeyboardAsync();
+        await cut.InvokeAsync(cut.Instance.CloseMobileNavMenuFromKeyboardAsync);
 
         Assert.True(closeNavMenuCalled);
         var invocation = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "focusElement");
@@ -95,7 +95,7 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.Equal(MainLayout.NavigationButtonId, argument);
     }
 
-    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, Action? closeNavMenu = null)
+    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, Action? closeNavMenu = null, bool isNavMenuOpen = true)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
@@ -110,7 +110,7 @@ public class MobileNavMenuTests : DashboardTestContext
 
         return RenderComponent<MobileNavMenu>(builder =>
         {
-            builder.Add(p => p.IsNavMenuOpen, true);
+            builder.Add(p => p.IsNavMenuOpen, isNavMenuOpen);
             builder.Add(p => p.IsAIEnabled, false);
             builder.Add(p => p.CloseNavMenu, closeNavMenu ?? (() => { }));
             builder.Add(p => p.LaunchHelpAsync, () => Task.CompletedTask);
