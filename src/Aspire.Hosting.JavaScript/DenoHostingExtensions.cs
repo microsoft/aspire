@@ -539,7 +539,7 @@ public static partial class JavaScriptHostingExtensions
         var args = new List<string> { "deno", "cache" };
         if (resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno))
         {
-            args.AddRange(GetResolutionFlags(deno));
+            args.AddRange(GetResolutionFlags(deno, includeImportMap: deno.Mode != DenoCommandMode.Task));
             args.AddRange(deno.UnstableFlags);
             if (ShouldUseFrozenLock(deno, workingDirectory))
             {

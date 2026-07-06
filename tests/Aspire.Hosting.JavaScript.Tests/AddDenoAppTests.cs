@@ -181,6 +181,29 @@ public class AddDenoAppTests
     }
 
     [Fact]
+    public async Task VerifyDockerfile_TaskCacheUsesTaskResolutionFlags()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "custom.lock"), "{}");
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoTask("start")
+            .WithDenoConfig("deno.json")
+            .WithDenoImportMap("import_map.json")
+            .WithDenoLock("custom.lock")
+            .WithDenoNodeModulesDir("auto")
+            .WithDenoUnstable("sloppy-imports");
+
+        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+
+        await Verify(File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile")));
+    }
+
+    [Fact]
     public async Task VerifyDockerfile_CacheUsesNoLockWhenConfigured()
     {
         using var tempDir = new TestTempDirectory();
