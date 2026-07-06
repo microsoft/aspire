@@ -131,6 +131,16 @@ internal static class IDistributedApplicationBuilderExtensions
             var sslType = multiInputResult.Canceled ? "self-signed" : (multiInputResult.Data?["SSLCertificateType"]?.Value ?? "self-signed");
             var certFiles = multiInputResult.Canceled ? null : multiInputResult.Data?["CertificateFile"]?.Files;
 
+            if (certFiles is { Count: > 0 })
+            {
+                var certTask = await reporter.CreateTaskAsync($"Processing {certFiles.Count} certificate file(s)");
+                foreach (var certFile in certFiles)
+                {
+                    await certTask.UpdateAsync($"Certificate: {certFile.Name}");
+                }
+                await certTask.SucceedAsync($"Processed {certFiles.Count} certificate file(s)");
+            }
+
             // Test Text input
             var envResult = await interactionService.PromptInputAsync(
                 "Environment Configuration",

@@ -51,7 +51,7 @@
     <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="shared/ComputeEnvironmentEndpointResolver.cs" />
     <Compile Include="$(TestsSharedDir)TestInteractionService.cs" LinkBase="shared" />
     <Compile Include="$(TestsSharedDir)TestPipelineActivityReporter.cs" Link="shared/TestPipelineActivityReporter.cs" />
-    <Compile Include="$(TestsSharedDir)InMemoryFileUploadStore.cs" Link="shared/InMemoryFileUploadStore.cs" />
+    <Compile Include="$(TestsSharedDir)TestFileUploadStore.cs" Link="shared/TestFileUploadStore.cs" />
     <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" Link="shared/TestModuleInitalizer.cs" />
     <Compile Include="$(RepoRoot)src\Aspire.Hosting.PostgreSQL\PostgresContainerImageTags.cs" />
     <Compile Include="$(RepoRoot)src\Aspire.Hosting.Redis\RedisContainerImageTags.cs" />
