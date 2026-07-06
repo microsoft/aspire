@@ -920,7 +920,7 @@ suite('AppHost discovery', () => {
             try {
                 await assert.rejects(
                     service.discover(makeWorkspaceFolder(buildPath('workspace'))),
-                    /aspire ls discovery failed: ls --format json --nologo failed\naspire extension get-apphosts fallback failed: extension get-apphosts --nologo failed/);
+                    /aspire ls discovery failed: ls --format json failed\naspire extension get-apphosts fallback failed: extension get-apphosts failed/);
             }
             finally {
                 service.dispose();
