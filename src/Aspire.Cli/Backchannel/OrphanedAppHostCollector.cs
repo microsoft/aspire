@@ -104,7 +104,7 @@ internal sealed class OrphanedAppHostCollector(
             return !ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(
                 cliPid,
                 cliStartedAt.ToUnixTimeSeconds(),
-                ProcessStartTimeHelper.RuntimeStartTimeComparisonTolerance);
+                ProcessStartTimeHelper.CrossProcessIdentityTimeTolerance);
         }
 
         return !ProcessStartTimeHelper.IsProcessRunning(cliPid);

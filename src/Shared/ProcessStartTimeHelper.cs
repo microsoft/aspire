@@ -18,14 +18,9 @@ internal static partial class ProcessStartTimeHelper
     private const int LinuxClockTicksPerSecondConfigName = 2; // _SC_CLK_TCK
 
     /// <summary>
-    /// The tolerance cross-process callers must use when comparing a legacy <see cref="Process.StartTime"/>-based
-    /// start time (see <see cref="IsProcessRunningWithRuntimeStartTime"/>). On Linux that value is reconstructed
-    /// from an independently sampled boot time and can differ by one second between two processes reading the same
-    /// PID, so an exact comparison would produce false "process gone" results and prematurely tear down a live
-    /// process tree. See https://github.com/dotnet/runtime/issues/56546. Centralized here so every orphan/liveness
-    /// watchdog applies the same value; <see cref="TimeSpan"/> cannot be <c>const</c>, so it is <c>static readonly</c>.
+    /// The comparison tolerance cross-process callers must use when comparing process identity time. 
     /// </summary>
-    public static readonly TimeSpan RuntimeStartTimeComparisonTolerance = TimeSpan.FromSeconds(1);
+    public static readonly TimeSpan CrossProcessIdentityTimeTolerance = TimeSpan.FromSeconds(1);
 
     /// <summary>
     /// Gets the current process's start time as whole Unix seconds. This is the value that should be
@@ -180,14 +175,14 @@ internal static partial class ProcessStartTimeHelper
     /// Determines whether a process matches a legacy start time that was produced from
     /// <see cref="Process.StartTime"/>. Cross-process callers should pass a one-second
     /// <paramref name="tolerance"/> because on Linux <see cref="Process.StartTime"/> is reconstructed from
-    /// an independently sampled boot time and can differ by ±1s between processes reading the same PID
-    /// (see https://github.com/dotnet/runtime/issues/56546).
+    /// an independently sampled boot time and can differ by CrossProcessIdentityTimeTolerance 
+    /// between processes reading the same PID.
     /// </summary>
     /// <param name="pid">The process ID to check.</param>
     /// <param name="expectedStartTimeUnixSeconds">The expected legacy start time (whole Unix seconds).</param>
     /// <param name="tolerance">
     /// Allowed difference between the expected and observed start time. Defaults to an exact match; the
-    /// cross-process orphan/liveness callers pass <see cref="RuntimeStartTimeComparisonTolerance"/> to absorb
+    /// cross-process orphan/liveness callers pass <see cref="CrossProcessIdentityTimeTolerance"/> to absorb
     /// the boot-time jitter described above.
     /// </param>
     /// <returns><see langword="true"/> if the process exists and its legacy start time matches; otherwise <see langword="false"/>.</returns>
