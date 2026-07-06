@@ -57,16 +57,45 @@ public class MobileNavMenuTests : DashboardTestContext
     }
 
     [Fact]
-    public void Render_OpenMenu_InitializesKeyboardNavigationWithComponentReferenceOnly()
+    public void Render_OpenMenu_InitializesKeyboardNavigationWithComponentReferenceAndMenuId()
     {
         _ = RenderMobileNavMenu(DashboardUrls.ResourcesUrl());
 
         var invocation = Assert.Single(JSInterop.Invocations, i => i.Identifier == "initializeMobileNavMenuKeyboardNavigation");
-        var argument = Assert.Single(invocation.Arguments);
-        Assert.IsAssignableFrom<DotNetObjectReference<MobileNavMenu>>(argument);
+        Assert.Collection(
+            invocation.Arguments,
+            argument => Assert.IsAssignableFrom<DotNetObjectReference<MobileNavMenu>>(argument),
+            argument => Assert.Equal(MobileNavMenu.MobileNavMenuId, argument));
     }
 
-    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl)
+    [Fact]
+    public async Task CloseMobileNavMenuFromFocusLossAsync_ClosesMenuWithoutRestoringFocus()
+    {
+        var closeNavMenuCalled = false;
+        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), () => closeNavMenuCalled = true);
+
+        await cut.Instance.CloseMobileNavMenuFromFocusLossAsync();
+
+        Assert.True(closeNavMenuCalled);
+        Assert.DoesNotContain(JSInterop.Invocations, invocation => invocation.Identifier == "focusElement");
+    }
+
+    [Fact]
+    public async Task CloseMobileNavMenuFromKeyboardAsync_ClosesMenuAndRestoresFocus()
+    {
+        JSInterop.SetupVoid("focusElement", _ => true);
+        var closeNavMenuCalled = false;
+        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), () => closeNavMenuCalled = true);
+
+        await cut.Instance.CloseMobileNavMenuFromKeyboardAsync();
+
+        Assert.True(closeNavMenuCalled);
+        var invocation = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "focusElement");
+        var argument = Assert.Single(invocation.Arguments);
+        Assert.Equal(MainLayout.NavigationButtonId, argument);
+    }
+
+    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, Action? closeNavMenu = null)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: true));
@@ -83,7 +112,7 @@ public class MobileNavMenuTests : DashboardTestContext
         {
             builder.Add(p => p.IsNavMenuOpen, true);
             builder.Add(p => p.IsAIEnabled, false);
-            builder.Add(p => p.CloseNavMenu, () => { });
+            builder.Add(p => p.CloseNavMenu, closeNavMenu ?? (() => { }));
             builder.Add(p => p.LaunchHelpAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchAIAgentsAsync, () => Task.CompletedTask);
             builder.Add(p => p.IsAgentHelpEnabled, false);

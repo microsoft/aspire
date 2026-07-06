@@ -49,7 +49,7 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
             try
             {
                 _mobileNavMenuReference ??= DotNetObjectReference.Create(this);
-                var keyboardNavigation = await JS.InvokeAsync<IJSObjectReference>("initializeMobileNavMenuKeyboardNavigation", _mobileNavMenuReference);
+                var keyboardNavigation = await JS.InvokeAsync<IJSObjectReference>("initializeMobileNavMenuKeyboardNavigation", _mobileNavMenuReference, MobileNavMenuId);
                 if (_disposed || !IsNavMenuOpen)
                 {
                     await DisposeKeyboardNavigationAsync(keyboardNavigation);
@@ -83,6 +83,13 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
         CloseNavMenu();
         await InvokeAsync(StateHasChanged);
         await JS.InvokeVoidAsync("focusElement", MainLayout.NavigationButtonId);
+    }
+
+    [JSInvokable]
+    public async Task CloseMobileNavMenuFromFocusLossAsync()
+    {
+        CloseNavMenu();
+        await InvokeAsync(StateHasChanged);
     }
 
     private async ValueTask DisposeKeyboardNavigationAsync()

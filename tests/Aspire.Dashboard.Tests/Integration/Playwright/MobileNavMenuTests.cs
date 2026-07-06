@@ -21,6 +21,43 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task MobileNavMenuClosesWhenFocusLeavesMenu()
+    {
+        await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
+        {
+            IgnoreHTTPSErrors = true,
+            BaseURL = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress(),
+            ViewportSize = new ViewportSize { Width = 640, Height = 384 }
+        });
+        var page = await context.NewPageAsync();
+
+        await page.GotoAsync("/").DefaultTimeout();
+        await Assertions.Expect(page.GetByText(MockDashboardClient.TestResource1.DisplayName)).ToBeVisibleAsync();
+
+        await page.Locator(".navigation-button").ClickAsync();
+        var menu = page.Locator("fluent-menu.mobile-nav-menu");
+        await Assertions.Expect(menu).ToBeVisibleAsync();
+
+        await page.Keyboard.PressAsync("Tab");
+        Assert.True(await page.EvaluateAsync<bool>(IsFocusInsideMobileNavMenuScript));
+
+        await page.EvaluateAsync("""
+            () => {
+                const button = document.createElement('button');
+                button.id = 'outside-mobile-nav';
+                button.textContent = 'Outside mobile nav';
+                document.body.appendChild(button);
+            }
+            """);
+        await page.Locator("#outside-mobile-nav").FocusAsync();
+
+        await Assertions.Expect(menu).ToBeHiddenAsync();
+        var activeElementId = await page.EvaluateAsync<string?>("() => document.activeElement?.id");
+        Assert.Equal("outside-mobile-nav", activeElementId);
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task MobileNavFocusRemainsVisibleAtHighZoomViewport()
     {
         await using var context = await PlaywrightFixture.Browser.NewContextAsync(new BrowserNewContextOptions
@@ -146,6 +183,29 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
             }
 
             return null;
+        }
+        """;
+
+    private const string IsFocusInsideMobileNavMenuScript = """
+        () => {
+            const menu = document.querySelector('fluent-menu.mobile-nav-menu');
+            const visited = new Set();
+            let element = document.activeElement;
+            while (element && !visited.has(element)) {
+                visited.add(element);
+                if (element === menu) {
+                    return true;
+                }
+
+                if (element.shadowRoot?.activeElement) {
+                    element = element.shadowRoot.activeElement;
+                    continue;
+                }
+
+                element = element.getRootNode?.().host ?? null;
+            }
+
+            return false;
         }
         """;
 

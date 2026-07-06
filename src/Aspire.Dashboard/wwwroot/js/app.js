@@ -334,7 +334,9 @@ window.focusElement = function (selector, suppressFocusVisible) {
     }
 };
 
-window.initializeMobileNavMenuKeyboardNavigation = function (dotnetHelper) {
+window.initializeMobileNavMenuKeyboardNavigation = function (dotnetHelper, menuId) {
+    const menu = document.getElementById(menuId);
+
     const keydownListener = function (event) {
         if (event.key === "Escape") {
             event.preventDefault();
@@ -342,18 +344,28 @@ window.initializeMobileNavMenuKeyboardNavigation = function (dotnetHelper) {
         }
     };
 
+    const focusoutListener = function (event) {
+        if (!menu.contains(event.relatedTarget)) {
+            dotnetHelper.invokeMethodAsync("CloseMobileNavMenuFromFocusLossAsync");
+        }
+    };
+
     // Keep Escape-to-close available as soon as the menu opens, including while
     // focus is still on the navigation button that opened this inline menu.
-    // Do not trap Tab: this menu is inline page navigation, not a modal dialog.
+    // Do not trap Tab: focusout closes the menu after focus naturally leaves it.
     document.addEventListener("keydown", keydownListener, true);
+    menu?.addEventListener("focusout", focusoutListener);
 
     return {
-        keydownListener
+        keydownListener,
+        focusoutListener,
+        menu
     };
 };
 
 window.disposeMobileNavMenuKeyboardNavigation = function (obj) {
     document.removeEventListener("keydown", obj.keydownListener, true);
+    obj.menu?.removeEventListener("focusout", obj.focusoutListener);
 };
 
 window.getWindowDimensions = function() {
