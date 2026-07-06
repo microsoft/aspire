@@ -168,8 +168,18 @@ internal static partial class ProcessStartTimeHelper
 
     /// <summary>
     /// Determines whether a process matches a legacy start time that was produced from
-    /// <see cref="Process.StartTime"/>.
+    /// <see cref="Process.StartTime"/>. Cross-process callers should pass a one-second
+    /// <paramref name="tolerance"/> because on Linux <see cref="Process.StartTime"/> is reconstructed from
+    /// an independently sampled boot time and can differ by ±1s between processes reading the same PID
+    /// (see https://github.com/dotnet/runtime/issues/56546).
     /// </summary>
+    /// <param name="pid">The process ID to check.</param>
+    /// <param name="expectedStartTimeUnixSeconds">The expected legacy start time (whole Unix seconds).</param>
+    /// <param name="tolerance">
+    /// Allowed difference between the expected and observed start time. Defaults to an exact match; the
+    /// cross-process orphan/liveness callers pass one second to absorb the boot-time jitter described above.
+    /// </param>
+    /// <returns><see langword="true"/> if the process exists and its legacy start time matches; otherwise <see langword="false"/>.</returns>
     public static bool IsProcessRunningWithRuntimeStartTime(int pid, long expectedStartTimeUnixSeconds, TimeSpan? tolerance = null)
     {
         try
@@ -216,9 +226,7 @@ internal static partial class ProcessStartTimeHelper
     /// <param name="actualStartTimeUnixSeconds">The observed start time, in whole Unix seconds.</param>
     /// <param name="tolerance">
     /// Optional allowed difference between the two values. Defaults to an exact match. Callers should only
-    /// opt into a non-zero tolerance when they must absorb cross-process jitter in the OS-reported start
-    /// time. The normal process-liveness paths should not need this because Linux start times are read
-    /// from <c>/proc</c> so both sides use the same clock domain.
+    /// opt into a non-zero tolerance when they must absorb cross-process jitter in the OS-reported start time. 
     /// </param>
     public static bool AreClose(long expectedStartTimeUnixSeconds, long actualStartTimeUnixSeconds, TimeSpan? tolerance = null)
     {
