@@ -375,6 +375,60 @@ suite('Browser Debugger Tests', () => {
 
         aspireDebugSession.dispose();
     });
+
+    test('waits for browser debug shutdown before cleaning up a session that starts after disposal', async () => {
+        const rmStub = sinon.stub(fs.promises, 'rm').resolves();
+        const stopDebugging = createDeferred<void>();
+        let startDebugSession: ((session: vscode.DebugSession) => void) | undefined;
+        let aspireDebugSession: AspireDebugSession | undefined;
+        sinon.stub(vscode.debug, 'onDidStartDebugSession').callsFake(listener => {
+            startDebugSession = listener;
+            return { dispose: () => { } };
+        });
+        sinon.stub(vscode.debug, 'startDebugging').callsFake(async (_folder, configuration) => {
+            assert.ok(startDebugSession);
+            aspireDebugSession?.dispose();
+            startDebugSession(createDebugSession('browser-session-id', configuration as vscode.DebugConfiguration));
+            return true;
+        });
+        sinon.stub(vscode.debug, 'stopDebugging').returns(stopDebugging.promise);
+
+        const dcpServer = {
+            sendNotification: sinon.stub(),
+            takeDebugSessionAggregateStats: sinon.stub().returns(undefined)
+        };
+        const parentDebugSession = createDebugSession('aspire-session-id', {
+            type: 'aspire',
+            request: 'launch',
+            name: 'Aspire',
+            program: '/workspace/apphost.cs',
+        });
+        const terminalProvider = {
+            isDebugConfigEnvironmentLoggingEnabled: () => false,
+        };
+        aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, dcpServer as any, terminalProvider as any, () => { });
+        const debugConfig = createDebugConfig();
+        await configure({ type: 'browser', url: 'https://localhost:5001' }, debugConfig);
+
+        let resolved = false;
+        const resourceDebugSessionPromise = aspireDebugSession.startAndGetDebugSession(debugConfig).then(result => {
+            resolved = true;
+            return result;
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+
+        assert.strictEqual(resolved, false);
+        assert.strictEqual(dcpServer.sendNotification.called, false);
+        assert.strictEqual(rmStub.called, false);
+
+        stopDebugging.resolve();
+        const resourceDebugSession = await resourceDebugSessionPromise;
+
+        assert.strictEqual(resourceDebugSession, undefined);
+        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+        assert.strictEqual(rmStub.calledOnceWithExactly(path.join(os.tmpdir(), 'aspire-vscode-browser-debug', 'run-1'), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }), true);
+    });
 });
 
 async function configure(launchConfig: BrowserLaunchConfiguration, debugConfig: AspireResourceExtendedDebugConfiguration): Promise<void> {
@@ -410,4 +464,15 @@ function createDebugSession(id: string, configuration: vscode.DebugConfiguration
         customRequest: sinon.stub(),
         getDebugProtocolBreakpoint: sinon.stub(),
     };
+}
+
+function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T | PromiseLike<T>) => void; reject: (reason?: unknown) => void } {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((promiseResolve, promiseReject) => {
+        resolve = promiseResolve;
+        reject = promiseReject;
+    });
+
+    return { promise, resolve, reject };
 }

@@ -595,30 +595,36 @@ export class AspireDebugSession implements vscode.DebugAdapter {
             }
             cleanupRun(debugConfig.runId);
           };
-          const stopDebugSession = () => {
+          const stopDebugSession = async () => {
             const stopDebuggingTask = vscode.debug.stopDebugging(session);
             if (dcpIdForSessionTermination) {
-              void stopDebuggingTask.then(finishSession, error => {
+              try {
+                await stopDebuggingTask;
+              }
+              catch (error) {
                 extensionLogOutputChannel.warn(`Failed to stop debug session '${session.name}': ${error instanceof Error ? error.message : String(error)}`);
-                finishSession();
-              });
+              }
+
+              finishSession();
             }
             else {
+              void stopDebuggingTask.then(undefined, error => {
+                extensionLogOutputChannel.warn(`Failed to stop debug session '${session.name}': ${error instanceof Error ? error.message : String(error)}`);
+              });
               finishSession();
             }
           };
 
           if (this._disposed) {
             extensionLogOutputChannel.info(`Stopping debug session that started after Aspire session disposal: ${session.name} (run id: ${session.configuration.runId})`);
-            stopDebugSession();
             resolved = true;
-            resolve(undefined);
+            void stopDebugSession().then(() => resolve(undefined));
             return;
           }
 
           const disposalFunction = () => {
             extensionLogOutputChannel.info(`Stopping debug session: ${session.name} (run id: ${session.configuration.runId})`);
-            stopDebugSession();
+            void stopDebugSession();
           };
 
           const vsCodeDebugSession: AspireResourceDebugSession = {
