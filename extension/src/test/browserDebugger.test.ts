@@ -71,6 +71,22 @@ suite('Browser Debugger Tests', () => {
         ]);
     });
 
+    test('uses the registered cleanup run id for the browser profile directory', async () => {
+        const rmStub = sinon.stub(fs.promises, 'rm').resolves();
+        const debugConfig = createDebugConfig();
+        debugConfig.runId = 'custom-run-id';
+
+        await configure({ type: 'browser', url: 'https://localhost:5001' }, debugConfig);
+
+        assert.strictEqual(debugConfig.userDataDir, path.join(os.tmpdir(), 'aspire-vscode-browser-debug', 'custom-run-id'));
+
+        cleanupRun('run-1');
+        assert.strictEqual(rmStub.called, false);
+
+        cleanupRun('custom-run-id');
+        assert.strictEqual(rmStub.calledOnceWithExactly(path.join(os.tmpdir(), 'aspire-vscode-browser-debug', 'custom-run-id'), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }), true);
+    });
+
     test('maps Firefox to the VS Code Firefox debug adapter', async () => {
         const debugConfig = createDebugConfig();
 
