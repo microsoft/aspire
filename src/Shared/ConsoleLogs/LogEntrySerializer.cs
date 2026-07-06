@@ -70,7 +70,9 @@ internal static class LogEntrySerializer
             writer.Write(',');
             writer.Write(EscapeCsvField(timestamp));
             writer.Write(',');
-            writer.Write(EscapeCsvField(entry.GetStrippedLogContent() ?? string.Empty));
+            // Use the non-caching strip path: a one-off export shouldn't permanently populate the
+            // per-entry stripped-content cache for every retained row.
+            writer.Write(EscapeCsvField(entry.GetStrippedLogContentUncached() ?? string.Empty));
             // CSV (RFC 4180) records are separated by CRLF.
             writer.Write("\r\n");
         }
