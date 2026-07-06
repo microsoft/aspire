@@ -12,13 +12,14 @@
             var highlightedCommand = _highlightedCommands[i];
             var highlightedCommandTooltip = !string.IsNullOrEmpty(highlightedCommand.GetDisplayDescription()) ? highlightedCommand.GetDisplayDescription()! : highlightedCommand.GetDisplayName();
 
-            <FluentButton Appearance="Appearance.Lightweight"
-                          Title="@highlightedCommandTooltip"
+            <FluentButton Id="@GetHighlightedCommandButtonId(i)"
+                          Appearance="Appearance.Lightweight"
                           aria-label="@highlightedCommandTooltip"
                           OnClick="@(() => CommandSelected.InvokeAsync(highlightedCommand))"
                           Disabled="@(highlightedCommand.State == CommandViewModelState.Disabled || IsCommandExecuting(Resource, highlightedCommand))">
                 <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(highlightedCommand.IconName, highlightedCommand.IconVariant)" Width="16px" />
             </FluentButton>
+            <AspireTooltip Anchor="@GetHighlightedCommandButtonId(i)" Text="@highlightedCommandTooltip" />
         }
         else
         {
@@ -27,12 +28,13 @@
     }
 
     var consoleLogsTooltip = Loc[nameof(Resources.ResourceActionConsoleLogsText)].Value;
-    <FluentButton Appearance="Appearance.Lightweight"
-                  Title="@consoleLogsTooltip"
+    <FluentButton Id="@_consoleLogsButtonId"
+                  Appearance="Appearance.Lightweight"
                   aria-label="@consoleLogsTooltip"
                   OnClick="@(() => NavigationManager.NavigateTo(Aspire.Dashboard.Utils.DashboardUrls.ConsoleLogsUrl(resource: ResourceViewModel.GetResourceName(Resource, ResourceByName))))">
         <FluentIcon Value="@s_consoleLogsIcon" />
     </FluentButton>
+    <AspireTooltip Anchor="@_consoleLogsButtonId" Text="@consoleLogsTooltip" />
 
     <FluentDivider Class="action-divider" Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
 }
@@ -41,5 +43,6 @@
                   Icon="@(new Icons.Regular.Size20.MoreHorizontal())"
                   Items="@_menuItems"
                   @ref="_menuButton"
+                  MenuButtonId="@_menuButtonId"
                   Title="@ControlLoc[nameof(ControlsStrings.ActionsButtonText)]"
-                  UseTooltip="false" />
+                  UseTooltip="true" />

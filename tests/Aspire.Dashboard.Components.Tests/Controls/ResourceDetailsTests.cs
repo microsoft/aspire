@@ -19,6 +19,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
+using ResourcesDialogs = Aspire.Dashboard.Resources.Dialogs;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
 
@@ -414,9 +415,15 @@ public class ResourceDetailsTests : DashboardTestContext
 
         var resourcesLoc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.Resources>>();
         var controlsLoc = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>();
+        var dialogsLoc = Services.GetRequiredService<IStringLocalizer<ResourcesDialogs>>();
 
         AssertTooltip(cut, resourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)].Value);
-        Assert.NotNull(cut.Find($"fluent-button[aria-label='{controlsLoc[nameof(ControlsStrings.GridValueMaskShowValue)].Value}']"));
+        AssertTooltip(cut, controlsLoc[nameof(ControlsStrings.GridValueMaskShowValue)].Value);
+        AssertTooltip(cut, dialogsLoc[nameof(ResourcesDialogs.OpenInTextVisualizer)].Value);
+
+        Assert.Null(cut.Find($"fluent-button[aria-label='{resourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)].Value}']").GetAttribute("title"));
+        Assert.Null(cut.Find($"fluent-button[aria-label='{controlsLoc[nameof(ControlsStrings.GridValueMaskShowValue)].Value}']").GetAttribute("title"));
+        Assert.Null(cut.Find($"fluent-button[aria-label='{dialogsLoc[nameof(ResourcesDialogs.OpenInTextVisualizer)].Value}']").GetAttribute("title"));
     }
 
     [Fact]

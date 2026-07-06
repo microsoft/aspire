@@ -56,12 +56,22 @@ public class ResourceActionsTests : DashboardTestContext
         var resourcesLoc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.Resources>>();
         var controlsLoc = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>();
 
-        Assert.NotNull(cut.Find("fluent-button[aria-label='Restart the resource']"));
-        Assert.NotNull(cut.Find("fluent-button[title='Restart the resource']"));
-        Assert.NotNull(cut.Find($"fluent-button[aria-label='{resourcesLoc[nameof(Dashboard.Resources.Resources.ResourceActionConsoleLogsText)].Value}']"));
-        Assert.NotNull(cut.Find($"fluent-button[title='{resourcesLoc[nameof(Dashboard.Resources.Resources.ResourceActionConsoleLogsText)].Value}']"));
-        Assert.NotNull(cut.Find($"fluent-button[aria-label='{controlsLoc[nameof(ControlsStrings.ActionsButtonText)].Value}']"));
-        Assert.NotNull(cut.Find($"fluent-button[title='{controlsLoc[nameof(ControlsStrings.ActionsButtonText)].Value}']"));
-        Assert.Empty(cut.FindComponents<AspireTooltip>());
+        var restartButton = cut.Find("fluent-button[aria-label='Restart the resource']");
+        var consoleLogsButton = cut.Find($"fluent-button[aria-label='{resourcesLoc[nameof(Dashboard.Resources.Resources.ResourceActionConsoleLogsText)].Value}']");
+        var actionsButton = cut.Find($"fluent-button[aria-label='{controlsLoc[nameof(ControlsStrings.ActionsButtonText)].Value}']");
+
+        Assert.Null(restartButton.GetAttribute("title"));
+        Assert.Null(consoleLogsButton.GetAttribute("title"));
+        Assert.Null(actionsButton.GetAttribute("title"));
+
+        AssertTooltip(cut, restartButton.Id, "Restart the resource");
+        AssertTooltip(cut, consoleLogsButton.Id, resourcesLoc[nameof(Dashboard.Resources.Resources.ResourceActionConsoleLogsText)].Value);
+        AssertTooltip(cut, actionsButton.Id, controlsLoc[nameof(ControlsStrings.ActionsButtonText)].Value);
+    }
+
+    private static void AssertTooltip(IRenderedFragment cut, string? anchor, string text)
+    {
+        Assert.NotNull(anchor);
+        Assert.Contains(cut.FindComponents<AspireTooltip>(), tooltip => tooltip.Instance.Anchor == anchor && tooltip.Instance.Text == text);
     }
 }

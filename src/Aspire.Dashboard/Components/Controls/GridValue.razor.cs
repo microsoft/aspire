@@ -105,6 +105,8 @@ public partial class GridValue
     private readonly Icon _maskIcon = new Icons.Regular.Size16.EyeOff();
     private readonly Icon _unmaskIcon = new Icons.Regular.Size16.Eye();
     private readonly string _cellTextId = $"celltext-{Guid.NewGuid():N}";
+    private readonly string _openTextVisualizerButtonId = $"open-text-visualizer-{Guid.NewGuid():N}";
+    private readonly string _maskButtonId = $"grid-value-mask-{Guid.NewGuid():N}";
     private string? _value;
     private string? _formattedValue;
     private Dictionary<string, object>? _componentParameters;

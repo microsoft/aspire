@@ -15,6 +15,9 @@ public partial class ResourceActions : ComponentBase
 {
     private static readonly Icon s_consoleLogsIcon = new Icons.Regular.Size16.SlideText();
 
+    private readonly string _highlightedCommandButtonIdPrefix = $"resource-actions-highlighted-command-{Guid.NewGuid():N}";
+    private readonly string _consoleLogsButtonId = $"resource-actions-console-logs-{Guid.NewGuid():N}";
+    private readonly string _menuButtonId = $"resource-actions-menu-{Guid.NewGuid():N}";
     private AspireMenuButton? _menuButton;
 
     [Inject]
@@ -78,4 +81,6 @@ public partial class ResourceActions : ComponentBase
             _highlightedCommands.AddRange(Resource.Commands.Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden).Take(MaxHighlightedCount));
         }
     }
+
+    private string GetHighlightedCommandButtonId(int index) => $"{_highlightedCommandButtonIdPrefix}-{index}";
 }

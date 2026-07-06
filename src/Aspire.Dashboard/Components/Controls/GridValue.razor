@@ -50,11 +50,13 @@
 
         <span class="defaultHidden">
             <FluentButton Appearance="Appearance.Lightweight"
+                          Id="@_openTextVisualizerButtonId"
                           Disabled="@(ValueToVisualize is null && Value is null)"
                           OnClick="OpenTextVisualizerAsync"
                           aria-label="@DialogsLoc[nameof(Dialogs.OpenInTextVisualizer)]">
                 <FluentIcon Icon="Icons.Regular.Size16.SlideSearch" />
             </FluentButton>
+            <AspireTooltip Anchor="@_openTextVisualizerButtonId" Text="@DialogsLoc[nameof(Dialogs.OpenInTextVisualizer)].Value" />
         </span>
 
         @if (ContentInButtonArea is not null)
@@ -67,11 +69,12 @@
             var maskButtonTooltip = (IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)]).Value;
 
             <FluentButton Appearance="Appearance.Lightweight"
+                          Id="@_maskButtonId"
                           IconEnd="@(IsMasked ? _unmaskIcon : _maskIcon)"
-                          Title="@maskButtonTooltip"
                           OnClick="ToggleMaskStateAsync"
                           aria-label="@maskButtonTooltip"
                           Class="grid-value-mask-button" />
+            <AspireTooltip Anchor="@_maskButtonId" Text="@maskButtonTooltip" />
         }
 
     </div>
