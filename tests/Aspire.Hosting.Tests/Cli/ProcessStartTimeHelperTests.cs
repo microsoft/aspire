@@ -94,6 +94,49 @@ public class ProcessStartTimeHelperTests
         Assert.Equal("/proc", ProcessStartTimeHelper.LinuxProcRoot);
     }
 
+    [Fact]
+    public void GetCurrentProcessStartTime_OnLinux_IsBootRelativeWithoutBtime()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Boot-relative /proc start-tick identity is Linux-specific.");
+
+        // The stable Linux identity is boot-relative: field 22 of /proc/<pid>/stat (start ticks since boot)
+        // divided by _SC_CLK_TCK, with NO /proc/stat btime added. Adding btime would re-express the value as
+        // wall-clock time and reintroduce the clock-sync drift the identity guard must survive, so assert the
+        // public value equals the pure boot-relative computation. Under the old btime-based code this would
+        // instead be a ~1.7-billion Unix-epoch value, so this test also guards against regressing to it.
+        var startTicks = ProcessStartTimeHelper.TryGetLinuxProcessStartTicks(Environment.ProcessId, ProcessStartTimeHelper.LinuxProcRoot);
+        Assert.NotNull(startTicks);
+
+        var expectedSecondsSinceBoot = (long)(startTicks.Value / (ulong)ProcessStartTimeHelper.GetLinuxClockTicksPerSecond());
+        Assert.Equal(expectedSecondsSinceBoot, ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds());
+    }
+
+    [Fact]
+    public void TryGetLinuxProcessStartTicks_ReadsField22FromProcRoot()
+    {
+        // Exercise the shared /proc reader against a synthetic proc root so it runs on every OS (the real
+        // /proc only exists on Linux). This is the same reader (and procRoot seam) DcpProcessMonitor uses
+        // when it points at HOST_PROC for host-process inspection.
+        using var procRoot = new TestTempDirectory();
+        const int pid = 4242;
+        const ulong expectedStartTicks = 9876543UL;
+
+        var statDirectory = Directory.CreateDirectory(Path.Combine(procRoot.Path, pid.ToString(CultureInfo.InvariantCulture)));
+        var fields = Enumerable.Range(0, 20).Select(static i => i.ToString(CultureInfo.InvariantCulture)).ToArray();
+        fields[0] = "S";
+        fields[19] = expectedStartTicks.ToString(CultureInfo.InvariantCulture);
+        File.WriteAllText(Path.Combine(statDirectory.FullName, "stat"), $"{pid} (proc name) {string.Join(' ', fields)}");
+
+        Assert.Equal(expectedStartTicks, ProcessStartTimeHelper.TryGetLinuxProcessStartTicks(pid, procRoot.Path));
+    }
+
+    [Fact]
+    public void TryGetLinuxProcessStartTicks_MissingStatFile_ReturnsNull()
+    {
+        using var procRoot = new TestTempDirectory();
+        Assert.Null(ProcessStartTimeHelper.TryGetLinuxProcessStartTicks(999999, procRoot.Path));
+    }
+
     [Theory]
     [InlineData("12345 missing-close-paren S 1 2 3")]
     [InlineData("12345 (dotnet) S 1 2 3")]

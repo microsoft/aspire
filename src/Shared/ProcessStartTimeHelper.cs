@@ -77,10 +77,15 @@ internal static partial class ProcessStartTimeHelper
     /// Gets the start time of the process with the given <paramref name="pid"/>.
     /// </summary>
     /// <remarks>
-    /// On Linux this deliberately uses <c>/proc</c> start ticks plus <c>btime</c> instead of
-    /// <see cref="Process.StartTime"/>. The runtime computes <see cref="Process.StartTime"/> from an
-    /// independently sampled boot time, so two processes can observe adjacent Unix seconds for the same
-    /// PID near a second boundary.
+    /// On Linux this deliberately uses boot-relative <c>/proc</c> start ticks (matching
+    /// <c>DcpProcessMonitor.GetLinuxProcessIdentityTimestamp</c>) instead of <see cref="Process.StartTime"/>
+    /// or any wall-clock time. The returned value is an opaque <em>seconds-since-boot</em> identity token,
+    /// not a real calendar time: field 22 of <c>/proc/&lt;pid&gt;/stat</c> is fixed at process start relative
+    /// to boot, so every process on the machine computes the same value for a given PID even after the wall
+    /// clock is stepped (NTP correction, container host clock sync). Using <see cref="Process.StartTime"/>
+    /// (which the runtime derives from an independently sampled boot time) or adding <c>/proc/stat</c>
+    /// <c>btime</c> (which itself shifts with wall-clock adjustments) would re-introduce that drift and let a
+    /// parent and child disagree about the same PID's start time, defeating the PID-reuse guard.
     /// </remarks>
     /// <returns>The start time, or <see langword="null"/> when the process cannot be inspected (already exited, privileged, etc.).</returns>
     public static DateTimeOffset? TryGetProcessStartTime(int pid)
@@ -237,7 +242,38 @@ internal static partial class ProcessStartTimeHelper
         // These identities are always stamped with PIDs from the current process namespace.
         // Do not honor HOST_PROC here: that is only for DCP host-process inspection, and
         // mixing local PIDs with host /proc data can make orphan detection act on the wrong process.
-        var procRoot = LinuxProcRoot;
+        if (TryGetLinuxProcessStartTicks(pid, LinuxProcRoot) is not { } startTicks)
+        {
+            return null;
+        }
+
+        // Boot-relative seconds only. startTicks is field 22 of /proc/<pid>/stat, fixed at process start
+        // relative to boot, so this is identical for every reader regardless of any later wall-clock step.
+        // We intentionally do NOT add /proc/stat btime: btime re-expresses this as wall-clock time and
+        // itself shifts on clock sync, which would re-introduce the drift this guards against. The result
+        // is an opaque same-machine identity token (seconds since boot), not a real calendar time. This
+        // mirrors DcpProcessMonitor.GetLinuxProcessIdentityTimestamp so every Aspire watchdog computes the
+        // same value for a given PID.
+        var startTimeSecondsSinceBoot = (long)(startTicks / (ulong)GetLinuxClockTicksPerSecond());
+        return DateTimeOffset.FromUnixTimeSeconds(startTimeSecondsSinceBoot);
+    }
+
+    /// <summary>
+    /// Reads the raw start time of the process with the given <paramref name="pid"/> as clock ticks since
+    /// boot (field 22 of <c>/proc/&lt;pid&gt;/stat</c>). This is the drift-immune building block for Linux
+    /// process identity: the value is fixed at process start relative to boot, so every reader on the
+    /// machine observes the same number even after a wall-clock adjustment. Divide by
+    /// <see cref="GetLinuxClockTicksPerSecond"/> to obtain seconds since boot.
+    /// </summary>
+    /// <param name="pid">The process to inspect.</param>
+    /// <param name="procRoot">
+    /// The <c>/proc</c> filesystem root to read from. Orphan/liveness detection must pass
+    /// <see cref="LinuxProcRoot"/> (the current namespace's <c>/proc</c>); only DCP host-process inspection
+    /// passes <c>HOST_PROC</c>.
+    /// </param>
+    /// <returns>The start ticks, or <see langword="null"/> when the stat file cannot be read or parsed.</returns>
+    internal static ulong? TryGetLinuxProcessStartTicks(int pid, string procRoot)
+    {
         var statPath = Path.Combine(procRoot, pid.ToString(CultureInfo.InvariantCulture), "stat");
 
         string contents;
@@ -250,14 +286,7 @@ internal static partial class ProcessStartTimeHelper
             return null;
         }
 
-        if (TryParseLinuxStatStartTicks(contents) is not { } startTicks ||
-            TryGetLinuxBootTimeUnixSeconds(procRoot) is not { } bootTimeUnixSeconds)
-        {
-            return null;
-        }
-
-        var startTimeUnixSeconds = bootTimeUnixSeconds + (long)(startTicks / (ulong)GetLinuxClockTicksPerSecond());
-        return DateTimeOffset.FromUnixTimeSeconds(startTimeUnixSeconds);
+        return TryParseLinuxStatStartTicks(contents);
     }
 
     internal static ulong? TryParseLinuxStatStartTicks(string contents)
@@ -278,31 +307,12 @@ internal static partial class ProcessStartTimeHelper
             : null;
     }
 
-    private static long? TryGetLinuxBootTimeUnixSeconds(string procRoot)
-    {
-        var statPath = Path.Combine(procRoot, "stat");
-        try
-        {
-            foreach (var line in File.ReadLines(statPath))
-            {
-                // /proc/stat contains a boot-time line shaped as:
-                //   btime 1719876543
-                if (line.StartsWith("btime ", StringComparison.Ordinal) &&
-                    long.TryParse(line["btime ".Length..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var bootTimeUnixSeconds))
-                {
-                    return bootTimeUnixSeconds;
-                }
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return null;
-        }
-
-        return null;
-    }
-
-    private static int GetLinuxClockTicksPerSecond()
+    /// <summary>
+    /// Gets the Linux clock resolution (<c>_SC_CLK_TCK</c>) used to convert <c>/proc</c> start ticks to
+    /// seconds. Shared so every Linux process-identity computation (including <c>DcpProcessMonitor</c>) uses
+    /// the same value.
+    /// </summary>
+    internal static int GetLinuxClockTicksPerSecond()
     {
         var result = sysconf(LinuxClockTicksPerSecondConfigName);
         return result > 0 ? (int)result : DefaultLinuxClockTicksPerSecond;
