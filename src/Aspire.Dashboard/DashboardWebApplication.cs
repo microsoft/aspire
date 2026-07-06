@@ -349,6 +349,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         builder.Services.AddScoped<DimensionManager>();
         builder.Services.AddScoped<DashboardDialogService>();
+        builder.Services.AddSingleton<IFeedbackDiagnosticProcessRunner, FeedbackDiagnosticProcessRunner>();
+        builder.Services.AddScoped<IDashboardFeedbackDiagnosticProvider, DashboardFeedbackDiagnosticProvider>();
         builder.Services.AddScoped<ResourceMenuBuilder>();
         builder.Services.AddScoped<StructuredLogMenuBuilder>();
         builder.Services.AddScoped<SpanMenuBuilder>();

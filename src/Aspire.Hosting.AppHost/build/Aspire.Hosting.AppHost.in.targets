@@ -401,6 +401,18 @@ namespace Projects%3B
     </ItemGroup>
   </Target>
 
+  <!-- Embed the Aspire.AppHost.Sdk version into the AppHost assembly so the running AppHost can
+       report it (for example in dashboard feedback diagnostics) without re-evaluating MSBuild.
+       AspireHostingSDKVersion is the SDK's own version, set by the Aspire.AppHost.Sdk props. -->
+  <Target Name="EmbedAppHostSdkVersion" BeforeTargets="GetAssemblyAttributes" Condition=" '$(IsAspireHost)' == 'true' and '$(AspireHostingSDKVersion)' != '' ">
+    <ItemGroup>
+      <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+        <_Parameter1>Aspire.AppHost.Sdk.Version</_Parameter1>
+        <_Parameter2>$(AspireHostingSDKVersion)</_Parameter2>
+      </AssemblyAttribute>
+    </ItemGroup>
+  </Target>
+
   <PropertyGroup>
     <AspirePublisher Condition="'$(AspirePublisher)' == ''">manifest</AspirePublisher>
     <AspireManifestPublishOutputPath Condition="'$(AspireManifestPublishOutputPath)' == ''">$(_AspireIntermediatePath)</AspireManifestPublishOutputPath>

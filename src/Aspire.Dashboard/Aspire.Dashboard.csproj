@@ -322,6 +322,7 @@
     <Compile Include="$(SharedDir)InteractionHelpers.cs" Link="Utils\InteractionHelpers.cs" />
     <Compile Include="$(SharedDir)Model\Serialization\ResourceJson.cs" Link="Model\Serialization\ResourceJson.cs" />
     <Compile Include="$(SharedDir)DashboardUrls.cs" Link="Utils\DashboardUrls.cs" />
+    <Compile Include="$(SharedDir)FeedbackIssueUrlBuilder.cs" Link="Utils\FeedbackIssueUrlBuilder.cs" />
     <Compile Include="$(SharedDir)Otlp\OtlpHelpers.cs" Link="Otlp\Model\OtlpHelpersShared.cs" />
     <Compile Include="$(SharedDir)Otlp\IOtlpResource.cs" Link="Otlp\Model\IOtlpResource.cs" />
     <Compile Include="$(SharedDir)Otlp\Serialization\OtlpCommonJson.cs" Link="Otlp\Model\Serialization\OtlpCommonJson.cs" />

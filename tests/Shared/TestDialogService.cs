@@ -23,8 +23,17 @@ public class TestDialogService : IDialogService
     public event Action<IDialogReference, DialogResult>? OnDialogCloseRequested;
 #pragma warning restore CS0067
 
-    public Task CloseAsync(IDialogReference dialog) => throw new NotImplementedException();
-    public Task CloseAsync(IDialogReference dialog, DialogResult result) => throw new NotImplementedException();
+    public Task CloseAsync(IDialogReference dialog)
+    {
+        OnDialogCloseRequested?.Invoke(dialog, DialogResult.Cancel());
+        return Task.CompletedTask;
+    }
+
+    public Task CloseAsync(IDialogReference dialog, DialogResult result)
+    {
+        OnDialogCloseRequested?.Invoke(dialog, result);
+        return Task.CompletedTask;
+    }
     public EventCallback<DialogResult> CreateDialogCallback(object receiver, Func<DialogResult, Task> callback) => throw new NotImplementedException();
     public void ShowConfirmation(object receiver, Func<DialogResult, Task> callback, string message, string primaryText = "Yes", string secondaryText = "No", string? title = null) => throw new NotImplementedException();
     public Task<IDialogReference> ShowConfirmationAsync(object receiver, Func<DialogResult, Task> callback, string message, string primaryText = "Yes", string secondaryText = "No", string? title = null) => throw new NotImplementedException();

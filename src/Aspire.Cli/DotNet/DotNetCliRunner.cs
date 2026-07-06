@@ -728,40 +728,12 @@ internal sealed class DotNetCliRunner(
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
-        var isSingleFileAppHost = projectFile.Name.Equals("apphost.cs", StringComparison.OrdinalIgnoreCase);
-
-        // If we are a single file app host then we use the build command instead of msbuild command.
-        var cliArgsList = new List<string> { isSingleFileAppHost ? "build" : "msbuild" };
-
-        if (properties.Length > 0)
-        {
-            // HACK: MSBuildVersion here because if you ever invoke `dotnet msbuild -getproperty with just a single
-            //       property it will not be returned as JSON. I've reported this as a problem to MSBuild but obviously
-            //       we need to work around it:
-            //
-            //       https://github.com/dotnet/msbuild/issues/12490
-            //
-            cliArgsList.Add($"-getProperty:MSBuildVersion,{string.Join(",", properties)}");
-        }
-
-        if (items.Length > 0)
-        {
-            cliArgsList.Add($"-getItem:{string.Join(",", items)}");
-        }
-
-        if (targets.Length > 0)
-        {
-            // Request MSBuild to actually run these targets before evaluating -getProperty / -getItem.
-            // Some run-related properties (RunCommand, RunArguments, RunWorkingDirectory) are only
-            // populated after the ComputeRunArguments target executes, so the direct-launch path
-            // matches what `dotnet run` would have produced.
-            // https://learn.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference#switches
-            cliArgsList.Add($"-t:{string.Join(";", targets)}");
-        }
-
-        cliArgsList.Add(projectFile.FullName);
-
-        string[] cliArgs = [.. cliArgsList];
+        // Argument construction (driver selection plus the MSBuild evaluation switches, including the
+        // MSBuildVersion -getProperty workaround) was extracted to the shared DotNetProjectProbe helper
+        // in src/Shared so it is isolated from this runner's process plumbing and can be reused/tested
+        // on its own. Only the CLI runs this probe; the dashboard's feedback diagnostics don't probe
+        // MSBuild, they read the AppHost-forwarded DASHBOARD__APPHOST__INFO value instead.
+        string[] cliArgs = [.. DotNetProjectProbe.BuildItemsAndPropertiesArguments(projectFile.FullName, items, properties, targets)];
         // These probes parse dotnet/msbuild stdout as machine-readable JSON. Disable
         // telemetry and workload-update notifications for every property/item probe so
         // unrelated first-run or workload messages cannot corrupt the JSON stream. This

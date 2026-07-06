@@ -37,6 +37,116 @@
         <target state="new">Notifications</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedback">
+        <source>Provide feedback</source>
+        <target state="new">Provide feedback</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackAdditionalContextLabel">
+        <source>Additional context</source>
+        <target state="new">Additional context</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackAspireDoctorOutputLabel">
+        <source>Aspire doctor output</source>
+        <target state="new">Aspire doctor output</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackBug">
+        <source>Report a bug</source>
+        <target state="new">Report a bug</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackBugDescriptionLabel">
+        <source>What happened?</source>
+        <target state="new">What happened?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackContextAppHost">
+        <source>AppHost: {0}</source>
+        <target state="new">AppHost: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackContextAspireVersion">
+        <source>Aspire version: {0}</source>
+        <target state="new">Aspire version: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackContextDashboardRoute">
+        <source>Dashboard route: /{0}</source>
+        <target state="new">Dashboard route: /{0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackContextOperatingSystem">
+        <source>Operating system: {0}</source>
+        <target state="new">Operating system: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackContextPostedFrom">
+        <source>Posted from: Dashboard</source>
+        <target state="new">Posted from: Dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackDetailsHeading">
+        <source>Additional details</source>
+        <target state="new">Additional details</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackDoctorCaptureExitCode">
+        <source>Could not capture `aspire doctor` output (exit code {0}).</source>
+        <target state="new">Could not capture `aspire doctor` output (exit code {0}).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackDoctorCaptureFailed">
+        <source>Could not capture `aspire doctor` output ({0}).</source>
+        <target state="new">Could not capture `aspire doctor` output ({0}).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackDoctorCaptureTimedOut">
+        <source>Could not capture `aspire doctor` output because it did not complete within {0} seconds.</source>
+        <target state="new">Could not capture `aspire doctor` output because it did not complete within {0} seconds.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackDoctorLoadingMessage">
+        <source>Collecting Aspire doctor output...</source>
+        <target state="new">Collecting Aspire doctor output...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackGeneral">
+        <source>General feedback</source>
+        <target state="new">General feedback</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackGeneralDescriptionLabel">
+        <source>What feedback do you have?</source>
+        <target state="new">What feedback do you have?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackIdea">
+        <source>Suggest an idea</source>
+        <target state="new">Suggest an idea</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackIdeaDescriptionLabel">
+        <source>What would you like to see?</source>
+        <target state="new">What would you like to see?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackIssueTitleLabel">
+        <source>Issue title</source>
+        <target state="new">Issue title</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackOpenIssueButton">
+        <source>Open issue</source>
+        <target state="new">Open issue</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutProvideFeedbackPublicIssueMessage">
+        <source>Issues created are public on the {0} GitHub repo.</source>
+        <target state="new">Issues created are public on the {0} GitHub repo.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutSettingsDialogClose">
         <source>Close</source>
         <target state="translated">Zavřít</target>

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -10,6 +11,7 @@ using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
+using Aspire.Shared;
 using Aspire.Tests.Shared;
 using Bunit;
 using Microsoft.AspNetCore.Components;
@@ -243,6 +245,277 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData("Report a bug", nameof(FeedbackIssueKind.Bug))]
+    [InlineData("Suggest an idea", nameof(FeedbackIssueKind.Idea))]
+    [InlineData("General feedback", nameof(FeedbackIssueKind.General))]
+    public async Task FeedbackMenu_Items_ShowFeedbackDialog(string menuText, string expectedKind)
+    {
+        DialogParameters? capturedParameters = null;
+        object? capturedData = null;
+        TestDialogService? dialogService = null;
+        dialogService = new TestDialogService(onShowDialog: (data, parameters) =>
+        {
+            capturedData = data;
+            capturedParameters = parameters;
+            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+        });
+
+        SetupMainLayoutServices(dialogService: dialogService);
+
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        await cut.InvokeAsync(() => cut.Find("#dashboard-feedback-button").Click());
+        await cut.InvokeAsync(() => cut.FindAll("fluent-menu-item").Single(item => item.TextContent.Contains(menuText, StringComparison.OrdinalIgnoreCase)).Click());
+
+        Assert.NotNull(capturedParameters);
+        Assert.Equal("FeedbackDialog", capturedParameters.Id);
+        Assert.Equal(menuText, capturedParameters.Title);
+        var viewModel = Assert.IsType<FeedbackDialogViewModel>(capturedData);
+        Assert.Equal(expectedKind, viewModel.Kind);
+        Assert.Equal(menuText, viewModel.Title);
+    }
+
+    [Fact]
+    public async Task FeedbackDialog_ReportBug_OpensIssueTemplateUrlWithEditableDetails()
+    {
+        SetupMainLayoutServices(feedbackDiagnosticProvider: new TestDashboardFeedbackDiagnosticProvider(
+            doctorOutput: """{"sdk":"10.0.301"}""",
+            additionalContext: "- Posted from: Dashboard"));
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentInputLabel(this);
+        FluentUISetupHelpers.SetupFluentTextField(this);
+
+        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
+        var dialogService = Services.GetRequiredService<IDialogService>();
+        await dialogService.ShowDialogAsync<FeedbackDialog>(
+            new FeedbackDialogViewModel(nameof(FeedbackIssueKind.Bug), "Report a bug"),
+            new DialogParameters
+            {
+                Title = "Report a bug",
+                PrimaryAction = null,
+                SecondaryAction = null
+            });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.HasComponent<FeedbackDialog>());
+            Assert.Contains("sdk", cut.Markup, StringComparison.Ordinal);
+            Assert.Contains("Issues created are public on the", cut.Markup, StringComparison.Ordinal);
+            Assert.Contains("GitHub repo.", cut.Markup, StringComparison.Ordinal);
+        });
+        Assert.True(cut.Find($"#{FeedbackDialog.MainTextInputId}").HasAttribute("required"));
+        var publicIssueMessage = cut.Find(".feedback-dialog-public-message");
+        Assert.Equal("note", publicIssueMessage.GetAttribute("role"));
+        var publicIssueLink = publicIssueMessage.QuerySelector("fluent-anchor");
+        Assert.NotNull(publicIssueLink);
+        Assert.Equal("https://github.com/microsoft/aspire", publicIssueLink.GetAttribute("href"));
+        Assert.Equal("_blank", publicIssueLink.GetAttribute("target"));
+        Assert.Contains("microsoft/aspire", publicIssueLink.TextContent, StringComparison.Ordinal);
+        var footerButtons = cut.FindAll("fluent-button")
+            .Where(button => button.TextContent.Contains("Open issue", StringComparison.OrdinalIgnoreCase) || button.TextContent.Contains("Cancel", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        Assert.Collection(
+            footerButtons,
+            button => Assert.Contains("Open issue", button.TextContent, StringComparison.OrdinalIgnoreCase),
+            button => Assert.Contains("Cancel", button.TextContent, StringComparison.OrdinalIgnoreCase));
+
+        cut.Find($"#{FeedbackDialog.TitleInputId}").Change("Bug title");
+        cut.Find($"#{FeedbackDialog.MainTextInputId}").Input("Bug details");
+        cut.Find($"#{FeedbackDialog.DoctorOutputInputId}").Input("""{"sdk":"edited"}""");
+        cut.Find($"#{FeedbackDialog.AdditionalContextInputId}").Input("Edited context");
+
+        // The new issue page is opened client-side (buttonOpenLink in app.js) so window.open runs
+        // inside the click gesture and isn't blocked by popup blockers, so the URL is bound to the
+        // button's data-url attribute rather than opened via JS interop after a SignalR round-trip.
+        var openIssueButton = cut.Find($"#{FeedbackDialog.OpenIssueButtonId}");
+        Assert.Equal("true", openIssueButton.GetAttribute("data-openbutton"));
+        Assert.Equal("_blank", openIssueButton.GetAttribute("data-target"));
+        var url = openIssueButton.GetAttribute("data-url");
+        Assert.NotNull(url);
+        Assert.StartsWith("https://github.com/microsoft/aspire/issues/new?", url, StringComparison.Ordinal);
+        Assert.Contains("template=10_bug_report.yml", url, StringComparison.Ordinal);
+        Assert.Contains("title=Bug%20title", url, StringComparison.Ordinal);
+        Assert.Contains("description=Bug%20details", url, StringComparison.Ordinal);
+        Assert.Contains("aspire-doctor-output=", url, StringComparison.Ordinal);
+        Assert.Contains("sdk", url, StringComparison.Ordinal);
+        Assert.Contains("edited", url, StringComparison.Ordinal);
+        Assert.Contains("additional-context=Edited%20context", url, StringComparison.Ordinal);
+
+        // Clicking the button closes the dialog (the link itself is opened client-side).
+        await cut.InvokeAsync(() => openIssueButton.Click());
+        cut.WaitForAssertion(() => Assert.False(cut.HasComponent<FeedbackDialog>()));
+    }
+
+    [Fact]
+    public async Task FeedbackDialog_ReportBug_ShowsProgressRingBesideDoctorOutputWhileLoading()
+    {
+        var diagnosticProvider = new WaitingDashboardFeedbackDiagnosticProvider();
+        SetupMainLayoutServices(feedbackDiagnosticProvider: diagnosticProvider);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentInputLabel(this);
+        FluentUISetupHelpers.SetupFluentTextField(this);
+
+        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
+        var dialogService = Services.GetRequiredService<IDialogService>();
+        await dialogService.ShowDialogAsync<FeedbackDialog>(
+            new FeedbackDialogViewModel(nameof(FeedbackIssueKind.Bug), "Report a bug"),
+            new DialogParameters
+            {
+                Title = "Report a bug",
+                PrimaryAction = null,
+                SecondaryAction = null
+            });
+
+        try
+        {
+            cut.WaitForAssertion(() =>
+            {
+                var doctorInputLine = cut.Find($"#{FeedbackDialog.DoctorOutputInputId}").ParentElement;
+                Assert.NotNull(doctorInputLine);
+                Assert.Contains("feedback-input-line", doctorInputLine.ClassList);
+                Assert.NotEmpty(doctorInputLine.QuerySelectorAll("fluent-progress-ring.feedback-input-progress"));
+                var doctorOutput = cut.Find($"#{FeedbackDialog.DoctorOutputInputId}");
+                var doctorInputLineChildren = doctorInputLine.Children.ToList();
+                Assert.Equal(doctorOutput.Id, doctorInputLineChildren[0].Id);
+                Assert.Equal("fluent-progress-ring", doctorInputLineChildren[1].LocalName);
+                Assert.False(doctorOutput.HasAttribute("disabled"));
+                Assert.True(doctorOutput.HasAttribute("readonly"));
+                Assert.Equal("true", doctorOutput.GetAttribute("aria-busy"));
+                Assert.Contains("Collecting Aspire doctor output...", doctorInputLine.InnerHtml, StringComparison.Ordinal);
+                Assert.Equal(string.Empty, doctorInputLine.TextContent.Trim());
+
+                // The details are collapsed by default, so the loading indicator is also surfaced in the
+                // accordion header (slot="end") so it stays visible while the user can't yet submit.
+                var headerLoading = cut.Find(".feedback-details-loading");
+                Assert.NotEmpty(headerLoading.QuerySelectorAll("fluent-progress-ring"));
+                Assert.Contains("Collecting Aspire doctor output...", headerLoading.TextContent, StringComparison.Ordinal);
+            });
+        }
+        finally
+        {
+            diagnosticProvider.SetResult();
+        }
+    }
+
+    [Fact]
+    public async Task FeedbackDialog_ReportBug_PreservesAdditionalContextEditedWhileLoading()
+    {
+        var diagnosticProvider = new WaitingDashboardFeedbackDiagnosticProvider();
+        SetupMainLayoutServices(feedbackDiagnosticProvider: diagnosticProvider);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentInputLabel(this);
+        FluentUISetupHelpers.SetupFluentTextField(this);
+
+        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
+        var dialogService = Services.GetRequiredService<IDialogService>();
+        await dialogService.ShowDialogAsync<FeedbackDialog>(
+            new FeedbackDialogViewModel(nameof(FeedbackIssueKind.Bug), "Report a bug"),
+            new DialogParameters
+            {
+                Title = "Report a bug",
+                PrimaryAction = null,
+                SecondaryAction = null
+            });
+
+        try
+        {
+            cut.WaitForAssertion(() => Assert.True(cut.Find($"#{FeedbackDialog.DoctorOutputInputId}").HasAttribute("readonly")));
+
+            cut.Find($"#{FeedbackDialog.TitleInputId}").Change("Bug title");
+            cut.Find($"#{FeedbackDialog.MainTextInputId}").Input("Bug details");
+            cut.Find($"#{FeedbackDialog.AdditionalContextInputId}").Input("Edited while loading");
+            diagnosticProvider.SetResult();
+
+            cut.WaitForAssertion(() =>
+            {
+                Assert.False(cut.Find($"#{FeedbackDialog.DoctorOutputInputId}").HasAttribute("readonly"));
+            });
+
+            // The edited additional context flows into the button's data-url, which is what the
+            // client-side open handler (buttonOpenLink) navigates to inside the click gesture.
+            var openIssueButton = cut.Find($"#{FeedbackDialog.OpenIssueButtonId}");
+            var url = openIssueButton.GetAttribute("data-url");
+            Assert.NotNull(url);
+            Assert.Contains("additional-context=Edited%20while%20loading", url, StringComparison.Ordinal);
+        }
+        finally
+        {
+            diagnosticProvider.SetResult();
+        }
+    }
+
+    [Theory]
+    [InlineData(nameof(FeedbackIssueKind.Bug), "Report a bug", 1)]
+    [InlineData(nameof(FeedbackIssueKind.Idea), "Suggest an idea", 0)]
+    [InlineData(nameof(FeedbackIssueKind.General), "General feedback", 0)]
+    public async Task FeedbackDialog_CapturesAppHostAndDoctorContext_OnlyForBugReports(string kind, string title, int expectedCaptures)
+    {
+        var diagnosticProvider = new TestDashboardFeedbackDiagnosticProvider(
+            doctorOutput: """{"sdk":"10.0.301"}""",
+            additionalContext: "- Posted from: Dashboard");
+        SetupMainLayoutServices(feedbackDiagnosticProvider: diagnosticProvider);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentInputLabel(this);
+        FluentUISetupHelpers.SetupFluentTextField(this);
+
+        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
+        var dialogService = Services.GetRequiredService<IDialogService>();
+        await dialogService.ShowDialogAsync<FeedbackDialog>(
+            new FeedbackDialogViewModel(kind, title),
+            new DialogParameters
+            {
+                Title = title,
+                PrimaryAction = null,
+                SecondaryAction = null
+            });
+
+        // The AppHost description and the `aspire doctor` capture are only relevant to bug reports:
+        // the dialog requests the AppHost line (includeAppHostInfo) and launches the doctor capture
+        // (which spawns the CLI) only for bugs. Idea/general feedback must leave both counts at zero.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.HasComponent<FeedbackDialog>());
+            Assert.Equal(expectedCaptures, diagnosticProvider.AppHostInfoRequestedCount);
+            Assert.Equal(expectedCaptures, diagnosticProvider.DoctorOutputCaptureCount);
+        });
+    }
+
+    [Fact]
+    public async Task FeedbackDialog_ReportBug_AspireDoctorUnavailable_HidesFieldAndSkipsCapture()
+    {
+        // When the AppHost didn't forward the CLI path (e.g. a standalone dashboard), doctor output is
+        // unavailable. The dialog must not show the field and must not attempt a capture (no probing).
+        var diagnosticProvider = new TestDashboardFeedbackDiagnosticProvider(
+            doctorOutput: """{"sdk":"10.0.301"}""",
+            additionalContext: "- Posted from: Dashboard",
+            isAspireDoctorOutputAvailable: false);
+        SetupMainLayoutServices(feedbackDiagnosticProvider: diagnosticProvider);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentInputLabel(this);
+        FluentUISetupHelpers.SetupFluentTextField(this);
+
+        var cut = FluentUISetupHelpers.RenderDialogProvider(this);
+        var dialogService = Services.GetRequiredService<IDialogService>();
+        await dialogService.ShowDialogAsync<FeedbackDialog>(
+            new FeedbackDialogViewModel(nameof(FeedbackIssueKind.Bug), "Report a bug"),
+            new DialogParameters
+            {
+                Title = "Report a bug",
+                PrimaryAction = null,
+                SecondaryAction = null
+            });
+
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<FeedbackDialog>()));
+        Assert.Equal(0, diagnosticProvider.DoctorOutputCaptureCount);
+        Assert.Empty(cut.FindAll($"#{FeedbackDialog.DoctorOutputInputId}"));
+        // The additional-context field stays available even without doctor output.
+        Assert.NotEmpty(cut.FindAll($"#{FeedbackDialog.AdditionalContextInputId}"));
+    }
+
+    [Theory]
     [InlineData(true, false, "dashboard-help-button", "HelpDialog", "dashboard-navigation-button")]
     [InlineData(true, false, "dashboard-settings-button", "SettingsDialog", "dashboard-navigation-button")]
     [InlineData(false, true, "dashboard-navigation-button", "HelpDialog", "dashboard-help-button")]
@@ -450,7 +723,8 @@ public partial class MainLayoutTests : DashboardTestContext
         MessageService? messageService = null,
         Action<DashboardOptions>? configureOptions = null,
         IDialogService? dialogService = null,
-        IAIContextProvider? aiContextProvider = null)
+        IAIContextProvider? aiContextProvider = null,
+        IDashboardFeedbackDiagnosticProvider? feedbackDiagnosticProvider = null)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: localStorage, messageService: messageService);
 
@@ -466,6 +740,11 @@ public partial class MainLayoutTests : DashboardTestContext
             {
                 Services.AddSingleton(assistantDisplayContext);
             }
+        }
+
+        if (feedbackDiagnosticProvider is not null)
+        {
+            Services.AddSingleton(feedbackDiagnosticProvider);
         }
 
         Services.AddOptions();
@@ -497,6 +776,48 @@ public partial class MainLayoutTests : DashboardTestContext
         JSInterop.SetupModule("window.registerOpenTextVisualizerOnClick", _ => true);
 
         JSInterop.Setup<BrowserInfo>("window.getBrowserInfo").SetResult(new BrowserInfo { TimeZone = "abc", UserAgent = "mozilla" });
+    }
+
+    private sealed class TestDashboardFeedbackDiagnosticProvider(string doctorOutput, string additionalContext, bool isAspireDoctorOutputAvailable = true) : IDashboardFeedbackDiagnosticProvider
+    {
+        public int AppHostInfoRequestedCount { get; private set; }
+
+        public int DoctorOutputCaptureCount { get; private set; }
+
+        public bool IsAspireDoctorOutputAvailable => isAspireDoctorOutputAvailable;
+
+        public string BuildAdditionalContext(bool includeAppHostInfo)
+        {
+            if (includeAppHostInfo)
+            {
+                AppHostInfoRequestedCount++;
+            }
+
+            return additionalContext;
+        }
+
+        public Task<string> CaptureAspireDoctorOutputAsync(CancellationToken cancellationToken)
+        {
+            DoctorOutputCaptureCount++;
+            return Task.FromResult(doctorOutput);
+        }
+    }
+
+    private sealed class WaitingDashboardFeedbackDiagnosticProvider : IDashboardFeedbackDiagnosticProvider
+    {
+        private readonly TaskCompletionSource<string> _doctorOutputTaskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool IsAspireDoctorOutputAvailable => true;
+
+        public string BuildAdditionalContext(bool includeAppHostInfo) => "- Posted from: Dashboard";
+
+        public Task<string> CaptureAspireDoctorOutputAsync(CancellationToken cancellationToken) =>
+            _doctorOutputTaskCompletionSource.Task.WaitAsync(cancellationToken);
+
+        public void SetResult()
+        {
+            _doctorOutputTaskCompletionSource.TrySetResult("""{"sdk":"10.0.301"}""");
+        }
     }
 
     private sealed class RecordingJSRuntime : IJSRuntime

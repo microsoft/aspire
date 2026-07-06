@@ -153,6 +153,7 @@ internal sealed class RootCommand : BaseRootCommand
         CacheCommand cacheCommand,
         CertificatesCommand certificatesCommand,
         DoctorCommand doctorCommand,
+        FeedbackCommand feedbackCommand,
         UpdateCommand updateCommand,
         McpCommand mcpCommand,
         AgentCommand agentCommand,
@@ -233,6 +234,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(cacheCommand);
         Subcommands.Add(certificatesCommand);
         Subcommands.Add(doctorCommand);
+        Subcommands.Add(feedbackCommand);
         Subcommands.Add(deployCommand);
         Subcommands.Add(destroyCommand);
         Subcommands.Add(doCommand);
