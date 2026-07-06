@@ -98,15 +98,15 @@ internal static class TypeScriptAppHostToolchainTestHelpers
 
     /// <summary>
     /// Gets the console text that indicates watch mode is active for a toolchain.
-    /// Node-based toolchains use nodemon; Deno uses its native file watcher, which prints
-    /// a different banner.
+    /// The E2E path runs the scaffolded <c>aspire:dev</c> package script for every toolchain,
+    /// so readiness comes from <c>tsc --watch</c>.
     /// </summary>
-    internal static string GetWatchModeReadyText(string toolchain) =>
-        NormalizeToolchain(toolchain) switch
-        {
-            "deno" => "Watcher Process started.",
-            _ => "Watching for file changes."
-        };
+    internal static string GetWatchModeReadyText(string toolchain)
+    {
+        _ = NormalizeToolchain(toolchain);
+
+        return "Watching for file changes.";
+    }
 
     /// <summary>
     /// Gets the primary lock file name a toolchain should produce after restore/install.
