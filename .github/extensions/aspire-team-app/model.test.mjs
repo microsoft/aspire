@@ -308,4 +308,9 @@ test("createIssueSignals leads with the highest-priority action pill", () => {
   // Pills are capped at 7 even with many labels.
   const noisy = makeIssue({ number: 5, milestone: "13.4", labels: ["a", "b", "c", "d", "e"] });
   assert.ok(createIssueSignals(noisy).length <= 7);
+
+  // The precise GraphQL __typename === "Bot" fast-path earns a bot pill even when the
+  // login has no "bot" substring (normalizeIssue now carries authorType for issues).
+  const botTyped = makeIssue({ number: 6, author: "dependa", authorType: "Bot" });
+  assert.ok(createIssueSignals(botTyped).some((s) => s.label === "bot"));
 });

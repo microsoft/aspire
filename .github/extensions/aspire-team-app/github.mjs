@@ -115,7 +115,7 @@ query($owner:String!, $name:String!, $after:String) {
       pageInfo { hasNextPage endCursor }
       nodes {
         number title url createdAt updatedAt
-        author { login avatarUrl }
+        author { __typename login avatarUrl }
         milestone { title }
         labels(first:15) { nodes { name } }
         assignees(first:10) { nodes { login } }
@@ -343,6 +343,10 @@ function normalizeIssue(repo, node, viewers) {
     url: node.url,
     author,
     authorAvatarUrl: node.author?.avatarUrl ?? null,
+    // __typename is the precise bot signal used by isBotAuthor's fast path. Issues
+    // fetch it just like PRs (normalizePr) so a Bot-typed author whose login lacks
+    // "bot" still earns the bot pill; the login string heuristics remain the fallback.
+    authorType: node.author?.__typename ?? null,
     createdAt: node.createdAt,
     updatedAt: node.updatedAt,
     milestone: node.milestone?.title ?? null,
