@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Documents KubernetesPersistentVolumeResource feature from microsoft/aspire#16929",
+  "mergedAt": "2026-07-06T03:12:25Z",
+  "number": 1328,
+  "runDate": "2026-07-06T07:25:44Z",
+  "status": "included",
+  "title": "Add Kubernetes persistent volume documentation"
+}

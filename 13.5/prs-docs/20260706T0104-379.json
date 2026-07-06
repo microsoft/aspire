@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "No matching changelog entry found for Keycloak WithRealmImport production limitation documentation",
+  "mergedAt": "2026-07-06T01:04:54Z",
+  "number": 379,
+  "runDate": "2026-07-06T07:25:44Z",
+  "status": "excluded",
+  "title": "Document WithRealmImport production limitation and alternatives"
+}

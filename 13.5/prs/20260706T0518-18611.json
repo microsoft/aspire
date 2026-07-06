@@ -1,0 +1,9 @@
+{
+  "author": "air-hand",
+  "comment": "Improvement: Go Delve debugger multi-client mode and typed server options, community contribution",
+  "mergedAt": "2026-07-06T05:18:26Z",
+  "number": 18611,
+  "runDate": "2026-07-06T07:25:44Z",
+  "status": "included",
+  "title": "Add Delve server options for Go hosting"
+}

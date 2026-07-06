@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@eso-cyber"
+  ],
+  "description": "Clicking a URL link in the Resources grid no longer also opens the resource details side panel. Click events on the URL column are now properly stopped from propagating to the row click handler.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🖱️",
+  "firstMergedAt": "2026-07-06T06:00:54Z",
+  "lastMergedAt": "2026-07-06T06:00:54Z",
+  "name": "Fix URL click opening resource details panel",
+  "owner": "JamesNK",
+  "prs": [
+    18644
+  ]
+}

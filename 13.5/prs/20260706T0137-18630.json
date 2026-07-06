@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Bug fix: Kubernetes GetEndpoint using targetPort instead of service port for distinct port/targetPort mappings",
+  "mergedAt": "2026-07-06T01:37:42Z",
+  "number": 18630,
+  "runDate": "2026-07-06T07:25:44Z",
+  "status": "included",
+  "title": "Fix Kubernetes GetEndpoint resolving to targetPort instead of service port"
+}

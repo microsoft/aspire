@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Bug fix: false-positive node/npm required-command banners when using WithBun() for JavaScript apps",
+  "mergedAt": "2026-07-06T03:35:31Z",
+  "number": 18631,
+  "runDate": "2026-07-06T07:25:44Z",
+  "status": "included",
+  "title": "Fix false-positive node/npm required-command banners for Bun JS apps"
+}

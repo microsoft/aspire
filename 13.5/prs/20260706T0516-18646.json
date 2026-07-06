@@ -1,0 +1,9 @@
+{
+  "author": "alirezafzali",
+  "comment": "New feature: shm_size support for Docker Compose services, community contribution",
+  "mergedAt": "2026-07-06T05:16:16Z",
+  "number": 18646,
+  "runDate": "2026-07-06T07:25:44Z",
+  "status": "included",
+  "title": "Add shm_size support to Docker Compose services"
+}

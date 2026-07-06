@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Dashboard improvement: Console/Terminal view toggle in ConsoleLogs page for WithTerminal() resources",
+  "mergedAt": "2026-07-06T01:08:47Z",
+  "number": 18574,
+  "runDate": "2026-07-06T07:25:44Z",
+  "status": "included",
+  "title": "Add Console/Terminal view toggle to ConsoleLogs dashboard page"
+}

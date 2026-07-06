@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where GetEndpoint() on a Kubernetes-published resource with distinct port and targetPort (e.g., WithHttpEndpoint(port: 9002, targetPort: 9000)) returned a URL built from the container targetPort instead of the exposed service port. Ingress and Gateway route rules are also corrected to use the service port.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-07-06T01:37:42Z",
+  "lastMergedAt": "2026-07-06T01:37:42Z",
+  "name": "Fix Kubernetes GetEndpoint using targetPort instead of service port",
+  "owner": "davidfowl",
+  "prs": [
+    18630
+  ]
+}

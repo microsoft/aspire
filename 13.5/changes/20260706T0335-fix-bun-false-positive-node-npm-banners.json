@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed false-positive \"Required command 'node'/'npm' was not found on PATH\" dashboard banners when using AddViteApp().WithBun() or other Bun-based JavaScript apps. Bun handles both install and run, so the node/npm requirements added by the default toolchain are now correctly removed when WithBun() is applied.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-07-06T03:35:31Z",
+  "lastMergedAt": "2026-07-06T03:35:31Z",
+  "name": "Fix false-positive node/npm required-command banners for Bun apps",
+  "owner": "davidfowl",
+  "prs": [
+    18631
+  ]
+}

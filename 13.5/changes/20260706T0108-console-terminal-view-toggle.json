@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The ConsoleLogs page now shows a Console logs / Terminal toggle in the toolbar options menu for resources with WithTerminal(). Previously, selecting a terminal resource would immediately switch to the terminal frame, hiding any console log output such as startup messages and wait-for dependencies.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔀",
+  "firstMergedAt": "2026-07-06T01:08:47Z",
+  "lastMergedAt": "2026-07-06T01:08:47Z",
+  "name": "Console/Terminal view toggle in ConsoleLogs page",
+  "owner": "mitchdenny",
+  "prs": [
+    18574
+  ]
+}

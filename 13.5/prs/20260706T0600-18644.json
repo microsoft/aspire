@@ -1,0 +1,9 @@
+{
+  "author": "eso-cyber",
+  "comment": "Bug fix: clicking URL in resources grid also opened details panel, community contribution",
+  "mergedAt": "2026-07-06T06:00:54Z",
+  "number": 18644,
+  "runDate": "2026-07-06T07:25:44Z",
+  "status": "included",
+  "title": "Fix: stop click propagation on UrlsColumnDisplay to prevent details popup"
+}
