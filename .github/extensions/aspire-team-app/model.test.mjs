@@ -12,6 +12,7 @@ import {
   createFocusIssueBuckets,
   createForMeItems,
   createIssueSignals,
+  filterCheckFailureRules,
   isChecksFailing,
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
@@ -237,6 +238,20 @@ test("visibleCheckState and isChecksFailing honor non-blocking check rules", () 
   });
   assert.equal(visibleCheckState(nonBlockingOnly), "success");
   assert.equal(isChecksFailing(nonBlockingOnly), false);
+});
+
+test("filterCheckFailureRules drops rules missing a repository, label, or concrete matcher", () => {
+  const valid = { repository: "devdiv-microsoft/aspire-1p", label: "proof of presence", checkNames: ["GitOps/GitHubPop"], checkNameContains: [] };
+  const containsOnly = { repository: "org/repo", label: "informational", checkNames: [], checkNameContains: ["proof of presence"] };
+  const noMatchers = { repository: "org/repo", label: "informational", checkNames: [], checkNameContains: [] };
+  const noRepo = { repository: "", label: "informational", checkNames: ["x"], checkNameContains: [] };
+  const noLabel = { repository: "org/repo", label: "", checkNames: ["x"], checkNameContains: [] };
+
+  // A rule with no concrete matcher would otherwise mark every aggregate failure on its
+  // repo non-blocking, hiding all red CI. Only rules that actually name a check survive.
+  assert.deepEqual(filterCheckFailureRules([valid, containsOnly, noMatchers, noRepo, noLabel]), [valid, containsOnly]);
+  assert.deepEqual(filterCheckFailureRules([]), []);
+  assert.deepEqual(filterCheckFailureRules(undefined), []);
 });
 
 test("shouldHideFromSharedPullRequestLists hides drafts, conflicts, and needs-author-action PRs", () => {

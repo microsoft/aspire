@@ -25,6 +25,21 @@ const stalledPullRequestMs = 7 * dayMs;
 const quickWinLineThreshold = 80;
 const quickWinFileThreshold = 3;
 
+// Faithful port of pr-dashboard's normalizeCheckFailureRules guard (dashboardConfig.ts,
+// davidfowl/pr-dashboard#96): a non-blocking check-failure rule is only honored when it
+// names a repository, a label, AND at least one concrete check matcher. Without this,
+// a matcher-less rule (a plausible constants.mjs typo) makes hasNonBlockingCheckFailureRule
+// treat every aggregate "failure" rollup on that repo as non-blocking, silently hiding all
+// red CI for the repo. Dropping matcher-less rules keeps such a config mistake from
+// suppressing genuine failures.
+export function filterCheckFailureRules(rules) {
+  return (rules ?? []).filter((rule) =>
+    rule.repository
+    && rule.label
+    && ((rule.checkNames?.length ?? 0) > 0 || (rule.checkNameContains?.length ?? 0) > 0));
+}
+const activeNonBlockingCheckFailureRules = filterCheckFailureRules(nonBlockingCheckFailureRules);
+
 const regressionBucketLabel = "Regression";
 const approvedButAgingBucketLabel = "Approved but aging";
 const agedOutCommunityBucketLabel = "Aged out community";
@@ -189,10 +204,10 @@ function isNonBlockingAggregateFailure(pr) {
 }
 
 function hasNonBlockingCheckFailureRule(repository) {
-  return nonBlockingCheckFailureRules.some((rule) => sameRepository(rule.repository, repository));
+  return activeNonBlockingCheckFailureRules.some((rule) => sameRepository(rule.repository, repository));
 }
 function matchingNonBlockingCheckFailureRule(repository, name) {
-  return nonBlockingCheckFailureRules.find((rule) =>
+  return activeNonBlockingCheckFailureRules.find((rule) =>
     sameRepository(rule.repository, repository) && matchesNonBlockingCheckFailureName(rule, name)) ?? null;
 }
 function sameRepository(first, second) {
@@ -200,8 +215,8 @@ function sameRepository(first, second) {
 }
 function matchesNonBlockingCheckFailureName(rule, name) {
   const normalized = String(name || "").trim().toLowerCase();
-  return rule.checkNames.some((checkName) => normalized === checkName.toLowerCase())
-    || rule.checkNameContains.some((fragment) => normalized.includes(fragment.toLowerCase()));
+  return (rule.checkNames ?? []).some((checkName) => normalized === checkName.toLowerCase())
+    || (rule.checkNameContains ?? []).some((fragment) => normalized.includes(fragment.toLowerCase()));
 }
 export function hasMergeConflicts(pr) {
   return pr.mergeableState === "dirty";
