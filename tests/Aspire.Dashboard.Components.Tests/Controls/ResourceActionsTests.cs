@@ -68,17 +68,18 @@ public class ResourceActionsTests : DashboardTestContext
         Assert.Empty(cut.FindComponents<AspireTooltip>());
 
         restartButton.TriggerEvent("onfocusin", new FocusEventArgs());
-        AssertTooltip(cut, "Restart the resource");
+        AssertTooltip(cut, restartButton.GetAttribute("id"), "Restart the resource");
 
         consoleLogsButton.TriggerEvent("onfocusin", new FocusEventArgs());
-        AssertTooltip(cut, resourcesLoc[nameof(Dashboard.Resources.Resources.ResourceActionConsoleLogsText)].Value);
+        AssertTooltip(cut, consoleLogsButton.GetAttribute("id"), resourcesLoc[nameof(Dashboard.Resources.Resources.ResourceActionConsoleLogsText)].Value);
 
         actionsButton.TriggerEvent("onfocusin", new FocusEventArgs());
-        AssertTooltip(cut, controlsLoc[nameof(ControlsStrings.ActionsButtonText)].Value);
+        AssertTooltip(cut, actionsButton.GetAttribute("id"), controlsLoc[nameof(ControlsStrings.ActionsButtonText)].Value);
     }
 
-    private static void AssertTooltip(IRenderedFragment cut, string text)
+    private static void AssertTooltip(IRenderedFragment cut, string? anchor, string text)
     {
-        Assert.Contains(cut.FindComponents<AspireTooltip>(), tooltip => tooltip.Instance.Text == text);
+        Assert.NotNull(anchor);
+        Assert.Contains(cut.FindComponents<AspireTooltip>(), tooltip => tooltip.Instance.Anchor == anchor && tooltip.Instance.Text == text);
     }
 }
