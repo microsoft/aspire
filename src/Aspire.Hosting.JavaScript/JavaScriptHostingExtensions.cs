@@ -34,7 +34,7 @@ public static class JavaScriptHostingExtensions
     private const string DefaultJavaScriptRunScriptName = "dev";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
 
-    // Help links surfaced when a required command is missing. Declared once so ResolveHelpLink stays in sync.
+    // Help links surfaced when a required command is missing, mapped to a command by ResolveHelpLink.
     private const string NodeHelpLink = "https://nodejs.org/en/download/";
     private const string NpmHelpLink = "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm";
     private const string BunHelpLink = "https://bun.sh/docs/installation";
@@ -329,12 +329,13 @@ public static class JavaScriptHostingExtensions
                 return Task.CompletedTask;
             });
 
-    // Registers a hook that materializes the resource's required commands just before start. Required commands
-    // are a run-mode concern: they are validated against the local PATH by
-    // RequiredCommandValidationEventingSubscriber on BeforeResourceStartedEvent, which fires after
-    // BeforeStartEvent. Resolving them here - rather than eagerly as each With* method runs - lets the
-    // package-manager selection settle first, so a later selection fully replaces an earlier one without having
-    // to remove stale RequiredCommandAnnotations. See https://github.com/microsoft/aspire/issues/18625.
+    // Registers a hook that materializes the resource's required commands just before start. The annotations are
+    // added on BeforeStartEvent in every execution context, but they only have an effect in run mode, where
+    // RequiredCommandValidationEventingSubscriber validates them against the local PATH on
+    // BeforeResourceStartedEvent (which fires after BeforeStartEvent). Resolving them here - rather than eagerly
+    // as each With* method runs - lets the package-manager selection settle first, so a later selection fully
+    // replaces an earlier one without having to remove stale RequiredCommandAnnotations.
+    // See https://github.com/microsoft/aspire/issues/18625.
     //
     // runtimeCommand is the executable the app was created to run with (node for
     // AddNodeApp/AddViteApp/AddJavaScriptApp, bun for AddBunApp); it launches the app whenever the app is not
