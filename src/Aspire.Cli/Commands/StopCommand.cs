@@ -150,20 +150,14 @@ internal sealed class StopCommand : BaseCommand
     /// </summary>
     private async Task<int> StopAllAppHostsAsync(CancellationToken cancellationToken)
     {
-        // First collect AppHosts whose launching CLI has died. 
-        // Collecting first guarantees orphaned trees and their stale sockets are cleaned up 
-        // even if the normal stop path can't connect to one of them.
-        try
+        // First collect AppHosts whose launching CLI has died.
+        // Collecting first guarantees orphaned trees and their stale sockets are cleaned up
+        // even if the normal stop path can't connect to one of them. CollectAsync is best effort and
+        // never throws for scan/stop failures (only cancellation propagates), so no guard is needed here.
+        var collected = await _collector.CollectAsync(cancellationToken).ConfigureAwait(false);
+        if (collected > 0)
         {
-            var collected = await _collector.CollectAsync(cancellationToken).ConfigureAwait(false);
-            if (collected > 0)
-            {
-                _logger.LogDebug("Collected {Count} orphaned AppHost(s) before stopping the rest.", collected);
-            }
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _logger.LogDebug(ex, "Failed to collect orphaned AppHosts during stop --all.");
+            _logger.LogDebug("Collected {Count} orphaned AppHost(s) before stopping the rest.", collected);
         }
 
         var allConnections = await _connectionResolver.ResolveAllConnectionsAsync(

@@ -22,9 +22,22 @@ internal sealed class OrphanedAppHostCollector(
     /// <returns>The number of orphaned AppHosts that were collected.</returns>
     public async Task<int> CollectAsync(CancellationToken cancellationToken)
     {
-        await backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
+        List<IAppHostAuxiliaryBackchannel> orphans;
+        try
+        {
+            await backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
 
-        var orphans = backchannelMonitor.Connections.Where(IsOrphaned).ToList();
+            orphans = backchannelMonitor.Connections.Where(IsOrphaned).ToList();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Discovering orphans is best effort: a scan or liveness-probe failure must not fail the
+            // caller (e.g. `aspire ps`/`aspire stop`), which honors the "(best effort)" contract without
+            // requiring every call site to guard. Cancellation still propagates so callers can abort.
+            logger.LogDebug(ex, "Failed to scan for orphaned AppHosts.");
+            return 0;
+        }
+
         if (orphans.Count == 0)
         {
             return 0;
@@ -91,7 +104,7 @@ internal sealed class OrphanedAppHostCollector(
             return !ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(
                 cliPid,
                 cliStartedAt.ToUnixTimeSeconds(),
-                TimeSpan.FromSeconds(1));
+                ProcessStartTimeHelper.RuntimeStartTimeComparisonTolerance);
         }
 
         return !ProcessStartTimeHelper.IsProcessRunning(cliPid);

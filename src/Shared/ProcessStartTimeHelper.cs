@@ -18,6 +18,16 @@ internal static partial class ProcessStartTimeHelper
     private const int LinuxClockTicksPerSecondConfigName = 2; // _SC_CLK_TCK
 
     /// <summary>
+    /// The tolerance cross-process callers must use when comparing a legacy <see cref="Process.StartTime"/>-based
+    /// start time (see <see cref="IsProcessRunningWithRuntimeStartTime"/>). On Linux that value is reconstructed
+    /// from an independently sampled boot time and can differ by one second between two processes reading the same
+    /// PID, so an exact comparison would produce false "process gone" results and prematurely tear down a live
+    /// process tree. See https://github.com/dotnet/runtime/issues/56546. Centralized here so every orphan/liveness
+    /// watchdog applies the same value; <see cref="TimeSpan"/> cannot be <c>const</c>, so it is <c>static readonly</c>.
+    /// </summary>
+    public static readonly TimeSpan RuntimeStartTimeComparisonTolerance = TimeSpan.FromSeconds(1);
+
+    /// <summary>
     /// Gets the current process's start time as whole Unix seconds. This is the value that should be
     /// propagated to child processes so they can verify the parent's identity (PID + start time).
     /// </summary>
@@ -177,7 +187,8 @@ internal static partial class ProcessStartTimeHelper
     /// <param name="expectedStartTimeUnixSeconds">The expected legacy start time (whole Unix seconds).</param>
     /// <param name="tolerance">
     /// Allowed difference between the expected and observed start time. Defaults to an exact match; the
-    /// cross-process orphan/liveness callers pass one second to absorb the boot-time jitter described above.
+    /// cross-process orphan/liveness callers pass <see cref="RuntimeStartTimeComparisonTolerance"/> to absorb
+    /// the boot-time jitter described above.
     /// </param>
     /// <returns><see langword="true"/> if the process exists and its legacy start time matches; otherwise <see langword="false"/>.</returns>
     public static bool IsProcessRunningWithRuntimeStartTime(int pid, long expectedStartTimeUnixSeconds, TimeSpan? tolerance = null)

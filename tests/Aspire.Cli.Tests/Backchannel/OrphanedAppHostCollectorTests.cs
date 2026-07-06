@@ -254,6 +254,44 @@ public class OrphanedAppHostCollectorTests
         Assert.Equal(1, monitor.ScanCallCount);
     }
 
+    [Fact]
+    public async Task CollectAsync_WhenScanThrows_ReturnsZero()
+    {
+        // Collection is best effort: a non-cancellation scan failure must not surface to the caller
+        // (e.g. `aspire ps`), even when an orphan is present that would otherwise have been collected.
+        var monitor = new TestAuxiliaryBackchannelMonitor
+        {
+            ScanAsyncCallback = _ => throw new InvalidOperationException("scan boom")
+        };
+        var stopper = new TestAppHostStopper();
+
+        const string socketPath = "/tmp/aspire-orphan-tests-scan-throw.sock";
+        monitor.AddConnection("orphan-hash", socketPath, CreateConnection(socketPath, appHostPid: 4242, orphaned: true));
+
+        var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
+
+        var collected = await collector.CollectAsync(CancellationToken.None);
+
+        Assert.Equal(0, collected);
+        Assert.Empty(stopper.StopRequests);
+    }
+
+    [Fact]
+    public async Task CollectAsync_WhenScanCancelled_Throws()
+    {
+        // Cancellation is the one failure that must NOT be swallowed, so callers can abort promptly.
+        var monitor = new TestAuxiliaryBackchannelMonitor
+        {
+            ScanAsyncCallback = _ => throw new OperationCanceledException()
+        };
+        var stopper = new TestAppHostStopper();
+
+        var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => collector.CollectAsync(CancellationToken.None));
+        Assert.Empty(stopper.StopRequests);
+    }
+
     private static string CreateSocketFile(DirectoryInfo directory, string name)
     {
         var path = Path.Combine(directory.FullName, name);

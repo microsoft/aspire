@@ -22,7 +22,7 @@ internal sealed class CliOrphanDetector(IConfiguration configuration, IHostAppli
 
     internal Func<int, long, bool> IsProcessRunningWithLegacyStartTime { get; set; } = (int pid, long expectedStartTimeUnix) =>
     {
-        return ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(pid, expectedStartTimeUnix, TimeSpan.FromSeconds(1));
+        return ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(pid, expectedStartTimeUnix, ProcessStartTimeHelper.RuntimeStartTimeComparisonTolerance);
     };
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

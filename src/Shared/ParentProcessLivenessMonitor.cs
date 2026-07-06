@@ -74,7 +74,7 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
                 stopToken.ThrowIfCancellationRequested();
 
                 var isProcessRunning = useRuntimeStartTime && parentStartedUnixSeconds is { } legacyStartTime
-                    ? ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(parentPid, legacyStartTime, TimeSpan.FromSeconds(1))
+                    ? ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(parentPid, legacyStartTime, ProcessStartTimeHelper.RuntimeStartTimeComparisonTolerance)
                     : ProcessStartTimeHelper.IsProcessRunning(parentPid, parentStartedUnixSeconds);
                 if (isProcessRunning)
                 {

@@ -31,7 +31,7 @@ internal sealed class OrphanDetector : BackgroundService
 
     internal Func<int, long, bool> IsProcessRunningWithLegacyStartTime { get; set; } = static (pid, expectedStartTimeUnix) =>
     {
-        return ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(pid, expectedStartTimeUnix, TimeSpan.FromSeconds(1));
+        return ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(pid, expectedStartTimeUnix, ProcessStartTimeHelper.RuntimeStartTimeComparisonTolerance);
     };
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

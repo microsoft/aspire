@@ -114,7 +114,9 @@ internal sealed partial class PsCommand : BaseCommand
         }
 
         // Collect AppHosts whose launching CLI has died before listing, so the output reflects reality and
-        // leaked aspire-managed/AppHost processes are cleaned up. Best effort.
+        // leaked aspire-managed/AppHost processes are cleaned up. Best effort: CollectAsync swallows scan/stop
+        // failures (only cancellation propagates), so a collection hiccup never fails `aspire ps`. The listing
+        // scan below still surfaces its own failures.
         await _collector.CollectAsync(cancellationToken).ConfigureAwait(false);
 
         // Scan for running AppHosts (same as ListAppHostsTool). JSON output must not go
