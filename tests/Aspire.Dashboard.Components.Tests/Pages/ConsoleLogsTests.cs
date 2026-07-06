@@ -438,6 +438,40 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Fact]
+    public void DownloadCsvLogs_UsesTwentyFourHourTimestampInFileName()
+    {
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+        var timeProvider = new TestTimeProvider
+        {
+            UtcNow = new DateTimeOffset(2025, 2, 8, 13, 16, 8, TimeSpan.Zero)
+        };
+        var viewport = CreateViewport(isDesktop: true);
+        SetupConsoleLogsServices(dashboardClient, timeProvider);
+        JSInterop.SetupVoid("downloadStreamAsFile", _ => true).SetVoidResult();
+
+        var cut = RenderConsoleLogsPage(viewport, resourceName: "test-resource");
+        cut.WaitForState(() => cut.Instance.PageViewModel.SelectedResource.Id?.InstanceId == testResource.Name);
+
+        cut.Find("fluent-button[title='" + Resources.ConsoleLogs.ConsoleLogsSettings + "']").Click();
+        var csvDownloadItem = cut.FindAll("fluent-menu-item")
+            .Single(item => string.Equals(item.GetAttribute("title"), Resources.ConsoleLogs.DownloadLogsAsCsv, StringComparison.Ordinal));
+        csvDownloadItem.Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var invocation = Assert.Single(JSInterop.Invocations, i => i.Identifier == "downloadStreamAsFile");
+            Assert.Equal("test-resource-20250208141608.csv", invocation.Arguments[0]);
+        });
+    }
+
+    [Fact]
     public async Task ReadingLogs_ErrorDuringRead_SetStatusAndLog()
     {
         // Arrange

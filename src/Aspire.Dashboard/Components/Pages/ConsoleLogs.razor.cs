@@ -1210,7 +1210,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             ? "AllResources"
             : string.Join("_", PageViewModel.SelectedResource.Id!.InstanceId!.Split(Path.GetInvalidFileNameChars()));
 
-        return $"{fileNamePrefix}-{TimeProvider.GetLocalNow().ToString("yyyyMMddhhmmss", CultureInfo.InvariantCulture)}.{extension}";
+        return $"{fileNamePrefix}-{TimeProvider.GetLocalNow().ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture)}.{extension}";
     }
 
     private async Task ClearConsoleLogs(ResourceKey? key)
