@@ -978,10 +978,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
     /// <summary>
     /// Runs the dashboard until it shuts down or <paramref name="cancellationToken"/> is cancelled.
-    /// Cancellation triggers a graceful host shutdown, which lets the standalone
-    /// <c>aspire-managed dashboard</c> process tear itself down (e.g. when a parent-liveness watchdog
-    /// observes that the launching CLI has died) instead of lingering as an orphaned process.
+    /// Cancellation triggers a graceful host shutdown.
     /// </summary>
+    /// <param name="cancellationToken">A cancellation token that can be used to request the dashboard to stop.</param>
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
         if (_validationFailures.Count > 0)
