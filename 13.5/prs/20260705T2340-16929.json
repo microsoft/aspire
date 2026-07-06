@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "New KubernetesPersistentVolumeResource and YAML serializer bug fixes for Kubernetes deployments",
+  "mergedAt": "2026-07-05T23:40:19Z",
+  "number": 16929,
+  "runDate": "2026-07-06T00:24:12Z",
+  "status": "included",
+  "title": "Add first-class KubernetesPersistentVolumeResource (and fix related YAML serializer bugs)"
+}

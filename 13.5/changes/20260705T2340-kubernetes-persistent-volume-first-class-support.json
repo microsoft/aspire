@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "A new KubernetesPersistentVolumeResource lets AppHost authors configure durable Kubernetes volumes in the app model and bind them to container or project workloads via WithPersistentVolume(). Includes YAML serializer fixes for PV/PVC/StatefulSet manifests that previously emitted invalid empty object blocks.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "💾",
+  "firstMergedAt": "2026-07-05T23:40:19Z",
+  "lastMergedAt": "2026-07-05T23:40:19Z",
+  "name": "Kubernetes persistent volume first-class support",
+  "owner": "mitchdenny",
+  "prs": [
+    16929
+  ]
+}
