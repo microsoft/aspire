@@ -41,7 +41,7 @@ suite('Browser Debugger Tests', () => {
             '--disable-background-mode'
         ]);
         assert.strictEqual(debugConfig.userDataDir, path.join(os.tmpdir(), 'aspire-vscode-browser-debug', 'run-1'));
-        assert.strictEqual(debugConfig.debugSessionId, null);
+        assert.strictEqual(debugConfig.debugSessionId, 'dcp-1');
         assert.strictEqual(debugConfig.sessionTerminatedDcpId, 'dcp-1');
         assert.strictEqual(debugConfig.sendSessionTerminatedOnDebugSessionEnd, true);
         assert.strictEqual(debugConfig.program, undefined);
@@ -69,6 +69,14 @@ suite('Browser Debugger Tests', () => {
             '--no-default-browser-check',
             '--disable-background-mode'
         ]);
+    });
+
+    test('maps Firefox to the VS Code Firefox debug adapter', async () => {
+        const debugConfig = createDebugConfig();
+
+        await configure({ type: 'browser', url: 'https://localhost:5001', browser: 'firefox' }, debugConfig);
+
+        assert.strictEqual(debugConfig.type, 'firefox');
     });
 
     test('logs the missing URL reason when browser launch configuration is incomplete', async () => {
@@ -131,6 +139,60 @@ suite('Browser Debugger Tests', () => {
             dcp_id: 'dcp-1',
             exit_code: 0
         });
+        assert.strictEqual(rmStub.calledOnceWithExactly(path.join(os.tmpdir(), 'aspire-vscode-browser-debug', 'run-1'), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }), true);
+
+        aspireDebugSession.dispose();
+    });
+
+    test('waits for stopped browser debug session before cleaning profile directory', async () => {
+        const rmStub = sinon.stub(fs.promises, 'rm').resolves();
+        let startDebugSession: ((session: vscode.DebugSession) => void) | undefined;
+        sinon.stub(vscode.debug, 'onDidStartDebugSession').callsFake(listener => {
+            startDebugSession = listener;
+            return { dispose: () => { } };
+        });
+        sinon.stub(vscode.debug, 'onDidTerminateDebugSession').callsFake(() => {
+            return { dispose: () => { } };
+        });
+        sinon.stub(vscode.debug, 'startDebugging').callsFake(async (_folder, configuration) => {
+            assert.ok(startDebugSession);
+            startDebugSession(createDebugSession('browser-session-id', configuration as vscode.DebugConfiguration));
+            return true;
+        });
+        let finishStopDebugging: (() => void) | undefined;
+        sinon.stub(vscode.debug, 'stopDebugging').callsFake(() => new Promise<void>(resolve => {
+            finishStopDebugging = resolve;
+        }));
+
+        const dcpServer = {
+            sendNotification: sinon.stub(),
+            takeDebugSessionAggregateStats: sinon.stub(),
+        };
+        const parentDebugSession = createDebugSession('aspire-session-id', {
+            type: 'aspire',
+            request: 'launch',
+            name: 'Aspire',
+            program: '/workspace/apphost.cs',
+        });
+        const terminalProvider = {
+            isDebugConfigEnvironmentLoggingEnabled: () => false,
+        };
+        const aspireDebugSession = new AspireDebugSession(parentDebugSession, {} as any, dcpServer as any, terminalProvider as any, () => { });
+        const debugConfig = createDebugConfig();
+        await configure({ type: 'browser', url: 'https://localhost:5001' }, debugConfig);
+
+        const resourceDebugSession = await aspireDebugSession.startAndGetDebugSession(debugConfig);
+
+        assert.ok(resourceDebugSession);
+        resourceDebugSession.stopSession();
+        await Promise.resolve();
+
+        assert.strictEqual(rmStub.called, false);
+
+        assert.ok(finishStopDebugging);
+        finishStopDebugging();
+        await Promise.resolve();
+
         assert.strictEqual(rmStub.calledOnceWithExactly(path.join(os.tmpdir(), 'aspire-vscode-browser-debug', 'run-1'), { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }), true);
 
         aspireDebugSession.dispose();

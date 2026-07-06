@@ -50,10 +50,10 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
                 extensionLogOutputChannel.warn(`Failed to delete browser debug profile directory '${userDataDir}': ${error instanceof Error ? error.message : String(error)}`);
             });
         });
-        // Browser/js-debug child sessions do not reliably carry Aspire's custom
-        // configuration fields, so AspireDebugSession sends the DCP termination
-        // notification from the VS Code session end event instead of adapter output.
-        debugConfiguration.debugSessionId = null;
+        // Browser/js-debug child sessions do not provide a reliable DAP onExit
+        // lifetime signal. Keep debugSessionId so adapterTracker still forwards
+        // browser output as service logs, and let AspireDebugSession send the DCP
+        // termination notification from the VS Code root session end event.
         debugConfiguration.sessionTerminatedDcpId = launchOptions.debugSessionId;
         debugConfiguration.sendSessionTerminatedOnDebugSessionEnd = true;
 
@@ -78,6 +78,9 @@ function getBrowserDebugAdapter(browser: string | undefined): string {
         case 'google-chrome':
         case 'chromium':
             return 'pwa-chrome';
+        case 'firefox':
+        case 'mozilla-firefox':
+            return 'firefox';
         default:
             return normalizedBrowser.startsWith('pwa-') ? normalizedBrowser : `pwa-${normalizedBrowser}`;
     }

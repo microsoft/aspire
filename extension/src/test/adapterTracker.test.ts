@@ -226,6 +226,32 @@ suite('Debug Adapter Tracker Tests', () => {
         disposable.dispose();
     });
 
+    test('service logs stay enabled when session termination is handled by VS Code debug session end', async () => {
+        (debugSession.configuration as AspireResourceExtendedDebugConfiguration).sendSessionTerminatedOnDebugSessionEnd = true;
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'pwa-msedge');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'output',
+            body: {
+                category: 'stdout',
+                output: 'browser log\n'
+            }
+        });
+        tracker.onExit(0);
+
+        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+        const notification = dcpServer.sendNotification.firstCall.args[0] as ServiceLogsNotification;
+        assert.strictEqual(notification.notification_type, 'serviceLogs');
+        assert.strictEqual(notification.session_id, 'run-123');
+        assert.strictEqual(notification.dcp_id, 'debug-456');
+        assert.strictEqual(notification.log_message, 'browser log');
+
+        disposable.dispose();
+    });
+
     test('telemetry output event is not sent as service log', async () => {
         const disposable = createDebugAdapterTracker(dcpServer as any, 'node');
         const factory = registerFactoryStub.lastCall.args[1];
