@@ -38,7 +38,7 @@ internal static class CliE2EAutomatorHelpers
     /// Intentionally larger than <see cref="AspireRunStartupBudgetSeconds"/> so the CLI's own startup timeout fires
     /// (surfacing its diagnostic) before this wait gives up on a genuine hang.
     /// </summary>
-    internal static readonly TimeSpan AspireRunReadyTimeout = TimeSpan.FromSeconds(AspireRunStartupBudgetSeconds + 60);
+    internal static TimeSpan AspireRunReadyTimeout => TimeSpan.FromSeconds(AspireRunStartupBudgetSeconds + 60);
 
     /// <summary>
     /// Builds the shell command that launches <c>aspire run</c> with an explicit AppHost startup budget so cold
