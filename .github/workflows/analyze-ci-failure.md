@@ -12,6 +12,7 @@ on:
     workflows: ["CI"]
     types:
       - completed
+    # Intentional for now: only analyze CI runs for builds against main while this workflow is being validated.
     branches:
       - main
   workflow_dispatch:
