@@ -775,7 +775,7 @@ safe-outputs:
               fi
             fi
 
-            # ── 3. Post PR comment using the analysis JSON ──
+            # ── 4. Post PR comment using the analysis JSON ──
             FIRST_PR=$(echo "$PR_NUMBERS" | cut -d',' -f1)
             if [ -z "$FIRST_PR" ] || [ "$FIRST_PR" = "null" ]; then
               echo "No PR number found in analysis. Skipping comment."
@@ -805,7 +805,7 @@ safe-outputs:
 
               "<!-- analyze-ci-failure -->\n" +
               if .verdict == "transient-infra" then
-                "🔍 **CI Failure Analysis: Transient Infrastructure Failure**\n\nThe CI build failed due to transient infrastructure issues.\n\n**Failed jobs:**\n" + job_list + "\n\nTo rerun the failed jobs manually, visit the [workflow run page](" + .run_url + ").\n"
+                "🔍 **CI Failure Analysis: Transient Infrastructure Failure**\n\nThe CI build failed due to transient infrastructure issues.\n\n**Failed jobs:**\n" + job_list + "\n\nIf a rerun was not already requested automatically, visit the [workflow run page](" + .run_url + ") to rerun the failed jobs manually.\n"
               elif .verdict == "flaky-test" then
                 "⚠️ **CI Failure Analysis: Possible Flaky Test(s)**\n\nThe CI build failed due to test failure(s) that appear unrelated to the PR changes. These may be flaky tests.\n\n**Suspected flaky test(s):**\n" + test_list + "\n\n**Suggested actions:**\n- Re-run the failed CI jobs to confirm if the failure is intermittent\n- If the test continues to fail, consider [quarantining it](https://github.com/microsoft/aspire/blob/main/docs/quarantined-tests.md) using `/quarantine-test <test name> <issue URL>`\n- Search [existing issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+label%3Atest-failure) to see if this test is already known to be flaky\n\nYou can re-run the failed jobs from the [workflow run page](" + .run_url + ").\n"
               elif .verdict == "code-issue" then
