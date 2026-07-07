@@ -18,16 +18,31 @@ internal static partial class ProcessStartTimeHelper
     private const int LinuxClockTicksPerSecondConfigName = 2; // _SC_CLK_TCK
 
     /// <summary>
-    /// The tolerance legacy callers must apply when comparing process start times (idetity times).
+    /// The tolerance legacy callers apply when comparing a <see cref="Process.StartTime"/>-derived
+    /// start time across processes. It absorbs the boot-time jitter that makes the same PID's runtime
+    /// start time differ between readers on Linux. The stable millisecond identity is far tighter — see
+    /// <see cref="StableStartTimeMatchTolerance"/>.
     /// </summary>
     public static readonly TimeSpan LegacyStartTimeMatchTolerance = TimeSpan.FromSeconds(1);
 
     /// <summary>
-    /// Gets the current process's start time (identity time) as whole Unix seconds-since-boot. 
-    /// This is the value that should be propagated to child processes so they can verify the parent's identity (PID + start time).
+    /// The tolerance callers apply when comparing the stable (millisecond) process-identity start time.
     /// </summary>
-    public static long GetCurrentProcessStartTimeUnixSeconds()
-        => GetCurrentProcessStartTime().ToUnixTimeSeconds();
+    // The stable identity is only as precise as its coarsest source. On Linux the /proc start time is
+    // expressed in clock ticks whose resolution is sysconf(_SC_CLK_TCK) — effectively 100 Hz / 10 ms
+    // (USER_HZ) on every mainstream distro. 20 ms is two of those ticks: it absorbs a one-tick rounding
+    // difference on each side of a tick boundary while still shrinking the PID-reuse window ~50x versus
+    // the previous whole-second identity. Windows (100 ns FILETIME) and macOS (1 us) are far finer, 
+    // so 20 ms is comfortably within their resolution too.
+    public static readonly TimeSpan StableStartTimeMatchTolerance = TimeSpan.FromMilliseconds(20);
+
+    /// <summary>
+    /// Gets the current process's stable identity start time as Unix milliseconds. This is the value
+    /// that should be propagated to child processes so they can verify the parent's identity
+    /// (PID + start time) at millisecond granularity.
+    /// </summary>
+    public static long GetCurrentProcessStartTimeUnixMilliseconds()
+        => GetCurrentProcessStartTime().ToUnixTimeMilliseconds();
 
     /// <summary>
     /// Gets the current process's start time as reported by <see cref="Process.StartTime"/>.
@@ -54,11 +69,12 @@ internal static partial class ProcessStartTimeHelper
     }
 
     /// <summary>
-    /// Gets the start time, as whole Unix seconds, of the process with the given <paramref name="pid"/>.
+    /// Gets the stable identity start time, as Unix milliseconds, of the process with the given
+    /// <paramref name="pid"/>.
     /// </summary>
     /// <returns>The start time, or <see langword="null"/> when the process cannot be inspected (already exited, privileged, etc.).</returns>
-    public static long? TryGetProcessStartTimeUnixSeconds(int pid)
-        => TryGetProcessStartTime(pid)?.ToUnixTimeSeconds();
+    public static long? TryGetProcessStartTimeUnixMilliseconds(int pid)
+        => TryGetProcessStartTime(pid)?.ToUnixTimeMilliseconds();
 
     /// <summary>
     /// Gets the start time, as whole Unix seconds, of the process with the given <paramref name="pid"/>
@@ -101,8 +117,8 @@ internal static partial class ProcessStartTimeHelper
     }
 
     /// <summary>
-    /// Parses a Unix-seconds start time previously produced by
-    /// <see cref="GetCurrentProcessStartTimeUnixSeconds"/> (for example from an environment variable).
+    /// Parses a Unix start-time value previously produced for an identity environment variable (whole
+    /// seconds for the legacy domain, milliseconds for the stable domain).
     /// </summary>
     /// <returns>The parsed value, or <see langword="null"/> when <paramref name="value"/> is missing or invalid.</returns>
     public static long? TryParseStartTimeUnixSeconds(string? value)
@@ -110,15 +126,15 @@ internal static partial class ProcessStartTimeHelper
 
     /// <summary>
     /// Determines whether a process with the given <paramref name="pid"/> is currently running and,
-    /// when <paramref name="expectedStartTimeUnixSeconds"/> is supplied, whether its start time matches
-    /// (guarding against PID reuse). When the expected start time is <see langword="null"/> this falls
-    /// back to a PID-only existence check.
+    /// when <paramref name="expectedStartTimeUnixMilliseconds"/> is supplied, whether its stable start
+    /// time matches (guarding against PID reuse). When the expected start time is <see langword="null"/>
+    /// this falls back to a PID-only existence check.
     /// </summary>
     /// <param name="pid">The process ID to check.</param>
-    /// <param name="expectedStartTimeUnixSeconds">The expected start time (whole Unix seconds), or <see langword="null"/> for PID-only.</param>
-    /// <param name="tolerance">Allowed difference between the expected and observed start time. Defaults to an exact match.</param>
+    /// <param name="expectedStartTimeUnixMilliseconds">The expected stable start time (Unix milliseconds), or <see langword="null"/> for PID-only.</param>
+    /// <param name="tolerance">Allowed difference between the expected and observed start time. Defaults to <see cref="StableStartTimeMatchTolerance"/>.</param>
     /// <returns><see langword="true"/> if the process exists and matches; otherwise <see langword="false"/>.</returns>
-    public static bool IsProcessRunning(int pid, long? expectedStartTimeUnixSeconds = null, TimeSpan? tolerance = null)
+    public static bool IsProcessRunning(int pid, long? expectedStartTimeUnixMilliseconds = null, TimeSpan? tolerance = null)
     {
         try
         {
@@ -128,19 +144,19 @@ internal static partial class ProcessStartTimeHelper
                 return false;
             }
 
-            if (expectedStartTimeUnixSeconds is { } expected)
+            if (expectedStartTimeUnixMilliseconds is { } expected)
             {
                 // Reading the process start time can race with process exit. On macOS it can throw:
                 //   Win32Exception (3): Unable to retrieve the specified information about the process or thread.
                 // If we cannot prove this is the expected target, treat it as not running so callers
                 // never act on a recycled PID.
-                var actual = TryGetProcessStartTimeUnixSeconds(pid);
+                var actual = TryGetProcessStartTimeUnixMilliseconds(pid);
                 if (actual is null)
                 {
                     return false;
                 }
 
-                if (!AreClose(expected, actual.Value, tolerance))
+                if (!AreCloseMilliseconds(expected, actual.Value, tolerance))
                 {
                     return false;
                 }
@@ -240,25 +256,39 @@ internal static partial class ProcessStartTimeHelper
         return Math.Abs(expectedStartTimeUnixSeconds - actualStartTimeUnixSeconds) <= toleranceSeconds;
     }
 
+    /// <summary>
+    /// Returns whether two stable-identity start times, expressed as Unix milliseconds, identify the same
+    /// process. Defaults to <see cref="StableStartTimeMatchTolerance"/> so a within-tick rounding
+    /// difference is accepted while a recycled PID (which starts a later, larger boot-relative time) is
+    /// still rejected.
+    /// </summary>
+    /// <param name="expectedStartTimeUnixMilliseconds">The expected start time, in Unix milliseconds.</param>
+    /// <param name="actualStartTimeUnixMilliseconds">The observed start time, in Unix milliseconds.</param>
+    /// <param name="tolerance">Optional allowed difference; defaults to <see cref="StableStartTimeMatchTolerance"/>.</param>
+    public static bool AreCloseMilliseconds(long expectedStartTimeUnixMilliseconds, long actualStartTimeUnixMilliseconds, TimeSpan? tolerance = null)
+    {
+        var toleranceMilliseconds = (long)(tolerance ?? StableStartTimeMatchTolerance).TotalMilliseconds;
+        return Math.Abs(expectedStartTimeUnixMilliseconds - actualStartTimeUnixMilliseconds) <= toleranceMilliseconds;
+    }
+
     private static DateTimeOffset? TryGetLinuxProcessStartTime(int pid)
     {
         // These identities are always stamped with PIDs from the current process namespace.
-        // Do not honor HOST_PROC here: that is only for DCP host-process inspection, and
-        // mixing local PIDs with host /proc data can make orphan detection act on the wrong process.
+        // Do not honor HOST_PROC here: that is only for DCP host-process inspection.
         if (TryGetLinuxProcessStartTicks(pid, LinuxProcRoot) is not { } startTicks)
         {
             return null;
         }
 
-        // Boot-relative seconds only. startTicks is field 22 of /proc/<pid>/stat, fixed at process start
+        // Boot-relative milliseconds. startTicks is field 22 of /proc/<pid>/stat, fixed at process start
         // relative to boot, so this is identical for every reader regardless of any later wall-clock step.
         // We intentionally do NOT add /proc/stat btime: btime re-expresses this as wall-clock time and
         // itself shifts on clock sync, which would re-introduce the drift this guards against. The result
-        // is an opaque same-machine identity token (seconds since boot), not a real calendar time. This
-        // mirrors DcpProcessMonitor.GetLinuxProcessIdentityTimestamp so every Aspire watchdog computes the
-        // same value for a given PID.
-        var startTimeSecondsSinceBoot = (long)(startTicks / (ulong)GetLinuxClockTicksPerSecond());
-        return DateTimeOffset.FromUnixTimeSeconds(startTimeSecondsSinceBoot);
+        // is an opaque same-machine identity token (milliseconds since boot), not a real calendar time.
+        // Milliseconds (startTicks * 1000 / _SC_CLK_TCK) preserves the sub-second precision needed to
+        // detect a PID reused within the same second; the source resolution is one _SC_CLK_TCK tick (~10 ms). 
+        var startTimeMillisecondsSinceBoot = (long)((startTicks * 1000) / (ulong)GetLinuxClockTicksPerSecond());
+        return DateTimeOffset.FromUnixTimeMilliseconds(startTimeMillisecondsSinceBoot);
     }
 
     /// <summary>

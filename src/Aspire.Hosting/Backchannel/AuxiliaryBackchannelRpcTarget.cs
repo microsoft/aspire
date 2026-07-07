@@ -877,30 +877,33 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             cliStartedAt = DateTimeOffset.FromUnixTimeSeconds(parsedCliStartedAt);
         }
 
-        // ASPIRE_CLI_STARTED_STABLE is the /proc-derived launcher-CLI identity that current CLIs stamp
-        // alongside the legacy value. It survives wall-clock steps, so surfacing it lets the CLI-side
-        // orphan collector verify the launching CLI with an exact PID-reuse check instead of the
-        // drift-prone legacy value. Older CLIs do not stamp it, so it stays null for them.
+        // ASPIRE_CLI_STARTED_STABLE is the stable launcher-CLI identity time that current CLIs stamp
+        // alongside the legacy value, in Unix milliseconds. It survives wall-clock steps, so surfacing it
+        // lets the CLI-side orphan collector verify the launching CLI with an exact PID-reuse check
+        // instead of the drift-prone legacy value. Older CLIs do not stamp it, so it stays null for them.
         DateTimeOffset? cliStableStartedAt = null;
         var cliStableStartedAtString = configuration[KnownConfigNames.CliProcessStartedStable];
         if (!string.IsNullOrEmpty(cliStableStartedAtString) && long.TryParse(cliStableStartedAtString, out var parsedCliStableStartedAt))
         {
-            cliStableStartedAt = DateTimeOffset.FromUnixTimeSeconds(parsedCliStableStartedAt);
+            cliStableStartedAt = DateTimeOffset.FromUnixTimeMilliseconds(parsedCliStableStartedAt);
         }
 
         using var currentProcess = Process.GetCurrentProcess();
-        // StartedAt is the legacy backchannel field, and released AppHosts populate it from
-        // Process.StartTime. Keep that runtime-domain value for mixed-version CLI compatibility.
-        // StableStartedAt carries the current /proc-backed PID identity for exact reuse checks.
+
         return Task.FromResult(new AppHostInformation
         {
             AppHostPath = appHostPath,
             ProcessId = Environment.ProcessId,
             CliProcessId = cliProcessId,
+
+            // StartedAt is the legacy backchannel field, and released AppHosts populate it from Process.StartTime. 
+            // Keep doing for mixed-version CLI compatibility.
+            // StableStartedAt carries millisecond-precision, stable process identity time for exact reuse checks.
             StartedAt = new DateTimeOffset(currentProcess.StartTime),
             StableStartedAt = ProcessStartTimeHelper.TryGetProcessStartTime(Environment.ProcessId),
             CliStartedAt = cliStartedAt,
             CliStableStartedAt = cliStableStartedAt,
+
             CliLogFilePath = configuration[KnownConfigNames.CliLogFilePath]
         });
     }

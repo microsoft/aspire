@@ -97,10 +97,10 @@ internal sealed class OrphanedAppHostCollector(
 
         if (connection.AppHostInfo.CliStableStartedAt is { } cliStableStartedAt)
         {
-            // Current AppHosts report the launching CLI's /proc-derived identity. It is immune to
-            // wall-clock steps, so an exact comparison reliably distinguishes the original launcher
-            // from a recycled PID: a mismatch here is trustworthy evidence the launcher is gone.
-            return !ProcessStartTimeHelper.IsProcessRunning(cliPid, cliStableStartedAt.ToUnixTimeSeconds());
+            // Current AppHosts report the launching CLI's in Unix milliseconds. 
+            // It is immune to wall-clock shifts steps, so a millisecond comparison reliably distinguishes the
+            // original launcher from a recycled PID: a mismatch here is trustworthy evidence the launcher is gone.
+            return !ProcessStartTimeHelper.IsProcessRunning(cliPid, cliStableStartedAt.ToUnixTimeMilliseconds());
         }
 
         // Legacy fallback (older AppHost): only ASPIRE_CLI_STARTED is available, which is stamped from Process.StartTime. 

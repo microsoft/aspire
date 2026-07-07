@@ -508,7 +508,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // Stamp the launching CLI (hostPid) as the parent under both the RemoteHost and generic CLI
         // key pairs. Resolve the start time once and pair it with the PID so the RemoteHost orphan
         // detector verifies both and does not keep the server alive against a recycled PID.
-        var hostStartedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixSeconds(hostPid);
+        var hostStartedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(hostPid);
         OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.RemoteAppHostProcessId, KnownConfigNames.RemoteAppHostProcessStarted);
         OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted);
 

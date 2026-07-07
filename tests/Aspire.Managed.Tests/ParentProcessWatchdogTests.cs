@@ -9,7 +9,7 @@ namespace Aspire.Managed.Tests;
 public class ParentProcessWatchdogTests
 {
     [Fact]
-    public void GetExpectedParentStartTimeUnixSeconds_PrefersStableValue()
+    public void GetExpectedParentStartTimeUnix_PrefersStableValue()
     {
         var environment = new Dictionary<string, string?>
         {
@@ -17,21 +17,21 @@ public class ParentProcessWatchdogTests
             [KnownConfigNames.CliProcessStartedStable] = "1001"
         };
 
-        var startTime = ParentProcessWatchdog.GetExpectedParentStartTimeUnixSeconds(environment.GetValueOrDefault, out var useRuntimeStartTime);
+        var startTime = ParentProcessWatchdog.GetExpectedParentStartTimeUnix(environment.GetValueOrDefault, out var useRuntimeStartTime);
 
         Assert.Equal(1001, startTime);
         Assert.False(useRuntimeStartTime);
     }
 
     [Fact]
-    public void GetExpectedParentStartTimeUnixSeconds_UsesRuntimeComparisonForLegacyValue()
+    public void GetExpectedParentStartTimeUnix_UsesRuntimeComparisonForLegacyValue()
     {
         var environment = new Dictionary<string, string?>
         {
             [KnownConfigNames.CliProcessStarted] = "1000"
         };
 
-        var startTime = ParentProcessWatchdog.GetExpectedParentStartTimeUnixSeconds(environment.GetValueOrDefault, out var useRuntimeStartTime);
+        var startTime = ParentProcessWatchdog.GetExpectedParentStartTimeUnix(environment.GetValueOrDefault, out var useRuntimeStartTime);
 
         Assert.Equal(1000, startTime);
         Assert.True(useRuntimeStartTime);

@@ -34,19 +34,19 @@ internal static class OrphanDetectionEnvironment
     {
         // Widening a non-null-valued dictionary to the nullable-valued signature is safe: Apply only
         // ever writes non-null values, so the caller's non-null contract is never violated.
-        Apply((IDictionary<string, string?>)environment, Environment.ProcessId, ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds(), pidKey, startedKey, overwrite);
+        Apply((IDictionary<string, string?>)environment, Environment.ProcessId, ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds(), pidKey, startedKey, overwrite);
     }
 
     /// <summary>
-    /// Stamps a specific process's identity, using an already-resolved <paramref name="startTimeUnixSeconds"/>.
+    /// Stamps a specific process's identity, using an already-resolved <paramref name="stableStartTimeUnixMilliseconds"/>.
     /// Accepting the start time (rather than resolving it) lets a caller write the same identity under
     /// several key pairs while only reading the start time once. The nullable value type matches
     /// <see cref="System.Diagnostics.ProcessStartInfo.Environment"/> so it can be stamped directly.
     /// </summary>
     /// <param name="environment">The child environment to stamp.</param>
     /// <param name="pid">The parent process id.</param>
-    /// <param name="startTimeUnixSeconds">
-    /// The parent's stable start time in whole Unix seconds, or <see langword="null"/> when it could
+    /// <param name="stableStartTimeUnixMilliseconds">
+    /// The parent's stable start time in Unix milliseconds, or <see langword="null"/> when it could
     /// not be read. When <see langword="null"/> only the PID is written; the watchdog then falls back
     /// to a PID-only existence check.
     /// </param>
@@ -59,7 +59,7 @@ internal static class OrphanDetectionEnvironment
     public static void Apply(
         IDictionary<string, string?> environment,
         int pid,
-        long? startTimeUnixSeconds,
+        long? stableStartTimeUnixMilliseconds,
         string pidKey,
         string startedKey,
         bool overwrite = true)
@@ -76,24 +76,29 @@ internal static class OrphanDetectionEnvironment
         }
 
         var isCliParentIdentity = pidKey == KnownConfigNames.CliProcessId && startedKey == KnownConfigNames.CliProcessStarted;
-        var startedForLegacyConsumers = isCliParentIdentity
-            ? ProcessStartTimeHelper.TryGetRuntimeProcessStartTimeUnixSeconds(pid) ?? startTimeUnixSeconds
-            : startTimeUnixSeconds;
+
+        // For the CLI parent identity, ASPIRE_CLI_STARTED is the value AppHosts <= Aspire version 13.4 
+        // verify with their Process.StartTime-based check, so it MUST stay in whole Unix seconds. 
+        // Every other identity's primary key carries the stable millisecond value directly. 
+        // We need to use correct units here.
+        var startedValue = isCliParentIdentity
+            ? ProcessStartTimeHelper.TryGetRuntimeProcessStartTimeUnixSeconds(pid)
+            : stableStartTimeUnixMilliseconds;
 
         // The start time can be unavailable (target already exited, privileged, etc.); only stamp it
         // when it is known so a stale/empty value never masquerades as a verified identity.
-        if (startedForLegacyConsumers is { } started && (overwrite || !environment.ContainsKey(startedKey)))
+        if (startedValue is { } started && (overwrite || !environment.ContainsKey(startedKey)))
         {
             environment[startedKey] = started.ToString(CultureInfo.InvariantCulture);
         }
 
         if (isCliParentIdentity &&
-            startTimeUnixSeconds is { } stableStarted &&
+            stableStartTimeUnixMilliseconds is { } stableStarted &&
             (overwrite || !environment.ContainsKey(KnownConfigNames.CliProcessStartedStable)))
         {
-            // ASPIRE_CLI_STARTED is consumed by released AppHosts and must remain compatible with their
-            // Process.StartTime-based verifier. Current AppHosts prefer this companion value, which is
-            // stable on Linux because it is derived from /proc start ticks.
+            // ASPIRE_CLI_STARTED_STABLE is the millisecond-precision companion current AppHosts prefer: 
+            // it survives wall-clock steps and gives exact PID-reuse detection. 
+            // AppHosts <= Aspire ver 13.4 ignore it and fall back to the seconds-based ASPIRE_CLI_STARTED above.
             environment[KnownConfigNames.CliProcessStartedStable] = stableStarted.ToString(CultureInfo.InvariantCulture);
         }
     }

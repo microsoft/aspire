@@ -68,7 +68,7 @@ public class OrphanedAppHostCollectorTests
                 AppHostPath = "/tmp/AppHost.csproj",
                 ProcessId = 4242,
                 CliProcessId = Environment.ProcessId,
-                CliStableStartedAt = DateTimeOffset.FromUnixTimeSeconds(1),
+                CliStableStartedAt = DateTimeOffset.FromUnixTimeMilliseconds(1),
             },
         };
 
@@ -385,7 +385,7 @@ public class OrphanedAppHostCollectorTests
                 // Orphaned: a mismatched stable start time is trustworthy evidence of a recycled CLI PID.
                 // Live: the current process's real stable start time matches, so the launching CLI is alive.
                 CliStableStartedAt = orphaned
-                    ? DateTimeOffset.FromUnixTimeSeconds(1)
+                    ? DateTimeOffset.FromUnixTimeMilliseconds(1)
                     : GetCurrentProcessStableStartTime(),
             },
         };
@@ -395,7 +395,7 @@ public class OrphanedAppHostCollectorTests
         => DateTimeOffset.FromUnixTimeSeconds(ProcessStartTimeHelper.GetCurrentProcessRuntimeStartTimeUnixSeconds());
 
     private static DateTimeOffset GetCurrentProcessStableStartTime()
-        => DateTimeOffset.FromUnixTimeSeconds(ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds());
+        => DateTimeOffset.FromUnixTimeMilliseconds(ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds());
 
     private static DateTimeOffset GetProcessStartTime(Process process)
     {

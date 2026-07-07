@@ -16,7 +16,7 @@ public class ProcessStartTimeHelperTests
     [Fact]
     public void IsProcessRunning_CurrentProcessWithMatchingStartTime_ReturnsTrue()
     {
-        var startedUnix = ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds();
+        var startedUnix = ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds();
         Assert.True(ProcessStartTimeHelper.IsProcessRunning(Environment.ProcessId, startedUnix));
     }
 
@@ -24,7 +24,7 @@ public class ProcessStartTimeHelperTests
     public void IsProcessRunning_CurrentProcessWithWrongStartTime_ReturnsFalse()
     {
         // A start time decades off can never match, simulating PID reuse.
-        Assert.False(ProcessStartTimeHelper.IsProcessRunning(Environment.ProcessId, expectedStartTimeUnixSeconds: 1));
+        Assert.False(ProcessStartTimeHelper.IsProcessRunning(Environment.ProcessId, expectedStartTimeUnixMilliseconds: 1));
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public class ProcessStartTimeHelperTests
         using var process = TestProcesses.StartLongRunning();
 
         var pid = process.Id;
-        var startedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixSeconds(process.Id);
+        var startedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(process.Id);
         Assert.NotNull(startedUnix);
 
         Assert.True(ProcessStartTimeHelper.IsProcessRunning(pid));
@@ -49,17 +49,17 @@ public class ProcessStartTimeHelperTests
     }
 
     [Fact]
-    public void GetCurrentProcessStartTimeUnixSeconds_ReturnsPositiveValue()
+    public void GetCurrentProcessStartTimeUnixMilliseconds_ReturnsPositiveValue()
     {
-        Assert.True(ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds() > 0);
+        Assert.True(ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds() > 0);
     }
 
     [Fact]
-    public void TryGetProcessStartTimeUnixSeconds_CurrentProcess_MatchesCurrentValue()
+    public void TryGetProcessStartTimeUnixMilliseconds_CurrentProcess_MatchesCurrentValue()
     {
-        var fromPid = ProcessStartTimeHelper.TryGetProcessStartTimeUnixSeconds(Environment.ProcessId);
+        var fromPid = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(Environment.ProcessId);
         Assert.NotNull(fromPid);
-        Assert.Equal(ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds(), fromPid);
+        Assert.Equal(ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds(), fromPid);
     }
 
     [Fact]
@@ -90,15 +90,15 @@ public class ProcessStartTimeHelperTests
     }
 
     [Fact]
-    public void GetCurrentProcessStartTime_IsStartTicksTicksDividedByTicksPerSecond()
+    public void GetCurrentProcessStartTimeUnixMilliseconds_IsStartTicksTimes1000DividedByTicksPerSecond()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "Boot-relative /proc start-tick identity is Linux-specific.");
 
         var startTicks = ProcessStartTimeHelper.TryGetLinuxProcessStartTicks(Environment.ProcessId, ProcessStartTimeHelper.LinuxProcRoot);
         Assert.NotNull(startTicks);
 
-        var expectedSecondsSinceBoot = (long)(startTicks.Value / (ulong)ProcessStartTimeHelper.GetLinuxClockTicksPerSecond());
-        Assert.Equal(expectedSecondsSinceBoot, ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds());
+        var expectedMillisecondsSinceBoot = (long)((startTicks.Value * 1000) / (ulong)ProcessStartTimeHelper.GetLinuxClockTicksPerSecond());
+        Assert.Equal(expectedMillisecondsSinceBoot, ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds());
     }
 
     [Fact]
@@ -170,5 +170,31 @@ public class ProcessStartTimeHelperTests
     public void AreClose_WithOptInTolerance_AllowsNeighboringSeconds(long expected, long actual, bool expectedResult)
     {
         Assert.Equal(expectedResult, ProcessStartTimeHelper.AreClose(expected, actual, TimeSpan.FromSeconds(1)));
+    }
+
+    [Theory]
+    [InlineData(100000L, 100000L, true)]    // exact match
+    [InlineData(100000L, 100010L, true)]    // within one _SC_CLK_TCK tick (~10 ms): same process
+    [InlineData(100000L, 100020L, true)]    // at the 20 ms boundary: accepted
+    [InlineData(100000L, 100021L, false)]   // just beyond 20 ms: rejected
+    [InlineData(100000L, 100500L, false)]   // reused 500 ms later (same wall-clock second): rejected
+    public void AreCloseMilliseconds_DefaultsToStableTolerance(long expected, long actual, bool expectedResult)
+    {
+        Assert.Equal(expectedResult, ProcessStartTimeHelper.AreCloseMilliseconds(expected, actual));
+    }
+
+    [Fact]
+    public void StableStartTimeMatchTolerance_IsTwentyMilliseconds()
+    {
+        Assert.Equal(TimeSpan.FromMilliseconds(20), ProcessStartTimeHelper.StableStartTimeMatchTolerance);
+    }
+
+    [Fact]
+    public void IsProcessRunning_StartTimeOffByMoreThanTolerance_ReturnsFalse()
+    {
+        // A recycled PID that starts 500 ms after the original (same wall-clock second) collided under the
+        // old whole-second identity; the millisecond identity + 20 ms tolerance distinguishes them.
+        var startedMs = ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds();
+        Assert.False(ProcessStartTimeHelper.IsProcessRunning(Environment.ProcessId, startedMs + 500));
     }
 }

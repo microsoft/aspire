@@ -35,7 +35,7 @@ internal static class ParentProcessWatchdog
             return null;
         }
 
-        var expectedStartTimeUnix = GetExpectedParentStartTimeUnixSeconds(Environment.GetEnvironmentVariable, out var useRuntimeStartTime);
+        var expectedStartTimeUnix = GetExpectedParentStartTimeUnix(Environment.GetEnvironmentVariable, out var useRuntimeStartTime);
 
         return ParentProcessLivenessMonitor.Start(
             parentPid,
@@ -44,7 +44,10 @@ internal static class ParentProcessWatchdog
             useRuntimeStartTime: useRuntimeStartTime);
     }
 
-    internal static long? GetExpectedParentStartTimeUnixSeconds(Func<string, string?> getEnvironmentVariable, out bool useRuntimeStartTime)
+    // Returns the stable identity value (ASPIRE_CLI_STARTED_STABLE, Unix milliseconds) when present,
+    // otherwise the legacy value (ASPIRE_CLI_STARTED, whole Unix seconds). The out flag tells the caller
+    // which clock domain the returned value is in.
+    internal static long? GetExpectedParentStartTimeUnix(Func<string, string?> getEnvironmentVariable, out bool useRuntimeStartTime)
     {
         if (ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(getEnvironmentVariable(KnownConfigNames.CliProcessStartedStable)) is { } stableStartTimeUnix)
         {

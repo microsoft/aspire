@@ -249,7 +249,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             {
                 config[KnownConfigNames.CliRunDetached] = "true";
                 config[KnownConfigNames.CliLauncherProcessId] = launcher.Id.ToString(CultureInfo.InvariantCulture);
-                config[KnownConfigNames.CliLauncherProcessStarted] = GetProcessStartTimeUnixSeconds(launcher).ToString(CultureInfo.InvariantCulture);
+                config[KnownConfigNames.CliLauncherProcessStarted] = GetProcessStartTimeUnixMilliseconds(launcher).ToString(CultureInfo.InvariantCulture);
             };
         });
 
@@ -347,7 +347,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             {
                 config[KnownConfigNames.CliRunDetached] = "true";
                 config[KnownConfigNames.CliLauncherProcessId] = launcher.Id.ToString(CultureInfo.InvariantCulture);
-                config[KnownConfigNames.CliLauncherProcessStarted] = GetProcessStartTimeUnixSeconds(launcher).ToString(CultureInfo.InvariantCulture);
+                config[KnownConfigNames.CliLauncherProcessStarted] = GetProcessStartTimeUnixMilliseconds(launcher).ToString(CultureInfo.InvariantCulture);
             };
         });
 
@@ -3444,9 +3444,9 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("certificate_trust_failed", tags[TelemetryConstants.Tags.ErrorType]);
     }
 
-    private static long GetProcessStartTimeUnixSeconds(Process process)
+    private static long GetProcessStartTimeUnixMilliseconds(Process process)
     {
-        var startTime = ProcessStartTimeHelper.TryGetProcessStartTimeUnixSeconds(process.Id);
+        var startTime = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(process.Id);
         Assert.NotNull(startTime);
         return startTime.Value;
     }

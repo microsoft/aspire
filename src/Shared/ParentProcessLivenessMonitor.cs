@@ -18,35 +18,39 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
 
     private ParentProcessLivenessMonitor(
         int parentPid,
-        long? parentStartedUnixSeconds,
+        long? parentStartedUnix,
         Func<CancellationToken, Task> onParentExited,
         TimeProvider timeProvider,
         bool useRuntimeStartTime)
     {
-        _monitorTask = MonitorAsync(parentPid, parentStartedUnixSeconds, onParentExited, timeProvider, useRuntimeStartTime, _stopCts.Token);
+        _monitorTask = MonitorAsync(parentPid, parentStartedUnix, onParentExited, timeProvider, useRuntimeStartTime, _stopCts.Token);
     }
 
     /// <summary>
     /// Starts polling the parent identified by <paramref name="parentPid"/> (and, when supplied,
-    /// <paramref name="parentStartedUnixSeconds"/> to guard against PID reuse). The parent is probed once
+    /// <paramref name="parentStartedUnix"/> to guard against PID reuse). The parent is probed once
     /// immediately, then on every poll interval, so a parent that is already gone is detected without
     /// waiting a full tick. When the parent is gone, <paramref name="onParentExited"/> is invoked exactly
     /// once. The token passed to that callback is cancelled when this monitor is disposed, so any grace
     /// delay inside the callback is unwound if the caller disarms first.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="parentStartedUnix"/> is interpreted per <paramref name="useRuntimeStartTime"/>:
+    /// whole Unix seconds for the legacy <c>Process.StartTime</c> domain, or Unix milliseconds for the stable identity time.
+    /// </remarks>
     public static ParentProcessLivenessMonitor Start(
         int parentPid,
-        long? parentStartedUnixSeconds,
+        long? parentStartedUnix,
         Func<CancellationToken, Task> onParentExited,
         TimeProvider? timeProvider = null,
         bool useRuntimeStartTime = false)
     {
-        return new ParentProcessLivenessMonitor(parentPid, parentStartedUnixSeconds, onParentExited, timeProvider ?? TimeProvider.System, useRuntimeStartTime);
+        return new ParentProcessLivenessMonitor(parentPid, parentStartedUnix, onParentExited, timeProvider ?? TimeProvider.System, useRuntimeStartTime);
     }
 
     private static async Task MonitorAsync(
         int parentPid,
-        long? parentStartedUnixSeconds,
+        long? parentStartedUnix,
         Func<CancellationToken, Task> onParentExited,
         TimeProvider timeProvider,
         bool useRuntimeStartTime,
@@ -73,9 +77,9 @@ internal sealed class ParentProcessLivenessMonitor : IAsyncDisposable
                 // first; ThrowIfCancellationRequested preserves that when we probe before the timer.
                 stopToken.ThrowIfCancellationRequested();
 
-                var isProcessRunning = useRuntimeStartTime && parentStartedUnixSeconds is { } legacyStartTime
+                var isProcessRunning = useRuntimeStartTime && parentStartedUnix is { } legacyStartTime
                     ? ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(parentPid, legacyStartTime, ProcessStartTimeHelper.LegacyStartTimeMatchTolerance)
-                    : ProcessStartTimeHelper.IsProcessRunning(parentPid, parentStartedUnixSeconds);
+                    : ProcessStartTimeHelper.IsProcessRunning(parentPid, parentStartedUnix);
                 if (isProcessRunning)
                 {
                     continue;

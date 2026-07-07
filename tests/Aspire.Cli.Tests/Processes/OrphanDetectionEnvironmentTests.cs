@@ -84,7 +84,7 @@ public class OrphanDetectionEnvironmentTests
     {
         var environment = new Dictionary<string, string?>(StringComparer.Ordinal);
 
-        OrphanDetectionEnvironment.Apply(environment, pid: 4321, startTimeUnixSeconds: 1000, KnownConfigNames.RemoteAppHostProcessId, KnownConfigNames.RemoteAppHostProcessStarted);
+        OrphanDetectionEnvironment.Apply(environment, pid: 4321, stableStartTimeUnixMilliseconds: 1000, KnownConfigNames.RemoteAppHostProcessId, KnownConfigNames.RemoteAppHostProcessStarted);
 
         Assert.Equal("4321", environment[KnownConfigNames.RemoteAppHostProcessId]);
         Assert.Equal("1000", environment[KnownConfigNames.RemoteAppHostProcessStarted]);
@@ -95,7 +95,7 @@ public class OrphanDetectionEnvironmentTests
     {
         var environment = new Dictionary<string, string?>(StringComparer.Ordinal);
 
-        OrphanDetectionEnvironment.Apply(environment, pid: 4321, startTimeUnixSeconds: null, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted);
+        OrphanDetectionEnvironment.Apply(environment, pid: 4321, stableStartTimeUnixMilliseconds: null, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted);
 
         Assert.Equal("4321", environment[KnownConfigNames.CliProcessId]);
         Assert.False(environment.ContainsKey(KnownConfigNames.CliProcessStarted));
@@ -111,7 +111,7 @@ public class OrphanDetectionEnvironmentTests
             [KnownConfigNames.CliProcessStarted] = "111",
         };
 
-        OrphanDetectionEnvironment.Apply(environment, pid: 4321, startTimeUnixSeconds: 1000, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted, overwrite: false);
+        OrphanDetectionEnvironment.Apply(environment, pid: 4321, stableStartTimeUnixMilliseconds: 1000, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted, overwrite: false);
 
         Assert.Equal("999", environment[KnownConfigNames.CliProcessId]);
         Assert.Equal("111", environment[KnownConfigNames.CliProcessStarted]);
