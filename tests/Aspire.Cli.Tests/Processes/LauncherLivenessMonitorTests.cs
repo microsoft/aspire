@@ -4,7 +4,6 @@
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Processes;
-using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 

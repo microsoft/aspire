@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Processes;

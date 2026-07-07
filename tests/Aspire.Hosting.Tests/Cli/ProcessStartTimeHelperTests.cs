@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Globalization;
 
 namespace Aspire.Hosting.Tests;
@@ -31,13 +30,9 @@ public class ProcessStartTimeHelperTests
     [Fact]
     public void IsProcessRunning_TracksRealProcessLifetime()
     {
-        // Mirrors CliOrphanDetectorTests' process choice for cross-platform reliability in CI.
-        var psi = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo("ping", "-t localhost") { CreateNoWindow = true }
-            : new ProcessStartInfo("tail", "-f /dev/null") { CreateNoWindow = true };
-
-        using var process = Process.Start(psi);
-        Assert.NotNull(process);
+        // Use the shared bounded, self-terminating helper so an aborted test host (hang dump / SIGKILL)
+        // can't leak this child on a CI agent. The test still kills it explicitly below.
+        using var process = TestProcesses.StartLongRunning();
 
         var pid = process.Id;
         var startedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixSeconds(process.Id);

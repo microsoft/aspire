@@ -1,7 +1,6 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Threading.Channels;
 using Aspire.Hosting.Cli;
 using Aspire.Hosting.Utils;
@@ -257,17 +256,10 @@ public class CliOrphanDetectorTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task AppHostExitsWhenCliProcessPidDies()
     {
-        // Start a long-running process that will stay alive until killed
-        // These are system utilities on their respective platforms and don't require any additional dependencies.
-        var psi = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo("ping", "-t localhost") { CreateNoWindow = true }
-            : new ProcessStartInfo("tail", "-f /dev/null");
-
-        psi.RedirectStandardOutput = true;
-        psi.RedirectStandardError = true;
-
-        using var fakeCliProcess = Process.Start(psi);
-        Assert.NotNull(fakeCliProcess);
+        // A long-running stand-in for the launching CLI. The shared helper is bounded and
+        // self-terminating so an aborted test host can't leak it; it is killed below to drive
+        // the orphan-exit path.
+        using var fakeCliProcess = TestProcesses.StartLongRunning();
 
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
         builder.Configuration["ASPIRE_CLI_PID"] = fakeCliProcess.Id.ToString();

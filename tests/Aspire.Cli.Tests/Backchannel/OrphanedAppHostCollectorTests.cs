@@ -96,11 +96,10 @@ public class OrphanedAppHostCollectorTests
     [Fact]
     public void IsOrphaned_DeadCliProcess_ReturnsTrue()
     {
-        var psi = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo("ping", "-t localhost") { CreateNoWindow = true }
-            : new ProcessStartInfo("tail", "-f /dev/null") { CreateNoWindow = true };
-        using var cliProcess = Process.Start(psi);
-        Assert.NotNull(cliProcess);
+        // A dead launcher: start the shared bounded, self-terminating helper (so an aborted test host
+        // can't leak it), capture its start time, then kill it. The collector must then see the
+        // recorded PID + start time as no-longer-running and report the AppHost orphaned.
+        using var cliProcess = TestProcesses.StartLongRunning();
 
         var cliStartedAt = GetProcessStartTime(cliProcess);
         cliProcess.Kill(entireProcessTree: true);

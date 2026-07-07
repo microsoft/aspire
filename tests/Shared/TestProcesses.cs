@@ -5,8 +5,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 
-namespace Aspire.Cli.Tests.TestServices;
-
+// Global namespace (no wrapper) so both Aspire.Cli.Tests and Aspire.Hosting.Tests can link this
+// shared helper without a project-specific using, matching the sibling TempDirectory.cs.
 internal static class TestProcesses
 {
     // A leaked long-running child lingers on a CI agent until the box is recycled. The process-lifecycle
