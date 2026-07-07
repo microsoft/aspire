@@ -97,8 +97,8 @@ internal sealed class OrphanedAppHostCollector(
 
         if (connection.AppHostInfo.CliStableStartedAt is { } cliStableStartedAt)
         {
-            // Current AppHosts report the launching CLI's in Unix milliseconds. 
-            // It is immune to wall-clock shifts steps, so a millisecond comparison reliably distinguishes the
+            // Current AppHosts report the launching CLI's start time in Unix milliseconds.
+            // It is immune to wall-clock shifts, so a millisecond comparison reliably distinguishes the
             // original launcher from a recycled PID: a mismatch here is trustworthy evidence the launcher is gone.
             return !ProcessStartTimeHelper.IsProcessRunning(cliPid, cliStableStartedAt.ToUnixTimeMilliseconds());
         }
