@@ -1,0 +1,38 @@
+{
+  "run_id": 28898685840,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/28898685840",
+  "analyzed_at": "2026-07-07T21:33:03Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 18656,
+    "title": "Update dependencies from microsoft/dcp",
+    "author": "dotnet-maestro[bot]",
+    "state": "closed",
+    "head_branch": "darc-main-b30d48fe-5b31-4376-a8fe-cf8080e11c81",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18656"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Polyglot SDK Validation / Java SDK Validation",
+      "id": 85730957128,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/28898685840/job/85730957128",
+      "classification": "transient-infra",
+      "reason": "NuGet package restore failed because api.nuget.org returned invalid/corrupt data: index.json endpoints returned non-object JSON ('The JSON document is not an object') and nupkg downloads had 'Central Directory corrupt' errors. These are transient nuget.org infrastructure issues unrelated to the PR changes.",
+      "failed_steps": ["Run Java SDK validation"]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / Polyglot Validation Results",
+      "id": 85732610124,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/28898685840/job/85732610124",
+      "classification": "transient-infra",
+      "reason": "Cascading failure from Java SDK Validation job. The check-results step exited with code 1 because Java validation was reported as 'failure' (Python, Go, TypeScript all succeeded).",
+      "failed_steps": ["Check validation results"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["nuget-org-invalid-response"]
+}

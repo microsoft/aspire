@@ -1,0 +1,16 @@
+{
+  "id": "nuget-org-invalid-response",
+  "type": "infra-failure",
+  "title": "NuGet.org serving invalid/corrupt package data (non-object JSON or corrupt nupkg)",
+  "error_pattern": "The content at 'https://api.nuget.org/v3-flatcontainer/...' is not a valid JSON object. The JSON document is not an object. / Failed to download package '...' from 'https://api.nuget.org/...'. The nupkg at '...' is not valid. Central Directory corrupt.",
+  "occurrences": [
+    {
+      "run_id": 28898685840,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/28898685840",
+      "job": "Tests / Polyglot SDK Validation / Java SDK Validation",
+      "pr_number": 18656,
+      "observed_at": "2026-07-07T21:33:03Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18672"
+}
