@@ -945,7 +945,11 @@ Read `ci-failure-data/analysis-summary.md`. It contains the run information, PR 
 
 Analyze all of the data to classify each failed job (see **Classification Rules** below).
 
-Check the **Prior Causes** section in the summary. If any of this run's failures match an existing cause (same test name, same error pattern, or same infrastructure error), you MUST reuse that cause's `id` when writing the cause file in Step 3b. This allows the publish job to merge occurrences into the existing cause rather than creating duplicates.
+#### Matching against prior causes (transient failures only)
+
+When a failure is classified as `flaky-test` or `infra-failure` (NOT `code-issue`), check the **Prior Causes** section in the summary for a match. Prior causes are loaded from JSON files in the `ci-failure-data/prior-causes/` directory (one file per cause, e.g. `ci-failure-data/prior-causes/nuget-feed-timeout.json`). These files are fetched by the `collect-data` job from the `memory/ci-failure-analysis` branch's `causes/` directory and rendered into the summary under the "Prior Causes (from memory branch)" heading.
+
+If any of this run's transient failures match an existing cause, you MUST reuse that cause's `id` when writing the cause file in Step 3b. This allows the publish job to merge occurrences into the existing cause rather than creating duplicates. Do NOT attempt to match code-issue failures against prior causes — those are not tracked.
 
 A failure matches an existing cause when:
 - For flaky tests: the failing test name matches `test_name` in a prior cause, OR the error message/stack trace substantially matches the `error_pattern`
