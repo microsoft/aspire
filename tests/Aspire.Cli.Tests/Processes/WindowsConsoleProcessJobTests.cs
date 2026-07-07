@@ -63,6 +63,60 @@ public class WindowsConsoleProcessJobTests
         Assert.True(spawnedProcess.HasExited);
     }
 
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public void SpawnProcess_WithJob_AssignsChildToJobAtomicallyAtCreation()
+    {
+        Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only test.");
+
+        using var job = new WindowsConsoleProcessJob();
+
+        using var nulHandle = WindowsProcessInterop.CreateFileW(
+            "NUL",
+            WindowsProcessInterop.GenericRead | WindowsProcessInterop.GenericWrite,
+            WindowsProcessInterop.FileShareRead | WindowsProcessInterop.FileShareWrite,
+            nint.Zero,
+            WindowsProcessInterop.OpenExisting,
+            0,
+            nint.Zero);
+
+        Assert.False(nulHandle.IsInvalid);
+        Assert.True(WindowsProcessInterop.SetHandleInformation(
+            nulHandle,
+            WindowsProcessInterop.HandleFlagInherit,
+            WindowsProcessInterop.HandleFlagInherit));
+
+        var nulRawHandle = nulHandle.DangerousGetHandle();
+        var stdio = new WindowsProcessInterop.StdioHandles(
+            Stdin: nulRawHandle,
+            Stdout: nulRawHandle,
+            Stderr: nulRawHandle);
+
+        var pi = WindowsProcessInterop.SpawnProcess(
+            "cmd.exe",
+            ["/c", "ping", "-n", "60", "127.0.0.1"],
+            Environment.CurrentDirectory,
+            stdio,
+            environment: null,
+            createNewConsole: false,
+            job.Handle);
+
+        try
+        {
+            // PROC_THREAD_ATTRIBUTE_JOB_LIST associates the child with the job before it runs, so the
+            // membership is observable the instant CreateProcess returns — there is no separate assign
+            // step that a parent dying mid-spawn could skip, and the child was never suspended.
+            Assert.True(WindowsProcessInterop.IsProcessInJob(pi.hProcess, job.Handle, out var isInJob));
+            Assert.True(isInJob);
+        }
+        finally
+        {
+            WindowsProcessInterop.TerminateProcess(pi.hProcess, 1);
+            WindowsProcessInterop.CloseHandle(pi.hProcess);
+            WindowsProcessInterop.CloseHandle(pi.hThread);
+        }
+    }
+
     [SupportedOSPlatform("windows")]
     private static Process SpawnJobAssignedChildProcess(WindowsConsoleProcessJob job, bool createNewConsole)
     {

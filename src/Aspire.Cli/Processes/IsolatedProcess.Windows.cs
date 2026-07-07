@@ -18,8 +18,8 @@ internal sealed partial class IsolatedProcess
     /// then delegates to <see cref="WindowsProcessInterop.SpawnProcess"/> for the actual
     /// <c>CreateProcessW</c> ceremony. Console isolation and parent-exit protection are
     /// independent: when <see cref="IsolatedProcessStartInfo.KillOnParentExit"/> is set, the spawn
-    /// primitive does the suspended-create / assign / resume dance even if the child does not need
-    /// a new console group.
+    /// primitive assigns the child to the kill-on-close job atomically at creation
+    /// (<c>PROC_THREAD_ATTRIBUTE_JOB_LIST</c>) even if the child does not need a new console group.
     /// </summary>
     /// <remarks>
     /// Unlike <see cref="DetachedProcessLauncher"/>, this launcher consumes the child's

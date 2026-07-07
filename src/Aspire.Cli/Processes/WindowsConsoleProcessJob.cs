@@ -113,8 +113,9 @@ internal sealed class WindowsConsoleProcessJob : IDisposable
     }
 
     /// <summary>
-    /// The job handle. Pass directly to <see cref="WindowsProcessInterop.SpawnProcess"/>
-    /// so the spawn primitive can do the suspended-create / assign / resume dance atomically.
+    /// The job handle. Pass directly to <see cref="WindowsProcessInterop.SpawnProcess"/> so the spawn
+    /// primitive can assign the child to this job atomically at creation via
+    /// <c>PROC_THREAD_ATTRIBUTE_JOB_LIST</c>.
     /// </summary>
     public SafeFileHandle Handle => _jobHandle;
 
