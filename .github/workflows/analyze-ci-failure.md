@@ -816,20 +816,34 @@ safe-outputs:
                   "  - **Why likely flaky**: \(.reason)"]
                 | join("\n");
 
+              "<!-- analyze-ci-failure -->\n" +
               if .verdict == "transient-infra" then
-                "<!-- analyze-ci-failure:rerun-dry-run -->\n🔍 **CI Failure Analysis: Transient Infrastructure Failure**\n\nThe CI build failed due to transient infrastructure issues.\n\n**Failed jobs:**\n" + job_list + "\n\nTo rerun the failed jobs manually, visit the [workflow run page](" + .run_url + ").\n"
+                "🔍 **CI Failure Analysis: Transient Infrastructure Failure**\n\nThe CI build failed due to transient infrastructure issues.\n\n**Failed jobs:**\n" + job_list + "\n\nTo rerun the failed jobs manually, visit the [workflow run page](" + .run_url + ").\n"
               elif .verdict == "flaky-test" then
-                "<!-- analyze-ci-failure:flaky -->\n⚠️ **CI Failure Analysis: Possible Flaky Test(s)**\n\nThe CI build failed due to test failure(s) that appear unrelated to the PR changes. These may be flaky tests.\n\n**Suspected flaky test(s):**\n" + test_list + "\n\n**Suggested actions:**\n- Re-run the failed CI jobs to confirm if the failure is intermittent\n- If the test continues to fail, consider [quarantining it](https://github.com/microsoft/aspire/blob/main/docs/quarantined-tests.md) using `/quarantine-test <test name> <issue URL>`\n- Search [existing issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+label%3Atest-failure) to see if this test is already known to be flaky\n\nYou can re-run the failed jobs from the [workflow run page](" + .run_url + ").\n"
+                "⚠️ **CI Failure Analysis: Possible Flaky Test(s)**\n\nThe CI build failed due to test failure(s) that appear unrelated to the PR changes. These may be flaky tests.\n\n**Suspected flaky test(s):**\n" + test_list + "\n\n**Suggested actions:**\n- Re-run the failed CI jobs to confirm if the failure is intermittent\n- If the test continues to fail, consider [quarantining it](https://github.com/microsoft/aspire/blob/main/docs/quarantined-tests.md) using `/quarantine-test <test name> <issue URL>`\n- Search [existing issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+label%3Atest-failure) to see if this test is already known to be flaky\n\nYou can re-run the failed jobs from the [workflow run page](" + .run_url + ").\n"
               elif .verdict == "code-issue" then
-                "<!-- analyze-ci-failure:code-issue -->\n❌ **CI Failure Analysis: Code Issue Detected**\n\nThe CI build failed due to issue(s) caused by changes in this PR.\n\n**Failed jobs:**\n" + job_list + "\n\nThe CI will not be automatically rerun. Please fix the issue and push an updated commit.\n"
+                "❌ **CI Failure Analysis: Code Issue Detected**\n\nThe CI build failed due to issue(s) caused by changes in this PR.\n\n**Failed jobs:**\n" + job_list + "\n\nThe CI will not be automatically rerun. Please fix the issue and push an updated commit.\n"
               else
-                "<!-- analyze-ci-failure:mixed -->\n⚠️ **CI Failure Analysis: Mixed Failures**\n\nThe CI build contains both transient and non-transient failures.\n\n**Failed jobs:**\n" + job_list + "\n\nThe CI will not be automatically rerun. Please review the failures above.\n"
+                "⚠️ **CI Failure Analysis: Mixed Failures**\n\nThe CI build contains both transient and non-transient failures.\n\n**Failed jobs:**\n" + job_list + "\n\nThe CI will not be automatically rerun. Please review the failures above.\n"
               end
             ' "$ANALYSIS_FILE" > "$COMMENT_FILE"
 
-            gh pr comment "$FIRST_PR" --repo "$REPO" --body-file "$COMMENT_FILE"
+            # Update an existing analysis comment if one exists (by marker),
+            # otherwise create a new one. This prevents stacking duplicate
+            # comments on PRs with repeated CI failures.
+            MARKER="<!-- analyze-ci-failure -->"
+            EXISTING_COMMENT_ID=$(gh api "repos/${REPO}/issues/${FIRST_PR}/comments" --paginate \
+              --jq ".[] | select(.body | contains(\"${MARKER}\")) | .id" 2>/dev/null | head -1 || true)
+
+            if [ -n "$EXISTING_COMMENT_ID" ]; then
+              gh api --method PATCH "repos/${REPO}/issues/comments/${EXISTING_COMMENT_ID}" \
+                -f body="$(cat "$COMMENT_FILE")" > /dev/null
+              echo "Updated existing analysis comment (ID: ${EXISTING_COMMENT_ID}) on PR #${FIRST_PR}"
+            else
+              gh pr comment "$FIRST_PR" --repo "$REPO" --body-file "$COMMENT_FILE"
+              echo "Posted new analysis comment on PR #${FIRST_PR}"
+            fi
             rm -f "$COMMENT_FILE"
-            echo "Posted analysis comment on PR #${FIRST_PR}"
     rerun-failed-jobs:
       name: "Rerun failed CI jobs"
       description: |
