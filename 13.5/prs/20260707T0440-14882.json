@@ -1,0 +1,9 @@
+{
+  "author": "mcumming",
+  "comment": "New File input type for IInteractionService with Dashboard UI, CLI file picker, and TypeScript app host support",
+  "mergedAt": "2026-07-07T04:40:23Z",
+  "number": 14882,
+  "runDate": "2026-07-07T07:07:24Z",
+  "status": "included",
+  "title": "Add File input type to the Interaction Service"
+}

@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@mcumming"
+  ],
+  "description": "A new File input type for IInteractionService lets AppHost commands display a file picker dialog in the dashboard and CLI, allowing users to select and upload files to the app host. Includes single and multiple file selection, configurable size limits, and full support for C# and TypeScript app hosts.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "📁",
+  "firstMergedAt": "2026-07-07T04:40:23Z",
+  "lastMergedAt": "2026-07-07T04:40:23Z",
+  "name": "File upload support for Interaction Service",
+  "owner": "JamesNK",
+  "prs": [
+    14882
+  ]
+}
