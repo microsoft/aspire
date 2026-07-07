@@ -12,7 +12,11 @@ public class VsCodeExtensionCheckTests
     [Fact]
     public async Task CheckAsync_ReturnsEmpty_WhenVsCodeNotInstalled()
     {
-        var check = new VsCodeExtensionCheck(() => new VsCodeExtensionDetection(VsCodeInstalled: false, ExtensionInstalled: false));
+        using var home = new TempDirectory();
+        // No TERM_PROGRAM and nothing resolvable on PATH, so real detection reports VS Code absent.
+        var environment = new TestEnvironment(new Dictionary<string, string?>());
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(home.DirectoryInfo, homeDirectory: home.DirectoryInfo);
+        var check = new VsCodeExtensionCheck(environment, executionContext, _ => null);
 
         var results = await check.CheckAsync(TestContext.Current.CancellationToken);
 
@@ -22,7 +26,16 @@ public class VsCodeExtensionCheckTests
     [Fact]
     public async Task CheckAsync_ReturnsWarning_WhenExtensionMissing()
     {
-        var check = new VsCodeExtensionCheck(() => new VsCodeExtensionDetection(VsCodeInstalled: true, ExtensionInstalled: false));
+        using var home = new TempDirectory();
+        using var extensions = new TempDirectory();
+        // VS Code is present (TERM_PROGRAM) but the override extensions directory is empty.
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["TERM_PROGRAM"] = "vscode",
+            ["VSCODE_EXTENSIONS"] = extensions.Path
+        });
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(home.DirectoryInfo, homeDirectory: home.DirectoryInfo);
+        var check = new VsCodeExtensionCheck(environment, executionContext, _ => null);
 
         var result = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
 
@@ -41,7 +54,17 @@ public class VsCodeExtensionCheckTests
     [Fact]
     public async Task CheckAsync_ReturnsPass_WhenExtensionInstalled()
     {
-        var check = new VsCodeExtensionCheck(() => new VsCodeExtensionDetection(VsCodeInstalled: true, ExtensionInstalled: true));
+        using var home = new TempDirectory();
+        using var extensions = new TempDirectory();
+        // VS Code is present and the Aspire extension is installed in the override extensions directory.
+        Directory.CreateDirectory(Path.Combine(extensions.Path, "microsoft-aspire.aspire-vscode-1.2.3"));
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["TERM_PROGRAM"] = "vscode",
+            ["VSCODE_EXTENSIONS"] = extensions.Path
+        });
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(home.DirectoryInfo, homeDirectory: home.DirectoryInfo);
+        var check = new VsCodeExtensionCheck(environment, executionContext, _ => null);
 
         var result = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
 

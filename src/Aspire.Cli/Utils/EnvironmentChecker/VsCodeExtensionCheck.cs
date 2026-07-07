@@ -27,18 +27,26 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
     /// </summary>
     internal const string MarketplaceUrl = "https://marketplace.visualstudio.com/items?itemName=microsoft-aspire.aspire-vscode";
 
-    private readonly Func<VsCodeExtensionDetection> _detect;
+    private readonly IEnvironment _environment;
+    private readonly CliExecutionContext _executionContext;
+    private readonly Func<string, string?> _commandResolver;
 
     public VsCodeExtensionCheck(IEnvironment environment, CliExecutionContext executionContext)
-        : this(() => Detect(environment, executionContext.HomeDirectory))
+        : this(environment, executionContext, PathLookupHelper.FindFullPathFromPath)
     {
     }
 
-    internal VsCodeExtensionCheck(Func<VsCodeExtensionDetection> detect)
+    // Defaults commandResolver to the real PATH lookup; the internal constructor lets tests inject a
+    // deterministic resolver (see the Detect overload below for why the resolver is a seam).
+    internal VsCodeExtensionCheck(IEnvironment environment, CliExecutionContext executionContext, Func<string, string?> commandResolver)
     {
-        ArgumentNullException.ThrowIfNull(detect);
+        ArgumentNullException.ThrowIfNull(environment);
+        ArgumentNullException.ThrowIfNull(executionContext);
+        ArgumentNullException.ThrowIfNull(commandResolver);
 
-        _detect = detect;
+        _environment = environment;
+        _executionContext = executionContext;
+        _commandResolver = commandResolver;
     }
 
     // Runs after the fast environment/OS checks; this is a cheap filesystem probe with no process spawn.
@@ -48,7 +56,7 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var detection = _detect();
+        var detection = Detect(_environment, _executionContext.HomeDirectory, _commandResolver);
 
         // Nothing to recommend when the user is not running VS Code.
         if (!detection.VsCodeInstalled)
@@ -163,18 +171,10 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
             };
 
             // Installed extensions live in per-version folders named "<publisher>.<name>-<version>",
-            // lowercased by VS Code, for example "microsoft-aspire.aspire-vscode-1.2.3". A case-insensitive
-            // prefix match tolerates any installed version without spawning the VS Code CLI. Requiring a
-            // digit immediately after the trailing '-' pins the match to the version segment so a different
-            // extension whose id starts with ours (e.g. "microsoft-aspire.aspire-vscode-extras-1.0.0") is
-            // not treated as a match.
-            var prefix = ExtensionId + "-";
+            // lowercased by VS Code, for example "microsoft-aspire.aspire-vscode-1.2.3".
             foreach (var directory in Directory.EnumerateDirectories(extensionsDirectory, "*", enumerationOptions))
             {
-                var folderName = Path.GetFileName(directory);
-                if (folderName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                    && folderName.Length > prefix.Length
-                    && char.IsAsciiDigit(folderName[prefix.Length]))
+                if (IsVersionedExtensionFolder(Path.GetFileName(directory)))
                 {
                     return true;
                 }
@@ -187,6 +187,18 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
         }
 
         return false;
+    }
+
+    // Matches an extension folder name against the Aspire extension id. A case-insensitive prefix match
+    // tolerates any installed version without spawning the VS Code CLI. Requiring a digit immediately
+    // after the trailing '-' pins the match to the version segment so a different extension whose id
+    // starts with ours (e.g. "microsoft-aspire.aspire-vscode-extras-1.0.0") is not treated as a match.
+    private static bool IsVersionedExtensionFolder(string folderName)
+    {
+        const string prefix = ExtensionId + "-";
+        return folderName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            && folderName.Length > prefix.Length
+            && char.IsAsciiDigit(folderName[prefix.Length]);
     }
 
     private static JsonObject BuildMetadata(VsCodeExtensionDetection detection)
