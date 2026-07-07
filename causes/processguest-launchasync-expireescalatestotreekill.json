@@ -1,0 +1,17 @@
+{
+  "id": "processguest-launchasync-expireescalatestotreekill",
+  "type": "flaky-test",
+  "title": "Flaky: ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToTreeKill times out intermittently",
+  "test_name": "Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToTreeKill",
+  "error_pattern": "System.TimeoutException : The operation has timed out.\n   at Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToTreeKill() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\ProcessGuestLauncherTests.cs:line 224",
+  "occurrences": [
+    {
+      "run_id": 28843804933,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/28843804933",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "pr_number": 18654,
+      "observed_at": "2026-07-07T07:03:28Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18667"
+}

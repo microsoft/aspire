@@ -1,0 +1,38 @@
+{
+  "run_id": 28843804933,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/28843804933",
+  "analyzed_at": "2026-07-07T07:03:28Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18654,
+    "title": "Add DotnetProjectResource playground sample",
+    "author": "karolz-ms",
+    "state": "closed",
+    "head_branch": "dev/karolz/project-v2-s1b",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18654"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 85543401141,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/28843804933/job/85543401141",
+      "classification": "flaky-test",
+      "reason": "Test LaunchAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToTreeKill failed with TimeoutException in CLI tests area not modified by this PR (which only adds playground sample files and documentation).",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToTreeKill",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToTreeKill() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\ProcessGuestLauncherTests.cs:line 224",
+      "classification": "flaky",
+      "reason": "The PR only adds playground sample files and documentation; no CLI test or source code was modified. The test involves timing-sensitive process signal escalation and fails with TimeoutException, a classic flaky test pattern."
+    }
+  ],
+  "causes": ["processguest-launchasync-expireescalatestotreekill"]
+}
