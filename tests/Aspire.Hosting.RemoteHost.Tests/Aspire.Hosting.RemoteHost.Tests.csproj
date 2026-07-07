@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TestInteractionService.cs" LinkBase="shared" />
+    <Compile Include="$(TestsSharedDir)TemporaryRepo.cs" Link="shared\TemporaryRepo.cs" />
   </ItemGroup>
 
   <ItemGroup>

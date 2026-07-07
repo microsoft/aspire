@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting.Ats;
 using Aspire.Hosting.Tests;
 using Xunit;
@@ -12,7 +13,7 @@ using Xunit;
 namespace Aspire.Hosting.RemoteHost.Tests;
 
 [Trait("Partition", "4")]
-public class AtsExportsTests
+public class AtsExportsTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void GetConnectionString_ReturnsConfiguredValue()
@@ -135,8 +136,8 @@ public class AtsExportsTests
         var data = await interactionService.Interactions.Reader.ReadAsync();
         data.Inputs["artifact"].Value = "/repo/artifact.zip";
 
-        var tempDir = Directory.CreateTempSubdirectory();
-        var tempFile = Path.Combine(tempDir.FullName, "artifact.zip");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.WorkspaceRoot.FullName, "artifact.zip");
         await File.WriteAllTextAsync(tempFile, "test content");
         data.Inputs["artifact"].SetFiles([new InteractionFile("file-1", "artifact.zip", tempFile)]);
 
