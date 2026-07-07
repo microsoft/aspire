@@ -45,6 +45,27 @@ public class ResourceNotificationTests
     }
 
     [Theory]
+    [InlineData(nameof(KnownResourceStates.Finished), null, true)]
+    [InlineData(nameof(KnownResourceStates.Exited), null, true)]
+    [InlineData(nameof(KnownResourceStates.FailedToStart), null, true)]
+    [InlineData(nameof(KnownResourceStates.Running), 0, false)]
+    [InlineData(null, 0, false)]
+    public void CompletionWaitOnlyYieldsOnTerminalStates(string? state, int? exitCode, bool expected)
+    {
+        var snapshot = new CustomResourceSnapshot
+        {
+            ResourceType = "test",
+            State = state,
+            ExitCode = exitCode,
+            Properties = []
+        };
+
+        var actual = ResourceNotificationService.ShouldYieldCompletionWait(snapshot);
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Theory]
     [InlineData(typeof(ProjectResource), KnownResourceTypes.Project)]
     [InlineData(typeof(ContainerResource), KnownResourceTypes.Container)]
     [InlineData(typeof(ExecutableResource), KnownResourceTypes.Executable)]
@@ -502,7 +523,7 @@ public class ResourceNotificationTests
     }
 
     [Fact]
-    public async Task WaitForDependenciesWaitsWhenCompletionDependencyExitsWithoutExitCode()
+    public async Task WaitForDependenciesThrowsWhenCompletionDependencyExitsWithoutExitCode()
     {
         var dependency = new CustomResource("dependency");
         var resource = new CustomResource("resource");
@@ -523,6 +544,90 @@ public class ResourceNotificationTests
         {
             State = "exited"
         }).DefaultTimeout();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        {
+            await waitTask;
+        }).DefaultTimeout();
+
+        Assert.Equal("Resource 'resource' stopped waiting for dependency resource 'dependency' because it entered the 'exited' state without reporting an exit code, expected '0'.", ex.Message);
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesCompletesWhenCompletionDependencyFinishesWithoutExitCode()
+    {
+        var dependency = new CustomResource("dependency");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency, WaitType.WaitForCompletion));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(resource, cts.Token);
+
+        await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                GetWaitingForDependencies(re).SequenceEqual(new[] { dependency.Name }),
+            cts.Token).DefaultTimeout();
+
+        await notificationService.PublishUpdateAsync(dependency, s => s with
+        {
+            State = "finished"
+        }).DefaultTimeout();
+
+        await waitTask.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesThrowsWhenCompletionDependencyFinishesWithUnexpectedExitCode()
+    {
+        var dependency = new CustomResource("dependency");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency, WaitType.WaitForCompletion));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(resource, cts.Token);
+
+        await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                GetWaitingForDependencies(re).SequenceEqual(new[] { dependency.Name }),
+            cts.Token).DefaultTimeout();
+
+        await notificationService.PublishUpdateAsync(dependency, s => s with
+        {
+            State = "finished",
+            ExitCode = 1
+        }).DefaultTimeout();
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        {
+            await waitTask;
+        }).DefaultTimeout();
+
+        Assert.Equal("Resource 'resource' stopped waiting for dependency resource 'dependency' because it entered the 'finished' state with exit code '1', expected '0'.", ex.Message);
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesCompletesWhenCompletionDependencyExitsWithExpectedExitCode()
+    {
+        var dependency = new CustomResource("dependency");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency, WaitType.WaitForCompletion));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(resource, cts.Token);
+
+        await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                GetWaitingForDependencies(re).SequenceEqual(new[] { dependency.Name }),
+            cts.Token).DefaultTimeout();
 
         await notificationService.PublishUpdateAsync(dependency, s => s with
         {
