@@ -78,17 +78,24 @@ internal static partial class ProcessSignaler
 
             if (expectedStartTime is not null)
             {
-                var processStartTime = ProcessStartTimeHelper.TryGetProcessStartTime(pid);
-                if (processStartTime is null)
+                // Compare the stable process identity at millisecond precision. Callers on this path supply a
+                // millisecond-domain start time (the AppHost's StableStartedAt, or a locally captured
+                // ProcessStartTimeHelper.TryGetProcessStartTime value), so truncating to whole seconds here would
+                // let a PID recycled later within the same second impersonate the target and defeat the reuse
+                // guard. The legacy Process.StartTime domain keeps its seconds-based, jitter-tolerant comparison
+                // via TryGetRunningProcessWithRuntimeStartTime instead.
+                var actualStartTimeUnixMilliseconds = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(pid);
+                if (actualStartTimeUnixMilliseconds is null)
                 {
                     logger.LogDebug("Could not inspect process {Pid} start time. Treating it as not running.", pid);
                     process.Dispose();
                     return null;
                 }
 
-                if (!AreClose(expectedStartTime, processStartTime.Value))
+                var expectedStartTimeUnixMilliseconds = expectedStartTime.Value.ToUnixTimeMilliseconds();
+                if (!ProcessStartTimeHelper.AreCloseMilliseconds(expectedStartTimeUnixMilliseconds, actualStartTimeUnixMilliseconds.Value))
                 {
-                    logger.LogDebug("Process {Pid} start time {ProcessStartTime} does not match expected start time {ExpectedStartTime}", pid, processStartTime, expectedStartTime);
+                    logger.LogDebug("Process {Pid} start time {ProcessStartTimeMs}ms does not match expected start time {ExpectedStartTimeMs}ms", pid, actualStartTimeUnixMilliseconds, expectedStartTimeUnixMilliseconds);
                     process.Dispose();
                     return null; // Do not return processes that do not match the expected start time
                 }
@@ -176,27 +183,6 @@ internal static partial class ProcessSignaler
             process?.Dispose();
             return null;
         }
-    }
-
-    internal static bool AreClose(DateTimeOffset? expectedStartTime, DateTime processStartTime, TimeSpan? tolerance = default)
-        => AreClose(expectedStartTime, new DateTimeOffset(processStartTime), tolerance);
-
-    internal static bool AreClose(DateTimeOffset? expectedStartTime, DateTimeOffset processStartTime, TimeSpan? tolerance = default)
-    {
-        if (expectedStartTime is null)
-        {
-            return true;
-        }
-
-        // Truncate both sides to whole seconds before comparing. The expected start time
-        // may already be at second granularity (e.g. from the orphan detector via ToUnixTimeSeconds()),
-        // and the OS-reported start time can have sub-second precision that would cause false mismatches.
-        // The truncate-and-compare math lives in the dependency-free ProcessStartTimeHelper so the
-        // RemoteHost and aspire-managed watchdogs (which cannot reference ProcessSignaler) share it.
-        var processStartTruncated = processStartTime.ToUnixTimeSeconds();
-        var expectedSeconds = ((DateTimeOffset)expectedStartTime).ToUnixTimeSeconds();
-
-        return ProcessStartTimeHelper.AreClose(expectedSeconds, processStartTruncated, tolerance);
     }
 
     private const int SigTerm = 15;
