@@ -53,6 +53,7 @@ public class VsCodeExtensionCheckTests
         Assert.NotNull(result.Metadata);
         Assert.True(result.Metadata["vsCodeInstalled"]!.GetValue<bool>());
         Assert.True(result.Metadata["extensionInstalled"]!.GetValue<bool>());
+        Assert.Equal(VsCodeExtensionCheck.ExtensionId, result.Metadata["extensionId"]!.GetValue<string>());
     }
 
     [Fact]
@@ -74,13 +75,17 @@ public class VsCodeExtensionCheckTests
         Assert.True(detection.ExtensionInstalled);
     }
 
-    [Fact]
-    public void Detect_FindsExtension_ViaDefaultHomeExtensionsDirectory()
+    [Theory]
+    [InlineData(".vscode")]
+    [InlineData(".vscode-insiders")]
+    [InlineData(".vscode-server")]
+    [InlineData(".vscode-server-insiders")]
+    public void Detect_FindsExtension_ViaEachDefaultExtensionsRoot(string rootFolder)
     {
         using var home = new TempDirectory();
-        // Exercise the default desktop extensions root (~/.vscode/extensions) rather than the
-        // VSCODE_EXTENSIONS override, guarding GetExtensionDirectories path composition.
-        Directory.CreateDirectory(Path.Combine(home.Path, ".vscode", "extensions", "microsoft-aspire.aspire-vscode-1.2.3"));
+        // Exercise each default extensions root that GetExtensionDirectories composes (desktop
+        // stable/Insiders and remote/server) rather than the VSCODE_EXTENSIONS override.
+        Directory.CreateDirectory(Path.Combine(home.Path, rootFolder, "extensions", "microsoft-aspire.aspire-vscode-1.2.3"));
 
         var environment = new TestEnvironment(new Dictionary<string, string?>
         {
@@ -91,6 +96,56 @@ public class VsCodeExtensionCheckTests
 
         Assert.True(detection.VsCodeInstalled);
         Assert.True(detection.ExtensionInstalled);
+    }
+
+    [Fact]
+    public void Detect_IgnoresDefaultRoots_WhenVsCodeExtensionsOverrideSet()
+    {
+        using var home = new TempDirectory();
+        using var overrideDirectory = new TempDirectory();
+        // The extension is present in the default desktop root but absent from the override directory.
+        // VSCODE_EXTENSIONS makes VS Code load only the override, so detection must report it missing.
+        Directory.CreateDirectory(Path.Combine(home.Path, ".vscode", "extensions", "microsoft-aspire.aspire-vscode-1.2.3"));
+
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["TERM_PROGRAM"] = "vscode",
+            ["VSCODE_EXTENSIONS"] = overrideDirectory.Path
+        });
+
+        var detection = VsCodeExtensionCheck.Detect(environment, home.DirectoryInfo);
+
+        Assert.True(detection.VsCodeInstalled);
+        Assert.False(detection.ExtensionInstalled);
+    }
+
+    [Theory]
+    [InlineData("code")]
+    [InlineData("code-insiders")]
+    public void Detect_DetectsVsCode_ViaPathFallback_WhenTermProgramNotVsCode(string launcherOnPath)
+    {
+        using var home = new TempDirectory();
+        // No TERM_PROGRAM, so detection falls back to probing the CLI launchers on PATH via the
+        // injected resolver.
+        var environment = new TestEnvironment(new Dictionary<string, string?>());
+        string? Resolver(string command) => string.Equals(command, launcherOnPath, StringComparison.Ordinal) ? "/usr/bin/" + command : null;
+
+        var detection = VsCodeExtensionCheck.Detect(environment, home.DirectoryInfo, Resolver);
+
+        Assert.True(detection.VsCodeInstalled);
+        Assert.False(detection.ExtensionInstalled);
+    }
+
+    [Fact]
+    public void Detect_ReportsVsCodeNotInstalled_WhenTermProgramAbsentAndNotOnPath()
+    {
+        using var home = new TempDirectory();
+        var environment = new TestEnvironment(new Dictionary<string, string?>());
+
+        var detection = VsCodeExtensionCheck.Detect(environment, home.DirectoryInfo, _ => null);
+
+        Assert.False(detection.VsCodeInstalled);
+        Assert.False(detection.ExtensionInstalled);
     }
 
     [Fact]
@@ -127,6 +182,26 @@ public class VsCodeExtensionCheckTests
         var detection = VsCodeExtensionCheck.Detect(environment, home.DirectoryInfo);
 
         Assert.True(detection.VsCodeInstalled);
+        Assert.False(detection.ExtensionInstalled);
+    }
+
+    [Fact]
+    public void Detect_ReportsExtensionMissing_WhenFolderSharesPrefixWithDifferentId()
+    {
+        using var home = new TempDirectory();
+        using var extensions = new TempDirectory();
+        // A different extension whose id begins with ours. Without the digit boundary the prefix match
+        // would incorrectly treat this as the Aspire extension.
+        Directory.CreateDirectory(Path.Combine(extensions.Path, "microsoft-aspire.aspire-vscode-extras-1.0.0"));
+
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["TERM_PROGRAM"] = "vscode",
+            ["VSCODE_EXTENSIONS"] = extensions.Path
+        });
+
+        var detection = VsCodeExtensionCheck.Detect(environment, home.DirectoryInfo);
+
         Assert.False(detection.ExtensionInstalled);
     }
 

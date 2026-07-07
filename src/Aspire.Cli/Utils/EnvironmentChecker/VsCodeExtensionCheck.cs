@@ -74,8 +74,15 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
     }
 
     internal static VsCodeExtensionDetection Detect(IEnvironment environment, DirectoryInfo homeDirectory)
+        => Detect(environment, homeDirectory, PathLookupHelper.FindFullPathFromPath);
+
+    // The command resolver is injected so tests can exercise the PATH-based detection fallback
+    // deterministically; PathLookupHelper.FindFullPathFromPath reads the real process PATH, which
+    // cannot be mocked via IEnvironment and would otherwise leave that branch untested (and flaky
+    // on machines that happen to have "code" on PATH).
+    internal static VsCodeExtensionDetection Detect(IEnvironment environment, DirectoryInfo homeDirectory, Func<string, string?> commandResolver)
     {
-        var vsCodeInstalled = IsVsCodeInstalled(environment);
+        var vsCodeInstalled = IsVsCodeInstalled(environment, commandResolver);
         if (!vsCodeInstalled)
         {
             return new VsCodeExtensionDetection(VsCodeInstalled: false, ExtensionInstalled: false);
@@ -85,7 +92,7 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
         return new VsCodeExtensionDetection(VsCodeInstalled: true, ExtensionInstalled: extensionInstalled);
     }
 
-    private static bool IsVsCodeInstalled(IEnvironment environment)
+    private static bool IsVsCodeInstalled(IEnvironment environment, Func<string, string?> commandResolver)
     {
         // When doctor is invoked from an integrated terminal, VS Code advertises itself via TERM_PROGRAM.
         // See https://code.visualstudio.com/docs/terminal/shell-integration.
@@ -95,8 +102,8 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
         }
 
         // Otherwise fall back to probing for the CLI launchers on PATH (stable and Insiders).
-        return PathLookupHelper.FindFullPathFromPath("code") is not null
-            || PathLookupHelper.FindFullPathFromPath("code-insiders") is not null;
+        return commandResolver("code") is not null
+            || commandResolver("code-insiders") is not null;
     }
 
     private static bool IsExtensionInstalled(IEnvironment environment, DirectoryInfo homeDirectory)
@@ -114,11 +121,15 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
 
     private static IEnumerable<string> GetExtensionDirectories(IEnvironment environment, DirectoryInfo homeDirectory)
     {
-        // VSCODE_EXTENSIONS overrides the default extensions location when set.
+        // VSCODE_EXTENSIONS overrides the default extensions location entirely: when it is set,
+        // VS Code loads extensions only from that directory, so we must probe only it. Falling through
+        // to the default roots here could report the Aspire extension as installed from ~/.vscode even
+        // though the running VS Code instance (using the override) would not load it — a false "pass".
         var overrideDirectory = environment.GetEnvironmentVariable("VSCODE_EXTENSIONS");
         if (!string.IsNullOrWhiteSpace(overrideDirectory))
         {
             yield return overrideDirectory;
+            yield break;
         }
 
         var home = homeDirectory.FullName;
@@ -143,15 +154,27 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
             // the rest, instead of throwing and reporting the whole extensions root as "not found" (a
             // false warning even when the Aspire extension is installed alongside an inaccessible one).
             // The parameterless EnumerateDirectories overload uses legacy behavior that throws instead.
-            var enumerationOptions = new EnumerationOptions { IgnoreInaccessible = true };
+            // AttributesToSkip is reset to None (the default EnumerationOptions skips Hidden/System) so an
+            // extension folder is never silently ignored because of an unexpected attribute.
+            var enumerationOptions = new EnumerationOptions
+            {
+                IgnoreInaccessible = true,
+                AttributesToSkip = FileAttributes.None
+            };
 
             // Installed extensions live in per-version folders named "<publisher>.<name>-<version>",
             // lowercased by VS Code, for example "microsoft-aspire.aspire-vscode-1.2.3". A case-insensitive
-            // prefix match tolerates any installed version without spawning the VS Code CLI.
+            // prefix match tolerates any installed version without spawning the VS Code CLI. Requiring a
+            // digit immediately after the trailing '-' pins the match to the version segment so a different
+            // extension whose id starts with ours (e.g. "microsoft-aspire.aspire-vscode-extras-1.0.0") is
+            // not treated as a match.
+            var prefix = ExtensionId + "-";
             foreach (var directory in Directory.EnumerateDirectories(extensionsDirectory, "*", enumerationOptions))
             {
                 var folderName = Path.GetFileName(directory);
-                if (folderName.StartsWith(ExtensionId + "-", StringComparison.OrdinalIgnoreCase))
+                if (folderName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                    && folderName.Length > prefix.Length
+                    && char.IsAsciiDigit(folderName[prefix.Length]))
                 {
                     return true;
                 }

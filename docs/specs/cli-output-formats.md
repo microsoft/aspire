@@ -468,7 +468,7 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
   ],
   "summary": {
     "passed": 2,
-    "warnings": 1,
+    "warnings": 2,
     "failed": 0
   }
 }
