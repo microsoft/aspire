@@ -11,8 +11,10 @@ namespace Aspire.Dashboard.Model.Interaction;
 
 public sealed class InputViewModel
 {
-    // Default maximum number of bytes to accept from an uploaded file.
-    public const long DefaultMaxUploadedFileBytes = 1024 * 1024; // 1 MB
+    // Fallback maximum upload size matching the server's default (100 MB).
+    // In practice the server always sends a MaxFileSize value for file inputs,
+    // so this constant is only used as a defensive safety net.
+    internal const long DefaultMaxUploadedFileBytes = 100 * 1024 * 1024; // 100 MB
 
     private static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
     {
