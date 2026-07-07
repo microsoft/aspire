@@ -228,6 +228,27 @@ public class VsCodeExtensionCheckTests
         Assert.False(detection.ExtensionInstalled);
     }
 
+    [Fact]
+    public void Detect_ReportsExtensionMissing_WhenExtensionsDirectoryDoesNotExist()
+    {
+        using var home = new TempDirectory();
+        // Point the override at a path that is never created so DirectoryContainsExtension hits the
+        // Directory.Exists == false guard. VS Code being present must still yield a clean "missing"
+        // result rather than throwing on the absent directory.
+        var missingExtensionsDirectory = Path.Combine(home.Path, "does-not-exist");
+
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["TERM_PROGRAM"] = "vscode",
+            ["VSCODE_EXTENSIONS"] = missingExtensionsDirectory
+        });
+
+        var detection = VsCodeExtensionCheck.Detect(environment, home.DirectoryInfo);
+
+        Assert.True(detection.VsCodeInstalled);
+        Assert.False(detection.ExtensionInstalled);
+    }
+
     private sealed class TempDirectory : IDisposable
     {
         public TempDirectory()
