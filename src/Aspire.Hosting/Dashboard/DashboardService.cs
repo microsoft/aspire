@@ -23,7 +23,7 @@ namespace Aspire.Hosting.Dashboard;
 /// required beyond a single request. Longer-scoped data is stored in <see cref="DashboardServiceData"/>.
 /// </remarks>
 [Authorize(Policy = ResourceServiceApiKeyAuthorization.PolicyName)]
-internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger)
+internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IFileUploadStore fileUploadStore)
     : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceBase
 {
     // gRPC has a maximum receive size of 4MB. Force logs into batches to avoid exceeding receive size.
@@ -43,10 +43,11 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
     {
         // Read the application name from configuration if available, otherwise fall back to the environment
         var applicationName = configuration["AppHost:DashboardApplicationName"] ?? hostEnvironment.ApplicationName;
-        
+
         return Task.FromResult(new ApplicationInformationResponse
         {
-            ApplicationName = ComputeApplicationName(applicationName)
+            ApplicationName = ComputeApplicationName(applicationName),
+            MinDashboardApiVersion = DashboardApiVersions.Current
         });
 
         static string ComputeApplicationName(string applicationName)
@@ -128,7 +129,8 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                                 .SelectMany(i => i.DynamicLoading?.DependsOnInputs ?? [])
                                 .ToList();
 
-                            var inputInstances = inputs.Inputs.Select(input => CreateInteractionInputDto(input, updateStateOnChangeInputs)).ToList();
+                            var maxFileUploadSize = FileUploadHelpers.GetMaxFileUploadSize(configuration);
+                            var inputInstances = inputs.Inputs.Select(input => CreateInteractionInputDto(input, updateStateOnChangeInputs, maxFileUploadSize)).ToList();
                             change.InputsDialog.InputItems.AddRange(inputInstances);
                         }
                         else if (interaction.InteractionInfo is ProgressInteractionInfo)
@@ -183,7 +185,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         };
     }
 
-    internal static Aspire.DashboardService.Proto.V1.InteractionInput CreateInteractionInputDto(Aspire.Hosting.InteractionInput input, IReadOnlyList<string>? updateStateOnChangeInputs = null)
+    internal static Aspire.DashboardService.Proto.V1.InteractionInput CreateInteractionInputDto(Aspire.Hosting.InteractionInput input, IReadOnlyList<string>? updateStateOnChangeInputs = null, long? maxFileUploadSize = null)
     {
         var updateStateOnChange = updateStateOnChangeInputs?.Any(i => string.Equals(i, input.Name, StringComparisons.InteractionInputName)) == true;
 
@@ -225,6 +227,27 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         {
             dto.MaxLength = input.MaxLength.Value;
         }
+        if (input.MaxFileSize != null)
+        {
+            // Cap the per-input MaxFileSize at the configured server-side upload limit.
+            var effectiveMaxFileSize = maxFileUploadSize.HasValue
+                ? Math.Min(input.MaxFileSize.Value, maxFileUploadSize.Value)
+                : input.MaxFileSize.Value;
+            dto.MaxFileSize = effectiveMaxFileSize;
+        }
+        else if (maxFileUploadSize.HasValue && input.InputType == InputType.File)
+        {
+            // If no per-input limit is set but a server-side limit exists, apply it.
+            dto.MaxFileSize = maxFileUploadSize.Value;
+        }
+        if (input.AllowMultipleFiles)
+        {
+            dto.AllowMultipleFiles = true;
+        }
+        if (!string.IsNullOrEmpty(input.FileFilter))
+        {
+            dto.FileFilter = input.FileFilter;
+        }
         dto.ValidationErrors.AddRange(input.ValidationErrors);
         return dto;
     }
@@ -238,6 +261,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.Hosting.InputType.Choice => Aspire.DashboardService.Proto.V1.InputType.Choice,
             Aspire.Hosting.InputType.Boolean => Aspire.DashboardService.Proto.V1.InputType.Boolean,
             Aspire.Hosting.InputType.Number => Aspire.DashboardService.Proto.V1.InputType.Number,
+            Aspire.Hosting.InputType.File => Aspire.DashboardService.Proto.V1.InputType.File,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
@@ -251,6 +275,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.DashboardService.Proto.V1.InputType.Choice => InputType.Choice,
             Aspire.DashboardService.Proto.V1.InputType.Boolean => InputType.Boolean,
             Aspire.DashboardService.Proto.V1.InputType.Number => InputType.Number,
+            Aspire.DashboardService.Proto.V1.InputType.File => InputType.File,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
@@ -464,5 +489,78 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             logger.LogError(ex, "Error executing service method '{Method}'.", serverCallContext.Method);
             throw;
         }
+    }
+
+    public override async Task<UploadFileResponse> UploadFile(IAsyncStreamReader<UploadFileChunk> requestStream, ServerCallContext context)
+    {
+        var maxTotalUploadBytes = FileUploadHelpers.GetMaxFileUploadSize(configuration);
+
+        var cancellationToken = context.CancellationToken;
+        long totalBytesWritten = 0;
+        string? fileId = null;
+        FileStream? fileStream = null;
+
+        try
+        {
+            while (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
+            {
+                var chunk = requestStream.Current;
+
+                // The first chunk carries the file name — create the store entry and file stream.
+                if (fileStream is null)
+                {
+                    if (string.IsNullOrEmpty(chunk.FileName))
+                    {
+                        throw new RpcException(new Status(StatusCode.InvalidArgument, "First chunk must include a file name."));
+                    }
+
+                    string path;
+                    (fileId, path) = fileUploadStore.CreateEntry(chunk.FileName);
+                    fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
+                }
+
+                if (!chunk.Data.IsEmpty)
+                {
+                    totalBytesWritten += chunk.Data.Length;
+                    if (totalBytesWritten > maxTotalUploadBytes)
+                    {
+                        throw new RpcException(new Status(StatusCode.ResourceExhausted, $"Upload exceeds maximum allowed size of {maxTotalUploadBytes} bytes."));
+                    }
+
+                    await fileStream.WriteAsync(chunk.Data.Memory, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            if (fileStream is null)
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Upload stream is empty."));
+            }
+        }
+        catch
+        {
+            // Dispose the stream before removing the entry so the file handle is closed
+            // before attempting deletion — on Windows, open handles prevent file deletion.
+            if (fileStream is not null)
+            {
+                await fileStream.DisposeAsync().ConfigureAwait(false);
+                fileStream = null;
+            }
+
+            if (fileId is not null)
+            {
+                fileUploadStore.RemoveEntry(fileId);
+            }
+
+            throw;
+        }
+        finally
+        {
+            if (fileStream is not null)
+            {
+                await fileStream.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
+        return new UploadFileResponse { FileId = fileId };
     }
 }

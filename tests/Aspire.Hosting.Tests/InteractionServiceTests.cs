@@ -1262,5 +1262,111 @@ public class InteractionServiceTests
             new ServiceCollection().BuildServiceProvider(),
             configuration);
     }
+
+    [Fact]
+    public async Task PromptInputsAsync_FileWithValue_PassesValidation()
+    {
+        var interactionService = CreateInteractionService();
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File, Required = true };
+        _ = interactionService.PromptInputAsync("Select file", "please", input);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", "file-content-here", InputType.File, Files: [new InputFileDto("file1", "test.txt", "/tmp/test.txt")])]);
+
+        Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
+        Assert.Empty(input.ValidationErrors);
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_FileRequiredEmpty_ReturnErrors()
+    {
+        var interactionService = CreateInteractionService();
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File, Required = true };
+        _ = interactionService.PromptInputAsync("Select file", "please", input);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", string.Empty, InputType.File)]);
+
+        // The interaction should still be in progress due to required field being empty
+        Assert.False(interaction.CompletionTcs.Task.IsCompleted);
+
+        Assert.Collection(input.ValidationErrors,
+            error => Assert.Equal("Value is required.", error));
+    }
+
+    [Fact]
+    public async Task PromptInputsAsync_FileOptionalEmpty_PassesValidation()
+    {
+        var interactionService = CreateInteractionService();
+
+        var input = new InteractionInput { Name = "File", Label = "File", InputType = InputType.File, Required = false };
+        _ = interactionService.PromptInputAsync("Select file", "please", input);
+
+        var interaction = Assert.Single(interactionService.GetCurrentInteractions());
+
+        await CompleteInteractionAsync(
+            interactionService,
+            interaction.InteractionId,
+            new InteractionCompletionState { Complete = true, State = new[] { input } },
+            inputs: [new InputDto("File", string.Empty, InputType.File)]);
+
+        Assert.True(interaction.CompletionTcs.Task.IsCompletedSuccessfully);
+        Assert.Empty(input.ValidationErrors);
+    }
+
+    [Fact]
+    public void InteractionInput_MaxFileSize_RejectsInvalidValues()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.File,
+            MaxFileSize = 0
+        });
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.File,
+            MaxFileSize = -1
+        });
+    }
+
+    [Fact]
+    public void InteractionInput_MaxFileSize_AcceptsValidValues()
+    {
+        var input = new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.File,
+            MaxFileSize = 1024 * 1024
+        };
+
+        Assert.Equal(1024 * 1024, input.MaxFileSize);
+    }
+
+    [Fact]
+    public void InteractionInput_MaxFileSize_DefaultsToNull()
+    {
+        var input = new InteractionInput
+        {
+            Name = "File",
+            InputType = InputType.File
+        };
+
+        Assert.Null(input.MaxFileSize);
+    }
 }
 

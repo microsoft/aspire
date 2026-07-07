@@ -2,12 +2,23 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Aspire.DashboardService.Proto.V1;
 
 namespace Aspire.Dashboard.Model.Interaction;
 
 public sealed class InputViewModel
 {
+    // Default maximum number of bytes to accept from an uploaded file.
+    public const long DefaultMaxUploadedFileBytes = 1024 * 1024; // 1 MB
+
+    private static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     public InteractionInput Input { get; private set; } = default!;
 
     public InputViewModel(InteractionInput input)
@@ -21,10 +32,10 @@ public sealed class InputViewModel
         // local values by default so an update for a dependent choice does not clobber text the user is
         // typing elsewhere in the dialog. ShouldUseIncomingValue captures the cases where the server is
         // authoritative because the field is being dynamically loaded or is not currently editable.
-        var value = Input is null || ShouldUseIncomingValue(Input, input)
-            ? input.Value
-            : Input.Value;
-        input.Value = value;
+        if (Input is not null && !ShouldUseIncomingValue(Input, input))
+        {
+            input.Value = Input.Value;
+        }
 
         Input = input;
         if (input.InputType == InputType.Choice && input.Options != null)
@@ -109,6 +120,21 @@ public sealed class InputViewModel
     // Used to track secret text visibility state
     public bool IsSecretTextVisible { get; set; }
 
+    // Tracks the uploaded file references for File inputs.
+    // When set, serializes successful references (Id != null) to JSON on the underlying Input.Value.
+    public List<FileReferenceViewModel> FileReferences { get; } = [];
+
+    public void SetFileReferences(IEnumerable<FileReferenceViewModel> files)
+    {
+        FileReferences.Clear();
+        FileReferences.AddRange(files);
+        var successfulRefs = FileReferences.Where(f => f.Id is not null).ToList();
+        // Use empty string (not "[]") when no files were accepted, so required-field checks work correctly.
+        Input.Value = successfulRefs.Count > 0
+            ? JsonSerializer.Serialize(successfulRefs, s_jsonSerializerOptions)
+            : string.Empty;
+    }
+
     private static bool OptionsEqual(List<SelectViewModel<string>> existing, List<SelectViewModel<string>> incoming)
     {
         if (existing.Count != incoming.Count)
@@ -137,4 +163,13 @@ public sealed class InputViewModel
         // Azure Subscription ID becoming editable after tenant-specific subscriptions are loaded.
         return (current.Loading && !incoming.Loading) || current.Disabled || incoming.Disabled;
     }
+}
+
+public sealed class FileReferenceViewModel
+{
+    public string? Id { get; set; }
+    public required string Name { get; set; }
+
+    [JsonIgnore]
+    public string? ErrorMessage { get; set; }
 }

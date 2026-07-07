@@ -94,6 +94,7 @@ Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary [ExposeMethods]
+Aspire.Hosting/Aspire.Hosting.ProgressContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent [ExposeProperties]
@@ -119,9 +120,14 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandOptions # Optional configu
   IconVariant?: enum:Aspire.Hosting.ApplicationModel.IconVariant # The icon variant.
   IsHighlighted: boolean # A flag indicating whether the command is highlighted in the UI.
   Parameter: any # Obsolete optional parameter that configures the command in some way. Clients must return any value provided by the server when invoking the command.
+  Progress: Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandProgressOptions # Gets or sets options for displaying a progress dialog while the command is executing.
   UpdateState: callback # A callback that is used to update the command state. The callback is executed when the command's resource snapshot is updated. If a callback isn't specified, the command is always enabled.
   ValidateArguments: callback # Gets or sets the callback that validates invocation arguments before the command callback is executed.
   Visibility: enum:Aspire.Hosting.ApplicationModel.ResourceCommandVisibility # Gets or sets where the command is visible to users and clients.
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandProgressOptions # Options for displaying a progress dialog while a command is executing.
+  HideCancelButton: boolean # Gets or sets a value indicating whether the cancel button is hidden in the progress dialog.
+  Message: string # Gets or sets the message to display in the progress dialog.
+  Title: string # Gets or sets the optional title of the progress dialog.
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandResultData # Represents a value produced by a command.
   DisplayImmediately?: boolean # When `true`, the dashboard will immediately display the value in a dialog when the command completes.
   Format?: enum:Aspire.Hosting.ApplicationModel.CommandResultFormat # The format of the `Value` data.
@@ -161,6 +167,7 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandRequestExportData # AT
   MethodName: string # Gets or sets the HTTP method name to use when sending the request.
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateExecutionConfigurationContext # Configuration context for server authentication certificate configuration.
   CertificatePath: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression # Expression that will resolve to the path of the server authentication certificate in PEM format. For containers this will be a path inside the container.
+  CertificateWithKeyPath: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression # Expression that will resolve to the path of the server authentication certificate and key in a combined PEM file. For containers this will be a path inside the container.
   KeyPath: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression # Expression that will resolve to the path of the server authentication certificate key in PEM format. For containers this will be a path inside the container.
   PfxPath: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression # Expression that will resolve to the path of the server authentication certificate in PFX format. For containers this will be a path inside the container.
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProcessCommandExportOptions # ATS-friendly configuration for resource process commands.
@@ -225,10 +232,12 @@ Aspire.Hosting/Aspire.Hosting.Ats.CreateBuilderOptions # Options for creating a 
   ProjectDirectory: string # The directory containing the AppHost project file.
 Aspire.Hosting/Aspire.Hosting.Ats.CreateInteractionInputOptions # Optional configuration shared by interaction input factory capabilities.
   AllowCustomChoice?: boolean # Gets or sets a value indicating whether a custom choice is allowed. Only used by choice inputs.
+  AllowMultipleFiles?: boolean # Gets or sets a value indicating whether multiple files can be selected. Only used by file inputs.
   Description?: string # Gets or sets the description for the input.
   Disabled?: boolean # Gets or sets a value indicating whether the input is disabled.
   EnableDescriptionMarkdown?: boolean # Gets or sets a value indicating whether the description is rendered as Markdown.
   Label?: string # Gets or sets the label for the input. Defaults to the input name when not specified.
+  MaxFileSize?: number # Gets or sets the maximum file size in bytes for file chooser inputs.
   MaxLength?: number # Gets or sets the maximum length for text inputs.
   Placeholder?: string # Gets or sets the placeholder text for the input.
   Required?: boolean # Gets or sets a value indicating whether the input is required.
@@ -241,6 +250,7 @@ Aspire.Hosting/Aspire.Hosting.Ats.HealthCheckResult # ATS-friendly custom health
   Description?: string # Gets an optional description for the health check result.
   Status: enum:Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus # Gets the health status returned by the health check.
 Aspire.Hosting/Aspire.Hosting.Ats.HttpsCertificateExecutionConfigurationExportData # ATS-friendly HTTPS certificate data returned from an execution-configuration result.
+  IsCertificateWithKeyPathReferenced: boolean # Indicates whether the key path was referenced.
   IsKeyPathReferenced: boolean # Indicates whether the key path was referenced.
   IsPfxPathReferenced: boolean # Indicates whether the PFX path was referenced.
   KeyPathExpression: string # The expression for the key path reference.
@@ -281,6 +291,10 @@ Aspire.Hosting/Aspire.Hosting.Ats.InteractionNotificationOptions # Options for n
   SecondaryButtonText?: string # Gets or sets the secondary button text.
   ShowDismiss?: boolean # Gets or sets a value indicating whether the dismiss button is shown.
   ShowSecondaryButton?: boolean # Gets or sets a value indicating whether the secondary button is shown.
+Aspire.Hosting/Aspire.Hosting.Ats.InteractionProgressOptions # Options for progress dialog prompts.
+  EnableMessageMarkdown?: boolean # Gets or sets a value indicating whether Markdown in the message is rendered.
+  PrimaryButtonText?: string # Gets or sets the primary button text (e.g. "Cancel").
+  Work?: callback # Gets or sets an optional asynchronous work callback to execute while the progress dialog is displayed. When provided, the progress dialog remains open while this callback executes and closes automatically when the callback completes.
 Aspire.Hosting/Aspire.Hosting.Ats.ParameterCustomInputOptions # Options for customizing parameter inputs from polyglot app hosts.
   AllowCustomChoice?: boolean # Gets or sets whether custom choices are allowed.
   Description: string # Gets or sets the description for the input.
@@ -306,11 +320,13 @@ Aspire.Hosting/Aspire.Hosting.Ats.ResourceEventDto # DTO for resource events ret
   StateStyle?: string # The state style (e.g., "success", "warn", "error").
 Aspire.Hosting/Aspire.Hosting.InteractionInput # Represents an input for an interaction.
   AllowCustomChoice?: boolean # Gets a value indicating whether a custom choice is allowed. Only used by `Choice` inputs.
+  AllowMultipleFiles?: boolean # Gets or sets a value indicating whether multiple files can be selected. Only used by `File` inputs.
   Description?: string # Gets or sets the description for the input.
   Disabled: boolean # Gets or sets a value indicating whether a custom choice is allowed. Only used by `Choice` inputs.
   EnableDescriptionMarkdown?: boolean # Gets or sets a value indicating whether the description should be rendered as Markdown. Setting this to `true` allows a description to contain Markdown elements such as links, text decoration and lists.
   InputType: enum:Aspire.Hosting.InputType # Gets or sets the type of the input.
   Label?: string # Gets or sets the label for the input. If not specified, the name will be used as the label.
+  MaxFileSize?: number # Gets or sets the maximum file size in bytes for `File` inputs. If not specified, the Dashboard upload UI applies a default limit of 1 MB. This limit is not enforced when the file path is provided directly (e.g. via the CLI).
   MaxLength?: number # gets or sets the maximum length for text inputs.
   Name: string # Gets or sets the name for the input. Used for accessing inputs by name from a keyed collection.
   Options: System.Private.CoreLib/System.Collections.Generic.KeyValuePair`2[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]][] # Gets or sets the options for the input. Only used by `Choice` inputs.
@@ -333,7 +349,7 @@ enum:Aspire.Hosting.ApplicationModel.ResourceCommandVisibility = None | UI | Api
 enum:Aspire.Hosting.ApplicationModel.UrlDisplayLocation = SummaryAndDetails | DetailsOnly
 enum:Aspire.Hosting.ApplicationModel.WaitBehavior = WaitOnResourceUnavailable | StopOnResourceUnavailable
 enum:Aspire.Hosting.DistributedApplicationOperation = Run | Publish
-enum:Aspire.Hosting.InputType = Text | SecretText | Choice | Boolean | Number
+enum:Aspire.Hosting.InputType = Text | SecretText | Choice | Boolean | Number | File
 enum:Aspire.Hosting.MessageIntent = None | Success | Warning | Error | Information | Confirmation
 enum:Aspire.Hosting.OtlpProtocol = Grpc | HttpProtobuf | HttpJson
 enum:Aspire.Hosting.Publishing.ContainerImageDestination = Registry | Archive
@@ -482,6 +498,7 @@ Aspire.Hosting.ApplicationModel/HttpCommandPrepareRequestContext.resourceName(co
 Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.arguments(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor
 Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> cancellationToken
 Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificatePath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
+Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificateWithKeyPath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.environment(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor
 Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.executionContext(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
 Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
@@ -609,6 +626,7 @@ Aspire.Hosting/createChoiceInput(name: string, choices?: Aspire.Hosting/Aspire.H
 Aspire.Hosting/createDirectory(name: string, entries: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem[], owner?: number, group?: number, mode?: number) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem
 Aspire.Hosting/createExecutionConfiguration() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder
 Aspire.Hosting/createFile(name: string, contents?: string, sourcePath?: string, owner?: number, group?: number, mode?: number, continueOnError?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemItem
+Aspire.Hosting/createFileInput(name: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.CreateInteractionInputOptions) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
 Aspire.Hosting/createLogger(categoryName: string) -> Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger
 Aspire.Hosting/createMarkdownTask(markdownString: string, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingTask
 Aspire.Hosting/createNumberInput(name: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.CreateInteractionInputOptions) -> Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder
@@ -718,6 +736,7 @@ Aspire.Hosting/onInitializeResource(callback: callback) -> Aspire.Hosting/Aspire
 Aspire.Hosting/onResourceEndpointsAllocated(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/onResourceReady(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/onResourceStopped(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/ProgressContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ProgressContext) -> cancellationToken
 Aspire.Hosting/ProjectResourceOptions.excludeKestrelEndpoints(context: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions) -> boolean
 Aspire.Hosting/ProjectResourceOptions.excludeLaunchProfile(context: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions) -> boolean
 Aspire.Hosting/ProjectResourceOptions.launchProfileName(context: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions) -> string
@@ -729,6 +748,7 @@ Aspire.Hosting/promptInput(title: string, message: string, input: Aspire.Hosting
 Aspire.Hosting/promptInputs(title: string, message: string, inputs: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputBuilder[], options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputsDialogOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult
 Aspire.Hosting/promptMessageBox(title: string, message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionMessageBoxOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult
 Aspire.Hosting/promptNotification(title: string, message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionNotificationOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult
+Aspire.Hosting/promptProgress(message: string, title?: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InteractionProgressOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BoolInteractionResult
 Aspire.Hosting/publishAsConnectionString() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/publishAsContainer() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/publishAsDockerFile(configure: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource

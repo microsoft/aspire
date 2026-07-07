@@ -99,11 +99,11 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     public async Task AgentInitCommand_IncludesSpecificSkillDirectory_WhenInstallFails()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var invalidRootFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "not-a-directory.txt");
-        await File.WriteAllTextAsync(invalidRootFilePath, "blocked").DefaultTimeout();
+        var blockedSkillParentPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents");
+        await File.WriteAllTextAsync(blockedSkillParentPath, "blocked").DefaultTimeout();
 
         var interactionService = new TestInteractionService();
-        interactionService.SetupStringPromptResponse(invalidRootFilePath);
+        interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
         interactionService.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
             .Where(choice => choice switch
             {
@@ -124,8 +124,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Empty(interactionService.ValidationFailures);
 
-        var expectedSkillDirectoryPath = Path.Combine(invalidRootFilePath, ".agents", "skills", CommonAgentApplicators.AspireSkillName);
+        var expectedSkillDirectoryPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireSkillName);
         Assert.Contains(
             interactionService.DisplayedErrors,
             message => message.Contains(expectedSkillDirectoryPath, StringComparison.Ordinal));
