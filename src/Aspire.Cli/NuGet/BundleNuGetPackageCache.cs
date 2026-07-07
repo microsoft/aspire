@@ -194,8 +194,9 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             args,
             workingDirectory: workingDirectory.FullName,
             environmentVariables: environmentVariables,
-            // A package search against a slow/unresponsive NuGet source can hang; bind it to the CLI's
-            // kill-on-close job so a hard-killed CLI cannot leak this aspire-managed helper on Windows.
+            // A package search against a slow/unresponsive NuGet source can hang. LayoutProcessRunner uses
+            // this to bind the helper to the CLI's Windows kill-on-close job (and, on non-Windows, to
+            // instead arm the cooperative parent-liveness watchdog) so a hard-killed CLI cannot leak it.
             killOnParentExit: true,
             ct: cancellationToken).ConfigureAwait(false);
 

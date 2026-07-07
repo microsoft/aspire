@@ -26,7 +26,10 @@ internal static class ParentProcessWatchdog
     /// Starts monitoring the parent identified by <c>ASPIRE_CLI_PID</c>/<c>ASPIRE_CLI_STARTED</c>.
     /// When the parent is no longer alive, <paramref name="operationCts"/> is cancelled (and the
     /// process force-exits as a backstop). Returns a handle that stops the watchdog when disposed, or
-    /// <see langword="null"/> when no parent is configured (the helper was invoked directly).
+    /// <see langword="null"/> when no parent identity is present — either because the helper was invoked
+    /// directly, or because the launching CLI deliberately omitted the identity on Windows, where the
+    /// kernel kill-on-close job already terminates this helper and running the cooperative watchdog too
+    /// would race that kill (see <c>LayoutProcessRunner</c>).
     /// </summary>
     public static IAsyncDisposable? Start(CancellationTokenSource operationCts)
     {

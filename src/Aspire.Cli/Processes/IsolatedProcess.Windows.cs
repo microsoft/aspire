@@ -81,9 +81,7 @@ internal sealed partial class IsolatedProcess
             // run path) have always relied on the job as their crash-time safety net, so that coupling is
             // preserved here; KillOnParentExit additionally opts non-console background helpers
             // (aspire-managed nuget / dashboard, the profiling collector) into the same job so they cannot
-            // outlive a hard-killed CLI. Keeping the coupling on this side means no caller has to thread a
-            // separate "also kill on exit" flag through the AppHost guest-launch chain just to keep today's
-            // behavior.
+            // outlive a hard-killed CLI. 
             var jobHandle = (startInfo.IsolateConsole || startInfo.KillOnParentExit) ? WindowsConsoleProcessJob.Shared.Handle : null;
             var pi = WindowsProcessInterop.SpawnProcess(
                 startInfo.FileName,

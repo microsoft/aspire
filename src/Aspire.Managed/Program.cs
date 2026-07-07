@@ -41,8 +41,9 @@ static async Task<int> RunDashboard(string[] args)
 
     // Tear the dashboard down if the launching CLI dies so a hard-killed `aspire dashboard run` (or the
     // profiling collector, which also launches aspire-managed dashboard) cannot leave an orphaned
-    // dashboard process behind. No-op when ASPIRE_CLI_PID is not set (e.g. the dashboard is launched
-    // directly), so the embedded/in-process dashboard is unaffected.
+    // dashboard process behind. No-op when ASPIRE_CLI_PID is not set — either the dashboard is launched
+    // directly (so the embedded/in-process dashboard is unaffected), or on Windows where the CLI relies
+    // on the kernel kill-on-close job instead (see LayoutProcessRunner).
     using var shutdownCts = new CancellationTokenSource();
     var parentWatchdog = Aspire.Managed.ParentProcessWatchdog.Start(shutdownCts);
     try
@@ -66,8 +67,9 @@ static async Task<int> RunServer(string[] args)
 
 static async Task<int> RunNuGet(string[] args)
 {
-    // Tear this helper down if the launching CLI dies so a hung/slow NuGet operation cannot linger as
-    // an orphaned aspire-managed process. No-op when ASPIRE_CLI_PID is not set (invoked directly).
+    // Tear this helper down if the launching CLI dies so a hung/slow NuGet operation cannot linger as an
+    // orphaned aspire-managed process. No-op when ASPIRE_CLI_PID is not set — either invoked directly, or
+    // on Windows where the CLI relies on the kernel kill-on-close job instead (see LayoutProcessRunner).
     using var operationCts = new CancellationTokenSource();
     var parentWatchdog = Aspire.Managed.ParentProcessWatchdog.Start(operationCts);
     try
