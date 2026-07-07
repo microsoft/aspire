@@ -248,7 +248,7 @@ internal sealed class ProcessTreeGracefulShutdownService(
         logger.LogDebug("Sending stop signal to process {Pid}", target.Pid);
         if (target.UseRuntimeStartTime && target.StartTime is { } runtimeStartTime)
         {
-            ProcessSignaler.RequestGracefulShutdownWithRuntimeStartTime(target.Pid, runtimeStartTime, ProcessStartTimeHelper.CrossProcessIdentityTimeTolerance, logger);
+            ProcessSignaler.RequestGracefulShutdownWithRuntimeStartTime(target.Pid, runtimeStartTime, ProcessStartTimeHelper.LegacyStartTimeMatchTolerance, logger);
         }
         else
         {
@@ -374,7 +374,7 @@ internal sealed class ProcessTreeGracefulShutdownService(
             return ProcessSignaler.TryGetRunningProcess(target.Pid, target.StartTime, logger);
         }
 
-        return ProcessSignaler.TryGetRunningProcessWithRuntimeStartTime(target.Pid, target.StartTime.Value, ProcessStartTimeHelper.CrossProcessIdentityTimeTolerance, logger);
+        return ProcessSignaler.TryGetRunningProcessWithRuntimeStartTime(target.Pid, target.StartTime.Value, ProcessStartTimeHelper.LegacyStartTimeMatchTolerance, logger);
     }
 
     private void ForceKill(ProcessTarget target, bool killEntireProcessTree)
