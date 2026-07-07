@@ -78,12 +78,6 @@ internal static partial class ProcessSignaler
 
             if (expectedStartTime is not null)
             {
-                // Compare the stable process identity at millisecond precision. Callers on this path supply a
-                // millisecond-domain start time (the AppHost's StableStartedAt, or a locally captured
-                // ProcessStartTimeHelper.TryGetProcessStartTime value), so truncating to whole seconds here would
-                // let a PID recycled later within the same second impersonate the target and defeat the reuse
-                // guard. The legacy Process.StartTime domain keeps its seconds-based, jitter-tolerant comparison
-                // via TryGetRunningProcessWithRuntimeStartTime instead.
                 var actualStartTimeUnixMilliseconds = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(pid);
                 if (actualStartTimeUnixMilliseconds is null)
                 {
