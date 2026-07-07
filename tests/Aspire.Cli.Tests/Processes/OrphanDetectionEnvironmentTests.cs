@@ -45,7 +45,23 @@ public class OrphanDetectionEnvironmentTests
         OrphanDetectionEnvironment.ApplyCurrentProcess(environment, overwrite: false);
 
         Assert.Equal("999", environment[KnownConfigNames.CliProcessId]);
-        // The caller did not supply a start time, so it is still stamped even under overwrite: false.
+        // The caller-supplied PID is authoritative, so no start time is stamped: doing so would pair
+        // PID 999 with the current process's start time. Leaving the keys unset keeps the identity
+        // consistent and lets the watchdog fall back to a PID-only existence check.
+        Assert.False(environment.ContainsKey(KnownConfigNames.CliProcessStarted));
+        Assert.False(environment.ContainsKey(KnownConfigNames.CliProcessStartedStable));
+    }
+
+    [Fact]
+    public void ApplyCurrentProcess_WithoutOverwrite_StampsFullIdentityWhenNoPidPresent()
+    {
+        var environment = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        OrphanDetectionEnvironment.ApplyCurrentProcess(environment, overwrite: false);
+
+        // With no caller-supplied PID (the common LayoutProcessRunner path), the current process's
+        // identity is stamped in full and the PID and start-time values describe the same process.
+        Assert.Equal(Environment.ProcessId.ToString(CultureInfo.InvariantCulture), environment[KnownConfigNames.CliProcessId]);
         Assert.NotNull(ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(environment[KnownConfigNames.CliProcessStarted]));
         Assert.NotNull(ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(environment[KnownConfigNames.CliProcessStartedStable]));
     }
@@ -99,6 +115,8 @@ public class OrphanDetectionEnvironmentTests
 
         Assert.Equal("999", environment[KnownConfigNames.CliProcessId]);
         Assert.Equal("111", environment[KnownConfigNames.CliProcessStarted]);
-        Assert.Equal("1000", environment[KnownConfigNames.CliProcessStartedStable]);
+        // The existing PID (999) is authoritative, so the stable start time for the passed pid (4321)
+        // is not stamped — doing so would pair PID 999 with a different process's start time.
+        Assert.False(environment.ContainsKey(KnownConfigNames.CliProcessStartedStable));
     }
 }
