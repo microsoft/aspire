@@ -23,9 +23,8 @@ internal static class OrphanDetectionEnvironment
     /// <param name="pidKey">The variable name to write the parent PID under.</param>
     /// <param name="startedKey">The variable name to write the parent start time under.</param>
     /// <param name="overwrite">
-    /// When <see langword="true"/> (the default) existing values are replaced. When
-    /// <see langword="false"/> a value the caller already set is preserved, so an explicit override
-    /// always wins.
+    /// When <see langword="true"/> (the default) existing values are replaced. 
+    /// When <see langword="false"/> a value the caller already set is preserved.
     /// </param>
     public static void ApplyCurrentProcess(
         IDictionary<string, string> environment,
@@ -54,10 +53,8 @@ internal static class OrphanDetectionEnvironment
     /// <param name="pidKey">The variable name to write the parent PID under.</param>
     /// <param name="startedKey">The variable name to write the parent start time under.</param>
     /// <param name="overwrite">
-    /// When <see langword="true"/> (the default) existing values are replaced. When
-    /// <see langword="false"/> caller-supplied values are preserved; in particular a caller-supplied
-    /// PID is treated as authoritative, so the start-time keys are left untouched rather than being
-    /// stamped from a different process.
+    /// When <see langword="true"/> (the default) existing values are replaced. 
+    /// When <see langword="false"/> caller-supplied values are preserved.
     /// </param>
     public static void Apply(
         IDictionary<string, string?> environment,
@@ -74,12 +71,7 @@ internal static class OrphanDetectionEnvironment
         }
         else
         {
-            // A caller-supplied PID is being preserved (overwrite: false), which makes that existing
-            // PID authoritative. Our pid/startTimeUnixSeconds describe a different process, so stamping
-            // the start-time keys from them would produce an inconsistent (PID, start-time) pair that an
-            // orphan detector would verify against the wrong process. Leave the start-time keys exactly
-            // as the caller left them; when none is present the watchdog falls back to a PID-only
-            // existence check.
+            // Env var already exists and we are not allowed to overwrite it.
             return;
         }
 
