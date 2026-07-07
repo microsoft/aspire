@@ -1472,9 +1472,23 @@ internal sealed class AppHostInformation
     /// </summary>
     /// <remarks>
     /// This value comes from <c>ASPIRE_CLI_STARTED</c>, which is intentionally stamped from
-    /// <see cref="Process.StartTime"/> for released-AppHost compatibility.
+    /// <see cref="Process.StartTime"/> for released-AppHost compatibility. On Linux it drifts across
+    /// processes after a wall-clock adjustment, so prefer <see cref="CliStableStartedAt"/> when it is
+    /// present.
     /// </remarks>
     public DateTimeOffset? CliStartedAt { get; init; }
+
+    /// <summary>
+    /// Gets or sets when the CLI process that launched the AppHost started, using the stable
+    /// PID-identity clock domain.
+    /// </summary>
+    /// <remarks>
+    /// This value comes from <c>ASPIRE_CLI_STARTED_STABLE</c> and, unlike <see cref="CliStartedAt"/>,
+    /// is derived from Linux <c>/proc</c> start ticks so it survives wall-clock adjustments and can be
+    /// compared exactly to guard against CLI PID reuse. Current CLIs stamp it; older CLIs do not, so
+    /// this additive field is <see langword="null"/> when the AppHost was launched by an older CLI.
+    /// </remarks>
+    public DateTimeOffset? CliStableStartedAt { get; init; }
 
     /// <summary>
     /// Gets or sets the log file path of the CLI process that launched the AppHost.

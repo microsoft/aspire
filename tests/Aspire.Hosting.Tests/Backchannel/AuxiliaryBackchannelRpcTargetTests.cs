@@ -2144,6 +2144,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
                 ["AppHost:Path"] = "/path/to/apphost.csproj",
                 [KnownConfigNames.CliProcessId] = "5678",
                 [KnownConfigNames.CliProcessStarted] = "1783180199",
+                [KnownConfigNames.CliProcessStartedStable] = "1783180250",
                 [KnownConfigNames.CliLogFilePath] = "/logs/cli_20260516T120000_abcd1234.log"
             })
             .Build();
@@ -2164,6 +2165,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal("/logs/cli_20260516T120000_abcd1234.log", result.CliLogFilePath);
         Assert.Equal(5678, result.CliProcessId);
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1783180199), result.CliStartedAt);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1783180250), result.CliStableStartedAt);
         Assert.NotNull(result.StartedAt);
         Assert.NotNull(result.StableStartedAt);
         Assert.True(ProcessStartTimeHelper.AreClose(

@@ -95,18 +95,19 @@ internal sealed class OrphanedAppHostCollector(
             return false;
         }
 
-        if (connection.AppHostInfo.CliStartedAt is { } cliStartedAt)
+        if (connection.AppHostInfo.CliStableStartedAt is { } cliStableStartedAt)
         {
-            // AppHostInfo.CliStartedAt is populated from ASPIRE_CLI_STARTED for backchannel
-            // compatibility with released AppHosts. That variable intentionally stays in the
-            // Process.StartTime clock domain, so compare it with the legacy verifier instead of
-            // the Linux /proc-based stable verifier.
-            return !ProcessStartTimeHelper.IsProcessRunningWithRuntimeStartTime(
-                cliPid,
-                cliStartedAt.ToUnixTimeSeconds(),
-                ProcessStartTimeHelper.CrossProcessIdentityTimeTolerance);
+            // Current AppHosts report the launching CLI's /proc-derived identity. It is immune to
+            // wall-clock steps, so an exact comparison reliably distinguishes the original launcher
+            // from a recycled PID: a mismatch here is trustworthy evidence the launcher is gone.
+            return !ProcessStartTimeHelper.IsProcessRunning(cliPid, cliStableStartedAt.ToUnixTimeSeconds());
         }
 
+        // Legacy fallback (older AppHost): only ASPIRE_CLI_STARTED is available, which is stamped from Process.StartTime. 
+        // On Linux that value drifts across processes after any clock correction (NTP, container suspend/resume), 
+        // so a start-time MISMATCH is NOT trustworthy evidence that the PID was reused. 
+        // We therefore only treat the AppHost as orphaned when the launching CLI PID is entirely gone, 
+        // biasing toward leaving a possible orphan (still guarded by the in-process watchdogs) over tearing down a live one.
         return !ProcessStartTimeHelper.IsProcessRunning(cliPid);
     }
 }

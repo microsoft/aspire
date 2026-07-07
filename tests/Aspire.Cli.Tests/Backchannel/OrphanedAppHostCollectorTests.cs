@@ -36,9 +36,71 @@ public class OrphanedAppHostCollectorTests
     }
 
     [Fact]
-    public void IsOrphaned_LiveCliProcess_ReturnsFalse()
+    public void IsOrphaned_StableStartTimeMatchesLiveCli_ReturnsFalse()
     {
-        // The current process stands in for a launching CLI that is still alive.
+        // Current AppHosts report CliStableStartedAt (the launcher CLI's /proc-based identity). The
+        // current process stands in for a launching CLI that is still alive, so its stable start time
+        // matches exactly and the AppHost is not orphaned.
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/tmp/AppHost.csproj",
+                ProcessId = 4242,
+                CliProcessId = Environment.ProcessId,
+                CliStableStartedAt = GetCurrentProcessStableStartTime(),
+            },
+        };
+
+        Assert.False(OrphanedAppHostCollector.IsOrphaned(connection));
+    }
+
+    [Fact]
+    public void IsOrphaned_StableStartTimeMismatchOnLiveCli_ReturnsTrue()
+    {
+        // The PID is alive but its stable /proc start time does not match — a recycled PID. The stable
+        // identity is immune to clock drift, so this mismatch is trustworthy evidence the original
+        // launcher is gone and the AppHost is orphaned.
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/tmp/AppHost.csproj",
+                ProcessId = 4242,
+                CliProcessId = Environment.ProcessId,
+                CliStableStartedAt = DateTimeOffset.FromUnixTimeSeconds(1),
+            },
+        };
+
+        Assert.True(OrphanedAppHostCollector.IsOrphaned(connection));
+    }
+
+    [Fact]
+    public void IsOrphaned_StablePreferredOverMismatchedLegacy_ReturnsFalse()
+    {
+        // Both identities are present. The stable value matches the live CLI while the legacy value does
+        // not (as can happen after a clock step). The collector must trust the drift-immune stable value
+        // and leave the live AppHost alone.
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/tmp/AppHost.csproj",
+                ProcessId = 4242,
+                CliProcessId = Environment.ProcessId,
+                CliStableStartedAt = GetCurrentProcessStableStartTime(),
+                CliStartedAt = DateTimeOffset.FromUnixTimeSeconds(1),
+            },
+        };
+
+        Assert.False(OrphanedAppHostCollector.IsOrphaned(connection));
+    }
+
+    [Fact]
+    public void IsOrphaned_LegacyLiveCliProcess_ReturnsFalse()
+    {
+        // Older AppHost: only the legacy CliStartedAt is reported. The current process stands in for a
+        // launching CLI that is still alive, so the AppHost is not orphaned.
         var connection = new TestAppHostAuxiliaryBackchannel
         {
             AppHostInfo = new AppHostInformation
@@ -54,31 +116,12 @@ public class OrphanedAppHostCollectorTests
     }
 
     [Fact]
-    public void IsOrphaned_LiveCliProcessWithAdjacentRuntimeStartTime_ReturnsFalse()
+    public void IsOrphaned_LegacyMismatchedStartTimeOnLiveCli_ReturnsFalse()
     {
-        // The AppHost backchannel reports ASPIRE_CLI_STARTED, which is intentionally stamped from
-        // Process.StartTime for released-AppHost compatibility. Different processes can observe that
-        // runtime value on adjacent Unix seconds, so the collector must use the same tolerant legacy
-        // comparison as the AppHost orphan detectors.
-        var connection = new TestAppHostAuxiliaryBackchannel
-        {
-            AppHostInfo = new AppHostInformation
-            {
-                AppHostPath = "/tmp/AppHost.csproj",
-                ProcessId = 4242,
-                CliProcessId = Environment.ProcessId,
-                CliStartedAt = GetCurrentProcessRuntimeStartTime().AddSeconds(1),
-            },
-        };
-
-        Assert.False(OrphanedAppHostCollector.IsOrphaned(connection));
-    }
-
-    [Fact]
-    public void IsOrphaned_LiveCliProcessWithMismatchedStartTime_ReturnsTrue()
-    {
-        // The PID is alive but its start time does not match — a recycled PID. The original launcher is
-        // gone, so the AppHost is orphaned.
+        // Older AppHost: only the drift-prone legacy CliStartedAt is available and it does NOT match the
+        // live CLI PID (as happens after a wall-clock step, not just PID reuse). Collecting is
+        // destructive, so an ambiguous legacy mismatch on a still-live PID must NOT tear down the app.
+        // The collector only acts on the legacy path when the CLI PID is entirely gone.
         var connection = new TestAppHostAuxiliaryBackchannel
         {
             AppHostInfo = new AppHostInformation
@@ -90,7 +133,7 @@ public class OrphanedAppHostCollectorTests
             },
         };
 
-        Assert.True(OrphanedAppHostCollector.IsOrphaned(connection));
+        Assert.False(OrphanedAppHostCollector.IsOrphaned(connection));
     }
 
     [Fact]
@@ -105,6 +148,36 @@ public class OrphanedAppHostCollectorTests
         cliProcess.Kill(entireProcessTree: true);
         cliProcess.WaitForExit();
 
+        // The launching CLI PID is entirely gone, so the AppHost is orphaned regardless of which
+        // identity domain was reported.
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = "/tmp/AppHost.csproj",
+                ProcessId = 4242,
+                CliProcessId = cliProcess.Id,
+                CliStableStartedAt = cliStartedAt,
+            },
+        };
+
+        Assert.True(OrphanedAppHostCollector.IsOrphaned(connection));
+    }
+
+    [Fact]
+    public void IsOrphaned_LegacyDeadCliProcess_ReturnsTrue()
+    {
+        var psi = OperatingSystem.IsWindows()
+            ? new ProcessStartInfo("ping", "-t localhost") { CreateNoWindow = true }
+            : new ProcessStartInfo("tail", "-f /dev/null") { CreateNoWindow = true };
+        using var cliProcess = Process.Start(psi);
+        Assert.NotNull(cliProcess);
+
+        var cliStartedAt = GetProcessStartTime(cliProcess);
+        cliProcess.Kill(entireProcessTree: true);
+        cliProcess.WaitForExit();
+
+        // Older AppHost reporting only the legacy identity: the PID is gone, so it is orphaned.
         var connection = new TestAppHostAuxiliaryBackchannel
         {
             AppHostInfo = new AppHostInformation
@@ -308,17 +381,21 @@ public class OrphanedAppHostCollectorTests
                 AppHostPath = "/tmp/AppHost.csproj",
                 ProcessId = appHostPid,
                 CliProcessId = Environment.ProcessId,
-                // Orphaned: a mismatched start time simulates a recycled CLI PID (the original launcher is gone).
-                // Live: the current process's real start time matches, so the launching CLI still looks alive.
-                CliStartedAt = orphaned
+                // Drive the decision through the stable /proc identity the collector prefers.
+                // Orphaned: a mismatched stable start time is trustworthy evidence of a recycled CLI PID.
+                // Live: the current process's real stable start time matches, so the launching CLI is alive.
+                CliStableStartedAt = orphaned
                     ? DateTimeOffset.FromUnixTimeSeconds(1)
-                    : GetCurrentProcessRuntimeStartTime(),
+                    : GetCurrentProcessStableStartTime(),
             },
         };
     }
 
     private static DateTimeOffset GetCurrentProcessRuntimeStartTime()
         => DateTimeOffset.FromUnixTimeSeconds(ProcessStartTimeHelper.GetCurrentProcessRuntimeStartTimeUnixSeconds());
+
+    private static DateTimeOffset GetCurrentProcessStableStartTime()
+        => DateTimeOffset.FromUnixTimeSeconds(ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixSeconds());
 
     private static DateTimeOffset GetProcessStartTime(Process process)
     {
