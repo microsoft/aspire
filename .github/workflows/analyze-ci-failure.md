@@ -763,7 +763,7 @@ safe-outputs:
                   CREATED_ISSUE_URL=$(gh issue create --repo "$REPO" \
                     --title "$ISSUE_TITLE" \
                     --label "$LABELS" \
-                    --body-file "$BODY_FILE" 2>&1)
+                    --body-file "$BODY_FILE")
                   rm -f "$BODY_FILE"
                   echo "Created issue for cause: ${CAUSE_ID} — ${CREATED_ISSUE_URL}"
 
