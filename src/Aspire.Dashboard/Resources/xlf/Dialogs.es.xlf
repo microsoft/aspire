@@ -504,6 +504,11 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Aceptar</target>
         <note />
       </trans-unit>
+      <trans-unit id="InteractionFileExceedsMaxSize">
+        <source>Exceeds the maximum size of {0}</source>
+        <target state="new">Exceeds the maximum size of {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InteractionFilePlaceholder">
         <source>Choose a file</source>
         <target state="new">Choose a file</target>
@@ -512,6 +517,11 @@ For more information about using AI agents with the dashboard, including setting
       <trans-unit id="InteractionFilePlaceholderMultiple">
         <source>Choose files</source>
         <target state="new">Choose files</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionFileUploadFailed">
+        <source>Upload failed</source>
+        <target state="new">Upload failed</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionUnsupportedVersionMessage">
