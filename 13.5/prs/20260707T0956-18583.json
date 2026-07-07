@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal CI automation: agentic workflow analyze-ci-failure improvements, publish job, and recurring cause tracking. No user-facing Aspire product impact.",
+  "mergedAt": "2026-07-07T09:56:11Z",
+  "number": 18583,
+  "runDate": "2026-07-07T12:45:56Z",
+  "status": "excluded",
+  "title": "Publish analyze-ci-failure results and recurring CI causes"
+}

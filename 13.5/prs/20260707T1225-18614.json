@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Internal Copilot canvas extension for Aspire team PR/issue workflow. No user-facing Aspire product change.",
+  "mergedAt": "2026-07-07T12:25:11Z",
+  "number": 18614,
+  "runDate": "2026-07-07T12:45:56Z",
+  "status": "excluded",
+  "title": "Sync Aspire Team App canvas with latest pr-dashboard logic"
+}
