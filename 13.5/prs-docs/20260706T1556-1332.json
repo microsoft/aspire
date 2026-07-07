@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Infrastructure revert (reverts PublishWithContainerFiles adoption in aspire.dev build) - not product documentation",
+  "mergedAt": "2026-07-06T15:56:25Z",
+  "number": 1332,
+  "runDate": "2026-07-07T00:26:12Z",
+  "status": "excluded",
+  "title": "Revert \"Adopt `PublishWithContainerFiles` for frontend assets and remove `esproj` coupling\""
+}

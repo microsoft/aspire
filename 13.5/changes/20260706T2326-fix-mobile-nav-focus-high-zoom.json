@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The mobile Resources navigation menu now keeps the focus ring visible at high zoom levels (1280x768 / 200%), scrolls nav items into view during keyboard navigation, and supports Escape to close the menu from the keyboard.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "♿",
+  "firstMergedAt": "2026-07-06T23:26:41Z",
+  "lastMergedAt": "2026-07-06T23:26:41Z",
+  "name": "Fix mobile nav focus visibility at high zoom",
+  "owner": "adamint",
+  "prs": [
+    18502
+  ]
+}

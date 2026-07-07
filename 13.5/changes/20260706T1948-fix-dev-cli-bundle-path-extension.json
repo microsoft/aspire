@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "When `aspire.aspireCliExecutablePath` is set to a dev-built CLI, the extension now forwards the configured path as `AspireCliPath` to all build processes — terminals, tasks, debugger child processes, and language-server builds — preventing bundle path mismatches that caused runtime failures such as `<unresolved-aspire-terminalhost>`.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-07-06T19:48:01Z",
+  "lastMergedAt": "2026-07-06T19:48:01Z",
+  "name": "Fix CLI bundle path forwarding in VS Code extension",
+  "owner": "adamint",
+  "prs": [
+    18362
+  ]
+}

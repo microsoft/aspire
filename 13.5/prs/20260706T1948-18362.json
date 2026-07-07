@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Extension fix: forward configured CLI path as AspireCliPath to all build processes to prevent bundle path mismatches",
+  "mergedAt": "2026-07-06T19:48:01Z",
+  "number": 18362,
+  "runDate": "2026-07-07T00:26:12Z",
+  "status": "included",
+  "title": "[extension] Forward aspireCliExecutablePath as AspireCliPath for MSBuild bundle resolution (#18073)"
+}

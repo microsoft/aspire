@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Dashboard bug fix: mobile nav focus ring visible at high zoom, Escape key support, scroll margin for nav items",
+  "mergedAt": "2026-07-06T23:26:41Z",
+  "number": 18502,
+  "runDate": "2026-07-07T00:26:12Z",
+  "status": "included",
+  "title": "Keep mobile nav focus visible at high zoom"
+}

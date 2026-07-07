@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The VS Code extension now passes `--nologo` on all hidden CLI probe calls (config info, ls, ps, describe, resource commands), making AppHost startup faster by skipping interactive startup output. Older CLIs that do not support `--nologo` are automatically detected and retried without it.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🚀",
+  "firstMergedAt": "2026-07-06T21:21:52Z",
+  "lastMergedAt": "2026-07-06T21:21:52Z",
+  "name": "Faster AppHost startup from VS Code extension",
+  "owner": "adamint",
+  "prs": [
+    18517
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Extension improvement: pass --nologo on hidden CLI probe calls for faster AppHost startup, with fallback for older CLIs",
+  "mergedAt": "2026-07-06T21:21:52Z",
+  "number": 18517,
+  "runDate": "2026-07-07T00:26:12Z",
+  "status": "included",
+  "title": "Improve extension CLI probe startup behavior"
+}
