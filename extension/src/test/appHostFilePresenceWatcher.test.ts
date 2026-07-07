@@ -1,21 +1,37 @@
 import * as assert from 'assert';
+import { EventEmitter } from 'events';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AppHostFilePresenceWatcher } from '../editor/AppHostFilePresenceWatcher';
 import { AppHostDataRepository } from '../views/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import * as cliModule from '../debugger/languages/cli';
 // Import parsers so they self-register before the watcher consults them.
 import '../editor/parsers/csharpAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
 
 interface CapturedListeners {
-    visibilityListeners: Array<(editors: readonly vscode.TextEditor[]) => void>;
+    tabsListeners: Array<() => void>;
+    visibleEditorsListeners: Array<() => void>;
+    activeEditorListeners: Array<() => void>;
     documentListeners: Array<(event: vscode.TextDocumentChangeEvent) => void>;
 }
 
-function makeEditor(filePath: string, content: string): vscode.TextEditor {
+// A minimal stand-in for the CLI child process so `setAppHostFilesOpen` (which the watcher calls for
+// real via the spy) can drive ps polling without spawning an actual `aspire` process.
+class TestChildProcess extends EventEmitter {
+    public killed = false;
+    public stdout = new EventEmitter();
+    public stderr = new EventEmitter();
+    kill(): boolean {
+        this.killed = true;
+        return true;
+    }
+}
+
+function makeDocument(filePath: string, content: string): vscode.TextDocument {
     const lines = content.split('\n');
-    const document = {
+    return {
         uri: vscode.Uri.file(filePath),
         fileName: filePath,
         languageId: filePath.endsWith('.cs') ? 'csharp' : filePath.endsWith('.ts') ? 'typescript' : 'javascript',
@@ -62,40 +78,74 @@ function makeEditor(filePath: string, content: string): vscode.TextEditor {
         notebook: undefined as any,
         isUntitled: false,
     } as unknown as vscode.TextDocument;
-    return { document } as unknown as vscode.TextEditor;
 }
 
 const appHostCsContent = 'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddRedis("cache");\nbuilder.Build().Run();';
 const appHostTsContent = 'import { createBuilder } from "@aspire/sdk";\nconst builder = await createBuilder();\nawait builder.addRedis("cache");';
 const nonAppHostCsContent = 'using System;\nclass Program { static void Main() { } }';
 
+function fsPath(path: string): string {
+    return vscode.Uri.file(path).fsPath;
+}
+
 suite('AppHostFilePresenceWatcher', () => {
     let captured: CapturedListeners;
-    let visibleEditorsStub: sinon.SinonStub;
+    let tabGroupsStub: sinon.SinonStub;
+    let onDidChangeActiveStub: sinon.SinonStub;
     let onDidChangeVisibleStub: sinon.SinonStub;
+    let visibleEditorsStub: sinon.SinonStub;
     let onDidChangeTextStub: sinon.SinonStub;
+    let textDocumentsStub: sinon.SinonStub;
+    let spawnStub: sinon.SinonStub;
     let repository: AppHostDataRepository;
     let setOpenSpy: sinon.SinonSpy;
     let clock: sinon.SinonFakeTimers;
-    let visibleEditors: vscode.TextEditor[];
+    let tabs: vscode.Tab[];
+    let textDocuments: vscode.TextDocument[];
+    let visibleDocuments: vscode.TextDocument[];
+
+    // `visible` defaults to all open documents (the common case: opening a file makes it visible).
+    // Pass an explicit list — often `[]` — to model backgrounded tabs whose editors are not on screen.
+    function setOpenDocuments(documents: vscode.TextDocument[], visible: vscode.TextDocument[] = documents): void {
+        textDocuments = documents;
+        visibleDocuments = visible;
+        tabs = documents.map(document => ({ input: { uri: document.uri } }) as unknown as vscode.Tab);
+    }
 
     setup(() => {
-        captured = { visibilityListeners: [], documentListeners: [] };
-        visibleEditors = [];
+        captured = { tabsListeners: [], visibleEditorsListeners: [], activeEditorListeners: [], documentListeners: [] };
+        tabs = [];
+        textDocuments = [];
+        visibleDocuments = [];
 
-        visibleEditorsStub = sinon.stub(vscode.window, 'visibleTextEditors').get(() => visibleEditors);
-        onDidChangeVisibleStub = sinon.stub(vscode.window, 'onDidChangeVisibleTextEditors').callsFake(((listener: (editors: readonly vscode.TextEditor[]) => void) => {
-            captured.visibilityListeners.push(listener);
+        tabGroupsStub = sinon.stub(vscode.window, 'tabGroups').get(() => ({
+            get all() { return [{ tabs }]; },
+            onDidChangeTabs: ((listener: () => void) => {
+                captured.tabsListeners.push(listener);
+                return { dispose: () => { } };
+            }) as any,
+        }));
+        visibleEditorsStub = sinon.stub(vscode.window, 'visibleTextEditors').get(
+            () => visibleDocuments.map(document => ({ document }) as unknown as vscode.TextEditor));
+        onDidChangeVisibleStub = sinon.stub(vscode.window, 'onDidChangeVisibleTextEditors').callsFake(((listener: () => void) => {
+            captured.visibleEditorsListeners.push(listener);
+            return { dispose: () => { } };
+        }) as any);
+        onDidChangeActiveStub = sinon.stub(vscode.window, 'onDidChangeActiveTextEditor').callsFake(((listener: () => void) => {
+            captured.activeEditorListeners.push(listener);
             return { dispose: () => { } };
         }) as any);
         onDidChangeTextStub = sinon.stub(vscode.workspace, 'onDidChangeTextDocument').callsFake(((listener: (event: vscode.TextDocumentChangeEvent) => void) => {
             captured.documentListeners.push(listener);
             return { dispose: () => { } };
         }) as any);
+        textDocumentsStub = sinon.stub(vscode.workspace, 'textDocuments').get(() => textDocuments);
+        spawnStub = sinon.stub(cliModule, 'spawnCliProcess').callsFake(() => new TestChildProcess() as any);
 
         const terminalProvider = new AspireTerminalProvider([]);
+        sinon.stub(terminalProvider, 'getAspireCliExecutablePath').resolves('aspire');
         repository = new AppHostDataRepository(terminalProvider);
-        setOpenSpy = sinon.spy(repository, 'setAppHostFileOpen');
+        setOpenSpy = sinon.spy(repository, 'setAppHostFilesOpen');
         clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
     });
 
@@ -103,118 +153,156 @@ suite('AppHostFilePresenceWatcher', () => {
         clock.restore();
         setOpenSpy.restore();
         repository.dispose();
+        spawnStub.restore();
+        textDocumentsStub.restore();
         onDidChangeTextStub.restore();
+        onDidChangeActiveStub.restore();
         onDidChangeVisibleStub.restore();
         visibleEditorsStub.restore();
+        tabGroupsStub.restore();
     });
 
-    test('constructor evaluates visible editors and reports false when none are AppHost files', async () => {
-        visibleEditors = [makeEditor('/test/Program.cs', nonAppHostCsContent)];
+    function reportedPaths(call: sinon.SinonSpyCall): string[] {
+        return (call.args[0] as readonly string[]).slice().sort();
+    }
+
+    test('does not report when no open tab is an AppHost file', async () => {
+        setOpenDocuments([makeDocument('/test/Program.cs', nonAppHostCsContent)]);
 
         const watcher = new AppHostFilePresenceWatcher(repository);
         await waitForUpdate(watcher);
 
-        // No call expected because the cached "_lastValue" starts at false.
+        // The initial reported set and the resolved set are both empty, so no notification fires.
         assert.strictEqual(setOpenSpy.called, false);
         watcher.dispose();
     });
 
-    test('constructor reports true when an AppHost file is already visible', async () => {
-        visibleEditors = [makeEditor('/test/AppHost.cs', appHostCsContent)];
+    test('reports the AppHost path when a tab is already open', async () => {
+        setOpenDocuments([makeDocument('/test/AppHost.cs', appHostCsContent)]);
 
         const watcher = new AppHostFilePresenceWatcher(repository);
         await waitForUpdate(watcher);
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
-        assert.strictEqual(setOpenSpy.firstCall.args[0], true);
+        assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/AppHost.cs')]);
         watcher.dispose();
     });
 
-    test('constructor reports true when an .mts AppHost file is already visible', async () => {
-        visibleEditors = [makeEditor('/test/apphost.mts', appHostTsContent)];
+    test('reports a backgrounded open AppHost tab whose editor is not visible', async () => {
+        setOpenDocuments([makeDocument('/test/AppHost.cs', appHostCsContent)], []);
 
         const watcher = new AppHostFilePresenceWatcher(repository);
         await waitForUpdate(watcher);
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
-        assert.strictEqual(setOpenSpy.firstCall.args[0], true);
+        assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/AppHost.cs')]);
         watcher.dispose();
     });
 
-    test('becoming-AppHost transition via visibility change reports true', async () => {
+    test('reports every open AppHost tab as a single set', async () => {
+        setOpenDocuments([
+            makeDocument('/test/AppHost.cs', appHostCsContent),
+            makeDocument('/other/apphost.ts', appHostTsContent),
+            makeDocument('/test/Program.cs', nonAppHostCsContent),
+        ]);
+
+        const watcher = new AppHostFilePresenceWatcher(repository);
+        await waitForUpdate(watcher);
+
+        assert.strictEqual(setOpenSpy.calledOnce, true);
+        assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/other/apphost.ts'), fsPath('/test/AppHost.cs')]);
+        watcher.dispose();
+    });
+
+    test('opening a new AppHost tab reports the added path', async () => {
         const watcher = new AppHostFilePresenceWatcher(repository);
         await waitForUpdate(watcher);
         assert.strictEqual(setOpenSpy.called, false);
 
-        visibleEditors = [makeEditor('/test/AppHost.cs', appHostCsContent)];
-        captured.visibilityListeners.forEach(l => l(visibleEditors));
+        setOpenDocuments([makeDocument('/test/AppHost.cs', appHostCsContent)]);
+        captured.tabsListeners.forEach(l => l());
         await waitForUpdate(watcher);
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
-        assert.strictEqual(setOpenSpy.firstCall.args[0], true);
+        assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/AppHost.cs')]);
         watcher.dispose();
     });
 
-    test('all-non-AppHost transition reports false', async () => {
-        visibleEditors = [makeEditor('/test/AppHost.cs', appHostCsContent)];
+    test('a visible-editor change that leaves the open tab set unchanged does not re-report', async () => {
+        const document = makeDocument('/test/AppHost.cs', appHostCsContent);
+        setOpenDocuments([document]);
         const watcher = new AppHostFilePresenceWatcher(repository);
         await waitForUpdate(watcher);
-        assert.strictEqual(setOpenSpy.lastCall.args[0], true);
+        assert.strictEqual(setOpenSpy.calledOnce, true);
+        assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/AppHost.cs')]);
 
-        visibleEditors = [makeEditor('/test/Program.cs', nonAppHostCsContent)];
-        captured.visibilityListeners.forEach(l => l(visibleEditors));
+        visibleDocuments = [];
+        captured.visibleEditorsListeners.forEach(l => l());
+        await waitForUpdate(watcher);
+
+        assert.strictEqual(setOpenSpy.callCount, 1, 'a visibility-only change must not re-report the unchanged open tab set');
+        watcher.dispose();
+    });
+
+    test('closing the last AppHost tab reports an empty set', async () => {
+        setOpenDocuments([makeDocument('/test/AppHost.cs', appHostCsContent)]);
+        const watcher = new AppHostFilePresenceWatcher(repository);
+        await waitForUpdate(watcher);
+        assert.deepStrictEqual(reportedPaths(setOpenSpy.lastCall), [fsPath('/test/AppHost.cs')]);
+
+        setOpenDocuments([makeDocument('/test/Program.cs', nonAppHostCsContent)]);
+        captured.tabsListeners.forEach(l => l());
         await waitForUpdate(watcher);
 
         assert.strictEqual(setOpenSpy.callCount, 2);
-        assert.strictEqual(setOpenSpy.secondCall.args[0], false);
+        assert.deepStrictEqual(setOpenSpy.secondCall.args[0], []);
         watcher.dispose();
     });
 
-    test('redundant visibility events with same value do not re-notify', async () => {
-        visibleEditors = [makeEditor('/test/AppHost.cs', appHostCsContent)];
+    test('redundant tab events with the same open set do not re-notify', async () => {
+        setOpenDocuments([makeDocument('/test/AppHost.cs', appHostCsContent)]);
         const watcher = new AppHostFilePresenceWatcher(repository);
         await waitForUpdate(watcher);
         const initialCalls = setOpenSpy.callCount;
 
-        captured.visibilityListeners.forEach(l => l(visibleEditors));
-        captured.visibilityListeners.forEach(l => l(visibleEditors));
+        captured.tabsListeners.forEach(l => l());
+        captured.tabsListeners.forEach(l => l());
         await waitForUpdate(watcher);
 
         assert.strictEqual(setOpenSpy.callCount, initialCalls);
         watcher.dispose();
     });
 
-    test('document edit on a visible non-AppHost file that becomes AppHost reports true after debounce', async () => {
-        const editor = makeEditor('/test/Program.cs', nonAppHostCsContent);
-        visibleEditors = [editor];
+    test('editing a backgrounded tab that becomes an AppHost reports the path after debounce', async () => {
+        setOpenDocuments([makeDocument('/test/Program.cs', nonAppHostCsContent)], []);
         const watcher = new AppHostFilePresenceWatcher(repository);
         await waitForUpdate(watcher);
         assert.strictEqual(setOpenSpy.called, false);
 
-        // Mutate the document content to look like an AppHost.
-        const upgraded = makeEditor('/test/Program.cs', appHostCsContent);
-        visibleEditors = [upgraded];
-        captured.documentListeners.forEach(l => l({ document: upgraded.document, contentChanges: [], reason: undefined } as any));
+        // The backgrounded document's content is edited into an AppHost (same tab/uri, new content).
+        const upgraded = makeDocument('/test/Program.cs', appHostCsContent);
+        textDocuments = [upgraded];
+        captured.documentListeners.forEach(l => l({ document: upgraded, contentChanges: [], reason: undefined } as any));
 
-        // Listener is debounced; nothing fires yet.
+        // The content listener is debounced; nothing fires until the debounce elapses.
         assert.strictEqual(setOpenSpy.called, false);
 
-        await clock.tickAsync(300);
+        await clock.tickAsync(AppHostFilePresenceWatcher['_changeDebounceMs']);
         await waitForUpdate(watcher);
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
-        assert.strictEqual(setOpenSpy.firstCall.args[0], true);
+        assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/Program.cs')]);
         watcher.dispose();
     });
 
-    test('document edit on a non-visible document is ignored', async () => {
-        const visible = makeEditor('/test/Program.cs', nonAppHostCsContent);
-        visibleEditors = [visible];
+    test('editing a document that has no open tab is ignored', async () => {
+        setOpenDocuments([makeDocument('/test/Program.cs', nonAppHostCsContent)]);
         const watcher = new AppHostFilePresenceWatcher(repository);
         await waitForUpdate(watcher);
 
-        const offscreen = makeEditor('/elsewhere/AppHost.cs', appHostCsContent);
-        captured.documentListeners.forEach(l => l({ document: offscreen.document, contentChanges: [], reason: undefined } as any));
+        // The edited AppHost document has no corresponding open tab, so the watcher must not react.
+        const untracked = makeDocument('/elsewhere/AppHost.cs', appHostCsContent);
+        captured.documentListeners.forEach(l => l({ document: untracked, contentChanges: [], reason: undefined } as any));
         await clock.tickAsync(500);
 
         assert.strictEqual(setOpenSpy.called, false);
@@ -222,35 +310,33 @@ suite('AppHostFilePresenceWatcher', () => {
     });
 
     test('rapid edits coalesce into a single update', async () => {
-        const editor = makeEditor('/test/AppHost.cs', appHostCsContent);
-        visibleEditors = [editor];
+        setOpenDocuments([makeDocument('/test/AppHost.cs', appHostCsContent)]);
         const watcher = new AppHostFilePresenceWatcher(repository);
         await waitForUpdate(watcher);
         const initial = setOpenSpy.callCount;
 
-        // Switch to non-AppHost while firing several rapid edits.
-        const downgraded = makeEditor('/test/AppHost.cs', nonAppHostCsContent);
-        visibleEditors = [downgraded];
+        // The document is edited down to a non-AppHost while several rapid edits fire.
+        const downgraded = makeDocument('/test/AppHost.cs', nonAppHostCsContent);
+        textDocuments = [downgraded];
         for (let i = 0; i < 5; i++) {
-            captured.documentListeners.forEach(l => l({ document: downgraded.document, contentChanges: [], reason: undefined } as any));
+            captured.documentListeners.forEach(l => l({ document: downgraded, contentChanges: [], reason: undefined } as any));
             await clock.tickAsync(50);
         }
-        await clock.tickAsync(300);
+        await clock.tickAsync(AppHostFilePresenceWatcher['_changeDebounceMs']);
         await waitForUpdate(watcher);
 
         assert.strictEqual(setOpenSpy.callCount, initial + 1);
-        assert.strictEqual(setOpenSpy.lastCall.args[0], false);
+        assert.deepStrictEqual(setOpenSpy.lastCall.args[0], []);
         watcher.dispose();
     });
 
     test('dispose removes listeners and pending timer', () => {
-        const editor = makeEditor('/test/Program.cs', nonAppHostCsContent);
-        visibleEditors = [editor];
+        setOpenDocuments([makeDocument('/test/Program.cs', nonAppHostCsContent)]);
         const watcher = new AppHostFilePresenceWatcher(repository);
 
-        const upgraded = makeEditor('/test/Program.cs', appHostCsContent);
-        visibleEditors = [upgraded];
-        captured.documentListeners.forEach(l => l({ document: upgraded.document, contentChanges: [], reason: undefined } as any));
+        const upgraded = makeDocument('/test/Program.cs', appHostCsContent);
+        textDocuments = [upgraded];
+        captured.documentListeners.forEach(l => l({ document: upgraded, contentChanges: [], reason: undefined } as any));
 
         watcher.dispose();
         clock.tick(500);
