@@ -7,24 +7,13 @@ description: |
   details and suggested next steps. For non-transient failures, posts a
   comment explaining the root cause.
 
-  NOTE: This workflow coexists with `auto-rerun-transient-ci-failures.yml`
-  which also triggers on CI failures. That workflow uses pattern-matching to
-  classify failures deterministically (currently in FORCE_RERUN_ALL mode).
-  This workflow uses Copilot for deeper analysis and provides richer PR
-  comments. When ENABLE_RERUN is 'false' (the default), this workflow only
-  observes and comments — it does not conflict with the existing rerun
-  workflow. Set ENABLE_RERUN to 'true' only after disabling
-  FORCE_RERUN_ALL in the other workflow to avoid duplicate reruns.
-
 on:
-  # TODO: Enable automatic trigger after testing is complete
-  # workflow_run:
-  #   workflows: ["CI"]
-  #   types:
-  #     - completed
-  #   branches:
-  #     - main
-  #     - 'release/**'
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       run_id:
@@ -40,8 +29,7 @@ jobs:
       && (
         github.event_name == 'workflow_dispatch'
         || (
-          github.event.workflow_run.event == 'pull_request'
-          && github.event.workflow_run.conclusion == 'failure'
+          github.event.workflow_run.conclusion == 'failure'
           && github.event.workflow_run.run_attempt <= 3
         )
       )
@@ -127,9 +115,7 @@ jobs:
           echo "pr_numbers=${PR_NUMBERS}" >> "$GITHUB_OUTPUT"
 
           if [ -z "${PR_NUMBERS}" ]; then
-            echo "No associated PR found. Skipping analysis."
-            echo "has_work=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "No associated PR found. Analysis will proceed without PR context."
           fi
 
           # Fetch all jobs for this run attempt.
