@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Certificates;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Microsoft.AspNetCore.Certificates.Generation;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -230,5 +232,105 @@ public class DevCertsCheckTests
 
         var devCertsResult = Assert.Single(results);
         Assert.Null(devCertsResult.Metadata);
+    }
+
+    [Fact]
+    public async Task CheckAsync_LinuxWithoutCertUtil_ReturnsCertUtilWarning()
+    {
+        var certs = new List<DevCertInfo>
+        {
+            CreateDevCertInfo(CertificateManager.TrustLevel.Full, "AAAA1111BBBB2222", MinVersion),
+        };
+        var toolRunner = new TestCertificateToolRunner
+        {
+            CheckHttpCertificateCallback = () => new CertificateTrustResult
+            {
+                HasCertificates = true,
+                TrustLevel = CertificateManager.TrustLevel.Full,
+                Certificates = certs
+            }
+        };
+        var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+        {
+            ["PATH"] = Path.Combine(AppContext.BaseDirectory, Guid.NewGuid().ToString("N"))
+        });
+        var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+
+        var results = await check.CheckAsync();
+
+        var certUtilResult = Assert.Single(results, r => r.Name == DevCertsCheck.CertUtilCheckName);
+        Assert.Equal(EnvironmentCheckStatus.Warning, certUtilResult.Status);
+        Assert.Contains("certutil", certUtilResult.Message);
+    }
+
+    [Fact]
+    public async Task CheckAsync_LinuxWithCertUtil_DoesNotReturnCertUtilWarning()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            var certUtilPath = Path.Combine(tempDirectory.FullName, CertificateHelpers.CertUtilCommand);
+            File.WriteAllText(certUtilPath, "");
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(certUtilPath, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            }
+
+            var certs = new List<DevCertInfo>
+            {
+                CreateDevCertInfo(CertificateManager.TrustLevel.Full, "AAAA1111BBBB2222", MinVersion),
+            };
+            var toolRunner = new TestCertificateToolRunner
+            {
+                CheckHttpCertificateCallback = () => new CertificateTrustResult
+                {
+                    HasCertificates = true,
+                    TrustLevel = CertificateManager.TrustLevel.Full,
+                    Certificates = certs
+                }
+            };
+            var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+            {
+                ["PATH"] = tempDirectory.FullName
+            });
+            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+
+            var results = await check.CheckAsync();
+
+            Assert.DoesNotContain(results, r => r.Name == DevCertsCheck.CertUtilCheckName);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CheckAsync_NonLinux_DoesNotReadEnvironmentVariablesForCertUtilWarning()
+    {
+        var certs = new List<DevCertInfo>
+        {
+            CreateDevCertInfo(CertificateManager.TrustLevel.Full, "AAAA1111BBBB2222", MinVersion),
+        };
+        var toolRunner = new TestCertificateToolRunner
+        {
+            CheckHttpCertificateCallback = () => new CertificateTrustResult
+            {
+                HasCertificates = true,
+                TrustLevel = CertificateManager.TrustLevel.Full,
+                Certificates = certs
+            }
+        };
+        var environment = TestEnvironment.CreateMacOS(new Dictionary<string, string?>
+        {
+            ["PATH"] = Path.Combine(AppContext.BaseDirectory, Guid.NewGuid().ToString("N"))
+        });
+        var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+
+        var results = await check.CheckAsync();
+
+        Assert.Equal(0, environment.GetEnvironmentVariablesCallCount);
+        Assert.Collection(results, result => Assert.Equal(DevCertsCheck.CheckName, result.Name));
     }
 }

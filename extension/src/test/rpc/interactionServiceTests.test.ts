@@ -367,6 +367,7 @@ suite('InteractionService endpoints', () => {
 		try {
 			const stub = sandbox.stub(extensionLogOutputChannel, 'info');
 			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
 			sandbox.stub(vscode.workspace, 'getConfiguration').returns(createAspireConfiguration({
 				enableAspireDashboardAutoLaunch: 'notification'
 			}));
@@ -389,6 +390,8 @@ suite('InteractionService endpoints', () => {
 			assert.ok(outputLines.every(line => !line.includes('base-secret')), 'Output should not contain base URL login token');
 			assert.ok(outputLines.every(line => !line.includes('codespaces-secret')), 'Output should not contain codespaces URL login token');
 			assert.equal(showInformationMessageStub.callCount, 1, 'Should show info message when autoLaunch is notification');
+			assert.ok(executeCommandStub.calledWith('aspire-vscode.refreshAppHostRuntimeState'), 'Should refresh live AppHost state without full AppHost rediscovery');
+			assert.ok(executeCommandStub.neverCalledWith('aspire-vscode.refreshAppHosts'), 'Should not trigger full workspace AppHost rediscovery');
 		}
 		finally {
 			sandbox.restore();

@@ -41,22 +41,25 @@ internal static partial class WindowsProcessInterop
     public const uint CreateNewConsole = 0x00000010;
 
     /// <summary>
-    /// Composite creation flags shared by every CLI process launcher that spawns into its own
-    /// hidden console group: CREATE_UNICODE_ENVIRONMENT (we always build a Unicode env block
+    /// Base creation flags shared by Windows launchers that need explicit handle inheritance
+    /// and/or job assignment: CREATE_UNICODE_ENVIRONMENT (we always build a Unicode env block
     /// ourselves) | EXTENDED_STARTUPINFO_PRESENT (we always pass STARTUPINFOEX with an attribute
-    /// list) | CREATE_NEW_CONSOLE (the entire point — detach from the parent's console).
-    /// Centralizing the composite prevents the two launchers from drifting (e.g. one path
-    /// accidentally dropping CREATE_UNICODE_ENVIRONMENT and silently truncating non-ASCII env
-    /// values).
+    /// list). CREATE_NEW_CONSOLE is added independently by callers that need console isolation.
     /// </summary>
-    public const uint NewConsoleCreationFlags =
-        CreateUnicodeEnvironment | ExtendedStartupInfoPresent | CreateNewConsole;
+    public const uint ExplicitHandleCreationFlags =
+        CreateUnicodeEnvironment | ExtendedStartupInfoPresent;
 
     public const ushort ShowWindowHide = 0x0000;
 
     // PROC_THREAD_ATTRIBUTE_HANDLE_LIST — see
     // https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute
     public static readonly nint ProcThreadAttributeHandleList = (nint)0x00020002;
+
+    // PROC_THREAD_ATTRIBUTE_JOB_LIST — assigns the child to one or more job objects atomically at
+    // CreateProcess time (Windows 8 / Server 2012 and later). 
+    // See https://learn.microsoft.com/windows/win32/procthread/process-creation-flags and
+    // https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-updateprocthreadattribute
+    public static readonly nint ProcThreadAttributeJobList = (nint)0x0002000D;
 
     // === Structs ===
 
@@ -172,9 +175,6 @@ internal static partial class WindowsProcessInterop
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool TerminateProcess(nint hProcess, uint uExitCode);
 
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    public static partial uint ResumeThread(nint hThread);
-
     // GetExitCodeProcess + WaitForSingleObject are used by IsolatedProcess.Windows so that
     // IsolatedProcess.ExitCode / HasExited can query the child via the SafeProcessHandle we
     // kept open from CreateProcessW. Process objects obtained via Process.GetProcessById
@@ -219,9 +219,13 @@ internal static partial class WindowsProcessInterop
         nint lpJobObjectInformation,
         uint cbJobObjectInformationLength);
 
+    // IsProcessInJob — reports whether a process is a member of the specified job. Used to verify
+    // that a child spawned with PROC_THREAD_ATTRIBUTE_JOB_LIST is associated with the kill-on-close
+    // job the instant it is created. See
+    // https://learn.microsoft.com/windows/win32/api/jobapi/nf-jobapi-isprocessinjob
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static partial bool AssignProcessToJobObject(SafeFileHandle hJob, nint hProcess);
+    public static partial bool IsProcessInJob(nint processHandle, SafeFileHandle jobHandle, [MarshalAs(UnmanagedType.Bool)] out bool result);
 
     // SetConsoleCtrlHandler — see
     // https://learn.microsoft.com/windows/console/setconsolectrlhandler
@@ -237,8 +241,6 @@ internal static partial class WindowsProcessInterop
     public static partial bool SetConsoleCtrlHandler(nint handlerRoutine, [MarshalAs(UnmanagedType.Bool)] bool add);
 
     // === Job-object constants ===
-
-    public const uint CreateSuspended = 0x00000004;
 
     // https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-jobobject_basic_limit_information
     public const uint JobObjectLimitBreakawayOk = 0x00000800;
@@ -301,11 +303,10 @@ internal static partial class WindowsProcessInterop
     public readonly record struct StdioHandles(nint Stdin, nint Stdout, nint Stderr);
 
     /// <summary>
-    /// Spawns a child process in its own hidden console group with exactly the stdio handles
-    /// in <paramref name="stdio"/> made inheritable through <c>PROC_THREAD_ATTRIBUTE_HANDLE_LIST</c>.
-    /// Used by both <see cref="DetachedProcessLauncher"/> (NUL-only handles) and
-    /// <see cref="IsolatedProcess"/> (NUL stdin + anonymous pipes for stdout/stderr)
-    /// so the console-isolation ceremony lives in one place.
+    /// Spawns a child process with exactly the stdio handles in <paramref name="stdio"/> made
+    /// inheritable through <c>PROC_THREAD_ATTRIBUTE_HANDLE_LIST</c>. Console isolation
+    /// (<c>CREATE_NEW_CONSOLE</c>) and parent-exit job assignment are independent options so
+    /// short-lived helper processes can get the job safety net without creating a new console.
     /// </summary>
     /// <param name="fileName">Full path to the executable to launch.</param>
     /// <param name="arguments">Arguments to pass to the child. Quoted via <see cref="BuildCommandLine"/>.</param>
@@ -323,12 +324,19 @@ internal static partial class WindowsProcessInterop
     /// to remove a subset of parent variables must materialize the parent env, apply their
     /// removals/overlays, and pass the resulting dictionary here.
     /// </param>
+    /// <param name="createNewConsole">
+    /// When <see langword="true"/>, launches the child in a new hidden console group. Use this for
+    /// AppHost-style processes that need targeted CTRL+C delivery or detached children that must not
+    /// share the parent console. Leave it <see langword="false"/> for ordinary background helpers.
+    /// </param>
     /// <param name="jobHandle">
-    /// Optional kill-on-close job object. When supplied, the child is created suspended,
-    /// assigned to the job, then resumed — so there is no instruction-level window where the
-    /// child could spawn a grandchild that escapes the job. <see cref="DetachedProcessLauncher"/>
-    /// passes <see langword="null" /> because detached children must outlive the CLI;
-    /// <see cref="IsolatedProcess"/> passes the singleton CLI job so children
+    /// Optional parent-lifetime job object. When supplied, the child is assigned to the job
+    /// atomically at <c>CreateProcess</c> time via <c>PROC_THREAD_ATTRIBUTE_JOB_LIST</c>, so there is
+    /// no window in which the child exists outside the job — even a launcher that dies (or is
+    /// SIGKILL'd) the instant after <c>CreateProcess</c> returns cannot leak it, and no child can spawn
+    /// a grandchild that escapes the job before the safety net is in place.
+    /// <see cref="DetachedProcessLauncher"/> passes <see langword="null" /> because detached children
+    /// must outlive the CLI; <see cref="IsolatedProcess"/> passes the singleton CLI job so children
     /// die with a parent crash.
     /// </param>
     /// <returns>
@@ -338,12 +346,13 @@ internal static partial class WindowsProcessInterop
     /// <see cref="System.Diagnostics.Process.GetProcessById(int)"/>).
     /// </returns>
     [SupportedOSPlatform("windows")]
-    public static PROCESS_INFORMATION SpawnConsoleIsolatedProcess(
+    public static PROCESS_INFORMATION SpawnProcess(
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
         StdioHandles stdio,
         IReadOnlyDictionary<string, string?>? environment,
+        bool createNewConsole,
         SafeFileHandle? jobHandle)
     {
         // Build the handle whitelist from the non-zero stdio slots. We pass exactly the handles
@@ -369,13 +378,17 @@ internal static partial class WindowsProcessInterop
         AddIfUnique(stdio.Stdout);
         AddIfUnique(stdio.Stderr);
 
+        // The child always needs the stdio handle whitelist; when a parent-lifetime job is supplied it
+        // ALSO needs PROC_THREAD_ATTRIBUTE_JOB_LIST so the child is assigned to the job atomically at creation (below).
+        var attributeCount = jobHandle is not null ? 2 : 1;
+
         var attrListSize = nint.Zero;
-        InitializeProcThreadAttributeList(nint.Zero, 1, 0, ref attrListSize);
+        InitializeProcThreadAttributeList(nint.Zero, attributeCount, 0, ref attrListSize);
 
         var attrList = Marshal.AllocHGlobal(attrListSize);
         try
         {
-            if (!InitializeProcThreadAttributeList(attrList, 1, 0, ref attrListSize))
+            if (!InitializeProcThreadAttributeList(attrList, attributeCount, 0, ref attrListSize))
             {
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Failed to initialize process thread attribute list");
             }
@@ -384,6 +397,9 @@ internal static partial class WindowsProcessInterop
             {
                 var handles = inheritable.ToArray();
                 var pinnedHandles = GCHandle.Alloc(handles, GCHandleType.Pinned);
+                var pinnedJobHandles = default(GCHandle);
+                var jobHandleRefAdded = false;
+
                 try
                 {
                     if (!UpdateProcThreadAttribute(
@@ -396,6 +412,25 @@ internal static partial class WindowsProcessInterop
                         nint.Zero))
                     {
                         throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Failed to update process thread attribute list");
+                    }
+
+                    if (jobHandle is not null)
+                    {
+                        jobHandle.DangerousAddRef(ref jobHandleRefAdded);
+                        var jobHandles = new[] { jobHandle.DangerousGetHandle() };
+                        pinnedJobHandles = GCHandle.Alloc(jobHandles, GCHandleType.Pinned);
+
+                        if (!UpdateProcThreadAttribute(
+                            attrList,
+                            0,
+                            ProcThreadAttributeJobList,
+                            pinnedJobHandles.AddrOfPinnedObject(),
+                            (nint)(nint.Size * jobHandles.Length),
+                            nint.Zero,
+                            nint.Zero))
+                        {
+                            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Failed to add job object to process thread attribute list");
+                        }
                     }
 
                     var si = new STARTUPINFOEX
@@ -413,14 +448,10 @@ internal static partial class WindowsProcessInterop
 
                     var commandLine = BuildCommandLine(fileName, arguments);
 
-                    // Only suspend when a job is involved: we need the child frozen between
-                    // CreateProcess and AssignProcessToJobObject so it cannot fork-and-breakaway
-                    // before we put the safety net under it. Without a job, the original
-                    // behavior is preserved bit-for-bit (no suspend, no resume).
-                    var flags = NewConsoleCreationFlags;
-                    if (jobHandle is not null)
+                    var flags = ExplicitHandleCreationFlags;
+                    if (createNewConsole)
                     {
-                        flags |= CreateSuspended;
+                        flags |= CreateNewConsole;
                     }
 
                     var envBlockHandle = nint.Zero;
@@ -446,33 +477,6 @@ internal static partial class WindowsProcessInterop
                             throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), $"Failed to create process: {fileName}");
                         }
 
-                        if (jobHandle is not null)
-                        {
-                            // Wrap the post-CreateProcess steps so any failure between here and
-                            // ResumeThread kills the suspended child — otherwise we'd leak a
-                            // process stuck in initial-suspend state.
-                            try
-                            {
-                                if (!AssignProcessToJobObject(jobHandle, pi.hProcess))
-                                {
-                                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Failed to assign child process to job object");
-                                }
-
-                                // ResumeThread returns the previous suspend count, or 0xFFFFFFFF on failure.
-                                if (ResumeThread(pi.hThread) == uint.MaxValue)
-                                {
-                                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "Failed to resume suspended child thread");
-                                }
-                            }
-                            catch
-                            {
-                                try { TerminateProcess(pi.hProcess, 1); } catch { }
-                                try { CloseHandle(pi.hThread); } catch { }
-                                try { CloseHandle(pi.hProcess); } catch { }
-                                throw;
-                            }
-                        }
-
                         return pi;
                     }
                     finally
@@ -485,6 +489,16 @@ internal static partial class WindowsProcessInterop
                 }
                 finally
                 {
+                    if (pinnedJobHandles.IsAllocated)
+                    {
+                        pinnedJobHandles.Free();
+                    }
+
+                    if (jobHandleRefAdded)
+                    {
+                        jobHandle!.DangerousRelease();
+                    }
+
                     pinnedHandles.Free();
                 }
             }

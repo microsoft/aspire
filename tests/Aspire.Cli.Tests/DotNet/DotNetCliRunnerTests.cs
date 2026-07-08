@@ -206,13 +206,89 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             (_, env, _, _) =>
             {
                 Assert.NotNull(env);
-                Assert.Equal(Environment.ProcessPath, env["AspireCliPath"]);
+                if (Environment.ProcessPath is { } processPath && DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(processPath))
+                {
+                    Assert.Equal(processPath, env["AspireCliPath"]);
+                }
+                else
+                {
+                    Assert.False(env.ContainsKey("AspireCliPath"));
+                }
             },
             0);
 
         var exitCode = await runner.BuildAsync(projectFile, noRestore: false, new ProcessInvocationOptions(), CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public void ShouldForwardProcessPathAsAspireCliPathRejectsUnbundledFrameworkDependentCliBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "artifacts", "bin", "Aspire.Cli", "Debug", "net10.0"));
+        var cliPath = Path.Combine(cliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(cliPath, string.Empty);
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, "aspire.dll"), string.Empty);
+
+        Assert.False(DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(cliPath));
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.")]
+    public void ShouldForwardProcessPathAsAspireCliPathRejectsSymlinkToUnbundledFrameworkDependentCliBuild()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "artifacts", "bin", "Aspire.Cli", "Debug", "net10.0"));
+        var cliPath = Path.Combine(cliDirectory.FullName, "aspire");
+        File.WriteAllText(cliPath, string.Empty);
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, "aspire.dll"), string.Empty);
+
+        var linkDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "bin"));
+        var linkPath = Path.Combine(linkDirectory.FullName, "aspire");
+        File.CreateSymbolicLink(linkPath, cliPath);
+
+        Assert.False(DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(linkPath));
+    }
+
+    [Fact]
+    public void ShouldForwardProcessPathAsAspireCliPathRejectsDotNetMuxerPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dotnetDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "dotnet"));
+        var dotnetPath = Path.Combine(dotnetDirectory.FullName, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        File.WriteAllText(dotnetPath, string.Empty);
+
+        Assert.False(DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(dotnetPath));
+    }
+
+    [Fact]
+    public void ShouldForwardProcessPathAsAspireCliPathAllowsFrameworkDependentCliWithInstallSidecar()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "bin"));
+        var cliPath = Path.Combine(cliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(cliPath, string.Empty);
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, "aspire.dll"), string.Empty);
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, ".aspire-install.json"), """{"source":"script"}""");
+
+        Assert.True(DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(cliPath));
+    }
+
+    [Fact]
+    public void ShouldForwardProcessPathAsAspireCliPathAllowsAdjacentBundleLayout()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "bin"));
+        var cliPath = Path.Combine(cliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(cliPath, string.Empty);
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, "aspire.dll"), string.Empty);
+        Directory.CreateDirectory(Path.Combine(cliDirectory.FullName, "dcp"));
+        Directory.CreateDirectory(Path.Combine(cliDirectory.FullName, "managed"));
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, "dcp", OperatingSystem.IsWindows() ? "dcp.exe" : "dcp"), string.Empty);
+        File.WriteAllText(Path.Combine(cliDirectory.FullName, "managed", OperatingSystem.IsWindows() ? "aspire-managed.exe" : "aspire-managed"), string.Empty);
+
+        Assert.True(DotNetCliRunner.ShouldForwardProcessPathAsAspireCliPath(cliPath));
     }
 
     [Fact]
@@ -1044,8 +1120,50 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var exception = await Assert.ThrowsAsync<FailedToConnectBackchannelConnection>(
-            () => backchannelCompletionSource.Task.WaitAsync(TimeSpan.FromSeconds(3)));
-        Assert.Contains("AppHost process has exited", exception.Message);
+            () => backchannelCompletionSource.Task).DefaultTimeout();
+        Assert.Equal("The AppHost process exited", exception.Message);
+    }
+
+    [Fact]
+    public async Task RunAsyncFailsBackchannelWithExitCodeWhenAppHostExitsUnexpectedlyBeforeBackchannelConnects()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.DotNetCliExecutionFactoryFactory = _ => new TestProcessExecutionFactory
+            {
+                CreateExecutionCallback = (args, env, _, _) => new ExitedProcessExecution(args, env, exitCode: 42)
+            };
+            options.AppHostBackchannelFactory = _ => new TestAppHostBackchannel
+            {
+                ConnectAsyncCallback = (_, _) => throw new SocketException((int)SocketError.ConnectionRefused)
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var runner = provider.GetRequiredService<IDotNetCliRunner>();
+        var backchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var exitCode = await runner.RunAsync(
+            projectFile: projectFile,
+            watch: false,
+            noBuild: false,
+            noRestore: false,
+            args: [],
+            env: new Dictionary<string, string>
+            {
+                [KnownConfigNames.UnixSocketPath] = Path.Combine(workspace.WorkspaceRoot.FullName, "cli.sock")
+            },
+            backchannelCompletionSource,
+            new ProcessInvocationOptions(),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(42, exitCode);
+        var exception = await Assert.ThrowsAsync<FailedToConnectBackchannelConnection>(
+            () => backchannelCompletionSource.Task).DefaultTimeout();
+        Assert.Equal("The AppHost process exited unexpectedly with exit code 42", exception.Message);
     }
 
     [Fact]

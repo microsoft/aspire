@@ -1,3 +1,7 @@
+.url-container {
+    padding: 4px 0;
+}
+
 ::deep.url-list {
     margin: 0;
     padding: 0;

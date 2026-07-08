@@ -2377,20 +2377,9 @@ public class DistributedApplicationTests
         return resourceEvent.Snapshot.Properties.FirstOrDefault(p => p.Name == propertyName)?.Value;
     }
 
-    private static Process StartLongRunningProcess()
-    {
-        var startInfo = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo("ping", "-t localhost") { CreateNoWindow = true }
-            : new ProcessStartInfo("tail", "-f /dev/null");
-
-        startInfo.RedirectStandardOutput = true;
-        startInfo.RedirectStandardError = true;
-
-        var process = Process.Start(startInfo);
-        Assert.NotNull(process);
-
-        return process;
-    }
+    // Delegates to the shared bounded, self-terminating helper so an aborted test host can't leak
+    // this child on a CI agent.
+    private static Process StartLongRunningProcess() => TestProcesses.StartLongRunning();
 
     private static async Task KillProcessAsync(Process process, CancellationToken cancellationToken)
     {

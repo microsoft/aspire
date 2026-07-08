@@ -25,6 +25,31 @@ internal static class CliE2EAutomatorHelpers
     private static readonly string s_expectedStableVersionMarker = GetExpectedStableVersionMarker();
 
     /// <summary>
+    /// AppHost startup budget (in seconds) applied to raw <c>aspire run</c> invocations in the E2E smoke tests via
+    /// <c>ASPIRE_CLI_START_TIMEOUT</c>. Without it, the CLI falls back to its default AppHost startup timeout (120s),
+    /// which is too tight for a cold NuGet restore + build + container start against the daily feed on a contended CI
+    /// runner — the smoke tests then fail intermittently before the AppHost reports ready. This mirrors the explicit
+    /// budget <see cref="AspireStartAsync"/> already sets for <c>aspire start</c>.
+    /// </summary>
+    internal const int AspireRunStartupBudgetSeconds = 180;
+
+    /// <summary>
+    /// Terminal-side timeout for waiting on the "Press CTRL+C" ready message after launching <c>aspire run</c>.
+    /// Intentionally larger than <see cref="AspireRunStartupBudgetSeconds"/> so the CLI's own startup timeout fires
+    /// (surfacing its diagnostic) before this wait gives up on a genuine hang.
+    /// </summary>
+    internal static TimeSpan AspireRunReadyTimeout => TimeSpan.FromSeconds(AspireRunStartupBudgetSeconds + 60);
+
+    /// <summary>
+    /// Builds the shell command that launches <c>aspire run</c> with an explicit AppHost startup budget so cold
+    /// daily-feed restores don't trip the CLI's default 120s startup timeout. See <see cref="AspireRunStartupBudgetSeconds"/>.
+    /// </summary>
+    internal static string GetAspireRunCommand()
+    {
+        return $"ASPIRE_CLI_START_TIMEOUT={AspireRunStartupBudgetSeconds.ToString(CultureInfo.InvariantCulture)} aspire run";
+    }
+
+    /// <summary>
     /// Prepares the Docker environment by setting up prompt counting, umask, and environment variables.
     /// </summary>
     internal static async Task PrepareDockerEnvironmentAsync(

@@ -179,6 +179,15 @@
   <data name="DevCertsOldVersionDetailsFormat" xml:space="preserve">
     <value>Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios.</value>
   </data>
+  <data name="DevCertsMissingCertUtilMessage" xml:space="preserve">
+    <value>certutil is not available; browser certificate trust may be incomplete</value>
+  </data>
+  <data name="DevCertsMissingCertUtilDetails" xml:space="preserve">
+    <value>Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</value>
+  </data>
+  <data name="DevCertsMissingCertUtilFix" xml:space="preserve">
+    <value>Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</value>
+  </data>
   <data name="DcpBundleNotFoundMessage" xml:space="preserve">
     <value>Developer Control Plane (DCP) bundle not found; skipping connection health checks</value>
   </data>

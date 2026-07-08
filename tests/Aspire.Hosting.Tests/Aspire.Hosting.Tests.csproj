@@ -48,9 +48,12 @@
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)ConsoleLogging\*.cs" LinkBase="shared" />
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
+    <Compile Include="$(TestsSharedDir)TestProcesses.cs" Link="shared/TestProcesses.cs" />
     <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="shared/ComputeEnvironmentEndpointResolver.cs" />
     <Compile Include="$(TestsSharedDir)TestInteractionService.cs" LinkBase="shared" />
     <Compile Include="$(TestsSharedDir)TestPipelineActivityReporter.cs" Link="shared/TestPipelineActivityReporter.cs" />
+    <Compile Include="$(TestsSharedDir)TestFileUploadStore.cs" Link="shared/TestFileUploadStore.cs" />
+    <Compile Include="$(TestsSharedDir)TestFileSystemService.cs" Link="shared/TestFileSystemService.cs" />
     <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" Link="shared/TestModuleInitalizer.cs" />
     <Compile Include="$(RepoRoot)src\Aspire.Hosting.PostgreSQL\PostgresContainerImageTags.cs" />
     <Compile Include="$(RepoRoot)src\Aspire.Hosting.Redis\RedisContainerImageTags.cs" />

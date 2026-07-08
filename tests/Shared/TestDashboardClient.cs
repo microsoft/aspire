@@ -24,6 +24,7 @@ public class TestDashboardClient : IDashboardClient
     public bool IsEnabled { get; }
     public Task WhenConnected { get; }
     public string ApplicationName { get; } = "TestApp";
+    public bool IsDashboardVersionSupported => true;
     public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
 #pragma warning disable CS0067 // Event is never used - required by interface
     public event Action<DashboardConnectionState>? ConnectionStateChanged;
@@ -72,6 +73,11 @@ public class TestDashboardClient : IDashboardClient
         }
 
         return _resourceCommandsChannel.Reader.ReadAsync(cancellationToken).AsTask();
+    }
+
+    public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(Guid.NewGuid().ToString("N"));
     }
 
     public async IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)

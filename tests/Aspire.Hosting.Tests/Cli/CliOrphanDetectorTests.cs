@@ -1,7 +1,6 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Threading.Channels;
 using Aspire.Hosting.Cli;
 using Aspire.Hosting.Utils;
@@ -70,7 +69,38 @@ public class CliOrphanDetectorTests(ITestOutputHelper testOutputHelper)
 
         var loggerFactory = CreateLoggerFactory(testOutputHelper);
         var detector = CreateCliOrphanDetector(loggerFactory, configuration, lifetime);
-        detector.IsProcessRunningWithStartTime = (pid, startTime) => false;
+        detector.IsProcessRunningWithLegacyStartTime = (pid, startTime) => false;
+
+        await detector.StartAsync(CancellationToken.None).DefaultTimeout();
+        await stopSignalTcs.Task.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task CliOrphanDetectorPrefersStableTimestampDetectionWhenProvided()
+    {
+        var legacyStartTime = DateTime.Now.AddMinutes(-5);
+        var legacyStartTimeUnixSeconds = ((DateTimeOffset)legacyStartTime).ToUnixTimeSeconds();
+        var stableStartTimeUnixSeconds = legacyStartTimeUnixSeconds + 1;
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                { "ASPIRE_CLI_PID", "1111" },
+                { "ASPIRE_CLI_STARTED", legacyStartTimeUnixSeconds.ToString() },
+                { "ASPIRE_CLI_STARTED_STABLE", stableStartTimeUnixSeconds.ToString() }
+            })
+            .Build();
+
+        var stopSignalTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var lifetime = new HostLifetimeStub(() => stopSignalTcs.TrySetResult());
+
+        var loggerFactory = CreateLoggerFactory(testOutputHelper);
+        var detector = CreateCliOrphanDetector(loggerFactory, configuration, lifetime);
+        detector.IsProcessRunningWithStartTime = (pid, startTime) =>
+        {
+            Assert.Equal(stableStartTimeUnixSeconds, startTime);
+            return false;
+        };
+        detector.IsProcessRunningWithLegacyStartTime = (_, _) => throw new InvalidOperationException("Stable start time should be preferred.");
 
         await detector.StartAsync(CancellationToken.None).DefaultTimeout();
         await stopSignalTcs.Task.DefaultTimeout();
@@ -107,7 +137,7 @@ public class CliOrphanDetectorTests(ITestOutputHelper testOutputHelper)
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 { "ASPIRE_CLI_PID", "1111" },
-                { "ASPIRE_CLI_STARTED", expectedStartTimeUnix.ToString() }
+                { "ASPIRE_CLI_STARTED_STABLE", expectedStartTimeUnix.ToString() }
             })
             .Build();
         var fakeTimeProvider = new FakeTimeProvider(DateTimeOffset.Now);
@@ -164,7 +194,7 @@ public class CliOrphanDetectorTests(ITestOutputHelper testOutputHelper)
         var detector = CreateCliOrphanDetector(loggerFactory, configuration, lifetime);
 
         // Simulate process with different start time (PID reuse scenario)
-        detector.IsProcessRunningWithStartTime = (pid, startTime) =>
+        detector.IsProcessRunningWithLegacyStartTime = (pid, startTime) =>
         {
             // Process exists but has different start time - indicates PID reuse
             return false;
@@ -226,17 +256,10 @@ public class CliOrphanDetectorTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task AppHostExitsWhenCliProcessPidDies()
     {
-        // Start a long-running process that will stay alive until killed
-        // These are system utilities on their respective platforms and don't require any additional dependencies.
-        var psi = OperatingSystem.IsWindows()
-            ? new ProcessStartInfo("ping", "-t localhost") { CreateNoWindow = true }
-            : new ProcessStartInfo("tail", "-f /dev/null");
-
-        psi.RedirectStandardOutput = true;
-        psi.RedirectStandardError = true;
-
-        using var fakeCliProcess = Process.Start(psi);
-        Assert.NotNull(fakeCliProcess);
+        // A long-running stand-in for the launching CLI. The shared helper is bounded and
+        // self-terminating so an aborted test host can't leak it; it is killed below to drive
+        // the orphan-exit path.
+        using var fakeCliProcess = TestProcesses.StartLongRunning();
 
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
         builder.Configuration["ASPIRE_CLI_PID"] = fakeCliProcess.Id.ToString();

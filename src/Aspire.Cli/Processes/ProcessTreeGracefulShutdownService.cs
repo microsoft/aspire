@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
@@ -22,7 +23,7 @@ internal sealed class ProcessTreeGracefulShutdownService(
     CliExecutionContext executionContext,
     IEnvironment environment,
     ILogger<ProcessTreeGracefulShutdownService> logger,
-    TimeProvider timeProvider) : IProcessTreeGracefulShutdownSignaler
+    TimeProvider timeProvider) : IProcessTreeGracefulShutdownSignaler, IAppHostStopper
 {
     private static readonly TimeSpan s_processTerminationTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan s_processTerminationPollInterval = TimeSpan.FromMilliseconds(250);
@@ -33,9 +34,10 @@ internal sealed class ProcessTreeGracefulShutdownService(
         bool includeStartTimeForDcp,
         CancellationToken cancellationToken)
     {
+        var processTarget = new ProcessTarget(pid, startTime, UseRuntimeStartTime: false);
         return StopProcessesAsync(
-            [new ProcessTarget(pid, startTime)],
-            token => RequestProcessTreeGracefulShutdownAsync(pid, startTime, includeStartTimeForDcp, token),
+            [processTarget],
+            token => RequestProcessTreeGracefulShutdownAsync(processTarget, includeStartTimeForDcp, token),
             cancellationToken);
     }
 
@@ -49,13 +51,19 @@ internal sealed class ProcessTreeGracefulShutdownService(
             return requestRpcStopAsync is not null && await TryRequestRpcStopAsync(requestRpcStopAsync, cancellationToken).ConfigureAwait(false);
         }
 
-        var appHostProcess = new ProcessTarget(appHostInfo.ProcessId, appHostInfo.StartedAt);
+        var appHostProcess = CreateAppHostProcessTarget(appHostInfo);
         var processesToForceKill = new List<ProcessTarget> { appHostProcess };
         if (appHostInfo.CliProcessId is int cliPid)
         {
             // The CLI process is a shutdown handle, not the success condition. On Unix it can remain
             // observable until its parent reaps it after the AppHost has already stopped.
-            processesToForceKill.Add(new ProcessTarget(cliPid, appHostInfo.CliStartedAt));
+            //
+            // AppHostInfo.CliStartedAt comes from ASPIRE_CLI_STARTED, which is intentionally stamped
+            // from Process.StartTime for released-AppHost compatibility. Keep that shutdown handle in
+            // the legacy/runtime clock domain. AppHost StartedAt can also be legacy/runtime metadata
+            // when talking to released AppHosts; current AppHosts send StableStartedAt so their primary
+            // process target uses the exact verifier.
+            processesToForceKill.Add(new ProcessTarget(cliPid, appHostInfo.CliStartedAt, UseRuntimeStartTime: true));
         }
 
         return await StopProcessesAsync(
@@ -120,7 +128,7 @@ internal sealed class ProcessTreeGracefulShutdownService(
             // Resolve the pid against its expected start time and hard-kill. This path never requests
             // graceful shutdown — the graceful attempt already happened (or was intentionally skipped),
             // so we go straight to the kill that the shared shutdown helper's force mode also performs.
-            ProcessSignaler.ForceKill(process.Pid, process.StartTime, logger, killEntireProcessTree);
+            ForceKill(process, killEntireProcessTree);
         }
     }
 
@@ -143,7 +151,7 @@ internal sealed class ProcessTreeGracefulShutdownService(
             // and the StopCommand monitor then times out reporting "Failed to stop apphost".
             // Targeting the AppHost PID directly avoids the cascade entirely.
             logger.LogDebug("Sending graceful shutdown to AppHost PID {Pid}", appHostInfo.ProcessId);
-            return await RequestProcessTreeGracefulShutdownAsync(appHostInfo.ProcessId, appHostInfo.StartedAt, includeStartTimeForDcp: false, cancellationToken).ConfigureAwait(false);
+            return await RequestProcessTreeGracefulShutdownAsync(CreateAppHostProcessTarget(appHostInfo), includeStartTimeForDcp: false, cancellationToken).ConfigureAwait(false);
         }
 
         // On Windows DCP is an in-tree descendant of the AppHost, so we cannot tree-kill the
@@ -154,9 +162,13 @@ internal sealed class ProcessTreeGracefulShutdownService(
         if (appHostInfo.CliProcessId is int cliPid)
         {
             logger.LogDebug("Requesting AppHost process tree shutdown via root CLI PID {Pid}", cliPid);
-            // CliStartedAt is recorded with second-level precision, so validate it locally with tolerance
-            // instead of passing it to DCP's millisecond-precision process-start-time option.
-            return await RequestProcessTreeGracefulShutdownAsync(cliPid, appHostInfo.CliStartedAt, includeStartTimeForDcp: false, cancellationToken).ConfigureAwait(false);
+            // CliStartedAt is recorded in the legacy Process.StartTime clock domain and with
+            // second-level precision, so validate it locally with the runtime verifier instead of
+            // passing it to DCP's millisecond-precision process-start-time option.
+            return await RequestProcessTreeGracefulShutdownAsync(
+                new ProcessTarget(cliPid, appHostInfo.CliStartedAt, UseRuntimeStartTime: true),
+                includeStartTimeForDcp: false,
+                cancellationToken).ConfigureAwait(false);
         }
 
         if (requestRpcStopAsync is not null && await TryRequestRpcStopAsync(requestRpcStopAsync, cancellationToken).ConfigureAwait(false))
@@ -165,7 +177,7 @@ internal sealed class ProcessTreeGracefulShutdownService(
         }
 
         logger.LogDebug("RPC stop not available, requesting shutdown via AppHost PID {Pid}", appHostInfo.ProcessId);
-        return await RequestProcessTreeGracefulShutdownAsync(appHostInfo.ProcessId, appHostInfo.StartedAt, includeStartTimeForDcp: true, cancellationToken).ConfigureAwait(false);
+        return await RequestProcessTreeGracefulShutdownAsync(CreateAppHostProcessTarget(appHostInfo), includeStartTimeForDcp: true, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> TryRequestGracefulShutdownAsync(
@@ -211,7 +223,18 @@ internal sealed class ProcessTreeGracefulShutdownService(
         bool includeStartTimeForDcp,
         CancellationToken cancellationToken)
     {
-        using var process = ProcessSignaler.TryGetRunningProcess(pid, startTime, logger);
+        return await RequestProcessTreeGracefulShutdownAsync(
+            new ProcessTarget(pid, startTime, UseRuntimeStartTime: false),
+            includeStartTimeForDcp,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> RequestProcessTreeGracefulShutdownAsync(
+        ProcessTarget target,
+        bool includeStartTimeForDcp,
+        CancellationToken cancellationToken)
+    {
+        using var process = TryGetRunningProcess(target);
         if (process is null)
         {
             return true;
@@ -219,17 +242,32 @@ internal sealed class ProcessTreeGracefulShutdownService(
 
         if (environment.IsWindows())
         {
-            return await TryStopProcessTreeWithDcpAsync(pid, startTime, includeStartTimeForDcp, cancellationToken).ConfigureAwait(false);
+            return await TryStopProcessTreeWithDcpAsync(target, includeStartTimeForDcp, cancellationToken).ConfigureAwait(false);
         }
 
-        logger.LogDebug("Sending stop signal to process {Pid}", pid);
-        ProcessSignaler.RequestGracefulShutdown(pid, startTime, logger);
+        logger.LogDebug("Sending stop signal to process {Pid}", target.Pid);
+        if (target.UseRuntimeStartTime && target.StartTime is { } runtimeStartTime)
+        {
+            ProcessSignaler.RequestGracefulShutdownWithRuntimeStartTime(target.Pid, runtimeStartTime, ProcessStartTimeHelper.LegacyStartTimeMatchTolerance, logger);
+        }
+        else
+        {
+            ProcessSignaler.RequestGracefulShutdown(target.Pid, target.StartTime, logger);
+        }
         return true;
     }
 
     internal async Task<bool> TryStopProcessTreeWithDcpAsync(int pid, DateTimeOffset? startTime, bool includeStartTime, CancellationToken cancellationToken)
     {
-        using var process = ProcessSignaler.TryGetRunningProcess(pid, startTime, logger);
+        return await TryStopProcessTreeWithDcpAsync(
+            new ProcessTarget(pid, startTime, UseRuntimeStartTime: false),
+            includeStartTime,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> TryStopProcessTreeWithDcpAsync(ProcessTarget target, bool includeStartTime, CancellationToken cancellationToken)
+    {
+        using var process = TryGetRunningProcess(target);
         if (process is null)
         {
             return true;
@@ -257,13 +295,16 @@ internal sealed class ProcessTreeGracefulShutdownService(
             "stop-process-tree",
             "--skip-descendants",
             "--pid",
-            pid.ToString(CultureInfo.InvariantCulture)
+            target.Pid.ToString(CultureInfo.InvariantCulture)
         };
 
-        if (includeStartTime && startTime is not null)
+        if (includeStartTime && target.StartTime is not null && (!target.UseRuntimeStartTime || environment.IsWindows()))
         {
+            // Runtime-domain start times are whole-second legacy metadata on Linux/macOS, while DCP
+            // compares the platform start time with millisecond precision. On Windows the AppHost
+            // fallback also uses Process.StartTime, so keep the PID-reuse guard for that DCP path.
             arguments.Add("--process-start-time");
-            arguments.Add(FormatDcpProcessStartTime(startTime.Value));
+            arguments.Add(FormatDcpProcessStartTime(target.StartTime.Value));
         }
 
         var (exitCode, output, error) = await layoutProcessRunner.RunAsync(
@@ -309,8 +350,50 @@ internal sealed class ProcessTreeGracefulShutdownService(
 
     private bool IsProcessStopped(ProcessTarget process)
     {
-        using var runningProcess = ProcessSignaler.TryGetRunningProcess(process.Pid, process.StartTime, logger);
+        using var runningProcess = TryGetRunningProcess(process);
         return runningProcess is null;
+    }
+
+    internal static ProcessTarget CreateAppHostProcessTarget(AppHostInformation appHostInfo)
+    {
+        if (appHostInfo.StableStartedAt is { } stableStartedAt)
+        {
+            return new ProcessTarget(appHostInfo.ProcessId, stableStartedAt, UseRuntimeStartTime: false);
+        }
+
+        // Released AppHosts only report StartedAt, and that value was produced from Process.StartTime.
+        // Keep those mixed-version stop paths in the runtime clock domain; current AppHosts also send
+        // StableStartedAt above so they retain exact /proc-based PID-reuse protection.
+        return new ProcessTarget(appHostInfo.ProcessId, appHostInfo.StartedAt, UseRuntimeStartTime: appHostInfo.StartedAt is not null);
+    }
+
+    private Process? TryGetRunningProcess(ProcessTarget target)
+    {
+        if (!target.UseRuntimeStartTime || target.StartTime is null)
+        {
+            return ProcessSignaler.TryGetRunningProcess(target.Pid, target.StartTime, logger);
+        }
+
+        return ProcessSignaler.TryGetRunningProcessWithRuntimeStartTime(target.Pid, target.StartTime.Value, ProcessStartTimeHelper.LegacyStartTimeMatchTolerance, logger);
+    }
+
+    private void ForceKill(ProcessTarget target, bool killEntireProcessTree)
+    {
+        using var process = TryGetRunningProcess(target);
+        if (process is null)
+        {
+            return;
+        }
+
+        logger.LogDebug("Killing process {Pid} (entireProcessTree={EntireProcessTree})...", target.Pid, killEntireProcessTree);
+        try
+        {
+            process.Kill(entireProcessTree: killEntireProcessTree);
+        }
+        catch (InvalidOperationException)
+        {
+            // Process already exited.
+        }
     }
 
     internal static string FormatDcpProcessStartTime(DateTimeOffset startTime)
@@ -318,5 +401,5 @@ internal sealed class ProcessTreeGracefulShutdownService(
         return startTime.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
     }
 
-    internal readonly record struct ProcessTarget(int Pid, DateTimeOffset? StartTime);
+    internal readonly record struct ProcessTarget(int Pid, DateTimeOffset? StartTime, bool UseRuntimeStartTime);
 }

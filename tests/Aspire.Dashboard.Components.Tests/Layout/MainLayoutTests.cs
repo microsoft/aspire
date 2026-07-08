@@ -495,6 +495,7 @@ public partial class MainLayoutTests : DashboardTestContext
 
         JSInterop.SetupModule("window.registerGlobalKeydownListener", _ => true);
         JSInterop.SetupModule("window.registerOpenTextVisualizerOnClick", _ => true);
+        LayoutSetupHelpers.SetupMobileNavMenuKeyboardNavigation(this);
 
         JSInterop.Setup<BrowserInfo>("window.getBrowserInfo").SetResult(new BrowserInfo { TimeZone = "abc", UserAgent = "mozilla" });
     }

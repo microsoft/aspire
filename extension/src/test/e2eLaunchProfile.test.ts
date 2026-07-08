@@ -73,9 +73,11 @@ suite('E2E launch profile', () => {
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
 
         assert.ok(runner.includes("'get-vscode'"));
-        assert.ok(runner.includes('attempts: 2'));
-        assert.ok(runner.includes('timeout: 240000'));
+        assert.ok(runner.includes("ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_ATTEMPTS', 5"));
+        assert.ok(runner.includes("ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_DELAY_MS', 15000"));
+        assert.ok(runner.includes("ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_TIMEOUT_MS', 240000"));
         assert.ok(runner.includes("'get-chromedriver'"));
+        assert.ok(runner.includes('const setupDownloadRetryOptions = getSetupDownloadRetryOptions();'));
         assert.ok(runner.includes('run(command, args, extraEnv, options);'));
     });
 
@@ -459,7 +461,7 @@ suite('E2E launch profile', () => {
         assert.ok(discoveryConfiguration.includes('runE2eTeardown'));
         assert.ok(!commandPalette.includes('throw new AggregateError'));
         assert.ok(!discoveryConfiguration.includes('throw new AggregateError'));
-        assert.ok(fixtures.includes("['ps', '--format', 'json']"));
+        assert.ok(fixtures.includes("['ps', '--format', 'json', '--nologo']"));
         assert.ok(fixtures.includes('Number.isInteger(candidate.appHostPid)'));
         assert.ok(fixtures.includes('let lastKnownAppHostPid = knownAppHostPid;'));
         assert.ok(fixtures.includes('lastKnownAppHostPid = runningAppHost.appHostPid;'));
