@@ -334,12 +334,6 @@
   <data name="InteractionButtonClose" xml:space="preserve">
     <value>Close</value>
   </data>
-  <data name="InteractionUnsupportedVersionTitle" xml:space="preserve">
-    <value>Dashboard Update Required</value>
-  </data>
-  <data name="InteractionUnsupportedVersionMessage" xml:space="preserve">
-    <value>This action requires a newer version of the Aspire dashboard. Please update your Aspire tools to use this feature.</value>
-  </data>
   <data name="InteractionFileExceedsMaxSize" xml:space="preserve">
     <value>Exceeds the maximum size of {0}</value>
   </data>

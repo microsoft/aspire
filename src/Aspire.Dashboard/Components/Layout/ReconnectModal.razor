@@ -1,5 +1,4 @@
 ﻿@using Aspire.Dashboard.Resources
-@inject IStringLocalizer<Layout> Loc
 
 <dialog id="components-reconnect-modal" data-nosnippet>
     <div class="components-reconnect-container">
@@ -25,6 +24,9 @@
         @* Resource service connection messages *@
         <p class="components-reconnect-resource-service-disconnected-visible">
             @Loc[nameof(Layout.ResourceServiceReconnectDisconnectedText)]
+        </p>
+        <p id="components-reconnect-resource-service-unsupported-text" class="components-reconnect-resource-service-unsupported-visible">
+            @((MarkupString)string.Format(CultureInfo.CurrentCulture, Loc[nameof(Layout.ResourceServiceReconnectUnsupportedText)], "<span id=\"reconnect-unsupported-app-name\"></span>", UpgradeAspireUrl))
         </p>
         <div class="components-reconnect-resource-service-retry-visible">
             <FluentButton Id="components-reconnect-resource-service-button" Appearance="Appearance.Accent">

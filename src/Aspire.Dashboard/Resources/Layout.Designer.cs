@@ -284,6 +284,15 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceServiceReconnectDisconnectedText", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The {0} app requires a newer version of the Aspire dashboard.&lt;br /&gt;&lt;br /&gt;See &lt;a href=&quot;{1}&quot; target=&quot;_blank&quot; rel=&quot;noreferrer noopener&quot;&gt;upgrade Aspire&lt;/a&gt; for more information..
+        /// </summary>
+        public static string ResourceServiceReconnectUnsupportedText {
+            get {
+                return ResourceManager.GetString("ResourceServiceReconnectUnsupportedText", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Retry.

@@ -37,11 +37,11 @@ public sealed class ResourceServiceConnectionProvider : ComponentBase, IAsyncDis
             _dotNetRef = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("registerResourceServiceConnectionProvider", _dotNetRef);
 
-            // Report the current state immediately in case we're already disconnected.
-            // Don't report Connecting — that's normal startup. Only report Disconnected.
-            if (DashboardClient.ConnectionState is DashboardConnectionState.Disconnected)
+            // Report the current state immediately in case we're already disconnected or unsupported.
+            // Don't report Connecting — that's normal startup.
+            if (DashboardClient.ConnectionState is DashboardConnectionState.Disconnected or DashboardConnectionState.Unsupported)
             {
-                await UpdateModalStateAsync(DashboardConnectionState.Disconnected);
+                await UpdateModalStateAsync(DashboardClient.ConnectionState);
             }
         }
     }
@@ -68,6 +68,11 @@ public sealed class ResourceServiceConnectionProvider : ComponentBase, IAsyncDis
         {
             _disconnectedCount = 0;
             await JS.InvokeVoidAsync("updateResourceServiceConnectionState", "connected", false);
+        }
+        else if (state is DashboardConnectionState.Unsupported)
+        {
+            _disconnectedCount = 0;
+            await JS.InvokeVoidAsync("updateResourceServiceConnectionState", "unsupported", false, DashboardClient.ApplicationName);
         }
         else if (state is DashboardConnectionState.Disconnected)
         {

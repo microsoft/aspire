@@ -41,7 +41,6 @@ public sealed class MockDashboardClient : IDashboardClient
     public bool IsEnabled => true;
     public Task WhenConnected => Task.CompletedTask;
     public string ApplicationName => "IntegrationTestApplication";
-    public bool IsDashboardVersionSupported => true;
     public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
 #pragma warning disable CS0067 // Event is never used - required by interface
     public event Action<DashboardConnectionState>? ConnectionStateChanged;

@@ -137,6 +137,11 @@
         <target state="new">Retry</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceServiceReconnectUnsupportedText">
+        <source>The {0} app requires a newer version of the Aspire dashboard.&lt;br /&gt;&lt;br /&gt;See &lt;a href="{1}" target="_blank" rel="noreferrer noopener"&gt;upgrade Aspire&lt;/a&gt; for more information.</source>
+        <target state="new">The {0} app requires a newer version of the Aspire dashboard.&lt;br /&gt;&lt;br /&gt;See &lt;a href="{1}" target="_blank" rel="noreferrer noopener"&gt;upgrade Aspire&lt;/a&gt; for more information.</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

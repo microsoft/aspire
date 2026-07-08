@@ -66,7 +66,6 @@ internal sealed class DashboardClient : IDashboardClient
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
     private ImmutableHashSet<Channel<WatchInteractionsResponseUpdate>> _outgoingInteractionChannels = [];
     private string? _applicationName;
-    private bool _isDashboardVersionSupported = true;
 
     private DashboardConnectionState _connectionState;
     private readonly object _connectionStateLock = new();
@@ -284,7 +283,7 @@ internal sealed class DashboardClient : IDashboardClient
                 // This handles both initial connection and reconnection after a disconnect.
                 _whenConnectedTcs.TrySetResult();
             }
-            else if (state is DashboardConnectionState.Disconnected or DashboardConnectionState.Connecting)
+            else if (state is DashboardConnectionState.Disconnected or DashboardConnectionState.Connecting or DashboardConnectionState.Unsupported)
             {
                 // Reset the WhenConnected TCS when disconnecting so that callers can re-await it.
                 if (_whenConnectedTcs.Task.IsCompleted)
@@ -327,7 +326,10 @@ internal sealed class DashboardClient : IDashboardClient
     {
         try
         {
-            await ConnectWithRetryAsync(cancellationToken).ConfigureAwait(false);
+            if (!await ConnectWithRetryAsync(cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
 
             await Task.WhenAll(
                 Task.Run(async () =>
@@ -357,7 +359,7 @@ internal sealed class DashboardClient : IDashboardClient
     /// On failure, transitions to Disconnected and waits before retrying. The delay can be
     /// cancelled by <see cref="ReconnectAsync"/> for immediate retry.
     /// </summary>
-    private async Task ConnectWithRetryAsync(CancellationToken cancellationToken)
+    private async Task<bool> ConnectWithRetryAsync(CancellationToken cancellationToken)
     {
         var errorCount = 0;
 
@@ -412,10 +414,14 @@ internal sealed class DashboardClient : IDashboardClient
 
                 // MinDashboardApiVersion is 0 when the server predates this field or hasn't set it,
                 // which means the dashboard is always considered supported.
-                _isDashboardVersionSupported = response.MinDashboardApiVersion <= DashboardApiVersions.Current;
+                if (response.MinDashboardApiVersion > DashboardApiVersions.Current)
+                {
+                    SetConnectionState(DashboardConnectionState.Unsupported);
+                    return false;
+                }
 
                 SetConnectionState(DashboardConnectionState.Connected);
-                return;
+                return true;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -764,8 +770,6 @@ internal sealed class DashboardClient : IDashboardClient
             ?? _dashboardOptions.ApplicationName
             ?? "Aspire";
     }
-
-    public bool IsDashboardVersionSupported => _isDashboardVersionSupported;
 
     public ResourceViewModel? GetResource(string resourceName)
     {

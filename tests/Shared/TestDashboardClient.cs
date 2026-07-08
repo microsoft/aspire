@@ -24,7 +24,6 @@ public class TestDashboardClient : IDashboardClient
     public bool IsEnabled { get; }
     public Task WhenConnected { get; }
     public string ApplicationName { get; } = "TestApp";
-    public bool IsDashboardVersionSupported => true;
     public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
 #pragma warning disable CS0067 // Event is never used - required by interface
     public event Action<DashboardConnectionState>? ConnectionStateChanged;

@@ -186,6 +186,9 @@
   <data name="ResourceServiceReconnectDisconnectedText" xml:space="preserve">
     <value>Lost connection to the AppHost. Attempting to reconnect...</value>
   </data>
+  <data name="ResourceServiceReconnectUnsupportedText" xml:space="preserve">
+    <value>The {0} app requires a newer version of the Aspire dashboard.&lt;br /&gt;&lt;br /&gt;See &lt;a href="{1}" target="_blank" rel="noreferrer noopener"&gt;upgrade Aspire&lt;/a&gt; for more information.</value>
+  </data>
   <data name="ResourceServiceReconnectRetryButtonText" xml:space="preserve">
     <value>Retry</value>
   </data>

@@ -400,6 +400,30 @@ public sealed class DashboardClientTests
     }
 
     [Fact]
+    public async Task ConnectWithRetry_UnsupportedDashboardVersion_SetsUnsupportedState()
+    {
+        await using var instance = CreateResourceServiceClient();
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient { MinDashboardApiVersion = int.MaxValue });
+
+        IDashboardClient client = instance;
+        var unsupportedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.ConnectionStateChanged += state =>
+        {
+            if (state == DashboardConnectionState.Unsupported)
+            {
+                unsupportedTcs.TrySetResult();
+            }
+        };
+
+        _ = client.WhenConnected;
+
+        await unsupportedTcs.Task.DefaultTimeout();
+
+        Assert.Equal(DashboardConnectionState.Unsupported, client.ConnectionState);
+        Assert.False(client.WhenConnected.IsCompleted);
+    }
+
+    [Fact]
     public async Task ExecuteResourceCommandAsync_AppHostUnavailable_ReturnsClearFailure()
     {
         await using var instance = CreateResourceServiceClient();
@@ -445,6 +469,7 @@ public sealed class DashboardClientTests
         public bool FailOnGetApplicationInformation { get; init; }
         public bool FailOnExecuteResourceCommand { get; init; }
         public bool CancelExecuteResourceCommandOnCallCancellation { get; init; }
+        public int MinDashboardApiVersion { get; init; }
 
         public override AsyncDuplexStreamingCall<WatchInteractionsRequestUpdate, WatchInteractionsResponseUpdate> WatchInteractions(CallOptions options)
         {
@@ -472,7 +497,8 @@ public sealed class DashboardClientTests
             return new AsyncUnaryCall<ApplicationInformationResponse>(
                 Task.FromResult(new ApplicationInformationResponse
                 {
-                    ApplicationName = "TestApplication"
+                    ApplicationName = "TestApplication",
+                    MinDashboardApiVersion = MinDashboardApiVersion
                 }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,
