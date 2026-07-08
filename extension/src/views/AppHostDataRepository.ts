@@ -955,7 +955,7 @@ export class AppHostDataRepository {
                     }
 
                     // Host no longer running: drop the stream silently (the app stopped — not an error).
-                    if (!this._appHosts.some(appHost => appHost.appHostPath === appHostPath)) {
+                    if (!this._appHosts.some(appHost => isMatchingAppHostPath(appHost.appHostPath, appHostPath))) {
                         stream.resources.clear();
                         this._describeStreams.delete(appHostPath);
                         this._attachResourcesToAppHosts();
