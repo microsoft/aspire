@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
+
+# This is the existing Azure Developer CLI (azd) project for a fictional "Contoso Store" app.
+# It is checked in on purpose: the Aspire app host next to it (../apphost.mts) adopts these assets
+# as-is via builder.addAzdProject(...). Nothing here is rewritten by the import.
+name: contoso-store
+metadata:
+  template: contoso-store@1.0.0
+infra:
+  provider: bicep
+  path: infra
+  module: main
+services:
+  store:
+    project: ./src/store
+    language: ts
+    host: containerapp
+    uses:
+      - cache
+      - orders
+    env:
+      NODE_ENV: development
+resources:
+  cache:
+    type: db.redis
+  orders:
+    type: db.postgres

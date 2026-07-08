@@ -92,6 +92,7 @@
     <Project Path="src/Aspire.Hosting.Azure.AppContainers/Aspire.Hosting.Azure.AppContainers.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.ApplicationInsights/Aspire.Hosting.Azure.ApplicationInsights.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.AppService/Aspire.Hosting.Azure.AppService.csproj" />
+    <Project Path="src/Aspire.Hosting.Azure.Azd/Aspire.Hosting.Azure.Azd.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.CognitiveServices/Aspire.Hosting.Azure.CognitiveServices.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.ContainerRegistry/Aspire.Hosting.Azure.ContainerRegistry.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.CosmosDB/Aspire.Hosting.Azure.CosmosDB.csproj" />
@@ -513,6 +514,7 @@
     <Project Path="tests/Aspire.Hosting.Analyzers.Tests/Aspire.Hosting.Analyzers.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Foundry.Tests/Aspire.Hosting.Foundry.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Azure.Kusto.Tests/Aspire.Hosting.Azure.Kusto.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Azure.Azd.Tests/Aspire.Hosting.Azure.Azd.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Azure.Kubernetes.Tests/Aspire.Hosting.Azure.Kubernetes.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Azure.Tests/Aspire.Hosting.Azure.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Browsers.Tests/Aspire.Hosting.Browsers.Tests.csproj" />

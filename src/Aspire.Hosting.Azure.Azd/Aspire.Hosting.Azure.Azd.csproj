@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageTags>aspire integration hosting azure azd migration import</PackageTags>
+    <Description>Imports an existing Azure Developer CLI (azd) project (azure.yaml) into an Aspire app model so existing azd assets can be adopted without rewriting them.</Description>
+    <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
+    <!-- New package with no shipped baseline yet; disable API-compat baseline validation. -->
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <!-- The importer surface is experimental (POC). Suppress the diagnostic for the package's own
+         usage of its experimental types; external consumers still receive the warning. -->
+    <NoWarn>$(NoWarn);ASPIREAZUREAZD001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting.Azure\Aspire.Hosting.Azure.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.AppContainers\Aspire.Hosting.Azure.AppContainers.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.AppService\Aspire.Hosting.Azure.AppService.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.CognitiveServices\Aspire.Hosting.Azure.CognitiveServices.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.CosmosDB\Aspire.Hosting.Azure.CosmosDB.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.EventHubs\Aspire.Hosting.Azure.EventHubs.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Functions\Aspire.Hosting.Azure.Functions.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.KeyVault\Aspire.Hosting.Azure.KeyVault.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.PostgreSQL\Aspire.Hosting.Azure.PostgreSQL.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Redis\Aspire.Hosting.Azure.Redis.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Search\Aspire.Hosting.Azure.Search.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.ServiceBus\Aspire.Hosting.Azure.ServiceBus.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.Azure.Storage\Aspire.Hosting.Azure.Storage.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.JavaScript\Aspire.Hosting.JavaScript.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Azure.Azd.Tests" />
+  </ItemGroup>
+
+</Project>
