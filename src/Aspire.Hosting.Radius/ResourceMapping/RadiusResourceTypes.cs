@@ -60,6 +60,10 @@ internal static class RadiusResourceTypes
     // will be removed in the same change that migrates the mapper to the Radius.*
     // UDT equivalents.
 
+    public const string LegacyApplications = "Applications.Core/applications";
+
+    public const string LegacyEnvironments = "Applications.Core/environments";
+
     public const string LegacyRedisCaches = "Applications.Datastores/redisCaches";
 
     public const string LegacyMongoDatabases = "Applications.Datastores/mongoDatabases";

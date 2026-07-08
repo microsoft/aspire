@@ -24,7 +24,7 @@ public sealed class ConnectionConstruct : ProvisionableConstruct
         set { Initialize(); _source!.Assign(value); }
     }
 
-    /// <summary>Initializes a new <see cref="ConnectionConstruct"/>.</summary>
+    /// <inheritdoc />
     protected override void DefineProvisionableProperties()
     {
         _source = DefineProperty<string>(nameof(Source), ["source"]);

@@ -4,6 +4,7 @@
 #pragma warning disable ASPIRERADIUS004 // Experimental: ConfigureRadiusInfrastructure escape-hatch construct types are consumed internally by the publisher.
 
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Hosting.Radius.ResourceMapping;
 using Azure.Provisioning;
 using Azure.Provisioning.Primitives;
 
@@ -104,7 +105,7 @@ public sealed class RadiusContainerConstruct : ProvisionableResource
     /// when the resource name contains characters that get sanitized.
     /// </param>
     public RadiusContainerConstruct(string bicepIdentifier, string containerName)
-        : base(bicepIdentifier, new Azure.Core.ResourceType("Radius.Compute/containers"), "2025-08-01-preview")
+        : base(bicepIdentifier, new Azure.Core.ResourceType(RadiusResourceTypes.Containers), RadiusResourceTypes.RadiusApiVersion)
     {
         ArgumentException.ThrowIfNullOrEmpty(containerName);
         _containerName = containerName;

@@ -4,6 +4,7 @@
 #pragma warning disable ASPIRERADIUS004 // Experimental: ConfigureRadiusInfrastructure escape-hatch construct types are consumed internally by the publisher.
 
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Hosting.Radius.ResourceMapping;
 using Azure.Provisioning;
 using Azure.Provisioning.Primitives;
 
@@ -100,7 +101,7 @@ public sealed class LegacyApplicationEnvironmentConstruct : ProvisionableResourc
 
     /// <summary>Initializes a new <see cref="LegacyApplicationEnvironmentConstruct"/> with the given Bicep identifier.</summary>
     public LegacyApplicationEnvironmentConstruct(string bicepIdentifier)
-        : base(bicepIdentifier, new Azure.Core.ResourceType("Applications.Core/environments"), "2023-10-01-preview")
+        : base(bicepIdentifier, new Azure.Core.ResourceType(RadiusResourceTypes.LegacyEnvironments), RadiusResourceTypes.LegacyApiVersion)
     {
     }
 
