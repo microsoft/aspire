@@ -179,6 +179,8 @@ internal static class CliTestHelper
         // wraps. Without this, DI returns null and Run-path tests construct the project with
         // a missing dependency, masking wiring regressions.
         services.AddTransient<IProcessTreeGracefulShutdownSignaler>(sp => sp.GetRequiredService<ProcessTreeGracefulShutdownService>());
+        services.AddTransient<IAppHostStopper>(sp => sp.GetRequiredService<ProcessTreeGracefulShutdownService>());
+        services.AddTransient<OrphanedAppHostCollector>();
         // Match Program.Main's ConsoleCancellationManager (5s finalDrainBudget) so tests exercise the
         // same shutdown ladder budget as production. RunCommand and GuestAppHostProject require these
         // services in production wiring. IGracefulShutdownWindow resolves to the same CCM instance,

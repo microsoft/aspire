@@ -12,9 +12,9 @@ namespace Aspire.Cli.Processes;
 internal static partial class DetachedProcessLauncher
 {
     /// <summary>
-    /// Windows implementation using <see cref="WindowsProcessInterop.SpawnConsoleIsolatedProcess"/>
+    /// Windows implementation using <see cref="WindowsProcessInterop.SpawnProcess"/>
     /// with NUL bound to stdout and stderr (stdin is left unset). The detached child is NOT
-    /// assigned to the CLI's kill-on-close job — the entire point of <c>aspire start</c> is
+    /// assigned to the CLI's kill-on-parent-exit job — the entire point of <c>aspire start</c> is
     /// that the AppHost outlives the launching CLI.
     /// </summary>
     [SupportedOSPlatform("windows")]
@@ -49,7 +49,7 @@ internal static partial class DetachedProcessLauncher
             Stderr: nulRawHandle);
 
         // The detached launcher's caller-facing surface takes (predicate, additional) — translate
-        // here into the single-dict shape that SpawnConsoleIsolatedProcess now expects. When the
+        // here into the single-dict shape that SpawnProcess now expects. When the
         // caller passes neither, leave environment null so the child inherits the parent env
         // verbatim (no allocation).
         IReadOnlyDictionary<string, string?>? environment = null;
@@ -77,14 +77,15 @@ internal static partial class DetachedProcessLauncher
         }
 
         // jobHandle: null — detached children must survive a CLI crash. Anything assigned to
-        // the CLI's kill-on-close job dies with the CLI, which is the opposite of what
+        // the CLI's kill-on-parent-exit job dies with the CLI, which is the opposite of what
         // `aspire start` wants.
-        var pi = WindowsProcessInterop.SpawnConsoleIsolatedProcess(
+        var pi = WindowsProcessInterop.SpawnProcess(
             fileName,
             arguments,
             workingDirectory,
             stdio,
             environment,
+            createNewConsole: true,
             jobHandle: null);
 
         Process detachedProcess;

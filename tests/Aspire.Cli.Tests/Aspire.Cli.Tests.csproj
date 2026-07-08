@@ -51,6 +51,7 @@
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
     <Compile Include="$(TestsSharedDir)TemporaryRepo.cs" Link="shared\TemporaryRepo.cs" />
     <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared\TempDirectory.cs" />
+    <Compile Include="$(TestsSharedDir)TestProcesses.cs" Link="shared\TestProcesses.cs" />
   </ItemGroup>
 
 </Project>
