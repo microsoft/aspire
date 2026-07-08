@@ -1,0 +1,16 @@
+{
+  "id": "npm-registry-rate-limit",
+  "type": "infra-failure",
+  "title": "NPM registry rate limiting (HTTP 429 Too Many Requests) from dnceng feed",
+  "error_pattern": "error Error: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/whatwg-encoding/-/whatwg-encoding-3.1.1.tgz: Request failed \"429 Too Many Requests\"\n    at ResponseError.ExtendableBuiltin\n    at new ResponseError",
+  "occurrences": [
+    {
+      "run_id": 28948977829,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/28948977829",
+      "job": "Tests / Run VS Code extension unit tests (Windows)",
+      "pr_number": 18688,
+      "observed_at": "2026-07-08T14:34:09Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18691"
+}

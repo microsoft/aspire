@@ -1,0 +1,47 @@
+{
+  "run_id": 28948977829,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/28948977829",
+  "analyzed_at": "2026-07-08T14:34:09Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18688,
+    "title": "ConfigurationSchemaGenerator: Fix typo and enable opt-out",
+    "author": "bart-vmware",
+    "state": "closed",
+    "head_branch": "patch-1",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18688"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension unit tests (Windows)",
+      "id": 85890809008,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/28948977829/job/85890809008",
+      "classification": "transient-infra",
+      "reason": "NPM package installation failed with HTTP 429 Too Many Requests from pkgs.dev.azure.com/dnceng npm registry during the 'Install dependencies' step. This is a transient rate-limiting issue on the internal npm feed.",
+      "failed_steps": ["Install dependencies"]
+    },
+    {
+      "name": "Tests / Hosting.Testing / Hosting.Testing (ubuntu-latest)",
+      "id": 85890814183,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/28948977829/job/85890814183",
+      "classification": "flaky-test",
+      "reason": "CrashTests(genericEntryPoint: True, crashArg: \"after-build\") failed with System.InvalidOperationException. The PR only modifies src/Components/Directory.Build.targets which is unrelated to Aspire.Hosting.Testing.Tests. The failure appears to be an intermittent issue with crash-handling test infrastructure.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Testing.Tests.TestingBuilderTests.CrashTests(genericEntryPoint: True, crashArg: \"after-build\")",
+      "job": "Tests / Hosting.Testing / Hosting.Testing (ubuntu-latest)",
+      "error": "System.InvalidOperationException : Crashing: after-build.",
+      "stack_trace": "at Program.<Main>$(String[] args) in /_/tests/TestingAppHost1/TestingAppHost1.AppHost/Program.cs:line 56\n   at Program.<Main>(String[] args)\n   at InvokeStub_Program.<Main>(Object, Span`1)\n   at System.Reflection.MethodBaseInvoker.InvokeWithOneArg(Object obj, BindingFlags invokeAttr, Binder binder, Object[] parameters, CultureInfo culture)\n--- End of stack trace from previous location ---\n   at Aspire.Hosting.Testing.DistributedApplicationFactory.ResolveApplicationAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting.Testing/DistributedApplicationFactory.cs:line 60\n   at Aspire.Hosting.Testing.DistributedApplicationTestingBuilder.SuspendingDistributedApplicationFactory.BuildAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting.Testing/DistributedApplicationTestingBuilder.cs:line 214",
+      "classification": "flaky",
+      "reason": "The failing test is in Aspire.Hosting.Testing.Tests which is unrelated to the PR's only changed file (src/Components/Directory.Build.targets). The test deliberately crashes the app host with 'after-build' and intermittently fails when the exception propagates unexpectedly through the testing infrastructure."
+    }
+  ],
+  "causes": ["npm-registry-rate-limit", "hosting-testing-crashtests-after-build"]
+}

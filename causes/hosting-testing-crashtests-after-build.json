@@ -1,0 +1,17 @@
+{
+  "id": "hosting-testing-crashtests-after-build",
+  "type": "flaky-test",
+  "title": "Flaky: TestingBuilderTests.CrashTests fails intermittently with unhandled InvalidOperationException",
+  "test_name": "Aspire.Hosting.Testing.Tests.TestingBuilderTests.CrashTests(genericEntryPoint: True, crashArg: \"after-build\")",
+  "error_pattern": "System.InvalidOperationException : Crashing: after-build.\n   at Program.<Main>$(String[] args) in /_/tests/TestingAppHost1/TestingAppHost1.AppHost/Program.cs:line 56\n   at Aspire.Hosting.Testing.DistributedApplicationFactory.ResolveApplicationAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting.Testing/DistributedApplicationFactory.cs:line 60\n   at Aspire.Hosting.Testing.DistributedApplicationTestingBuilder.SuspendingDistributedApplicationFactory.BuildAsync(CancellationToken cancellationToken) in /_/src/Aspire.Hosting.Testing/DistributedApplicationTestingBuilder.cs:line 214",
+  "occurrences": [
+    {
+      "run_id": 28948977829,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/28948977829",
+      "job": "Tests / Run VS Code extension unit tests (Windows)",
+      "pr_number": 18688,
+      "observed_at": "2026-07-08T14:34:09Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18690"
+}
