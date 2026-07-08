@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 using System.Text;
@@ -243,10 +244,18 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         foreach (var capability in context.Capabilities)
         {
             var targetParamName = capability.TargetParameterName ?? "builder";
-            var hasOptionalParams = capability.Parameters.Any(p =>
-                !string.Equals(p.Name, targetParamName, StringComparison.Ordinal) &&
-                (IsCancellationToken(p) || p.IsOptional));
-            if (!hasOptionalParams)
+            var reservationOptionals = capability.Parameters
+                .Where(p => !string.Equals(p.Name, targetParamName, StringComparison.Ordinal))
+                .Where(p => IsCancellationToken(p) || p.IsOptional)
+                .ToList();
+            if (reservationOptionals.Count == 0)
+            {
+                continue;
+            }
+
+            // Direct-options capabilities thread the DTO type directly and emit no wrapper struct,
+            // so there is no name to reserve for them.
+            if (TryGetDirectOptionsParameter(reservationOptionals, out _))
             {
                 continue;
             }
@@ -1035,6 +1044,42 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         return (required, optional);
     }
 
+    /// <summary>
+    /// Determines whether a capability's optional parameters can be flattened so the caller passes
+    /// the DTO directly (<c>options ...*HostedAgentOptions</c>) instead of through a generated
+    /// wrapper struct. Mirrors the TypeScript generator's flattening.
+    /// </summary>
+    /// <remarks>
+    /// Stricter than TypeScript: Go models all optionals as a single trailing variadic and allows
+    /// only one, so we flatten only when the optional set is exactly one DTO named "options" with no
+    /// coexisting cancellation token or callback.
+    /// </remarks>
+    private static bool TryGetDirectOptionsParameter(
+        IReadOnlyList<AtsParameterInfo> optionalParams,
+        [NotNullWhen(true)] out AtsParameterInfo? directOptionsParam)
+    {
+        directOptionsParam = null;
+        if (optionalParams.Count != 1)
+        {
+            return false;
+        }
+        var p = optionalParams[0];
+        if (p.IsCallback || IsCancellationToken(p))
+        {
+            return false;
+        }
+        if (!string.Equals(p.Name, "options", StringComparison.Ordinal))
+        {
+            return false;
+        }
+        if (p.Type?.Category != AtsTypeCategory.Dto)
+        {
+            return false;
+        }
+        directOptionsParam = p;
+        return true;
+    }
+
     private string RenderParameterList(
         List<AtsParameterInfo> requiredParams,
         List<AtsParameterInfo> optionalParams,
@@ -1058,7 +1103,16 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
                 sb.Append(", ");
             }
             sb.Append("options ...*");
-            sb.Append(GetOptionsTypeName(capability));
+            // Single optional DTO named "options" is threaded directly as its DTO type instead of
+            // through a generated wrapper struct (see TryGetDirectOptionsParameter).
+            if (TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam))
+            {
+                sb.Append(MapDtoType(directOptionsParam.Type!.TypeId));
+            }
+            else
+            {
+                sb.Append(GetOptionsTypeName(capability));
+            }
         }
         return sb.ToString();
     }
@@ -1408,6 +1462,21 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
         if (optionalParams.Count > 0)
         {
+            // Direct-options: merge the DTO variadic under the original parameter name. The request
+            // args are identical to the wrapper path, so only the public Go call shape changes.
+            if (TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam))
+            {
+                var dtoType = MapDtoType(directOptionsParam.Type!.TypeId);
+                WriteLine($"{indent}if len(options) > 0 {{");
+                WriteLine($"{indent}\tmerged := &{dtoType}{{}}");
+                WriteLine($"{indent}\tfor _, opt := range options {{");
+                WriteLine($"{indent}\t\tif opt != nil {{ merged = deepUpdate(merged, opt) }}");
+                WriteLine($"{indent}\t}}");
+                WriteLine($"{indent}\treqArgs[\"{directOptionsParam.Name}\"] = serializeValue(merged)");
+                WriteLine($"{indent}}}");
+                return;
+            }
+
             var optionsType = GetOptionsTypeName(capability);
             WriteLine($"{indent}if len(options) > 0 {{");
             WriteLine($"{indent}\tmerged := &{optionsType}{{}}");
@@ -1596,6 +1665,13 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             {
                 continue;
             }
+
+            // Direct-options capabilities thread the DTO directly, so no wrapper struct is emitted.
+            if (TryGetDirectOptionsParameter(optionalParams, out _))
+            {
+                continue;
+            }
+
             var name = GetOptionsTypeName(capability);
             seenForCapability[capability.CapabilityId] = name;
             if (!emitted.Add(name))

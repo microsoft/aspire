@@ -340,6 +340,38 @@ public class AtsGoCodeGeneratorTests
         Assert.DoesNotMatch(@"func \(s \*[^\)]*\) WithRelationship\([^)]*\btype string\)", aspireGo);
     }
 
+    [Fact]
+    public void GeneratedCode_FlattensSingleOptionalDtoOptionsParameter()
+    {
+        // WithHttpCommand has a single optional "options" DTO, so it flattens: the DTO is threaded
+        // directly instead of through a wrapper struct (issue #17664), matching the TypeScript output.
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        // Signature threads the DTO directly; no wrapper struct is emitted.
+        Assert.Contains("WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions)", aspireGo);
+        Assert.DoesNotContain("type WithHttpCommandOptions struct", aspireGo);
+
+        // The merged DTO is still sent under the original "options" arg, keeping the RPC payload identical.
+        Assert.Contains("reqArgs[\"options\"] = serializeValue(merged)", aspireGo);
+    }
+
+    [Fact]
+    public void GeneratedCode_DoesNotFlattenWhenOptionsCoexistsWithOtherOptionals()
+    {
+        // More than just "options" is optional here (PromptProgress has title + options + a
+        // cancellation token), so Go's single-variadic rule keeps the wrapper struct.
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireGo = files["aspire.go"];
+
+        Assert.Contains("type PromptProgressOptions struct", aspireGo);
+        Assert.Contains("Options *InteractionProgressOptions `json:\"options,omitempty\"`", aspireGo);
+    }
+
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
     {
         var testAssembly = LoadTestAssembly();
