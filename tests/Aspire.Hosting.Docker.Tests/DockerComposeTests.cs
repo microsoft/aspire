@@ -145,9 +145,8 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
     public async Task MultipleDockerComposeEnvironmentsSupported()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var outputPath = Path.Combine(workspace.Path, "output");
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         var env1 = builder.AddDockerComposeEnvironment("env1");
@@ -164,7 +163,7 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
         // Publishing will stop the app when it is done
         await app.RunAsync();
 
-        await VerifyDirectory(outputPath);
+        await VerifyDirectory(workspace.Path);
     }
 
     [Fact]

@@ -13,6 +13,12 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
 {
     private static readonly ConcurrentDictionary<string, byte> s_preservedWorkspaces = new(StringComparer.Ordinal);
 
+    // Lazily create the shared .aspire/settings.json in the parent Workspaces directory.
+    // This sentinel stops directory-walking searches (ConfigurationHelper, ConfigurationService)
+    // from finding the user's actual ~/.aspire/settings.json. Using Lazy<T> ensures thread
+    // safety: two tests creating workspaces concurrently will never corrupt the file.
+    private static readonly Lazy<DirectoryInfo> s_workspacesParent = new(InitializeWorkspacesParent);
+
     public DirectoryInfo WorkspaceRoot => repoDirectory;
 
     public string Path => repoDirectory.FullName;
@@ -204,18 +210,29 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
         }
     }
 
-    public static TemporaryWorkspace Create(ITestOutputHelper outputHelper)
+    private static DirectoryInfo InitializeWorkspacesParent()
     {
         var tempPath = IOPath.GetTempPath();
         var parentDir = Directory.CreateDirectory(IOPath.Combine(tempPath, typeof(TemporaryWorkspace).Assembly.GetName().Name!, "Workspace"));
+
+        // Place the .aspire/settings.json sentinel in the shared parent directory so
+        // directory-walking searches stop here. Individual workspace subdirectories
+        // remain clean, avoiding interference with tests that enumerate their contents.
+        var settingsPath = IOPath.Combine(parentDir.FullName, ".aspire", "settings.json");
+        if (!File.Exists(settingsPath))
+        {
+            Directory.CreateDirectory(IOPath.Combine(parentDir.FullName, ".aspire"));
+            File.WriteAllText(settingsPath, "{}");
+        }
+
+        return parentDir;
+    }
+
+    public static TemporaryWorkspace Create(ITestOutputHelper outputHelper)
+    {
+        var parentDir = s_workspacesParent.Value;
         var repoDirectory = parentDir.CreateSubdirectory(IOPath.GetRandomFileName());
         outputHelper.WriteLine($"Temporary workspace created at: {repoDirectory.FullName}");
-
-        // Create an empty settings file so directory-walking searches
-        // (ConfigurationHelper, ConfigurationService) stop here instead
-        // of finding the user's actual ~/.aspire/settings.json.
-        var aspireDir = Directory.CreateDirectory(IOPath.Combine(repoDirectory.FullName, ".aspire"));
-        File.WriteAllText(IOPath.Combine(aspireDir.FullName, "settings.json"), "{}");
 
         // Register workspace path for CaptureWorkspaceOnFailure attribute
         TestContext.Current?.KeyValueStorage["WorkspacePath"] = repoDirectory.FullName;

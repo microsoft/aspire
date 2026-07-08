@@ -92,9 +92,8 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper outputHelper)
     public async Task MultipleKubernetesEnvironmentsSupported()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var outputPath = Path.Combine(workspace.Path, "output");
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var env1 = builder.AddKubernetesEnvironment("env1");
         var env2 = builder.AddKubernetesEnvironment("env2");
@@ -110,7 +109,7 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper outputHelper)
         // Publishing will stop the app when it is done
         await app.RunAsync();
 
-        await VerifyDirectory(outputPath);
+        await VerifyDirectory(workspace.Path);
     }
 
     [Fact]
