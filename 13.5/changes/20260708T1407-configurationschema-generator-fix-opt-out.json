@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@bart-vmware"
+  ],
+  "description": "Fixes a typo in the MSBuild variable (`AsemblyName` → `AssemblyName`) that caused the configuration schema generator's intermediate response file to be unnamed, preventing per-project identification and risking cross-project file collisions in shared output paths. Also adds a `ConfigurationSchemaGeneratorEnabled` MSBuild property so integration projects can opt out of schema generation.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-07-08T14:07:05Z",
+  "lastMergedAt": "2026-07-08T14:07:05Z",
+  "name": "ConfigurationSchemaGenerator filename fix and opt-out support",
+  "owner": "JamesNK",
+  "prs": [
+    18688
+  ]
+}

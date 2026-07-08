@@ -1,0 +1,9 @@
+{
+  "author": "bart-vmware",
+  "comment": "Improvement in integration build tooling: fixes typo in AssemblyName variable and adds ConfigurationSchemaGeneratorEnabled opt-out property",
+  "mergedAt": "2026-07-08T14:07:05Z",
+  "number": 18688,
+  "runDate": "2026-07-08T18:28:25Z",
+  "status": "included",
+  "title": "ConfigurationSchemaGenerator: Fix typo and enable opt-out"
+}
