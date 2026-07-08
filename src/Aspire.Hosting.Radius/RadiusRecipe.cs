@@ -18,10 +18,9 @@ namespace Aspire.Hosting.Radius;
 /// <para>
 /// <b>Native (Radius.*) types</b>: per-instance <see cref="Name"/> and <see cref="Parameters"/>
 /// are <b>not</b> supported — Radius binds exactly one recipe per resource type per environment
-/// and would silently ignore per-instance values. Declaring them on a native type (or a native
-/// container) fails the publish with diagnostic <c>ASPIRERADIUS027</c>. Set recipe parameters at
-/// the environment level instead with <c>WithRecipeParameters(resourceType, ...)</c>.
-/// <see cref="RecipeLocation"/> remains valid for selecting the type's single recipe.
+/// and would silently ignore per-instance values. Configure recipe parameters at the
+/// environment/type scope instead. <see cref="RecipeLocation"/> remains valid for selecting
+/// the type's single recipe.
 /// </para>
 /// <para>
 /// See: https://github.com/radius-project/radius/blob/main/eng/design-notes/extensibility/2025-02-user-defined-resource-type-feature-spec.md

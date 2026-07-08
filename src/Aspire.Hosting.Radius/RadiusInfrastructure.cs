@@ -85,10 +85,10 @@ internal static class RadiusInfrastructure
 
             // Skip if a target annotation for this environment already exists. Prepare steps
             // are idempotent so re-execution (e.g. during test composition) does not duplicate.
-            var existingAnnotations = resource.Annotations
+            var alreadyTargeted = resource.Annotations
                 .OfType<DeploymentTargetAnnotation>()
                 .Any(a => a.ComputeEnvironment == targetComputeEnvironment);
-            if (existingAnnotations)
+            if (alreadyTargeted)
             {
                 continue;
             }
