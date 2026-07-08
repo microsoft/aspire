@@ -20,15 +20,12 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     /// producer/consumer/control UDS path triple. The replica index is opaque to the
     /// host — callers encode it however they like in the path layout.
     /// </summary>
-    private (TerminalHostArgs args, TempSocketDirectory socketDir, string controlPath) BuildArgs()
+    private (TerminalHostArgs args, TemporaryWorkspace workspace, string controlPath) BuildArgs()
     {
-        // Unix Domain Socket paths are limited to ~108 bytes on most platforms.
-        // TemporaryWorkspace generates paths that exceed this limit, so use a
-        // short temp directory specifically for socket files.
-        var socketDir = new TempSocketDirectory(outputHelper);
-        var dcpDir = Path.Combine(socketDir.Path, "dcp");
-        var hostDir = Path.Combine(socketDir.Path, "host");
-        var ctrlDir = Path.Combine(socketDir.Path, "ctl");
+        var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dcpDir = Path.Combine(workspace.Path, "dcp");
+        var hostDir = Path.Combine(workspace.Path, "host");
+        var ctrlDir = Path.Combine(workspace.Path, "ctl");
         Directory.CreateDirectory(dcpDir);
         Directory.CreateDirectory(hostDir);
         Directory.CreateDirectory(ctrlDir);
@@ -43,14 +40,14 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
             "--control-uds", control,
         ]);
 
-        return (args, socketDir, control);
+        return (args, workspace, control);
     }
 
     [Fact]
     public async Task RunAsyncBindsControlListenerWhenStarted()
     {
-        var (args, socketDir, control) = BuildArgs();
-        using var disp = socketDir;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -72,8 +69,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ControlEndpointReturnsSessionInfo()
     {
-        var (args, socketDir, control) = BuildArgs();
-        using var disp = socketDir;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -104,8 +101,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ShutdownRequestCausesRunAsyncToReturn()
     {
-        var (args, socketDir, control) = BuildArgs();
-        using var disp = socketDir;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -132,8 +129,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
         // ServeClientAsync had registered into _activeRpcs, ending up with two
         // concurrently-served sessions instead of one. The reservation counter
         // increment must happen synchronously under _gate at the accept site.
-        var (args, socketDir, control) = BuildArgs();
-        using var disp = socketDir;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -209,8 +206,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SnapshotSessionReportsConfiguredPaths()
     {
-        var (args, socketDir, control) = BuildArgs();
-        using var disp = socketDir;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -256,8 +253,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
             return;
         }
 
-        var (args, socketDir, control) = BuildArgs();
-        using var disp = socketDir;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         // Pre-place leftovers exactly as a crashed previous host would have left them.
         File.WriteAllBytes(args.ProducerUdsPath, []);
@@ -300,8 +297,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
         // same UDS path, with ProducerConnected and RestartCount tracking
         // each cycle. This exercises the path DCP exercises in production
         // when the underlying process exits and gets relaunched.
-        var (args, socketDir, control) = BuildArgs();
-        using var disp = socketDir;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -381,8 +378,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
         // Even before any producer has connected, the snapshot must populate
         // the new fields so older AppHost wire deserialisation never sees a
         // missing-required-property error.
-        var (args, socketDir, control) = BuildArgs();
-        using var disp = socketDir;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -418,8 +415,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
         // minimal HMP1 server never sends Hello.PrimaryPeerId or RoleChange.
         // Without this bridge, the underlying PTY stayed at its DCP-initial
         // dims forever.
-        var (args, socketDir, control) = BuildArgs();
-        using var disp = socketDir;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -773,8 +770,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
             return;
         }
 
-        var (args, socketDir, control) = BuildArgs();
-        using var disp = socketDir;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -810,8 +807,8 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
             return;
         }
 
-        var (args, socketDir, _) = BuildArgs();
-        using var disp = socketDir;
+        var (args, workspace, _) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -892,28 +889,5 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
         }
 
         throw new TimeoutException($"Timed out waiting for '{path}' after {timeout.TotalSeconds:F1}s.");
-    }
-}
-
-/// <summary>
-/// A short-path temp directory for Unix Domain Socket files, which are limited to ~108 bytes.
-/// Uses <see cref="Directory.CreateTempSubdirectory"/> to keep the path short.
-/// </summary>
-sealed class TempSocketDirectory(ITestOutputHelper outputHelper) : IDisposable
-{
-    private readonly DirectoryInfo _dir = Directory.CreateTempSubdirectory(".th-");
-
-    public string Path => _dir.FullName;
-
-    public void Dispose()
-    {
-        try
-        {
-            _dir.Delete(recursive: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            outputHelper.WriteLine($"Failed to delete temp socket directory '{_dir.FullName}': {ex.Message}");
-        }
     }
 }

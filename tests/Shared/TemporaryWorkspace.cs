@@ -5,6 +5,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using Xunit;
 
+using IOPath = System.IO.Path;
+
 namespace Aspire.Tests.Utils;
 
 public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, DirectoryInfo repoDirectory) : IDisposable
@@ -204,16 +206,16 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
 
     public static TemporaryWorkspace Create(ITestOutputHelper outputHelper)
     {
-        var tempPath = System.IO.Path.GetTempPath();
-        var path = System.IO.Path.Combine(tempPath, typeof(TemporaryWorkspace).Assembly.GetName().Name!, "TemporaryWorkspaces", Guid.NewGuid().ToString());
-        var repoDirectory = Directory.CreateDirectory(path);
+        var tempPath = IOPath.GetTempPath();
+        var parentDir = Directory.CreateDirectory(IOPath.Combine(tempPath, typeof(TemporaryWorkspace).Assembly.GetName().Name!, "Workspace"));
+        var repoDirectory = parentDir.CreateSubdirectory(IOPath.GetRandomFileName());
         outputHelper.WriteLine($"Temporary workspace created at: {repoDirectory.FullName}");
 
         // Create an empty settings file so directory-walking searches
         // (ConfigurationHelper, ConfigurationService) stop here instead
         // of finding the user's actual ~/.aspire/settings.json.
-        var aspireDir = Directory.CreateDirectory(System.IO.Path.Combine(path, ".aspire"));
-        File.WriteAllText(System.IO.Path.Combine(aspireDir.FullName, "settings.json"), "{}");
+        var aspireDir = Directory.CreateDirectory(IOPath.Combine(repoDirectory.FullName, ".aspire"));
+        File.WriteAllText(IOPath.Combine(aspireDir.FullName, "settings.json"), "{}");
 
         // Register workspace path for CaptureWorkspaceOnFailure attribute
         TestContext.Current?.KeyValueStorage["WorkspacePath"] = repoDirectory.FullName;
