@@ -72,8 +72,11 @@ string port = Environment.GetEnvironmentVariable("DEFAULT_AD_PORT") ?? "8088";
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls($"http://+:{port}");
 builder.Services.AddFoundryResponses(agent);
-builder.Services.AddDevTemporaryLocalContributorSetup(); // Local Docker debugging only - must not be used in production.
 
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddDevTemporaryLocalContributorSetup();
+}
 var app = builder.Build();
 
 app.MapFoundryResponses();
