@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixes multiple process-leak scenarios: adds PID+start-time validation to RemoteHost orphan detection to prevent false positives from PID reuse, adds orphan detection to the dashboard and nuget commands, prevents detached processes from surviving a SIGKILL of the launcher, and actively reaps already-leaked orphaned processes.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-07-07T23:40:58Z",
+  "lastMergedAt": "2026-07-07T23:40:58Z",
+  "name": "Fix Aspire-managed process leaks",
+  "owner": "karolz-ms",
+  "prs": [
+    18566
+  ]
+}

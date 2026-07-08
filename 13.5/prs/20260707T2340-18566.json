@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Bug fix for multiple process leak scenarios in CLI and AppHost. Fixes PID-reuse in RemoteHost orphan detection, adds orphan detection for dashboard and nuget commands, prevents detached process leaks after SIGKILL, and adds active orphan reaping.",
+  "mergedAt": "2026-07-07T23:40:58Z",
+  "number": 18566,
+  "runDate": "2026-07-08T00:20:56Z",
+  "status": "included",
+  "title": "Fixes several use cases where aspire-managed processes may leak"
+}
