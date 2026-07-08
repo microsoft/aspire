@@ -872,7 +872,7 @@ export class AppHostDataRepository {
      * (via the idempotent {@link _setDescribeError}); any working describe from any host clears it,
      * since a single working stream proves the CLI supports `describe`.
      */
-    private _startDescribe(appHostPath: string, forceIncludeDisabledCommands?: boolean): void {
+    private _startDescribe(appHostPath: string, forceIncludeDisabledCommands?: boolean, initialRestartDelay?: number): void {
         if (this._disposed) {
             return;
         }
@@ -885,7 +885,11 @@ export class AppHostDataRepository {
             nonJsonLines: [],
             stderr: '',
             restartTimer: undefined,
-            restartDelay: 5000,
+            // A fresh stream restarts after 5s; a restart carries the backed-off delay forward via
+            // `initialRestartDelay` so repeated no-data exits grow the interval (5s -> 10s -> 20s ...)
+            // instead of hammering the CLI every 5s. Each stream is single-use, so the backoff has to
+            // be threaded into the next stream rather than mutated on this one.
+            restartDelay: initialRestartDelay ?? 5000,
             version: 0,
         };
         this._describeStreams.set(appHostPath, stream);
@@ -984,7 +988,10 @@ export class AppHostDataRepository {
                     this._onDidChangeData.fire();
 
                     const delay = stream.restartDelay;
-                    stream.restartDelay = Math.min(delay * 2, this._getPollingIntervalMs());
+                    // `stream` is single-use and discarded below, so carry the backed-off delay into the
+                    // next stream via `_startDescribe`'s `initialRestartDelay` rather than mutating this one
+                    // (a write here would never be read again).
+                    const nextDelay = Math.min(delay * 2, this._getPollingIntervalMs());
                     extensionLogOutputChannel.info(`Restarting describe --follow --apphost ${appHostPath} in ${delay}ms`);
                     stream.restartTimer = setTimeout(() => {
                         stream.restartTimer = undefined;
@@ -997,7 +1004,7 @@ export class AppHostDataRepository {
                             this._onDidChangeData.fire();
                             return;
                         }
-                        this._startDescribe(appHostPath);
+                        this._startDescribe(appHostPath, undefined, nextDelay);
                     }, delay);
                 },
                 errorCallback: (error) => {
@@ -1042,7 +1049,6 @@ export class AppHostDataRepository {
             if (resource.name) {
                 stream.resources.set(resource.name, resource);
                 stream.receivedData = true;
-                stream.restartDelay = 5000;
                 this._setDescribeError(undefined);
                 this._attachResourcesToAppHosts();
                 if (this._viewMode === 'workspace') {

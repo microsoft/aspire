@@ -1059,6 +1059,60 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('describe restart backs off exponentially across repeated no-data exits', async () => {
+        // Fake timers let us assert the exact restart intervals. waitForCondition relies on a real
+        // setTimeout(0) and would hang here, so this test drives readiness with waitForMicrotasks (a
+        // pure microtask flush) and advances restart timers with clock.tickAsync.
+        const clock = sinon.useFakeTimers();
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            await waitForMicrotasks();
+            const psCalls = spawnStub.getCalls().filter(call =>
+                (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
+            const psCall = psCalls[psCalls.length - 1];
+            assert.ok(psCall, 'expected an aspire ps --follow watch to be running');
+            psCall.args[3].lineCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1,
+                dashboardUrl: 'https://localhost:17193/login?t=token',
+            }]));
+            await waitForMicrotasks();
+
+            const describeCalls = () => spawnStub.getCalls().filter(call => {
+                const spawnArgs = call.args[2] as string[];
+                return spawnArgs[0] === 'describe' && spawnArgs[spawnArgs.length - 1] === '/workspace/AppHost.csproj';
+            });
+            // Exit the most recent describe stream with a no-data failure, which schedules a restart.
+            const exitCurrentDescribe = () => describeCalls().at(-1)!.args[3].exitCallback(1);
+
+            assert.strictEqual(describeCalls().length, 1, 'expected the initial describe stream once ps reports the host running');
+
+            // First no-data exit -> restart scheduled 5s out.
+            exitCurrentDescribe();
+            await clock.tickAsync(4999);
+            assert.strictEqual(describeCalls().length, 1, 'restart fired before its 5s delay');
+            await clock.tickAsync(1);
+            assert.strictEqual(describeCalls().length, 2, 'first restart did not fire at 5s');
+
+            // Second no-data exit must back off to 10s. On the buggy constant-5s path a third stream
+            // would spawn again after only 5s; the backoff keeps it at one stream until 10s elapses.
+            exitCurrentDescribe();
+            await clock.tickAsync(5000);
+            assert.strictEqual(describeCalls().length, 2, 'restart interval did not back off past 5s');
+            await clock.tickAsync(5000);
+            assert.strictEqual(describeCalls().length, 3, 'second restart did not fire at the backed-off 10s');
+        } finally {
+            repository.dispose();
+            clock.restore();
+        }
+    });
+
     test('describe reports generic error when workspace AppHost exits with runtime failure', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
