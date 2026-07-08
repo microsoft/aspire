@@ -72,15 +72,9 @@ string port = Environment.GetEnvironmentVariable("DEFAULT_AD_PORT") ?? "8088";
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls($"http://+:{port}");
 builder.Services.AddFoundryResponses(agent);
-
-if (builder.Environment.IsDevelopment())
-{
-    builder.Services.AddDevTemporaryLocalContributorSetup();
-}
 var app = builder.Build();
 
 app.MapFoundryResponses();
-app.MapDevTemporaryLocalAgentEndpoint();
 app.MapGet("/liveness", () => Results.Ok("Healthy"));
 app.MapGet("/readiness", () => Results.Ok("Ready"));
 
