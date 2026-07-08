@@ -30,7 +30,6 @@ public partial class HostedAgentConfiguration(string image)
     /// </summary>
     public IDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>()
     {
-        { "enableVnextExperience", "true" },
         { "DeployedBy", "Aspire Hosting Framework" },
         { "DeployedOn", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) }
     };
@@ -51,7 +50,7 @@ public partial class HostedAgentConfiguration(string image)
     /// The protocols that the agent supports for ingress communication of the containers.
     /// </summary>
     [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
-    public IList<ProtocolVersionRecord> ContainerProtocolVersions { get; init; } = [
+    public IList<ProtocolVersionRecord> ProtocolVersions { get; init; } = [
         new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, DefaultContainerProtocolVersion)
     ];
 
@@ -122,12 +121,15 @@ public partial class HostedAgentConfiguration(string image)
         ValidateEnvironmentVariableNamesAreNotReserved(EnvironmentVariables.Keys, targetResourceName);
 
         var def = new HostedAgentDefinition(
-            ContainerProtocolVersions,
             cpu: CpuString,
             memory: MemoryString)
         {
-            Image = Image
+            ContainerConfiguration = new ContainerConfiguration(Image)
         };
+        foreach (var protocolVersion in ProtocolVersions)
+        {
+            def.ProtocolVersions.Add(protocolVersion);
+        }
         if (ContentFilterConfiguration is not null)
         {
             def.ContentFilterConfiguration = ContentFilterConfiguration;

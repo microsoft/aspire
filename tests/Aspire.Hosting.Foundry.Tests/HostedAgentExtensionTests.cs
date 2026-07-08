@@ -127,8 +127,8 @@ public class HostedAgentExtensionTests
         builder.AddPythonApp("agent", "./app.py", "main:app")
             .AsHostedAgent(project, configuration =>
             {
-                configuration.ContainerProtocolVersions.Clear();
-                configuration.ContainerProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.0.0"));
+                configuration.ProtocolVersions.Clear();
+                configuration.ProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.0.0"));
             });
 
         using var app = builder.Build();
@@ -354,7 +354,7 @@ public class HostedAgentExtensionTests
         Assert.Equal(2m, configuration.Memory);
         Assert.Equal("unit-test", configuration.Metadata["scenario"]);
         Assert.Equal("my-value", configuration.EnvironmentVariables["MY_VAR"]);
-        var protocol = Assert.Single(configuration.ContainerProtocolVersions);
+        var protocol = Assert.Single(configuration.ProtocolVersions);
         Assert.Equal(ProjectsAgentProtocol.Invocations, protocol.Protocol);
         Assert.Equal("1.0.0", protocol.Version);
     }

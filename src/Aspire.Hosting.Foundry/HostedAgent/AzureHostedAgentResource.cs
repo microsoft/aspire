@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ClientModel.Primitives;
 using System.Globalization;
 using System.IO.Hashing;
 using System.Text;
@@ -157,10 +158,13 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             throw new InvalidOperationException($"Project '{project.Name}' does not have a valid connection string.");
         }
         var def = await ToHostedAgentConfigurationAsync(context).ConfigureAwait(false);
+        var options = def.ToProjectsAgentVersionCreationOptions(Target.Name);
+        LogHostedAgentPayload(context, options);
+
         var projectClient = new AIProjectClient(new Uri(projectEndpoint), credential);
         var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
             Name,
-            def.ToProjectsAgentVersionCreationOptions(Target.Name),
+            options,
             cancellationToken: context.CancellationToken
         ).ConfigureAwait(false);
 
@@ -172,9 +176,23 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         return result.Value;
     }
 
+    private void LogHostedAgentPayload(PipelineStepContext context, ProjectsAgentVersionCreationOptions options)
+    {
+        var payload = ModelReaderWriter.Write(options, ModelReaderWriterOptions.Json).ToString();
+        context.ReportingStep.Log(
+            LogLevel.Information,
+            new MarkdownString($"""
+                Foundry hosted agent '{Name}' CreateAgentVersion request payload:
+
+                ```json
+                {payload}
+                ```
+                """));
+    }
+
     private async Task UpdateAgentEndpointProtocolsAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
     {
-        var endpointProtocols = GetAgentEndpointProtocols(configuration.ContainerProtocolVersions);
+        var endpointProtocols = GetAgentEndpointProtocols(configuration.ProtocolVersions);
         if (endpointProtocols.Count == 0)
         {
             return;

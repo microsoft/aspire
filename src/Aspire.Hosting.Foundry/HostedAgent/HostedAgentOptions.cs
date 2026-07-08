@@ -91,10 +91,10 @@ internal sealed class HostedAgentOptions
         {
             var protocolVersionRecords = protocols.Select(ToProtocolVersionRecord).ToArray();
 
-            configuration.ContainerProtocolVersions.Clear();
+            configuration.ProtocolVersions.Clear();
             foreach (var record in protocolVersionRecords)
             {
-                configuration.ContainerProtocolVersions.Add(record);
+                configuration.ProtocolVersions.Add(record);
             }
         }
     }

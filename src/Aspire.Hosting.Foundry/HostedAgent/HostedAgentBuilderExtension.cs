@@ -84,7 +84,7 @@ public static class HostedAgentResourceBuilderExtensions
     /// <param name="configure">A callback to configure hosted agent deployment options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
-    /// The <see cref="HostedAgentConfiguration.ContainerProtocolVersions"/> setting affects both run and publish mode.
+    /// The <see cref="HostedAgentConfiguration.ProtocolVersions"/> setting affects both run and publish mode.
     /// Other settings are used in publish mode.
     /// </remarks>
     [AspireExportIgnore(Reason = "Action callback shape is awkward for polyglot hosts; the HostedAgentOptions DTO shape is exported instead.")]
@@ -338,11 +338,11 @@ public static class HostedAgentResourceBuilderExtensions
         catch (Exception ex)
         {
             throw new InvalidOperationException(
-                $"Failed to apply the hosted agent configuration callback while determining the Foundry hosted agent protocol for run mode. In run mode, only {nameof(HostedAgentConfiguration.ContainerProtocolVersions)} is used; other options can still be validated by the callback.",
+                $"Failed to apply the hosted agent configuration callback while determining the Foundry hosted agent protocol for run mode. In run mode, only {nameof(HostedAgentConfiguration.ProtocolVersions)} is used; other options can still be validated by the callback.",
                 ex);
         }
 
-        return configuration.ContainerProtocolVersions.FirstOrDefault()?.Protocol.ToString();
+        return configuration.ProtocolVersions.FirstOrDefault()?.Protocol.ToString();
     }
 
     private static void ConfigurePublishMode<T>(

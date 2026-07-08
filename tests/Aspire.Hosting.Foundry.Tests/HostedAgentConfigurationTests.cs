@@ -1,6 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ClientModel.Primitives;
+using System.Text.Json.Nodes;
+using Azure.AI.Projects.Agents;
+
 namespace Aspire.Hosting.Foundry.Tests;
 
 public class HostedAgentConfigurationTests
@@ -71,6 +75,23 @@ public class HostedAgentConfigurationTests
 
         Assert.NotNull(options);
         Assert.Equal("Test agent", options.Description);
+    }
+
+    [Fact]
+    public void ToProjectsAgentVersionCreationOptions_UsesProtocolVersionsAndContainerConfiguration()
+    {
+        var config = new HostedAgentConfiguration("myregistry.azurecr.io/myagent:v1");
+
+        var options = config.ToProjectsAgentVersionCreationOptions("target");
+        var payload = JsonNode.Parse(ModelReaderWriter.Write(options, ModelReaderWriterOptions.Json).ToString())!;
+        var definition = payload["definition"]!;
+
+        var protocolVersion = Assert.Single(definition["protocol_versions"]!.AsArray());
+        Assert.Equal(ProjectsAgentProtocol.Responses.ToString(), protocolVersion!["protocol"]!.GetValue<string>());
+        Assert.Equal("2.0.0", protocolVersion["version"]!.GetValue<string>());
+        Assert.Equal("myregistry.azurecr.io/myagent:v1", definition["container_configuration"]!["image"]!.GetValue<string>());
+        Assert.Null(definition["container_protocol_versions"]);
+        Assert.Null(definition["image"]);
     }
 
     [Fact]
