@@ -1,0 +1,9 @@
+{
+  "author": "idogit123",
+  "comment": "Documents RavenDB TypeScript AppHost support from CommunityToolkit.Aspire v13.4.0 (previous milestone). No matching 13.5 product changelog entry.",
+  "mergedAt": "2026-07-08T11:48:34Z",
+  "number": 1330,
+  "runDate": "2026-07-08T12:31:01Z",
+  "status": "excluded",
+  "title": "Update RavenDB hosting integration docs to reflect TypeScript AppHost support"
+}
