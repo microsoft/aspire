@@ -486,6 +486,18 @@ type IServiceProviderHandle = Handle<'System.ComponentModel/System.IServiceProvi
 // Enum Types
 // ============================================================================
 
+/** Specifies the protocols supported by an agent resource. */
+export enum AgentProtocol {
+    /** The Agent2Agent protocol. */
+    A2A = "A2A",
+    /** The OpenAI Responses API protocol. */
+    Responses = "Responses",
+    /** The AG-UI protocol. */
+    AgUi = "AgUi",
+    /** The Agent Communication Protocol. */
+    Acp = "Acp",
+}
+
 /** Defines the scope of custom certificate authorities for a resource. The default scope for most resources is `Append`, but some resources may choose to override this default behavior. */
 export enum CertificateTrustScope {
     /** Disable all custom certificate authority configuration for a resource. This indicates that the resource should use its default certificate authority trust behavior without modification. */
@@ -16781,7 +16793,7 @@ export interface ContainerResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -17300,6 +17312,19 @@ export interface ContainerResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): ContainerResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ContainerResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -17590,7 +17615,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -18109,6 +18134,19 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ContainerResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): ContainerResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ContainerResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -18749,7 +18787,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -20497,6 +20535,45 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -21287,6 +21364,14 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
+    asAgent(protocol: AgentProtocol): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
     withOptionalString(options?: WithOptionalStringOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
@@ -21422,7 +21507,7 @@ export interface CSharpAppResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -21952,6 +22037,19 @@ export interface CSharpAppResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): CSharpAppResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -22046,7 +22144,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -22576,6 +22674,19 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): CSharpAppResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): CSharpAppResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -22721,7 +22832,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -24523,6 +24634,45 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -25245,6 +25395,14 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
+    asAgent(protocol: AgentProtocol): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
     withOptionalString(options?: WithOptionalStringOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
@@ -25435,7 +25593,7 @@ export interface DotnetToolResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -25932,6 +26090,19 @@ export interface DotnetToolResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): DotnetToolResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -26081,7 +26252,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -26578,6 +26749,19 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): DotnetToolResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): DotnetToolResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -26900,7 +27084,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -28596,6 +28780,45 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -29334,6 +29557,14 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
+    asAgent(protocol: AgentProtocol): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
     withOptionalString(options?: WithOptionalStringOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
@@ -29498,7 +29729,7 @@ export interface ExecutableResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -29995,6 +30226,19 @@ export interface ExecutableResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ExecutableResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -30111,7 +30355,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -30608,6 +30852,19 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): ExecutableResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ExecutableResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -30826,7 +31083,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -32522,6 +32779,45 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -33234,6 +33530,14 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
 
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
+    }
+
+    asAgent(protocol: AgentProtocol): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ExecutableResourcePromise {
@@ -37803,7 +38107,7 @@ export interface ProjectResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -38333,6 +38637,19 @@ export interface ProjectResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): ProjectResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ProjectResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -38427,7 +38744,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -38957,6 +39274,19 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): ProjectResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): ProjectResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ProjectResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -39103,7 +39433,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -40905,6 +41235,45 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -41627,6 +41996,14 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
+    asAgent(protocol: AgentProtocol): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
     withOptionalString(options?: WithOptionalStringOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
@@ -41958,7 +42335,7 @@ export interface TestDatabaseResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -42477,6 +42854,19 @@ export interface TestDatabaseResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestDatabaseResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -42767,7 +43157,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -43286,6 +43676,19 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): TestDatabaseResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestDatabaseResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -43925,7 +44328,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -45673,6 +46076,45 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -46463,6 +46905,14 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
+    asAgent(protocol: AgentProtocol): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
@@ -46794,7 +47244,7 @@ export interface TestRedisResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -47335,6 +47785,19 @@ export interface TestRedisResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestRedisResourcePromise;
     /**
      * Adds a child database to a test Redis resource
      *
@@ -47667,7 +48130,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -48208,6 +48671,19 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): TestRedisResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestRedisResourcePromise;
     /**
      * Adds a child database to a test Redis resource
      *
@@ -48889,7 +49365,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -50697,6 +51173,45 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
     private async _addTestChildDatabaseInternal(name: string, databaseName?: string): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
         if (databaseName !== undefined) rpcArgs.databaseName = databaseName;
@@ -51686,6 +52201,14 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
     }
 
+    asAgent(protocol: AgentProtocol): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
+    }
+
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.addTestChildDatabase(name, options)), this._client);
     }
@@ -52065,7 +52588,7 @@ export interface TestVaultResource {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -52584,6 +53107,19 @@ export interface TestVaultResource {
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestVaultResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -52876,7 +53412,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -53395,6 +53931,19 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns A reference to the `IResourceBuilder`1`.
      */
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): TestVaultResourcePromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestVaultResourcePromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -54036,7 +54585,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -55784,6 +56333,45 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._asAgentInternal(protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
+    /** @internal */
     private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
@@ -56587,6 +57175,14 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
     withContainerBuildOptions(callback: (arg: ContainerBuildOptionsCallbackContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withContainerBuildOptions(callback)), this._client);
+    }
+
+    asAgent(protocol: AgentProtocol): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise {
@@ -59612,7 +60208,7 @@ export interface ResourceWithEndpoints {
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -59705,6 +60301,19 @@ export interface ResourceWithEndpoints {
      * @returns The resource builder.
      */
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ResourceWithEndpointsPromise;
 }
 
 export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEndpoints> {
@@ -59712,7 +60321,7 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -59805,6 +60414,19 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
      * @returns The resource builder.
      */
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): ResourceWithEndpointsPromise;
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ResourceWithEndpointsPromise;
 }
 
 // ============================================================================
@@ -59833,7 +60455,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
-     * to discover and proxy the MCP server exposed by the resource.
+     * to discover, proxy, and invoke the MCP server exposed by the resource.
      * @param options Additional options.
      * @returns The resource builder.
      */
@@ -60235,6 +60857,45 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
         return new ResourceWithEndpointsPromiseImpl(this._onResourceEndpointsAllocatedInternal(callback), this._client);
     }
 
+    /** @internal */
+    private async _asAgentInternal(protocol: AgentProtocol): Promise<ResourceWithEndpoints> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, protocol };
+        const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
+            'Aspire.Hosting.Agents/asAgent',
+            rpcArgs
+        );
+        return new ResourceWithEndpointsImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgent(protocol: AgentProtocol): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._asAgentInternal(protocol), this._client);
+    }
+
+    /** @internal */
+    private async _asAgentWithPathInternal(agentCustomPath: string, protocol: AgentProtocol): Promise<ResourceWithEndpoints> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocol };
+        const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
+            'Aspire.Hosting.Agents/asAgentWithPath',
+            rpcArgs
+        );
+        return new ResourceWithEndpointsImpl(result, this._client);
+    }
+
+    /**
+     * Configures the resource as an agent that supports the specified protocol using a custom protocol path.
+     * @param agentCustomPath The custom path for protocol-specific dashboard commands and URLs.
+     * @param protocol The protocol supported by the agent.
+     * @returns A reference to the `IResourceBuilder`1` for chaining.
+     */
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._asAgentWithPathInternal(agentCustomPath, protocol), this._client);
+    }
+
 }
 
 /**
@@ -60312,6 +60973,14 @@ class ResourceWithEndpointsPromiseImpl implements ResourceWithEndpointsPromise {
 
     onResourceEndpointsAllocated(callback: (arg: ResourceEndpointsAllocatedEvent) => Promise<void>): ResourceWithEndpointsPromise {
         return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.onResourceEndpointsAllocated(callback)), this._client);
+    }
+
+    asAgent(protocol: AgentProtocol): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgent(protocol)), this._client);
+    }
+
+    asAgentWithPath(agentCustomPath: string, protocol: AgentProtocol): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.asAgentWithPath(agentCustomPath, protocol)), this._client);
     }
 
 }
