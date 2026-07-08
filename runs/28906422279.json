@@ -1,0 +1,38 @@
+{
+  "run_id": 28906422279,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/28906422279",
+  "analyzed_at": "2026-07-08T00:09:14Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18566,
+    "title": "Fixes several use cases where aspire-managed processes may leak",
+    "author": "karolz-ms",
+    "state": "closed",
+    "head_branch": "dev/karolz/analyze-managed-process-leaks",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18566"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (ubuntu-latest)",
+      "id": 85754705164,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/28906422279/job/85754705164",
+      "classification": "flaky-test",
+      "reason": "One test timed out with a TimeoutException after 30000ms. The test (RunCommand_DetachedChild_WhenSignaledBeforeReadiness_AwaitsAppHostTeardownBeforeExit) involves complex async process management including signal handling, detached child processes, and waiting for app host teardown. The timeout suggests intermittent timing sensitivity under CI load rather than a logical code defect.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.RunCommandTests.RunCommand_DetachedChild_WhenSignaledBeforeReadiness_AwaitsAppHostTeardownBeforeExit",
+      "job": "Tests / Cli / Cli (ubuntu-latest)",
+      "error": "System.TimeoutException : The operation at /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/RunCommandTests.cs:469 timed out after reaching the limit of 30000ms.",
+      "stack_trace": "at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter[T](Task`1 task, TimeSpan timeout, String filePath, Int32 lineNumber) in /home/runner/work/aspire/aspire/tests/Shared/AsyncTestHelpers.cs:line 160\n   at Aspire.Cli.Tests.Commands.RunCommandTests.RunCommand_DetachedChild_WhenSignaledBeforeReadiness_AwaitsAppHostTeardownBeforeExit() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/RunCommandTests.cs:line 469",
+      "classification": "flaky",
+      "reason": "TimeoutException (not an assertion or build failure) in a timing-sensitive test involving detached child process management, signal handling before app host readiness, and waiting for teardown. The 30-second timeout may be insufficient under CI load for such complex async process coordination. The test was added by this PR (+290 lines to RunCommandTests.cs), testing new process lifecycle functionality, but the intermittent timeout pattern indicates environmental sensitivity rather than a definitive code defect."
+    }
+  ],
+  "causes": ["runcmd-detachedchild-awaitsapphostteardown-timeout"]
+}
