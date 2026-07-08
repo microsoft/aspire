@@ -159,7 +159,6 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         }
         var def = await ToHostedAgentConfigurationAsync(context).ConfigureAwait(false);
         var options = def.ToProjectsAgentVersionCreationOptions(Target.Name);
-        LogHostedAgentPayload(context, options);
 
         var projectClient = new AIProjectClient(new Uri(projectEndpoint), credential);
         var result = await projectClient.AgentAdministrationClient.CreateAgentVersionAsync(
@@ -174,20 +173,6 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         await AssignFoundryRoleToAgentIdentityAsync(context, project, result.Value, provisioningContext).ConfigureAwait(false);
 
         return result.Value;
-    }
-
-    private void LogHostedAgentPayload(PipelineStepContext context, ProjectsAgentVersionCreationOptions options)
-    {
-        var payload = ModelReaderWriter.Write(options, ModelReaderWriterOptions.Json).ToString();
-        context.ReportingStep.Log(
-            LogLevel.Information,
-            new MarkdownString($"""
-                Foundry hosted agent '{Name}' CreateAgentVersion request payload:
-
-                ```json
-                {payload}
-                ```
-                """));
     }
 
     private async Task UpdateAgentEndpointProtocolsAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
