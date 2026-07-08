@@ -167,11 +167,7 @@ suite('AppHostDataRepository', () => {
         repository.dispose();
     });
 
-    test('describe watch retries without nologo when an older CLI rejects it', async () => {
-        const firstProcess = new TestChildProcess();
-        const retryProcess = new TestChildProcess();
-        spawnStub.onFirstCall().returns(firstProcess);
-        spawnStub.onSecondCall().returns(retryProcess);
+    test('describe retries without nologo when an older CLI rejects it', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
         try {
@@ -179,27 +175,42 @@ suite('AppHostDataRepository', () => {
             repository.setPanelVisible(true);
             await waitForMicrotasks();
 
-            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--follow', '--format', 'json', '--nologo', '--include-disabled-commands']);
-            spawnStub.firstCall.args[3].stderrCallback("Unrecognized command or argument '--nologo'.");
-            spawnStub.firstCall.args[3].exitCallback(1);
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            await waitForMicrotasks();
+            const psCalls = spawnStub.getCalls().filter(call =>
+                (call.args[2] as string[])[0] === 'ps' && (call.args[2] as string[]).includes('--follow'));
+            const psCall = psCalls[psCalls.length - 1];
+            assert.ok(psCall, 'expected an aspire ps --follow watch to be running');
+            psCall.args[3].lineCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1,
+                dashboardUrl: 'https://localhost:17193/login?t=token',
+            }]));
+
+            let describeCall: sinon.SinonSpyCall | undefined;
+            await waitForCondition(() => {
+                describeCall = spawnStub.getCalls().find(call => {
+                    const spawnArgs = call.args[2] as string[];
+                    return spawnArgs[0] === 'describe' && spawnArgs[spawnArgs.length - 1] === '/workspace/AppHost.csproj';
+                });
+                return describeCall !== undefined;
+            }, 'expected a describe stream to start');
+
+            assert.deepStrictEqual(describeCall!.args[2], ['describe', '--follow', '--format', 'json', '--nologo', '--include-disabled-commands', '--apphost', '/workspace/AppHost.csproj']);
+            describeCall!.args[3].stderrCallback("Unrecognized command or argument '--nologo'.");
+            describeCall!.args[3].exitCallback(1);
             await waitForMicrotasks();
             await waitForMicrotasks();
 
-            assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--follow', '--format', 'json', '--include-disabled-commands']);
+            const describeCalls = spawnStub.getCalls().filter(call => (call.args[2] as string[])[0] === 'describe');
+            assert.strictEqual(describeCalls.length, 2);
+            assert.deepStrictEqual(describeCalls[1].args[2], ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', '/workspace/AppHost.csproj']);
         } finally {
             repository.dispose();
         }
     });
 
     test('concurrent older-CLI nologo failures each retry their captured command', async () => {
-        const firstDescribeProcess = new TestChildProcess();
-        const firstPsProcess = new TestChildProcess();
-        const retryDescribeProcess = new TestChildProcess();
-        const retryPsProcess = new TestChildProcess();
-        spawnStub.onCall(0).returns(firstDescribeProcess);
-        spawnStub.onCall(1).returns(firstPsProcess);
-        spawnStub.onCall(2).returns(retryDescribeProcess);
-        spawnStub.onCall(3).returns(retryPsProcess);
         const repository = new AppHostDataRepository(terminalProvider);
 
         try {
@@ -207,27 +218,61 @@ suite('AppHostDataRepository', () => {
             repository.setPanelVisible(true);
             await waitForMicrotasks();
 
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            await waitForMicrotasks();
+            const psFollowCall = spawnStub.getCalls().find(call => {
+                const spawnArgs = call.args[2] as string[];
+                return spawnArgs[0] === 'ps' && spawnArgs.includes('--follow');
+            });
+            assert.ok(psFollowCall, 'expected an aspire ps --follow watch to be running');
+            psFollowCall.args[3].lineCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1,
+                dashboardUrl: 'https://localhost:17193/login?t=token',
+            }]));
+
+            let firstDescribe: sinon.SinonSpyCall | undefined;
+            await waitForCondition(() => {
+                firstDescribe = spawnStub.getCalls().find(call => {
+                    const spawnArgs = call.args[2] as string[];
+                    return spawnArgs[0] === 'describe' && spawnArgs[spawnArgs.length - 1] === '/workspace/AppHost.csproj';
+                });
+                return firstDescribe !== undefined;
+            }, 'expected a describe stream to start');
+
             const fetchPromise = repository.fetchAppHostsOnce();
             await waitForMicrotasks();
 
-            assert.deepStrictEqual(spawnStub.getCall(0).args[2], ['describe', '--follow', '--format', 'json', '--nologo', '--include-disabled-commands']);
-            assert.deepStrictEqual(spawnStub.getCall(1).args[2], ['ps', '--format', 'json', '--nologo']);
+            const firstOneShotPs = spawnStub.getCalls().find(call => {
+                const spawnArgs = call.args[2] as string[];
+                return spawnArgs[0] === 'ps' && !spawnArgs.includes('--follow');
+            });
+            assert.ok(firstOneShotPs, 'expected fetchAppHostsOnce to spawn one-shot ps');
+            assert.deepStrictEqual(firstDescribe!.args[2], ['describe', '--follow', '--format', 'json', '--nologo', '--include-disabled-commands', '--apphost', '/workspace/AppHost.csproj']);
+            assert.deepStrictEqual(firstOneShotPs.args[2], ['ps', '--format', 'json', '--nologo']);
 
-            spawnStub.getCall(0).args[3].stderrCallback("Unrecognized command or argument '--nologo'.");
-            spawnStub.getCall(0).args[3].exitCallback(1);
+            firstDescribe!.args[3].stderrCallback("Unrecognized command or argument '--nologo'.");
+            firstDescribe!.args[3].exitCallback(1);
             await waitForMicrotasks();
             await waitForMicrotasks();
 
-            assert.deepStrictEqual(spawnStub.getCall(2).args[2], ['describe', '--follow', '--format', 'json', '--include-disabled-commands']);
+            const describeCalls = spawnStub.getCalls().filter(call => (call.args[2] as string[])[0] === 'describe');
+            assert.strictEqual(describeCalls.length, 2);
+            assert.deepStrictEqual(describeCalls[1].args[2], ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', '/workspace/AppHost.csproj']);
 
-            spawnStub.getCall(1).args[3].stderrCallback("Unrecognized command or argument '--nologo'.");
-            spawnStub.getCall(1).args[3].exitCallback(1);
+            firstOneShotPs.args[3].stderrCallback("Unrecognized command or argument '--nologo'.");
+            firstOneShotPs.args[3].exitCallback(1);
             await waitForMicrotasks();
             await waitForMicrotasks();
 
-            assert.deepStrictEqual(spawnStub.getCall(3).args[2], ['ps', '--format', 'json']);
-            spawnStub.getCall(3).args[3].stdoutCallback('[]');
-            spawnStub.getCall(3).args[3].exitCallback(0);
+            const oneShotPsCalls = spawnStub.getCalls().filter(call => {
+                const spawnArgs = call.args[2] as string[];
+                return spawnArgs[0] === 'ps' && !spawnArgs.includes('--follow');
+            });
+            assert.strictEqual(oneShotPsCalls.length, 2);
+            assert.deepStrictEqual(oneShotPsCalls[1].args[2], ['ps', '--format', 'json']);
+            oneShotPsCalls[1].args[3].stdoutCallback('[]');
+            oneShotPsCalls[1].args[3].exitCallback(0);
 
             const appHosts = await fetchPromise;
             assert.deepStrictEqual(appHosts, []);
@@ -3067,6 +3112,12 @@ suite('AppHostDataRepository', () => {
 
             assert.strictEqual(discoverStub.callCount, 1);
             assert.ok(spawned.slice(initialSpawnCount).some(call => call.args[0] === 'ps' && !call.args.includes('--follow')), 'expected pending runtime refresh to request an immediate ps snapshot');
+
+            const initialSnapshotCall = spawned.filter(call => call.args[0] === 'ps' && !call.args.includes('--follow')).at(-1);
+            assert.ok(initialSnapshotCall, 'expected runtime state refresh to request an immediate ps snapshot');
+            initialSnapshotCall.options.stdoutCallback(JSON.stringify([]));
+            initialSnapshotCall.options.exitCallback(0);
+            await waitForMicrotasks();
 
             discovery.resolve([]);
             await waitForCondition(() => repository.isWorkspaceAppHostDiscoveryComplete, 'workspace discovery did not complete');
