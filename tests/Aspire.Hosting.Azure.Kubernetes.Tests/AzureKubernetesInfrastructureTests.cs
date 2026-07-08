@@ -163,7 +163,7 @@ public class AzureKubernetesInfrastructureTests(ITestOutputHelper output)
     [Fact]
     public async Task KubernetesPipelineStepsFlowThroughAksEnvironment()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.Create(output);
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
             workspace.Path,
