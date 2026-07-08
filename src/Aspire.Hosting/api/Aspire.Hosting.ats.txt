@@ -326,7 +326,7 @@ Aspire.Hosting/Aspire.Hosting.InteractionInput # Represents an input for an inte
   EnableDescriptionMarkdown?: boolean # Gets or sets a value indicating whether the description should be rendered as Markdown. Setting this to `true` allows a description to contain Markdown elements such as links, text decoration and lists.
   InputType: enum:Aspire.Hosting.InputType # Gets or sets the type of the input.
   Label?: string # Gets or sets the label for the input. If not specified, the name will be used as the label.
-  MaxFileSize?: number # Gets or sets the maximum file size in bytes for `File` inputs. If not specified, the server applies the configured upload limit (default 100 MB). This limit is not enforced when the file path is provided directly (e.g. via the CLI).
+  MaxFileSize?: number # Gets or sets the maximum file size in bytes for `File` inputs. If not specified, the server applies the configured upload limit (default 100 MB). When specified, the value is capped at the server-side upload limit.
   MaxLength?: number # gets or sets the maximum length for text inputs.
   Name: string # Gets or sets the name for the input. Used for accessing inputs by name from a keyed collection.
   Options: System.Private.CoreLib/System.Collections.Generic.KeyValuePair`2[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]][] # Gets or sets the options for the input. Only used by `Choice` inputs.
