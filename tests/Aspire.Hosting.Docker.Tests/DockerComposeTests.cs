@@ -47,9 +47,8 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
     [Fact]
     public void PublishingDockerComposeEnviromentPublishesFile()
     {
-        var workspace = Directory.CreateTempSubdirectory(".docker-compose-test");
-        outputHelper.WriteLine($"Temp directory: {workspace.FullName}");
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.FullName);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -61,18 +60,15 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composeFile = Path.Combine(workspace.FullName, "docker-compose.yaml");
+        var composeFile = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composeFile), "Docker Compose file was not created.");
-
-        workspace.Delete(recursive: true);
     }
 
     [Fact]
     public async Task DockerComposeOnlyExposesExternalEndpoints()
     {
-        var workspace = Directory.CreateTempSubdirectory(".docker-compose-test");
-        outputHelper.WriteLine($"Temp directory: {workspace.FullName}");
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.FullName);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -86,14 +82,12 @@ public class DockerComposeTests(ITestOutputHelper outputHelper)
         var app = builder.Build();
         app.Run();
 
-        var composeFile = Path.Combine(workspace.FullName, "docker-compose.yaml");
+        var composeFile = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composeFile), "Docker Compose file was not created.");
 
         var composeContent = File.ReadAllText(composeFile);
 
         await Verify(composeContent, "yaml");
-
-        workspace.Delete(recursive: true);
     }
 
     [Fact]
