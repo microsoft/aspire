@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Projects;
-using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Projects;
 

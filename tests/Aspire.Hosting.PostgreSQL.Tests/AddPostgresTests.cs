@@ -12,7 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.PostgreSQL.Tests;
 
-public class AddPostgresTests
+public class AddPostgresTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void AddPostgresAddsHealthCheckAnnotationToResource()
@@ -477,8 +477,8 @@ public class AddPostgresTests
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        using var tempStore = new TestTempDirectory();
-        builder.Configuration["Aspire:Store:Path"] = tempStore.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        builder.Configuration["Aspire:Store:Path"] = workspace.Path;
 
         var username = builder.AddParameter("pg-user", "myuser");
         var pg1 = builder.AddPostgres("mypostgres1").WithPgAdmin(pga => pga.WithHostPort(8081));
@@ -539,8 +539,8 @@ public class AddPostgresTests
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        using var tempStore = new TestTempDirectory();
-        builder.Configuration["Aspire:Store:Path"] = tempStore.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        builder.Configuration["Aspire:Store:Path"] = workspace.Path;
 
         var pg1 = builder.AddPostgres("mypostgres1").WithPgWeb(pga => pga.WithHostPort(8081));
         var pg2 = builder.AddPostgres("mypostgres2").WithPgWeb(pga => pga.WithHostPort(8081));

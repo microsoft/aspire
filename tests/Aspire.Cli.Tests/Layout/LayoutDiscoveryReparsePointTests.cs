@@ -3,7 +3,6 @@
 
 using Aspire.Cli.Layout;
 using Aspire.Cli.Tests.Acquisition;
-using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging.Abstractions;

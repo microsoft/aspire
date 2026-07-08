@@ -12,7 +12,7 @@ namespace Aspire.TerminalHost.Tests;
 public sealed class TerminalHostAppTestsCollection;
 
 [Collection(nameof(TerminalHostAppTestsCollection))]
-public class TerminalHostAppTests
+public class TerminalHostAppTests(ITestOutputHelper outputHelper)
 {
     /// <summary>
     /// Builds a single-replica argument set for the host. Each terminal host process
@@ -20,12 +20,12 @@ public class TerminalHostAppTests
     /// producer/consumer/control UDS path triple. The replica index is opaque to the
     /// host — callers encode it however they like in the path layout.
     /// </summary>
-    private static (TerminalHostArgs args, TestTempDirectory tmp, string controlPath) BuildArgs()
+    private (TerminalHostArgs args, TemporaryWorkspace workspace, string controlPath) BuildArgs()
     {
-        var tmp = new TestTempDirectory();
-        var dcpDir = Path.Combine(tmp.Path, "dcp");
-        var hostDir = Path.Combine(tmp.Path, "host");
-        var ctrlDir = Path.Combine(tmp.Path, "control");
+        var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dcpDir = Path.Combine(workspace.Path, "dcp");
+        var hostDir = Path.Combine(workspace.Path, "host");
+        var ctrlDir = Path.Combine(workspace.Path, "control");
         Directory.CreateDirectory(dcpDir);
         Directory.CreateDirectory(hostDir);
         Directory.CreateDirectory(ctrlDir);
@@ -40,14 +40,14 @@ public class TerminalHostAppTests
             "--control-uds", control,
         ]);
 
-        return (args, tmp, control);
+        return (args, workspace, control);
     }
 
     [Fact]
     public async Task RunAsyncBindsControlListenerWhenStarted()
     {
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -69,8 +69,8 @@ public class TerminalHostAppTests
     [Fact]
     public async Task ControlEndpointReturnsSessionInfo()
     {
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -101,8 +101,8 @@ public class TerminalHostAppTests
     [Fact]
     public async Task ShutdownRequestCausesRunAsyncToReturn()
     {
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -129,8 +129,8 @@ public class TerminalHostAppTests
         // ServeClientAsync had registered into _activeRpcs, ending up with two
         // concurrently-served sessions instead of one. The reservation counter
         // increment must happen synchronously under _gate at the accept site.
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -206,8 +206,8 @@ public class TerminalHostAppTests
     [Fact]
     public async Task SnapshotSessionReportsConfiguredPaths()
     {
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -253,8 +253,8 @@ public class TerminalHostAppTests
             return;
         }
 
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         // Pre-place leftovers exactly as a crashed previous host would have left them.
         File.WriteAllBytes(args.ProducerUdsPath, []);
@@ -297,8 +297,8 @@ public class TerminalHostAppTests
         // same UDS path, with ProducerConnected and RestartCount tracking
         // each cycle. This exercises the path DCP exercises in production
         // when the underlying process exits and gets relaunched.
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -378,8 +378,8 @@ public class TerminalHostAppTests
         // Even before any producer has connected, the snapshot must populate
         // the new fields so older AppHost wire deserialisation never sees a
         // missing-required-property error.
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -415,8 +415,8 @@ public class TerminalHostAppTests
         // minimal HMP1 server never sends Hello.PrimaryPeerId or RoleChange.
         // Without this bridge, the underlying PTY stayed at its DCP-initial
         // dims forever.
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -770,8 +770,8 @@ public class TerminalHostAppTests
             return;
         }
 
-        var (args, tmp, control) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();
@@ -807,8 +807,8 @@ public class TerminalHostAppTests
             return;
         }
 
-        var (args, tmp, _) = BuildArgs();
-        using var disp = tmp;
+        var (args, workspace, _) = BuildArgs();
+        using var disp = workspace;
 
         await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
         using var hostCts = new CancellationTokenSource();

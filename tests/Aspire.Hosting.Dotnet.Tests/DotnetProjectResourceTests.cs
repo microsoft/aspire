@@ -11,7 +11,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Dotnet.Tests;
 
-public class DotnetProjectResourceTests
+public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task AddDotnetProject_ProjectFile_ProducesDotnetRunProjectArgs()
@@ -98,8 +98,8 @@ public class DotnetProjectResourceTests
     [Fact]
     public async Task AddDotnetProject_MaterializesEndpointsFromLaunchProfile()
     {
-        using var tempDir = new TestTempDirectory();
-        var projectDir = Directory.CreateDirectory(Path.Combine(tempDir.Path, "MyService"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDir = Directory.CreateDirectory(Path.Combine(workspace.Path, "MyService"));
         var projectPath = Path.Combine(projectDir.FullName, "MyService.csproj");
         await File.WriteAllTextAsync(projectPath, "<Project />");
 

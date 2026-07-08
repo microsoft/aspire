@@ -5,7 +5,6 @@ using System.Text.Json;
 using Aspire.Cli.Caching;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
-using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Projects;

@@ -173,10 +173,10 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "Only supported on Linux in CI.");
 
-        using var homeDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         var options = new RemoteInvokeOptions();
-        options.StartInfo.Environment["HOME"] = homeDirectory.Path;
-        options.StartInfo.Environment["USERPROFILE"] = homeDirectory.Path;
+        options.StartInfo.Environment["HOME"] = workspace.Path;
+        options.StartInfo.Environment["USERPROFILE"] = workspace.Path;
 
         RemoteExecutor.Invoke(static homePath =>
         {
@@ -197,7 +197,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
             Assert.Equal(certificatePath, cachedCertificatePath);
             Assert.Equal(certificate.ExportCertificatePem(), File.ReadAllText(certificatePath));
             Assert.Equal("cached key", File.ReadAllText(keyPath));
-        }, homeDirectory.Path, options).Dispose();
+        }, workspace.Path, options).Dispose();
     }
 
     private static DirectoryInfo CreateDcpDirectoryWithExecutable(TemporaryWorkspace workspace)

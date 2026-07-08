@@ -3,7 +3,6 @@
 
 using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Agents;
 

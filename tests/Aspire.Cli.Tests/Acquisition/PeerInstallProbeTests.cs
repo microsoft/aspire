@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Acquisition;
-using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Text;

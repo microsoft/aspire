@@ -5,7 +5,6 @@ using System.Reflection;
 using System.Text;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.TestServices;
-using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;

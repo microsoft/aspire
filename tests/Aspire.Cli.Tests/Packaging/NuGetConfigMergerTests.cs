@@ -6,7 +6,6 @@ using System.Xml.Linq;
 using System.Xml;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
-using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Packaging;

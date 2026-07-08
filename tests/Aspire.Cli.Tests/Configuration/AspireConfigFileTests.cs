@@ -3,7 +3,6 @@
 
 using System.Text.Json;
 using Aspire.Cli.Configuration;
-using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Configuration;
 

@@ -5,7 +5,7 @@ using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.Utils;
 
-public class DotNetToolDetectionTests
+public class DotNetToolDetectionTests(ITestOutputHelper outputHelper)
 {
     [Theory]
     [InlineData("/home/test/.dotnet/tools/aspire")]
@@ -24,8 +24,8 @@ public class DotNetToolDetectionTests
     [Fact]
     public void IsRunningAsDotNetTool_ReturnsTrueForCustomToolPathWithSiblingStore()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var toolPath = Path.Combine(tempDirectory.Path, "custom tool path");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var toolPath = Path.Combine(workspace.Path, "custom tool path");
         var processPath = Path.Combine(toolPath, GetAspireExecutableName());
         var storeExecutablePath = Path.Combine(
             toolPath,
@@ -51,8 +51,8 @@ public class DotNetToolDetectionTests
     [Fact]
     public void GetDotNetToolUpdateCommand_ReturnsToolPathCommandForCustomToolStorePath()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var toolPath = Path.Combine(tempDirectory.Path, "custom tool path");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var toolPath = Path.Combine(workspace.Path, "custom tool path");
         var processPath = Path.Combine(
             toolPath,
             ".store",
@@ -79,8 +79,8 @@ public class DotNetToolDetectionTests
     [Fact]
     public void IsRunningAsDotNetTool_ReturnsFalseForCustomToolPathWithoutSiblingStore()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var processPath = Path.Combine(tempDirectory.Path, GetAspireExecutableName());
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var processPath = Path.Combine(workspace.Path, GetAspireExecutableName());
         File.WriteAllText(processPath, string.Empty);
 
         Assert.False(DotNetToolDetection.IsRunningAsDotNetTool(processPath));

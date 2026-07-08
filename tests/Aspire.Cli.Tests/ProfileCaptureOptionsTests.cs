@@ -3,7 +3,6 @@
 
 using Aspire.Cli.Commands;
 using Aspire.Cli.Profiling;
-using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Telemetry;
 using Aspire.Hosting;
 using Aspire.Shared;

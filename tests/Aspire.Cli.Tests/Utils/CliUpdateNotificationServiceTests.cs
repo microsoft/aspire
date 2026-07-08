@@ -257,8 +257,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     public async Task NotifyIfUpdateAvailable_UsesToolPathCommandForCustomToolPath()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var tempDirectory = new TestTempDirectory();
-        var toolPath = Path.Combine(tempDirectory.Path, "custom tool path");
+        var toolPath = Path.Combine(workspace.CreateDirectory("install").FullName, "custom tool path");
         var processPath = CreateCustomToolPathInstall(toolPath);
         TestInteractionService? interactionService = null;
 

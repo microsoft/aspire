@@ -17,7 +17,7 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
+public class AzureAppServiceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task AddContainerAppEnvironmentAddsDeploymentTargetWithContainerAppToProjectResources()
@@ -80,11 +80,11 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task PublishToAppService_WithDashedConnectionStringName_FailsValidationInPipeline()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "validate-appservice-config-env");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "validate-appservice-config-env");
 
-        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton(outputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         builder.AddAzureAppServiceEnvironment("env");
@@ -121,11 +121,11 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task PublishToAppService_WithDashedConnectionStringName_CanBeIgnored()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "validate-appservice-config-env");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "validate-appservice-config-env");
 
-        builder.Services.AddSingleton(testOutputHelper);
+        builder.Services.AddSingleton(outputHelper);
         builder.Services.AddSingleton<IPipelineActivityReporter, TestPipelineActivityReporter>();
 
         builder.AddAzureAppServiceEnvironment("env");
@@ -426,9 +426,9 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task AzureAppServiceEnvironmentCanPublishExistingAppServicePlan()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var nameParameter = builder.AddParameter("appServicePlanName", "existing-plan-name");
         var resourceGroupParameter = builder.AddParameter("appServicePlanResourceGroup", "existing-rg");
@@ -444,15 +444,15 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         await app.RunAsync();
 
-        var mainBicepPath = Path.Combine(tempDir.Path, "main.bicep");
+        var mainBicepPath = Path.Combine(workspace.Path, "main.bicep");
         Assert.True(File.Exists(mainBicepPath), $"Expected publish to produce '{mainBicepPath}'.");
         var mainBicep = await File.ReadAllTextAsync(mainBicepPath);
 
-        var envBicepPath = Path.Combine(tempDir.Path, "env", "env.bicep");
+        var envBicepPath = Path.Combine(workspace.Path, "env", "env.bicep");
         Assert.True(File.Exists(envBicepPath), $"Expected publish to produce '{envBicepPath}'.");
         var envBicep = await File.ReadAllTextAsync(envBicepPath);
 
-        var apiBicepPath = Path.Combine(tempDir.Path, "api", "api.bicep");
+        var apiBicepPath = Path.Combine(workspace.Path, "api", "api.bicep");
         Assert.True(File.Exists(apiBicepPath), $"Expected publish to produce '{apiBicepPath}'.");
         var apiBicep = await File.ReadAllTextAsync(apiBicepPath);
 
@@ -622,9 +622,9 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task MultipleAzureAppServiceEnvironmentsSupported()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "publish-manifest");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "publish-manifest");
 
         var env1 = builder.AddAzureAppServiceEnvironment("env1");
         var env2 = builder.AddAzureAppServiceEnvironment("env2");
@@ -645,16 +645,16 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
         var verifySettings = new VerifySettings();
         verifySettings.ScrubLines(line => line.Contains("\"path\"") && line.Contains(".csproj"));
         await VerifyFile(
-            Path.Combine(tempDir.Path, "aspire-manifest.json"),
+            Path.Combine(workspace.Path, "aspire-manifest.json"),
             verifySettings);
     }
 
     [Fact]
     public async Task ResourceWithProbes()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var env1 = builder.AddAzureAppServiceEnvironment("env");
 

@@ -214,13 +214,13 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     public async Task StopCommand_SingleOutOfScopeAppHostUsesFullPathInMessages()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var outOfScopeWorkspace = TemporaryWorkspace.Create(outputHelper);
+        var outOfScopeDir = workspace.CreateDirectory("out-of-scope");
         var interactionService = new TestInteractionService();
         var statusMessages = new ConcurrentQueue<string>();
         interactionService.ShowStatusCallback = statusMessages.Enqueue;
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        var appHostPath = Path.Combine(outOfScopeWorkspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
+        var appHostPath = Path.Combine(outOfScopeDir.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
         monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath, int.MaxValue - 6, isInScope: false));
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>

@@ -568,8 +568,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_WhenProjectUpdatedSuccessfullyAndRunningAsCustomToolPathDotnetTool_DisplaysToolPathUpdateCommand()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var tempDirectory = new TestTempDirectory();
-        var toolPath = Path.Combine(tempDirectory.Path, "custom tool path");
+        var installDir = workspace.CreateDirectory("install");
+        var toolPath = Path.Combine(installDir.FullName, "custom tool path");
         var processPath = CreateCustomToolPathInstall(toolPath);
         var interactionService = new TestInteractionService()
         {
@@ -1161,8 +1161,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_SelfUpdate_WhenRunningFromNix_DisplaysNixUpdateGuidance()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var tempDirectory = new TestTempDirectory();
-        var processPath = CreateNixInstall(tempDirectory);
+        var installDir = workspace.CreateDirectory("install");
+        var processPath = CreateNixInstall(installDir.FullName);
         var interactionService = new TestInteractionService();
         var downloaderInvoked = false;
 
@@ -1198,8 +1198,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_WhenRunningFromNix_DisplaysNixUpdateGuidanceForSelfUpdateEntryPoints(NixSelfUpdateEntryPoint entryPoint)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var tempDirectory = new TestTempDirectory();
-        var processPath = CreateNixInstall(tempDirectory);
+        var installDir = workspace.CreateDirectory("install");
+        var processPath = CreateNixInstall(installDir.FullName);
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
 
         // Only the TypeScript (BeforeGuestProjectUpdate) case needs a real apphost.ts on disk.
@@ -1324,8 +1324,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     public async Task UpdateCommand_SelfUpdate_WhenRunningAsCustomToolPathDotnetTool_DisplaysToolPathUpdateCommand()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        using var tempDirectory = new TestTempDirectory();
-        var toolPath = Path.Combine(tempDirectory.Path, "custom tool path");
+        var installDir = workspace.CreateDirectory("install");
+        var toolPath = Path.Combine(installDir.FullName, "custom tool path");
         var processPath = CreateCustomToolPathInstall(toolPath);
         var interactionService = new TestInteractionService();
 
@@ -3171,9 +3171,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         return processPath;
     }
 
-    private static string CreateNixInstall(TestTempDirectory tempDirectory)
+    private static string CreateNixInstall(string installPath)
     {
-        var binaryDir = Path.Combine(tempDirectory.Path, "nix", "store", "hash-aspire-cli", "lib", "aspire-cli");
+        var binaryDir = Path.Combine(installPath, "nix", "store", "hash-aspire-cli", "lib", "aspire-cli");
         Directory.CreateDirectory(binaryDir);
 
         var processPath = Path.Combine(binaryDir, GetAspireExecutableName());

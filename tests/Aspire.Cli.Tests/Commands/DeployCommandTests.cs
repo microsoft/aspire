@@ -18,9 +18,9 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandWithHelpArgumentReturnsZero()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -33,10 +33,10 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandFailsWithInvalidProjectFile()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliRunnerFactory = (sp) =>
             {
@@ -65,10 +65,10 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandFailsWhenAppHostIsNotCompatible()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -99,10 +99,10 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandFailsWhenAppHostBuildFails()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -133,10 +133,10 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandSucceedsWithoutOutputPath()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -201,10 +201,10 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandSucceedsEndToEnd()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -270,13 +270,13 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandIncludesDeployFlagInArguments()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Use a cross-platform path for testing
         var testOutputPath = Path.Combine(Path.GetTempPath(), "test");
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 
@@ -341,10 +341,10 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandReturnsNonZeroExitCodeWhenDeploymentFails()
     {
-        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Arrange
-        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
 

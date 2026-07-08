@@ -3,7 +3,6 @@
 
 using System.Text.Json;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;

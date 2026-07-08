@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
@@ -11,9 +11,8 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.DotNet.RemoteExecutor" />
     </ItemGroup>
-
-    <ItemGroup>
-        <ProjectReference Include="..\..\src\Components\Aspire.Azure.AI.Inference\Aspire.Azure.AI.Inference.csproj" />
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Components\Aspire.Azure.AI.Inference\Aspire.Azure.AI.Inference.csproj" />
         <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" />
     </ItemGroup>
 
