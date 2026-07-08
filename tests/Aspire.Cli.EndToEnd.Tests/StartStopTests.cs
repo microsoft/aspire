@@ -92,6 +92,72 @@ public sealed class StartStopTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task StartLaunchesDetachedProcessesOutsideOriginalProcessGroup()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var projectSuffix = Guid.NewGuid().ToString("N")[..6];
+        var projectName = $"DetachedProcessGroup_{projectSuffix}";
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
+
+        await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(projectName)}", counter);
+
+        var assertionScript = Path.Combine(workspace.WorkspaceRoot.FullName, "assert-detached-process-group.py");
+        File.WriteAllText(assertionScript, """
+import json
+import os
+import subprocess
+import sys
+
+with open("/tmp/aspire-start.json", encoding="utf-8") as start_file:
+    start_info = json.load(start_file)
+
+launcher_pgid = os.environ["ASPIRE_E2E_LAUNCHER_PGID"]
+launcher_sid = os.environ["ASPIRE_E2E_LAUNCHER_SID"]
+
+def get_process_group_and_session(pid):
+    output = subprocess.check_output(
+        ["ps", "-o", "pgid=", "-o", "sid=", "-p", str(pid)],
+        text=True)
+    fields = output.split()
+    if len(fields) != 2:
+        raise SystemExit(f"Unexpected ps output for PID {pid}: {output!r}")
+    return fields[0], fields[1]
+
+for name, pid in (("detached CLI", start_info["cliPid"]), ("AppHost", start_info["appHostPid"])):
+    pgid, sid = get_process_group_and_session(pid)
+    print(f"{name} PID {pid}: PGID={pgid} SID={sid}; launcher PGID={launcher_pgid} SID={launcher_sid}")
+    if pgid == launcher_pgid:
+        raise SystemExit(f"{name} PID {pid} is still in the launcher's process group {launcher_pgid}")
+    if sid == launcher_sid:
+        raise SystemExit(f"{name} PID {pid} is still in the launcher's session {launcher_sid}")
+""");
+
+        var containerAssertionScript = CliE2ETestHelpers.ToContainerPath(assertionScript, workspace);
+
+        await auto.RunCommandAsync("export ASPIRE_E2E_LAUNCHER_PGID=$(ps -o pgid= -p $$ | tr -d ' ') ASPIRE_E2E_LAUNCHER_SID=$(ps -o sid= -p $$ | tr -d ' ')", counter);
+        await auto.RunCommandAsync("aspire start --format json > /tmp/aspire-start.json", counter, TimeSpan.FromMinutes(2));
+        await auto.RunCommandAsync($"python3 {AspireCliShellCommandHelpers.QuoteBashArg(containerAssertionScript)}", counter, TimeSpan.FromSeconds(30));
+
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    [Fact]
     public async Task AddPackageWhileAppHostRunningDetached()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

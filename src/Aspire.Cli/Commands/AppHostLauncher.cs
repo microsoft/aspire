@@ -383,15 +383,16 @@ internal sealed class AppHostLauncher(
         {
             try
             {
-                childProcess = detachedProcessLauncher.Start(
+                childProcess = await detachedProcessLauncher.StartAsync(
                     executablePath,
                     childArgs,
                     executionContext.WorkingDirectory.FullName,
                     IsExtensionEnvironmentVariable,
-                    CreateDetachedChildEnvironment(Activity.Current));
+                    CreateDetachedChildEnvironment(Activity.Current),
+                    cancellationToken).ConfigureAwait(false);
                 spawnActivity.SetProcessId(childProcess.Id);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 spawnActivity.SetError(ex.Message);
                 logger.LogError(ex, "Failed to start child CLI process");

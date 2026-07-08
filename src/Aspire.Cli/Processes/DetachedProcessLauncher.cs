@@ -2,29 +2,77 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.Bundles;
+using Aspire.Cli.Layout;
+using Aspire.Shared;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Processes;
 
 internal interface IDetachedProcessLauncher
 {
-    Process Start(
+    Task<Process> StartAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
         Func<string, bool>? shouldRemoveEnvironmentVariable = null,
-        IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null);
+        IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null,
+        CancellationToken cancellationToken = default);
 }
 
-internal sealed class DefaultDetachedProcessLauncher : IDetachedProcessLauncher
+internal sealed class DefaultDetachedProcessLauncher(
+    ILayoutDiscovery layoutDiscovery,
+    IBundleService bundleService,
+    CliExecutionContext executionContext,
+    ILogger<DefaultDetachedProcessLauncher> logger) : IDetachedProcessLauncher
 {
-    public Process Start(
+    public async Task<Process> StartAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
         Func<string, bool>? shouldRemoveEnvironmentVariable = null,
-        IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null)
+        IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null,
+        CancellationToken cancellationToken = default)
     {
-        return DetachedProcessLauncher.Start(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables);
+        if (OperatingSystem.IsWindows())
+        {
+            return await DetachedProcessLauncher.StartAsync(
+                fileName,
+                arguments,
+                workingDirectory,
+                shouldRemoveEnvironmentVariable,
+                additionalEnvironmentVariables,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+
+        using var layoutLease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dcp-fork-process", cancellationToken).ConfigureAwait(false);
+        var dcpDirectory = layoutLease?.Layout.GetDcpPath() ??
+            layoutDiscovery.GetComponentPath(LayoutComponent.Dcp, executionContext.WorkingDirectory.FullName);
+        if (dcpDirectory is null)
+        {
+            throw new InvalidOperationException("Could not find DCP in the Aspire layout.");
+        }
+
+        var dcpPath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
+        if (!File.Exists(dcpPath))
+        {
+            throw new InvalidOperationException($"Could not find DCP executable at '{dcpPath}'.");
+        }
+
+        Dictionary<string, string> effectiveEnvironment = additionalEnvironmentVariables is null
+            ? []
+            : new Dictionary<string, string>(additionalEnvironmentVariables);
+        layoutLease?.AddEnvironment(effectiveEnvironment);
+
+        logger.LogDebug("Launching detached child process through DCP fork-process: {DcpPath}", dcpPath);
+        return await DetachedProcessLauncher.StartAsync(
+            fileName,
+            arguments,
+            workingDirectory,
+            shouldRemoveEnvironmentVariable,
+            effectiveEnvironment,
+            dcpPath,
+            cancellationToken).ConfigureAwait(false);
     }
 }
 
@@ -41,41 +89,21 @@ internal sealed class DefaultDetachedProcessLauncher : IDetachedProcessLauncher
 //    corrupts the parent's terminal — and breaks E2E tests that pattern-match
 //    on the parent's output.
 //
-// 2. No pipe or handle from the parent→child stdio redirection may leak into
-//    the grandchild (AppHost). If it does, callers that wait for the CLI's
-//    stdout to close (e.g. Node.js `execSync`, shell `$(...)` substitution)
-//    will hang until the AppHost exits — which defeats the purpose of --detach.
+// 2. The child CLI must not remain in the parent's process group/session. If it does,
+//    shells and tools that clean up the launcher's process group can also tear down the
+//    detached AppHost process tree.
 //
-// These two constraints conflict when using .NET's Process.Start:
+// These constraints are platform-specific:
 //
-//   • RedirectStandardOutput = true  → solves (1) but violates (2) on Windows,
-//     because .NET calls CreateProcess with bInheritHandles=TRUE, and the pipe
-//     write-handle is duplicated into the child. The child passes it to the
-//     grandchild (AppHost), keeping the pipe alive.
+//   Windows: P/Invoke CreateProcess with CREATE_NEW_CONSOLE, STARTUPINFOEX,
+//   SW_HIDE, and an explicit PROC_THREAD_ATTRIBUTE_HANDLE_LIST. Child
+//   stdout/stderr go to the NUL device and only the NUL handle is inheritable.
 //
-//   • RedirectStandardOutput = false → solves (2) but violates (1), because
-//     the child inherits the parent's console and writes directly to it.
-//
-// The solution is platform-specific:
-//
-// ┌─────────┬────────────────────────────────────────────────────────────────┐
-// │ Windows │ P/Invoke CreateProcess with CREATE_NEW_CONSOLE,               │
-// │         │ STARTUPINFOEX, SW_HIDE, and an explicit                       │
-// │         │ PROC_THREAD_ATTRIBUTE_HANDLE_LIST. This gives the child an    │
-// │         │ independent console lifetime while still letting us set       │
-// │         │ bInheritHandles=TRUE (required to assign hStdOutput to NUL)   │
-// │         │ and restrict inheritance to ONLY the NUL handle — so the      │
-// │         │ grandchild inherits nothing useful. Child stdout/stderr go to │
-// │         │ the NUL device.                                               │
-// │         │                                                               │
-// │ Linux / │ Process.Start with RedirectStandard{Output,Error} = true,     │
-// │ macOS   │ then immediately close the parent's read-end pipe streams.    │
-// │         │ The original pipe fds have O_CLOEXEC, but dup2 onto fd 0/1/2 │
-// │         │ clears it — so grandchildren inherit the pipe as their stdio. │
-// │         │ With no reader, writes produce harmless EPIPE. The critical   │
-// │         │ difference from Windows is that no caller gets stuck waiting  │
-// │         │ on a pipe handle — closing the read-end is sufficient.        │
-// └─────────┴────────────────────────────────────────────────────────────────┘
+//   Linux/macOS: delegate the actual detached child spawn to DCP fork-process.
+//   Current .NET ProcessStartInfo cannot request a fresh Unix session/process group
+//   for the launched process; DCP applies setsid before exec. Keep this shim isolated
+//   so it can be removed once the underlying process-group support is available
+//   through the BCL.
 //
 
 /// <summary>
@@ -93,14 +121,28 @@ internal static partial class DetachedProcessLauncher
     /// <param name="workingDirectory">The working directory for the child process.</param>
     /// <param name="shouldRemoveEnvironmentVariable">Optional predicate that returns <see langword="true" /> for environment variable names that should be removed from the child process.</param>
     /// <param name="additionalEnvironmentVariables">Optional dictionary of environment variables to add to the child process without mutating the parent.</param>
+    /// <param name="dcpPath">The DCP executable path used for Unix detached launches.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A <see cref="Process"/> object representing the launched child.</returns>
-    public static Process Start(string fileName, IReadOnlyList<string> arguments, string workingDirectory, Func<string, bool>? shouldRemoveEnvironmentVariable = null, IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null)
+    public static Task<Process> StartAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        Func<string, bool>? shouldRemoveEnvironmentVariable = null,
+        IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null,
+        string? dcpPath = null,
+        CancellationToken cancellationToken = default)
     {
         if (OperatingSystem.IsWindows())
         {
-            return StartWindows(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables);
+            return Task.FromResult(StartWindows(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables));
         }
 
-        return StartUnix(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables);
+        if (dcpPath is null)
+        {
+            throw new InvalidOperationException("Unix detached process launch requires a DCP executable path.");
+        }
+
+        return StartUnix(dcpPath, fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables, cancellationToken);
     }
 }

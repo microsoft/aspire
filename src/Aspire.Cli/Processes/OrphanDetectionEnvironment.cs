@@ -81,9 +81,11 @@ internal static class OrphanDetectionEnvironment
         // verify with their Process.StartTime-based check, so it MUST stay in whole Unix seconds. 
         // Every other identity's primary key carries the stable millisecond value directly. 
         // We need to use correct units here.
-        var startedValue = isCliParentIdentity
-            ? ProcessStartTimeHelper.TryGetRuntimeProcessStartTimeUnixSeconds(pid)
-            : stableStartTimeUnixMilliseconds;
+        var startedValue = stableStartTimeUnixMilliseconds is null
+            ? null
+            : isCliParentIdentity
+                ? ProcessStartTimeHelper.TryGetRuntimeProcessStartTimeUnixSeconds(pid)
+                : stableStartTimeUnixMilliseconds;
 
         // The start time can be unavailable (target already exited, privileged, etc.); only stamp it
         // when it is known so a stale/empty value never masquerades as a verified identity.

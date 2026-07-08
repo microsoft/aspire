@@ -2,24 +2,27 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 
 namespace Aspire.Cli.Processes;
 
 internal static partial class DetachedProcessLauncher
 {
     /// <summary>
-    /// Unix implementation using Process.Start with stdio redirection.
-    /// On Linux/macOS, the redirect pipes' original fds are created with O_CLOEXEC,
-    /// but dup2 onto fd 0/1/2 clears that flag — so grandchildren DO inherit the pipe
-    /// as their stdio. However, since we close the parent's read-end immediately, the
-    /// pipe has no reader and writes produce EPIPE (harmless). The key difference from
-    /// Windows is that on Unix, only fds 0/1/2 survive exec — no extra handle leakage.
+    /// Unix implementation using DCP's <c>fork-process</c> helper.
     /// </summary>
-    private static Process StartUnix(string fileName, IReadOnlyList<string> arguments, string workingDirectory, Func<string, bool>? shouldRemoveEnvironmentVariable, IReadOnlyDictionary<string, string>? additionalEnvironmentVariables)
+    private static async Task<Process> StartUnix(
+        string dcpPath,
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        Func<string, bool>? shouldRemoveEnvironmentVariable,
+        IReadOnlyDictionary<string, string>? additionalEnvironmentVariables,
+        CancellationToken cancellationToken)
     {
         var startInfo = new ProcessStartInfo
         {
-            FileName = fileName,
+            FileName = dcpPath,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
@@ -28,6 +31,9 @@ internal static partial class DetachedProcessLauncher
             WorkingDirectory = workingDirectory
         };
 
+        startInfo.ArgumentList.Add("fork-process");
+        startInfo.ArgumentList.Add("--");
+        startInfo.ArgumentList.Add(fileName);
         foreach (var arg in arguments)
         {
             startInfo.ArgumentList.Add(arg);
@@ -61,16 +67,35 @@ internal static partial class DetachedProcessLauncher
             }
         }
 
-        var process = Process.Start(startInfo)
-            ?? throw new InvalidOperationException("Failed to start detached process");
+        cancellationToken.ThrowIfCancellationRequested();
 
-        // Close the parent's read-end of the pipes. This means the pipe has no reader,
-        // so if the grandchild (AppHost) writes to inherited stdout/stderr, it gets EPIPE
-        // which is harmless. The important thing is no caller is blocked waiting on the
-        // pipe — unlike Windows where the handle stays open and blocks execSync callers.
-        process.StandardOutput.Close();
-        process.StandardError.Close();
+        using var dcpProcess = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Failed to start DCP fork-process.");
 
-        return process;
+        // Read both streams concurrently so DCP cannot block while reporting a launch error.
+        var stdoutTask = dcpProcess.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        var stderrTask = dcpProcess.StandardError.ReadToEndAsync(CancellationToken.None);
+
+        // Once DCP has started, wait for it to report the detached child PID even if the caller
+        // cancels. Without the PID, AppHostLauncher cannot clean up a child that was already forked.
+        await dcpProcess.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+        var stdout = await stdoutTask.ConfigureAwait(false);
+        var stderr = await stderrTask.ConfigureAwait(false);
+        var dcpOutput = $"stdout: '{stdout.Trim()}', stderr: '{stderr.Trim()}'";
+
+        if (dcpProcess.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"DCP fork-process exited with code {dcpProcess.ExitCode}. {dcpOutput}");
+        }
+
+        var trimmedStdout = stdout.Trim();
+        // DCP fork-process writes only the detached child PID followed by a newline, for example:
+        //   12345
+        if (!int.TryParse(trimmedStdout, NumberStyles.None, CultureInfo.InvariantCulture, out var childPid))
+        {
+            throw new InvalidOperationException($"DCP fork-process did not return a valid child process ID. {dcpOutput}");
+        }
+
+        return Process.GetProcessById(childPid);
     }
 }

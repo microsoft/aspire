@@ -1,13 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Aspire.Cli.Processes;
+using Aspire.Cli.Tests.Utils;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Cli.Tests.Processes;
 
-public class DetachedProcessLauncherTests
+public class DetachedProcessLauncherTests(ITestOutputHelper outputHelper)
 {
     // Regression test for the duplicate-handle bug that broke `aspire start` on Windows:
     // DetachedProcessLauncher.StartWindows points both Stdout and Stderr at the same NUL
@@ -17,18 +20,165 @@ public class DetachedProcessLauncherTests
     // handle list, so this spawn must succeed.
     [Fact]
     [SupportedOSPlatform("windows")]
-    public void Start_OnWindows_WithSharedStdoutStderrHandle_Succeeds()
+    public async Task StartAsync_OnWindows_WithSharedStdoutStderrHandle_Succeeds()
     {
         Assert.SkipUnless(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Windows-only test.");
 
         // A short-lived child is sufficient: we only need CreateProcessW to return successfully.
         // `cmd.exe /c exit 0` returns immediately and never touches stdout/stderr, so any
         // failure mode here is from the spawn primitive, not from the child itself.
-        using var child = DetachedProcessLauncher.Start(
+        using var child = await DetachedProcessLauncher.StartAsync(
             "cmd.exe",
             ["/c", "exit", "0"],
             Environment.CurrentDirectory);
 
         Assert.True(child.Id > 0);
+    }
+
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    [SupportedOSPlatform("macos")]
+    public async Task StartAsync_OnUnix_InvokesDcpForkProcessWithExpectedContext()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only test.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dcpPath = Path.Combine(workspace.WorkspaceRoot.FullName, "fake-dcp");
+        var capturePath = Path.Combine(workspace.WorkspaceRoot.FullName, "capture.txt");
+        await File.WriteAllTextAsync(dcpPath, """
+#!/bin/sh
+if [ "$1" != "fork-process" ]; then
+  exit 42
+fi
+if [ "$2" != "--" ]; then
+  exit 43
+fi
+shift 2
+{
+  printf 'cwd=%s\n' "$PWD"
+  printf 'cmd=%s\n' "$1"
+  printf 'arg1=%s\n' "$2"
+  printf 'arg2=%s\n' "$3"
+  printf 'home=%s\n' "${HOME:-missing}"
+  printf 'added=%s\n' "$ASPIRE_TEST_ADDED"
+} > "$ASPIRE_TEST_CAPTURE"
+sleep 60 >/dev/null 2>&1 </dev/null &
+echo $!
+""");
+        File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        using var child = await DetachedProcessLauncher.StartAsync(
+            "/bin/sh",
+            ["-c", "exit 0"],
+            workspace.WorkspaceRoot.FullName,
+            name => string.Equals(name, "HOME", StringComparison.Ordinal),
+            new Dictionary<string, string>
+            {
+                ["ASPIRE_TEST_ADDED"] = "value",
+                ["ASPIRE_TEST_CAPTURE"] = capturePath
+            },
+            dcpPath: dcpPath,
+            cancellationToken: CancellationToken.None);
+
+        try
+        {
+            Assert.True(child.Id > 0);
+            Assert.Equal([
+                $"cwd={PathNormalizer.ResolveSymlinks(workspace.WorkspaceRoot.FullName)}",
+                "cmd=/bin/sh",
+                "arg1=-c",
+                "arg2=exit 0",
+                "home=missing",
+                "added=value"
+            ], await File.ReadAllLinesAsync(capturePath));
+        }
+        finally
+        {
+            if (!child.HasExited)
+            {
+                child.Kill(entireProcessTree: true);
+                await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            }
+        }
+    }
+
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    [SupportedOSPlatform("macos")]
+    public async Task StartAsync_OnUnix_ReturnsForkedProcessWhenCancelledAfterDcpStarts()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only test.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dcpPath = Path.Combine(workspace.WorkspaceRoot.FullName, "fake-dcp");
+        var startedPath = Path.Combine(workspace.WorkspaceRoot.FullName, "dcp-started.txt");
+        await File.WriteAllTextAsync(dcpPath, """
+#!/bin/sh
+if [ "$1" != "fork-process" ]; then
+  exit 42
+fi
+if [ "$2" != "--" ]; then
+  exit 43
+fi
+printf 'started\n' > "$ASPIRE_TEST_STARTED"
+sleep 1
+sleep 60 >/dev/null 2>&1 </dev/null &
+echo $!
+""");
+        File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        using var cts = new CancellationTokenSource();
+        Process? child = null;
+        var startTask = DetachedProcessLauncher.StartAsync(
+            "/bin/sh",
+            ["-c", "exit 0"],
+            workspace.WorkspaceRoot.FullName,
+            additionalEnvironmentVariables: new Dictionary<string, string>
+            {
+                ["ASPIRE_TEST_STARTED"] = startedPath
+            },
+            dcpPath: dcpPath,
+            cancellationToken: cts.Token);
+
+        try
+        {
+            await WaitForFileAsync(startedPath).WaitAsync(TimeSpan.FromSeconds(5));
+            await cts.CancelAsync();
+
+            child = await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.True(child.Id > 0);
+        }
+        finally
+        {
+            if (child is null)
+            {
+                try
+                {
+                    child = await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+                }
+                catch
+                {
+                    // The assertion failure will report the original problem; this best-effort wait
+                    // only prevents a successfully-forked child from being orphaned by the test.
+                }
+            }
+
+            if (child is { HasExited: false })
+            {
+                child.Kill(entireProcessTree: true);
+                await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            }
+
+            child?.Dispose();
+        }
+    }
+
+    private static async Task WaitForFileAsync(string path)
+    {
+        while (!File.Exists(path))
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(50));
+        }
     }
 }

@@ -451,15 +451,22 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class TestDetachedProcessLauncher(Action onStart) : IDetachedProcessLauncher
     {
-        public Process Start(
+        public Task<Process> StartAsync(
             string fileName,
             IReadOnlyList<string> arguments,
             string workingDirectory,
             Func<string, bool>? shouldRemoveEnvironmentVariable = null,
-            IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null)
+            IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null,
+            CancellationToken cancellationToken = default)
         {
+            _ = arguments;
+            _ = workingDirectory;
+            _ = shouldRemoveEnvironmentVariable;
+            _ = additionalEnvironmentVariables;
+            _ = cancellationToken;
+
             onStart();
-            return new Process { StartInfo = new ProcessStartInfo(fileName) };
+            return Task.FromResult(new Process { StartInfo = new ProcessStartInfo(fileName) });
         }
     }
 

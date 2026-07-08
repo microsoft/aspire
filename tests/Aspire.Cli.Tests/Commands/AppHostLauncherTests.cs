@@ -458,6 +458,28 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LaunchDetachedAsync_TreatsCancellationFromDetachedLauncherAsCancelledStart()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        harness.ProcessLauncher.StartHandler = (_, _, _, _, _, cancellationToken) => throw new OperationCanceledException(cancellationToken);
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: false,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None);
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Empty(harness.InteractionService.DisplayedErrors);
+    }
+
+    [Fact]
     public void DetachedChildEnvironmentFilter_PreservesDebugSessionVariables()
     {
         Assert.True(AppHostLauncher.IsExtensionEnvironmentVariable(KnownConfigNames.ExtensionEndpoint));
@@ -863,6 +885,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public Process? StartedProcess { get; private set; }
 
+        public Func<string, IReadOnlyList<string>, string, Func<string, bool>?, IReadOnlyDictionary<string, string>?, CancellationToken, Task<Process>>? StartHandler { get; set; }
+
         public void StopStartedProcess()
         {
             if (StartedProcess is { HasExited: false })
@@ -872,16 +896,23 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             }
         }
 
-        public Process Start(
+        public Task<Process> StartAsync(
             string fileName,
             IReadOnlyList<string> arguments,
             string workingDirectory,
             Func<string, bool>? shouldRemoveEnvironmentVariable = null,
-            IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null)
+            IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null,
+            CancellationToken cancellationToken = default)
         {
+            if (StartHandler is not null)
+            {
+                return StartHandler(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables, cancellationToken);
+            }
+
             _ = fileName;
             _ = shouldRemoveEnvironmentVariable;
             _ = additionalEnvironmentVariables;
+            _ = cancellationToken;
 
             var childLogFile = GetChildLogFile(arguments);
             if (ChildLogLines.Count > 0)
@@ -891,7 +922,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
             StartedProcess = Process.Start(CreateProcessStartInfo(workingDirectory)) ?? throw new InvalidOperationException("Failed to start test child process.");
             Started.SetResult();
-            return StartedProcess;
+            return Task.FromResult(StartedProcess);
         }
 
         public void Dispose()
