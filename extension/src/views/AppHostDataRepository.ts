@@ -992,7 +992,7 @@ export class AppHostDataRepository {
                             return;
                         }
                         this._describeStreams.delete(appHostPath);
-                        if (!this._appHosts.some(appHost => appHost.appHostPath === appHostPath)) {
+                        if (!this._appHosts.some(appHost => isMatchingAppHostPath(appHost.appHostPath, appHostPath))) {
                             this._attachResourcesToAppHosts();
                             this._onDidChangeData.fire();
                             return;
