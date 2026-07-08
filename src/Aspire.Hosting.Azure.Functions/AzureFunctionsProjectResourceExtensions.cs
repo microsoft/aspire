@@ -223,6 +223,19 @@ public static class AzureFunctionsProjectResourceExtensions
                     var endpoint = resource.GetEndpoint("http");
                     context.EnvironmentVariables["ASPNETCORE_URLS"] = ReferenceExpression.Create($"http://+:{endpoint.Property(EndpointProperty.TargetPort)}");
                 }
+                else if (context.ExecutionContext.IsRunMode)
+                {
+                    var launchProfile = context.Resource.GetEffectiveLaunchProfile()?.LaunchProfile;
+                    if (launchProfile is null)
+                    {
+                        return;
+                    }
+                    foreach (var envVar in launchProfile.EnvironmentVariables)
+                    {
+                        var value = Environment.ExpandEnvironmentVariables(envVar.Value);
+                        context.EnvironmentVariables.TryAdd(envVar.Key, value);
+                    }
+                }
 
                 // Set the storage connection string.
                 ((IResourceWithAzureFunctionsConfig)resource.HostStorage).ApplyAzureFunctionsConfiguration(context.EnvironmentVariables, "AzureWebJobsStorage");
