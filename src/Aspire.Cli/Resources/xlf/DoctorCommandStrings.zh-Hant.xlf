@@ -323,8 +323,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DevelopmentToolsCategoryHeader">
-        <source>Development tools</source>
-        <target state="new">Development tools</target>
+        <source>Development Tools</source>
+        <target state="new">Development Tools</target>
         <note />
       </trans-unit>
       <trans-unit id="EnvironmentCategoryHeader">

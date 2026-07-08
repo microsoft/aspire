@@ -132,7 +132,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Development tools.
+        ///   Looks up a localized string similar to Development Tools.
         /// </summary>
         public static string DevelopmentToolsCategoryHeader {
             get {

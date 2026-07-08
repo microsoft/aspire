@@ -83,7 +83,7 @@
     <value>Environment</value>
   </data>
   <data name="DevelopmentToolsCategoryHeader" xml:space="preserve">
-    <value>Development tools</value>
+    <value>Development Tools</value>
   </data>
   <data name="VsCodeExtensionInstalledMessage" xml:space="preserve">
     <value>Aspire extension for VS Code is installed</value>
