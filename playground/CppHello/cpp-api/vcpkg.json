@@ -1,0 +1,8 @@
+{
+  "dependencies": [
+    {
+      "name": "cpp-httplib",
+      "default-features": false
+    }
+  ]
+}

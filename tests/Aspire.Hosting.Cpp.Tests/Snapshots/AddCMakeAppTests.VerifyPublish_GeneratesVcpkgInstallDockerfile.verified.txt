@@ -1,0 +1,20 @@
+﻿FROM debian:bookworm AS build
+WORKDIR /src
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential cmake ninja-build ca-certificates git curl zip unzip tar pkg-config && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth=1 https://github.com/microsoft/vcpkg /opt/vcpkg && /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+ENV VCPKG_ROOT=/opt/vcpkg
+COPY . .
+RUN --mount=type=cache,target=/src/.aspire/cmake/docker-build \
+    cmake -S . -B /src/.aspire/cmake/docker-build -G Ninja -DCMAKE_BUILD_TYPE='Release' -DCMAKE_RUNTIME_OUTPUT_DIRECTORY=/src/.aspire/cmake/docker-bin -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE=/src/.aspire/cmake/docker-bin -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG=/src/.aspire/cmake/docker-bin -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO=/src/.aspire/cmake/docker-bin -DCMAKE_RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL=/src/.aspire/cmake/docker-bin -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake
+RUN --mount=type=cache,target=/src/.aspire/cmake/docker-build \
+    cmake --build /src/.aspire/cmake/docker-build --config 'Release' --target 'api'
+RUN --mount=type=cache,target=/src/.aspire/cmake/docker-build \
+    cmake --install /src/.aspire/cmake/docker-build --config 'Release' --prefix /src/.aspire/cmake/docker-install
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libstdc++6 && rm -rf /var/lib/apt/lists/*
+RUN groupadd --system --gid 999 app && useradd --system --gid 999 --uid 999 --no-create-home app
+WORKDIR /app
+COPY --from=build /src/.aspire/cmake/docker-install/ /app/
+USER app
+ENTRYPOINT ["/app/bin/api"]
