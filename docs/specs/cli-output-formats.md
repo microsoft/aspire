@@ -458,7 +458,7 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
       "status": "warning",
       "message": "VS Code is installed, but the Aspire extension is not installed",
       "fix": "Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.",
-      "link": "https://marketplace.visualstudio.com/items?itemName=microsoft-aspire.aspire-vscode",
+      "link": "https://aka.ms/aspire/vscode-extension",
       "metadata": {
         "vsCodeInstalled": true,
         "extensionInstalled": false,
@@ -476,7 +476,7 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 
 `status` is one of `pass`, `warning`, or `fail`. Individual checks can include `details`, `fix`, `link`, or command-specific `metadata`.
 
-The `devtools` category surfaces development-tooling recommendations. The `vscode-extension` check only appears when VS Code is detected: it reports `warning` when the [Aspire VS Code extension](https://marketplace.visualstudio.com/items?itemName=microsoft-aspire.aspire-vscode) is missing and `pass` when it is installed. Its `metadata` exposes `vsCodeInstalled` (bool), `extensionInstalled` (bool), and `extensionId` (string).
+The `devtools` category surfaces development-tooling recommendations. The `vscode-extension` check only appears when VS Code is detected: it reports `warning` when the [Aspire VS Code extension](https://aka.ms/aspire/vscode-extension) is missing and `pass` when it is installed. Its `metadata` exposes `vsCodeInstalled` (bool), `extensionInstalled` (bool), and `extensionId` (string).
 
 ### `aspire config info`
 

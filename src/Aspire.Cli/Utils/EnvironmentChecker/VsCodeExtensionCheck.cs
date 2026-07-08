@@ -23,9 +23,10 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
     internal const string ExtensionId = "microsoft-aspire.aspire-vscode";
 
     /// <summary>
-    /// The marketplace URL used as the fix link when the extension is missing.
+    /// The marketplace URL used as the fix link when the extension is missing. This is an aka.ms
+    /// redirect so the ultimate destination can be updated without shipping a new CLI build.
     /// </summary>
-    internal const string MarketplaceUrl = "https://marketplace.visualstudio.com/items?itemName=microsoft-aspire.aspire-vscode";
+    internal const string MarketplaceUrl = "https://aka.ms/aspire/vscode-extension";
 
     private readonly IEnvironment _environment;
     private readonly CliExecutionContext _executionContext;
@@ -64,21 +65,36 @@ internal sealed class VsCodeExtensionCheck : IEnvironmentCheck
             return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>([]);
         }
 
-        var extensionInstalled = detection.ExtensionInstalled;
-        var result = new EnvironmentCheckResult
+        var metadata = BuildMetadata(detection);
+
+        // The Aspire extension is installed: report a clean pass with no fix or link.
+        if (detection.ExtensionInstalled)
+        {
+            var pass = new EnvironmentCheckResult
+            {
+                Category = EnvironmentCheckCategories.DevelopmentTools,
+                Name = CheckName,
+                Status = EnvironmentCheckStatus.Pass,
+                Message = DoctorCommandStrings.VsCodeExtensionInstalledMessage,
+                Metadata = metadata
+            };
+
+            return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>([pass]);
+        }
+
+        // VS Code is present but the extension is missing: warn and point at the marketplace.
+        var warning = new EnvironmentCheckResult
         {
             Category = EnvironmentCheckCategories.DevelopmentTools,
             Name = CheckName,
-            Status = extensionInstalled ? EnvironmentCheckStatus.Pass : EnvironmentCheckStatus.Warning,
-            Message = extensionInstalled
-                ? DoctorCommandStrings.VsCodeExtensionInstalledMessage
-                : DoctorCommandStrings.VsCodeExtensionMissingMessage,
-            Fix = extensionInstalled ? null : DoctorCommandStrings.VsCodeExtensionMissingFix,
-            Link = extensionInstalled ? null : MarketplaceUrl,
-            Metadata = BuildMetadata(detection)
+            Status = EnvironmentCheckStatus.Warning,
+            Message = DoctorCommandStrings.VsCodeExtensionMissingMessage,
+            Fix = DoctorCommandStrings.VsCodeExtensionMissingFix,
+            Link = MarketplaceUrl,
+            Metadata = metadata
         };
 
-        return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>([result]);
+        return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>([warning]);
     }
 
     internal static VsCodeExtensionDetection Detect(IEnvironment environment, DirectoryInfo homeDirectory)
