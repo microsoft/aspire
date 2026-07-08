@@ -15,10 +15,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Using Include="Aspire.Tests.Utils" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.TerminalHost\Aspire.TerminalHost.csproj" />
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
   </ItemGroup>
@@ -35,7 +31,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" Link="shared/AsyncTestHelpers.cs" />
-    <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
   </ItemGroup>
 
 </Project>
