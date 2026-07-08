@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import { ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isFileBasedApp } from './languages/dotnet';
-import { stripComments } from 'jsonc-parser';
+import { stripComments, parseTree, findNodeAtLocation } from 'jsonc-parser';
 import { aspireConfigFileName, AspireConfigProfile } from '../utils/cliTypes';
 
 /*
@@ -43,20 +43,76 @@ export function expandEnvironmentVariables(value: string): string {
 }
 
 /**
- * Well-known launch profile command names (lowercased for case-insensitive comparison).
+ * Well-known launch profile command names, using the exact casing the .NET SDK uses.
+ *
+ * The SDK's provider table (`LaunchSettings.s_providers`) is an ordinal, case-sensitive dictionary keyed
+ * by these exact strings, so command-name comparisons must match that casing rather than lowercasing.
+ * A profile such as `commandName: "executable"` is therefore NOT a supported provider and `dotnet run` /
+ * `dotnet run-api` skips it. See
+ * https://github.com/dotnet/sdk/blob/main/src/Microsoft.DotNet.ProjectTools/LaunchSettings/LaunchSettings.cs
  */
 export const LaunchProfileCommandName = {
-    project: 'project',
-    executable: 'executable',
+    project: 'Project',
+    executable: 'Executable',
 } as const;
+
+// Command names that `dotnet run` / `dotnet run-api` recognize when picking the *default* launch profile.
+// The SDK selects the first profile whose commandName maps to a supported provider, and its provider table
+// currently contains both 'Project' and 'Executable'. Keep this in sync with the SDK's provider table:
+// https://github.com/dotnet/sdk/blob/main/src/Microsoft.DotNet.ProjectTools/LaunchSettings/LaunchSettings.cs
+const defaultLaunchProfileCommandNames: ReadonlySet<string> = new Set([
+    LaunchProfileCommandName.project,
+    LaunchProfileCommandName.executable,
+]);
 
 export interface LaunchSettings {
     profiles: { [key: string]: LaunchProfile };
+    // The profile names in launchSettings.json *source order*. JavaScript objects enumerate
+    // integer-like keys (e.g. "10", "2") in ascending numeric order rather than insertion order, so
+    // `Object.keys(profiles)` cannot be trusted to reflect the order profiles appear in the file. The
+    // .NET SDK selects the default launch profile using `JsonElement.EnumerateObject()`, which walks
+    // the file in source order, so we must preserve that order here to pick the same default profile.
+    // Populated by readLaunchSettings; may be absent for LaunchSettings constructed by other means.
+    profileOrder?: readonly string[];
 }
 
 export interface LaunchProfileResult {
     profile: LaunchProfile | null;
     profileName: string | null;
+}
+
+/**
+ * Extracts the profile names from launchSettings.json (or aspire.config.json) content in *source
+ * order* using a JSONC syntax tree, rather than relying on parsed-object key enumeration.
+ *
+ * This is necessary because integer-like profile names (e.g. "10", "2") are reordered by JavaScript
+ * object key enumeration (numeric keys first, in ascending order), which does not match the file
+ * order the .NET SDK uses when selecting the default launch profile. Walking the parse tree preserves
+ * the exact order the properties appear in the file.
+ *
+ * Returns undefined when the content has no `profiles` object so callers can fall back to key order.
+ */
+function extractProfileOrder(content: string): string[] | undefined {
+    const root = parseTree(content);
+    if (!root) {
+        return undefined;
+    }
+
+    const profilesNode = findNodeAtLocation(root, ['profiles']);
+    if (profilesNode?.type !== 'object' || !profilesNode.children) {
+        return undefined;
+    }
+
+    const order: string[] = [];
+    for (const propertyNode of profilesNode.children) {
+        // Each object member is a 'property' node whose first child is the key (a string node).
+        const keyNode = propertyNode.children?.[0];
+        if (typeof keyNode?.value === 'string') {
+            order.push(keyNode.value);
+        }
+    }
+
+    return order;
 }
 
 /**
@@ -79,6 +135,8 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
             // We need to strip comments from the JSON file before parsing
             content = stripComments(content);
             const launchSettings = JSON.parse(content) as LaunchSettings;
+            // Capture the profile order from the file so the default-profile selection matches the SDK.
+            launchSettings.profileOrder = extractProfileOrder(content);
 
             extensionLogOutputChannel.debug(`Successfully read launch settings from: ${launchSettingsPath}`);
             return launchSettings;
@@ -106,7 +164,7 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
                 }
 
                 extensionLogOutputChannel.debug(`Successfully read launch profiles from: ${aspireConfigPath}`);
-                return { profiles };
+                return { profiles, profileOrder: extractProfileOrder(content) };
             }
         }
 
@@ -149,17 +207,51 @@ export function determineBaseLaunchProfile(
         }
     }
 
-    // If launch_profile is absent, choose the first one with commandName='Project'
-    for (const [name, profile] of Object.entries(launchSettings.profiles)) {
-        if (profile.commandName?.toLowerCase() === LaunchProfileCommandName.project) {
-            extensionLogOutputChannel.debug(`Using default launch profile: ${name}`);
-            return { profile, profileName: name };
-        }
+    // If launch_profile is absent, fall back to the profile that `dotnet run` applies by default.
+    const defaultProfile = determineDefaultLaunchProfile(launchSettings);
+    if (defaultProfile.profile) {
+        extensionLogOutputChannel.debug(`Using default launch profile: ${defaultProfile.profileName}`);
+        return defaultProfile;
     }
 
     // TODO: If launch_profile is absent, check for a ServiceDefaults project in the workspace
     // and look for a launch profile with that ServiceDefaults project name in the current project's launch settings
     extensionLogOutputChannel.debug('No base launch profile determined');
+    return { profile: null, profileName: null };
+}
+
+/**
+ * Determines the launch profile that `dotnet run` / `dotnet run-api` applies by default: the first
+ * profile whose commandName maps to a supported provider (currently 'Project' or 'Executable').
+ *
+ * This is NOT necessarily the first 'Project' profile. The SDK picks the first *supported* profile, so an
+ * 'Executable' profile that appears earlier wins over a later 'Project' profile. See
+ * {@link defaultLaunchProfileCommandNames}.
+ *
+ * `dotnet run-api` always applies this default profile because the extension invokes it without
+ * selecting a profile, so run-api applies it regardless of which profile the extension itself resolves
+ * via {@link determineBaseLaunchProfile} (or of `disable_launch_profile`). Callers use it to recognize
+ * environment values that run-api copied from that default profile.
+ */
+export function determineDefaultLaunchProfile(launchSettings: LaunchSettings | null): LaunchProfileResult {
+    if (!launchSettings?.profiles) {
+        return { profile: null, profileName: null };
+    }
+
+    // Enumerate profiles in file source order to match the SDK's `JsonElement.EnumerateObject()`.
+    // profileOrder (populated by readLaunchSettings) preserves that order even for integer-like
+    // profile names; fall back to Object.keys for LaunchSettings constructed without it.
+    const profileNames = launchSettings.profileOrder ?? Object.keys(launchSettings.profiles);
+
+    for (const name of profileNames) {
+        const profile = launchSettings.profiles[name];
+        // Match the SDK's exact, case-sensitive provider lookup: a profile whose commandName differs only
+        // in casing (e.g. "executable") is not a supported provider, so `dotnet run-api` would skip it too.
+        if (profile?.commandName && defaultLaunchProfileCommandNames.has(profile.commandName)) {
+            return { profile, profileName: name };
+        }
+    }
+
     return { profile: null, profileName: null };
 }
 
