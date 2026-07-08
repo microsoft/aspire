@@ -40,3 +40,9 @@ This pipeline:
 ## Template Structure
 
 The public pipelines (`azure-pipelines-public.yml` and `azdo-tests.yml`) use a shared template (`templates/public-pipeline-template.yml`) to avoid code duplication while maintaining the same functionality.
+
+## Build-result notifications
+
+`azure-pipelines.yml` files a GitHub issue on microsoft/aspire when the
+internal build breaks on `main` or `release/*`, and closes it when the
+next build is green. See [docs/ci/internal-build-failure-notifications.md](../../docs/ci/internal-build-failure-notifications.md).
