@@ -52,28 +52,6 @@ document.addEventListener("click", function (e) {
     }
 });
 
-document.addEventListener("keyup", function (e) {
-    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || (e.key !== "Enter" && e.code !== "Enter" && e.code !== "NumpadEnter")) {
-        return;
-    }
-
-    const targetElement = getFluentMenuItemForTarget(e.target);
-    if (!targetElement || targetElement.getAttribute("aria-disabled") === "true" || targetElement.hasAttribute("disabled")) {
-        return;
-    }
-
-    const menu = targetElement.closest("fluent-menu");
-    if (!menu || !menu.closest(".aspire-menu-container") || (menu.open === false && !menu.hasAttribute("open"))) {
-        return;
-    }
-
-    // FluentUI 4.14.1 wires an internal keydown handler for Enter on fluent-menu-item,
-    // but standalone FluentMenu items do not invoke the Blazor OnClick callback.
-    // Reuse the working click path and only run while the Aspire menu is still open.
-    targetElement.click();
-    e.preventDefault();
-});
-
 let isScrolledToContent = false;
 let lastScrollHeight = null;
 
