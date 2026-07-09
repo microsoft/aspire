@@ -59,10 +59,17 @@ internal sealed class AppHostCleanupLauncher(
         logger.LogDebug("Starting AppHost resource cleanup mode for {AppHostPath}", appHostFile.FullName);
         var pendingRun = project.RunAsync(context, runCancellationTokenSource.Token);
 
+        var buildTask = buildCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), timeProvider, cancellationToken);
+        if (await Task.WhenAny(buildTask, pendingRun).ConfigureAwait(false) == pendingRun)
+        {
+            ObserveFaults(buildTask);
+            return await pendingRun.ConfigureAwait(false);
+        }
+
         bool buildSuccess;
         try
         {
-            buildSuccess = await buildCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), timeProvider, cancellationToken).ConfigureAwait(false);
+            buildSuccess = await buildTask.ConfigureAwait(false);
         }
         catch (TimeoutException)
         {

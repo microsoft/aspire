@@ -117,6 +117,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string CouldNotDetermineAppHostPath {
+            get {
+                return ResourceManager.GetString("CouldNotDetermineAppHostPath", resourceCulture);
+            }
+        }
+
         public static string ForceCleanupUnsupportedWarning {
             get {
                 return ResourceManager.GetString("ForceCleanupUnsupportedWarning", resourceCulture);

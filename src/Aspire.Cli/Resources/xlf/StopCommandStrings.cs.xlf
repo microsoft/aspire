@@ -17,6 +17,11 @@
         <target state="new">{0} stopped successfully.</target>
         <note />
       </trans-unit>
+      <trans-unit id="CouldNotDetermineAppHostPath">
+        <source>Could not determine the AppHost project path.</source>
+        <target state="new">Could not determine the AppHost project path.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
         <source>Stop a running AppHost</source>
         <target state="needs-review-translation">Zastavte spuštěného hostitele aplikací Aspire.</target>

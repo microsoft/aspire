@@ -427,6 +427,74 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopCommand_ForceReturnsCleanupRunExitCodeWhenAppHostExitsBeforeBuildCompletes()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        const int expectedExitCode = 123;
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            GetAspireHostingVersionAsyncCallback = (_, _) => Task.FromResult<string?>("13.5.0"),
+            RunAsyncCallback = (_, _) => Task.FromResult(expectedExitCode)
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(expectedExitCode, exitCode);
+        Assert.Equal(0, interactionService.DisplayedErrors.Count(error => error.Contains("Timed out waiting", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task StopCommand_ForceReportsUnknownAppHostPathAfterNormalStop()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            AppHostInfo = null,
+            IsInScope = true
+        };
+        monitor.AddConnection("hash1", connection.SocketPath, connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop --force");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+        Assert.Contains(StopCommandStrings.CouldNotDetermineAppHostPath, interactionService.DisplayedErrors);
+    }
+
+    [Fact]
     public async Task StopCommand_ForceReportsCleanupShutdownTimeoutSeparately()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
