@@ -24,7 +24,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartCommand_Help_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -39,7 +39,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartCommand_Help_ShowsStartDebugSessionOptionInExtensionContext()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DisableAnsi = true;
@@ -61,7 +61,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartCommand_AcceptsNoBuildOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -75,7 +75,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartCommand_AcceptsFormatOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -89,7 +89,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartCommand_AcceptsIsolatedOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -103,7 +103,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartCommand_RejectsInvalidStartupTimeoutEnvironmentVariable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -129,7 +129,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void StartCommand_ForwardsUnmatchedTokensToAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -144,7 +144,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartCommand_WhenMultipleProjectFilesFound_NonInteractive_ReturnsNonZeroExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create two real apphost project files in the workspace
         var appHost1Dir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost1");
@@ -175,7 +175,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartCommand_WhenMultipleProjectFilesFound_JsonFormat_ReturnsNonZeroExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create two real apphost project files in the workspace
         var appHost1Dir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost1");
@@ -205,7 +205,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartCommand_LaunchFailure_DisplaysBothLogPaths()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         // Create a fake .csproj file so the path exists on disk for the process launcher.
@@ -259,7 +259,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartCommand_WhenRunningInExtensionWithoutDebugSession_StartsVsCodeRunSession()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateAppHostFile(workspace);
 
         string? workingDirectory = null;
@@ -316,7 +316,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartCommand_WhenRunningInExtensionWithStartDebugSession_StartsVsCodeDebugSession()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateAppHostFile(workspace);
 
         bool? debug = null;
@@ -360,7 +360,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StartCommand_WhenRunningInExtensionWithDebugSession_DoesNotStartVsCodeRunSession()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateAppHostFile(workspace);
         var startDebugSessionCalled = false;
         var detachedLauncherCalled = false;
@@ -403,7 +403,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     [InlineData("start --format json --apphost {0}")]
     public async Task StartCommand_WhenRunningInExtensionWithDetachedOnlyOption_DoesNotStartVsCodeRunSession(string commandTemplate)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateAppHostFile(workspace);
         var startDebugSessionCalled = false;
         var detachedLauncherCalled = false;

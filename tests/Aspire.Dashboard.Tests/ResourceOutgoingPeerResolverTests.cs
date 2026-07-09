@@ -418,7 +418,7 @@ public class ResourceOutgoingPeerResolverTests
         public bool IsEnabled => true;
         public Task WhenConnected => Task.CompletedTask;
         public string ApplicationName => "ApplicationName";
-        public bool IsDashboardVersionSupported => true;
+        public string? MinRequiredVersion => null;
         public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
 #pragma warning disable CS0067 // Event is never used - required by interface
         public event Action<DashboardConnectionState>? ConnectionStateChanged;

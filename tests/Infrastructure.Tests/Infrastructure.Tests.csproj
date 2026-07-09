@@ -18,6 +18,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="Aspire.Tests.Utils" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Roslyn for compiling mock test assemblies -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
     <PackageReference Include="Microsoft.Extensions.FileSystemGlobbing" />
@@ -31,9 +35,8 @@
     <ProjectReference Include="..\..\tools\TypeScriptApiCompat\TypeScriptApiCompat.csproj" />
     <ProjectReference Include="..\..\tools\SelectTests\SelectTests.csproj" />
   </ItemGroup>
-
   <ItemGroup>
-    <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared/TempDirectory.cs" />
+    <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
   </ItemGroup>
 
   <ItemGroup>

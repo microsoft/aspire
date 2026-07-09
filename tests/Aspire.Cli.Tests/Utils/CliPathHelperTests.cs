@@ -13,7 +13,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreateGuestAppHostSocketPath_UsesRandomizedIdentifier()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var socketPath1 = CliPathHelper.CreateGuestAppHostSocketPath("apphost.sock");
         var socketPath2 = CliPathHelper.CreateGuestAppHostSocketPath("apphost.sock");
@@ -40,7 +40,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreateUnixDomainSocketPath_UsesRandomizedIdentifier()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var socketPath1 = CliPathHelper.CreateUnixDomainSocketPath("apphost.sock");
         var socketPath2 = CliPathHelper.CreateUnixDomainSocketPath("apphost.sock");
@@ -147,7 +147,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [InlineData("localhive")]
     public void TryGetAspireHomeDirectoryFromInstallRoute_SharedPrefixRoute_ReturnsInstallPrefix(string source)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire");
         var binDir = Path.Combine(installPrefix, "bin");
         var binaryPath = WriteBinaryWithSidecar(binDir, source);
@@ -160,7 +160,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryGetAspireHomeDirectoryFromInstallRoute_PrRoute_ReturnsOuterInstallPrefix()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-pr-test");
         var binDir = Path.Combine(installPrefix, "dogfood", "pr-17159", "bin");
         var binaryPath = WriteBinaryWithSidecar(binDir, "pr");
@@ -178,7 +178,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [InlineData("unknown")]
     public void TryGetAspireHomeDirectoryFromInstallRoute_PackageManagerOrUnknownRoute_ReturnsNull(string source)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var binaryPath = WriteBinaryWithSidecar(workspace.WorkspaceRoot.FullName, source);
 
         var result = CliPathHelper.TryGetAspireHomeDirectoryFromInstallRoute(binaryPath);
@@ -189,7 +189,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetAspireHomeDirectory_PrRoute_UsesOuterInstallPrefix()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "portable");
         var binDir = Path.Combine(installPrefix, "dogfood", "pr-17159", "bin");
         var binaryPath = WriteBinaryWithSidecar(binDir, "pr");
@@ -250,7 +250,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [SkipOnPlatform(TestPlatforms.Windows, "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.")]
     public void ResolveSymlinkHelpers_Link_ReturnsTarget()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var target = Path.Combine(workspace.WorkspaceRoot.FullName, "target-aspire");
         File.WriteAllText(target, string.Empty);
 
@@ -321,7 +321,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [SkipOnPlatform(TestPlatforms.Windows | TestPlatforms.Linux, "Firmlink stripping in resolve helpers only applies on macOS.")]
     public void ResolveSymlinkToFullPath_OnMacOS_StripsFirmlinkPrefix()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         // Place a real file under the workspace (which sits on /var/folders on macOS),
         // then construct the firmlinked-form input by prepending /private. Both forms
         // resolve to the same physical file at the kernel level, so File.Exists
@@ -341,7 +341,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [SkipOnPlatform(TestPlatforms.Windows | TestPlatforms.Linux, "Firmlink stripping in resolve helpers only applies on macOS.")]
     public void ResolveSymlinkOrOriginalPath_OnMacOS_StripsFirmlinkPrefix()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var realPath = Path.Combine(workspace.WorkspaceRoot.FullName, "binary-under-test");
         File.WriteAllText(realPath, string.Empty);
 
@@ -361,7 +361,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
         // inherits the /private/ form and lands in nuget.config in a shape NuGet's packageSourceMapping
         // lookup silently drops. The fix lives in the resolve helpers; this test pins the propagation
         // so a future refactor doesn't reintroduce the asymmetry.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "portable");
         var binDir = Path.Combine(installPrefix, "dogfood", "pr-17105", "bin");
         var binaryPath = WriteBinaryWithSidecar(binDir, "pr");

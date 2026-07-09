@@ -856,6 +856,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Exceeds the maximum size of {0}.
+        /// </summary>
+        public static string InteractionFileExceedsMaxSize {
+            get {
+                return ResourceManager.GetString("InteractionFileExceedsMaxSize", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Choose a file.
         /// </summary>
         public static string InteractionFilePlaceholder {
@@ -874,23 +883,14 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Dashboard Update Required.
+        ///   Looks up a localized string similar to Upload failed.
         /// </summary>
-        public static string InteractionUnsupportedVersionTitle {
+        public static string InteractionFileUploadFailed {
             get {
-                return ResourceManager.GetString("InteractionUnsupportedVersionTitle", resourceCulture);
+                return ResourceManager.GetString("InteractionFileUploadFailed", resourceCulture);
             }
         }
 
-        /// <summary>
-        ///   Looks up a localized string similar to This action requires a newer version of the Aspire dashboard. Please update your Aspire tools to use this feature..
-        /// </summary>
-        public static string InteractionUnsupportedVersionMessage {
-            get {
-                return ResourceManager.GetString("InteractionUnsupportedVersionMessage", resourceCulture);
-            }
-        }
-        
         /// <summary>
         ///   Looks up a localized string similar to OK.
         /// </summary>

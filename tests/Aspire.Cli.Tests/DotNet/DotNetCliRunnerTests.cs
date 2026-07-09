@@ -41,7 +41,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DotNetCliCorrectlyAppliesNoLaunchProfileArgumentWhenSpecifiedInOptions()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -81,7 +81,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAppHostCommandAsyncUsesNativeCommandWithoutRunDelimiter()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         var appHostCommand = Path.Combine(workspace.WorkspaceRoot.FullName, "bin", "Debug", "net10.0", "AppHost");
         var runWorkingDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "run-cwd"));
@@ -123,7 +123,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAppHostCommandAsyncResolvesDotnetMuxerCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         var appHostAssembly = Path.Combine(workspace.WorkspaceRoot.FullName, "bin", "Debug", "net10.0", "AppHost.dll");
         var runWorkingDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "run-cwd"));
@@ -164,7 +164,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BuildAsyncDoesNotInjectDotnetCliUseMsBuildServerEnvironmentVariable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -192,7 +192,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BuildAsyncPassesCurrentAspireCliPathToMSBuild()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -225,7 +225,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ShouldForwardProcessPathAsAspireCliPathRejectsUnbundledFrameworkDependentCliBuild()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "artifacts", "bin", "Aspire.Cli", "Debug", "net10.0"));
         var cliPath = Path.Combine(cliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
         File.WriteAllText(cliPath, string.Empty);
@@ -238,7 +238,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [SkipOnPlatform(TestPlatforms.Windows, "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.")]
     public void ShouldForwardProcessPathAsAspireCliPathRejectsSymlinkToUnbundledFrameworkDependentCliBuild()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "artifacts", "bin", "Aspire.Cli", "Debug", "net10.0"));
         var cliPath = Path.Combine(cliDirectory.FullName, "aspire");
         File.WriteAllText(cliPath, string.Empty);
@@ -254,7 +254,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ShouldForwardProcessPathAsAspireCliPathRejectsDotNetMuxerPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dotnetDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "dotnet"));
         var dotnetPath = Path.Combine(dotnetDirectory.FullName, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
         File.WriteAllText(dotnetPath, string.Empty);
@@ -265,7 +265,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ShouldForwardProcessPathAsAspireCliPathAllowsFrameworkDependentCliWithInstallSidecar()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "bin"));
         var cliPath = Path.Combine(cliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
         File.WriteAllText(cliPath, string.Empty);
@@ -278,7 +278,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ShouldForwardProcessPathAsAspireCliPathAllowsAdjacentBundleLayout()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "bin"));
         var cliPath = Path.Combine(cliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
         File.WriteAllText(cliPath, string.Empty);
@@ -294,7 +294,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestoreAsyncRunsDotnetRestoreCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -322,7 +322,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BuildAsyncDoesNotInjectConfiguredDotnetCliUseMsBuildServer()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -359,7 +359,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BuildAsyncIncludesNoRestoreFlagWhenNoRestoreIsTrue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -388,7 +388,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BuildAsyncDoesNotIncludeNoRestoreFlagWhenNoRestoreIsFalse()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -417,7 +417,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task BuildAsyncAddsBinlogWhenBinlogDirectoryIsConfigured()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -458,7 +458,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewProjectAsyncDoesNotAddBinlogWhenBinlogDirectoryIsConfigured()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -490,7 +490,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncDoesNotInjectDotnetCliUseMsBuildServerWhenNoBuildIsFalse()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -527,7 +527,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncDoesNotInjectDotnetCliUseMsBuildServerWhenNoBuildIsTrue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -568,7 +568,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncPreservesExistingEnvironmentVariables()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -613,7 +613,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncPropagatesProcessProfilingContextToChildEnvironment()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -668,7 +668,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     {
         const string sessionId = "backchannel-parent-session";
         var startedActivities = new ConcurrentQueue<Activity>();
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -733,7 +733,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewProjectAsyncReturnsExitCode73WhenProjectAlreadyExists()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -765,7 +765,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncSetsVersionCheckDisabledWhenUpdateNotificationsFeatureIsDisabled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -805,7 +805,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncDoesNotSetVersionCheckDisabledWhenUpdateNotificationsFeatureIsEnabled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -847,7 +847,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncDoesNotOverrideUserProvidedVersionCheckDisabledValue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -894,7 +894,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncKeepsExtensionLaunchedAppHostAliveUntilBackchannelDisconnects()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -957,7 +957,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncFailsBackchannelWhenExtensionLaunchedAppHostDoesNotConnectBeforeTimeout()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -1044,7 +1044,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncFailsBackchannelWhenAppHostExitsWithSuccessBeforeBackchannelConnects()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -1086,7 +1086,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncFailsBackchannelWithExitCodeWhenAppHostExitsUnexpectedlyBeforeBackchannelConnects()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -1128,7 +1128,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddPackageAsyncUseFilesSwitchForSingleFileAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
         await File.WriteAllTextAsync(appHostFile.FullName, "// Single-file AppHost");
 
@@ -1181,7 +1181,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddPackageAsyncUsesPositionalArgumentForCsprojFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "<Project></Project>");
 
@@ -1248,7 +1248,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddPackageAsyncUsesPositionalArgumentForCsprojFileWithNoRestore()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "<Project></Project>");
 
@@ -1314,7 +1314,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddPackageAsyncWithSourceAndNoRestoreHasArgumentSourceAndNoRestore()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "<Project></Project>");
 
@@ -1385,7 +1385,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetSolutionProjectsAsync_ParsesOutputCorrectly()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create a fake solution file
         var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
@@ -1433,7 +1433,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddProjectReferenceAsync_ExecutesCorrectCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
@@ -1467,7 +1467,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncAppliesNoLaunchProfileForSingleFileAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
         await File.WriteAllTextAsync(appHostFile.FullName, "// Single-file AppHost");
 
@@ -1514,7 +1514,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncDoesNotIncludeNoLaunchProfileForSingleFileAppHostWhenNotSpecified()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
         await File.WriteAllTextAsync(appHostFile.FullName, "// Single-file AppHost");
 
@@ -1560,7 +1560,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncSuppressesCliRunHookForProjectAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -1597,7 +1597,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncSuppressesCliRunHookForSingleFileAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
         await File.WriteAllTextAsync(appHostFile.FullName, "// Single-file AppHost");
 
@@ -1634,7 +1634,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncDoesNotIncludeNoBuildFlagForSingleFileAppHostWhenNoBuildIsTrue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
         await File.WriteAllTextAsync(appHostFile.FullName, "// Single-file AppHost");
 
@@ -1675,7 +1675,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncFiltersOutEmptyAndWhitespaceArguments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -1720,7 +1720,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncFiltersOutEmptyArgumentsForSingleFileAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
         await File.WriteAllTextAsync(appHostFile.FullName, "// Single-file AppHost");
 
@@ -1772,7 +1772,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncIncludesAllNonEmptyFlagsWhenEnabled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -1821,7 +1821,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncCorrectlyHandlesWatchWithoutDebug()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -1869,7 +1869,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetProjectItemsAndPropertiesAsync_UsesBuild_ForSingleFileAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
         await File.WriteAllTextAsync(appHostFile.FullName, "// Single-file AppHost");
 
@@ -1906,7 +1906,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetProjectItemsAndPropertiesAsyncSuppressesCliRunHook()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -1941,7 +1941,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostInformationAsync_UsesAspireHostingAppHostPackageVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -1984,7 +1984,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostInformationAsync_UsesAspireHostingAppHostCentralPackageVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -2026,7 +2026,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetProjectItemsAndPropertiesAsync_UsesMsBuild_ForCsProjFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -2066,7 +2066,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetProjectItemsAndPropertiesAsync_EmitsTargetSwitch_WhenTargetsRequested()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -2105,7 +2105,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ComputeRunArgumentsPopulatesRunPropertiesForSdkProject()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "RunPropertiesApp"));
         var projectFile = new FileInfo(Path.Combine(projectDirectory.FullName, "RunPropertiesApp.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, """
@@ -2151,7 +2151,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetProjectItemsAndPropertiesAsync_OmitsTargetSwitch_WhenNoTargetsRequested()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -2187,7 +2187,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SearchPackagesAsyncRetriesOnFailureAndSucceedsOnSecondAttempt()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -2234,7 +2234,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SearchPackagesAsyncRetriesMaxTimesAndReturnsFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -2276,7 +2276,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SearchPackagesAsyncSucceedsOnFirstAttemptWithoutRetry()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -2318,7 +2318,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SearchPackagesAsync_WithExactMatch_UsesExactMatchFlagWithoutPaginationArguments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -2369,7 +2369,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task InstallTemplateAsync_UsesLocalPackagePathForLocalFolderSource()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var packageVersion = "13.3.0-local.1";
         var packagesDirectory = workspace.WorkspaceRoot.CreateSubdirectory("packages");
@@ -2442,7 +2442,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncIncludesNoBuildFlagWhenNoBuildIsTrue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -2480,7 +2480,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncDoesNotIncludeNoBuildFlagWhenNoBuildIsFalse()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -2518,7 +2518,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncIncludesNoRestoreFlagWhenNoRestoreIsTrueAndNoBuildIsFalse()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -2558,7 +2558,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     public async Task RunAsyncDoesNotIncludeNoRestoreFlagWhenNoBuildIsTrue()
     {
         // --no-build implies --no-restore, so we should not include --no-restore when --no-build is specified
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -2597,7 +2597,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsyncSetsCliLogFilePathEnvironmentVariable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 

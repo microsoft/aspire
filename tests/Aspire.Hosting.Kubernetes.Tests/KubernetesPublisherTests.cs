@@ -11,13 +11,13 @@ using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
 
-public class KubernetesPublisherTests()
+public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task PublishAsync_GeneratesValidHelmChart()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -65,7 +65,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -84,8 +84,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAppliesServiceCustomizations()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env")
             .WithProperties(e => e.DefaultImagePullPolicy = "Always");
@@ -104,7 +104,7 @@ public class KubernetesPublisherTests()
         app.Run();
 
         // Assert
-        var deploymentPath = Path.Combine(tempDir.Path, "templates/service/deployment.yaml");
+        var deploymentPath = Path.Combine(workspace.Path, "templates/service/deployment.yaml");
         Assert.True(File.Exists(deploymentPath));
 
         var content = await File.ReadAllTextAsync(deploymentPath);
@@ -115,8 +115,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_CustomWorkloadAndResourceType()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -162,7 +162,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -181,8 +181,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_CustomManifestResource()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -206,7 +206,7 @@ public class KubernetesPublisherTests()
 
         app.Run();
 
-        var manifestPath = Path.Combine(tempDir.Path, "templates/myapp/scaler.yaml");
+        var manifestPath = Path.Combine(workspace.Path, "templates/myapp/scaler.yaml");
         Assert.True(File.Exists(manifestPath), $"Manifest should exist at {manifestPath}");
 
         var content = await File.ReadAllTextAsync(manifestPath);
@@ -247,8 +247,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_HandlesSpecialResourceName()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env")
                    .WithHelm(helm => helm.WithChartName("my-chart"));
@@ -284,7 +284,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -303,8 +303,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_ResourceWithProbes()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -340,7 +340,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -359,8 +359,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_WithDockerfileFactory_WritesDockerfileToOutputFolder()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -372,7 +372,7 @@ public class KubernetesPublisherTests()
         app.Run();
 
         // Verify Dockerfile was written to resource-specific path
-        var dockerfilePath = Path.Combine(tempDir.Path, "testcontainer.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "testcontainer.Dockerfile");
         Assert.True(File.Exists(dockerfilePath), $"Dockerfile should exist at {dockerfilePath}");
         var actualContent = await File.ReadAllTextAsync(dockerfilePath);
 
@@ -432,8 +432,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task KubernetesWithProjectResources()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -469,7 +469,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -488,8 +488,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task KubernetesMapsPortsForBaitAndSwitchResources()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.AddKubernetesEnvironment("env");
         var api = builder.AddExecutable("api", "node", ".")
             .PublishAsDockerFile()
@@ -515,7 +515,7 @@ public class KubernetesPublisherTests()
         SettingsTask settingsTask = default!;
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
             if (settingsTask is null)
             {
@@ -537,8 +537,8 @@ public class KubernetesPublisherTests()
         // that endpoint must resolve to the Kubernetes Service `port` (what clients connect to), not
         // the container `targetPort`. The generated Service maps port -> targetPort, so a URL using
         // the targetPort points at a port the Service is not listening on.
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.AddKubernetesEnvironment("k8s");
 
         var questdb = builder.AddContainer("questdb", "questdb/questdb:9.4.1")
@@ -561,7 +561,7 @@ public class KubernetesPublisherTests()
         SettingsTask settingsTask = default!;
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
             if (settingsTask is null)
             {
@@ -587,8 +587,8 @@ public class KubernetesPublisherTests()
         //   - the Ingress backend references the Service port by NAME ("http"), so it is decoupled
         //     from the numeric port and resolves through the Service to 9002 -> 9000
         //   - the Gateway HTTPRoute backendRef uses the numeric Service port 9002 (not 9000)
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         var k8s = builder.AddKubernetesEnvironment("k8s");
 
         var ingress = k8s.AddIngress("ingress").WithIngressClass("nginx");
@@ -613,7 +613,7 @@ public class KubernetesPublisherTests()
         SettingsTask settingsTask = default!;
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
             if (settingsTask is null)
             {
@@ -635,8 +635,8 @@ public class KubernetesPublisherTests()
         // distinct exposed `port` (9002) and container `targetPort` (9000), the generated probe must
         // target the container port 9000. This is the inverse of issue #18321: client-facing
         // references use the Service port, but the probe must keep using the container target port.
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
         builder.AddKubernetesEnvironment("k8s");
 
 #pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
@@ -658,7 +658,7 @@ public class KubernetesPublisherTests()
         SettingsTask settingsTask = default!;
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
             if (settingsTask is null)
             {
@@ -675,8 +675,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_HandlesConditionalReferenceExpression()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -717,7 +717,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -736,8 +736,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_HandlesConditionalReferenceExpressionWithParameterCondition()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -773,7 +773,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -792,8 +792,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_ConditionalWithParameterBranch_UsesIfElseSyntax()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -832,7 +832,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -851,8 +851,8 @@ public class KubernetesPublisherTests()
     [Fact]
     public async Task PublishAsync_HandlesScalarEnvironmentVariableTypes()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -886,7 +886,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             var fileExtension = Path.GetExtension(filePath)[1..];
 
             if (settingsTask is null)
@@ -915,8 +915,8 @@ public class KubernetesPublisherTests()
         // the PVC, and a PV without a PersistentVolumeSource (csi/hostPath/local/nfs/...) is
         // rejected by `kubectl apply`. See
         // https://kubernetes.io/docs/concepts/storage/persistent-volumes/#dynamic.
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env")
             .WithProperties(env =>
@@ -943,7 +943,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
 
             var content = await File.ReadAllTextAsync(filePath);
@@ -962,7 +962,7 @@ public class KubernetesPublisherTests()
         }
 
         // The bare PV manifest (data-pv.yaml) must NOT be emitted — see method comment.
-        var legacyPv = Path.Combine(tempDir.Path, "templates", "service", "data-pv.yaml");
+        var legacyPv = Path.Combine(workspace.Path, "templates", "service", "data-pv.yaml");
         Assert.False(File.Exists(legacyPv), "DefaultStorageType=\"pvc\" must not emit a bare PV; dynamic provisioning is driven by the PVC's storageClassName.");
 
         await settingsTask;
@@ -976,8 +976,8 @@ public class KubernetesPublisherTests()
         // pod hostPath volume (no PV/PVC objects are emitted — only the Deployment manifest
         // is produced). The original bug emitted empty `{}` mappings on the hostPath
         // sub-properties; with the nullable-property fixes those are now suppressed.
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env")
             .WithProperties(env =>
@@ -992,7 +992,7 @@ public class KubernetesPublisherTests()
         var app = builder.Build();
         app.Run();
 
-        var deploymentPath = Path.Combine(tempDir.Path, "templates", "service", "deployment.yaml");
+        var deploymentPath = Path.Combine(workspace.Path, "templates", "service", "deployment.yaml");
         Assert.True(File.Exists(deploymentPath));
 
         var deploymentContent = await File.ReadAllTextAsync(deploymentPath);
@@ -1009,8 +1009,8 @@ public class KubernetesPublisherTests()
         // volumes[] entry through the generated PVC and promotes the workload to a
         // StatefulSet (regardless of whether the resource implements
         // IResourceWithConnectionString).
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
 
@@ -1037,7 +1037,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
 
             var content = await File.ReadAllTextAsync(filePath);
@@ -1050,11 +1050,11 @@ public class KubernetesPublisherTests()
 
         // The pre-existing per-resource PVC under templates/service/ must NOT be emitted —
         // the binding consumes the volume mount and routes it to the standalone PVC instead.
-        var legacyPvc = Path.Combine(tempDir.Path, "templates", "service", "data-pvc.yaml");
+        var legacyPvc = Path.Combine(workspace.Path, "templates", "service", "data-pvc.yaml");
         Assert.False(File.Exists(legacyPvc), "Bound volumes must not also be emitted via the env-default PV/PVC path.");
 
         // And no Deployment manifest for the bound workload — it must promote to StatefulSet.
-        var deploymentPath = Path.Combine(tempDir.Path, "templates", "service", "deployment.yaml");
+        var deploymentPath = Path.Combine(workspace.Path, "templates", "service", "deployment.yaml");
         Assert.False(File.Exists(deploymentPath), "Workloads bound to a persistent volume must render as a StatefulSet, not a Deployment.");
 
         await settingsTask;
@@ -1066,8 +1066,8 @@ public class KubernetesPublisherTests()
         // Closes https://github.com/microsoft/aspire/issues/9430 — projects can bind a
         // persistent volume via the (volume, mountPath) overload, which adds the
         // ContainerMountAnnotation itself.
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
 
@@ -1092,7 +1092,7 @@ public class KubernetesPublisherTests()
 
         foreach (var expectedFile in expectedFiles)
         {
-            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var filePath = Path.Combine(workspace.Path, expectedFile);
             Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
 
             var content = await File.ReadAllTextAsync(filePath);
@@ -1113,8 +1113,8 @@ public class KubernetesPublisherTests()
         // routes through the standalone PVC; the unbound one falls through to the
         // env-default storage type (here: emptyDir) so existing workloads are not
         // perturbed by this feature.
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
 
@@ -1130,13 +1130,13 @@ public class KubernetesPublisherTests()
         var app = builder.Build();
         app.Run();
 
-        var statefulSetPath = Path.Combine(tempDir.Path, "templates", "service", "statefulset.yaml");
+        var statefulSetPath = Path.Combine(workspace.Path, "templates", "service", "statefulset.yaml");
         Assert.True(File.Exists(statefulSetPath));
 
         var statefulSetContent = await File.ReadAllTextAsync(statefulSetPath);
         AssertNoBuggyEmptyMappings(statefulSetContent);
 
-        var pvcPath = Path.Combine(tempDir.Path, "templates", "data", "data.yaml");
+        var pvcPath = Path.Combine(workspace.Path, "templates", "data", "data.yaml");
         Assert.True(File.Exists(pvcPath));
         var pvcContent = await File.ReadAllTextAsync(pvcPath);
         Assert.DoesNotContain("{}", pvcContent);
@@ -1153,8 +1153,8 @@ public class KubernetesPublisherTests()
         // into separate namespaces/clusters, so the workload's claimName would
         // reference a PVC that does not exist alongside it. Fail fast at publish time
         // with a clear message rather than silently emitting broken YAML.
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var envA = builder.AddKubernetesEnvironment("envA");
         var envB = builder.AddKubernetesEnvironment("envB");
@@ -1184,8 +1184,8 @@ public class KubernetesPublisherTests()
         // at the volume-source layer even if a co-scheduled container in the same
         // pod forgot to set the mount flag). Prior to this test, both emission
         // paths silently dropped the flag, so `isReadOnly: true` was a no-op.
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var k8s = builder.AddKubernetesEnvironment("env");
 
@@ -1200,7 +1200,7 @@ public class KubernetesPublisherTests()
         var app = builder.Build();
         app.Run();
 
-        var statefulSetPath = Path.Combine(tempDir.Path, "templates", "api", "statefulset.yaml");
+        var statefulSetPath = Path.Combine(workspace.Path, "templates", "api", "statefulset.yaml");
         Assert.True(File.Exists(statefulSetPath), $"Expected StatefulSet manifest at {statefulSetPath}");
         var content = await File.ReadAllTextAsync(statefulSetPath);
         AssertNoBuggyEmptyMappings(content);
@@ -1242,8 +1242,8 @@ public class KubernetesPublisherTests()
         // and land in values.yaml under `parameters.<pv-name>.<param>`. Literal-value
         // overloads never exercise this path, so a regression here could silently
         // break the generated PVC YAML or values.yaml without failing any other test.
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         // Use unique parameter names per run to defeat any persistent state file lookup.
         var suffix = Guid.NewGuid().ToString("N");
@@ -1270,7 +1270,7 @@ public class KubernetesPublisherTests()
         var app = builder.Build();
         app.Run();
 
-        var pvcPath = Path.Combine(tempDir.Path, "templates", "data", "data.yaml");
+        var pvcPath = Path.Combine(workspace.Path, "templates", "data", "data.yaml");
         Assert.True(File.Exists(pvcPath), $"Expected PVC manifest at {pvcPath}");
         var pvcContent = await File.ReadAllTextAsync(pvcPath);
         AssertNoBuggyEmptyMappings(pvcContent);
@@ -1282,7 +1282,7 @@ public class KubernetesPublisherTests()
         Assert.Contains($"{{{{ .Values.parameters.data.{capacityName} }}}}", pvcContent);
         Assert.Contains($"{{{{ .Values.parameters.data.{backupTierName} }}}}", pvcContent);
 
-        var valuesPath = Path.Combine(tempDir.Path, "values.yaml");
+        var valuesPath = Path.Combine(workspace.Path, "values.yaml");
         Assert.True(File.Exists(valuesPath), $"Expected values.yaml at {valuesPath}");
         var valuesContent = await File.ReadAllTextAsync(valuesPath);
 

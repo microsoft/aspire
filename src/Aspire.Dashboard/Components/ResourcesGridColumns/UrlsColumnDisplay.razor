@@ -20,7 +20,7 @@ else if (DisplayedUrls.Count > 1)
     var renderedUrls = DisplayedUrls.Take(maxRenderedUrls).ToList();
     var preOverflowedCount = DisplayedUrls.Count - renderedUrls.Count;
 
-    <div class="url-container" @onclick:stopPropagation="true">
+    <div class="url-container" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
         <FluentOverflow Class="url-overflow">
             <ChildContent>
                 @for (var i = 0; i < renderedUrls.Count; i++)
@@ -34,7 +34,7 @@ else if (DisplayedUrls.Count > 1)
                 }
             </ChildContent>
             <MoreButtonTemplate Context="overflow">
-                <div @onclick:stopPropagation="true" style="display:inherit;">
+                <div @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" style="display:inherit;">
                     <FluentButton Appearance="Appearance.Accent" OnClick="() => _popoverVisible = !_popoverVisible" Class="url-button">
                         @($"+{overflow.ItemsOverflow.Count() + preOverflowedCount}")
                     </FluentButton>
@@ -44,7 +44,7 @@ else if (DisplayedUrls.Count > 1)
                 @{
                     var items = overflow.ItemsOverflow.Select(i => (DisplayedUrl)i.Data!).Concat(DisplayedUrls.Skip(maxRenderedUrls)).ToList();
                 }
-                <div @onclick:stopPropagation="true">
+                <div @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
                     @* Each item is approximately 36px tall, plus 48px for the header and container padding. The popover body has a CSS max-height of 300px. *@
                     <FluentPopover AnchorId="@overflow.IdMoreButton" @bind-Open="_popoverVisible" VerticalThreshold="@(Math.Min(items.Count * 36 + 48, 300))" AutoFocus="false">
                         <Header>
@@ -77,7 +77,7 @@ else if (DisplayedUrls.Count > 1)
     {
         if (displayedUrl.Url != null)
         {
-            return @<a href="@displayedUrl.Url" target="_blank" title="@GetTooltipText(displayedUrl)" @onclick:stopPropagation="true">@displayedUrl.Text</a>;
+            return @<a href="@displayedUrl.Url" target="_blank" title="@GetTooltipText(displayedUrl)" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">@displayedUrl.Text</a>;
         }
         else
         {

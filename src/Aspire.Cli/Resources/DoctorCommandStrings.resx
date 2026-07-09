@@ -82,6 +82,18 @@
   <data name="EnvironmentCategoryHeader" xml:space="preserve">
     <value>Environment</value>
   </data>
+  <data name="DevelopmentToolsCategoryHeader" xml:space="preserve">
+    <value>Development Tools</value>
+  </data>
+  <data name="VsCodeExtensionInstalledMessage" xml:space="preserve">
+    <value>Aspire extension for VS Code is installed</value>
+  </data>
+  <data name="VsCodeExtensionMissingMessage" xml:space="preserve">
+    <value>VS Code is installed, but the Aspire extension is not installed</value>
+  </data>
+  <data name="VsCodeExtensionMissingFix" xml:space="preserve">
+    <value>Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</value>
+  </data>
   <data name="SummaryFormat" xml:space="preserve">
     <value>Summary: {0} passed, {1} warnings, {2} failed</value>
   </data>
