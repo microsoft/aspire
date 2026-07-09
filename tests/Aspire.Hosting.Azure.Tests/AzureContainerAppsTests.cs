@@ -2863,6 +2863,75 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "worker")));
     }
 
+    [Fact]
+    public async Task SameEnvironmentContainerAppsFormATotalDeploymentOrder()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        // A mix of floating apps and apps with their own declared dependencies. Regardless of the
+        // shape of the declared graph, the environment must end up with a single total deployment
+        // order so a model-graph-driven deployer never writes two apps in the environment at once.
+        var shared = builder.AddContainer("shared", "myimage");
+        builder.AddContainer("api", "myimage").WaitFor(shared);
+        builder.AddContainer("worker", "myimage").WaitFor(shared);
+        builder.AddContainer("cache", "myimage");
+        builder.AddContainer("gateway", "myimage");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var apps = model.GetComputeResources().ToList();
+
+        // The "must deploy before" relation formed by every ordering edge (the synthetic DependsOn
+        // edges plus the user-declared Reference/WaitFor edges) must be a strict total order over the
+        // apps. In a strict total order of N elements, the number of transitive predecessors is a
+        // permutation of 0, 1, ..., N-1: exactly one app deploys first, exactly one second, and so on.
+        // That profile is what guarantees at most one app deploys at a time.
+        var predecessorCounts = apps
+            .Select(computeResource => GetTransitiveOrderingPredecessors(computeResource, apps).Count)
+            .OrderBy(count => count)
+            .ToArray();
+
+        Assert.Equal(Enumerable.Range(0, apps.Count).ToArray(), predecessorCounts);
+    }
+
+    // Ordering relationship types that force one resource to deploy before another: the synthetic
+    // serialization edges (DependsOn) plus the user-declared dependencies (Reference/WaitFor).
+    private static readonly string[] s_orderingRelationshipTypes = ["DependsOn", "Reference", "WaitFor"];
+
+    private static HashSet<IResource> GetTransitiveOrderingPredecessors(IResource resource, IReadOnlyList<IResource> apps)
+    {
+        var appSet = new HashSet<IResource>(apps);
+        var predecessors = new HashSet<IResource>();
+        var stack = new Stack<IResource>();
+        stack.Push(resource);
+
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+
+            var directPredecessors = current.Annotations.OfType<ResourceRelationshipAnnotation>()
+                .Where(r => s_orderingRelationshipTypes.Contains(r.Type))
+                .Select(r => r.Resource)
+                .Where(target => appSet.Contains(target) && !ReferenceEquals(target, current));
+
+            foreach (var predecessor in directPredecessors)
+            {
+                if (predecessors.Add(predecessor))
+                {
+                    stack.Push(predecessor);
+                }
+            }
+        }
+
+        return predecessors;
+    }
+
     private static IResource GetComputeResource(DistributedApplicationModel model, string name)
         => Assert.Single(model.GetComputeResources(), r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
 
