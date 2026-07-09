@@ -97,9 +97,13 @@ and/or AWS resources, configure the providers in the AppHost.
 ### Cloud providers
 
 Configure Azure and/or AWS cloud providers directly in the AppHost. The publisher
-emits `properties.providers.azure.scope` / `providers.aws.scope` on the
-`Radius.Core/environments` resource and the deploy pipeline registers
-credentials via `rad credential register` before `rad deploy` runs.
+emits the provider configuration on the `Radius.Core/environments` resource using the
+native schema's discrete fields — `properties.providers.azure.subscriptionId` /
+`properties.providers.azure.resourceGroupName` for Azure and
+`properties.providers.aws.accountId` / `properties.providers.aws.region` for AWS
+(the legacy `Applications.Core/environments` schema instead used a single `scope`
+path) — and the deploy pipeline registers credentials via `rad credential register`
+before `rad deploy` runs.
 
 ```csharp
 var clientSecret = builder.AddParameter("azure-sp-secret", secret: true);
