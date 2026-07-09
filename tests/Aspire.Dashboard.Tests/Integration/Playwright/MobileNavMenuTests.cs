@@ -189,22 +189,17 @@ public sealed class MobileNavMenuTests : PlaywrightTestsBase<DashboardServerFixt
     private const string IsFocusInsideMobileNavMenuScript = """
         () => {
             const menu = document.querySelector('fluent-menu.mobile-nav-menu');
-            const visited = new Set();
+            if (!menu) return false;
             let element = document.activeElement;
-            while (element && !visited.has(element)) {
-                visited.add(element);
+            while (element) {
                 if (element === menu) {
                     return true;
                 }
-
-                if (element.shadowRoot?.activeElement) {
-                    element = element.shadowRoot.activeElement;
-                    continue;
-                }
-
-                element = element.getRootNode?.().host ?? null;
+                // Traverse upward: if inside a shadow root, go to the shadow host;
+                // otherwise walk up the light DOM via parentElement.
+                const root = element.getRootNode?.();
+                element = (root instanceof ShadowRoot ? root.host : element.parentElement) ?? null;
             }
-
             return false;
         }
         """;

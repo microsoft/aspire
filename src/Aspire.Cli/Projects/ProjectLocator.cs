@@ -636,39 +636,47 @@ internal sealed class ProjectLocator(
                 return null;
             }
 
-            if (aspireConfig?.AppHost?.Path is { } configAppHostPath)
+            if (aspireConfig is not null)
             {
-                var configFilePath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
-
-                // Validate before Path.Combine / new FileInfo, which throw ArgumentException
-                // ("Null character in path." / "Illegal characters in path.") on NUL bytes and
-                // other invalid characters that survive JSON parsing. Without this we surface
-                // as a generic "An unexpected error occurred" — see
-                // https://github.com/microsoft/aspire/issues/17624.
-                if (!IsValidConfiguredAppHostPath(configAppHostPath, configFilePath, fieldName: AspireConfigAppHostPathKey, silent: silent))
+                // aspire.config.json exists at this level — this is the workspace root.
+                // If it specifies an appHost.path, resolve it; otherwise no AppHost is
+                // configured. Either way, do not walk further up.
+                if (aspireConfig.AppHost?.Path is { } configAppHostPath)
                 {
-                    return null;
-                }
+                    var configFilePath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
 
-                var qualifiedPath = Path.IsPathRooted(configAppHostPath)
-                    ? configAppHostPath
-                    : Path.Combine(searchDirectory.FullName, configAppHostPath);
-                qualifiedPath = PathNormalizer.NormalizePathForCurrentPlatform(qualifiedPath);
-                var appHostFile = new FileInfo(qualifiedPath);
-
-                if (appHostFile.Exists)
-                {
-                    logger.LogInformation("Found AppHost path '{AppHostPath}' from config file in {Directory}", configAppHostPath, searchDirectory.FullName);
-                    return appHostFile;
-                }
-                else
-                {
-                    if (!silent)
+                    // Validate before Path.Combine / new FileInfo, which throw ArgumentException
+                    // ("Null character in path." / "Illegal characters in path.") on NUL bytes and
+                    // other invalid characters that survive JSON parsing. Without this we surface
+                    // as a generic "An unexpected error occurred" — see
+                    // https://github.com/microsoft/aspire/issues/17624.
+                    if (!IsValidConfiguredAppHostPath(configAppHostPath, configFilePath, fieldName: AspireConfigAppHostPathKey, silent: silent))
                     {
-                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, configFilePath, qualifiedPath));
+                        return null;
                     }
-                    return null;
+
+                    var qualifiedPath = Path.IsPathRooted(configAppHostPath)
+                        ? configAppHostPath
+                        : Path.Combine(searchDirectory.FullName, configAppHostPath);
+                    qualifiedPath = PathNormalizer.NormalizePathForCurrentPlatform(qualifiedPath);
+                    var appHostFile = new FileInfo(qualifiedPath);
+
+                    if (appHostFile.Exists)
+                    {
+                        logger.LogInformation("Found AppHost path '{AppHostPath}' from config file in {Directory}", configAppHostPath, searchDirectory.FullName);
+                        return appHostFile;
+                    }
+                    else
+                    {
+                        if (!silent)
+                        {
+                            interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, configFilePath, qualifiedPath));
+                        }
+                        return null;
+                    }
                 }
+
+                return null;
             }
 
             // TODO: Remove legacy .aspire/settings.json fallback once confident most users have migrated.
@@ -678,6 +686,9 @@ internal sealed class ProjectLocator(
 
             if (settingsFile.Exists)
             {
+                // .aspire/settings.json exists at this level — this is the workspace root.
+                // If it specifies an appHostPath, resolve it; otherwise no AppHost is
+                // configured. Either way, do not walk further up.
                 try
                 {
                     using var stream = settingsFile.OpenRead();
@@ -738,6 +749,9 @@ internal sealed class ProjectLocator(
                     ReportInvalidConfigurationFile(ex, message, silent);
                     return null;
                 }
+
+                // Settings file exists but has no appHostPath — no AppHost configured.
+                return null;
             }
 
             if (searchParentDirectories && searchDirectory.Parent is not null)

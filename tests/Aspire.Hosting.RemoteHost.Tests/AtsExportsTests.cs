@@ -5,7 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Aspire.Cli.Tests.Utils;
+using Aspire.Tests.Utils;
 using Aspire.Hosting.Ats;
 using Aspire.Hosting.Tests;
 using Xunit;

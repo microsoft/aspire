@@ -7,9 +7,8 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TestInteractionService.cs" LinkBase="shared" />
-    <Compile Include="$(TestsSharedDir)TemporaryRepo.cs" Link="shared\TemporaryRepo.cs" />
+    <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared\TemporaryWorkspace.cs" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Managed\Aspire.Managed.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.Go\Aspire.Hosting.CodeGeneration.Go.csproj" />

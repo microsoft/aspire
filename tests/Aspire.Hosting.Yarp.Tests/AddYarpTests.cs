@@ -166,9 +166,9 @@ public class AddYarpTests(ITestOutputHelper testOutputHelper)
         testProvider.AddService(new DistributedApplicationOptions());
         testProvider.AddService(Options.Create(new DcpOptions()));
 
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
 
-        var yarp = builder.AddYarp("yarp").WithStaticFiles(tempDir.Path);
+        var yarp = builder.AddYarp("yarp").WithStaticFiles(workspace.Path);
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(yarp.Resource, DistributedApplicationOperation.Run, testProvider);
 
@@ -181,9 +181,9 @@ public class AddYarpTests(ITestOutputHelper testOutputHelper)
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
 
-        var yarp = builder.AddYarp("yarp").WithStaticFiles(tempDir.Path);
+        var yarp = builder.AddYarp("yarp").WithStaticFiles(workspace.Path);
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(yarp.Resource, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
 
@@ -195,9 +195,9 @@ public class AddYarpTests(ITestOutputHelper testOutputHelper)
     public void VerifyWithStaticFilesBindMountAddsContainerFileSystemAnnotationInRunMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
 
-        var yarp = builder.AddYarp("yarp").WithStaticFiles(tempDir.Path);
+        var yarp = builder.AddYarp("yarp").WithStaticFiles(workspace.Path);
 
         var annotation = Assert.Single(yarp.Resource.Annotations.OfType<ContainerFileSystemCallbackAnnotation>());
         Assert.Equal("/wwwroot", annotation.DestinationPath);
@@ -207,22 +207,22 @@ public class AddYarpTests(ITestOutputHelper testOutputHelper)
     public void VerifyWithStaticFilesAddsDockerfileBuildAnnotationInPublishMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
 
-        var yarp = builder.AddYarp("yarp").WithStaticFiles(tempDir.Path);
+        var yarp = builder.AddYarp("yarp").WithStaticFiles(workspace.Path);
 
         var annotation = Assert.Single(yarp.Resource.Annotations.OfType<DockerfileBuildAnnotation>());
         Assert.NotNull(annotation.DockerfileFactory);
-        Assert.Contains(tempDir.Path, annotation.ContextPath);
+        Assert.Contains(workspace.Path, annotation.ContextPath);
     }
 
     [Fact]
     public async Task VerifyWithStaticFilesGeneratesCorrectDockerfileInPublishMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
 
-        var yarp = builder.AddYarp("yarp").WithStaticFiles(tempDir.Path);
+        var yarp = builder.AddYarp("yarp").WithStaticFiles(workspace.Path);
 
         var annotation = Assert.Single(yarp.Resource.Annotations.OfType<DockerfileBuildAnnotation>());
         Assert.NotNull(annotation.DockerfileFactory);

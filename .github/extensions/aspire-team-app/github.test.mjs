@@ -108,7 +108,7 @@ function issueNode(number, updatedAt) {
     url: `https://github.com/microsoft/aspire/issues/${number}`,
     createdAt: "2026-07-01T09:00:00Z",
     updatedAt,
-    author: { login: "octo", avatarUrl: null },
+    author: { __typename: "User", login: "octo", avatarUrl: null },
     milestone: null,
     labels: { nodes: [] },
     assignees: { nodes: [] },

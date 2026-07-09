@@ -3,7 +3,6 @@
 
 using System.Text.Json;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Hex1b.Input;
 using Xunit;
@@ -94,7 +93,7 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
 
         await auto.WaitUntilAsync(
             s => s.ContainsText("Press CTRL+C to stop the AppHost and exit."),
-            timeout: TimeSpan.FromMinutes(2),
+            timeout: CliE2EAutomatorHelpers.AspireRunReadyTimeout,
             description: "Press CTRL+C message from aspire run");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
@@ -154,7 +153,7 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
 
         await auto.WaitUntilAsync(
             s => s.ContainsText("Press CTRL+C to stop the AppHost and exit."),
-            timeout: TimeSpan.FromMinutes(2),
+            timeout: CliE2EAutomatorHelpers.AspireRunReadyTimeout,
             description: "Press CTRL+C message from aspire run");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.C);

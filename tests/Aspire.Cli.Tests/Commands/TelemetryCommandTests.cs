@@ -22,7 +22,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryCommand_WithoutSubcommand_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -211,7 +211,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     public async Task TelemetryCommand_WithDashboardUrl_InvalidTelemetryApiResponse_DisplaysErrorMessage(
         string otelCommand, HttpStatusCode? statusCode, string? contentType, string? body, HttpStatusCode? baseProbeStatusCode, string expectedMessageKey)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 

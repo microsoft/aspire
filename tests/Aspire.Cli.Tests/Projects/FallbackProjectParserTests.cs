@@ -3,7 +3,6 @@
 
 using System.Text.Json;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -21,7 +20,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_ExtractsAspireAppHostSdk_OldFormat()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
         var projectContent = """
             <Project Sdk="Microsoft.NET.Sdk">
@@ -43,7 +42,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_ExtractsAspireAppHostSdk_NewFormat()
     {
         // Arrange - tests the new <Project Sdk="Aspire.AppHost.Sdk/version"> format
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
         var projectContent = """
             <Project Sdk="Aspire.AppHost.Sdk/13.0.1">
@@ -68,7 +67,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_ExtractsAspireAppHostSdk_NewFormat_WithMultipleSdks()
     {
         // Arrange - tests parsing when multiple SDKs are in the attribute
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
         var projectContent = """
             <Project Sdk="Aspire.AppHost.Sdk/13.0.1;Microsoft.NET.Sdk">
@@ -93,7 +92,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_DoesNotMatchSimilarSdkName()
     {
         // Arrange - tests that Aspire.AppHost.SdkFoo doesn't match
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
         var projectContent = """
             <Project Sdk="Aspire.AppHost.SdkFoo/1.0.0">
@@ -118,7 +117,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_ExtractsPackageReferences()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
         var projectContent = """
             <Project Sdk="Microsoft.NET.Sdk">
@@ -144,7 +143,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_ExtractsProjectReferences()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
         var projectContent = """
             <Project Sdk="Microsoft.NET.Sdk">
@@ -183,7 +182,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_InvalidXml_ThrowsProjectUpdaterException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.csproj");
         var invalidProjectContent = """
             <Project Sdk="Microsoft.NET.Sdk">
@@ -205,7 +204,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_SingleFileAppHost_ExtractsAspireAppHostSdk()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.cs");
         var projectContent = """
             #:sdk Aspire.AppHost.Sdk@13.0.0-preview.1.25519.5
@@ -229,7 +228,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_SingleFileAppHost_ExtractsPackageReferences()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.cs");
         var projectContent = """
             #:sdk Aspire.AppHost.Sdk@13.0.0-preview.1.25519.5
@@ -259,7 +258,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_SingleFileAppHost_NoPackageReferences()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.cs");
         var projectContent = """
             #:sdk Aspire.AppHost.Sdk@9.5.0
@@ -282,7 +281,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_SingleFileAppHost_WithWildcardVersion()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.cs");
         var projectContent = """
             #:sdk Aspire.AppHost.Sdk@*
@@ -306,7 +305,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_SingleFileAppHost_NoProjectReferences()
     {
         // Arrange - single-file apphosts don't support project references
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.cs");
         var projectContent = """
             #:sdk Aspire.AppHost.Sdk@9.5.0
@@ -329,7 +328,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_SingleFileAppHost_NoSdkDirective()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.cs");
         var projectContent = """
             // Missing SDK directive
@@ -351,7 +350,7 @@ public class FallbackProjectParserTests(ITestOutputHelper output)
     public async Task ParseProject_UnsupportedFileType_ThrowsProjectUpdaterException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.CreateForCli(output);
         var projectFile = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.txt");
         var projectContent = "Some random content";
 

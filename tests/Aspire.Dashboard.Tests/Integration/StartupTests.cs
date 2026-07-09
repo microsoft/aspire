@@ -66,6 +66,42 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task RunAsync_TokenCancelled_ShutsDownAndReturnsZero()
+    {
+        // The standalone `aspire-managed dashboard` process relies on RunAsync honoring its cancellation
+        // token so the parent-liveness watchdog can tear the dashboard down when the launching CLI dies.
+        // Verify a running dashboard shuts down gracefully and reports success when the token is cancelled.
+        var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(testOutputHelper);
+        var logger = loggerFactory.CreateLogger<StartupTests>();
+
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(loggerFactory);
+
+        using var cts = new CancellationTokenSource();
+        var runTask = app.RunAsync(cts.Token);
+
+        // Wait until the dashboard is actually serving so we exercise the running -> graceful-shutdown
+        // path rather than a start-time cancellation race. FrontendEndPointsAccessor throws until started.
+        await AsyncTestHelpers.AssertIsTrueRetryAsync(
+            () =>
+            {
+                try
+                {
+                    return app.FrontendEndPointsAccessor.Count > 0;
+                }
+                catch (InvalidOperationException)
+                {
+                    return false;
+                }
+            },
+            "Dashboard reached startup.", logger);
+
+        cts.Cancel();
+
+        var exitCode = await runTask.DefaultTimeout();
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
     public async Task EndPointAccessors_AppStarted_IPv4OrIPv6()
     {
         // Arrange
