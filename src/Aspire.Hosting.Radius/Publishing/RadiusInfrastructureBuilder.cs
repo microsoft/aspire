@@ -3,10 +3,10 @@
 
 #pragma warning disable ASPIRERADIUS004 // Experimental: ConfigureRadiusInfrastructure escape-hatch construct types are consumed internally by the publisher.
 
-#pragma warning disable ASPIRERADIUS002 // RadiusRecipe.Name signals upstream deprecation for callers; internal publisher code still reads it.
 #pragma warning disable ASPIRECOMPUTE002 // GetEndpointPropertyExpression/GetHostAddressExpression are experimental compute-environment APIs the publisher relies on.
 using System.Globalization;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing.Constructs;
@@ -37,6 +37,16 @@ internal sealed class RadiusInfrastructureBuilder
     /// </summary>
     private DistributedApplicationExecutionContext _executionContext = null!;
     private CancellationToken _cancellationToken;
+
+    // Bicep parameters allocated for secret/parameter values referenced by container env vars.
+    // Keyed by the Aspire parameter name so repeated references reuse a single param declaration.
+    // These are emitted as top-level Bicep `param`s (secure when the source parameter is secret)
+    // instead of inlining values, so no literal secret is written to the published artifact.
+    private readonly Dictionary<string, ProvisioningParameter> _envParametersByName = new(StringComparer.Ordinal);
+
+    // Maps the emitted Bicep parameter identifier to its originating Aspire ParameterResource, so
+    // the deploy step can resolve each value at deploy time and pass it via `rad deploy --parameters`.
+    private readonly Dictionary<string, ParameterResource> _deployParametersByIdentifier = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Default recipe template paths per resource type.
@@ -103,51 +113,22 @@ internal sealed class RadiusInfrastructureBuilder
         var legacyRecipeEntries = new Dictionary<string, Dictionary<string, RecipeEntry>>(StringComparer.Ordinal);
         var typeInstancesByResourceName = new Dictionary<string, RadiusResourceTypeConstruct>(StringComparer.Ordinal);
 
-        // Radius binds one recipe per resource type per environment. Legacy Applications.* types
-        // resolve that binding through the legacy environment, which still supports multiple
-        // *named* recipes per type, so divergent legacy instances bind per instance (a distinct
-        // named recipe) while the type-level entry keeps the in-cluster default. User-defined
-        // (Radius.*) types resolve their binding through the shared recipe pack, which maps a
-        // type to exactly one recipe: UDT types support neither per-instance recipe overrides
-        // nor named recipes, so instances of one UDT type cannot diverge to different recipes.
-        // That divergence is rejected for UDT types below (see ASPIRERADIUS026). Compute the set
-        // of distinct effective recipe locations per type so the "divergent" case can be detected.
-        // A null entry means an in-cluster / default-recipe instance. Both cloud-managed
-        // selections and customization recipes count, so a custom in-cluster sibling of a managed
-        // resource (or two managed instances with different recipes) is detected (FR-007, INV-5).
-        static bool IsDivergentType(string resourceType) => false;
-
-        // Collect recipe entries: UDT types go into the recipe pack, legacy
-        // Applications.* types are stashed for inline emission on the legacy env.
+        // Radius binds one recipe per resource type per environment. Each type gets its default
+        // in-cluster recipe: UDT (Radius.*) types via the shared recipe pack, legacy
+        // Applications.* types via inline named recipes on the legacy environment. Per-instance
+        // and custom recipe overrides are not part of this PR — they arrive with the follow-up
+        // that reintroduces the recipe customization API.
         foreach (var resource in radiusResources)
         {
             var (resourceType, _) = resolvedTypes[resource];
-            RadiusRecipe? effectiveRecipe = null;
 
             if (IsLegacyResourceType(resourceType))
             {
-                // Legacy types can diverge: when this type's instances resolve to different
-                // recipes, a nameless effective recipe (e.g. a cloud-managed, location-only
-                // recipe) needs a synthetic per-instance recipe name (its resource name) so it
-                // doesn't collapse onto the shared "default" recipe (FR-007, INV-5). A recipe
-                // that already carries an explicit Name keeps it, so distinct named recipes for
-                // the same legacy type still register side by side.
-                var effectiveRecipeHasLocation = effectiveRecipe?.RecipeLocation is not null;
-                var effectiveRecipeLocation = NormalizeRecipeLocation(effectiveRecipe?.RecipeLocation);
-                var bindPerInstance = effectiveRecipeLocation is not null
-                    && IsDivergentType(resourceType);
-                var recipeNameOverride = bindPerInstance && string.IsNullOrEmpty(effectiveRecipe?.Name)
-                    ? resource.Name
-                    : null;
-
-                AddLegacyRecipeEntry(legacyRecipeEntries, resourceType, effectiveRecipe, recipeNameOverride);
+                AddLegacyRecipeEntry(legacyRecipeEntries, resourceType);
             }
             else
             {
-                // UDT types bind exactly one recipe per type via the shared recipe pack.
-                // Divergence was already rejected above (ASPIRERADIUS026), so every instance of
-                // this type shares the same effective recipe.
-                AddRecipeEntry(udtRecipeEntries, resourceType, effectiveRecipe);
+                AddRecipeEntry(udtRecipeEntries, resourceType);
             }
         }
 
@@ -179,7 +160,7 @@ internal sealed class RadiusInfrastructureBuilder
             // recipe — mirroring how backing resources get their default recipes.
             if (computeForcesUdtChain)
             {
-                AddRecipeEntry(udtRecipeEntries, RadiusResourceTypes.Containers, null);
+                AddRecipeEntry(udtRecipeEntries, RadiusResourceTypes.Containers);
             }
 
             recipePackConstruct = CreateRecipePackConstruct(recipePackIdentifier, udtRecipeEntries);
@@ -232,16 +213,13 @@ internal sealed class RadiusInfrastructureBuilder
             var identifier = BicepPostProcessor.SanitizeIdentifier(resource.Name);
 
             var isLegacy = IsLegacyResourceType(resourceType);
-            RadiusRecipe? effectiveRecipe = null;
-            string? instanceRecipeNameOverride = null;
 
             ProvisionableResource? parentEnv = isLegacy ? legacyEnvConstruct : envConstruct;
             ProvisionableResource parentApp = isLegacy ? legacyAppConstruct! : appConstruct!;
 
             var typeInstance = CreateResourceTypeConstruct(
                 identifier, resource.Name, resourceType, apiVersion,
-                parentApp, parentEnv, isLegacy, effectiveRecipe,
-                instanceRecipeNameOverride);
+                parentApp, parentEnv);
             options.ResourceTypeInstances.Add(typeInstance);
             typeInstancesByResourceName[resource.Name] = typeInstance;
             instanceParents[typeInstance] = (parentEnv, parentApp);
@@ -269,6 +247,10 @@ internal sealed class RadiusInfrastructureBuilder
             options.Containers.Add(containerConstruct);
             containerConnectionTargets[containerConstruct] = connectionTargets;
         }
+
+        // Emit the Bicep parameters allocated for secret/parameter-backed container env vars as
+        // top-level `param`s, before ConfigureRadiusInfrastructure runs so callbacks can see them.
+        options.Parameters.AddRange(_envParametersByName.Values);
 
         // 6. Snapshot every identifier that rewiring depends on, then run
         // ConfigureRadiusInfrastructure callbacks (last-write-wins). We only
@@ -299,7 +281,27 @@ internal sealed class RadiusInfrastructureBuilder
             containerConnectionTargets,
             identifierSnapshot);
 
+        RecordDeployParameters();
+
         return options;
+    }
+
+    // Records the emitted Bicep parameter identifier → ParameterResource mapping on the
+    // environment resource so the deploy step can resolve each value at deploy time and pass it
+    // via `rad deploy --parameters`. Replaces any prior annotation so a re-publish (e.g. repeated
+    // BuildAsync calls) stays idempotent rather than accumulating stale mappings.
+    private void RecordDeployParameters()
+    {
+        foreach (var existing in _environment.Annotations.OfType<RadiusDeployParametersAnnotation>().ToList())
+        {
+            _environment.Annotations.Remove(existing);
+        }
+
+        if (_deployParametersByIdentifier.Count > 0)
+        {
+            _environment.Annotations.Add(new RadiusDeployParametersAnnotation(
+                new Dictionary<string, ParameterResource>(_deployParametersByIdentifier, StringComparer.Ordinal)));
+        }
     }
 
     /// <summary>
@@ -552,12 +554,6 @@ internal sealed class RadiusInfrastructureBuilder
         return resource;
     }
 
-    // Treat null and empty/whitespace recipe locations as "no location" (an in-cluster /
-    // default-recipe instance) so divergence detection and per-instance binding agree on
-    // what counts as a real recipe location.
-    private static string? NormalizeRecipeLocation(string? location)
-        => string.IsNullOrWhiteSpace(location) ? null : location;
-
     /// <summary>
     /// Builds a <c>.id</c> expression for a resource, e.g., <c>envIdentifier.id</c>.
     /// </summary>
@@ -642,76 +638,34 @@ internal sealed class RadiusInfrastructureBuilder
 
     private static RadiusResourceTypeConstruct CreateResourceTypeConstruct(
         string identifier, string resourceName, string resourceType, string apiVersion,
-        ProvisionableResource appConstruct, ProvisionableResource? envConstruct,
-        bool isLegacy, RadiusRecipe? recipe, string? instanceRecipeNameOverride = null)
+        ProvisionableResource appConstruct, ProvisionableResource? envConstruct)
     {
         var construct = new RadiusResourceTypeConstruct(identifier, resourceType, apiVersion);
         construct.ResourceName = resourceName;
         construct.ApplicationId = BuildIdExpression(appConstruct);
         construct.EnvironmentId = BuildIdExpression(envConstruct!);
 
-        // Instance-level recipe name/parameters apply only to legacy Applications.* types, whose
-        // environment still supports named recipes. Native (Radius.*) UDT instances bind their
-        // type's single recipe through the shared recipe pack and must never emit a per-instance
-        // recipe block — Radius silently ignores it. Their parameters are declared at the
-        // environment level via WithRecipeParameters(resourceType, ...). User per-instance misuse
-        // on native types is rejected earlier (ASPIRERADIUS027); this guard also prevents a
-        // cloud-managed recipe's parameters from leaking onto a native instance.
-        if (isLegacy)
-        {
-            // Divergent same-type materialization on a legacy type: bind this instance to its
-            // own named recipe (registered on the legacy environment) so it doesn't share
-            // the type's in-cluster "default" recipe (FR-007, INV-5).
-            var hasRecipeNameOverride = !string.IsNullOrEmpty(instanceRecipeNameOverride);
-            if (hasRecipeNameOverride)
-            {
-                construct.RecipeName = instanceRecipeNameOverride!;
-            }
-
-            if (recipe is not null)
-            {
-                var hasExplicitName = !string.IsNullOrEmpty(recipe.Name);
-                // Only emit the instance-level recipe name when the recipe carries one.
-                if (hasExplicitName)
-                {
-                    // A legacy per-instance name override (a divergent same-type instance bound
-                    // to its own named recipe registered under its resource name) must win over
-                    // the recipe's own Name; otherwise the instance would reference a recipe name
-                    // that was never registered. Parameters are still emitted in either case.
-                    if (!hasRecipeNameOverride)
-                    {
-                        construct.RecipeName = hasExplicitName ? recipe.Name : "default";
-                    }
-                }
-            }
-        }
-
+        // Every instance binds its resource type's single default recipe (UDT types via the
+        // shared recipe pack, legacy types via the "default" entry on the legacy environment),
+        // so no per-instance recipe name is emitted here. Per-instance / named recipe overrides
+        // are deferred to the follow-up that reintroduces the recipe customization API.
         return construct;
     }
 
     private void AddRecipeEntry(
         Dictionary<string, RecipeEntry> entries,
-        string resourceType,
-        RadiusRecipe? recipe)
+        string resourceType)
     {
-        // Custom recipe with template path
-        if (recipe?.RecipeLocation is not null)
-        {
-            entries[resourceType] = new RecipeEntry("bicep", recipe.RecipeLocation);
-            return;
-        }
-
-        // Default recipe template
         if (s_defaultRecipeTemplates.TryGetValue(resourceType, out var defaultTemplate))
         {
-            // Don't overwrite a custom entry
+            // Don't overwrite a custom entry a ConfigureRadiusInfrastructure callback may add.
             entries.TryAdd(resourceType, new RecipeEntry("bicep", defaultTemplate));
         }
         else
         {
             _logger.LogWarning(
                 "No default recipe template found for resource type '{ResourceType}'. " +
-                "Consider providing a custom recipe via PublishAsRadiusResource().",
+                "Register a recipe for this type via ConfigureRadiusInfrastructure().",
                 resourceType);
         }
     }
@@ -736,32 +690,17 @@ internal sealed class RadiusInfrastructureBuilder
 
     private void AddLegacyRecipeEntry(
         Dictionary<string, Dictionary<string, RecipeEntry>> entries,
-        string resourceType,
-        RadiusRecipe? recipe,
-        string? recipeNameOverride = null)
+        string resourceType)
     {
-        // A managed/location-only recipe leaves Name as string.Empty (its default),
-        // which `?? "default"` does NOT catch. An empty recipe-name key would emit an
-        // empty-string Bicep property (`recipes: { type: { '': {...} } }`) and crash the
-        // Azure.Provisioning writer, so collapse empty names to "default" here too.
-        // A caller-supplied override (e.g. a cloud-managed resource's name) wins so a
-        // mixed-materialization type can hold both the in-cluster "default" recipe and
-        // a per-instance cloud recipe (FR-007, INV-5).
-        var recipeName = !string.IsNullOrEmpty(recipeNameOverride)
-            ? recipeNameOverride
-            : string.IsNullOrEmpty(recipe?.Name) ? "default" : recipe.Name;
+        // Legacy Applications.* types register their recipe under the "default" name on the
+        // legacy environment. The outer map is keyed by recipe name so a future PR can register
+        // multiple named recipes per type; this PR only emits the single default recipe.
+        const string recipeName = "default";
 
         if (!entries.TryGetValue(resourceType, out var byName))
         {
             byName = new Dictionary<string, RecipeEntry>(StringComparer.Ordinal);
             entries[resourceType] = byName;
-        }
-
-        if (recipe?.RecipeLocation is not null)
-        {
-            // Custom recipe: last write wins *for the same (type, recipeName)*.
-            byName[recipeName] = new RecipeEntry("bicep", recipe.RecipeLocation);
-            return;
         }
 
         if (s_defaultRecipeTemplates.TryGetValue(resourceType, out var defaultTemplate))
@@ -772,7 +711,7 @@ internal sealed class RadiusInfrastructureBuilder
         {
             _logger.LogWarning(
                 "No default recipe template found for legacy resource type '{ResourceType}'. " +
-                "Consider providing a custom recipe via PublishAsRadiusResource().",
+                "Register a recipe for this type via ConfigureRadiusInfrastructure().",
                 resourceType);
         }
     }
@@ -1031,9 +970,12 @@ internal sealed class RadiusInfrastructureBuilder
         return result;
     }
 
-    private readonly record struct EnvPart(string Literal)
+    // An ordered fragment of a container env-var value: either a literal string or a reference to
+    // a Bicep parameter (used for secret/parameter values so the literal is never emitted).
+    private readonly record struct EnvPart(string? Literal, ProvisioningParameter? Parameter)
     {
-        public static EnvPart FromLiteral(string literal) => new(literal);
+        public static EnvPart FromLiteral(string literal) => new(literal, null);
+        public static EnvPart FromParameter(ProvisioningParameter parameter) => new(null, parameter);
     }
 
     /// <summary>
@@ -1055,10 +997,10 @@ internal sealed class RadiusInfrastructureBuilder
                 parts.Add(EnvPart.FromLiteral(b ? "true" : "false"));
                 return;
             case ParameterResource param:
-                parts.Add(EnvPart.FromLiteral(await param.GetValueAsync(_cancellationToken).ConfigureAwait(false) ?? string.Empty));
+                parts.Add(EnvPart.FromParameter(GetOrAddEnvParameter(param)));
                 return;
             case IResourceBuilder<ParameterResource> paramBuilder:
-                parts.Add(EnvPart.FromLiteral(await paramBuilder.Resource.GetValueAsync(_cancellationToken).ConfigureAwait(false) ?? string.Empty));
+                parts.Add(EnvPart.FromParameter(GetOrAddEnvParameter(paramBuilder.Resource)));
                 return;
             case EndpointReference endpointReference:
                 parts.Add(EnvPart.FromLiteral(ResolveEndpointUrl(endpointReference)));
@@ -1167,11 +1109,60 @@ internal sealed class RadiusInfrastructureBuilder
     private static string UnescapeBraces(string format) =>
         format.Replace("{{", "{", StringComparison.Ordinal).Replace("}}", "}", StringComparison.Ordinal);
 
+    // Allocates (or reuses) the Bicep parameter that carries this Aspire parameter's value. The
+    // parameter is declared `@secure()` when the source is a secret so its value is neither printed
+    // in deploy logs nor written to the artifact. The identifier→resource mapping is recorded for
+    // the deploy step, which supplies the actual value via `rad deploy --parameters`.
+    private ProvisioningParameter GetOrAddEnvParameter(ParameterResource parameter)
+    {
+        if (_envParametersByName.TryGetValue(parameter.Name, out var existing))
+        {
+            return existing;
+        }
+
+        var identifier = Infrastructure.NormalizeBicepIdentifier(parameter.Name);
+        var provisioningParameter = new ProvisioningParameter(identifier, typeof(string))
+        {
+            IsSecure = parameter.Secret,
+        };
+
+        _envParametersByName[parameter.Name] = provisioningParameter;
+        _deployParametersByIdentifier[identifier] = parameter;
+        return provisioningParameter;
+    }
+
     private static BicepValue<string> BuildEnvBicepValue(List<EnvPart> parts)
     {
-        return parts.Count == 0
-            ? string.Empty
-            : string.Concat(parts.Select(p => p.Literal));
+        if (parts.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        // All-literal value: concatenate directly (also covers the common single-literal case).
+        if (parts.All(static p => p.Parameter is null))
+        {
+            return string.Concat(parts.Select(static p => p.Literal));
+        }
+
+        // A single parameter with no surrounding literals maps straight to the `param` reference,
+        // emitting `value: paramName` rather than an interpolated string.
+        if (parts is [{ Literal: null, Parameter: { } soleParameter }])
+        {
+            return soleParameter;
+        }
+
+        // Mixed literal/parameter value: build an interpolated Bicep string ('...${param}...').
+        // Literals are passed as interpolation arguments (not spliced into the format) so any '{'
+        // or '}' they contain can't be misread as a placeholder.
+        var format = new StringBuilder();
+        var args = new object[parts.Count];
+        for (var i = 0; i < parts.Count; i++)
+        {
+            format.Append('{').Append(i.ToString(CultureInfo.InvariantCulture)).Append('}');
+            args[i] = parts[i].Parameter is { } parameter ? parameter : parts[i].Literal!;
+        }
+
+        return BicepFunction.Interpolate(FormattableStringFactory.Create(format.ToString(), args));
     }
 
     /// <summary>

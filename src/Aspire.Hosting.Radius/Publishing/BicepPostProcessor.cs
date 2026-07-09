@@ -35,6 +35,13 @@ internal static partial class BicepPostProcessor
 
         var infra = new RadiusResourceInfrastructure(environmentName);
 
+        // Top-level Bicep parameters (secret/parameter-backed container env values). Added first so
+        // they render as `param` declarations ahead of the resources that reference them.
+        foreach (var parameter in options.Parameters)
+        {
+            infra.Add(parameter);
+        }
+
         // Add all constructs in block order:
         // 1. Recipe packs (referenced by environments)
         // 2. UDT environments
@@ -329,6 +336,16 @@ internal static partial class BicepPostProcessor
         foreach (var container in options.Containers)
         {
             Register(container.BicepIdentifier, "a container workload");
+        }
+
+        // Secret/parameter-backed env values become top-level `param` declarations, which share the
+        // same flat Bicep symbol namespace. Registering them here turns an identifier collision
+        // (e.g. two Aspire parameters whose names both sanitize to the same Bicep identifier) into a
+        // clear ASPIRERADIUS056 error instead of an opaque duplicate-declaration Bicep compile
+        // failure or a silently clobbered deploy-parameter value.
+        foreach (var parameter in options.Parameters)
+        {
+            Register(parameter.BicepIdentifier, "a secret/parameter env value");
         }
 
     }

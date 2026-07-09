@@ -5,6 +5,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.Radius.Publishing.Constructs;
+using Azure.Provisioning;
 
 namespace Aspire.Hosting.Radius.Publishing;
 
@@ -60,4 +61,11 @@ public sealed class RadiusInfrastructureOptions
     /// paired with <see cref="LegacyEnvironments"/>.
     /// </summary>
     public List<LegacyApplicationConstruct> LegacyApplications { get; } = [];
+
+    /// <summary>
+    /// Gets the top-level Bicep parameters emitted for secret/parameter values referenced by
+    /// container environment variables. Secret sources are declared <c>@secure()</c> so their
+    /// values are supplied at deploy time via <c>rad deploy --parameters</c> rather than inlined.
+    /// </summary>
+    public List<ProvisioningParameter> Parameters { get; } = [];
 }
