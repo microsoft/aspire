@@ -30,7 +30,8 @@ internal sealed class AppHostCleanupLauncher(
         var backchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
         var environmentVariables = new Dictionary<string, string>
         {
-            [KnownConfigNames.DcpResourceCleanupMode] = "true"
+            [KnownConfigNames.DcpResourceCleanupMode] = "true",
+            [KnownConfigNames.DcpWaitForResourceCleanup] = "true"
         };
         ProfilingTelemetry.AddCurrentContextToEnvironment(environmentVariables);
 
@@ -104,6 +105,19 @@ internal sealed class AppHostCleanupLauncher(
 
             await backchannel.GetDashboardUrlsAsync(cancellationToken).ConfigureAwait(false);
             await backchannel.NotifyAppHostReadyAsync(cancellationToken).ConfigureAwait(false);
+
+            var resourcesCreated = await WaitForAppHostResourcesCreatedAsync(
+                backchannel,
+                pendingRun,
+                startupStartTimestamp,
+                startupTimeout,
+                cancellationToken).ConfigureAwait(false);
+
+            if (!resourcesCreated)
+            {
+                return await pendingRun.ConfigureAwait(false);
+            }
+
             await RequestAppHostCleanupStopAsync(backchannel, pendingRun, cancellationToken).ConfigureAwait(false);
 
             return await WaitForAppHostCleanupShutdownAsync(runCancellationTokenSource, pendingRun, cancellationToken).ConfigureAwait(false);
@@ -138,6 +152,26 @@ internal sealed class AppHostCleanupLauncher(
         }
 
         return false;
+    }
+
+    private async Task<bool> WaitForAppHostResourcesCreatedAsync(
+        IAppHostCliBackchannel backchannel,
+        Task<int> pendingRun,
+        long startupStartTimestamp,
+        TimeSpan startupTimeout,
+        CancellationToken cancellationToken)
+    {
+        var resourcesCreatedTask = backchannel.WaitForResourcesCreatedAsync(cancellationToken)
+            .WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), timeProvider, cancellationToken);
+
+        if (await Task.WhenAny(resourcesCreatedTask, pendingRun).ConfigureAwait(false) == pendingRun)
+        {
+            ObserveFaults(resourcesCreatedTask);
+            return false;
+        }
+
+        await resourcesCreatedTask.ConfigureAwait(false);
+        return true;
     }
 
     private async Task<IAppHostCliBackchannel?> WaitForBackchannelAsync(

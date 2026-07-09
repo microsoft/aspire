@@ -11,6 +11,8 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     public TaskCompletionSource? RequestStopAsyncCalled { get; set; }
     public Func<Task>? RequestStopAsyncCallback { get; set; }
     public TaskCompletionSource? NotifyAppHostReadyAsyncCalled { get; set; }
+    public TaskCompletionSource? WaitForResourcesCreatedAsyncCalled { get; set; }
+    public Func<CancellationToken, Task>? WaitForResourcesCreatedAsyncCallback { get; set; }
 
     public TaskCompletionSource? GetDashboardUrlsAsyncCalled { get; set; }
     public Func<CancellationToken, Task<DashboardUrlsState>>? GetDashboardUrlsAsyncCallback { get; set; }
@@ -51,6 +53,14 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     {
         NotifyAppHostReadyAsyncCalled?.SetResult();
         return Task.CompletedTask;
+    }
+
+    public Task WaitForResourcesCreatedAsync(CancellationToken cancellationToken)
+    {
+        WaitForResourcesCreatedAsyncCalled?.SetResult();
+        return WaitForResourcesCreatedAsyncCallback is not null
+            ? WaitForResourcesCreatedAsyncCallback.Invoke(cancellationToken)
+            : Task.CompletedTask;
     }
 
     public Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)

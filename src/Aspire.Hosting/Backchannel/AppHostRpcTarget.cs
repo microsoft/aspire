@@ -205,6 +205,35 @@ internal class AppHostRpcTarget(
         return Task.CompletedTask;
     }
 
+    public async Task WaitForResourcesCreatedAsync(CancellationToken cancellationToken)
+    {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(WaitForResourcesCreatedAsync), streaming: false);
+        // ApplicationStarted is raised after every hosted service has started. In run mode that
+        // includes OrchestratorHostService, whose StartAsync waits for DcpExecutor.RunApplicationAsync
+        // to finish creating DCP objects.
+        await WaitForApplicationStartedAsync(lifetime, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task WaitForApplicationStartedAsync(IHostApplicationLifetime lifetime, CancellationToken cancellationToken)
+    {
+        if (lifetime.ApplicationStarted.IsCancellationRequested)
+        {
+            return;
+        }
+
+        var applicationStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cancellationRegistration = cancellationToken.Register(static state =>
+        {
+            ((TaskCompletionSource)state!).TrySetCanceled();
+        }, applicationStarted);
+        using var startedRegistration = lifetime.ApplicationStarted.Register(static state =>
+        {
+            ((TaskCompletionSource)state!).TrySetResult();
+        }, applicationStarted);
+
+        await applicationStarted.Task.ConfigureAwait(false);
+    }
+
 #pragma warning disable CA1822
     public Task<string[]> GetCapabilitiesAsync(CancellationToken cancellationToken)
     {

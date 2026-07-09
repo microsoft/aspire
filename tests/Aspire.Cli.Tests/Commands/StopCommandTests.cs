@@ -324,7 +324,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("13.5.0")]
     [InlineData("13.5.0-local.20260709.t210638")]
-    public async Task StopCommand_ForceStopsNormallyThenLaunchesAppHostInResourceCleanupMode(string aspireHostingVersion)
+    public async Task StopCommand_ForceWaitsForResourceCleanupBeforeStoppingCleanupAppHost(string aspireHostingVersion)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
@@ -332,9 +332,12 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
         IReadOnlyDictionary<string, string>? environment = null;
+        var resourcesCreated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var backchannel = new TestAppHostBackchannel
         {
-            RequestStopAsyncCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+            RequestStopAsyncCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
+            WaitForResourcesCreatedAsyncCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously),
+            WaitForResourcesCreatedAsyncCallback = _ => resourcesCreated.Task
         };
 
         var projectLocator = new TestProjectLocator
@@ -366,11 +369,17 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
 
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        var invokeTask = result.InvokeAsync();
+        await backchannel.WaitForResourcesCreatedAsyncCalled.Task.DefaultTimeout();
+        Assert.False(backchannel.RequestStopAsyncCalled.Task.IsCompleted);
+        resourcesCreated.SetResult();
+
+        var exitCode = await invokeTask.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(environment);
         Assert.Equal("true", environment[KnownConfigNames.DcpResourceCleanupMode]);
+        Assert.Equal("true", environment[KnownConfigNames.DcpWaitForResourceCleanup]);
         Assert.True(backchannel.RequestStopAsyncCalled.Task.IsCompletedSuccessfully);
         Assert.Contains(interactionService.DisplayedMessages, message => message.Message == string.Format(SharedCommandStrings.AppHostNotRunningAtPath, Path.Combine("AppHost", "AppHost.csproj")));
     }
@@ -490,7 +499,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StopCommand_ForceCancelsCleanupRunWhenStartupRpcThrows()
+    public async Task StopCommand_ForceCancelsCleanupRunWhenResourceCleanupRpcThrows()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
@@ -500,7 +509,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var cleanupCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var backchannel = new TestAppHostBackchannel
         {
-            GetDashboardUrlsAsyncCallback = _ => throw new InvalidOperationException("Dashboard unavailable.")
+            WaitForResourcesCreatedAsyncCallback = _ => throw new InvalidOperationException("Resource cleanup unavailable.")
         };
 
         var projectLocator = new TestProjectLocator
@@ -544,7 +553,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
-        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("Dashboard unavailable.", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("Resource cleanup unavailable.", StringComparison.Ordinal));
         await cleanupCanceled.Task.DefaultTimeout();
     }
 

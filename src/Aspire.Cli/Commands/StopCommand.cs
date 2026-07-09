@@ -135,14 +135,14 @@ internal sealed class StopCommand : BaseCommand
         appHostFile ??= stopResult.AppHostFile;
         if (appHostFile is null)
         {
-            InteractionService.DisplayError("Unrecognized app host type.");
+            InteractionService.DisplayError(RestoreCommandStrings.UnrecognizedAppHostType);
             return CliExitCodes.FailedToFindProject;
         }
 
         var project = _projectFactory.TryGetProject(appHostFile);
         if (project is null)
         {
-            InteractionService.DisplayError("Unrecognized app host type.");
+            InteractionService.DisplayError(RestoreCommandStrings.UnrecognizedAppHostType);
             return CliExitCodes.FailedToFindProject;
         }
 
