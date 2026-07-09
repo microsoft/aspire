@@ -151,4 +151,62 @@ public class MarkupHelpersTests
         var fileUri = new Uri(Path.GetFullPath(path)).AbsoluteUri;
         TerminalLinkAssert.ContainsLink(rendered, fileUri, path);
     }
+
+    [Fact]
+    public void SafeFileLink_LongPath_DoesNotWrapIncorrectly()
+    {
+        // Regression test: Spectre.Console 0.57.0 had a wrapping bug (spectreconsole/spectre.console#2152)
+        // where long file paths rendered via links would be incorrectly broken across lines.
+        // This test uses a narrow console width to verify the fix in 0.57.2.
+        var path = Path.Combine(Path.GetTempPath(), "aspire", "logs", "aspire-cli-20260101T120000Z.log");
+        var result = MarkupHelpers.SafeFileLink(supportsLinks: true, path);
+
+        var output = new StringBuilder();
+        var settings = new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.Standard,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        };
+        var console = AnsiConsole.Create(settings);
+        console.Profile.Width = 40;
+        console.Profile.Capabilities.Links = true;
+
+        console.MarkupLine(result);
+
+        var rendered = output.ToString();
+        var fileUri = new Uri(Path.GetFullPath(path)).AbsoluteUri;
+
+        // The link should be present and the file name should appear as a contiguous string
+        // (not split by wrapping) within the OSC 8 hyperlink sequence.
+        TerminalLinkAssert.ContainsLink(rendered, fileUri, path);
+    }
+
+    [Fact]
+    public void SafeFileLink_LongPath_NoLinks_DoesNotWrapIncorrectly()
+    {
+        // Same wrapping regression test but for terminals without link support.
+        var path = Path.Combine(Path.GetTempPath(), "aspire", "logs", "aspire-cli-20260101T120000Z.log");
+        var result = MarkupHelpers.SafeFileLink(supportsLinks: false, path);
+
+        var output = new StringBuilder();
+        var settings = new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        };
+        var console = AnsiConsole.Create(settings);
+        console.Profile.Width = 40;
+
+        console.MarkupLine(result);
+
+        // The rendered output should contain the full path without spurious line breaks
+        // splitting the filename itself. Line wrapping is acceptable at word boundaries
+        // but should not split in the middle of the file name.
+        var rendered = output.ToString();
+        Assert.Contains("aspire-cli-20260101T120000Z.log", rendered);
+    }
 }
