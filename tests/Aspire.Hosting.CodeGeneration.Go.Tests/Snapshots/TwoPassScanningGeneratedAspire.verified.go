@@ -2075,10 +2075,11 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerF
 	reqArgs["sourcePath"] = serializeValue(sourcePath)
 	if len(options) > 0 {
 		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -2101,10 +2102,11 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerF
 	}
 	if len(options) > 0 {
 		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFilesCallback", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -2504,10 +2506,11 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpComman
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
 		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -3145,10 +3148,11 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCom
 	}
 	if len(options) > 0 {
 		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -4512,10 +4516,11 @@ func (s *cSharpAppResource) WithHttpCommand(path string, displayName string, opt
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
 		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -5074,10 +5079,11 @@ func (s *cSharpAppResource) WithProcessCommandFactory(commandName string, displa
 	}
 	if len(options) > 0 {
 		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -7289,10 +7295,11 @@ func (s *containerRegistryResource) WithProcessCommandFactory(commandName string
 	}
 	if len(options) > 0 {
 		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -8171,10 +8178,11 @@ func (s *containerResource) WithContainerFiles(destinationPath string, sourcePat
 	reqArgs["sourcePath"] = serializeValue(sourcePath)
 	if len(options) > 0 {
 		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -8197,10 +8205,11 @@ func (s *containerResource) WithContainerFilesCallback(destinationPath string, c
 	}
 	if len(options) > 0 {
 		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFilesCallback", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -8600,10 +8609,11 @@ func (s *containerResource) WithHttpCommand(path string, displayName string, opt
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
 		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -9241,10 +9251,11 @@ func (s *containerResource) WithProcessCommandFactory(commandName string, displa
 	}
 	if len(options) > 0 {
 		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -12008,10 +12019,11 @@ func (s *dotnetToolResource) WithHttpCommand(path string, displayName string, op
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
 		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -12570,10 +12582,11 @@ func (s *dotnetToolResource) WithProcessCommandFactory(commandName string, displ
 	}
 	if len(options) > 0 {
 		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -14802,10 +14815,11 @@ func (s *executableResource) WithHttpCommand(path string, displayName string, op
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
 		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -15364,10 +15378,11 @@ func (s *executableResource) WithProcessCommandFactory(commandName string, displ
 	}
 	if len(options) > 0 {
 		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -16739,10 +16754,11 @@ func (s *externalServiceResource) WithProcessCommandFactory(commandName string, 
 	}
 	if len(options) > 0 {
 		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -17806,10 +17822,11 @@ func (s *interactionInputBuilder) WithDynamicLoading(callback func(arg Interacti
 	}
 	if len(options) > 0 {
 		merged := &DynamicLoadingOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/withDynamicLoading", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -18050,10 +18067,11 @@ func (s *interactionService) CreateBooleanInput(name string, options ...*CreateI
 	reqArgs["name"] = serializeValue(name)
 	if len(options) > 0 {
 		merged := &CreateInteractionInputOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createBooleanInput", reqArgs)
 	if err != nil {
@@ -18104,10 +18122,11 @@ func (s *interactionService) CreateFileInput(name string, options ...*CreateInte
 	reqArgs["name"] = serializeValue(name)
 	if len(options) > 0 {
 		merged := &CreateInteractionInputOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createFileInput", reqArgs)
 	if err != nil {
@@ -18131,10 +18150,11 @@ func (s *interactionService) CreateNumberInput(name string, options ...*CreateIn
 	reqArgs["name"] = serializeValue(name)
 	if len(options) > 0 {
 		merged := &CreateInteractionInputOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createNumberInput", reqArgs)
 	if err != nil {
@@ -18158,10 +18178,11 @@ func (s *interactionService) CreateSecretInput(name string, options ...*CreateIn
 	reqArgs["name"] = serializeValue(name)
 	if len(options) > 0 {
 		merged := &CreateInteractionInputOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createSecretInput", reqArgs)
 	if err != nil {
@@ -18185,10 +18206,11 @@ func (s *interactionService) CreateTextInput(name string, options ...*CreateInte
 	reqArgs["name"] = serializeValue(name)
 	if len(options) > 0 {
 		merged := &CreateInteractionInputOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createTextInput", reqArgs)
 	if err != nil {
@@ -19418,10 +19440,11 @@ func (s *parameterResource) WithProcessCommandFactory(commandName string, displa
 	}
 	if len(options) > 0 {
 		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -21213,10 +21236,11 @@ func (s *projectResource) WithHttpCommand(path string, displayName string, optio
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
 		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -21775,10 +21799,11 @@ func (s *projectResource) WithProcessCommandFactory(commandName string, displayN
 	}
 	if len(options) > 0 {
 		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -24366,10 +24391,11 @@ func (s *testDatabaseResource) WithContainerFiles(destinationPath string, source
 	reqArgs["sourcePath"] = serializeValue(sourcePath)
 	if len(options) > 0 {
 		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -24392,10 +24418,11 @@ func (s *testDatabaseResource) WithContainerFilesCallback(destinationPath string
 	}
 	if len(options) > 0 {
 		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFilesCallback", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -24795,10 +24822,11 @@ func (s *testDatabaseResource) WithHttpCommand(path string, displayName string, 
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
 		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -25436,10 +25464,11 @@ func (s *testDatabaseResource) WithProcessCommandFactory(commandName string, dis
 	}
 	if len(options) > 0 {
 		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -26789,10 +26818,11 @@ func (s *testRedisResource) WithContainerFiles(destinationPath string, sourcePat
 	reqArgs["sourcePath"] = serializeValue(sourcePath)
 	if len(options) > 0 {
 		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -26815,10 +26845,11 @@ func (s *testRedisResource) WithContainerFilesCallback(destinationPath string, c
 	}
 	if len(options) > 0 {
 		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFilesCallback", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -27236,10 +27267,11 @@ func (s *testRedisResource) WithHttpCommand(path string, displayName string, opt
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
 		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -27914,10 +27946,11 @@ func (s *testRedisResource) WithProcessCommandFactory(commandName string, displa
 	}
 	if len(options) > 0 {
 		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		reqArgs["options"] = serializeValue(merged)
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s

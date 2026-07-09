@@ -1442,17 +1442,19 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
 
         if (optionalParams.Count > 0)
         {
-            // Direct-options: merge the DTO variadic under the original parameter name. The request
-            // args are identical to the wrapper path, so only the public Go call shape changes.
+            // Direct-options: merge the DTO variadic under the original parameter name. Only emit the
+            // key when a non-nil option was applied, matching the wrapper path's ToMap(), which omits
+            // the nilable field when it is nil (e.g. a lone WithFoo(nil) sends no "options" key).
             if (TryGetDirectOptionsParameter(optionalParams, out var directOptionsParam))
             {
                 var dtoType = MapDtoType(directOptionsParam.Type!.TypeId);
                 WriteLine($"{indent}if len(options) > 0 {{");
                 WriteLine($"{indent}\tmerged := &{dtoType}{{}}");
+                WriteLine($"{indent}\tapplied := false");
                 WriteLine($"{indent}\tfor _, opt := range options {{");
-                WriteLine($"{indent}\t\tif opt != nil {{ merged = deepUpdate(merged, opt) }}");
+                WriteLine($"{indent}\t\tif opt != nil {{ merged = deepUpdate(merged, opt); applied = true }}");
                 WriteLine($"{indent}\t}}");
-                WriteLine($"{indent}\treqArgs[\"{directOptionsParam.Name}\"] = serializeValue(merged)");
+                WriteLine($"{indent}\tif applied {{ reqArgs[\"{directOptionsParam.Name}\"] = serializeValue(merged) }}");
                 WriteLine($"{indent}}}");
                 return;
             }
