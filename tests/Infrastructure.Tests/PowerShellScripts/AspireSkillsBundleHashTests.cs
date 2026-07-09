@@ -30,17 +30,18 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
     // Canonical hook-like content using LF placeholders; each test rewrites the newlines per style.
     private const string CanonicalText = "#!/usr/bin/env bash\necho 'aspire'\n";
 
-    private readonly TestTempDirectory _tempDir = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _commonScriptPath;
     private readonly ITestOutputHelper _output;
 
     public AspireSkillsBundleHashTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _commonScriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "aspire-skills-bundle.common.ps1");
     }
 
-    public void Dispose() => _tempDir.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Theory]
     [RequiresTools(["pwsh"])]
@@ -50,7 +51,7 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
     [InlineData(LineEndings.BomCrlf)]
     public async Task NormalizesEveryLineEndingVariantToTheSameHash(LineEndings lineEndings)
     {
-        var inputPath = Path.Combine(_tempDir.Path, $"input-{lineEndings}.bin");
+        var inputPath = Path.Combine(_workspace.Path, $"input-{lineEndings}.bin");
         File.WriteAllBytes(inputPath, BuildInput(lineEndings));
 
         var hash = await RunHashDriverAsync(inputPath);
@@ -146,7 +147,7 @@ public sealed class AspireSkillsBundleHashTests : IDisposable
 
     private string WriteDriver(string fileName, string content)
     {
-        var path = Path.Combine(_tempDir.Path, fileName);
+        var path = Path.Combine(_workspace.Path, fileName);
         File.WriteAllText(path, content);
         return path;
     }

@@ -12,7 +12,7 @@ namespace Infrastructure.Tests;
 /// </summary>
 public sealed class GenerateTestSummaryToolTests : IClassFixture<GenerateTestSummaryFixture>, IDisposable
 {
-    private readonly TestTempDirectory _tempDirectory = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly GenerateTestSummaryFixture _fixture;
     private readonly ITestOutputHelper _output;
 
@@ -20,14 +20,15 @@ public sealed class GenerateTestSummaryToolTests : IClassFixture<GenerateTestSum
     {
         _fixture = fixture;
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
     }
 
-    public void Dispose() => _tempDirectory.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     public async Task IncludesStructuredErrorMessageAndStackTraceInReport()
     {
-        var trxPath = Path.Combine(_tempDirectory.Path, "sample.trx");
+        var trxPath = Path.Combine(_workspace.Path, "sample.trx");
         TestTrxBuilder.CreateTrxFile(
             trxPath,
             new TestTrxCase(
@@ -49,14 +50,14 @@ public sealed class GenerateTestSummaryToolTests : IClassFixture<GenerateTestSum
     [Fact]
     public async Task FailedTestsJsonListsOnlyFailedTestNames()
     {
-        var trxPath = Path.Combine(_tempDirectory.Path, "mixed.trx");
+        var trxPath = Path.Combine(_workspace.Path, "mixed.trx");
         TestTrxBuilder.CreateTrxFile(
             trxPath,
             new TestTrxCase("Tests.Type.PassingMethod", "Tests.Type.PassingMethod", "Passed"),
             new TestTrxCase("Tests.Type.FailingMethod", "Tests.Type.FailingMethod", "Failed", ErrorMessage: "boom"),
             new TestTrxCase("Tests.Type.ErroredMethod", "Tests.Type.ErroredMethod", "Error", ErrorMessage: "kaboom"));
 
-        var jsonPath = Path.Combine(_tempDirectory.Path, "failed.json");
+        var jsonPath = Path.Combine(_workspace.Path, "failed.json");
         var result = await RunToolAsync(trxPath, "--failed-tests-json", jsonPath);
 
         Assert.Equal(0, result.ExitCode);
@@ -77,13 +78,13 @@ public sealed class GenerateTestSummaryToolTests : IClassFixture<GenerateTestSum
         // Aborted is a failed outcome (matches CreateFailingTestIssue). Without it,
         // a red run whose only failures aborted would report zero failures and be
         // misfiled as infra, dropping the failing-test signal.
-        var trxPath = Path.Combine(_tempDirectory.Path, "aborted.trx");
+        var trxPath = Path.Combine(_workspace.Path, "aborted.trx");
         TestTrxBuilder.CreateTrxFile(
             trxPath,
             new TestTrxCase("Tests.Type.AbortedMethod", "Tests.Type.AbortedMethod", "Aborted", ErrorMessage: "aborted"),
             new TestTrxCase("Tests.Type.PassingMethod", "Tests.Type.PassingMethod", "Passed"));
 
-        var jsonPath = Path.Combine(_tempDirectory.Path, "failed.json");
+        var jsonPath = Path.Combine(_workspace.Path, "failed.json");
         var result = await RunToolAsync(trxPath, "--failed-tests-json", jsonPath);
 
         Assert.Equal(0, result.ExitCode);
@@ -100,13 +101,13 @@ public sealed class GenerateTestSummaryToolTests : IClassFixture<GenerateTestSum
     [Fact]
     public async Task FailedTestsJsonIsEmptyWhenAllPass()
     {
-        var trxPath = Path.Combine(_tempDirectory.Path, "allpass.trx");
+        var trxPath = Path.Combine(_workspace.Path, "allpass.trx");
         TestTrxBuilder.CreateTrxFile(
             trxPath,
             new TestTrxCase("Tests.Type.A", "Tests.Type.A", "Passed"),
             new TestTrxCase("Tests.Type.B", "Tests.Type.B", "Passed"));
 
-        var jsonPath = Path.Combine(_tempDirectory.Path, "failed.json");
+        var jsonPath = Path.Combine(_workspace.Path, "failed.json");
         var result = await RunToolAsync(trxPath, "--failed-tests-json", jsonPath);
 
         Assert.Equal(0, result.ExitCode);
@@ -129,11 +130,11 @@ public sealed class GenerateTestSummaryToolTests : IClassFixture<GenerateTestSum
         // drop the failing-test signal. extractionFailed flags it as a test
         // failure instead. Falsifiable: without the flag the payload is
         // indistinguishable from a clean zero-failure run.
-        var trxDir = Path.Combine(_tempDirectory.Path, "corrupt");
+        var trxDir = Path.Combine(_workspace.Path, "corrupt");
         Directory.CreateDirectory(trxDir);
         await File.WriteAllTextAsync(Path.Combine(trxDir, "broken.trx"), "this is not valid trx xml <<<");
 
-        var jsonPath = Path.Combine(_tempDirectory.Path, "failed.json");
+        var jsonPath = Path.Combine(_workspace.Path, "failed.json");
         var result = await RunToolAsync(trxDir, "--failed-tests-json", jsonPath);
 
         Assert.Equal(0, result.ExitCode);
@@ -156,14 +157,14 @@ public sealed class GenerateTestSummaryToolTests : IClassFixture<GenerateTestSum
         // and the reporter files a test-failure issue rather than dropping the
         // signal as infra. Falsifiable: if the flag only considered the
         // all-unreadable case, this would report a clean zero and be misfiled.
-        var trxDir = Path.Combine(_tempDirectory.Path, "partial");
+        var trxDir = Path.Combine(_workspace.Path, "partial");
         Directory.CreateDirectory(trxDir);
         TestTrxBuilder.CreateTrxFile(
             Path.Combine(trxDir, "clean.trx"),
             new TestTrxCase("Tests.Type.PassingMethod", "Tests.Type.PassingMethod", "Passed"));
         await File.WriteAllTextAsync(Path.Combine(trxDir, "broken.trx"), "this is not valid trx xml <<<");
 
-        var jsonPath = Path.Combine(_tempDirectory.Path, "failed.json");
+        var jsonPath = Path.Combine(_workspace.Path, "failed.json");
         var result = await RunToolAsync(trxDir, "--failed-tests-json", jsonPath);
 
         Assert.Equal(0, result.ExitCode);
@@ -183,14 +184,14 @@ public sealed class GenerateTestSummaryToolTests : IClassFixture<GenerateTestSum
         // A readable .trx with a real failure plus an unreadable .trx: the collected
         // failure is trustworthy, so extractionFailed stays false even though one
         // file could not be read. The failing test name is still reported.
-        var trxDir = Path.Combine(_tempDirectory.Path, "partial-with-failure");
+        var trxDir = Path.Combine(_workspace.Path, "partial-with-failure");
         Directory.CreateDirectory(trxDir);
         TestTrxBuilder.CreateTrxFile(
             Path.Combine(trxDir, "failed.trx"),
             new TestTrxCase("Tests.Type.FailingMethod", "Tests.Type.FailingMethod", "Failed", ErrorMessage: "boom"));
         await File.WriteAllTextAsync(Path.Combine(trxDir, "broken.trx"), "this is not valid trx xml <<<");
 
-        var jsonPath = Path.Combine(_tempDirectory.Path, "failed.json");
+        var jsonPath = Path.Combine(_workspace.Path, "failed.json");
         var result = await RunToolAsync(trxDir, "--failed-tests-json", jsonPath);
 
         Assert.Equal(0, result.ExitCode);
@@ -212,7 +213,7 @@ public sealed class GenerateTestSummaryToolTests : IClassFixture<GenerateTestSum
         // TrxReader.GetTestResultsFromTrx, which TimeSpan.Parse-es those attributes
         // and throws FormatException — silently skipping every real .trx and
         // reporting zero failures.
-        var trxPath = Path.Combine(_tempDirectory.Path, "timestamped.trx");
+        var trxPath = Path.Combine(_workspace.Path, "timestamped.trx");
         TestTrxBuilder.CreateTrxFile(
             trxPath,
             new TestTrxCase(
@@ -221,7 +222,7 @@ public sealed class GenerateTestSummaryToolTests : IClassFixture<GenerateTestSum
                 StartTime: "2026-06-08T18:34:22.1234567+00:00",
                 EndTime: "2026-06-08T18:34:25.7654321+00:00"));
 
-        var jsonPath = Path.Combine(_tempDirectory.Path, "failed.json");
+        var jsonPath = Path.Combine(_workspace.Path, "failed.json");
         var result = await RunToolAsync(trxPath, "--failed-tests-json", jsonPath);
 
         Assert.Equal(0, result.ExitCode);

@@ -68,20 +68,37 @@ internal sealed class ProcessInvocationOptions
     public bool KillEntireProcessTreeOnCancel { get; set; } = true;
 
     /// <summary>
-    /// When <c>true</c>, the spawned process is given its own hidden console group (Windows)
-    /// and, on Windows, is assigned to the CLI's kill-on-close job object. Required so the
-    /// shutdown ladder in <see cref="ProcessExecution"/> can target the child with
-    /// DCP's <c>stop-process-tree</c> CTRL+C dance.
+    /// When <c>true</c>, the spawned process is given its own hidden console group (Windows) so the
+    /// shutdown ladder in <see cref="ProcessExecution"/> can target the child with DCP's
+    /// <c>stop-process-tree</c> CTRL+C dance without also signalling the CLI. On Windows a
+    /// console-isolated child is additionally bound to the process-wide
+    /// <see cref="WindowsConsoleProcessJob"/> kill-on-close job as its crash-time safety net.
     /// </summary>
     /// <remarks>
-    /// Pair with <see cref="GracefulShutdownSignaler"/> and <see cref="ShutdownService"/>.
-    /// On Windows the spawned process is bound to the process-wide
-    /// <see cref="WindowsConsoleProcessJob"/> kill-on-close job automatically.
+    /// Pair with <see cref="GracefulShutdownSignaler"/> and <see cref="ShutdownService"/> for
+    /// graceful shutdown. A non-isolated background helper that should not outlive the CLI can opt
+    /// into the same kill-on-close job — without a new console group — via <see cref="KillOnParentExit"/>.
     /// Leaving the signaler/service unset means cancellation falls back to
     /// <see cref="ProcessExecution"/>'s force-kill mode, preserving back-compat
     /// for the many non-Run callers (build, restore, package add, layout, etc.).
     /// </remarks>
     public bool IsolateConsole { get; set; }
+
+    /// <summary>
+    /// When <c>true</c>, the child is bound to the CLI's Windows kill-on-close job so the OS terminates
+    /// it when the CLI exits unexpectedly (crash / SIGKILL), even if the child does not react 
+    /// to cancellation request. This is an OS-level, Windows-only crash-time safety net
+    /// for background helpers that must never outlive their parent — the <c>aspire-managed</c> NuGet
+    /// helper, the standalone dashboard, and the profiling collector — and, unlike
+    /// <see cref="IsolateConsole"/>, it does not give the child a new console group.
+    /// </summary>
+    /// <remarks>
+    /// On non-Windows hosts this is a no-op; process-group signalling plus the in-child
+    /// parent-liveness watchdog (which self-terminates when <c>ASPIRE_CLI_PID</c> disappears) provide
+    /// the cross-platform equivalent. The two layers are complementary: the job is the instant,
+    /// guaranteed backstop on Windows, and the watchdog is the graceful, cross-platform mechanism.
+    /// </remarks>
+    public bool KillOnParentExit { get; set; }
 
     /// <summary>
     /// Issues the graceful shutdown signal during the shutdown ladder (DCP
@@ -97,6 +114,26 @@ internal sealed class ProcessInvocationOptions
     /// force-kill mode.
     /// </summary>
     public IGracefulShutdownWindow? ShutdownService { get; set; }
+
+    /// <summary>
+    /// Creates a shallow copy so a caller-supplied instance can be layered with additional settings
+    /// without mutating the original, which the caller may reuse across invocations. The delegate and
+    /// service references are intentionally shared with the copy.
+    /// </summary>
+    public ProcessInvocationOptions Clone() => new()
+    {
+        StandardOutputCallback = StandardOutputCallback,
+        StandardErrorCallback = StandardErrorCallback,
+        NoLaunchProfile = NoLaunchProfile,
+        StartDebugSession = StartDebugSession,
+        Debug = Debug,
+        SuppressLogging = SuppressLogging,
+        KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
+        IsolateConsole = IsolateConsole,
+        KillOnParentExit = KillOnParentExit,
+        GracefulShutdownSignaler = GracefulShutdownSignaler,
+        ShutdownService = ShutdownService,
+    };
 }
 
 internal sealed class DotNetCliRunner(
@@ -316,11 +353,13 @@ internal sealed class DotNetCliRunner(
             KillEntireProcessTreeOnCancel = options.KillEntireProcessTreeOnCancel,
             // Forward the Run-path shutdown ladder opt-ins. Forgetting any of these silently
             // demotes the run to the force-kill fallback: IsolateConsole=false skips console
-            // isolation, and the null signaler/service pair causes ProcessExecution's OCE catch
+            // isolation, KillOnParentExit=false removes the Windows crash-time job safety net, and the
+            // null signaler/service pair causes ProcessExecution's OCE catch
             // (DotNet/ProcessExecution.cs) to route through its force-kill mode (best-effort SIGTERM
             // then kill) instead of its graceful ladder. Build/restore/etc. callers leave these unset
             // and intentionally keep the force-kill path.
             IsolateConsole = options.IsolateConsole,
+            KillOnParentExit = options.KillOnParentExit,
             GracefulShutdownSignaler = options.GracefulShutdownSignaler,
             ShutdownService = options.ShutdownService,
             StandardOutputCallback = line =>
@@ -350,28 +389,15 @@ internal sealed class DotNetCliRunner(
         public int StderrLineCount;
     }
 
-    internal static int GetCurrentProcessId() => Environment.ProcessId;
-
-    internal static long GetCurrentProcessStartTimeUnixSeconds()
-    {
-        var startTime = Process.GetCurrentProcess().StartTime;
-        return ((DateTimeOffset)startTime).ToUnixTimeSeconds();
-    }
-
     /// <summary>
     /// Configures dotnet-specific environment variables for CLI process executions.
     /// </summary>
     private void ConfigureDotNetEnvironment(IDictionary<string, string> env)
     {
-        // The AppHost uses this environment variable to signal to the CliOrphanDetector which process
-        // it should monitor in order to know when to stop the CLI. As long as the process still exists
-        // the orphan detector will allow the CLI to keep running. If the environment variable does
-        // not exist the orphan detector will exit.
-        env[KnownConfigNames.CliProcessId] = GetCurrentProcessId().ToString(CultureInfo.InvariantCulture);
-
-        // Set the CLI process start time for robust orphan detection to prevent PID reuse issues.
-        // The AppHost will verify both PID and start time to ensure it's monitoring the correct process.
-        env[KnownConfigNames.CliProcessStarted] = GetCurrentProcessStartTimeUnixSeconds().ToString(CultureInfo.InvariantCulture);
+        // Stamp the CLI's identity (PID + start time) so the AppHost's CliOrphanDetector can verify
+        // which process it is monitoring and exit once that process is gone. Verifying both PID and
+        // start time avoids acting on a recycled PID. If the variables are absent the detector exits.
+        OrphanDetectionEnvironment.ApplyCurrentProcess(env);
 
         // Pass the CLI log file path so that querying CLI processes (e.g., aspire resource, aspire stop)
         // can surface it to help users diagnose issues in the managing CLI process.

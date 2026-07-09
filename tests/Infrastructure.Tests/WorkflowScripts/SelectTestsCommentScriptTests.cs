@@ -21,7 +21,7 @@ public sealed class SelectTestsCommentScriptTests : IDisposable
 {
     private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly TestTempDirectory _tempDirectory = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _repoRoot = RepoRoot.Path;
     private readonly string _harnessPath;
     private readonly ITestOutputHelper _output;
@@ -29,10 +29,11 @@ public sealed class SelectTestsCommentScriptTests : IDisposable
     public SelectTestsCommentScriptTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _harnessPath = Path.Combine(_repoRoot, "tests", "Infrastructure.Tests", "WorkflowScripts", "select-tests-comment.harness.js");
     }
 
-    public void Dispose() => _tempDirectory.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     [RequiresTools(["node"])]
@@ -101,7 +102,7 @@ public sealed class SelectTestsCommentScriptTests : IDisposable
     [RequiresTools(["node"])]
     public async Task SkipsCommentWhenSummaryFileMissing()
     {
-        var missingPath = Path.Combine(_tempDirectory.Path, "does-not-exist.md");
+        var missingPath = Path.Combine(_workspace.Path, "does-not-exist.md");
 
         var result = await RunCommentScriptAsync(missingPath, PullRequestContext("abcdef1234567890", contextSha: "fedcba0987654321"));
 
@@ -176,7 +177,7 @@ public sealed class SelectTestsCommentScriptTests : IDisposable
 
     private string WriteSummary(string content)
     {
-        var path = Path.Combine(_tempDirectory.Path, $"{Guid.NewGuid():N}.md");
+        var path = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}.md");
         File.WriteAllText(path, content);
         return path;
     }
@@ -226,8 +227,8 @@ public sealed class SelectTestsCommentScriptTests : IDisposable
     private async Task<CommentScriptResult> RunCommentScriptAsync(string commentFile, object context, string? liveHeadSha, object[] existingComments)
     {
         var script = ExtractCommentScript();
-        var requestPath = Path.Combine(_tempDirectory.Path, $"{Guid.NewGuid():N}.json");
-        var outputPath = Path.Combine(_tempDirectory.Path, $"{Guid.NewGuid():N}.result.json");
+        var requestPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}.json");
+        var outputPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}.result.json");
         await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new { script, commentFile, context, liveHeadSha, existingComments }, s_jsonOptions));
 
         using var command = new NodeCommand(_output, "select-tests-comment");

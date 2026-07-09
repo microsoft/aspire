@@ -39,7 +39,7 @@ using Polly.Retry;
 namespace Aspire.Hosting.Tests.Dcp;
 
 [Trait("Partition", "4")]
-public class DcpExecutorTests
+public class DcpExecutorTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task ContainersArePassedOtelServiceName()
@@ -66,7 +66,7 @@ public class DcpExecutorTests
     [Fact]
     public async Task DockerfileContainerBuildSpecIncludesPlatform()
     {
-        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(outputHelper);
 
         var builder = DistributedApplication.CreateBuilder();
 #pragma warning disable ASPIREPIPELINES003 // ContainerBuildOptions APIs are experimental.
@@ -91,7 +91,7 @@ public class DcpExecutorTests
     [Fact]
     public async Task DockerfileContainerBuildSpec_RunMode_DefaultsToHostPlatform()
     {
-        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync();
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(outputHelper);
 
         var builder = DistributedApplication.CreateBuilder();
         builder.AddDockerfile("mycontainer", tempDockerfileContext.ContextPath, tempDockerfileContext.DockerfilePath);

@@ -22,7 +22,7 @@ public sealed class ReportPipelineFailureIntegrationTests : IDisposable
     // request verbatim so the Web camelCase policy does not rename them.
     private static readonly JsonSerializerOptions s_requestOptions = new();
 
-    private readonly TestTempDirectory _tempDirectory = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _repoRoot;
     private readonly string _harnessPath;
     private readonly ITestOutputHelper _output;
@@ -30,11 +30,12 @@ public sealed class ReportPipelineFailureIntegrationTests : IDisposable
     public ReportPipelineFailureIntegrationTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _repoRoot = RepoRoot.Path;
         _harnessPath = Path.Combine(_repoRoot, "tests", "Infrastructure.Tests", "WorkflowScripts", "report-pipeline-failure.integration.harness.js");
     }
 
-    public void Dispose() => _tempDirectory.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     private static object DeploymentEnv() => new
     {
@@ -286,7 +287,7 @@ public sealed class ReportPipelineFailureIntegrationTests : IDisposable
 
     private async Task<RunnerResult> InvokeAsync(object scenario)
     {
-        var requestPath = Path.Combine(_tempDirectory.Path, $"{Guid.NewGuid():N}.json");
+        var requestPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}.json");
         await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(scenario, s_requestOptions));
 
         using var command = new NodeCommand(_output, "report-pipeline-failure-integration");

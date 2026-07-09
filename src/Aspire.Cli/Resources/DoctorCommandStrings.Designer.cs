@@ -132,6 +132,42 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Development Tools.
+        /// </summary>
+        public static string DevelopmentToolsCategoryHeader {
+            get {
+                return ResourceManager.GetString("DevelopmentToolsCategoryHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire extension for VS Code is installed.
+        /// </summary>
+        public static string VsCodeExtensionInstalledMessage {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionInstalledMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to VS Code is installed, but the Aspire extension is not installed.
+        /// </summary>
+        public static string VsCodeExtensionMissingMessage {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionMissingMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience..
+        /// </summary>
+        public static string VsCodeExtensionMissingFix {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionMissingFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Summary: {0} passed, {1} warnings, {2} failed.
         /// </summary>
         public static string SummaryFormat {

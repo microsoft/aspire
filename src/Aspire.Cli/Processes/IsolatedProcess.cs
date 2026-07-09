@@ -4,16 +4,14 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Text;
-using Microsoft.Win32.SafeHandles;
 
 namespace Aspire.Cli.Processes;
 
 /// <summary>
 /// Mirrors <see cref="ProcessStartInfo"/>. Differences from the BCL shape:
 /// stdout/stderr are always redirected (so there is no <c>RedirectStandardOutput</c>
-/// flag — see <see cref="IsolatedProcess.Start"/>), and <see cref="JobHandle"/> adds
-/// the Windows-only kill-on-close safety net described in
-/// <see cref="WindowsConsoleProcessJob"/>.
+/// flag — see <see cref="IsolatedProcess.Start"/>), and <see cref="KillOnParentExit"/> adds
+/// a parent-lifetime safety net for children that should not outlive the CLI.
 /// </summary>
 internal sealed class IsolatedProcessStartInfo
 {
@@ -40,24 +38,21 @@ internal sealed class IsolatedProcessStartInfo
     public IDictionary<string, string?> Environment => _environment ??= LoadParentEnvironment();
 
     /// <summary>
-    /// Windows-only crash-time safety net. When set, the spawned child is atomically
-    /// assigned to this job object via the suspended-create / assign / resume dance in
-    /// <see cref="WindowsProcessInterop.SpawnConsoleIsolatedProcess"/>. Set to
-    /// <see cref="WindowsConsoleProcessJob.Handle"/> from <see cref="WindowsConsoleProcessJob.Shared"/>
-    /// on Windows hosts; <see langword="null"/> on non-Windows hosts (Unix process-group
-    /// semantics cover the equivalent case).
+    /// When <see langword="true"/>, the child should be terminated when the parent exits.
+    /// This mirrors the .NET 11 ProcessStartInfo.KillOnParentExit shape so the custom Windows
+    /// job-object implementation can be replaced by the platform implementation later.
     /// </summary>
-    public SafeFileHandle? JobHandle { get; init; }
+    public bool KillOnParentExit { get; init; }
 
     /// <summary>
     /// When <see langword="true"/> (the default) the child is spawned in its own hidden console
     /// group on Windows (CREATE_NEW_CONSOLE | SW_HIDE) so a graceful CTRL+C can target it without
     /// also signalling the CLI. When <see langword="false"/> the child
-    /// is spawned via an ordinary redirected <see cref="Process.Start(ProcessStartInfo)"/> — no new
-    /// console, no <see cref="JobHandle"/>, and stdin wired to an empty pipe — which is the shape
-    /// every non-isolated CLI subprocess (build, restore, package add, …) uses. On Unix both modes
-    /// are identical because SIGTERM via the process group covers teardown, so only Windows branches
-    /// on this flag.
+    /// is spawned via an ordinary redirected <see cref="Process.Start(ProcessStartInfo)"/> unless
+    /// <see cref="KillOnParentExit"/> is also supplied. Job-protected Windows children use the suspended-create
+    /// launcher even when they do not need graceful console isolation so they are atomically assigned
+    /// to the kill-on-parent-exit job. On Unix both modes are identical because SIGTERM via the process
+    /// group covers teardown, so only Windows branches on this flag.
     /// </summary>
     public bool IsolateConsole { get; init; } = true;
 
@@ -111,10 +106,10 @@ internal sealed class IsolatedProcessStartInfo
 
 /// <summary>
 /// Mirrors <see cref="System.Diagnostics.Process"/> for a child spawned by <see cref="Start"/>.
-/// On Windows the child gets its own hidden console (CREATE_NEW_CONSOLE | SW_HIDE) so a graceful
-/// shutdown can <c>AttachConsole</c> + post <c>CTRL_C_EVENT</c> at it without also signalling the
-/// CLI; on Unix it's a thin <see cref="Process.Start(ProcessStartInfo)"/>
-/// wrapper because SIGTERM via the process group is enough.
+/// On Windows, callers can request either kill-on-parent-exit, a hidden console
+/// (CREATE_NEW_CONSOLE | SW_HIDE) for targeted graceful shutdown, or both. On Unix it's a thin
+/// <see cref="Process.Start(ProcessStartInfo)"/> wrapper because SIGTERM via the process group is
+/// enough.
 /// </summary>
 /// <remarks>
 /// Differences from the BCL shape worth knowing about:
@@ -260,30 +255,23 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         ArgumentNullException.ThrowIfNull(standardOutputHandler);
         ArgumentNullException.ThrowIfNull(standardErrorHandler);
 
-        // Non-isolated mode is an ordinary redirected Process.Start on every platform: no new
-        // console, no JobHandle, stdin wired to an empty pipe. On Unix the isolated mode is the
-        // same redirected spawn (SIGTERM via the process group is enough), so only the isolated
-        // Windows path needs the dedicated new-console launcher.
-        if (!startInfo.IsolateConsole)
-        {
-            return StartRedirected(startInfo, standardOutputHandler, standardErrorHandler, redirectStandardInput: true);
-        }
-
-        if (OperatingSystem.IsWindows())
+        // Windows parent-exit protection requires the suspended-create / assign / resume ceremony in
+        // StartWindows. Route protected helpers through that path even when they do not need a
+        // graceful CTRL+C console group; otherwise use the ordinary redirected Process.Start shape.
+        if (OperatingSystem.IsWindows() && (startInfo.IsolateConsole || startInfo.KillOnParentExit))
         {
             return StartWindows(startInfo, standardOutputHandler, standardErrorHandler);
         }
 
-        return StartRedirected(startInfo, standardOutputHandler, standardErrorHandler, redirectStandardInput: false);
+        return StartRedirected(startInfo, standardOutputHandler, standardErrorHandler, redirectStandardInput: !startInfo.IsolateConsole);
     }
 
     /// <summary>
     /// Cross-platform redirected spawn — a thin <see cref="Process.Start(ProcessStartInfo)"/>
     /// wrapper. Used for every non-isolated child (all platforms) and for isolated children on
     /// Unix, where SIGTERM / process groups handle cooperative shutdown so the new-console
-    /// gymnastics the Windows partial uses are unnecessary. <see cref="IsolatedProcessStartInfo.JobHandle"/>
-    /// is ignored here (Unix process-group reparenting + signal delivery cover the crash-time case
-    /// that JobHandle exists to address on Windows).
+    /// gymnastics the Windows partial uses are unnecessary. <see cref="IsolatedProcessStartInfo.KillOnParentExit"/>
+    /// is ignored here until a cross-platform platform primitive is available.
     /// </summary>
     /// <param name="startInfo">Process launch parameters.</param>
     /// <param name="standardOutputHandler">Per-line callback for stdout; receives the wrapper as sender.</param>

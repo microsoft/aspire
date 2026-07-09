@@ -18,16 +18,17 @@ public class DockerSocketBindMountTests(ITestOutputHelper testOutputHelper)
             CMD sh -c "docker info > /out/docker-info.txt"
             """;
 
-        using var dir = new TestTempDirectory();
-        using var outDir = new TestTempDirectory();
-        var dockerFilePath = Path.Combine(dir.Path, "Dockerfile");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var contextDir = workspace.CreateDirectory("context");
+        var outDir = workspace.CreateDirectory("output");
+        var dockerFilePath = Path.Combine(contextDir.FullName, "Dockerfile");
         await File.WriteAllTextAsync(dockerFilePath, dockerfile);
 
         var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
-        appBuilder.AddDockerfile("docker-client", contextPath: dir.Path)
+        appBuilder.AddDockerfile("docker-client", contextPath: contextDir.FullName)
                   .WithBindMount("/var/run/docker.sock", "/var/run/docker.sock")
-                  .WithBindMount(outDir.Path, "/out");
+                  .WithBindMount(outDir.FullName, "/out");
 
         using var app = appBuilder.Build();
 
@@ -44,7 +45,7 @@ public class DockerSocketBindMountTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(KnownResourceStates.Exited, state.Snapshot.State);
 
-        var infoFile = Path.Combine(outDir.Path, "docker-info.txt");
+        var infoFile = Path.Combine(outDir.FullName, "docker-info.txt");
         Assert.True(File.Exists(infoFile));
 
         var infoContent = await File.ReadAllTextAsync(infoFile);

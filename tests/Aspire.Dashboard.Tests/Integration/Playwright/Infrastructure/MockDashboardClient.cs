@@ -31,9 +31,9 @@ public sealed class MockDashboardClient : IDashboardClient
         }.ToDictionary(),
         state: KnownResourceState.Running);
 
-    private readonly List<ResourceViewModel>? _resources;
+    private readonly IReadOnlyList<ResourceViewModel>? _resources;
 
-    public MockDashboardClient(List<ResourceViewModel>? resources = null)
+    public MockDashboardClient(IReadOnlyList<ResourceViewModel>? resources = null)
     {
         _resources = resources;
     }
@@ -41,7 +41,7 @@ public sealed class MockDashboardClient : IDashboardClient
     public bool IsEnabled => true;
     public Task WhenConnected => Task.CompletedTask;
     public string ApplicationName => "IntegrationTestApplication";
-    public bool IsDashboardVersionSupported => true;
+    public string? MinRequiredVersion => null;
     public DashboardConnectionState ConnectionState => DashboardConnectionState.Connected;
 #pragma warning disable CS0067 // Event is never used - required by interface
     public event Action<DashboardConnectionState>? ConnectionStateChanged;
@@ -56,7 +56,7 @@ public sealed class MockDashboardClient : IDashboardClient
     public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken)
     {
         return Task.FromResult(new ResourceViewModelSubscription(
-            [TestResource1],
+            [.. (_resources ?? [TestResource1])],
             Test()
         ));
     }

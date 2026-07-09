@@ -18,7 +18,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetIncludedFilesAsync_OutsideRepo_ReturnsNull()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = workspace.CreateExecutionContext();
         using var profilingTelemetry = CreateProfilingTelemetry();
         var repo = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
@@ -32,7 +32,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
     public async Task GetIncludedFilesAsync_InGitRepo_ReturnsTrackedAndUntracked_ExcludingIgnored()
     {
         await GitTestHelper.EnsureGitAvailableAsync();
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await workspace.InitializeGitAsync().DefaultTimeout();
         await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName);
 
@@ -75,7 +75,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
     public async Task GetIncludedFilesAsync_DeletedTrackedFile_StillReturned()
     {
         await GitTestHelper.EnsureGitAvailableAsync();
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await workspace.InitializeGitAsync().DefaultTimeout();
         await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName);
 
@@ -102,7 +102,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
     public async Task GetIncludedFilesAsync_EmitsProfilingActivityForGitProcess()
     {
         await GitTestHelper.EnsureGitAvailableAsync();
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await workspace.InitializeGitAsync().DefaultTimeout();
         await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName);
 

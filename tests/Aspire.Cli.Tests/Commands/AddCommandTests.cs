@@ -23,7 +23,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddCommandWithHelpArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -37,7 +37,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task IntegrationAddCommandWithHelpArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -51,7 +51,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task IntegrationSearchCommandWithJsonOptionDoesNotEmitDiscoveryJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
         {
@@ -82,7 +82,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task IntegrationSearchCommandRequiresQuery()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
         {
@@ -123,7 +123,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
@@ -206,7 +206,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
@@ -232,7 +232,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task IntegrationDiscoveryCommandReturnsSearchFailureExitCodeWhenPackageDiscoveryFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
@@ -263,7 +263,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
@@ -319,7 +319,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
@@ -384,7 +384,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
@@ -457,7 +457,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
@@ -538,7 +538,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
@@ -637,7 +637,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
         if (configFileChannelJson is not null)
@@ -720,7 +720,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "elsewhere"));
         var appHostFile = new FileInfo(Path.Combine(projectDirectory.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
@@ -765,7 +765,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
 
@@ -838,7 +838,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
@@ -908,7 +908,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives", "test-hive"));
 
         var implicitCache = new FakeNuGetPackageCache
@@ -956,7 +956,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
@@ -1002,7 +1002,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddCommandInteractiveFlowSmokeTest()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
 
@@ -1069,7 +1069,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     {
         var promptedForIntegrationPackages = false;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
 
@@ -1146,7 +1146,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var promptedForIntegrationPackages = false;
         var promptedForVersion = false;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
 
@@ -1230,7 +1230,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var promptedForIntegrationPackages = false;
         var promptedForVersion = false;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -1311,7 +1311,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var selectedPackageVersion = string.Empty;
         var exactMatchQueries = new List<string>();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AddCommandPrompterFactory = (sp) =>
@@ -1390,7 +1390,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var selectedPackageVersion = string.Empty;
         var exactMatchQueries = new List<string>();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -1478,7 +1478,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var selectedPackageName = string.Empty;
         var selectedPackageVersion = string.Empty;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -1545,7 +1545,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var selectedPackageVersion = string.Empty;
         var exactMatchQueryCounts = new Dictionary<string, int>(StringComparer.Ordinal);
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AddCommandPrompterFactory = (sp) =>
@@ -1617,7 +1617,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var promptedForVersion = false;
         var selectedPackageVersion = string.Empty;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -1690,7 +1690,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     {
         var statusMessages = new List<string>();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService
         {
             ShowStatusCallback = statusMessages.Add
@@ -1763,7 +1763,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var addPackageWasCalled = false;
         var testInteractionService = new TestInteractionService();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
@@ -1835,7 +1835,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var addPackageWasCalled = false;
         var testInteractionService = new TestInteractionService();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -1912,7 +1912,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         string? addedPackageName = null;
         string? addedPackageVersion = null;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -1998,7 +1998,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         string? addUsedSource = null;
         const string expectedSource = "https://custom-nuget-source.test/v3/index.json";
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
 
@@ -2062,7 +2062,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     {
         var testInteractionService = new TestInteractionService();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => testInteractionService;
@@ -2096,7 +2096,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         string? displayedSubtleMessage = null;
         bool promptedForIntegration = false;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -2192,7 +2192,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // Arrange
         List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>? displayedPackages = null;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = (sp) =>
@@ -2240,7 +2240,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // Arrange
         List<object>? displayedChoices = null;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = (sp) =>
@@ -2288,7 +2288,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // Arrange
         List<object>? displayedChoices = null;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = (sp) =>
@@ -2346,7 +2346,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // restore from the pinned daily feed — producing a confusing default and a failed restore.
         List<string>? displayedLabels = null;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = (sp) =>
@@ -2407,7 +2407,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var addedPackageId = string.Empty;
         var addedPackageVersion = string.Empty;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
@@ -2463,7 +2463,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     public async Task AddCommand_WithoutHives_UsesImplicitChannelWithoutPrompting()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         
         var selectedPackageId = string.Empty;
         
@@ -2521,7 +2521,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     public async Task AddCommand_WithHives_PrefersImplicitChannelVersionInNonInteractiveMode()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
         hivesDir.Create();
@@ -2688,7 +2688,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // where a stable/daily/staging emulated name excluded the local channel from add resolution.
         var cliVersion = VersionHelper.GetDefaultSdkVersion();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var identityPackagesDir = workspace.CreateDirectory("identity-packages");
         // Aspire.Hosting drives GetLocalHivePinnedVersion; Aspire.Hosting.Redis is the integration we add.
         File.WriteAllText(Path.Combine(identityPackagesDir.FullName, $"Aspire.Hosting.{cliVersion}.nupkg"), string.Empty);
@@ -2761,7 +2761,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Func<FileInfo?, NuGetPackage[]> searchCallback,
         string promptFailureMessage)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         configureHives(workspace);
 
         var selectedPackageVersion = string.Empty;
@@ -2818,7 +2818,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // installing a package that produces nothing in the target language.
         var addedPackageId = string.Empty;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
 
@@ -2866,7 +2866,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // The polyglot-compatible integration (Redis) survives filtering and installs normally.
         var addedPackageId = string.Empty;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
 
@@ -2914,7 +2914,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         // --all bypasses the polyglot filter so a not-yet-marked integration can still be added.
         var addedPackageId = string.Empty;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
 
@@ -2966,7 +2966,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplayRawTextCallback = text => rawJson = text
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
 
@@ -3012,7 +3012,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplaySubtleMessageCallback = message => displayedSubtleMessage = message
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
 
@@ -3058,7 +3058,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplaySubtleMessageCallback = message => displayedSubtleMessage = message
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
 
@@ -3104,7 +3104,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             DisplaySubtleMessageCallback = message => displayedSubtleMessage = message
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         File.WriteAllText(appHostFile.FullName, string.Empty);
 
@@ -3212,7 +3212,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
         var promptedPackages = new List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>();
         var addedPackage = string.Empty;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AddCommandPrompterFactory = (sp) =>
@@ -3316,7 +3316,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
         var addPackageWasCalled = false;
         var testInteractionService = new TestInteractionService();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
@@ -3367,7 +3367,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
         var addedPackage = string.Empty;
         var testInteractionService = new TestInteractionService();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
@@ -3416,7 +3416,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
         var promptedPackages = new List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>();
         var addedPackage = string.Empty;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -3480,7 +3480,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
             DisplaySubtleMessageCallback = message => displayedSubtleMessage = message
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -3541,7 +3541,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
         var addPackageWasCalled = false;
         var testInteractionService = new TestInteractionService();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
@@ -3593,7 +3593,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
         var addPackageWasCalled = false;
         var testInteractionService = new TestInteractionService();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
@@ -3644,7 +3644,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
     {
         var promptedPackages = new List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -3733,7 +3733,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
         var addedPackageName = string.Empty;
         var addedPackageVersion = string.Empty;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -3816,7 +3816,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
         var addPackageWasCalled = false;
         var testInteractionService = new TestInteractionService();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -3904,7 +3904,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
             DisplaySubtleMessageCallback = message => displayedSubtleMessage = message
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -3992,7 +3992,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
             DisplaySubtleMessageCallback = message => displayedSubtleMessage = message
         };
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
@@ -4072,7 +4072,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
     {
         var addedPackage = string.Empty;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.AddCommandPrompterFactory = (sp) =>
