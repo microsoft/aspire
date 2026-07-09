@@ -1048,12 +1048,9 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     /// <summary>
     /// Determines whether a capability's optional parameters can be flattened so the caller passes
     /// the DTO directly (<c>options ...*HostedAgentOptions</c>) instead of through a generated
-    /// wrapper struct. Mirrors the TypeScript generator's flattening.
+    /// wrapper struct. Go allows only one trailing variadic, so a coexisting cancellation token
+    /// keeps the wrapper.
     /// </summary>
-    /// <remarks>
-    /// Passes <c>cancellationTokenIsSeparateParameter: false</c>: Go models all optionals as a single
-    /// trailing variadic and allows only one, so a coexisting cancellation token keeps the wrapper.
-    /// </remarks>
     private static bool TryGetDirectOptionsParameter(
         IReadOnlyList<AtsParameterInfo> optionalParams,
         [NotNullWhen(true)] out AtsParameterInfo? directOptionsParam)
