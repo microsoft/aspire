@@ -37,6 +37,21 @@ public class ResourceSnapshotBuilderTests
         AssertHighlightedProperty(snapshot, KnownProperties.Container.Lifetime, "Container lifetime", isSensitive: false, sortOrder: 5);
     }
 
+    [Theory]
+    [InlineData(null, ContainerLifetime.Session)]
+    [InlineData(ResourceLifecycleMode.Session, ContainerLifetime.Session)]
+    [InlineData(ResourceLifecycleMode.Persistent, ContainerLifetime.Persistent)]
+    [InlineData(ResourceLifecycleMode.Cleanup, ContainerLifetime.Persistent)]
+    public void ContainerSnapshotMapsLifecycleModeToContainerLifetime(string? mode, ContainerLifetime expectedLifetime)
+    {
+        var container = Container.Create("container", "redis:latest");
+        container.Spec.Mode = mode;
+
+        var snapshot = CreateSnapshotBuilder().ToSnapshot(container, CreatePreviousSnapshot());
+
+        Assert.Equal(expectedLifetime, GetProperty(snapshot, KnownProperties.Container.Lifetime).Value);
+    }
+
     [Fact]
     public void ExecutableSnapshotAddsDisplayMetadataForDashboardProperties()
     {
