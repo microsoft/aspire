@@ -42,7 +42,6 @@ jobs:
     uses: ./.github/workflows/specialized-test-runner.yml
     with:
       attributeName: "OuterloopTest"
-      extraTestArgs: "--filter-trait outerloop=true"
       enablePlaywrightInstall: true
 
   # On a scheduled failure, file/append a single deduplicated issue: a
@@ -115,4 +114,3 @@ jobs:
           script: |
             const reporter = require('./.github/workflows/report-specialized-test-failures.js');
             await require('./.github/workflows/specialized-test-failure-runner.js')({ github, context, core, reporter });
-

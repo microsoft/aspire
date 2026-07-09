@@ -284,6 +284,60 @@ public class BuildTestMatrixTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
+    public async Task SpecializedTraitFilterIsIntersectedWithEachShardFilter()
+    {
+        var artifactsDir = Path.Combine(_workspace.Path, "artifacts");
+        Directory.CreateDirectory(artifactsDir);
+
+        TestDataBuilder.CreateTestsMetadataJson(
+            Path.Combine(artifactsDir, "RegularProject.tests-metadata.json"),
+            projectName: "RegularProject",
+            testProjectPath: "tests/RegularProject/RegularProject.csproj",
+            shortName: "Regular");
+
+        TestDataBuilder.CreateSplitTestsMetadataJson(
+            Path.Combine(artifactsDir, "PartitionProject.tests-metadata.json"),
+            projectName: "PartitionProject",
+            testProjectPath: "tests/PartitionProject/PartitionProject.csproj",
+            shortName: "Partition");
+
+        TestDataBuilder.CreateTestsPartitionsJson(
+            Path.Combine(artifactsDir, "PartitionProject.tests-partitions.json"),
+            "MyPartition");
+
+        TestDataBuilder.CreateSplitTestsMetadataJson(
+            Path.Combine(artifactsDir, "ClassProject.tests-metadata.json"),
+            projectName: "ClassProject",
+            testProjectPath: "tests/ClassProject/ClassProject.csproj",
+            shortName: "Class");
+
+        TestDataBuilder.CreateClassBasedPartitionsJson(
+            Path.Combine(artifactsDir, "ClassProject.tests-partitions.json"),
+            "MyNamespace.TestClass");
+
+        var outputFile = Path.Combine(_workspace.Path, "matrix.json");
+
+        var result = await RunScript(artifactsDir, outputFile, specializedTraitFilter: "outerloop=true");
+
+        result.EnsureSuccessful();
+
+        var matrix = ParseCanonicalMatrix(outputFile);
+
+        var regularEntry = Assert.Single(matrix.Tests, e => e.ProjectName == "RegularProject");
+        Assert.Equal("--filter-trait \"outerloop=true\"", regularEntry.ExtraTestArgs);
+
+        var partitionEntry = Assert.Single(matrix.Tests, e => e.ProjectName == "PartitionProject" && e.Collection == "MyPartition");
+        Assert.Equal("--filter-query \"/[(outerloop=true)&(category!=failing)&(Partition=MyPartition)]\"", partitionEntry.ExtraTestArgs);
+
+        var uncollectedEntry = Assert.Single(matrix.Tests, e => e.ProjectName == "PartitionProject" && e.Collection == "*");
+        Assert.Equal("--filter-query \"/[(outerloop=true)&(category!=failing)&(Partition!=*)]\"", uncollectedEntry.ExtraTestArgs);
+
+        var classEntry = Assert.Single(matrix.Tests, e => e.ProjectName == "ClassProject");
+        Assert.Equal("--filter-class \"MyNamespace.TestClass\" --filter-trait \"outerloop=true\"", classEntry.ExtraTestArgs);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
     public async Task CreatesEmptyMatrixWhenNoMetadataFiles()
     {
         // Arrange
@@ -731,14 +785,24 @@ public class BuildTestMatrixTests : IDisposable
         }
     }
 
-    private async Task<CommandResult> RunScript(string artifactsDir, string outputFile)
+    private async Task<CommandResult> RunScript(string artifactsDir, string outputFile, string? specializedTraitFilter = null)
     {
         using var cmd = new PowerShellCommand(_scriptPath, _output)
             .WithTimeout(TimeSpan.FromMinutes(2));
 
-        return await cmd.ExecuteAsync(
+        var args = new List<string>
+        {
             "-ArtifactsDir", $"\"{artifactsDir}\"",
-            "-OutputMatrixFile", $"\"{outputFile}\"");
+            "-OutputMatrixFile", $"\"{outputFile}\""
+        };
+
+        if (!string.IsNullOrEmpty(specializedTraitFilter))
+        {
+            args.Add("-SpecializedTraitFilter");
+            args.Add($"\"{specializedTraitFilter}\"");
+        }
+
+        return await cmd.ExecuteAsync(args.ToArray());
     }
 
     private static CanonicalMatrix ParseCanonicalMatrix(string path)

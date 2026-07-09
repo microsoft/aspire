@@ -43,7 +43,6 @@ jobs:
     uses: ./.github/workflows/specialized-test-runner.yml
     with:
       attributeName: "QuarantinedTest"
-      extraTestArgs: "--filter-trait quarantined=true"
       enablePlaywrightInstall: true
       ignoreTestFailures: true
 
@@ -80,4 +79,3 @@ jobs:
           script: |
             const reporter = require('./.github/workflows/report-specialized-test-failures.js');
             await require('./.github/workflows/specialized-test-failure-runner.js')({ github, context, core, reporter });
-

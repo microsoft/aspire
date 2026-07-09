@@ -12,10 +12,11 @@
     <PropertyGroup>
       <_TestMatrixOutputPath>$([MSBuild]::NormalizePath('$(RepoRoot)', '$(TestMatrixOutputPath)'))</_TestMatrixOutputPath>
       <_BuildMatrixScript>$([MSBuild]::NormalizePath($(RepoRoot), 'eng', 'scripts', 'build-test-matrix.ps1'))</_BuildMatrixScript>
+      <_SpecializedTraitFilterArg Condition="'$(SpecializedTraitFilter)' != ''"> -SpecializedTraitFilter &quot;$(SpecializedTraitFilter)&quot;</_SpecializedTraitFilterArg>
     </PropertyGroup>
 
     <!-- Build the canonical test matrix (platform-agnostic) -->
-    <Exec Command="pwsh -File &quot;$(_BuildMatrixScript)&quot; -ArtifactsDir &quot;$(ArtifactsDir)&quot; -OutputMatrixFile &quot;$(_TestMatrixOutputPath)&quot;"
+    <Exec Command="pwsh -File &quot;$(_BuildMatrixScript)&quot; -ArtifactsDir &quot;$(ArtifactsDir)&quot; -OutputMatrixFile &quot;$(_TestMatrixOutputPath)&quot;$(_SpecializedTraitFilterArg)"
           ConsoleToMSBuild="true">
       <Output TaskParameter="ConsoleOutput" PropertyName="TestEnumerationOutput" />
     </Exec>

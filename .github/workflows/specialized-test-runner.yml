@@ -10,7 +10,7 @@
 # Compared to tests.yml, this workflow:
 #   - Scopes the build to only projects containing the target attribute (grep-based)
 #   - Passes specialized MSBuild properties (RunQuarantinedTests/RunOuterloopTests)
-#   - Uses positive trait filtering for class-level test splitting (DiscoveryTraitFilter)
+#   - Uses positive trait filtering for class-level test splitting and execution
 #   - Overrides enablePlaywrightInstall on all test entries
 #   - On PRs, filters to a single project for fast sanity checks
 name: Specialized Test Runner
@@ -25,7 +25,7 @@ on:
       extraTestArgs:
         required: false
         type: string
-        description: 'Additional test arguments passed to run-tests.yml (e.g., --filter-trait quarantined=true)'
+        description: 'Additional non-filter test arguments passed to run-tests.yml'
       enablePlaywrightInstall:
         required: true
         type: boolean
@@ -87,6 +87,8 @@ jobs:
       #   gated on that prop are included (some csproj files set SkipTests unless the prop is set)
       # - DiscoveryTraitFilter enables positive filtering for class-level test splitting
       #   (e.g., only discovers classes that contain quarantined tests)
+      # - SpecializedTraitFilter moves the execution filter into each matrix entry so
+      #   split entries intersect the specialized trait with the class/partition shard.
       - name: Generate canonical test matrix
         run: >
           ./build.sh -test
@@ -99,6 +101,7 @@ jobs:
           /p:IncludeCliE2ETests=true
           ${{ steps.derive_props.outputs.msbuild_prop }}
           /p:DiscoveryTraitFilter=${{ steps.derive_props.outputs.discovery_filter }}
+          /p:SpecializedTraitFilter=${{ steps.derive_props.outputs.discovery_filter }}
           /bl
 
       - name: Expand matrix for GitHub Actions
