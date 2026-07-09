@@ -186,7 +186,7 @@ The workflow is intentionally conservative. All of these conditions must be met 
 | **Attempt limit** | The source run must be on attempt ≤ 3. Reruns are triggered from source attempts 1, 2, and 3, so a run gets up to 3 automatic reruns (4 total attempts) before the cap stops further reruns. |
 | **Retryable job cap** | At least 1 but no more than 5 retryable jobs (default). On attempts > 1, the cap is stricter: the count must be *strictly less than* 5. |
 | **Open PR** | At least one associated pull request must still be open. |
-| **Non-aggregator** | Aggregator jobs (`Final Results`, `Tests / Final Test Results`) are excluded from analysis. |
+| **Non-aggregator** | Aggregator jobs (`Final Results`, `Tests / Final Test Results`, `Tests / run_tests / Test Results`) are excluded from analysis. |
 | **Mixed-failure veto** | A job with both a test execution failure (`Run tests*`) and unrelated transient post-step noise is *not* retried on infrastructure grounds alone — the test execution failure must match a pattern (pass 3 or 4) to qualify. |
 
 When a rerun is requested, GitHub reruns **all** failed jobs for that attempt — not just the matched ones. This is a GitHub API constraint (there is no API for atomically rerunning a subset of failed jobs). The matched-job count and safety rails are the eligibility gate; once eligible, the rerun covers the full failed set.

@@ -46,7 +46,9 @@
 .NOTES
   PowerShell 7+
   Fails fast if ExtractTestPartitions cannot be built or run.
-  Fails fast if zero test classes discovered when in class mode.
+  Fails fast if zero test classes are discovered in default class mode.
+  With IncludeTraitFilter, zero matching classes writes an empty partitions file
+  so specialized workflows can skip projects with no matching trait.
   Only runs --list-tests when no partitions are found in the assembly.
 #>
 
