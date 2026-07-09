@@ -14,7 +14,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create a minimal project file so project detection succeeds
         var projectContent = """
@@ -52,7 +52,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
@@ -77,7 +77,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommand_WhenSdkNotInstalled_OnlyShowsCliTemplates()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller
@@ -101,7 +101,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PublishCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create a minimal project file so project detection succeeds
         var projectContent = """
@@ -139,7 +139,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommand_WhenSdkNotInstalled_ReturnsCorrectExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create a minimal project file so project detection succeeds
         var projectContent = """
@@ -177,7 +177,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunCommand_WhenSdkInstalled_ContinuesNormalExecution()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetSdkInstallerFactory = _ => new TestDotNetSdkInstaller

@@ -67,6 +67,7 @@
   "aspire-vscode.strings.aspireCliVersion": "Aspire CLI Version: {0}.",
   "aspire-vscode.strings.requiredCapability": "Required capability: {0}.",
   "aspire-vscode.strings.aspireTerminalName": "Aspire terminal",
+  "aspire-vscode.strings.aspireCliPathEnvironmentDescription": "Forwards aspire.aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution and integrated terminals use the configured Aspire CLI.",
   "aspire-vscode.strings.installCliPlaceholder": "Select how to install the Aspire CLI",
   "aspire-vscode.strings.installCliViewAllOptions": "View all installation options",
   "aspire-vscode.strings.installCliViewAllOptionsDescription": "Open the installation guide (includes the install script)",

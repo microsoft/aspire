@@ -4,13 +4,13 @@
 namespace Aspire.Cli.Tests.Utils;
 
 [Trait("Partition", "2")]
-public class PathLookupHelperTests
+public class PathLookupHelperTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void ResolveExecutablePath_SearchesPath_WhenExecutableIsCommandName()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var binPath = Path.Combine(tempDirectory.Path, "bin");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var binPath = Path.Combine(workspace.WorkspaceRoot.FullName, "bin");
         Directory.CreateDirectory(binPath);
 
         var executableName = OperatingSystem.IsWindows() ? "mycommand.exe" : "mycommand";
@@ -43,9 +43,9 @@ public class PathLookupHelperTests
             return;
         }
 
-        using var tempDirectory = new TestTempDirectory();
-        var firstBinPath = Path.Combine(tempDirectory.Path, "first-bin");
-        var secondBinPath = Path.Combine(tempDirectory.Path, "second-bin");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var firstBinPath = Path.Combine(workspace.WorkspaceRoot.FullName, "first-bin");
+        var secondBinPath = Path.Combine(workspace.WorkspaceRoot.FullName, "second-bin");
         Directory.CreateDirectory(firstBinPath);
         Directory.CreateDirectory(secondBinPath);
 
@@ -70,8 +70,8 @@ public class PathLookupHelperTests
     [InlineData("../mycommand")]
     public void ResolveExecutablePath_DoesNotSearchPath_WhenExecutablePathIsExplicit(string executablePath)
     {
-        using var tempDirectory = new TestTempDirectory();
-        var binPath = Path.Combine(tempDirectory.Path, "bin");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var binPath = Path.Combine(workspace.WorkspaceRoot.FullName, "bin");
         Directory.CreateDirectory(binPath);
         File.WriteAllText(Path.Combine(binPath, "mycommand"), string.Empty);
 
@@ -90,8 +90,8 @@ public class PathLookupHelperTests
             return;
         }
 
-        using var tempDirectory = new TestTempDirectory();
-        var binPath = Path.Combine(tempDirectory.Path, "bin");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var binPath = Path.Combine(workspace.WorkspaceRoot.FullName, "bin");
         Directory.CreateDirectory(binPath);
         File.WriteAllText(Path.Combine(binPath, "mycommand.exe"), string.Empty);
 
@@ -208,9 +208,9 @@ public class PathLookupHelperTests
             return;
         }
 
-        using var tempDirectory = new TestTempDirectory();
-        var firstBinPath = Path.Combine(tempDirectory.Path, "first-bin");
-        var secondBinPath = Path.Combine(tempDirectory.Path, "second-bin");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var firstBinPath = Path.Combine(workspace.WorkspaceRoot.FullName, "first-bin");
+        var secondBinPath = Path.Combine(workspace.WorkspaceRoot.FullName, "second-bin");
         Directory.CreateDirectory(firstBinPath);
         Directory.CreateDirectory(secondBinPath);
 

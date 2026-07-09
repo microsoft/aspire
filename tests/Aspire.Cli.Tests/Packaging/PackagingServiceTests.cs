@@ -21,7 +21,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingChannelDisabled_DoesNotIncludeStagingChannel()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -54,7 +54,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetChannelsAsync_WhenIdentityChannelIsStaging_IncludesStagingChannel()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Staging);
@@ -93,7 +93,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // Stable (so useSharedFeed in CreateStagingChannel resolves false). No overrideStagingFeed
         // is set: the injected informational version makes the darc derivation deterministic so the
         // test exercises (and asserts) the real SHA-feed routing rather than an override crutch.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Staging);
@@ -128,7 +128,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // packages). Before the fix, useSharedFeed was derived from the version shape (Both quality ->
         // shared daily feed), which is what broke `aspire add` for TypeScript apphosts while C#
         // apphosts (with the darc feed baked into nuget.config) resolved correctly.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Staging);
@@ -167,7 +167,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // staging CLI ("13.4.0") must resolve Aspire.* from its SHA-specific darc feed with Stable
         // quality (version filtering). The fix keeps this behavior while also covering the
         // prerelease-shaped case above.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Staging);
@@ -201,7 +201,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenIdentityChannelIsStagingWithOverrideFeed_UsesOverrideFeed()
     {
         // An explicit overrideStagingFeed always wins over identity-based darc derivation.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Staging);
@@ -236,7 +236,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // no override feed. Synthesis was permitted by the identity gate, so the only safe outcome is
         // to omit the staging channel and surface a warning — silently routing to the shared daily
         // feed would resolve the wrong (main-branch) packages, which is the bug this PR fixes.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Staging);
@@ -292,7 +292,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         const string DarcUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json";
         const string SharedUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json";
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: identityChannel);
@@ -357,7 +357,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // like a prerelease-shaped staging build. Both overrides are required — the identity override
         // makes ShouldUseSharedStagingFeed pick the darc feed, and the version override supplies the
         // '+<commit>' the darc URL is derived from.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Local);
@@ -389,7 +389,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     {
         // A stable-shaped (no semver prerelease tag) version override drives the quality predicate to
         // Stable, mirroring how an official stable-shaped staging build is filtered.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Local);
@@ -419,7 +419,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // An unrecognized identity override (rejected by IdentityChannelReader.IsValidChannel) is
         // ignored and the real 'local' identity is used, so no staging channel is synthesized despite
         // the version override being present.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Local);
@@ -444,7 +444,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     {
         // overrideStagingFeed is the most powerful escape hatch and must win over the SHA-derived darc
         // URL even when the diagnostic version override is also present.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Local);
@@ -472,7 +472,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     {
         // Any normal CLI invocation that has the diagnostic overrides set must leave a trace in the
         // logs so an overridden identity/feed can't silently resolve Aspire.* packages.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Local);
@@ -499,7 +499,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // Only the version override is set, so the identity stays 'local' and no staging channel is
         // synthesized. The warning must still fire — the override is active even though it had no
         // routing effect, and a silent no-op would hide a misconfiguration.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Local);
@@ -527,7 +527,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     {
         // StripBuildMetadata removes the '+<commit>' before the prerelease-tag check, so a commit hash
         // containing '-' must not be misread as a semver prerelease tag.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Local);
@@ -553,7 +553,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     {
         // The unavailable-reason check (cached via Lazy) must also honor the identity override, so a
         // local CLI with overrideCliIdentityChannel=staging reports staging as available.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Local);
@@ -573,7 +573,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetChannelsAsync_WhenRequestedChannelIsStaging_IncludesStagingChannel()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Stable);
@@ -594,7 +594,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // daily feed when config asks for staging — that resolves daily packages, not staging.
         // The escape hatches (overrideStagingFeed or the staging feature flag) are covered by
         // other tests in this file.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -624,7 +624,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // because the SHA-specific darc feed for the stable commit exists. With quality=Both
         // (the default for stagingChannelConfigured), useSharedFeed=true so the channel points
         // at the shared dnceng/dotnet9 feed.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Stable);
@@ -656,7 +656,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // A daily CLI invoked with `aspire update --channel staging` must NOT synthesize a
         // staging channel from either the SHA-specific darc feed (which doesn't exist for daily
         // commits) or the shared daily feed (which contains daily packages, not staging).
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Daily);
@@ -678,7 +678,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     {
         // The overrideStagingFeed escape hatch must still work on a daily CLI: when the user has
         // explicitly named the staging feed, we trust them and synthesize the channel.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Daily);
@@ -706,7 +706,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     {
         // The same gating applies to local and per-PR CLI identities. Per-PR (pr-<N>) builds
         // have a hive label baked in by CI but no staging feed of their own.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: identity);
@@ -731,7 +731,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // SHA-specific darc feed (not the shared daily feed). The informational version is injected
         // so the darc derivation is deterministic — no overrideStagingFeed crutch is needed, which
         // lets the assertions below isolate the feature-flag gate AND the real feed routing.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: PackageChannelNames.Daily);
@@ -775,7 +775,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetChannelsAsync_StableChannel_IsExplicitWithAllPackagesMappingToNuGetOrg()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -799,7 +799,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingChannelEnabled_IncludesStagingChannelWithOverrideFeed()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -842,7 +842,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingChannelEnabledWithOverrideFeed_UsesFullUrl()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -874,7 +874,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingChannelEnabledWithAzureDevOpsFeedOverride_UsesFullUrl()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -906,7 +906,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingChannelEnabledWithInvalidOverrideFeed_FallsBackToDefault()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -937,7 +937,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingChannelEnabledWithQualityOverride_UsesSpecifiedQuality()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -967,7 +967,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingChannelEnabledWithQualityBoth_UsesQualityBoth()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -997,7 +997,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingChannelEnabledWithInvalidQuality_DefaultsToStable()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -1027,7 +1027,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingChannelEnabledWithoutQualityOverride_DefaultsToStable()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -1056,7 +1056,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task NuGetConfigMerger_WhenChannelRequiresGlobalPackagesFolder_AddsGlobalPackagesFolderConfiguration()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         
         var features = new TestFeatures();
@@ -1106,7 +1106,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingChannelEnabled_StagingAppearsAfterStableBeforeDaily()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         
@@ -1162,7 +1162,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingChannelDisabled_OrderIsDefaultStableDailyPr()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         
@@ -1202,7 +1202,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingQualityPrerelease_AndNoFeedOverride_UsesSharedFeed()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -1237,7 +1237,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingQualityBoth_AndNoFeedOverride_UsesSharedFeed()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -1272,7 +1272,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingQualityPrerelease_WithFeedOverride_UsesFeedOverride()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -1310,7 +1310,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task NuGetConfigMerger_WhenStagingUsesSharedFeed_DoesNotAddGlobalPackagesFolder()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         
         var features = new TestFeatures();
@@ -1353,7 +1353,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingPinToCliVersionSet_ChannelHasPinnedVersion()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -1385,7 +1385,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingPinToCliVersionNotSet_ChannelHasNoPinnedVersion()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -1415,7 +1415,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenStagingPinToCliVersionSetButNotSharedFeed_ChannelHasNoPinnedVersion()
     {
         // Arrange - pin is set but explicit feed override means not using shared feed
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -1446,7 +1446,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenLocalHiveContainsProjectTemplatesPackage_ChannelHasPinnedVersion()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -1470,7 +1470,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetChannelsAsync_WhenPrIdentityRunsFromDogfoodInstallPrefix_AddsMatchingPrHiveChannel()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
 
         const string prChannelName = "pr-17225";
@@ -1511,7 +1511,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetChannelsAsync_WhenPrIdentityExistsInDefaultHiveAndDogfoodInstallPrefix_UsesDogfoodHiveChannel()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
 
         const string prChannelName = "pr-17225";
@@ -1554,7 +1554,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetChannelsAsync_WhenPrDogfoodHiveHasOnlyMalformedPackageNames_AddsChannelWithoutPinnedVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
 
         const string prChannelName = "pr-17225";
@@ -1590,7 +1590,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetChannelsAsync_WhenPrIdentityDogfoodPackagesDirectoryIsMissing_DoesNotAddPrHiveChannel()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
 
         const string prChannelName = "pr-17225";
@@ -1619,7 +1619,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetChannelsAsync_WhenPrIdentityDoesNotMatchDogfoodDirectory_DoesNotAddPrHiveChannel()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
 
         const string installedPrChannelName = "pr-11111";
@@ -1650,7 +1650,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetChannelsAsync_WhenProcessPathProviderThrows_DoesNotAddPrHiveChannel()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
 
         const string prChannelName = "pr-17225";
@@ -1676,7 +1676,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetChannelsAsync_WhenNonPrIdentityRunsFromDogfoodInstallPrefix_DoesNotAddPrHiveChannel()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
 
         const string prChannelName = "pr-17225";
@@ -1712,7 +1712,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryResolvePrInstallPackagesDirectory_WithWrongInstallLayout_ReturnsNull()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
 
         const string prChannelName = "pr-17225";
@@ -1734,7 +1734,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             new() { Id = "Aspire.ProjectTemplates", Version = "13.2.2", Source = PackageSources.NuGetOrg },
         ]);
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -1775,7 +1775,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             new() { Id = "Aspire.ProjectTemplates", Version = "13.1.0", Source = "dotnet9" },
         ]);
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -1827,7 +1827,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             new() { Id = "Aspire.Hosting.PostgreSQL", Version = "13.3.0-preview.1.26201.1", Source = "dotnet9" },
         ]);
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -1878,7 +1878,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             new() { Id = "Aspire.ProjectTemplates", Version = "13.1.0", Source = "dotnet9" },
         ]);
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -1924,7 +1924,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_HiveChannelNameAlwaysMatchesDirectoryName()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
 
@@ -1958,7 +1958,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenIdentityChannelIsNotLocal_HiveKeepsDirectoryName()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
 
@@ -1992,7 +1992,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task LocalHiveChannel_WithPinnedVersion_ReturnsIntegrationPackagesFromNupkgFiles()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -2032,7 +2032,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetChannelsAsync_LocalHive_AspireMappingPointsAtLocalDirectory_NotPublicFeed()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -2072,7 +2072,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         //    direct-enumeration shortcut when PinnedVersion != null, so an empty local hive
         //    falls through to the standard NuGet search path with the local dir as a source.
         // This test pins the channel-construction half of that contract.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -2102,7 +2102,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     {
         // Partial-state variant: `~/.aspire/hives/local/packages/` exists but contains zero `*.nupkg` files.
         // GetLocalHivePinnedVersion returns null because no FindHighestVersion lookup matches.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
@@ -2125,7 +2125,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // ASPIRE_CLI_PACKAGES points the Aspire* feed at a flat .nupkg directory and the service
         // synthesizes a channel named after the running CLI's identity channel that maps Aspire* there
         // and pins to the version discovered in the directory.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
 
@@ -2154,7 +2154,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     {
         // A discovered ~/.aspire/hives/<channel> hive must not mask the explicit override directory:
         // the override is the most specific signal of intent, so it wins and only one channel remains.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
 
@@ -2185,7 +2185,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     {
         // A flat directory has no latest-stable/latest-prerelease semantics, so two versions of the
         // same Aspire package would let NuGet silently resolve the highest. Fail fast instead.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
 
         var packagesOverrideDir = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "shipping"));
@@ -2210,7 +2210,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetChannelsAsync_WhenPackagesOverrideDirectoryMissing_ThrowsFailFast()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
 
         var missingDir = new DirectoryInfo(Path.Combine(tempDir.FullName, "does-not-exist"));

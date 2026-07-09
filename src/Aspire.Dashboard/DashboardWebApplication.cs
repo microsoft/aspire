@@ -976,6 +976,47 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Runs the dashboard until it shuts down or <paramref name="cancellationToken"/> is cancelled.
+    /// Cancellation triggers a graceful host shutdown.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token that can be used to request the dashboard to stop.</param>
+    public async Task<int> RunAsync(CancellationToken cancellationToken)
+    {
+        if (_validationFailures.Count > 0)
+        {
+            return ExitCodeValidationFailure;
+        }
+
+        try
+        {
+            // Cast to IHost so this binds to the CancellationToken-aware HostingAbstractionsHostExtensions.RunAsync
+            // (WebApplication's own RunAsync only takes a URL). Cancelling the token stops the host gracefully.
+            await ((IHost)_app).RunAsync(cancellationToken).ConfigureAwait(false);
+            return 0;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Cancellation is the watchdog's normal shutdown signal (or a start-time race), not a failure.
+            return 0;
+        }
+        catch (IOException ex) when (ContainsAddressInUse(ex))
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            return ExitCodeAddressInUse;
+        }
+        catch (Exception ex)
+        {
+            // Include the full exception (type, stack trace, inner exceptions)
+            // so that a "dashboard silently died" report has enough breadcrumbs
+            // to find the root cause from the AppHost log alone, without
+            // requiring a debugger attach.
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            Console.Error.WriteLine(ex.ToString());
+            return ExitCodeUnexpectedError;
+        }
+    }
+
     private static bool ContainsAddressInUse(Exception ex)
     {
         for (var current = ex.InnerException; current is not null; current = current.InnerException)

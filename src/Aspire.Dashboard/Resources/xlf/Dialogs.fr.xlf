@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="fr" original="../Dialogs.resx">
     <body>
@@ -502,6 +502,36 @@ For more information about using AI agents with the dashboard, including setting
       <trans-unit id="InteractionButtonOk">
         <source>OK</source>
         <target state="translated">OK</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionFileExceedsMaxSize">
+        <source>Exceeds the maximum size of {0}</source>
+        <target state="new">Exceeds the maximum size of {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionFilePlaceholder">
+        <source>Choose a file</source>
+        <target state="new">Choose a file</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionFilePlaceholderMultiple">
+        <source>Choose files</source>
+        <target state="new">Choose files</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionFileUploadFailed">
+        <source>Upload failed</source>
+        <target state="new">Upload failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionUnsupportedVersionMessage">
+        <source>This action requires a newer version of the Aspire dashboard. Please update your Aspire tools to use this feature.</source>
+        <target state="new">This action requires a newer version of the Aspire dashboard. Please update your Aspire tools to use this feature.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionUnsupportedVersionTitle">
+        <source>Dashboard Update Required</source>
+        <target state="new">Dashboard Update Required</target>
         <note />
       </trans-unit>
       <trans-unit id="ManageDataAllDataCheckboxLabel">

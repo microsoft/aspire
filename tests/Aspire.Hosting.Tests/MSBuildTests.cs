@@ -10,7 +10,7 @@ using Aspire.Hosting.Tests.Utils;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "6")]
-public class MSBuildTests
+public class MSBuildTests(ITestOutputHelper outputHelper)
 {
     /// <summary>
     /// Tests that when an AppHost has a ProjectReference to a library project, a warning is emitted.
@@ -19,11 +19,11 @@ public class MSBuildTests
     public void EnsureWarningsAreEmittedWhenProjectReferencingLibraries()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        CreateLibraryProject(tempDirectory.Path, "Library");
+        CreateLibraryProject(workspace.WorkspaceRoot.FullName, "Library");
 
-        var appHostDirectory = Path.Combine(tempDirectory.Path, "AppHost");
+        var appHostDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost");
         Directory.CreateDirectory(appHostDirectory);
 
         File.WriteAllText(Path.Combine(appHostDirectory, "AppHost.csproj"),
@@ -76,11 +76,11 @@ public class MSBuildTests
     public async Task ValidateMetadataSources()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        CreateAppProject(tempDirectory.Path, "App");
+        CreateAppProject(workspace.WorkspaceRoot.FullName, "App");
 
-        var appHostDirectory = Path.Combine(tempDirectory.Path, "AppHost");
+        var appHostDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost");
         Directory.CreateDirectory(appHostDirectory);
 
         File.WriteAllText(Path.Combine(appHostDirectory, "AppHost.csproj"),
@@ -131,7 +131,7 @@ public class MSBuildTests
             App = appMetadata
         }).ScrubLinesWithReplace(line =>
             {
-                var temp = tempDirectory?.Path;
+                var temp = workspace?.WorkspaceRoot.FullName;
                 if (temp is not null)
                 {
                     line = line.Replace($"/private{temp}", "{AspirePath}") // Handle macOS temp symlinks
@@ -323,10 +323,10 @@ public class MSBuildTests
     public async Task CliBundleDefaultResolvesExplicitBundlePath()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var bundle = CreateFakeCliBundle(tempDirectory.Path);
-        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+        var bundle = CreateFakeCliBundle(workspace.WorkspaceRoot.FullName);
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
             $"""
               <AspireCliBundlePath>{bundle.LayoutRoot}</AspireCliBundlePath>
             """);
@@ -345,12 +345,12 @@ public class MSBuildTests
     public async Task CliBundleDefaultResolvesNewestVersionedBundlePath()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var layoutRoot = Path.Combine(tempDirectory.Path, "layout");
+        var layoutRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "layout");
         _ = CreateFakeCliBundleAtVersionedLayoutRoot(layoutRoot, "13.9.0-preview.1.25301.1_older-aaaaaaaaaaaaaaaa");
         var newestBundle = CreateFakeCliBundleAtVersionedLayoutRoot(layoutRoot, "13.10.0-preview.1.25301.1_newer-bbbbbbbbbbbbbbbb");
-        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
             $"""
               <AspireCliBundlePath>{layoutRoot}</AspireCliBundlePath>
             """);
@@ -369,12 +369,12 @@ public class MSBuildTests
     public async Task CliBundleDefaultIgnoresTemporaryVersionedBundleDirectories()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var layoutRoot = Path.Combine(tempDirectory.Path, "layout");
+        var layoutRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "layout");
         _ = CreateFakeCliBundleAtVersionedLayoutRoot(layoutRoot, "99.0.0-preview.1.tmp.aaaaaaaaaaaaaaaa");
         var newestBundle = CreateFakeCliBundleAtVersionedLayoutRoot(layoutRoot, "13.10.0-preview.1.25301.1_newer-bbbbbbbbbbbbbbbb");
-        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
             $"""
               <AspireCliBundlePath>{layoutRoot}</AspireCliBundlePath>
             """);
@@ -393,9 +393,9 @@ public class MSBuildTests
     public void CliBundleOptOutEmitsWarning()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
             """
               <AspireUseCliBundle>false</AspireUseCliBundle>
             """);
@@ -412,12 +412,12 @@ public class MSBuildTests
     public async Task CliBundleDefaultResolvesAspireHomeBundleForSidecarlessCli()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "bin"));
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "bin"));
         var fakeCliPath = CreateFakeAspireCli(fakeCliDirectory.FullName);
-        var bundle = CreateFakeCliBundle(Path.Combine(tempDirectory.Path, "aspire-home"));
-        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+        var bundle = CreateFakeCliBundle(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-home"));
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
             $"""
               <AspireCliPath>{fakeCliPath}</AspireCliPath>
             """);
@@ -436,10 +436,10 @@ public class MSBuildTests
     public async Task CliBundleDefaultResolvesAspireHomeBundleWithoutCliOnPath()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var bundle = CreateFakeCliBundle(Path.Combine(tempDirectory.Path, "aspire-home"));
-        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot, additionalProperties: "");
+        var bundle = CreateFakeCliBundle(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-home"));
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot, additionalProperties: "");
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
@@ -459,9 +459,9 @@ public class MSBuildTests
     public async Task CliBundleDefaultResolvesDotNetToolStoreBundleFromShimPath()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var toolsDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, ".dotnet", "tools"));
+        var toolsDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".dotnet", "tools"));
         var shimPath = CreateFakeAspireCli(toolsDirectory.FullName);
         var nativeCliDirectory = Directory.CreateDirectory(Path.Combine(
             toolsDirectory.FullName,
@@ -476,7 +476,7 @@ public class MSBuildTests
         _ = CreateFakeAspireCli(nativeCliDirectory.FullName);
         File.WriteAllText(Path.Combine(nativeCliDirectory.FullName, ".aspire-install.json"), """{"source":"dotnet-tool"}""");
         var bundle = CreateFakeCliBundleAtLayoutRoot(nativeCliDirectory.FullName);
-        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
             $"""
               <AspireCliPath>{shimPath}</AspireCliPath>
             """);
@@ -495,15 +495,15 @@ public class MSBuildTests
     public async Task CliBundleOptInPrefersExistingRepoPathsOverBundlePath()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var bundle = CreateFakeCliBundle(tempDirectory.Path);
-        var repoDcpDir = EnsureTrailingSeparator(Path.Combine(tempDirectory.Path, "repo-dcp"));
-        var repoDashboardDir = EnsureTrailingSeparator(Path.Combine(tempDirectory.Path, "repo-dashboard"));
+        var bundle = CreateFakeCliBundle(workspace.WorkspaceRoot.FullName);
+        var repoDcpDir = EnsureTrailingSeparator(Path.Combine(workspace.WorkspaceRoot.FullName, "repo-dcp"));
+        var repoDashboardDir = EnsureTrailingSeparator(Path.Combine(workspace.WorkspaceRoot.FullName, "repo-dashboard"));
         Directory.CreateDirectory(repoDcpDir);
         Directory.CreateDirectory(repoDashboardDir);
 
-        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
             $"""
               <DcpDir>{repoDcpDir}</DcpDir>
               <AspireDashboardDir>{repoDashboardDir}</AspireDashboardDir>
@@ -524,10 +524,10 @@ public class MSBuildTests
     public void CliBundleOptInFailsWhenExplicitBundlePathIsInvalid()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var missingBundlePath = Path.Combine(tempDirectory.Path, "missing-bundle");
-        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+        var missingBundlePath = Path.Combine(workspace.WorkspaceRoot.FullName, "missing-bundle");
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
             $"""
               <AspireCliBundlePath>{missingBundlePath}</AspireCliBundlePath>
             """);
@@ -550,10 +550,10 @@ public class MSBuildTests
     public void CliBundleOptInFailsWhenExplicitCliPathIsInvalid()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var missingCliPath = Path.Combine(tempDirectory.Path, "missing-aspire");
-        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+        var missingCliPath = Path.Combine(workspace.WorkspaceRoot.FullName, "missing-aspire");
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
             $"""
               <AspireCliPath>{missingCliPath}</AspireCliPath>
             """);
@@ -572,9 +572,9 @@ public class MSBuildTests
     public async Task CliBundleDefaultAppliesToNonCSharpAppHostProject()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var appHostDirectory = Path.Combine(tempDirectory.Path, "AppHost");
+        var appHostDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost");
         Directory.CreateDirectory(appHostDirectory);
         File.WriteAllText(Path.Combine(appHostDirectory, "AppHost.fsproj"),
             """
@@ -605,11 +605,11 @@ public class MSBuildTests
     public async Task CliBundleOptInKeepsSdkProjectReferenceMutation()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        CreateAppProject(tempDirectory.Path, "App");
-        var bundle = CreateFakeCliBundle(tempDirectory.Path);
-        var appHostDirectory = CreateSdkBundleAppHostProject(tempDirectory.Path, repoRoot,
+        CreateAppProject(workspace.WorkspaceRoot.FullName, "App");
+        var bundle = CreateFakeCliBundle(workspace.WorkspaceRoot.FullName);
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
             $"""
               <AspireCliBundlePath>{bundle.LayoutRoot}</AspireCliBundlePath>
             """,
@@ -761,11 +761,11 @@ public class MSBuildTests
     public void TreatProjectReferencesAsResourcesFalse_DisablesMutation()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        CreateLibraryProject(tempDirectory.Path, "Library");
+        CreateLibraryProject(workspace.WorkspaceRoot.FullName, "Library");
 
-        var appHostDirectory = Path.Combine(tempDirectory.Path, "AppHost");
+        var appHostDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost");
         Directory.CreateDirectory(appHostDirectory);
 
         File.WriteAllText(Path.Combine(appHostDirectory, "AppHost.csproj"),
@@ -820,11 +820,11 @@ public class MSBuildTests
     public void TreatProjectReferencesAsResourcesTrue_EnablesMutation()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        CreateLibraryProject(tempDirectory.Path, "Library");
+        CreateLibraryProject(workspace.WorkspaceRoot.FullName, "Library");
 
-        var appHostDirectory = Path.Combine(tempDirectory.Path, "AppHost");
+        var appHostDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost");
         Directory.CreateDirectory(appHostDirectory);
 
         File.WriteAllText(Path.Combine(appHostDirectory, "AppHost.csproj"),
@@ -875,9 +875,9 @@ public class MSBuildTests
     public void AspireExportAnalyzersAreDisabledByDefault()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var projectDirectory = Path.Combine(tempDirectory.Path, "MyHostingExtension");
+        var projectDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "MyHostingExtension");
         Directory.CreateDirectory(projectDirectory);
 
         File.WriteAllText(Path.Combine(projectDirectory, "MyHostingExtension.csproj"),
@@ -924,9 +924,9 @@ public class MSBuildTests
     public void AspireExportAnalyzersCanBeEnabledWithMsBuildProperty()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var projectDirectory = Path.Combine(tempDirectory.Path, "MyHostingExtension");
+        var projectDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "MyHostingExtension");
         Directory.CreateDirectory(projectDirectory);
 
         File.WriteAllText(Path.Combine(projectDirectory, "MyHostingExtension.csproj"),
@@ -973,9 +973,9 @@ public class MSBuildTests
     public void AspireIntegrationAnalyzerPackageContainsExpectedAssets()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var packageOutputPath = Path.Combine(tempDirectory.Path, "packages");
+        var packageOutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "packages");
         Directory.CreateDirectory(packageOutputPath);
 
         var packagePath = PackProject(
@@ -1000,9 +1000,9 @@ public class MSBuildTests
     public void AspireIntegrationAnalyzerPackageCanBeConsumedFromLocalSource()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var packageOutputPath = Path.Combine(tempDirectory.Path, "packages");
+        var packageOutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "packages");
         Directory.CreateDirectory(packageOutputPath);
 
         var analyzerPackagePath = PackProject(
@@ -1012,7 +1012,7 @@ public class MSBuildTests
 
         var analyzerVersion = ReadPackageVersion(analyzerPackagePath);
 
-        var projectDirectory = Path.Combine(tempDirectory.Path, "MyHostingExtension");
+        var projectDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "MyHostingExtension");
         Directory.CreateDirectory(projectDirectory);
         var nuGetConfigPath = Path.Combine(projectDirectory, "NuGet.config");
 
@@ -1143,9 +1143,9 @@ public class MSBuildTests
     public void GenerateAssemblyInfoFalse_EmitsError()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var appHostDirectory = Path.Combine(tempDirectory.Path, "AppHost");
+        var appHostDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost");
         Directory.CreateDirectory(appHostDirectory);
 
         File.WriteAllText(Path.Combine(appHostDirectory, "AppHost.csproj"),

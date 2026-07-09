@@ -10,7 +10,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureContainerAppEnvironmentExtensionsTests
+public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void AddAsExistingResource_ShouldBeIdempotent_ForAzureContainerAppEnvironmentResource()
@@ -340,9 +340,9 @@ public class AzureContainerAppEnvironmentExtensionsTests
         // that resolve would have appended the default registry's login step name
         // to the built-in 'push-prereq' step's DependsOnSteps list, leaving a stale
         // dependency edge that caused the publish-time ResolveStepsAsync to fail.
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var acr = builder.AddAzureContainerRegistry("acr");
         builder.AddAzureContainerAppEnvironment("env")
@@ -355,11 +355,11 @@ public class AzureContainerAppEnvironmentExtensionsTests
         // Publishing will stop the app when it is done.
         await app.RunAsync();
 
-        var mainBicepPath = Path.Combine(tempDir.Path, "main.bicep");
+        var mainBicepPath = Path.Combine(workspace.Path, "main.bicep");
         Assert.True(File.Exists(mainBicepPath), $"Expected publish to produce '{mainBicepPath}'.");
         var mainBicep = await File.ReadAllTextAsync(mainBicepPath);
 
-        var envBicepPath = Path.Combine(tempDir.Path, "env", "env.bicep");
+        var envBicepPath = Path.Combine(workspace.Path, "env", "env.bicep");
         Assert.True(File.Exists(envBicepPath), $"Expected publish to produce '{envBicepPath}'.");
         var envBicep = await File.ReadAllTextAsync(envBicepPath);
 

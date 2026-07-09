@@ -21,6 +21,7 @@ import {
     expandEnvironmentVariables
 } from '../launchProfiles';
 import { AspireDebugSession } from '../AspireDebugSession';
+import { createAspireCliPathProcessEnvironment } from '../../utils/cliPathEnvironment';
 
 interface IDotNetService {
     getAndActivateDevKit(): Promise<boolean>
@@ -63,7 +64,7 @@ class DotNetService implements IDotNetService {
             extensionLogOutputChannel.info(`Building .NET project: ${projectFile} using dotnet CLI`);
 
             const args = ['build', projectFile];
-            const buildProcess = spawn('dotnet', args);
+            const buildProcess = spawn('dotnet', args, { env: createAspireCliPathProcessEnvironment() });
 
             let stdoutOutput = '';
             let stderrOutput = '';
@@ -112,7 +113,7 @@ class DotNetService implements IDotNetService {
             '-property:GenerateFullPaths=true'
         ];
         try {
-            const { stdout } = await this.execFileAsync('dotnet', args, { encoding: 'utf8' });
+            const { stdout } = await this.execFileAsync('dotnet', args, { encoding: 'utf8', env: createAspireCliPathProcessEnvironment() });
             const output = stdout.trim();
             if (!output) {
                 throw new Error(noOutputFromMsbuild);
@@ -138,7 +139,7 @@ class DotNetService implements IDotNetService {
 
                 childProcess = spawn('dotnet', ['run-api'], {
                     cwd: path.dirname(projectPath),
-                    env: process.env,
+                    env: createAspireCliPathProcessEnvironment(),
                     stdio: ['pipe', 'pipe', 'pipe']
                 });
 

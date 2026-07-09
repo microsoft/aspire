@@ -17,6 +17,10 @@ message ApplicationInformationRequest {
 
 message ApplicationInformationResponse {
     string application_name = 1;
+    // The minimum dashboard API version required to fully support this AppHost's features.
+    // If the dashboard's current API version is lower than this value, it should display
+    // a warning to the user indicating that some features may not be available.
+    int32 min_dashboard_api_version = 2;
 }
 
 ////////////////////////////////////////////
@@ -431,6 +435,9 @@ message InteractionInput {
     bool update_state_on_change = 13;
     string name = 14;
     bool disabled = 15;
+    int64 max_file_size = 16;
+    bool allow_multiple_files = 17;
+    string file_filter = 18;
 }
 enum MessageIntent {
     MESSAGE_INTENT_NONE = 0;
@@ -447,6 +454,20 @@ enum InputType {
     INPUT_TYPE_CHOICE = 3;
     INPUT_TYPE_BOOLEAN = 4;
     INPUT_TYPE_NUMBER = 5;
+    INPUT_TYPE_FILE = 6;
+}
+
+////////////////////////////////////////////
+
+message UploadFileChunk {
+    bytes data = 1;
+    // The original file name provided by the user (sent in the first chunk).
+    string file_name = 2;
+}
+
+message UploadFileResponse {
+    // An opaque reference ID for the uploaded file. Used as the Value for file inputs.
+    string file_id = 1;
 }
 
 ////////////////////////////////////////////
@@ -457,4 +478,5 @@ service DashboardService {
     rpc WatchResourceConsoleLogs(WatchResourceConsoleLogsRequest) returns (stream WatchResourceConsoleLogsUpdate);
     rpc ExecuteResourceCommand(ResourceCommandRequest) returns (ResourceCommandResponse);
     rpc WatchInteractions(stream WatchInteractionsRequestUpdate) returns (stream WatchInteractionsResponseUpdate);
+    rpc UploadFile(stream UploadFileChunk) returns (UploadFileResponse);
 }

@@ -13,6 +13,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting;
+using Aspire.Hosting.Dashboard;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Grpc.Net.Client.Configuration;
@@ -65,6 +66,7 @@ internal sealed class DashboardClient : IDashboardClient
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
     private ImmutableHashSet<Channel<WatchInteractionsResponseUpdate>> _outgoingInteractionChannels = [];
     private string? _applicationName;
+    private bool _isDashboardVersionSupported = true;
 
     private DashboardConnectionState _connectionState;
     private readonly object _connectionStateLock = new();
@@ -403,9 +405,14 @@ internal sealed class DashboardClient : IDashboardClient
 
             try
             {
-                var response = await _client!.GetApplicationInformationAsync(new(), headers: _headers, cancellationToken: cancellationToken);
+                var request = new ApplicationInformationRequest();
+                var response = await _client!.GetApplicationInformationAsync(request, headers: _headers, cancellationToken: cancellationToken);
 
                 _applicationName = response.ApplicationName;
+
+                // MinDashboardApiVersion is 0 when the server predates this field or hasn't set it,
+                // which means the dashboard is always considered supported.
+                _isDashboardVersionSupported = response.MinDashboardApiVersion <= DashboardApiVersions.Current;
 
                 SetConnectionState(DashboardConnectionState.Connected);
                 return;
@@ -758,6 +765,8 @@ internal sealed class DashboardClient : IDashboardClient
             ?? "Aspire";
     }
 
+    public bool IsDashboardVersionSupported => _isDashboardVersionSupported;
+
     public ResourceViewModel? GetResource(string resourceName)
     {
         EnsureInitialized();
@@ -1012,6 +1021,53 @@ internal sealed class DashboardClient : IDashboardClient
                 Message = errorMessage
             };
         }
+    }
+
+    public async Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        using var call = _client!.UploadFile(headers: _headers, cancellationToken: combinedTokens.Token);
+
+        const int chunkSize = 64 * 1024; // 64 KB chunks
+        var buffer = new byte[chunkSize];
+        var isFirst = true;
+        long totalBytesRead = 0;
+
+        int bytesRead;
+        while ((bytesRead = await fileStream.ReadAsync(buffer, combinedTokens.Token).ConfigureAwait(false)) > 0)
+        {
+            totalBytesRead += bytesRead;
+            if (totalBytesRead > expectedSize)
+            {
+                throw new InvalidOperationException($"File '{fileName}' exceeded the expected size of {expectedSize} bytes.");
+            }
+
+            var chunk = new UploadFileChunk
+            {
+                Data = Google.Protobuf.ByteString.CopyFrom(buffer, 0, bytesRead)
+            };
+
+            if (isFirst)
+            {
+                chunk.FileName = fileName;
+            }
+
+            await call.RequestStream.WriteAsync(chunk, combinedTokens.Token).ConfigureAwait(false);
+            isFirst = false;
+        }
+
+        // Handle case where the file was empty — still send filename.
+        if (isFirst)
+        {
+            await call.RequestStream.WriteAsync(new UploadFileChunk { FileName = fileName }, combinedTokens.Token).ConfigureAwait(false);
+        }
+
+        await call.RequestStream.CompleteAsync().ConfigureAwait(false);
+
+        var response = await call.ResponseAsync.ConfigureAwait(false);
+        return response.FileId;
     }
 
     public async ValueTask DisposeAsync()

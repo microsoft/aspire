@@ -48,6 +48,13 @@ public interface IDashboardClient : IAsyncDisposable
     string ApplicationName { get; }
 
     /// <summary>
+    /// Gets whether the dashboard version is supported by the connected AppHost.
+    /// Returns <see langword="false"/> when the AppHost requires a newer dashboard API version
+    /// than this build supports.
+    /// </summary>
+    bool IsDashboardVersionSupported { get; }
+
+    /// <summary>
     /// Gets the current set of resources and a stream of updates.
     /// </summary>
     /// <remarks>
@@ -87,6 +94,8 @@ public interface IDashboardClient : IAsyncDisposable
     IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken);
 
     Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken);
+
+    Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, CancellationToken cancellationToken);
 }
 
 /// <summary>

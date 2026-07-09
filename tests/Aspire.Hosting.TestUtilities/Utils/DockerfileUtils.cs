@@ -35,13 +35,13 @@ public static class DockerfileUtils
         RUN chmod -R 777 /usr/share/nginx/html
         """;
 
-    public static async Task<TemporaryDockerfileContext> CreateTemporaryDockerfileAsync(string dockerfileName = "Dockerfile", bool createDockerfile = true, bool includeSecrets = false)
+    public static async Task<TemporaryDockerfileContext> CreateTemporaryDockerfileAsync(ITestOutputHelper outputHelper, string dockerfileName = "Dockerfile", bool createDockerfile = true, bool includeSecrets = false)
     {
-        var tempDirectory = new TestTempDirectory();
+        var workspace = TemporaryWorkspace.Create(outputHelper);
 
         try
         {
-            var tempContextPath = tempDirectory.Path;
+            var tempContextPath = workspace.WorkspaceRoot.FullName;
             var tempDockerfilePath = Path.Combine(tempContextPath, dockerfileName);
 
             if (createDockerfile)
@@ -55,23 +55,23 @@ public static class DockerfileUtils
                 await File.WriteAllTextAsync(tempDockerfilePath, dockerfileContent);
             }
 
-            return new TemporaryDockerfileContext(tempDirectory, tempDockerfilePath);
+            return new TemporaryDockerfileContext(workspace, tempDockerfilePath);
         }
         catch
         {
-            tempDirectory.Dispose();
+            workspace.Dispose();
             throw;
         }
     }
 }
 
-public sealed class TemporaryDockerfileContext(TestTempDirectory tempDirectory, string dockerfilePath) : IDisposable
+public sealed class TemporaryDockerfileContext(TemporaryWorkspace workspace, string dockerfilePath) : IDisposable
 {
-    private readonly TestTempDirectory _tempDirectory = tempDirectory;
+    private readonly TemporaryWorkspace _workspace = workspace;
 
-    public string ContextPath => _tempDirectory.Path;
+    public string ContextPath => _workspace.WorkspaceRoot.FullName;
 
     public string DockerfilePath { get; } = dockerfilePath;
 
-    public void Dispose() => _tempDirectory.Dispose();
+    public void Dispose() => _workspace.Dispose();
 }

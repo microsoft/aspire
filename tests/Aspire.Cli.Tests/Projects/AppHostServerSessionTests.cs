@@ -444,7 +444,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreatePrebuiltAppHostServer_DisposesLayoutLeaseWhenConstructorFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appPath = workspace.CreateDirectory("apphost").FullName;
         var integrationCachePathBlockedByFile = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations");
         File.WriteAllText(integrationCachePathBlockedByFile, string.Empty);
