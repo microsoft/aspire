@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Dashboard accessibility bug fixes for Resources page - keyboard navigation, focus management, ARIA states, and reflow for narrow layouts.",
+  "mergedAt": "2026-07-09T03:52:27Z",
+  "number": 17926,
+  "runDate": "2026-07-09T07:08:26Z",
+  "status": "included",
+  "title": "Fix Resources accessibility keyboard and reflow paths"
+}

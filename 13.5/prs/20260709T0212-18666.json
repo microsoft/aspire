@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Test-only change - cleans up temp directory in AtsExportsTests using TemporaryWorkspace. No user-facing changes.",
+  "mergedAt": "2026-07-09T02:12:15Z",
+  "number": 18666,
+  "runDate": "2026-07-09T07:08:26Z",
+  "status": "excluded",
+  "title": "Clean up temp directory in AtsExportsTests using TemporaryWorkspace"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test infrastructure refactoring - replaces TestTempDirectory with TemporaryWorkspace shared utility. No user-facing changes.",
+  "mergedAt": "2026-07-09T01:25:53Z",
+  "number": 18683,
+  "runDate": "2026-07-09T07:08:26Z",
+  "status": "excluded",
+  "title": "Replace TestTempDirectory with TemporaryWorkspace and clean up test project configuration"
+}

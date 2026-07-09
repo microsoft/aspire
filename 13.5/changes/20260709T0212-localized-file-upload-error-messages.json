@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "File upload error messages in the Interactions dialog (exceeds maximum size, upload failed) are now localized using the standard string localizer, consistent with the rest of the dialog.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-07-09T02:12:26Z",
+  "lastMergedAt": "2026-07-09T02:12:26Z",
+  "name": "Localized file upload error messages in Interactions dialog",
+  "owner": "radical",
+  "prs": [
+    18665
+  ]
+}

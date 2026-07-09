@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Dashboard improvement - localizes file upload error messages in InteractionsInputDialog for international users.",
+  "mergedAt": "2026-07-09T02:12:26Z",
+  "number": 18665,
+  "runDate": "2026-07-09T07:08:26Z",
+  "status": "included",
+  "title": "Localize file input validation messages in InteractionsInputDialog"
+}

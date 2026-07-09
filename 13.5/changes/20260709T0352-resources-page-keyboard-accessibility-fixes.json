@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Keyboard and screen reader users now get correct navigation on the Resources page: View Options announces expanded/collapsed state, focus returns after menu selection, nested row controls no longer trigger parent row actions, and the active tab stays visible and keyboard-reachable in narrow tab strips.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "♿",
+  "firstMergedAt": "2026-07-09T03:52:27Z",
+  "lastMergedAt": "2026-07-09T03:52:27Z",
+  "name": "Resources page keyboard accessibility and reflow fixes",
+  "owner": "adamint",
+  "prs": [
+    17926
+  ]
+}
