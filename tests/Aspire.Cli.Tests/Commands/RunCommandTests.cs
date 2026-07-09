@@ -464,8 +464,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         await teardownStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
         // The detached child must not exit while the AppHost teardown is in progress. The callback
-        // is blocked on teardownCanFinish, so pendingCommand cannot complete regardless of how much
-        // fake time passes.
+        // is blocked on teardownCanFinish and fake time is never advanced, so pendingCommand cannot
+        // complete until the gate is released below.
         Assert.False(pendingCommand.IsCompleted, "Detached child exited before the AppHost teardown completed.");
 
         // Allow the teardown to finish. The RunCommand's finally block awaits runTask (via WaitAsync),
