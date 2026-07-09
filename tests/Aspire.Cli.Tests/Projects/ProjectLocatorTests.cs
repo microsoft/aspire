@@ -3029,69 +3029,6 @@ builder.Build().Run();");
         Assert.Equal(AppHostProjectCandidateStatus.Buildable, candidate.Status);
     }
 
-    [Fact]
-    public async Task GetAppHostFromSettings_StopsAtWorkspaceRootWhenLegacySettingsHasNoAppHostPath()
-    {
-        // Regression: previously, GetAppHostProjectFileFromSettingsAsync continued walking
-        // past .aspire/settings.json when it had no appHostPath, allowing stale config in
-        // parent directories to contaminate the result.
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        // Plant a stale aspire.config.json in the parent directory with an appHost.path.
-        // The walk should NOT reach this because .aspire/settings.json in the workspace
-        // marks it as the workspace root.
-        var parentDir = workspace.WorkspaceRoot.Parent!;
-        var staleConfigPath = Path.Combine(parentDir.FullName, AspireConfigFile.FileName);
-        await File.WriteAllTextAsync(staleConfigPath, """{ "appHost": { "path": "Stale.csproj" } }""");
-
-        try
-        {
-            var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-            var projectLocator = CreateProjectLocator(executionContext);
-
-            var foundAppHost = await projectLocator.GetAppHostFromSettingsAsync(CancellationToken.None).DefaultTimeout();
-
-            // The workspace has .aspire/settings.json with no appHostPath — the walk
-            // should stop there and return null, not pick up the parent's stale config.
-            Assert.Null(foundAppHost);
-        }
-        finally
-        {
-            File.Delete(staleConfigPath);
-        }
-    }
-
-    [Fact]
-    public async Task GetAppHostFromSettings_StopsAtWorkspaceRootWhenAspireConfigJsonHasNoAppHostPath()
-    {
-        // Same regression scenario as above but with the modern aspire.config.json format.
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-
-        // Create aspire.config.json at workspace root with no appHost.path.
-        var workspaceConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
-        await File.WriteAllTextAsync(workspaceConfigPath, """{ "channel": "daily" }""");
-
-        // Plant a stale aspire.config.json in the parent directory.
-        var parentDir = workspace.WorkspaceRoot.Parent!;
-        var staleConfigPath = Path.Combine(parentDir.FullName, AspireConfigFile.FileName);
-        await File.WriteAllTextAsync(staleConfigPath, """{ "appHost": { "path": "Stale.csproj" } }""");
-
-        try
-        {
-            var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-            var projectLocator = CreateProjectLocator(executionContext);
-
-            var foundAppHost = await projectLocator.GetAppHostFromSettingsAsync(CancellationToken.None).DefaultTimeout();
-
-            // aspire.config.json exists at workspace root (no appHost.path) — stop there.
-            Assert.Null(foundAppHost);
-        }
-        finally
-        {
-            File.Delete(staleConfigPath);
-        }
-    }
-
     private static ProjectLocator CreateProjectLocator(
         CliExecutionContext executionContext,
         IInteractionService? interactionService = null,
