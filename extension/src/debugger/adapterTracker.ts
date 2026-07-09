@@ -89,6 +89,10 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                     }
                 },
                 onExit(code: number | undefined) {
+                    if (configuration.sendSessionTerminatedOnDebugSessionEnd) {
+                        return;
+                    }
+
                     // Exit code 143 should be treated as normal exit (SIGTERM) on macOS and Linux
                     if ((process.platform === 'darwin' || process.platform === 'linux') && code === 143) {
                         code = 0;
