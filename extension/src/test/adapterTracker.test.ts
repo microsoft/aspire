@@ -226,6 +226,27 @@ suite('Debug Adapter Tracker Tests', () => {
         disposable.dispose();
     });
 
+    test('falls back to adapter onExit code when exited event has a non-number exit code', async () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        // Malformed `exited` event without a numeric exitCode; the guard should
+        // ignore it and leave the adapter exit code to be used.
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'exited',
+            body: {}
+        });
+        tracker.onExit(2);
+
+        assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
+        const notification = dcpServer.sendNotification.firstCall.args[0] as SessionTerminatedNotification;
+        assert.strictEqual(notification.exit_code, 2);
+
+        disposable.dispose();
+    });
+
     test('exited event exit code of 0 is used even when adapter exit code differs', async () => {
         const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
         const factory = registerFactoryStub.lastCall.args[1];
