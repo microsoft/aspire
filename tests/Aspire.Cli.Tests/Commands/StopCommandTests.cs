@@ -699,7 +699,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StopCommand_ForceWithInvalidCleanupTimeoutStillStopsNormally()
+    public async Task StopCommand_ForceWithInvalidCleanupTimeoutStopsNormallyThenReturnsInvalidCommand()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
@@ -715,7 +715,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         };
         var projectFactory = new TestAppHostProjectFactory
         {
-            GetAspireHostingVersionAsyncCallback = (_, _) => Task.FromResult<string?>("13.4.0"),
+            GetAspireHostingVersionAsyncCallback = (_, _) => Task.FromResult<string?>("13.5.0"),
             RunAsyncCallback = (_, _) =>
             {
                 cleanupRunCalled = true;
@@ -737,10 +737,11 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.False(cleanupRunCalled);
-        Assert.Equal(0, interactionService.DisplayedErrors.Count(error =>
-            error == string.Format(CultureInfo.CurrentCulture, RunCommandStrings.InvalidAppHostStartupTimeoutEnvironmentVariable, CliConfigNames.AppHostStartupTimeout)));
+        Assert.Contains(
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.InvalidAppHostStartupTimeoutEnvironmentVariable, CliConfigNames.AppHostStartupTimeout),
+            interactionService.DisplayedErrors);
         Assert.Contains(interactionService.DisplayedMessages, message => message.Message == string.Format(SharedCommandStrings.AppHostNotRunningAtPath, Path.Combine("AppHost", "AppHost.csproj")));
     }
 
