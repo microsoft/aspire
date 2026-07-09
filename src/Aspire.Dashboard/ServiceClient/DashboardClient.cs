@@ -416,7 +416,7 @@ internal sealed class DashboardClient : IDashboardClient
                 var response = await _client!.GetApplicationInformationAsync(request, headers: _headers, cancellationToken: cancellationToken);
 
                 _applicationName = response.ApplicationName;
-                _minRequiredVersion = response.MinDashboardVersion;
+                _minRequiredVersion = string.IsNullOrEmpty(response.MinDashboardVersion) ? null : response.MinDashboardVersion;
 
                 // MinDashboardVersion is empty when the server predates this field or hasn't set it,
                 // which means the dashboard is always considered supported.
