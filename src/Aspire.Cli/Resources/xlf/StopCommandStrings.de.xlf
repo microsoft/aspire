@@ -77,6 +77,11 @@
         <target state="translated">Die Optionen {0} und {1} können nicht zusammen verwendet werden.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TimeoutWaitingForAppHostCleanupShutdown">
+        <source>Timed out waiting {0}s for AppHost resource cleanup to stop.</source>
+        <target state="new">Timed out waiting {0}s for AppHost resource cleanup to stop.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnknownAspireHostingVersion">
         <source>unknown</source>
         <target state="new">unknown</target>

@@ -95,19 +95,29 @@ internal sealed class AppHostCleanupLauncher(
                 startupTimeout,
                 cancellationToken).ConfigureAwait(false);
 
+            if (backchannel is null)
+            {
+                return await pendingRun.ConfigureAwait(false);
+            }
+
             pendingLogCapture = RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, logCaptureCancellationSource.Token);
 
             await backchannel.GetDashboardUrlsAsync(cancellationToken).ConfigureAwait(false);
             await backchannel.NotifyAppHostReadyAsync(cancellationToken).ConfigureAwait(false);
             await RequestAppHostCleanupStopAsync(backchannel, pendingRun, cancellationToken).ConfigureAwait(false);
 
-            return await pendingRun.WaitAsync(s_cleanupShutdownTimeout, cancellationToken).ConfigureAwait(false);
+            return await WaitForAppHostCleanupShutdownAsync(runCancellationTokenSource, pendingRun, cancellationToken).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
             await CancelAppHostCleanupAsync(runCancellationTokenSource, pendingRun, cancellationToken).ConfigureAwait(false);
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeout));
             return CliExitCodes.FailedToDotnetRunAppHost;
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            await CancelAppHostCleanupAsync(runCancellationTokenSource, pendingRun, CancellationToken.None).ConfigureAwait(false);
+            throw;
         }
         finally
         {
@@ -130,7 +140,7 @@ internal sealed class AppHostCleanupLauncher(
         return false;
     }
 
-    private async Task<IAppHostCliBackchannel> WaitForBackchannelAsync(
+    private async Task<IAppHostCliBackchannel?> WaitForBackchannelAsync(
         Task<int> pendingRun,
         TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource,
         OutputCollector? outputCollector,
@@ -142,11 +152,29 @@ internal sealed class AppHostCleanupLauncher(
         var backchannelTask = backchannelCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), timeProvider, cancellationToken);
         if (await Task.WhenAny(backchannelTask, pendingRun).ConfigureAwait(false) == pendingRun)
         {
+            ObserveFaults(backchannelTask);
             DisplayRecentAppHostStartupOutput(outputCollector, appHostStartupOutputStartIndex);
-            return await backchannelTask.ConfigureAwait(false);
+            return null;
         }
 
         return await backchannelTask.ConfigureAwait(false);
+    }
+
+    private async Task<int> WaitForAppHostCleanupShutdownAsync(
+        CancellationTokenSource runCancellationTokenSource,
+        Task<int> pendingRun,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await pendingRun.WaitAsync(s_cleanupShutdownTimeout, timeProvider, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            await CancelAppHostCleanupAsync(runCancellationTokenSource, pendingRun, cancellationToken).ConfigureAwait(false);
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.TimeoutWaitingForAppHostCleanupShutdown, (int)s_cleanupShutdownTimeout.TotalSeconds));
+            return CliExitCodes.FailedToDotnetRunAppHost;
+        }
     }
 
     private void DisplayRecentAppHostStartupOutput(OutputCollector? outputCollector, int appHostStartupOutputStartIndex)
@@ -167,6 +195,15 @@ internal sealed class AppHostCleanupLauncher(
     {
         var elapsed = timeProvider.GetElapsedTime(startupStartTimestamp);
         return elapsed >= startupTimeout ? TimeSpan.Zero : startupTimeout - elapsed;
+    }
+
+    private static void ObserveFaults(Task task)
+    {
+        _ = task.ContinueWith(
+            static completedTask => _ = completedTask.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     private async Task CancelAppHostCleanupAsync(CancellationTokenSource runCancellationTokenSource, Task<int> pendingRun, CancellationToken cancellationToken)

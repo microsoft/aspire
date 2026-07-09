@@ -14,8 +14,9 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
 using Aspire.Tests;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -372,6 +373,239 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("true", environment[KnownConfigNames.DcpResourceCleanupMode]);
         Assert.True(backchannel.RequestStopAsyncCalled.Task.IsCompletedSuccessfully);
         Assert.Contains(interactionService.DisplayedMessages, message => message.Message == string.Format(SharedCommandStrings.AppHostNotRunningAtPath, Path.Combine("AppHost", "AppHost.csproj")));
+    }
+
+    [Fact]
+    public async Task StopCommand_ForceReturnsCleanupRunExitCodeWhenAppHostExitsBeforeBackchannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        const int expectedExitCode = 123;
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            GetAspireHostingVersionAsyncCallback = (_, _) => Task.FromResult<string?>("13.5.0"),
+            RunAsyncCallback = (context, _) =>
+            {
+                context.BuildCompletionSource?.SetResult(true);
+                return Task.FromResult(expectedExitCode);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(expectedExitCode, exitCode);
+        Assert.Equal(0, interactionService.DisplayedErrors.Count(error => error.Contains("Timed out waiting", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task StopCommand_ForceReportsCleanupShutdownTimeoutSeparately()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var timeProvider = new FakeTimeProvider();
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var cleanupCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var backchannel = new TestAppHostBackchannel
+        {
+            RequestStopAsyncCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            GetAspireHostingVersionAsyncCallback = (_, _) => Task.FromResult<string?>("13.5.0"),
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                context.BuildCompletionSource?.SetResult(true);
+                context.BackchannelCompletionSource?.SetResult(backchannel);
+
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    cleanupCanceled.SetResult();
+                    throw;
+                }
+
+                return CliExitCodes.Success;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.TimeProvider = timeProvider;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var invokeTask = result.InvokeAsync();
+        await backchannel.RequestStopAsyncCalled.Task.DefaultTimeout();
+
+        for (var i = 0; i < 10 && !invokeTask.IsCompleted; i++)
+        {
+            await Task.Yield();
+            timeProvider.Advance(TimeSpan.FromSeconds(10));
+        }
+
+        var exitCode = await invokeTask.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Contains(
+            string.Format(CultureInfo.CurrentCulture, StopCommandStrings.TimeoutWaitingForAppHostCleanupShutdown, 10),
+            interactionService.DisplayedErrors);
+        await cleanupCanceled.Task.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task StopCommand_ForceCancelsCleanupRunWhenStartupRpcThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var cleanupCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetDashboardUrlsAsyncCallback = _ => throw new InvalidOperationException("Dashboard unavailable.")
+        };
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            GetAspireHostingVersionAsyncCallback = (_, _) => Task.FromResult<string?>("13.5.0"),
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                context.BuildCompletionSource?.SetResult(true);
+                context.BackchannelCompletionSource?.SetResult(backchannel);
+
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    cleanupCanceled.SetResult();
+                    throw;
+                }
+
+                return CliExitCodes.Success;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("Dashboard unavailable.", StringComparison.Ordinal));
+        await cleanupCanceled.Task.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task StopCommand_ForceUsesStoppedConnectionPathForCleanupWhenProjectDiscoveryFails()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        FileInfo? versionAppHostFile = null;
+        FileInfo? cleanupAppHostFile = null;
+        var backchannel = new TestAppHostBackchannel
+        {
+            RequestStopAsyncCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostFile.FullName, int.MaxValue - 10));
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                throw new ProjectLocatorException("Multiple project files found.", ProjectLocatorFailureReason.MultipleProjectFilesFound)
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            GetAspireHostingVersionAsyncCallback = (file, _) =>
+            {
+                versionAppHostFile = file;
+                return Task.FromResult<string?>("13.5.0");
+            },
+            RunAsyncCallback = async (context, _) =>
+            {
+                cleanupAppHostFile = context.AppHostFile;
+                context.BuildCompletionSource?.SetResult(true);
+                context.BackchannelCompletionSource?.SetResult(backchannel);
+                await backchannel.RequestStopAsyncCalled.Task.DefaultTimeout();
+                return CliExitCodes.Success;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop --force");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(appHostFile.FullName, versionAppHostFile?.FullName);
+        Assert.Equal(appHostFile.FullName, cleanupAppHostFile?.FullName);
+        Assert.True(backchannel.RequestStopAsyncCalled.Task.IsCompletedSuccessfully);
     }
 
     [Fact]

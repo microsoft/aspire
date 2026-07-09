@@ -123,6 +123,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string TimeoutWaitingForAppHostCleanupShutdown {
+            get {
+                return ResourceManager.GetString("TimeoutWaitingForAppHostCleanupShutdown", resourceCulture);
+            }
+        }
+
         public static string UnknownAspireHostingVersion {
             get {
                 return ResourceManager.GetString("UnknownAspireHostingVersion", resourceCulture);

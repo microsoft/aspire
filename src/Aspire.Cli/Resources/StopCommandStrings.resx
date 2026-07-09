@@ -156,6 +156,9 @@
   <data name="ForceCleanupUnsupportedWarning" xml:space="preserve">
     <value>The AppHost uses Aspire.Hosting {0}, which does not support persistent resource cleanup. Update the AppHost SDK to Aspire {1} or newer; --force only stopped the AppHost.</value>
   </data>
+  <data name="TimeoutWaitingForAppHostCleanupShutdown" xml:space="preserve">
+    <value>Timed out waiting {0}s for AppHost resource cleanup to stop.</value>
+  </data>
   <data name="UnknownAspireHostingVersion" xml:space="preserve">
     <value>unknown</value>
   </data>
