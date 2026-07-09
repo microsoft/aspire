@@ -2854,4 +2854,225 @@ public class TraceTests
         Assert.Equal(1, result.PagedResult.TotalItemCount);
         Assert.Contains("span1", result.PagedResult.Items[0].Name);
     }
+
+    [Fact]
+    public void GetTraces_NotContainsFilter_ExcludesTraceWhenAnySpanMatches()
+    {
+        // Verifies that a "not contains" filter on the trace Name field excludes the trace
+        // when ANY span's name contains the filtered text, even if other spans in the same
+        // trace do not contain it. This is the fix for https://github.com/microsoft/aspire/issues/18684.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // Root span whose name contains the filter text.
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5)),
+                            // Child span whose name does NOT contain "1-1".
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3), parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        // Filter: Name not contains "1-1" — the root span's name is "Test span. Id: 1-1" which
+        // contains "1-1", so the trace should be excluded even though the child span doesn't match.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.NameField,
+                    Condition = FilterCondition.NotContains,
+                    Value = "1-1"
+                }
+            ]
+        });
+
+        Assert.Empty(traces.PagedResult.Items);
+    }
+
+    [Fact]
+    public void GetTraces_NotContainsFilter_IncludesTraceWhenNoSpanMatches()
+    {
+        // Verifies that a "not contains" filter includes the trace when none of its spans'
+        // names contain the filtered text.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5)),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3), parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        // Filter: Name not contains "NONEXISTENT" — no span name contains this text,
+        // so the trace should be included.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.NameField,
+                    Condition = FilterCondition.NotContains,
+                    Value = "NONEXISTENT"
+                }
+            ]
+        });
+
+        Assert.Collection(traces.PagedResult.Items,
+            trace => AssertId("1", trace.TraceId));
+    }
+
+    [Fact]
+    public void GetTraces_NotEqualFilter_ExcludesTraceWhenAnySpanMatches()
+    {
+        // Verifies that a "not equal" filter excludes the trace when ANY span's field value
+        // equals the filtered text.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5)),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3), parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        // Filter: Name != "Test span. Id: 1-1" — the root span matches exactly, so the trace
+        // should be excluded even though the child span doesn't match.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.NameField,
+                    Condition = FilterCondition.NotEqual,
+                    Value = "Test span. Id: 1-1"
+                }
+            ]
+        });
+
+        Assert.Empty(traces.PagedResult.Items);
+    }
+
+    [Fact]
+    public void GetTraces_NotContainsWithPositiveFilter_CombinesCorrectly()
+    {
+        // Verifies that combining a positive filter with a negative filter works correctly:
+        // the trace must have at least one span matching the positive filter AND all spans
+        // must satisfy the negative filter.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5),
+                                attributes: [KeyValuePair.Create("env", "prod")]),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3),
+                                parentSpanId: "1-1", attributes: [KeyValuePair.Create("env", "prod")])
+                        }
+                    }
+                }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "2", spanId: "2-1", startTime: s_testTime.AddMinutes(10), endTime: s_testTime.AddMinutes(15),
+                                attributes: [KeyValuePair.Create("env", "staging")])
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        // Positive: attribute env contains "prod"
+        // Negative: name not contains "1-1" (excludes trace 1 because root span name matches)
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter { Field = "env", Condition = FilterCondition.Contains, Value = "prod" },
+                new FieldTelemetryFilter { Field = KnownTraceFields.NameField, Condition = FilterCondition.NotContains, Value = "1-1" }
+            ]
+        });
+
+        // Trace 1 is excluded (root span name contains "1-1" even though env=prod matches).
+        // Trace 2 doesn't match the positive filter (env=staging, not prod).
+        Assert.Empty(traces.PagedResult.Items);
+    }
 }

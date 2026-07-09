@@ -981,10 +981,15 @@ public sealed partial class TelemetryRepository : IDisposable
             }
         }
 
-        // A trace matches when one of its spans matches all non-duration filters.
+        // Single pass over spans handles both filter polarities:
+        // - Negative filters (not-equal, not-contains) use ALL-span semantics: the trace is
+        //   excluded if ANY span violates the condition.
+        // - Positive filters use ANY-span semantics: the trace matches when at least one span
+        //   satisfies all positive filters.
+        var hasPositiveMatch = false;
         foreach (var span in trace.Spans)
         {
-            var match = true;
+            var positiveMatch = !hasPositiveMatch;
             foreach (var filter in filters)
             {
                 if (filter.IsTraceDurationFilter())
@@ -992,20 +997,29 @@ public sealed partial class TelemetryRepository : IDisposable
                     continue;
                 }
 
-                if (!filter.Apply(span))
+                if (filter.IsNegativeFilter)
                 {
-                    match = false;
-                    break;
+                    if (!filter.Apply(span))
+                    {
+                        return false;
+                    }
+                }
+                else if (positiveMatch)
+                {
+                    if (!filter.Apply(span))
+                    {
+                        positiveMatch = false;
+                    }
                 }
             }
 
-            if (match)
+            if (positiveMatch)
             {
-                return true;
+                hasPositiveMatch = true;
             }
         }
 
-        return false;
+        return hasPositiveMatch;
     }
 
     private static bool MatchesFilters(OtlpTrace trace, List<TraceFilter> optimizedFilters)
@@ -1019,10 +1033,13 @@ public sealed partial class TelemetryRepository : IDisposable
             }
         }
 
-        // A trace matches when one of its spans matches all non-duration filters.
+        // Single pass over spans handles both filter polarities:
+        // - Negative filters use ALL-span semantics (any violation excludes the trace).
+        // - Positive filters use ANY-span semantics (one span matching all suffices).
+        var hasPositiveMatch = false;
         foreach (var span in trace.Spans)
         {
-            var match = true;
+            var positiveMatch = !hasPositiveMatch;
             foreach (var filter in optimizedFilters)
             {
                 if (filter.IsDurationFilter)
@@ -1030,25 +1047,36 @@ public sealed partial class TelemetryRepository : IDisposable
                     continue;
                 }
 
-                if (!filter.Apply(span))
+                if (filter.IsNegativeFilter)
                 {
-                    match = false;
-                    break;
+                    if (!filter.Apply(span))
+                    {
+                        return false;
+                    }
+                }
+                else if (positiveMatch)
+                {
+                    if (!filter.Apply(span))
+                    {
+                        positiveMatch = false;
+                    }
                 }
             }
 
-            if (match)
+            if (positiveMatch)
             {
-                return true;
+                hasPositiveMatch = true;
             }
         }
 
-        return false;
+        return hasPositiveMatch;
     }
 
     private readonly record struct TraceFilter(TelemetryFilter Filter, DurationFilter? OptimizedDurationFilter, StringFilter? OptimizedStringFilter)
     {
         public bool IsOptimized => OptimizedDurationFilter is not null || OptimizedStringFilter is not null;
+
+        public bool IsNegativeFilter => Filter.IsNegativeFilter;
 
         public bool IsDurationFilter => OptimizedDurationFilter is not null || Filter.IsTraceDurationFilter();
 
