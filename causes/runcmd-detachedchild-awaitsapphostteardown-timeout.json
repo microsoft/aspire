@@ -3,7 +3,7 @@
   "type": "flaky-test",
   "title": "Flaky: RunCommandTests.RunCommand_DetachedChild_WhenSignaledBeforeReadiness_AwaitsAppHostTeardownBeforeExit times out intermittently",
   "test_name": "Aspire.Cli.Tests.Commands.RunCommandTests.RunCommand_DetachedChild_WhenSignaledBeforeReadiness_AwaitsAppHostTeardownBeforeExit",
-  "error_pattern": "System.TimeoutException : The operation at /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/RunCommandTests.cs:469 timed out after reaching the limit of 30000ms.\n   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter[T](Task`1 task, TimeSpan timeout, String filePath, Int32 lineNumber) in /home/runner/work/aspire/aspire/tests/Shared/AsyncTestHelpers.cs:line 160\n   at Aspire.Cli.Tests.Commands.RunCommandTests.RunCommand_DetachedChild_WhenSignaledBeforeReadiness_AwaitsAppHostTeardownBeforeExit() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/RunCommandTests.cs:line 469",
+  "error_pattern": "System.TimeoutException : The operation at .*/tests/Aspire.Cli.Tests/Commands/RunCommandTests.cs:469 timed out after reaching the limit of 30000ms.\n   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter[T](Task`1 task, TimeSpan timeout, String filePath, Int32 lineNumber) in .*/tests/Shared/AsyncTestHelpers.cs:line 160\n   at Aspire.Cli.Tests.Commands.RunCommandTests.RunCommand_DetachedChild_WhenSignaledBeforeReadiness_AwaitsAppHostTeardownBeforeExit()",
   "occurrences": [
     {
       "run_id": 28906422279,
@@ -11,6 +11,13 @@
       "job": "Tests / Cli / Cli (ubuntu-latest)",
       "pr_number": 18566,
       "observed_at": "2026-07-08T00:09:14Z"
+    },
+    {
+      "run_id": 28989215965,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/28989215965",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "pr_number": 18665,
+      "observed_at": "2026-07-09T03:05:44Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18677"

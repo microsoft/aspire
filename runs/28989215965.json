@@ -1,0 +1,38 @@
+{
+  "run_id": 28989215965,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/28989215965",
+  "analyzed_at": "2026-07-09T03:05:44Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18665,
+    "title": "Localize file input validation messages in InteractionsInputDialog",
+    "author": "Copilot",
+    "state": "closed",
+    "head_branch": "copilot/localize-validation-messages",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18665"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 86027830791,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/28989215965/job/86027830791",
+      "classification": "flaky-test",
+      "reason": "Test RunCommand_DetachedChild_WhenSignaledBeforeReadiness_AwaitsAppHostTeardownBeforeExit timed out after 30000ms. The PR only modifies Aspire.Dashboard files; this test is in Aspire.Cli.Tests and is unrelated to the PR changes. Matches known recurring flaky cause.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.RunCommandTests.RunCommand_DetachedChild_WhenSignaledBeforeReadiness_AwaitsAppHostTeardownBeforeExit",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "System.TimeoutException : The operation at D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Commands\\RunCommandTests.cs:469 timed out after reaching the limit of 30000ms.",
+      "stack_trace": "at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter[T](Task`1 task, TimeSpan timeout, String filePath, Int32 lineNumber) in D:\\a\\aspire\\aspire\\tests\\Shared\\AsyncTestHelpers.cs:line 160\n   at Aspire.Cli.Tests.Commands.RunCommandTests.RunCommand_DetachedChild_WhenSignaledBeforeReadiness_AwaitsAppHostTeardownBeforeExit() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Commands\\RunCommandTests.cs:line 469",
+      "classification": "flaky",
+      "reason": "Timeout in CLI integration test unrelated to PR changes (PR only modifies Aspire.Dashboard localization files). Matches prior known flaky cause 'runcmd-detachedchild-awaitsapphostteardown-timeout' tracked at https://github.com/microsoft/aspire/issues/18677."
+    }
+  ],
+  "causes": ["runcmd-detachedchild-awaitsapphostteardown-timeout"]
+}
