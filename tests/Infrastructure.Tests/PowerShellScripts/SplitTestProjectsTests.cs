@@ -166,10 +166,10 @@ public class SplitTestProjectsTests : IDisposable
         // "echo" as RunCommand produces output that won't match the class prefix,
         // so zero classes are discovered. With IncludeTraitFilter set, the script
         // should succeed gracefully instead of erroring.
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithNoAttributes(assemblyPath, "UnrelatedClass");
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.json");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.json");
 
         // Act
         var result = await RunScript(
@@ -194,10 +194,10 @@ public class SplitTestProjectsTests : IDisposable
     {
         // Arrange - assembly with no partition attributes → falls to class mode.
         // Without IncludeTraitFilter, zero discovered classes should be an error.
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithNoAttributes(assemblyPath, "UnrelatedClass");
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.json");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.json");
 
         // Act
         var result = await RunScript(
