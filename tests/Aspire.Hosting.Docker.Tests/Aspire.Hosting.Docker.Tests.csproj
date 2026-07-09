@@ -12,11 +12,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="Aspire.Tests.Utils" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.ContainerRegistry\Aspire.Hosting.Azure.ContainerRegistry.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Docker\Aspire.Hosting.Docker.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Kubernetes\Aspire.Hosting.Kubernetes.csproj" />
-    <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
+    <!-- Provides the generated Projects.ServiceA apphost-resource type. Previously inherited
+         transitively via Aspire.Hosting.Tests; referenced directly now that this project no
+         longer depends on Aspire.Hosting.Tests. -->
+    <ProjectReference Include="..\testproject\TestProject.AppHost\TestProject.AppHost.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />
   </ItemGroup>
 

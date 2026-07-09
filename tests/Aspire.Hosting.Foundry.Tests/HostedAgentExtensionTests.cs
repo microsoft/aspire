@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
@@ -267,6 +266,56 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public void AsHostedAgent_InPublishMode_AddsDefaultHttpEndpointWhenMissing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddProject<Project>("agent", launchProfileName: null)
+            .AsHostedAgent(project);
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var endpoint = Assert.Single(hostedAgent.Target.Annotations.OfType<EndpointAnnotation>());
+
+        Assert.Equal("http", endpoint.Name);
+        Assert.Equal("http", endpoint.UriScheme);
+        Assert.Null(endpoint.TargetPort);
+    }
+
+    [Fact]
+    public async Task AsHostedAgent_InPublishMode_IgnoresProjectEndpointTargetPortEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddProject<Project>("agent", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 9000, env: "DEFAULT_AD_PORT")
+            .AsHostedAgent(project);
+
+        using var app = builder.Build();
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var endpoint = Assert.Single(hostedAgent.Target.Annotations.OfType<EndpointAnnotation>());
+        SetFoundryProjectOutputs(project.Resource);
+
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            hostedAgent.Target,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(9000, endpoint.TargetPort);
+        Assert.DoesNotContain("ASPNETCORE_URLS", envVars.Keys);
+        Assert.DoesNotContain("HTTP_PORTS", envVars.Keys);
+        Assert.DoesNotContain("HTTPS_PORTS", envVars.Keys);
+        Assert.DoesNotContain("DEFAULT_AD_PORT", envVars.Keys);
+    }
+
+    [Fact]
     public void AsHostedAgent_WithOptions_AppliesAllPropertiesToConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -483,6 +532,13 @@ public class HostedAgentExtensionTests
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    private static void SetFoundryProjectOutputs(AzureCognitiveServicesProjectResource project)
+    {
+        project.Outputs["endpoint"] = "https://account.services.ai.azure.com/api/projects/my-project";
+        project.Outputs["APPLICATION_INSIGHTS_CONNECTION_STRING"] = "";
+        project.ProvisioningTaskCompletionSource?.TrySetResult();
+    }
 
     [Fact]
     public void AsHostedAgent_StampsReferenceRoleAssignmentAnnotationOnTarget_WithAzureAIUserRole()

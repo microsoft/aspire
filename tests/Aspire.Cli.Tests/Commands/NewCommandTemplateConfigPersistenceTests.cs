@@ -210,7 +210,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     [Fact]
     public void PrDogfoodNewTemplateContract_AccountsForEveryRegisteredNewTemplate()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CreatePrDogfoodNewTemplateServices(workspace, processPath: null, dotNetRunner: new TestDotNetCliRunner());
 
@@ -239,7 +239,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     [MemberData(nameof(PrDogfoodNewTemplateCases))]
     public async Task NewTemplate_PrDogfoodInstallHiveDiscovered_UsesPrChannel(PrDogfoodNewTemplateCase testCase)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (processPath, packagesDirectory) = CreatePrDogfoodInstallLayout(workspace);
         var dotNetTemplateInstalls = new List<DotNetTemplateInstall>();
@@ -351,7 +351,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         bool registerIdentityChannel,
         string? explicitChannelArg)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -412,7 +412,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
                 Task.FromResult<IEnumerable<NuGetPackage>>(
                     [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "13.3.0" }])
         };
-        var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures());
+        var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance);
 
         var stableCache = new FakeNuGetPackageCache
         {
@@ -425,7 +425,8 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             PackageChannelQuality.Stable,
             [new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)],
             stableCache,
-            features: new TestFeatures());
+            features: new TestFeatures(),
+            NullLogger.Instance);
 
         var channels = new List<PackageChannel> { implicitChannel, stableChannel };
 
@@ -453,7 +454,8 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
                     new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg),
                 ],
                 cache,
-                features: new TestFeatures()));
+                features: new TestFeatures(),
+                NullLogger.Instance));
         }
 
         return new TestPackagingService

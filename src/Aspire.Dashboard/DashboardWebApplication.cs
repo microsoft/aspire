@@ -23,6 +23,7 @@ using Aspire.Dashboard.Otlp.Grpc;
 using Aspire.Dashboard.Otlp.Http;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
+using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Microsoft.AspNetCore.Authentication;
@@ -327,7 +328,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddScoped<TelemetryImportService>();
         builder.Services.AddSingleton<IInstrumentUnitResolver, DefaultInstrumentUnitResolver>();
 
-        builder.Services.AddScoped<IAIContextProvider, AIContextProvider>();
+        builder.Services.AddScoped<AIContextProvider>();
+        builder.Services.AddScoped<IAIContextProvider>(serviceProvider => serviceProvider.GetRequiredService<AIContextProvider>());
+        builder.Services.AddScoped<IAssistantDisplayContext>(serviceProvider => serviceProvider.GetRequiredService<AIContextProvider>());
         builder.Services.AddScoped<IceBreakersBuilder>();
         builder.Services.AddSingleton<ChatClientFactory>();
 
@@ -337,6 +340,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddScoped<ISessionStorage, SessionBrowserStorage>();
 
         builder.Services.AddSingleton<IKnownPropertyLookup, KnownPropertyLookup>();
+
+        // Resolves per-replica HMP v1 producer streams server-side from the live
+        // resource snapshot stream. Default impl looks up by display name and
+        // replica index in IDashboardClient and connects to the consumer UDS
+        // path the AppHost stamped onto the snapshot.
+        builder.Services.TryAddSingleton<Aspire.Dashboard.Terminal.ITerminalConnectionResolver, Aspire.Dashboard.Terminal.DefaultTerminalConnectionResolver>();
 
         builder.Services.AddScoped<DimensionManager>();
         builder.Services.AddScoped<DashboardDialogService>();
@@ -509,8 +518,12 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         _app.UseMiddleware<BrowserSecurityHeadersMiddleware>();
         _app.UseAntiforgery();
+        _app.UseWebSockets();
 
         _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+
+        // Terminal WebSocket proxy
+        _app.MapTerminalWebSocket();
 
         // OTLP HTTP services.
         _app.MapHttpOtlpApi(dashboardOptions.Otlp);
@@ -953,7 +966,53 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
         catch (Exception ex)
         {
+            // Include the full exception (type, stack trace, inner exceptions)
+            // so that a "dashboard silently died" report has enough breadcrumbs
+            // to find the root cause from the AppHost log alone, without
+            // requiring a debugger attach.
             Console.Error.WriteLine($"Error: {ex.Message}");
+            Console.Error.WriteLine(ex.ToString());
+            return ExitCodeUnexpectedError;
+        }
+    }
+
+    /// <summary>
+    /// Runs the dashboard until it shuts down or <paramref name="cancellationToken"/> is cancelled.
+    /// Cancellation triggers a graceful host shutdown.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token that can be used to request the dashboard to stop.</param>
+    public async Task<int> RunAsync(CancellationToken cancellationToken)
+    {
+        if (_validationFailures.Count > 0)
+        {
+            return ExitCodeValidationFailure;
+        }
+
+        try
+        {
+            // Cast to IHost so this binds to the CancellationToken-aware HostingAbstractionsHostExtensions.RunAsync
+            // (WebApplication's own RunAsync only takes a URL). Cancelling the token stops the host gracefully.
+            await ((IHost)_app).RunAsync(cancellationToken).ConfigureAwait(false);
+            return 0;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Cancellation is the watchdog's normal shutdown signal (or a start-time race), not a failure.
+            return 0;
+        }
+        catch (IOException ex) when (ContainsAddressInUse(ex))
+        {
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            return ExitCodeAddressInUse;
+        }
+        catch (Exception ex)
+        {
+            // Include the full exception (type, stack trace, inner exceptions)
+            // so that a "dashboard silently died" report has enough breadcrumbs
+            // to find the root cause from the AppHost log alone, without
+            // requiring a debugger attach.
+            Console.Error.WriteLine($"Error: {ex.Message}");
+            Console.Error.WriteLine(ex.ToString());
             return ExitCodeUnexpectedError;
         }
     }

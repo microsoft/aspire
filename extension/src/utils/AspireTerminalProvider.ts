@@ -7,6 +7,7 @@ import { DcpServerConnectionInfo } from '../dcp/types';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
 import { EnvironmentVariables, getEnvironmentWithoutE2EBridgeVariables } from './environment';
 import { resolveCliPath } from './cliPath';
+import { ASPIRE_CLI_PATH_ENV_VAR, getForwardableAspireCliPath } from './cliPathEnvironment';
 import path from 'path';
 
 export const enum AnsiColors {
@@ -22,6 +23,7 @@ export interface AspireTerminal {
 
 export interface SendAspireCommandOptions {
     redactAdditionalArgs?: boolean;
+    terminalTarget?: 'shared' | 'editor';
 }
 
 // String parts are fixed CLI syntax and are validated before interpolation.
@@ -43,6 +45,32 @@ export interface AspireTerminalCommandEvent {
     executionSuppressed: boolean;
     executionMode: 'suppressed' | 'shellIntegration' | 'sendText';
 }
+
+const noExtensionVariablesScrubbedEnvironmentVariables = [
+    'ASPIRE_BACKCHANNEL_PATH',
+    'ASPIRE_CLI_LOG_FILE',
+    'ASPIRE_CLI_PID',
+    'ASPIRE_CLI_STARTED',
+    'ASPIRE_EXTENSION_CAPABILITIES',
+    'ASPIRE_EXTENSION_CERT',
+    'ASPIRE_EXTENSION_DEBUG_RUN_MODE',
+    'ASPIRE_EXTENSION_DEBUG_SESSION_ID',
+    'ASPIRE_EXTENSION_ENDPOINT',
+    'ASPIRE_EXTENSION_PROMPT_ENABLED',
+    'ASPIRE_EXTENSION_TOKEN',
+    'ASPIRE_NON_INTERACTIVE',
+    'ASPIRE_SUPPRESS_CLI_RUN_HOOK',
+    'DCP_INSTANCE_ID_PREFIX',
+    'DEBUG_SESSION_INFO',
+    'DEBUG_SESSION_PORT',
+    'DEBUG_SESSION_RUN_MODE',
+    'DEBUG_SESSION_SERVER_CERTIFICATE',
+    'DEBUG_SESSION_TOKEN',
+] as const;
+
+const noExtensionVariablesScrubbedEnvironmentVariablePrefixes = [
+    'ASPIRE_TERMINAL_HOST_',
+] as const;
 
 /**
  * Quotes a single argument for safe interpolation into a shell command line.
@@ -169,13 +197,16 @@ export class AspireTerminalProvider implements vscode.Disposable {
             logCommand = `${baseCommand} ${logArgs.join(' ')}`;
         }
         const executionSuppressed = isE2eTerminalCommandExecutionSuppressed();
+        const terminalTarget = options?.terminalTarget ?? 'shared';
         let aspireTerminal: AspireTerminal | undefined;
         let executionMode: AspireTerminalCommandEvent['executionMode'];
         if (executionSuppressed) {
             executionMode = 'suppressed';
         }
         else {
-            aspireTerminal = this.getAspireTerminal();
+            aspireTerminal = terminalTarget === 'editor'
+                ? this.createAspireEditorTerminal()
+                : this.getAspireTerminal();
             executionMode = aspireTerminal.terminal.shellIntegration ? 'shellIntegration' : 'sendText';
         }
         this._onDidSendAspireCommand.fire({
@@ -214,8 +245,6 @@ export class AspireTerminalProvider implements vscode.Disposable {
     }
 
     getAspireTerminal(forceCreate?: boolean): AspireTerminal {
-        const terminalName = aspireTerminalName;
-
         const existingTerminal = this._terminalByDebugSessionId.get(null);
         if (existingTerminal) {
             if (!forceCreate) {
@@ -227,18 +256,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         }
 
         extensionLogOutputChannel.info(`Creating new Aspire terminal`);
-        const terminalOptions: vscode.TerminalOptions = {
-            name: terminalName,
-            env: this.createEnvironment(),
-        };
-        if (process.platform === 'win32') {
-            // quoteShellArg uses PowerShell escaping on Windows. Do not rely on the
-            // user's default terminal profile because cmd.exe treats backticks as
-            // ordinary characters and would make quoted values containing " shell-sensitive again.
-            terminalOptions.shellPath = this.getWindowsPowerShellPath();
-        }
-
-        const terminal = vscode.window.createTerminal(terminalOptions);
+        const terminal = this.createTerminal();
 
         const aspireTerminal: AspireTerminal = {
             terminal,
@@ -253,14 +271,55 @@ export class AspireTerminalProvider implements vscode.Disposable {
         return aspireTerminal;
     }
 
+    private createAspireEditorTerminal(): AspireTerminal {
+        extensionLogOutputChannel.info('Creating Aspire editor terminal');
+        const terminal = this.createTerminal(vscode.TerminalLocation.Editor);
+        return {
+            terminal,
+            dispose: () => terminal.dispose(),
+        };
+    }
+
+    private createTerminal(location?: vscode.TerminalLocation): vscode.Terminal {
+        const terminalOptions: vscode.TerminalOptions = {
+            name: aspireTerminalName,
+            env: this.createEnvironment(),
+            location,
+        };
+        if (process.platform === 'win32') {
+            // quoteShellArg uses PowerShell escaping on Windows. Do not rely on the
+            // user's default terminal profile because cmd.exe treats backticks as
+            // ordinary characters and would make quoted values containing " shell-sensitive again.
+            terminalOptions.shellPath = this.getWindowsPowerShellPath();
+        }
+
+        return vscode.window.createTerminal(terminalOptions);
+    }
+
     createEnvironment(debugSessionId?: string, noDebug?: boolean, noExtensionVariables?: boolean): any {
         if (noExtensionVariables) {
-            return getEnvironmentWithoutE2EBridgeVariables();
+            const env: any = {
+                ...getEnvironmentWithoutE2EBridgeVariables(),
+
+                // Hidden CLI processes still render status/error text that VS Code shows to the user.
+                // Keep those messages aligned with the VS Code UI language without enabling the
+                // extension RPC/DCP backchannels that noExtensionVariables intentionally suppresses.
+                ASPIRE_LOCALE_OVERRIDE: vscode.env.language,
+            };
+
+            addForwardableAspireCliPath(env);
+            scrubNoExtensionVariablesEnvironment(env);
+
+            return env;
         }
 
         const env: any = {
             ...getEnvironmentWithoutE2EBridgeVariables(),
+        };
 
+        addForwardableAspireCliPath(env);
+
+        Object.assign(env, {
             // Extension connection information
             ASPIRE_EXTENSION_ENDPOINT: this.rpcServerConnectionInfo.address,
             ASPIRE_EXTENSION_TOKEN: this.rpcServerConnectionInfo.token,
@@ -274,32 +333,65 @@ export class AspireTerminalProvider implements vscode.Disposable {
             DEBUG_SESSION_PORT: this.dcpServerConnectionInfo.address,
             DEBUG_SESSION_TOKEN: this.dcpServerConnectionInfo.token,
             DEBUG_SESSION_SERVER_CERTIFICATE: this.dcpServerConnectionInfo.certificate,
-        };
+        });
 
         if (debugSessionId) {
-            env.ASPIRE_EXTENSION_DEBUG_SESSION_ID = debugSessionId;
-            env.DCP_INSTANCE_ID_PREFIX = debugSessionId + '-';
-            env.DEBUG_SESSION_RUN_MODE = noDebug === false ? "Debug" : "NoDebug";
-            env.ASPIRE_EXTENSION_DEBUG_RUN_MODE = noDebug === false ? "Debug" : "NoDebug";
-            env.DEBUG_SESSION_INFO = JSON.stringify(getRunSessionInfo());
-            env.ASPIRE_EXTENSION_CAPABILITIES = getSupportedCapabilities().join(',');
-            // Extension-managed debug/run sessions stream CLI output into VS Code's
-            // debug console, which is not an interactive terminal. Keep prompts routed
-            // through the extension backchannel while disabling Spectre live output
-            // such as the first-run banner and spinners.
-            env.ASPIRE_NON_INTERACTIVE = 'true';
-
-            // if DCP debug logging is enabled, set DCP-specific logging environment variables
-            const dcpDebugLoggingEnabled = vscode.workspace.getConfiguration('aspire').get<boolean>('enableAspireDcpDebugLogging', false);
-            const workspaceRoot = vscode.workspace.workspaceFolders?.[0];
-            if (dcpDebugLoggingEnabled && workspaceRoot) {
-                env.DCP_DIAGNOSTICS_LOG_LEVEL = "debug";
-                env.DCP_PRESERVE_EXECUTABLE_LOGS = "1";
-                env.DCP_DIAGNOSTICS_LOG_FOLDER = path.join(workspaceRoot.uri.fsPath, '.aspire', 'dcp', `logs-${debugSessionId}`);
-            }
+            this.addDcpRunSessionEnvironment(env, debugSessionId, noDebug);
         }
 
         return env;
+    }
+
+    createDcpRunSessionEnvironment(debugSessionId: string, noDebug?: boolean): any {
+        const env: any = {
+            ...getEnvironmentWithoutE2EBridgeVariables(),
+
+            // Include DCP server info without the extension RPC backchannel. Short-lived
+            // helper CLI processes must not register an extension backchannel because the
+            // CLI's ProcessExit hook stops the debug session attached to that backchannel.
+            DEBUG_SESSION_PORT: this.dcpServerConnectionInfo.address,
+            DEBUG_SESSION_TOKEN: this.dcpServerConnectionInfo.token,
+            DEBUG_SESSION_SERVER_CERTIFICATE: this.dcpServerConnectionInfo.certificate,
+        };
+
+        delete env.ASPIRE_EXTENSION_ENDPOINT;
+        delete env.ASPIRE_EXTENSION_TOKEN;
+        delete env.ASPIRE_EXTENSION_CERT;
+
+        this.addDcpRunSessionEnvironment(env, debugSessionId, noDebug);
+
+        return env;
+    }
+
+    private addDcpRunSessionEnvironment(env: any, debugSessionId: string, noDebug?: boolean): void {
+        env.ASPIRE_EXTENSION_DEBUG_SESSION_ID = debugSessionId;
+        env.DCP_INSTANCE_ID_PREFIX = debugSessionId + '-';
+        env.DEBUG_SESSION_RUN_MODE = noDebug === false ? "Debug" : "NoDebug";
+        env.ASPIRE_EXTENSION_DEBUG_RUN_MODE = noDebug === false ? "Debug" : "NoDebug";
+        env.DEBUG_SESSION_INFO = JSON.stringify(getRunSessionInfo());
+        env.ASPIRE_EXTENSION_CAPABILITIES = getSupportedCapabilities().join(',');
+        // Extension-managed debug/run sessions stream CLI output into VS Code's
+        // debug console, which is not an interactive terminal. Keep prompts routed
+        // through the extension backchannel while disabling Spectre live output
+        // such as the first-run banner and spinners.
+        env[EnvironmentVariables.ASPIRE_NON_INTERACTIVE] = 'true';
+
+        // While debugging, the developer can pause on a breakpoint (e.g. before builder.Build())
+        // for an arbitrarily long time. Use a very long startup timeout (86400s = 24h) so the parent
+        // Aspire CLI doesn't hit its normal ~120s startup timeout and tear down the debug session.
+        // An explicitly configured ASPIRE_CLI_START_TIMEOUT still wins.
+        if (noDebug === false && !hasConfiguredEnvironmentVariable(env, EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT)) {
+            env[EnvironmentVariables.ASPIRE_CLI_START_TIMEOUT] = '86400';
+        }
+
+        // if DCP debug logging is enabled, set DCP-specific logging environment variables
+        const dcpDebugLoggingEnabled = vscode.workspace.getConfiguration('aspire').get<boolean>('enableAspireDcpDebugLogging', false);
+        const workspaceRoot = vscode.workspace.workspaceFolders?.[0];
+        if (dcpDebugLoggingEnabled && workspaceRoot) {
+            env.DCP_DIAGNOSTICS_LOG_LEVEL = "debug";
+            env.DCP_PRESERVE_EXECUTABLE_LOGS = "1";
+            env.DCP_DIAGNOSTICS_LOG_FOLDER = path.join(workspaceRoot.uri.fsPath, '.aspire', 'dcp', `logs-${debugSessionId}`);
+        }
     }
 
     closeAllOpenAspireTerminals() {
@@ -374,6 +466,70 @@ function isPowerShell7Available(): boolean {
     return result.status === 0 && result.error === undefined;
 }
 
+function addForwardableAspireCliPath(env: Record<string, string | undefined>): void {
+    // Forward aspire.aspireCliExecutablePath as AspireCliPath so MSBuild's
+    // ResolveAspireCliBundle task — which `dotnet build` evaluates whenever
+    // the AppHost is built (including from this CLI process and from VS
+    // Code's auto-build / language server) — resolves the bundle layout
+    // relative to the configured CLI instead of probing PATH. PATH-resolved
+    // bundle paths get baked into the AppHost assembly as
+    // [AssemblyMetadata("aspireterminalhostpath", …)] and can outlive a
+    // dev-loop CLI swap (see https://github.com/microsoft/aspire/issues/18073).
+    // Only forward values that pass the task's File.Exists guard; stale
+    // absolute paths make the task produce no bundle outputs instead of
+    // falling back, and the AppHost targets can then fail with ASPIRE009.
+    const configuredCliPath = getForwardableAspireCliPath();
+    if (configuredCliPath) {
+        env[ASPIRE_CLI_PATH_ENV_VAR] = configuredCliPath;
+    }
+}
+
+function hasConfiguredEnvironmentVariable(env: Record<string, string | undefined>, name: string): boolean {
+    if (env[name]) {
+        return true;
+    }
+
+    if (process.platform !== 'win32') {
+        return false;
+    }
+
+    // Windows environment variables are case-insensitive. Avoid adding a second
+    // differently-cased key because Node picks only one when spawning the child process.
+    return Object.entries(env).some(([key, value]) => key.toUpperCase() === name && !!value);
+}
+
+function scrubNoExtensionVariablesEnvironment(env: Record<string, string | undefined>): void {
+    for (const key of noExtensionVariablesScrubbedEnvironmentVariables) {
+        deleteEnvironmentVariable(env, key);
+    }
+
+    for (const key of Object.keys(env)) {
+        if (noExtensionVariablesScrubbedEnvironmentVariablePrefixes.some(prefix => isEnvironmentVariablePrefixMatch(key, prefix))) {
+            delete env[key];
+        }
+    }
+}
+
+function deleteEnvironmentVariable(env: Record<string, string | undefined>, name: string): void {
+    if (process.platform === 'win32') {
+        for (const key of Object.keys(env)) {
+            if (key.toUpperCase() === name) {
+                delete env[key];
+            }
+        }
+
+        return;
+    }
+
+    delete env[name];
+}
+
+function isEnvironmentVariablePrefixMatch(key: string, prefix: string): boolean {
+    return process.platform === 'win32'
+        ? key.toUpperCase().startsWith(prefix)
+        : key.startsWith(prefix);
+}
+
 function isE2eTerminalCommandExecutionSuppressed(): boolean {
     return process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE === 'true' &&
         !!process.env.ASPIRE_EXTENSION_E2E_STATE_FILE &&
@@ -381,7 +537,7 @@ function isE2eTerminalCommandExecutionSuppressed(): boolean {
         process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_TERMINAL_COMMAND_EXECUTION === 'true';
 }
 
-function assertNoTerminalControlCharacters(value: string): void {
+export function assertNoTerminalControlCharacters(value: string): void {
     // Shell quoting protects shell metacharacters after the command reaches the
     // shell. C0 controls are terminal input first: in sendText fallback, ETX can
     // abort the current line and CR/LF can submit following text as another

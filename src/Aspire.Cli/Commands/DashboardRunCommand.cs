@@ -28,6 +28,7 @@ internal sealed class DashboardRunCommand : BaseCommand
     private readonly IBundleService _bundleService;
     private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly FileLoggerProvider _fileLoggerProvider;
+    private readonly IEnvironment _environment;
     private readonly ILogger<DashboardRunCommand> _logger;
 
     private static readonly Option<string?> s_frontendUrlOption = new("--frontend-url")
@@ -59,6 +60,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         IBundleService bundleService,
         LayoutProcessRunner layoutProcessRunner,
         FileLoggerProvider fileLoggerProvider,
+        IEnvironment environment,
         ILogger<DashboardRunCommand> logger,
         CommonCommandServices services)
         : base("run", DashboardCommandStrings.RunDescription, services)
@@ -66,6 +68,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         _bundleService = bundleService;
         _layoutProcessRunner = layoutProcessRunner;
         _fileLoggerProvider = fileLoggerProvider;
+        _environment = environment;
         _logger = logger;
 
         Options.Add(s_frontendUrlOption);
@@ -97,7 +100,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         // so that raw pass-through arguments (unmatched tokens) take precedence.
         var unmatchedTokens = parseResult.UnmatchedTokens;
         var allowAnonymous = parseResult.GetValue(s_allowAnonymousOption);
-        AddOptionArgs(parseResult, dashboardArgs, unmatchedTokens, ExecutionContext);
+        AddOptionArgs(parseResult, dashboardArgs, unmatchedTokens, _environment);
 
         // Set a browser token for frontend auth unless anonymous access is enabled.
         // Tokens and keys are passed via environment variables (not command-line args)
@@ -105,9 +108,9 @@ internal sealed class DashboardRunCommand : BaseCommand
         string? browserToken = null;
         var environmentVariables = new Dictionary<string, string>();
         layoutLease?.AddEnvironment(environmentVariables);
-        if (!allowAnonymous && !ConfigSettingHasValue(unmatchedTokens, ExecutionContext, KnownConfigNames.DashboardUnsecuredAllowAnonymous))
+        if (!allowAnonymous && !ConfigSettingHasValue(unmatchedTokens, _environment, KnownConfigNames.DashboardUnsecuredAllowAnonymous))
         {
-            if (!ConfigSettingHasValue(unmatchedTokens, ExecutionContext, DashboardConfigNames.DashboardFrontendBrowserTokenName.EnvVarName))
+            if (!ConfigSettingHasValue(unmatchedTokens, _environment, DashboardConfigNames.DashboardFrontendBrowserTokenName.EnvVarName))
             {
                 browserToken = TokenGenerator.GenerateToken();
                 environmentVariables[DashboardConfigNames.DashboardFrontendBrowserTokenName.EnvVarName] = browserToken;
@@ -115,12 +118,12 @@ internal sealed class DashboardRunCommand : BaseCommand
 
             // Enable API key authentication for the telemetry API so that only
             // callers who possess the key (or the browser token) can query it.
-            if (!ConfigSettingHasValue(unmatchedTokens, ExecutionContext, DashboardConfigNames.DashboardApiPrimaryApiKeyName.EnvVarName))
+            if (!ConfigSettingHasValue(unmatchedTokens, _environment, DashboardConfigNames.DashboardApiPrimaryApiKeyName.EnvVarName))
             {
                 var apiKey = TokenGenerator.GenerateToken();
                 environmentVariables[DashboardConfigNames.DashboardApiPrimaryApiKeyName.EnvVarName] = apiKey;
 
-                if (!ConfigSettingHasValue(unmatchedTokens, ExecutionContext, DashboardConfigNames.DashboardApiAuthModeName.EnvVarName))
+                if (!ConfigSettingHasValue(unmatchedTokens, _environment, DashboardConfigNames.DashboardApiAuthModeName.EnvVarName))
                 {
                     environmentVariables[DashboardConfigNames.DashboardApiAuthModeName.EnvVarName] = "ApiKey";
                 }
@@ -130,33 +133,33 @@ internal sealed class DashboardRunCommand : BaseCommand
         dashboardArgs.AddRange(unmatchedTokens);
 
         // Resolve URLs for the summary display.
-        var dashboardInfo = ResolveDashboardInfo(dashboardArgs, unmatchedTokens, ExecutionContext, browserToken);
+        var dashboardInfo = ResolveDashboardInfo(dashboardArgs, unmatchedTokens, _environment, browserToken);
 
         return await ExecuteForegroundAsync(managedPath, dashboardArgs, dashboardInfo, environmentVariables, cancellationToken).ConfigureAwait(false);
     }
 
-    private static void AddOptionArgs(ParseResult parseResult, List<string> args, IReadOnlyList<string> unmatchedTokens, CliExecutionContext executionContext)
+    private static void AddOptionArgs(ParseResult parseResult, List<string> args, IReadOnlyList<string> unmatchedTokens, IEnvironment environment)
     {
-        AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_frontendUrlOption, KnownConfigNames.AspNetCoreUrls, defaultValue: "http://localhost:18888");
-        AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_otlpGrpcUrlOption, KnownConfigNames.DashboardOtlpGrpcEndpointUrl, defaultValue: "http://localhost:4317");
-        AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_otlpHttpUrlOption, KnownConfigNames.DashboardOtlpHttpEndpointUrl, defaultValue: "http://localhost:4318");
-        AddBoolOptionArg(parseResult, args, unmatchedTokens, executionContext, s_allowAnonymousOption, KnownConfigNames.DashboardUnsecuredAllowAnonymous);
+        AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_frontendUrlOption, KnownAspNetCoreConfigNames.Urls, defaultValue: "http://localhost:18888");
+        AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_otlpGrpcUrlOption, KnownConfigNames.DashboardOtlpGrpcEndpointUrl, defaultValue: "http://localhost:4317");
+        AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_otlpHttpUrlOption, KnownConfigNames.DashboardOtlpHttpEndpointUrl, defaultValue: "http://localhost:4318");
+        AddBoolOptionArg(parseResult, args, unmatchedTokens, environment, s_allowAnonymousOption, KnownConfigNames.DashboardUnsecuredAllowAnonymous);
 
         // Always enable the telemetry API so CLI commands (e.g. aspire otel) can query the dashboard,
         // unless the user has explicitly configured either the enabled or disabled setting.
-        if (!ConfigSettingHasValue(unmatchedTokens, executionContext, KnownConfigNames.DashboardApiEnabled) &&
-            !ConfigSettingHasValue(unmatchedTokens, executionContext, KnownConfigNames.DashboardApiDisabled))
+        if (!ConfigSettingHasValue(unmatchedTokens, environment, KnownConfigNames.DashboardApiEnabled) &&
+            !ConfigSettingHasValue(unmatchedTokens, environment, KnownConfigNames.DashboardApiDisabled))
         {
             args.Add($"--{KnownConfigNames.DashboardApiEnabled}=true");
         }
 
-        AddStringOptionArg(parseResult, args, unmatchedTokens, executionContext, s_configFilePathOption, KnownConfigNames.DashboardConfigFilePath, defaultValue: null);
+        AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_configFilePathOption, KnownConfigNames.DashboardConfigFilePath, defaultValue: null);
     }
 
     private static void AddStringOptionArg(ParseResult parseResult, List<string> args, IReadOnlyList<string> unmatchedTokens,
-        CliExecutionContext executionContext, Option<string?> option, string envVarName, string? defaultValue)
+        IEnvironment environment, Option<string?> option, string envVarName, string? defaultValue)
     {
-        if (ConfigSettingHasValue(unmatchedTokens, executionContext, envVarName))
+        if (ConfigSettingHasValue(unmatchedTokens, environment, envVarName))
         {
             return;
         }
@@ -172,9 +175,9 @@ internal sealed class DashboardRunCommand : BaseCommand
     }
 
     private static void AddBoolOptionArg(ParseResult parseResult, List<string> args, IReadOnlyList<string> unmatchedTokens,
-        CliExecutionContext executionContext, Option<bool> option, string envVarName, bool? defaultValue = null)
+        IEnvironment environment, Option<bool> option, string envVarName, bool? defaultValue = null)
     {
-        if (ConfigSettingHasValue(unmatchedTokens, executionContext, envVarName))
+        if (ConfigSettingHasValue(unmatchedTokens, environment, envVarName))
         {
             return;
         }
@@ -196,7 +199,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         }
     }
 
-    internal static bool ConfigSettingHasValue(IReadOnlyList<string> unmatchedTokens, CliExecutionContext executionContext, string envVarName)
+    internal static bool ConfigSettingHasValue(IReadOnlyList<string> unmatchedTokens, IEnvironment environment, string envVarName)
     {
         // Check if already provided via unmatched tokens.
         var prefix = $"--{envVarName}=";
@@ -219,7 +222,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         }
 
         // Check if already set as an environment variable.
-        if (executionContext.GetEnvironmentVariable(envVarName) is not null)
+        if (environment.GetEnvironmentVariable(envVarName) is not null)
         {
             return true;
         }
@@ -227,11 +230,11 @@ internal sealed class DashboardRunCommand : BaseCommand
         return false;
     }
 
-    internal static DashboardInfo ResolveDashboardInfo(List<string> dashboardArgs, IReadOnlyList<string> unmatchedTokens, CliExecutionContext executionContext, string? browserToken)
+    internal static DashboardInfo ResolveDashboardInfo(List<string> dashboardArgs, IReadOnlyList<string> unmatchedTokens, IEnvironment environment, string? browserToken)
     {
-        var frontendUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, executionContext, KnownConfigNames.AspNetCoreUrls) ?? "http://localhost:18888";
-        var otlpGrpcUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, executionContext, KnownConfigNames.DashboardOtlpGrpcEndpointUrl) ?? "http://localhost:4317";
-        var otlpHttpUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, executionContext, KnownConfigNames.DashboardOtlpHttpEndpointUrl) ?? "http://localhost:4318";
+        var frontendUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, environment, KnownAspNetCoreConfigNames.Urls) ?? "http://localhost:18888";
+        var otlpGrpcUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, environment, KnownConfigNames.DashboardOtlpGrpcEndpointUrl) ?? "http://localhost:4317";
+        var otlpHttpUrl = ResolveSettingValue(dashboardArgs, unmatchedTokens, environment, KnownConfigNames.DashboardOtlpHttpEndpointUrl) ?? "http://localhost:4318";
 
         // Take the first URL if multiple are specified (semicolon-separated).
         var parts = frontendUrl.Split(';', StringSplitOptions.RemoveEmptyEntries);
@@ -248,7 +251,7 @@ internal sealed class DashboardRunCommand : BaseCommand
     /// Resolves a setting value by checking, in order: args (--KEY=value), unmatched tokens
     /// (--KEY value with space separator), and environment variables.
     /// </summary>
-    internal static string? ResolveSettingValue(List<string> args, IReadOnlyList<string> unmatchedTokens, CliExecutionContext executionContext, string key)
+    internal static string? ResolveSettingValue(List<string> args, IReadOnlyList<string> unmatchedTokens, IEnvironment environment, string key)
     {
         // First check --KEY=value in args (last-wins).
         var result = ResolveArgValue(args, key);
@@ -268,7 +271,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         }
 
         // Fall back to environment variable.
-        return executionContext.GetEnvironmentVariable(key);
+        return environment.GetEnvironmentVariable(key);
     }
 
     internal static string? ResolveArgValue(List<string> args, string key)
@@ -371,7 +374,10 @@ internal sealed class DashboardRunCommand : BaseCommand
         IProcessExecution process;
         try
         {
-            process = _layoutProcessRunner.Start(managedPath, dashboardArgs, environmentVariables: environmentVariables, options: options);
+            // Foreground `aspire dashboard run`: the dashboard is a child of this CLI and must not
+            // outlive it, so bind it to the Windows kill-on-close job as an OS-level backstop on top of
+            // the cross-platform parent-liveness watchdog. No-op on non-Windows hosts.
+            process = await _layoutProcessRunner.StartAsync(managedPath, dashboardArgs, environmentVariables: environmentVariables, options: options, killOnParentExit: true).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -380,7 +386,7 @@ internal sealed class DashboardRunCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.DashboardFailure);
         }
 
-        using var _ = process;
+        await using var _ = process;
 
         // Wait for the dashboard to become ready, the process to exit, or a timeout.
         var processExitTask = process.WaitForExitAsync(cancellationToken);

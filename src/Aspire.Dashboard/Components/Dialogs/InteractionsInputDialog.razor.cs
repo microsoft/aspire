@@ -33,6 +33,10 @@ public partial class InteractionsInputDialog : IAsyncDisposable
     [Inject]
     public required IJSRuntime JS { get; init; }
 
+    [Inject]
+    public required IDashboardClient DashboardClient { get; init; }
+
+    private readonly CancellationTokenSource _disposalCts = new();
     private InteractionsInputsDialogViewModel? _content;
     private EditContext _editContext = default!;
     private ValidationMessageStore _validationMessages = default!;
@@ -137,6 +141,10 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             {
                 _validationMessages.Add(field, $"{inputModel.Input.Label} is required.");
             }
+            foreach (var erroredFile in inputModel.FileReferences.Where(f => f.ErrorMessage is not null))
+            {
+                _validationMessages.Add(field, $"{erroredFile.Name}: {erroredFile.ErrorMessage}");
+            }
         }
 
         _editContext.NotifyValidationStateChanged();
@@ -151,6 +159,10 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             if (IsMissingRequiredValue(inputModel))
             {
                 _validationMessages.Add(field, $"{inputModel.Input.Label} is required.");
+            }
+            foreach (var erroredFile in inputModel.FileReferences.Where(f => f.ErrorMessage is not null))
+            {
+                _validationMessages.Add(field, $"{erroredFile.Name}: {erroredFile.ErrorMessage}");
             }
 
             if (inputModel.Input.UpdateStateOnChange)
@@ -198,6 +210,62 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         await Dialog.CancelAsync();
     }
 
+    private static long GetMaxFileSize(InputViewModel inputModel) =>
+        inputModel.Input.MaxFileSize > 0 ? inputModel.Input.MaxFileSize : InputViewModel.DefaultMaxUploadedFileBytes;
+
+    private string GetFileButtonText(InputViewModel inputModel)
+    {
+        if (!string.IsNullOrEmpty(inputModel.Input.Placeholder))
+        {
+            return inputModel.Input.Placeholder;
+        }
+
+        return inputModel.Input.AllowMultipleFiles
+            ? Loc[nameof(Resources.Dialogs.InteractionFilePlaceholderMultiple)]
+            : Loc[nameof(Resources.Dialogs.InteractionFilePlaceholder)];
+    }
+
+    // Maximum number of files that can be selected in a single file input change event.
+    private const int MaxFileCount = 100;
+
+    private async Task OnInputFileChangeAsync(InputViewModel inputModel, InputFileChangeEventArgs args)
+    {
+        var maxFileSize = GetMaxFileSize(inputModel);
+        var fileReferences = new List<FileReferenceViewModel>();
+
+        foreach (var file in args.GetMultipleFiles(MaxFileCount))
+        {
+            if (file.Size > maxFileSize)
+            {
+                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = $"Exceeds the maximum size of {FormatHelpers.FormatFileSize(maxFileSize)}" });
+                continue;
+            }
+
+            try
+            {
+                using var stream = file.OpenReadStream(maxFileSize);
+                var fileId = await DashboardClient.UploadFileAsync(stream, file.Name, file.Size, _disposalCts.Token);
+                fileReferences.Add(new FileReferenceViewModel { Id = fileId, Name = file.Name });
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = "Upload failed" });
+            }
+        }
+
+        inputModel.SetFileReferences(fileReferences);
+
+        var field = GetFieldIdentifier(inputModel);
+        _validationMessages.Clear(field);
+
+        foreach (var erroredFile in fileReferences.Where(f => f.ErrorMessage is not null))
+        {
+            _validationMessages.Add(field, $"{erroredFile.Name}: {erroredFile.ErrorMessage}");
+        }
+
+        _editContext.NotifyValidationStateChanged();
+    }
+
     private async Task ToggleSecretTextVisibilityAsync(InputViewModel inputModel)
     {
         inputModel.IsSecretTextVisible = !inputModel.IsSecretTextVisible;
@@ -217,6 +285,8 @@ public partial class InteractionsInputDialog : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _disposalCts.Cancel();
+        _disposalCts.Dispose();
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);
     }
 }

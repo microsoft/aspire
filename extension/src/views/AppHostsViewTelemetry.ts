@@ -77,9 +77,12 @@ export class AppHostsViewTelemetry implements vscode.Disposable {
         sendTelemetryEvent('runningapphostsview/shown', {
             view_mode: this._dataRepository.viewMode,
             initial_visibility: initial ? 'true' : 'false',
+            workspace_apphost_state: this._getWorkspaceAppHostState(),
+            has_error: this._dataRepository.hasError ? 'true' : 'false',
         }, {
             running_apphosts: runningAppHosts,
             total_resources: totalResources,
+            workspace_apphost_candidates: this._dataRepository.workspaceAppHostCandidatePaths.length,
         });
     }
 
@@ -103,5 +106,28 @@ export class AppHostsViewTelemetry implements vscode.Disposable {
         }, 0);
 
         return countedWorkspaceResources ? totalResources : totalResources + workspaceResources.length;
+    }
+
+    private _getWorkspaceAppHostState(): string {
+        if (!vscode.workspace.workspaceFolders?.length) {
+            return 'no_workspace';
+        }
+        if (this._dataRepository.hasError) {
+            return 'error';
+        }
+        if (!this._dataRepository.isWorkspaceAppHostDiscoveryComplete) {
+            return 'discovering';
+        }
+        if (this._dataRepository.workspaceAppHostCandidatePaths.length === 0) {
+            return 'not_found';
+        }
+        if (this._dataRepository.workspaceAppHostPath === undefined) {
+            return 'multiple';
+        }
+        if (this._dataRepository.workspaceAppHost !== undefined) {
+            return 'running';
+        }
+
+        return 'selected';
     }
 }

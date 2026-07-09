@@ -9,6 +9,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -29,6 +30,7 @@ internal class ConsoleInteractionService : IInteractionService
     private readonly IAnsiConsole _errorConsole;
     private readonly CliExecutionContext _executionContext;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly IProcessPathProvider _processPathProvider;
     private readonly ILogger _stdoutLogger;
     private readonly ILogger _stderrLogger;
     private readonly ConsoleLogBufferContext _logBufferContext;
@@ -58,17 +60,19 @@ internal class ConsoleInteractionService : IInteractionService
 
     public bool SupportsLinks => MessageConsole.Profile.Capabilities.Links;
 
-    public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, ILoggerFactory loggerFactory, ConsoleLogBufferContext logBufferContext)
+    public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IProcessPathProvider processPathProvider, ILoggerFactory loggerFactory, ConsoleLogBufferContext logBufferContext)
     {
         ArgumentNullException.ThrowIfNull(consoleEnvironment);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(hostEnvironment);
+        ArgumentNullException.ThrowIfNull(processPathProvider);
         ArgumentNullException.ThrowIfNull(loggerFactory);
         ArgumentNullException.ThrowIfNull(logBufferContext);
         _outConsole = consoleEnvironment.Out;
         _errorConsole = consoleEnvironment.Error;
         _executionContext = executionContext;
         _hostEnvironment = hostEnvironment;
+        _processPathProvider = processPathProvider;
         _stdoutLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stdout}");
         _stderrLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stderr}");
         _logBufferContext = logBufferContext;
@@ -440,14 +444,54 @@ internal class ConsoleInteractionService : IInteractionService
 
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion)
     {
-        var cliInformationalVersion = VersionHelper.GetDefaultTemplateVersion();
+        var cliInformationalVersion = _executionContext.IdentityVersion;
 
-        DisplayError(InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading);
+        // When both versions parse, tell the user which side is older and how to
+        // update it rather than the ambiguous "upgrade the AppHost or Aspire CLI".
+        var errorMessage = InteractionServiceStrings.AppHostNotCompatibleConsiderUpgrading;
+        string? updateCommand = null;
+
+        if (SemVersion.TryParse(appHostHostingVersion, SemVersionStyles.Any, out var hostingVersion) &&
+            SemVersion.TryParse(cliInformationalVersion, SemVersionStyles.Any, out var cliVersion))
+        {
+            var comparison = SemVersion.ComparePrecedence(hostingVersion, cliVersion);
+            if (comparison < 0)
+            {
+                errorMessage = InteractionServiceStrings.AppHostNotCompatibleUpdateAppHost;
+                updateCommand = "aspire update";
+            }
+            else if (comparison > 0)
+            {
+                errorMessage = InteractionServiceStrings.AppHostNotCompatibleUpdateCli;
+                updateCommand = DotNetToolDetection.GetDotNetToolUpdateCommand(_processPathProvider.ProcessPath)
+                    ?? NpmInstallDetection.GetNpmUpdateCommand()
+                    ?? "aspire update";
+            }
+        }
+
+        DisplayError(errorMessage);
         MessageConsole.WriteLine();
-        MessageConsole.MarkupLine(
-            $"\t[bold]{InteractionServiceStrings.AspireHostingSDKVersion}[/]: {appHostHostingVersion.EscapeMarkup()}");
-        MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.AspireCLIVersion}[/]: {cliInformationalVersion.EscapeMarkup()}");
-        MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.RequiredCapability}[/]: {ex.RequiredCapability.EscapeMarkup()}");
+
+        var grid = new Grid();
+        grid.AddColumn(new GridColumn { Padding = new Padding(2, 0, 1, 0), NoWrap = true });
+        grid.AddColumn(new GridColumn { Padding = new Padding(0) });
+        grid.AddRow(
+            new Markup($"[bold]{InteractionServiceStrings.AspireHostingSDKVersion.EscapeMarkup()}[/]"),
+            new Markup(appHostHostingVersion.EscapeMarkup()));
+        grid.AddRow(
+            new Markup($"[bold]{InteractionServiceStrings.AspireCLIVersion.EscapeMarkup()}[/]"),
+            new Markup(cliInformationalVersion.EscapeMarkup()));
+        grid.AddRow(
+            new Markup($"[bold]{InteractionServiceStrings.RequiredCapability.EscapeMarkup()}[/]"),
+            new Markup(ex.RequiredCapability.EscapeMarkup()));
+        MessageConsole.Write(grid);
+
+        if (updateCommand is not null)
+        {
+            MessageConsole.WriteLine();
+            MessageConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ToUpdateRunCommand, updateCommand.EscapeMarkup()));
+        }
+
         MessageConsole.WriteLine();
         return CliExitCodes.AppHostIncompatible;
     }
@@ -470,25 +514,13 @@ internal class ConsoleInteractionService : IInteractionService
         {
             // Only attempt to parse/remove markup when the message is expected to contain it.
             // Plain text messages may contain characters like '[' that would be rejected by the markup parser.
-            var logMessage = allowMarkup ? message.RemoveMarkup() : message;
+            var logMessage = allowMarkup ? StringUtils.RemoveMarkup(message) : message;
             logger.LogInformation("{Message}", ConsoleHelpers.FormatEmojiPrefix(emoji, target, replaceEmoji: true) + logMessage);
         }
 
         var displayMessage = allowMarkup ? message : message.EscapeMarkup();
 
-        // Use a grid to keep the icon in a fixed first column so long text wraps
-        // without pushing under the emoji prefix.
-        var grid = new Grid();
-        grid.AddColumn();
-        grid.AddColumn();
-        grid.Columns[0].NoWrap = true;
-        grid.Columns[0].Padding = new Padding(0);
-        grid.Columns[1].Padding = new Padding(0);
-
-        grid.AddRow(
-            new Markup(ConsoleHelpers.FormatEmojiPrefix(emoji, target)),
-            new Markup(displayMessage));
-
+        var grid = ConsoleHelpers.CreateEmojiGrid(emoji, target, new Markup(displayMessage));
         target.Write(grid);
     }
 
@@ -804,7 +836,7 @@ internal class ConsoleInteractionService : IInteractionService
         // text. Some choice formatters intentionally include [bold]/[dim]/etc. tokens for the
         // interactive multi-select renderer; those tokens would otherwise leak verbatim through
         // DisplaySubtleMessage and confuse anyone diagnosing a typoed --option value.
-        var availableChoices = string.Join(", ", choices.Select(c => choiceFormatter(c).RemoveSpectreFormatting()));
+        var availableChoices = string.Join(", ", choices.Select(c => StringUtils.RemoveMarkup(choiceFormatter(c))));
         DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveAvailableValues, availableChoices));
         throw new NonInteractiveException(symbolDisplayName);
     }

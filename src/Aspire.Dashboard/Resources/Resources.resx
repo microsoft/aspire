@@ -208,8 +208,18 @@
   <data name="ResourcesDetailsStateProperty" xml:space="preserve">
     <value>State</value>
   </data>
+  <data name="ResourceCommandAppHostDisconnected" xml:space="preserve">
+    <value>The AppHost disconnected while executing the command. Restart the AppHost and try again.</value>
+  </data>
   <data name="ResourceCommandCanceled" xml:space="preserve">
     <value>"{0}" canceled</value>
+    <comment>{0} is the display name of the command.</comment>
+  </data>
+  <data name="ResourceCommandCancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="ResourceCommandCanceling" xml:space="preserve">
+    <value>"{0}" canceling...</value>
     <comment>{0} is the display name of the command.</comment>
   </data>
   <data name="ResourceCommandFailed" xml:space="preserve">

@@ -1,11 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.ApplicationModel;
-
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
 
 /// <summary>
 /// Optional configuration for resource commands added with <see cref="ResourceBuilderExtensions.WithCommand{T}(Aspire.Hosting.ApplicationModel.IResourceBuilder{T}, string, string, Func{Aspire.Hosting.ApplicationModel.ExecuteCommandContext, Task{Aspire.Hosting.ApplicationModel.ExecuteCommandResult}}, Aspire.Hosting.ApplicationModel.CommandOptions?)"/>.
@@ -41,7 +37,6 @@ public class CommandOptions
     /// <see cref="InteractionInput.Name"/>.
     /// </para>
     /// </remarks>
-    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public IReadOnlyList<InteractionInput> Arguments
     {
         get => _arguments;
@@ -58,7 +53,6 @@ public class CommandOptions
     /// errors to callers.
     /// </para>
     /// </remarks>
-    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public Func<InputsDialogValidationContext, Task>? ValidateArguments { get; set; }
 
     /// <summary>
@@ -99,6 +93,49 @@ public class CommandOptions
     /// <para>If a callback isn't specified, the command is always enabled.</para>
     /// </summary>
     public Func<UpdateCommandStateContext, ResourceCommandState>? UpdateState { get; set; }
+
+    /// <summary>
+    /// Gets or sets options for displaying a progress dialog while the command is executing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// When <see cref="CommandProgressOptions.Message"/> is not <see langword="null"/> or empty, a progress dialog
+    /// is automatically shown while the command callback executes. The dialog closes when the command completes.
+    /// </para>
+    /// <para>
+    /// When <see langword="null"/>, or when <see cref="CommandProgressOptions.Message"/> is <see langword="null"/> or empty,
+    /// no progress dialog is shown and the command executes without visual feedback.
+    /// </para>
+    /// </remarks>
+    public CommandProgressOptions? Progress { get; set; }
 }
 
-#pragma warning restore ASPIREINTERACTION001
+/// <summary>
+/// Options for displaying a progress dialog while a command is executing.
+/// </summary>
+[AspireDto]
+public class CommandProgressOptions
+{
+    /// <summary>
+    /// Gets or sets the message to display in the progress dialog.
+    /// </summary>
+    /// <remarks>
+    /// When not <see langword="null"/> or empty, a progress dialog is displayed while the command executes.
+    /// </remarks>
+    public string? Message { get; set; }
+
+    /// <summary>
+    /// Gets or sets the optional title of the progress dialog.
+    /// </summary>
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the cancel button is hidden in the progress dialog.
+    /// </summary>
+    /// <remarks>
+    /// When <see langword="false"/> (the default), a cancel button is shown. Clicking it cancels the command via the
+    /// <see cref="ExecuteCommandContext.CancellationToken"/>.
+    /// When <see langword="true"/>, no cancel button is displayed and the user cannot cancel the operation from the dialog.
+    /// </remarks>
+    public bool HideCancelButton { get; set; }
+}

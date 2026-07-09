@@ -4,7 +4,6 @@
 using System.Xml.Linq;
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
 
@@ -86,12 +85,8 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromSeconds(60));
         await auto.EnterAsync(); // confirm "Perform updates?" (default: Yes)
-        // The updater may prompt for a NuGet.config location and ask to apply changes
-        // when the project doesn't have an existing NuGet.config. Accept defaults for both.
-        await auto.WaitUntilTextAsync("Which directory for NuGet.config file?", timeout: TimeSpan.FromSeconds(30));
-        await auto.EnterAsync(); // accept default directory
-        await auto.WaitUntilTextAsync("Apply these changes to NuGet.config?", timeout: TimeSpan.FromSeconds(30));
-        await auto.EnterAsync(); // confirm "Apply these changes to NuGet.config?" (default: Yes)
+        // Stable channel does not prompt for NuGet.config creation because it maps
+        // Aspire* to nuget.org and there is no existing config.
         await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromSeconds(60));
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -194,13 +189,11 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
             """);
 
         // First update: migrate to the new SDK format on the latest stable version.
+        // Stable channel does not prompt for NuGet.config creation because it maps
+        // Aspire* to nuget.org and there is no existing config.
         await auto.TypeAsync($"aspire update --project \"{containerAppHostCsprojPath}\" --channel stable");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromSeconds(60));
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Which directory for NuGet.config file?", timeout: TimeSpan.FromSeconds(30));
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Apply these changes to NuGet.config?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromSeconds(60));
         await auto.WaitForSuccessPromptAsync(counter);
@@ -236,17 +229,12 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         // Second update: SDK is already current, so AnalyzeAppHostSdkAsync will
         // skip the SDK update step. The updater must still detect and remove the
         // orphan PackageVersion - that cleanup is itself an update step, so the
-        // run prompts for confirmation just like the first update did, and
-        // re-prompts for the NuGet.config because any update step (not just SDK
-        // migration) can introduce package mappings the existing config may not
-        // cover.
+        // run prompts for confirmation just like the first update did.
+        // Stable channel does not prompt for NuGet.config because it maps Aspire*
+        // to nuget.org and there is no existing config.
         await auto.TypeAsync($"aspire update --project \"{containerAppHostCsprojPath}\" --channel stable");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromSeconds(60));
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Which directory for NuGet.config file?", timeout: TimeSpan.FromSeconds(30));
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Apply these changes to NuGet.config?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromSeconds(60));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));

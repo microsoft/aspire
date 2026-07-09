@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ru" original="../Dialogs.resx">
     <body>
@@ -504,6 +504,36 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">ОК</target>
         <note />
       </trans-unit>
+      <trans-unit id="InteractionFilePlaceholder">
+        <source>Choose a file</source>
+        <target state="new">Choose a file</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionFilePlaceholderMultiple">
+        <source>Choose files</source>
+        <target state="new">Choose files</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionUnsupportedVersionMessage">
+        <source>This action requires a newer version of the Aspire dashboard. Please update your Aspire tools to use this feature.</source>
+        <target state="new">This action requires a newer version of the Aspire dashboard. Please update your Aspire tools to use this feature.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InteractionUnsupportedVersionTitle">
+        <source>Dashboard Update Required</source>
+        <target state="new">Dashboard Update Required</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ManageDataAllDataCheckboxLabel">
+        <source>All data</source>
+        <target state="new">All data</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ManageDataDataTypeForResourceCheckboxLabel">
+        <source>{0} for {1}</source>
+        <target state="new">{0} for {1}</target>
+        <note>{0} is the data type display name. {1} is the parent resource display name.</note>
+      </trans-unit>
       <trans-unit id="ManageDataDialogTitle">
         <source>Manage logs and telemetry</source>
         <target state="translated">Управление журналами и телеметрией</target>
@@ -725,8 +755,8 @@ For more information about using AI agents with the dashboard, including setting
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningDescription">
-        <source>Confirm you want to show the value. In the future, opening the text visualizer will automatically display all values</source>
-        <target state="translated">Подтвердите, что хотите отобразить значение. В будущем при открытии визуализатора текста все значения будут отображаться автоматически</target>
+        <source>Confirm you want to show this value. Once confirmed, the text visualizer in the browser will show values automatically</source>
+        <target state="needs-review-translation">Подтвердите, что хотите отобразить значение. В будущем при открытии визуализатора текста все значения будут отображаться автоматически</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningTitle">

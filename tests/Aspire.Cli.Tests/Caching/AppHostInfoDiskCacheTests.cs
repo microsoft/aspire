@@ -16,7 +16,7 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     private static AppHostInfoDiskCache CreateCache(TemporaryWorkspace workspace, IConfigurationService? configurationService = null)
     {
         var ctx = workspace.CreateExecutionContext();
-        return new AppHostInfoDiskCache(NullLogger<AppHostInfoDiskCache>.Instance, ctx, configurationService ?? new TestConfigurationService());
+        return new AppHostInfoDiskCache(NullLogger<AppHostInfoDiskCache>.Instance, ctx, configurationService ?? new TestConfigurationService(), new TestEnvironment());
     }
 
     private static AppHostInfoDiskCache CreateCacheWithRealConfigurationService(TemporaryWorkspace workspace, Dictionary<string, string?>? processConfigurationValues = null)
@@ -27,7 +27,7 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
             .Build();
         var globalSettingsFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.global.json"));
         var configurationService = new ConfigurationService(configuration, ctx, globalSettingsFile, NullLogger<ConfigurationService>.Instance);
-        return new AppHostInfoDiskCache(NullLogger<AppHostInfoDiskCache>.Instance, ctx, configurationService);
+        return new AppHostInfoDiskCache(NullLogger<AppHostInfoDiskCache>.Instance, ctx, configurationService, new TestEnvironment());
     }
 
     private static FileInfo CreateProjectFile(TemporaryWorkspace workspace, string name = "Test.AppHost.csproj")
@@ -54,7 +54,7 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CacheMissThenHit()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = CreateCache(workspace);
         var projectFile = CreateProjectFile(workspace);
 
@@ -80,7 +80,7 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CacheEntryMissingRunCommandIsTreatedAsMiss()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = CreateCache(workspace);
         var projectFile = CreateProjectFile(workspace);
 
@@ -94,7 +94,7 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TouchingProjectFileInvalidatesCacheEntry()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = CreateCache(workspace);
         var projectFile = CreateProjectFile(workspace);
 
@@ -113,7 +113,7 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TouchingProjectAssetsJsonInvalidatesCacheEntry()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = CreateCache(workspace);
         var projectFile = CreateProjectFile(workspace);
 
@@ -131,7 +131,7 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TouchingDirectoryPackagesPropsInvalidatesCacheEntry()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = CreateCache(workspace);
         var projectFile = CreateProjectFile(workspace);
 
@@ -148,7 +148,7 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DisabledCacheNeverReadsOrWrites()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
         {
           "dotnetAppHostInfoCacheDisabled": "true"
@@ -169,7 +169,7 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ProcessConfigurationValueDoesNotDisableCache()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = CreateCacheWithRealConfigurationService(workspace, new Dictionary<string, string?>
         {
             ["dotnetAppHostInfoCacheDisabled"] = "true",
@@ -185,7 +185,7 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConcurrentWritesToSameKeyLeaveReadableCacheEntry()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = CreateCache(workspace);
         var projectFile = CreateProjectFile(workspace);
 
@@ -211,7 +211,7 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SetAsync_SkipsWriteWhenProjectKeyChangesAfterEvaluation()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = CreateCache(workspace);
         var projectFile = CreateProjectFile(workspace);
         var expectedKey = cache.GetCacheKey(projectFile);
@@ -229,11 +229,11 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ComputeKey_IsStableForUnchangedInputs()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
 
-        var key1 = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(projectFile.FullName));
-        var key2 = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(projectFile.FullName));
+        var key1 = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(projectFile.FullName), new TestEnvironment());
+        var key2 = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(projectFile.FullName), new TestEnvironment());
         Assert.Equal(key1, key2);
         Assert.NotEmpty(key1);
     }
@@ -241,19 +241,46 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ComputeKey_DiffersByProjectPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectA = CreateProjectFile(workspace, "A.csproj");
         var projectB = CreateProjectFile(workspace, "B.csproj");
 
-        var keyA = AppHostInfoDiskCache.ComputeKeyAsync(projectA);
-        var keyB = AppHostInfoDiskCache.ComputeKeyAsync(projectB);
+        var keyA = AppHostInfoDiskCache.ComputeKeyAsync(projectA, new TestEnvironment());
+        var keyB = AppHostInfoDiskCache.ComputeKeyAsync(projectB, new TestEnvironment());
         Assert.NotEqual(keyA, keyB);
+    }
+
+    [Fact]
+    public void ComputeKey_IsCaseInsensitiveForPath()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows(),
+            "Path casing normalization only applies on Windows.");
+
+        // On Windows the same physical project is reached through paths that differ only by case —
+        // VS Code launches the CLI with a lowercase drive letter ("c:\...") while a terminal uses an
+        // uppercase one ("C:\..."), and segment casing can vary too. Because the filesystem is
+        // case-insensitive, all of these must derive the same cache key, otherwise a terminal-
+        // populated entry is invisible to a later read for the same project and the AppHost is
+        // needlessly re-evaluated. The cache key lowercases the whole path on Windows, so vary both
+        // the drive letter and the rest of the path here to mirror that scenario.
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = CreateProjectFile(workspace);
+
+        var fullPath = projectFile.FullName;
+        var lowerPath = fullPath.ToLowerInvariant();
+        var upperDrivePath = char.ToUpperInvariant(fullPath[0]) + fullPath[1..].ToUpperInvariant();
+
+        var keyLower = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(lowerPath), new TestEnvironment());
+        var keyUpper = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(upperDrivePath), new TestEnvironment());
+
+        Assert.Equal(keyLower, keyUpper);
     }
 
     [Fact]
     public void ComputeKey_WalksAboveTenParentDirectories()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var projectDir = workspace.WorkspaceRoot.FullName;
         for (var i = 0; i < 11; i++)
@@ -264,9 +291,9 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
         var projectFile = new FileInfo(Path.Combine(projectDir, "Deep.AppHost.csproj"));
         File.WriteAllText(projectFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
 
-        var keyBeforeImport = AppHostInfoDiskCache.ComputeKeyAsync(projectFile);
+        var keyBeforeImport = AppHostInfoDiskCache.ComputeKeyAsync(projectFile, new TestEnvironment());
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Build.props"), "<Project />");
-        var keyAfterImport = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(projectFile.FullName));
+        var keyAfterImport = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(projectFile.FullName), new TestEnvironment());
 
         Assert.NotEqual(keyBeforeImport, keyAfterImport);
     }
@@ -274,7 +301,7 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ComputeKey_StopsAtGitFileBoundary()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var parentImport = Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Build.props");
         File.WriteAllText(parentImport, "<Project />");
@@ -288,12 +315,12 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
         var projectFile = new FileInfo(Path.Combine(projectDir.FullName, "AppHost.csproj"));
         File.WriteAllText(projectFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
 
-        var keyBeforeParentImportEdit = AppHostInfoDiskCache.ComputeKeyAsync(projectFile);
+        var keyBeforeParentImportEdit = AppHostInfoDiskCache.ComputeKeyAsync(projectFile, new TestEnvironment());
 
         File.WriteAllText(parentImport, "<Project><!-- above git boundary edit --></Project>");
         File.SetLastWriteTimeUtc(parentImport, DateTime.UtcNow.AddSeconds(2));
 
-        var keyAfterParentImportEdit = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(projectFile.FullName));
+        var keyAfterParentImportEdit = AppHostInfoDiskCache.ComputeKeyAsync(new FileInfo(projectFile.FullName), new TestEnvironment());
 
         Assert.Equal(keyBeforeParentImportEdit, keyAfterParentImportEdit);
     }

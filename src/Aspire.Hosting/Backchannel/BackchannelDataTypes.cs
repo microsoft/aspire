@@ -50,6 +50,17 @@ internal static class AuxiliaryBackchannelCapabilities
     /// and JSON-valued resource properties when requested by the client.
     /// </summary>
     public const string V3 = "aux.v3";
+
+    /// <summary>
+    /// Terminal capability (13.4+): the AppHost exposes per-replica terminal info via
+    /// <see cref="GetTerminalInfoResponse.Replicas"/> AND the per-resource list returned by
+    /// <c>ListTerminalsAsync</c> (with per-replica current grid size and attached-peer counts).
+    /// Together these surfaces back <c>aspire terminal attach</c> and <c>aspire terminal ps</c>.
+    /// The two were split during development as <c>terminals.v1</c> and <c>terminals.ps.v1</c>;
+    /// they were consolidated before ship because they are interconnected and always ship together.
+    /// Older clients ignore the new fields/RPC; new clients gate CLI/UI affordances on this capability.
+    /// </summary>
+    public const string Terminals_V1 = "terminals.v1";
 }
 
 /// <summary>
@@ -896,6 +907,21 @@ internal sealed class PublishingPromptInput
     public bool Loading { get; init; }
 
     public bool Disabled { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether multiple files can be selected for File inputs.
+    /// </summary>
+    public bool AllowMultipleFiles { get; init; }
+
+    /// <summary>
+    /// Gets the file type filter for File inputs. Uses the same format as the HTML accept attribute.
+    /// </summary>
+    public string? FileFilter { get; init; }
+
+    /// <summary>
+    /// Gets the maximum file size in bytes for File inputs. Null means no explicit limit.
+    /// </summary>
+    public long? MaxFileSize { get; init; }
 }
 
 /// <summary>
@@ -934,6 +960,27 @@ internal class PublishingPromptInputAnswer
 {
     public string? Name { get; set; }
     public string? Value { get; set; }
+}
+
+internal sealed class UploadFileRequest
+{
+    public required byte[] Data { get; set; }
+    public required string FileName { get; set; }
+}
+
+internal sealed class UploadFileResponse
+{
+    public required string FileId { get; set; }
+}
+
+/// <summary>
+/// Represents a file reference as serialized in interaction input values.
+/// Matches the JSON format: [{"Id":"...","Name":"..."}]
+/// </summary>
+internal sealed class FileReferenceDto
+{
+    public required string Id { get; set; }
+    public required string Name { get; set; }
 }
 
 /// <summary>
@@ -1436,15 +1483,48 @@ internal sealed class AppHostInformation
     public int? CliProcessId { get; init; }
 
     /// <summary>
-    /// Gets or sets when the AppHost process started.
+    /// Gets or sets when the AppHost process started using the legacy <see cref="Process.StartTime"/> clock domain.
     /// </summary>
+    /// <remarks>
+    /// Released AppHosts only report this field. On Linux it can differ from the stable PID-identity
+    /// value by an adjacent Unix second, so callers that verify process identity should prefer
+    /// <see cref="StableStartedAt"/> when it is present and use a runtime-start-time verifier for this
+    /// fallback field.
+    /// </remarks>
     public DateTimeOffset? StartedAt { get; init; }
+
+    /// <summary>
+    /// Gets or sets when the AppHost process started using the stable PID-identity clock domain.
+    /// </summary>
+    /// <remarks>
+    /// Current AppHosts report this additive field so callers can perform exact PID-reuse checks while
+    /// still accepting older AppHosts that only sent <see cref="StartedAt"/>.
+    /// </remarks>
+    public DateTimeOffset? StableStartedAt { get; init; }
 
     /// <summary>
     /// Gets or sets when the CLI process that launched the AppHost started.
     /// This value is only set when the AppHost is launched via the Aspire CLI.
     /// </summary>
+    /// <remarks>
+    /// This value comes from <c>ASPIRE_CLI_STARTED</c>, which is intentionally stamped from
+    /// <see cref="Process.StartTime"/> for released-AppHost compatibility. On Linux it drifts across
+    /// processes after a wall-clock adjustment, so prefer <see cref="CliStableStartedAt"/> when it is
+    /// present.
+    /// </remarks>
     public DateTimeOffset? CliStartedAt { get; init; }
+
+    /// <summary>
+    /// Gets or sets when the CLI process that launched the AppHost started, using the stable
+    /// PID-identity clock domain.
+    /// </summary>
+    /// <remarks>
+    /// This value comes from <c>ASPIRE_CLI_STARTED_STABLE</c> and, unlike <see cref="CliStartedAt"/>,
+    /// is derived from Linux <c>/proc</c> start ticks so it survives wall-clock adjustments and can be
+    /// compared exactly to guard against CLI PID reuse. Current CLIs stamp it; older CLIs do not, so
+    /// this additive field is <see langword="null"/> when the AppHost was launched by an older CLI.
+    /// </remarks>
+    public DateTimeOffset? CliStableStartedAt { get; init; }
 
     /// <summary>
     /// Gets or sets the log file path of the CLI process that launched the AppHost.
@@ -1479,6 +1559,237 @@ internal sealed class ResourceLogLine
     public bool IsError { get; init; }
 }
 
+#region Terminal
+
+/// <summary>
+/// Request for getting terminal information for a resource.
+/// </summary>
+internal sealed class GetTerminalInfoRequest : BackchannelRequest
+{
+    /// <summary>
+    /// Gets the resource name.
+    /// </summary>
+    public required string ResourceName { get; init; }
+
+    /// <inheritdoc />
+    public override GetTerminalInfoRequest WithTraceContext(BackchannelTraceContext traceContext)
+        => new() { ResourceName = ResourceName, TraceContext = traceContext };
+}
+
+/// <summary>
+/// Per-replica endpoint information for an interactive terminal session. One entry per
+/// replica of a resource configured with WithTerminal. Returned inside
+/// <see cref="GetTerminalInfoResponse.Replicas"/> when the auxiliary backchannel reports
+/// the <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+/// </summary>
+internal sealed class TerminalReplicaInfo
+{
+    /// <summary>
+    /// Gets the zero-based replica index. Stable across the lifetime of the AppHost run.
+    /// </summary>
+    public required int ReplicaIndex { get; init; }
+
+    /// <summary>
+    /// Gets a short human-readable label for the replica, suitable for selection prompts and logs.
+    /// </summary>
+    public required string Label { get; init; }
+
+    /// <summary>
+    /// Gets the consumer-side Unix domain socket path that viewers (Dashboard, CLI) connect to in
+    /// order to attach to this replica's PTY via Hex1b's HMP v1 protocol.
+    /// </summary>
+    public required string ConsumerUdsPath { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether this replica's upstream producer is currently attached.
+    /// True while the underlying PTY is actively delivering bytes to the host. False transiently
+    /// between automatic recycles (when DCP relaunches the underlying process and rebinds), and
+    /// permanently when the host is shutting down. Identical in meaning to
+    /// <see cref="ProducerConnected"/>; both are populated for backwards compatibility with
+    /// older clients that branched on this name.
+    /// </summary>
+    public required bool IsAlive { get; init; }
+
+    /// <summary>
+    /// Gets the exit code from the most recently-completed producer cycle for this replica,
+    /// or null if no cycle has completed yet. Updates each time the upstream producer
+    /// disconnects.
+    /// </summary>
+    public int? ExitCode { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the upstream producer is currently attached to this
+    /// replica. Synonym for <see cref="IsAlive"/> with clearer naming.
+    /// </summary>
+    public bool ProducerConnected { get; init; }
+
+    /// <summary>
+    /// Gets the number of completed producer cycles for this replica. Increments each time
+    /// the upstream producer disconnects and the host rebinds. Useful as a diagnostic — an
+    /// unexpectedly high count indicates the upstream process is crashing repeatedly.
+    /// </summary>
+    public int RestartCount { get; init; }
+
+    /// <summary>
+    /// Gets the current terminal grid width in columns, as last negotiated by the active HMP1
+    /// primary peer. Falls back to <see cref="GetTerminalInfoResponse.Columns"/> when no peer has
+    /// driven a resize yet. Null when the AppHost predates the
+    /// <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+    /// </summary>
+    public int? CurrentColumns { get; init; }
+
+    /// <summary>
+    /// Gets the current terminal grid height in rows. See <see cref="CurrentColumns"/>.
+    /// </summary>
+    public int? CurrentRows { get; init; }
+
+    /// <summary>
+    /// Gets the count of HMP1 viewer peers currently attached to this replica's consumer UDS
+    /// (Dashboard tabs, CLI <c>aspire terminal attach</c> sessions, etc.). Zero when no viewer
+    /// is attached. Null when the AppHost predates the
+    /// <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+    /// </summary>
+    public int? AttachedPeerCount { get; init; }
+
+    /// <summary>
+    /// Gets per-peer details for currently-attached HMP1 viewers, in connect order. Useful for
+    /// "who's attached?" diagnostics in <c>aspire terminal ps -v</c>. Null when the AppHost
+    /// predates the <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+    /// </summary>
+    public TerminalPeerInfo[]? Peers { get; init; }
+}
+
+/// <summary>
+/// Per-peer identification for an HMP1 client currently attached to a replica's consumer UDS.
+/// Mirrors the host-side peer info reported by the terminal host control protocol.
+/// </summary>
+internal sealed class TerminalPeerInfo
+{
+    /// <summary>
+    /// Gets the HMP1-assigned stable peer identifier for the lifetime of the connection.
+    /// </summary>
+    public required string PeerId { get; init; }
+
+    /// <summary>
+    /// Gets the free-form display label the peer reported in its ClientHello, or null if the
+    /// peer didn't supply one (e.g. <c>aspire-cli:1234</c>, <c>dashboard:abc12345</c>).
+    /// </summary>
+    public string? DisplayName { get; init; }
+}
+
+/// <summary>
+/// Response containing terminal information for a resource.
+/// </summary>
+internal sealed class GetTerminalInfoResponse
+{
+    /// <summary>
+    /// Gets whether terminal access is available for this resource.
+    /// </summary>
+    public required bool IsAvailable { get; init; }
+
+    /// <summary>
+    /// Gets the per-replica endpoint information when <see cref="IsAvailable"/> is true.
+    /// Null for older AppHosts that predate the
+    /// <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+    /// </summary>
+    public TerminalReplicaInfo[]? Replicas { get; init; }
+
+    /// <summary>
+    /// Gets the legacy single-socket UDS path. Always null in 13.4+; preserved on the wire
+    /// so older CLI builds that deserialize this response keep working without crashing on an
+    /// unexpected schema.
+    /// </summary>
+    public string? SocketPath { get; init; }
+
+    /// <summary>
+    /// Gets the AppHost-configured initial terminal width in columns. Hint only; viewers may
+    /// negotiate a different size after attaching.
+    /// </summary>
+    public int Columns { get; init; }
+
+    /// <summary>
+    /// Gets the AppHost-configured initial terminal height in rows. Hint only; viewers may
+    /// negotiate a different size after attaching.
+    /// </summary>
+    public int Rows { get; init; }
+}
+
+/// <summary>
+/// Request for listing every <c>WithTerminal</c>-enabled resource. Empty payload — the AppHost
+/// already knows which resources have a <c>TerminalAnnotation</c>. Gated on the
+/// <see cref="AuxiliaryBackchannelCapabilities.Terminals_V1"/> capability.
+/// </summary>
+internal sealed class ListTerminalsRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override ListTerminalsRequest WithTraceContext(BackchannelTraceContext traceContext)
+        => new() { TraceContext = traceContext };
+}
+
+/// <summary>
+/// One entry per <c>WithTerminal</c>-enabled resource. Returned inside
+/// <see cref="ListTerminalsResponse.Terminals"/>. Replica details (current size, attached peers)
+/// are only populated when the host process is reachable; otherwise <see cref="IsHostReachable"/>
+/// is false and the per-replica entries are degraded (<see cref="TerminalReplicaInfo.IsAlive"/> =
+/// false, AppHost-known <see cref="TerminalReplicaInfo.ConsumerUdsPath"/>), but the array shape
+/// stays consistent so diagnostics stay legible.
+/// </summary>
+internal sealed class TerminalSummary
+{
+    /// <summary>
+    /// Gets the resource name (matches <c>IResource.Name</c>).
+    /// </summary>
+    public required string ResourceName { get; init; }
+
+    /// <summary>
+    /// Gets a short human-readable display name. Today identical to <see cref="ResourceName"/>;
+    /// kept separate so the AppHost can substitute a friendlier name later (e.g. when a resource
+    /// has a display name annotation).
+    /// </summary>
+    public required string DisplayName { get; init; }
+
+    /// <summary>
+    /// Gets the AppHost-configured initial terminal width. Falls back when no replica has reported
+    /// a resize.
+    /// </summary>
+    public required int ConfiguredColumns { get; init; }
+
+    /// <summary>
+    /// Gets the AppHost-configured initial terminal height.
+    /// </summary>
+    public required int ConfiguredRows { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the terminal host process for this resource was
+    /// reachable when the snapshot was taken. False when the host hasn't started yet, the control
+    /// UDS isn't bound, or the control RPC timed out.
+    /// </summary>
+    public required bool IsHostReachable { get; init; }
+
+    /// <summary>
+    /// Gets the per-replica details. One entry per configured replica, in replica index order.
+    /// Replicas whose host wasn't reachable when the snapshot was taken still appear here with
+    /// <see cref="TerminalReplicaInfo.IsAlive"/> = false and the AppHost-known
+    /// <see cref="TerminalReplicaInfo.ConsumerUdsPath"/> populated, so the diagnostic shape
+    /// stays consistent regardless of host reachability. Null only when the producer didn't
+    /// supply any replica info (older AppHost predating per-replica fan-out).
+    /// </summary>
+    public TerminalReplicaInfo[]? Replicas { get; init; }
+}
+
+/// <summary>
+/// Response from <c>ListTerminalsAsync</c>. Lists every <c>WithTerminal</c>-enabled resource in the
+/// AppHost. Empty array when no resource is configured for terminals.
+/// </summary>
+internal sealed class ListTerminalsResponse
+{
+    /// <summary>
+    /// Gets the per-resource summaries. Empty (not null) when there are no terminal-enabled resources.
+    /// </summary>
+    public required TerminalSummary[] Terminals { get; init; }
+}
+
+#endregion
 /// <summary>
 /// Represents a batch of resource console log lines.
 /// </summary>
@@ -1489,4 +1800,3 @@ internal sealed class ResourceLogBatch
     /// </summary>
     public required ResourceLogLine[] Lines { get; init; }
 }
-

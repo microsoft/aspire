@@ -2,10 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREINTERACTION001
 
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -17,6 +17,7 @@ namespace Aspire.Hosting.Tests.Publishing;
 public class PublishingActivityReporterTests
 {
     private readonly InteractionService _interactionService = CreateInteractionService();
+    private readonly TestFileUploadStore _fileUploadStore = new();
 
     [Fact]
     public async Task CreateStepAsync_CreatesStepAndEmitsActivity()
@@ -1323,7 +1324,7 @@ public class PublishingActivityReporterTests
 
     private PipelineActivityReporter CreatePublishingReporter()
     {
-        return new PipelineActivityReporter(_interactionService, NullLogger<PipelineActivityReporter>.Instance);
+        return new PipelineActivityReporter(_interactionService, _fileUploadStore, NullLogger<PipelineActivityReporter>.Instance);
     }
 
     internal static InteractionService CreateInteractionService()

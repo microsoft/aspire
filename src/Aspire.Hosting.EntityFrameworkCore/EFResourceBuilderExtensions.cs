@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREDOTNETTOOL
-#pragma warning disable ASPIREINTERACTION001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore;
@@ -785,7 +784,6 @@ public static class EFResourceBuilderExtensions
                 return CommandResults.Failure(result.ErrorMessage);
             });
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only
     /// <summary>
     /// Common wrapper that handles state management and exception handling for EF commands.
     /// </summary>
@@ -996,5 +994,4 @@ public static class EFResourceBuilderExtensions
                 logger.LogError("Get Database Status command failed: {Error}", result.ErrorMessage);
                 return CommandResults.Failure(result.ErrorMessage);
             });
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only
 }

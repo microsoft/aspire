@@ -183,6 +183,12 @@
   <data name="ReconnectRetryButtonText" xml:space="preserve">
     <value>Retry</value>
   </data>
+  <data name="ResourceServiceReconnectDisconnectedText" xml:space="preserve">
+    <value>Lost connection to the AppHost. Attempting to reconnect...</value>
+  </data>
+  <data name="ResourceServiceReconnectRetryButtonText" xml:space="preserve">
+    <value>Retry</value>
+  </data>
   <data name="MessageUnsecuredEndpointTitle" xml:space="preserve">
     <value>Endpoint is unsecured</value>
   </data>

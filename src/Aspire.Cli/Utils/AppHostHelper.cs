@@ -8,6 +8,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Semver;
 
@@ -139,8 +140,11 @@ internal static class AppHostHelper
         int currentPid,
         ILogger logger)
     {
-        var matchingSockets = BackchannelConstants.FindMatchingSockets(appHostPath, homeDirectory);
-        var remainingSockets = PruneOrphanedSockets(matchingSockets, currentPid, out var deletedCount);
+        // Resolve symlinks so callers that provide "/tmp/..." can still match sockets keyed
+        // off the physical path (for example "/private/tmp/..." on macOS).
+        var resolvedPath = PathNormalizer.ResolveSymlinks(appHostPath);
+        var matchingSockets = BackchannelConstants.FindMatchingSockets(resolvedPath, homeDirectory);
+        var remainingSockets = PruneOrphanedSockets(matchingSockets, currentPid, logger, out var deletedCount);
         if (deletedCount > 0)
         {
             logger.LogDebug("Cleaned up {Count} orphaned AppHost socket(s).", deletedCount);
@@ -150,9 +154,49 @@ internal static class AppHostHelper
     }
 
     /// <summary>
+    /// Best-effort deletion of an auxiliary backchannel socket file whose owning AppHost instance is no longer running.
+    /// </summary>
+    /// <remarks>
+    /// This is the single CLI-side socket-cleanup path. It is used both at stop time (<c>aspire stop</c> and
+    /// <see cref="Projects.RunningInstanceManager"/>, once the process is confirmed terminated) and by the orphan-pruning
+    /// backstop in <see cref="PruneOrphanedSockets"/> (once the owning PID is observed to be dead). Leaving the socket
+    /// behind causes a later command (for example <c>aspire add</c> or <c>aspire stop</c>) to rediscover it via
+    /// <see cref="FindMatchingNonOrphanedSockets"/> and attempt to connect to a now-dead process. This is most visible on
+    /// Windows, where the dead AppHost's PID can be reused so the orphan-pruning heuristic still believes the process is
+    /// alive. Deleting by exact path at stop time sidesteps that PID heuristic entirely. The caller must only invoke this
+    /// once it knows the owning process has terminated. The AppHost-side socket cleanup in <c>Aspire.Hosting</c>
+    /// (<c>BackchannelService</c>/<c>AuxiliaryBackchannelService</c>) deliberately does not share this method: it lives in a
+    /// different assembly and deletes a socket the AppHost itself owns, so it is not exposed to the PID-reuse problem. See
+    /// https://github.com/microsoft/aspire/issues/17587.
+    /// </remarks>
+    /// <param name="socketPath">The path to the auxiliary backchannel socket file.</param>
+    /// <param name="logger">Logger used for diagnostic output.</param>
+    /// <returns><see langword="true"/> if the socket file was deleted; otherwise <see langword="false"/>.</returns>
+    internal static bool TryDeleteSocketFile(string socketPath, ILogger logger)
+    {
+        try
+        {
+            if (File.Exists(socketPath))
+            {
+                File.Delete(socketPath);
+                logger.LogDebug("Cleaned up backchannel socket file: {SocketPath}", socketPath);
+                return true;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A failed delete is non-fatal: the next command's orphan-pruning pass will attempt cleanup again. We swallow
+            // the same exception types as the other socket-cleanup sites for consistency.
+            logger.LogDebug(ex, "Failed to clean up backchannel socket file (this may be safe to ignore): {SocketPath}", socketPath);
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Deletes PID-qualified socket files whose owning process has exited and returns sockets that should still be probed.
     /// </summary>
-    private static string[] PruneOrphanedSockets(string[] socketPaths, int currentPid, out int deletedCount)
+    private static string[] PruneOrphanedSockets(string[] socketPaths, int currentPid, ILogger logger, out int deletedCount)
     {
         deletedCount = 0;
         var remainingSockets = new List<string>(socketPaths.Length);
@@ -169,13 +213,9 @@ internal static class AppHostHelper
                     //   auxi.sock.{hash}.{instanceHash}.{pid}
                     // After a crash or reboot these files can remain, and connecting to them
                     // reports "connection refused" even though there is no AppHost to stop.
-                    try
+                    if (TryDeleteSocketFile(socketPath, logger))
                     {
-                        File.Delete(socketPath);
                         deletedCount++;
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                    {
                     }
 
                     continue;

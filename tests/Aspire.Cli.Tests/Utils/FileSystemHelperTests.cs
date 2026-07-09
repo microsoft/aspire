@@ -11,7 +11,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithSimpleFiles_CopiesAllFiles()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -38,7 +38,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithSubdirectories_CopiesRecursively()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -70,7 +70,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithEmptyDirectory_CreatesDestination()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("empty_source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "empty_destination");
 
@@ -87,7 +87,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithNonExistentSource_ThrowsDirectoryNotFoundException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var nonExistentSource = Path.Combine(workspace.WorkspaceRoot.FullName, "nonexistent");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -100,7 +100,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithNullSource_ThrowsArgumentNullException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
         // Act & Assert
@@ -112,7 +112,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithNullDestination_ThrowsArgumentNullException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
 
         // Act & Assert
@@ -124,7 +124,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithEmptySource_ThrowsArgumentException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
         // Act & Assert
@@ -136,7 +136,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithEmptyDestination_ThrowsArgumentException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
 
         // Act & Assert
@@ -148,7 +148,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_PreservesFileContent_WithBinaryFiles()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -173,7 +173,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithMultipleLevelsOfSubdirectories_CopiesAll()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -204,7 +204,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithExistingDestinationFiles_OverwritesThem()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -239,7 +239,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithExistingDestinationFilesAndOverwriteFalse_ThrowsIOException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -264,7 +264,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
             "/home/user/folder2/App2.AppHost.csproj"
         };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Equal("App1.AppHost.csproj", result[paths[0]]);
         Assert.Equal("App2.AppHost.csproj", result[paths[1]]);
@@ -279,7 +279,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
             "/home/user/folder2/Project.csproj"
         };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Equal(Path.Combine("folder1", "Project.csproj"), result[paths[0]]);
         Assert.Equal(Path.Combine("folder2", "Project.csproj"), result[paths[1]]);
@@ -294,7 +294,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
             @"C:\folder2\Project.csproj"
         };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Equal(Path.Combine("folder1", "Project.csproj"), result[paths[0]]);
         Assert.Equal(Path.Combine("folder2", "Project.csproj"), result[paths[1]]);
@@ -309,7 +309,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
             "/home/b/shared/Project.csproj"
         };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Equal(Path.Combine("a", "shared", "Project.csproj"), result[paths[0]]);
         Assert.Equal(Path.Combine("b", "shared", "Project.csproj"), result[paths[1]]);
@@ -320,7 +320,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     {
         var paths = new List<string> { "/home/user/repos/MyApp/AppHost.cs" };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Equal(Path.Combine("MyApp", "AppHost.cs"), result[paths[0]]);
     }
@@ -330,7 +330,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     {
         var paths = new List<string> { "/home/user/repos/MyApp/MyApp.AppHost.csproj" };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Equal("MyApp.AppHost.csproj", result[paths[0]]);
     }
@@ -343,7 +343,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
             "/home/user/App1/AppHost.cs"
         };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Equal(Path.Combine("App1", "AppHost.cs"), result[paths[0]]);
     }
@@ -357,7 +357,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
             "/home/user/App2/AppHost.cs"
         };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Equal(Path.Combine("App1", "AppHost.cs"), result[paths[0]]);
         Assert.Equal(Path.Combine("App2", "AppHost.cs"), result[paths[1]]);
@@ -372,7 +372,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
             "/home/user/b/src/AppHost.cs"
         };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Equal(Path.Combine("a", "src", "AppHost.cs"), result[paths[0]]);
         Assert.Equal(Path.Combine("b", "src", "AppHost.cs"), result[paths[1]]);
@@ -387,7 +387,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
             "/home/user/App2/AppHost.cs"
         };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Equal("App1.AppHost.csproj", result[paths[0]]);
         Assert.Equal(Path.Combine("App2", "AppHost.cs"), result[paths[1]]);
@@ -396,7 +396,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ShortenPaths_EmptyList_ReturnsEmptyDictionary()
     {
-        var result = FileSystemHelper.ShortenPaths(Array.Empty<string>());
+        var result = FileSystemHelper.ShortenPaths(Array.Empty<string>(), new TestEnvironment());
 
         Assert.Empty(result);
     }
@@ -411,7 +411,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
             "/a/folder3/Unique.csproj"
         };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Equal(Path.Combine("folder1", "Project.csproj"), result[paths[0]]);
         Assert.Equal(Path.Combine("folder2", "Project.csproj"), result[paths[1]]);
@@ -427,7 +427,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
             @"D:\folder\Project.csproj"
         };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Equal(@"C:\folder\Project.csproj", result[paths[0]]);
         Assert.Equal(@"D:\folder\Project.csproj", result[paths[1]]);
@@ -444,7 +444,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
             "/repo/folder/Project.csproj"
         };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Equal(Path.Combine("Folder", "Project.csproj"), result[paths[0]]);
         Assert.Equal(Path.Combine("folder", "Project.csproj"), result[paths[1]]);
@@ -459,7 +459,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
             "/home/user/folder1/Project.csproj"
         };
 
-        var result = FileSystemHelper.ShortenPaths(paths);
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
 
         Assert.Single(result);
         Assert.Equal("Project.csproj", result[paths[0]]);

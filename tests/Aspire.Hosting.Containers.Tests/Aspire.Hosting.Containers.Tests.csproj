@@ -5,13 +5,20 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="Aspire.Tests.Utils" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.Testing\Aspire.Hosting.Testing.csproj" />
-    <ProjectReference Include="..\Aspire.Hosting.Tests\Aspire.Hosting.Tests.csproj" />
+    <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Polly.Core" />
     <PackageReference Include="Verify.XunitV3" />
+    <!-- Provides FakeLogCollector/FakeLogger. Previously inherited transitively via
+         Aspire.Hosting.Tests; referenced directly now that this project depends on
+         Aspire.Hosting.TestUtilities instead. -->
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
   </ItemGroup>
 
   <ItemGroup>

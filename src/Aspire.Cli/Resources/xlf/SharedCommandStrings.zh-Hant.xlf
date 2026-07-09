@@ -82,6 +82,11 @@
         <target state="new">The --stream option requires --format json.</target>
         <note />
       </trans-unit>
+      <trans-unit id="MultipleAppHostsNonInteractive">
+        <source>Multiple running AppHosts were found, but the CLI is running in non-interactive mode. Pass --apphost to specify which AppHost to use.</source>
+        <target state="new">Multiple running AppHosts were found, but the CLI is running in non-interactive mode. Pass --apphost to specify which AppHost to use.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MultipleInScopeAppHosts">
         <source>Multiple running AppHosts found in the current directory. Select from running AppHosts.</source>
         <target state="new">Multiple running AppHosts found in the current directory. Select from running AppHosts.</target>
@@ -136,6 +141,11 @@
         <source>Select an AppHost to {0}:</source>
         <target state="new">Select an AppHost to {0}:</target>
         <note />
+      </trans-unit>
+      <trans-unit id="UnrecognizedOptionDidYouMeanFormat">
+        <source>Unrecognized option '{0}'. Did you mean '{1}'?</source>
+        <target state="new">Unrecognized option '{0}'. Did you mean '{1}'?</target>
+        <note>{0} is the unrecognized option, {1} is the suggested correct option.</note>
       </trans-unit>
       <trans-unit id="UsingAppHost">
         <source>Using AppHost: {0}</source>

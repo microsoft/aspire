@@ -12,15 +12,15 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureKubernetesFoundryReferenceTests
+public class AzureKubernetesFoundryReferenceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path);
+            workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -55,7 +55,7 @@ public class AzureKubernetesFoundryReferenceTests
         // The agent endpoint must resolve to the Foundry project endpoint composed with the deployed
         // hosted agent path because hosted-agent deployment creates the Foundry agent version with the
         // wrapper resource name.
-        var valuesPath = Directory.EnumerateFiles(tempDir.Path, "values.yaml", SearchOption.AllDirectories).Single();
+        var valuesPath = Directory.EnumerateFiles(workspace.Path, "values.yaml", SearchOption.AllDirectories).Single();
         var values = await File.ReadAllTextAsync(valuesPath);
 
         Assert.Contains("AGENT_HTTP: \"{project.outputs.endpoint}/agents/agent-ha\"", values);

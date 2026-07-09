@@ -544,7 +544,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
 
         // Use the same path for both runs
-        using var aspireStore = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
 
         var before = await RunContainersAsync();
         var after = await RunContainersAsync();
@@ -556,7 +556,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
         async Task<string?[]> RunContainersAsync()
         {
             using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper)
-                .WithTempAspireStore(aspireStore.Path)
+                .WithTempAspireStore(workspace.Path)
                 .WithResourceCleanUp(false);
 
             var passwordParameter = builder.AddParameter("pwd", "p@ssword1", secret: true);
@@ -628,6 +628,13 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
         await host.StartAsync();
 
         await app.ResourceNotifications.WaitForResourceHealthyAsync(newDb.Resource.Name, cts.Token);
+
+        // Verify that the resource logger emitted feedback about the custom creation script.
+        // Logs are attributed to the parent server resource, not the database resource.
+        await app.WaitForAllTextAsync(
+            ["Executing custom creation script for database", "Completed custom creation script for database"],
+            resourceName: postgres.Resource.Name,
+            cts.Token);
 
         var conn = host.Services.GetRequiredService<NpgsqlConnection>();
 

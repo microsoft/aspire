@@ -557,7 +557,7 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
         using var cts = new CancellationTokenSource(TestConstants.ExtraLongTimeoutTimeSpan * 2);
 
         // Use the same path for both runs
-        using var aspireStore = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
 
         var before = await RunContainersAsync();
         var after = await RunContainersAsync();
@@ -569,7 +569,7 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
         async Task<string?[]> RunContainersAsync()
         {
             using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper)
-                .WithTempAspireStore(aspireStore.Path)
+                .WithTempAspireStore(workspace.Path)
                 .WithResourceCleanUp(false);
 
             var passwordParameter = builder.AddParameter("pwd", "p@ssw0rd1", secret: true);
@@ -670,6 +670,13 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
         await host.StartAsync();
 
         await app.ResourceNotifications.WaitForResourceHealthyAsync(newDb.Resource.Name, cts.Token);
+
+        // Verify that the resource logger emitted feedback about the custom creation script.
+        // Logs are attributed to the parent server resource, not the database resource.
+        await app.WaitForAllTextAsync(
+            ["Executing custom creation script for database", "Completed custom creation script for database"],
+            resourceName: mysql.Resource.Name,
+            cts.Token);
 
         // Test SqlConnection
         await pipeline.ExecuteAsync(async token =>

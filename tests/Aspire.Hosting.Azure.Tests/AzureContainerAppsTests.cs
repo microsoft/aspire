@@ -24,7 +24,7 @@ using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureContainerAppsTests
+public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task AddContainerAppsInfrastructureAddsDeploymentTargetWithContainerAppToContainerResources()
@@ -132,14 +132,14 @@ public class AzureContainerAppsTests
             .AddProject("project");
 
         // The agent app is deployed to the Foundry project compute environment via AsHostedAgent.
-        var agent = builder.AddProject<Project>("agent", launchProfileName: null)
-            .WithHttpEndpoint()
-            .WithExternalHttpEndpoints();
+        var agent = builder.AddProject<Project>("agent", launchProfileName: null);
         agent.AsHostedAgent(project);
 
         // The web app is deployed to Azure Container Apps and references the Foundry hosted agent.
         // The ACA publisher must delegate endpoint resolution to the Foundry compute environment
         // rather than looking the agent up in its own endpoint map. See issue #17749.
+        // AsHostedAgent supplies the logical "http" endpoint in publish mode when the target app
+        // does not declare one itself. See issue #17904.
         // WithReference(agent) exercises the bare EndpointReference branch; the explicit
         // Property(Url) environment variable exercises the EndpointReferenceExpression branch.
         var web = builder.AddProject<Project>("web", launchProfileName: null)
@@ -1861,9 +1861,9 @@ public class AzureContainerAppsTests
     [Fact]
     public async Task MultipleAzureContainerAppEnvironmentsSupported()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "publish-manifest");
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "publish-manifest");
 
         var env1 = builder.AddAzureContainerAppEnvironment("env1");
         var env2 = builder.AddAzureContainerAppEnvironment("env2");
@@ -1879,7 +1879,7 @@ public class AzureContainerAppsTests
         // Publishing will stop the app when it is done
         await app.RunAsync();
 
-        await VerifyFile(Path.Combine(tempDir.Path, "aspire-manifest.json"));
+        await VerifyFile(Path.Combine(workspace.Path, "aspire-manifest.json"));
     }
 
     [Fact]
@@ -2250,13 +2250,13 @@ public class AzureContainerAppsTests
 
         builder.AddAzureContainerAppEnvironment("env");
 
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Contents of the Dockerfile are not important for this test
-        File.WriteAllText(Path.Combine(tempDirectory.Path, "Dockerfile"), "FROM alpine");
+        File.WriteAllText(Path.Combine(workspace.Path, "Dockerfile"), "FROM alpine");
 
-        builder.AddDockerfile("with-bind-mount", tempDirectory.Path)
-            .WithBindMount(tempDirectory.Path, "/app/data");
+        builder.AddDockerfile("with-bind-mount", workspace.Path)
+            .WithBindMount(workspace.Path, "/app/data");
 
         using var app = builder.Build();
 

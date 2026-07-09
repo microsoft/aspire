@@ -14,7 +14,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREUSERSECRETS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
@@ -260,16 +259,15 @@ public class ParameterProcessorTests
         // Marking them as Running with the provided values
         await updates.MoveNextAsync().DefaultTimeout();
         Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
-        Assert.Equal("value1", updates.Current.Snapshot.Properties.FirstOrDefault(p => p.Name == KnownProperties.Parameter.Value)?.Value);
+        AssertParameterValueProperty(updates.Current.Snapshot, "value1", isSensitive: false);
 
         await updates.MoveNextAsync().DefaultTimeout();
         Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
-        Assert.Equal("value2", updates.Current.Snapshot.Properties.FirstOrDefault(p => p.Name == KnownProperties.Parameter.Value)?.Value);
+        AssertParameterValueProperty(updates.Current.Snapshot, "value2", isSensitive: false);
 
         await updates.MoveNextAsync().DefaultTimeout();
         Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
-        Assert.Equal("secretValue", updates.Current.Snapshot.Properties.FirstOrDefault(p => p.Name == KnownProperties.Parameter.Value)?.Value);
-        Assert.True(updates.Current.Snapshot.Properties.FirstOrDefault(p => p.Name == KnownProperties.Parameter.Value)?.IsSensitive ?? false);
+        AssertParameterValueProperty(updates.Current.Snapshot, "secretValue", isSensitive: true);
     }
 
     [Fact]
@@ -1265,6 +1263,17 @@ public class ParameterProcessorTests
             .Build();
 
         return new ParameterResource(name, _ => configuration[$"Parameters:{name}"] ?? throw new MissingParameterValueException($"Parameter '{name}' is missing"), secret);
+    }
+
+    private static void AssertParameterValueProperty(CustomResourceSnapshot snapshot, string expectedValue, bool isSensitive)
+    {
+        var property = Assert.Single(snapshot.Properties, p => p.Name == KnownProperties.Parameter.Value);
+
+        Assert.Equal(expectedValue, property.Value);
+        Assert.Equal(isSensitive, property.IsSensitive);
+        Assert.Equal(MessageStrings.ResourcePropertyParameterValueDisplayName, property.DisplayName);
+        Assert.True(property.IsHighlighted);
+        Assert.Equal(0, property.SortOrder);
     }
 
     private static ParameterResource CreateParameterWithMissingValue(string name, bool secret = false)

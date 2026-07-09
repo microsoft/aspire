@@ -25,8 +25,8 @@ suite('E2E launch profile', () => {
     test('clears the E2E control file before explicit workspace reloads', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
-        const extension = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
-        const openWorkspaceCase = extension.slice(extension.indexOf("case 'openWorkspaceFolder'"), extension.indexOf("case 'getWorkspaceFolders'"));
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const openWorkspaceCase = e2eStateFileBridge.slice(e2eStateFileBridge.indexOf("case 'openWorkspaceFolder'"), e2eStateFileBridge.indexOf("case 'getWorkspaceFolders'"));
         const clearControlFileIndex = openWorkspaceCase.indexOf('clearPendingE2eControlFile();');
         const openFolderIndex = openWorkspaceCase.indexOf("vscode.commands.executeCommand('vscode.openFolder'");
 
@@ -37,8 +37,8 @@ suite('E2E launch profile', () => {
 
     test('validates explicit workspace folder before reporting bridge command start', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
-        const extension = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
-        const openWorkspaceCase = extension.slice(extension.indexOf("case 'openWorkspaceFolder'"), extension.indexOf("case 'getWorkspaceFolders'"));
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const openWorkspaceCase = e2eStateFileBridge.slice(e2eStateFileBridge.indexOf("case 'openWorkspaceFolder'"), e2eStateFileBridge.indexOf("case 'getWorkspaceFolders'"));
 
         assert.ok(openWorkspaceCase.indexOf('getE2eWorkspaceFolderPath') < openWorkspaceCase.indexOf('markStarted();'));
     });
@@ -73,9 +73,11 @@ suite('E2E launch profile', () => {
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
 
         assert.ok(runner.includes("'get-vscode'"));
-        assert.ok(runner.includes('attempts: 2'));
-        assert.ok(runner.includes('timeout: 240000'));
+        assert.ok(runner.includes("ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_ATTEMPTS', 5"));
+        assert.ok(runner.includes("ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_DELAY_MS', 15000"));
+        assert.ok(runner.includes("ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_TIMEOUT_MS', 240000"));
         assert.ok(runner.includes("'get-chromedriver'"));
+        assert.ok(runner.includes('const setupDownloadRetryOptions = getSetupDownloadRetryOptions();'));
         assert.ok(runner.includes('run(command, args, extraEnv, options);'));
     });
 
@@ -192,11 +194,21 @@ suite('E2E launch profile', () => {
         assert.ok(aspireCliEnvironmentStart >= 0);
         assert.ok(aspireCliEnvironmentEnd > aspireCliEnvironmentStart);
         assert.ok(aspireCliEnvironment.includes("ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'"));
+        assert.ok(aspireCliEnvironment.includes("DOTNET_CLI_UI_LANGUAGE: 'en'"));
         assert.ok(aspireCliEnvironment.includes("DOTNET_CLI_TELEMETRY_OPTOUT: '1'"));
         assert.ok(envConstruction.includes('const extestEnv = getAspireCliEnvironment({'));
         assert.ok(envConstruction.includes("ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE: 'true'"));
         assert.ok(runTests.includes('runWithProcessTreeTimeout(process.execPath'));
         assert.ok(runTests.includes('extestEnv'));
+    });
+
+    test('suppresses evaluation diagnostics for intentional E2E AppHost interaction APIs', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+
+        assert.ok(runner.includes('#pragma warning disable ASPIREINTERACTION001'));
+        assert.ok(runner.includes('new InteractionInput'));
+        assert.ok(runner.includes('InputType.SecretText'));
     });
 
     test('launches VS Code E2E tests with telemetry disabled before extension activation', () => {
@@ -206,6 +218,77 @@ suite('E2E launch profile', () => {
 
         assert.strictEqual(settings['telemetry.telemetryLevel'], 'off');
         assert.ok(runner.includes("'--disable-telemetry'"));
+    });
+
+    test('does not seed dashboard launch preferences in the E2E harness', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const settings = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'test-e2e', 'settings.json'), 'utf8'));
+
+        assert.strictEqual(settings['aspire.dashboardBrowser'], undefined);
+        assert.strictEqual(settings['aspire.enableAspireDashboardAutoLaunch'], undefined);
+        assert.ok(!runner.includes("'aspire.dashboardBrowser':"));
+        assert.ok(!runner.includes("'aspire.enableAspireDashboardAutoLaunch':"));
+    });
+
+    test('resets the dashboard default notification key for E2E dashboard launch coverage', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
+
+        assert.ok(apiTypes.includes('resetDashboardDefaultChangedNotification?: boolean;'));
+        assert.ok(e2eStateFileBridge.includes("import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';"));
+        assert.ok(e2eStateFileBridge.includes("context.globalState.update(dashboardDefaultChangedNotificationKey, undefined)"));
+        assert.ok(fixtures.includes('resetDashboardDefaultChangedNotificationForE2E'));
+        assert.ok(debugDashboard.includes('await resetDashboardDefaultChangedNotificationForE2E();'));
+    });
+
+    test('uses known AppHost PID when E2E teardown CLI status probes time out', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const stopTimeoutCase = fixtures.slice(fixtures.indexOf("if (/timed out|Failed to stop/i.test(stopError.message))"), fixtures.indexOf('const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);'));
+        const waitFallbackStart = fixtures.indexOf('catch (cliError)');
+        const waitFallback = fixtures.slice(waitFallbackStart, fixtures.indexOf('if (!runningAppHost)', waitFallbackStart));
+
+        assert.ok(fixtures.includes("import { ProcessError, runProcess } from './process';"));
+        assert.ok(stopTimeoutCase.includes('runningAppHostBeforeStop?.appHostPid !== undefined'));
+        assert.ok(stopTimeoutCase.includes('waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop.appHostPid'));
+        assert.ok(waitFallback.includes('isProcessTimeoutError(cliError)'));
+        assert.ok(waitFallback.includes('knownAppHostPid === undefined'));
+        assert.ok(waitFallback.includes('runningAppHostFromState?.appHostPid !== knownAppHostPid'));
+        assert.ok(waitFallback.includes('isKnownAppHostProcess(knownAppHostPid, appHostPath)'));
+        assert.ok(waitFallback.includes('await stopProcess(knownAppHostPid, 30000);'));
+    });
+
+    test('latches E2E control command start before command completion can overwrite the state file', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
+
+        assert.ok(apiTypes.includes('startedObserved?: boolean;'));
+        assert.ok(e2eStateFileBridge.includes("controlStatus = { revision, status: 'started', startedObserved: true };"));
+        assert.ok(e2eStateFileBridge.includes("controlStatus = { revision, status: 'applied', startedObserved: commandStarted, result };"));
+        assert.ok(assertions.includes("waitFor === 'applied' ? file.control.status === 'applied' : file.control.startedObserved === true"));
+    });
+
+    test('latches E2E AppHost stopping path transitions before snapshots can clear', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
+        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
+
+        assert.ok(apiTypes.includes('stoppingPathEvents: readonly AspireExtensionE2EStoppingPathEvent[];'));
+        assert.ok(apiTypes.includes("state: 'entered' | 'left';"));
+        assert.ok(e2eStateFileBridge.includes('recordStoppingPathEvents(state.stoppingPaths);'));
+        assert.ok(e2eStateFileBridge.includes("stoppingPathEvents.push({ sequence: ++stoppingPathSequence, appHostPath, state: 'entered' });"));
+        assert.ok(assertions.includes('waitForStoppingPathEvent'));
+        assert.ok(debugDashboard.includes('const beforeStoppingPathEvent = getStoppingPathEventCount();'));
+        assert.ok(debugDashboard.includes("await waitForStoppingPathEvent(appHostPath, 'entered', beforeStoppingPathEvent, 120000);"));
+        assert.ok(!debugDashboard.includes("file => file.state.stoppingPaths.some(stoppingPath => isSamePath(stoppingPath, appHostPath))"));
     });
 
     test('patches ExTester launch arguments without replacement-token expansion', () => {
@@ -225,9 +308,27 @@ suite('E2E launch profile', () => {
         assert.ok(zeroToRunning.includes('this.timeout(2100000);'));
         assert.ok(zeroToRunning.includes('waitForDebugSessionStartup(appHostPath, 300000)'));
         assert.ok(zeroToRunning.includes('waitForDebugDashboardUrl(appHostPath, 180000)'));
-        assert.ok(zeroToRunning.includes('waitForEditorTitle(dashboardHost, 180000'));
+        assert.ok(zeroToRunning.includes("waitForHttpText(dashboardUrl, 'Aspire', 180000"));
         assert.ok(zeroToRunning.includes("process.platform === 'linux'"));
         assert.ok(zeroToRunning.includes("waitForWorkbenchTextAfterIntegratedBrowserNavigation(['Resources', dashboardHost], 180000)"));
+        assert.ok(!zeroToRunning.includes("waitForEditorTitle(dashboardHost"));
+        assert.ok(!zeroToRunning.includes("waitForEditorTitle(new URL(dashboardUrl).host"));
+    });
+
+    test('uses integrated-browser webview text instead of editor title waits', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const appHostTreeProvider = fs.readFileSync(path.join(extensionRoot, 'src', 'views', 'AspireAppHostTreeProvider.ts'), 'utf8');
+        const treeActions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+
+        assert.ok(appHostTreeProvider.includes("await vscode.commands.executeCommand('simpleBrowser.show', element.url);"));
+        assert.ok(treeActions.includes("assert.strictEqual((openedEndpoint.result as { url?: string }).url, endpointUrl);"));
+        assert.ok(treeActions.includes('waitForWorkbenchTextAfterIntegratedBrowserNavigation(new URL(endpointUrl).host)'));
+        assert.ok(treeActions.includes("waitForHttpText(endpointUrl, 'ok')"));
+        assert.ok(!treeActions.includes('waitForEditorTitle(new URL(endpointUrl).host'));
+        assert.ok(e2eStateFileBridge.includes('return { url: endpoint.url };'));
+        assert.ok(e2eStateFileBridge.includes("case 'publishAppHost':"));
+        assert.ok(e2eStateFileBridge.includes("appHostLaunchService.launch(command.appHostPath, 'publish', true)"));
     });
 
     test('hides AppHost outside the workspace for empty-discovery coverage', () => {
@@ -246,16 +347,154 @@ suite('E2E launch profile', () => {
     test('uses monotonic E2E event sequences instead of positional slices over capped buffers', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
-        const extension = fs.readFileSync(path.join(extensionRoot, 'src', 'extension.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
         const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
 
         assert.ok(apiTypes.includes('sequence: number;'));
-        assert.ok(extension.includes('commandInvocationSequence'));
-        assert.ok(extension.includes('terminalCommandSequence'));
-        assert.ok(extension.includes('debugLaunchSequence'));
+        assert.ok(e2eStateFileBridge.includes('commandInvocationSequence'));
+        assert.ok(e2eStateFileBridge.includes('terminalCommandSequence'));
+        assert.ok(e2eStateFileBridge.includes('debugLaunchSequence'));
         assert.ok(assertions.includes('event.sequence > afterInvocationSequence'));
         assert.ok(!assertions.includes('.slice(afterInvocationCount)'));
         assert.ok(!assertions.includes('.slice(afterCommandCount)'));
         assert.ok(!assertions.includes('.slice(afterLaunchCount)'));
+    });
+
+    test('writes E2E control and mutable fixture files with Windows-safe retries', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const assertions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'assertions.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
+        const extensionRenameRetryStart = e2eStateFileBridge.indexOf('function isRetryableRenameError');
+        const extensionRenameRetryEnd = e2eStateFileBridge.indexOf('function sleepSynchronously');
+        const renameRetryStart = assertions.indexOf('function isRetryableRenameError');
+        const renameRetryEnd = assertions.indexOf('function isDebugSessionForAppHost');
+        assert.ok(extensionRenameRetryStart >= 0);
+        assert.ok(extensionRenameRetryEnd > extensionRenameRetryStart);
+        assert.ok(renameRetryStart >= 0);
+        assert.ok(renameRetryEnd > renameRetryStart);
+        const extensionRenameRetry = e2eStateFileBridge.slice(extensionRenameRetryStart, extensionRenameRetryEnd);
+        const renameRetry = assertions.slice(renameRetryStart, renameRetryEnd);
+
+        assert.ok(assertions.includes('writeJsonFileAtomic(controlFilePath'));
+        assert.ok(assertions.includes('renameFileWithRetry(temporaryPath, filePath)'));
+        assert.ok(extensionRenameRetry.includes("error.code === 'EPERM'"));
+        assert.ok(extensionRenameRetry.includes("error.code === 'EACCES'"));
+        assert.ok(extensionRenameRetry.includes("error.code === 'EEXIST'"));
+        assert.ok(renameRetry.includes("error.code === 'EBUSY'"));
+        assert.ok(fixtures.includes('writeFileWithRetry(settingsPath'));
+        assert.ok(fixtures.includes('removePath(getWorkspaceAppHostConfigPath(), { force: true });'));
+        assert.ok(fixtures.includes("removePath(path.join(getWorkspaceRoot(), '.aspire'), { recursive: true, force: true });"));
+        assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
+        assert.ok(fixtures.includes('fs.rmSync(targetPath, options);'));
+        assert.ok(debugDashboard.includes('writeFileWithRetry(appHostSourcePath, brokenSource);'));
+        assert.ok(debugDashboard.includes('writeFileWithRetry(appHostSourcePath, originalSource)'));
+        assert.ok(debugDashboard.includes("__AspireE2EFlushRegressionMissingSymbol__' does not exist"));
+        assert.ok(!debugDashboard.includes('waitForLogFileText'));
+        assert.ok(fixtures.includes("code === 'EBUSY'"));
+        assert.ok(fixtures.includes("code === 'EPERM'"));
+        assert.ok(fixtures.includes("code === 'EACCES'"));
+    });
+
+    test('uses lightweight secondary AppHost candidates for discovery-only E2E coverage', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const commandPalette = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'commandPalette.e2e.test.ts'), 'utf8');
+        const discoveryConfiguration = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'discoveryConfiguration.e2e.test.ts'), 'utf8');
+
+        assert.ok(commandPalette.includes('this.timeout(420000);'));
+        assert.ok(fixtures.includes("kind: 'project' | 'single-file' = 'project'"));
+        assert.ok(fixtures.includes("path.join(projectDirectory, 'apphost.cs')"));
+        assert.ok(fixtures.includes('#:sdk Aspire.AppHost.Sdk@${getAppHostSdkVersion()}'));
+        assert.ok(commandPalette.includes("createAdditionalAppHostCandidate('AspireE2E.SecondAppHost', 'single-file')"));
+        assert.ok(discoveryConfiguration.includes("createAdditionalAppHostCandidate('AspireE2E.SecondAppHost', 'single-file')"));
+        assert.ok(discoveryConfiguration.includes('restored primary AppHost without stale secondary candidate'));
+    });
+
+    test('waits for running AppHost processes to exit before deleting E2E fixture directories', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const zeroToRunning = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'zeroToRunning.e2e.test.ts'), 'utf8');
+        const commandPalette = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'commandPalette.e2e.test.ts'), 'utf8');
+        const discoveryConfiguration = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'discoveryConfiguration.e2e.test.ts'), 'utf8');
+        const stopAppHostStart = fixtures.indexOf('export async function stopAppHostIfRunning');
+        const stopAppHostEnd = fixtures.indexOf('interface PsAppHost');
+        const stopKnownProcessStart = fixtures.indexOf('async function waitForNoRunningAppHostPathOrStopKnownProcess');
+        const stopKnownProcessEnd = fixtures.indexOf('function getRunningAppHostFromState');
+        assert.ok(stopAppHostStart >= 0);
+        assert.ok(stopAppHostEnd > stopAppHostStart);
+        assert.ok(stopKnownProcessStart >= 0);
+        assert.ok(stopKnownProcessEnd > stopKnownProcessStart);
+        const stopAppHost = fixtures.slice(stopAppHostStart, stopAppHostEnd);
+        const stopKnownProcess = fixtures.slice(stopKnownProcessStart, stopKnownProcessEnd);
+        const waitForCapturedPidCalls = stopAppHost.match(/await waitForNoRunningAppHostPathOrStopKnownProcess\(appHostPath, 30000, runningAppHostBeforeStop\?\.appHostPid, 'after stopping'\);/g) ?? [];
+        const stopErrorAssignmentStart = stopAppHost.indexOf('const stopError = await tryStopAppHost(appHostPath);');
+        const successfulStopStart = stopAppHost.indexOf('if (!stopError)');
+        const successfulStopEnd = stopAppHost.indexOf('if (/not running|No running AppHost|No AppHost/i.test(stopError.message))');
+        const successfulStopWait = stopAppHost.indexOf("await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');", successfulStopStart);
+        const timedOutStopStart = stopAppHost.indexOf('if (/timed out|Failed to stop/i.test(stopError.message))');
+
+        assert.ok(stopErrorAssignmentStart >= 0);
+        assert.ok(successfulStopStart > stopErrorAssignmentStart);
+        assert.ok(successfulStopEnd > successfulStopStart);
+        assert.ok(successfulStopWait > successfulStopStart && successfulStopWait < successfulStopEnd);
+        assert.ok(timedOutStopStart > successfulStopEnd);
+        assert.ok(stopAppHost.includes('const runningAppHostBeforeStop = getRunningAppHostFromState(appHostPath);'));
+        assert.ok(waitForCapturedPidCalls.length >= 3);
+        assert.ok(stopAppHost.includes('const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);'));
+        assert.ok(stopAppHost.includes('await waitForProcessExit(runningAppHost.appHostPid, 30000);'));
+        assert.ok(stopAppHost.includes('if (!await getRunningAppHostAccordingToCli(appHostPath))'));
+        assert.ok(stopAppHost.includes('if (isProcessRunning(runningAppHost.appHostPid))'));
+        assert.ok(stopAppHost.includes('await stopProcess(runningAppHost.appHostPid, 30000);'));
+        assert.ok(fixtures.includes('export function getRunningAppHostPid(appHostPath: string): number | undefined'));
+        assert.ok(fixtures.includes('export async function waitForRunningAppHostPid(appHostPath: string, timeoutMs: number): Promise<number>'));
+        assert.ok(fixtures.includes('removeGeneratedProject(projectName: string, knownAppHostPid?: number)'));
+        assert.ok(zeroToRunning.includes('let appHostPidBeforeStop: number | undefined;'));
+        assert.ok(zeroToRunning.includes('setup(() => {'));
+        assert.ok(zeroToRunning.includes('appHostPidBeforeStop = undefined;'));
+        assert.ok(zeroToRunning.includes('() => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath)'));
+        assert.ok(zeroToRunning.indexOf('() => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath)') > zeroToRunning.indexOf('await runE2eTeardown(['));
+        assert.ok(zeroToRunning.indexOf('appHostPidBeforeStop = await waitForRunningAppHostPid(appHostPath, 30000);') < zeroToRunning.lastIndexOf("executeE2eControlCommand({ name: 'stopDebugging' })"));
+        assert.ok(zeroToRunning.includes('removeGeneratedProject(projectName, appHostPidBeforeStop)'));
+        assert.ok(commandPalette.includes('runE2eTeardown'));
+        assert.ok(discoveryConfiguration.includes('runE2eTeardown'));
+        assert.ok(!commandPalette.includes('throw new AggregateError'));
+        assert.ok(!discoveryConfiguration.includes('throw new AggregateError'));
+        assert.ok(fixtures.includes("['ps', '--format', 'json', '--nologo']"));
+        assert.ok(fixtures.includes('Number.isInteger(candidate.appHostPid)'));
+        assert.ok(fixtures.includes('let lastKnownAppHostPid = knownAppHostPid;'));
+        assert.ok(fixtures.includes('lastKnownAppHostPid = runningAppHost.appHostPid;'));
+        assert.ok(!fixtures.includes('terminateProcessTree(runningAppHost.appHostPid'));
+        assert.ok(fixtures.includes("await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping')"));
+        assert.ok(fixtures.includes("await waitForNoRunningAppHostPathOrStopKnownProcess(getGeneratedAppHostPath(projectName), 30000, knownAppHostPid, 'before deleting')"));
+        assert.ok(fixtures.includes('async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>'));
+        assert.ok(fixtures.includes('process.kill(pid, 0);'));
+        assert.ok(fixtures.includes("process.kill(pid, 'SIGTERM');"));
+        assert.ok(fixtures.includes('async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string, timeoutMs: number, knownAppHostPid: number | undefined, actionDescription: string): Promise<void>'));
+        assert.ok(stopKnownProcess.indexOf('const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);') < stopKnownProcess.indexOf('await stopProcess(runningAppHost.appHostPid, 30000);'));
+        assert.ok(stopKnownProcess.includes('stale/reused'));
+        assert.ok(fixtures.includes('formatE2eTeardownFailureMessage(failureMessage, failures.map(redactE2eTeardownFailure))'));
+        assert.ok(fixtures.includes('function redactE2eTeardownFailure(failure: unknown): string'));
+        assert.ok(!fixtures.includes('error?.stack'));
+        assert.ok(fixtures.includes("code === 'ENOTEMPTY'"));
+        assert.ok(fixtures.includes("error.code === 'EPERM'"));
+        assert.ok(fixtures.includes("const maxAttempts = process.platform === 'win32' ? 40 : 1;"));
+    });
+
+    test('keeps tree action resource lifecycle commands as terminal routing assertions', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const treeActions = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
+        const stopResourceStart = treeActions.indexOf("getCommandInvocationCount('aspire-vscode.stopResource')");
+        const executeResourceCommandStart = treeActions.indexOf("getCommandInvocationCount('aspire-vscode.executeResourceCommandItem')");
+        assert.ok(stopResourceStart >= 0);
+        assert.ok(executeResourceCommandStart > stopResourceStart);
+        const resourceLifecycleSuppressionStart = treeActions.lastIndexOf('await setTerminalCommandExecutionSuppressedForE2E(true);', stopResourceStart);
+        assert.ok(resourceLifecycleSuppressionStart >= 0);
+        const resourceLifecycleCommands = treeActions.slice(resourceLifecycleSuppressionStart, executeResourceCommandStart);
+
+        assert.ok(resourceLifecycleCommands.includes('await setTerminalCommandExecutionSuppressedForE2E(true);'));
+        assert.ok(resourceLifecycleCommands.includes('await setTerminalCommandExecutionSuppressedForE2E(false);'));
+        assert.ok(!resourceLifecycleCommands.includes("['Stopped', 'Finished', 'Exited']"));
     });
 });

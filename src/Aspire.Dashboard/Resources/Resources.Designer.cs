@@ -10,8 +10,7 @@
 
 namespace Aspire.Dashboard.Resources {
     using System;
-    
-    
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +22,15 @@ namespace Aspire.Dashboard.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     public class Resources {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal Resources() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +44,7 @@ namespace Aspire.Dashboard.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +58,7 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Commands.
         /// </summary>
@@ -68,7 +67,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceActionCommandsText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Console logs.
         /// </summary>
@@ -77,7 +76,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceActionConsoleLogsText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Metrics.
         /// </summary>
@@ -86,7 +85,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceActionMetricsText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Structured logs.
         /// </summary>
@@ -95,7 +94,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceActionStructuredLogsText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Traces.
         /// </summary>
@@ -104,7 +103,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceActionTracesText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to URLs.
         /// </summary>
@@ -113,7 +112,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceActionUrlsText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Collapse child resources.
         /// </summary>
@@ -122,7 +121,16 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceCollapseAllChildren", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to The AppHost disconnected while executing the command. Restart the AppHost and try again..
+        /// </summary>
+        public static string ResourceCommandAppHostDisconnected {
+            get {
+                return ResourceManager.GetString("ResourceCommandAppHostDisconnected", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to &quot;{0}&quot; canceled.
         /// </summary>
@@ -131,7 +139,25 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceCommandCanceled", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Cancel.
+        /// </summary>
+        public static string ResourceCommandCancel {
+            get {
+                return ResourceManager.GetString("ResourceCommandCancel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to &quot;{0}&quot; canceling....
+        /// </summary>
+        public static string ResourceCommandCanceling {
+            get {
+                return ResourceManager.GetString("ResourceCommandCanceling", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to &quot;{0}&quot; failed.
         /// </summary>
@@ -140,7 +166,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceCommandFailed", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to &quot;{0}&quot; starting.
         /// </summary>
@@ -149,7 +175,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceCommandStarting", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to &quot;{0}&quot; succeeded.
         /// </summary>
@@ -158,7 +184,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceCommandSuccess", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to View console logs.
         /// </summary>
@@ -167,7 +193,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceCommandToastViewLogs", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to View response.
         /// </summary>
@@ -176,7 +202,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceCommandViewResponse", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to View console logs.
         /// </summary>
@@ -185,7 +211,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceDetailsViewConsoleLogs", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Expand child resources.
         /// </summary>
@@ -194,7 +220,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceExpandAllChildren", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to (Unset).
         /// </summary>
@@ -203,7 +229,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceFilterOptionEmpty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to {0} ({1} ago).
         /// </summary>
@@ -212,7 +238,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HealthCheckStatusWithTimeFormat", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to {0} (just now).
         /// </summary>
@@ -221,7 +247,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HealthCheckStatusJustNowFormat", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to {0} (last run at {1}).
         /// </summary>
@@ -230,7 +256,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("HealthCheckStatusWithTimeTooltipFormat", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Actions.
         /// </summary>
@@ -239,7 +265,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesActionsColumnHeader", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to View options.
         /// </summary>
@@ -248,7 +274,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesChangeViewOptions", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Connection string.
         /// </summary>
@@ -257,7 +283,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsConnectionStringProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Container arguments.
         /// </summary>
@@ -266,7 +292,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsContainerArgumentsProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Container command.
         /// </summary>
@@ -275,7 +301,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsContainerCommandProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Container ID.
         /// </summary>
@@ -284,7 +310,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsContainerIdProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Container image.
         /// </summary>
@@ -293,7 +319,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsContainerImageProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Container lifetime.
         /// </summary>
@@ -302,7 +328,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsContainerLifetimeProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Container ports.
         /// </summary>
@@ -311,7 +337,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsContainerPortsProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Display name.
         /// </summary>
@@ -320,7 +346,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsDisplayNameProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Executable arguments.
         /// </summary>
@@ -329,7 +355,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsExecutableArgumentsProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Executable path.
         /// </summary>
@@ -338,7 +364,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsExecutablePathProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Process ID.
         /// </summary>
@@ -347,7 +373,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsExecutableProcessIdProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Working directory.
         /// </summary>
@@ -356,7 +382,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsExecutableWorkingDirectoryProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Exit code.
         /// </summary>
@@ -365,7 +391,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsExitCodeProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Health state.
         /// </summary>
@@ -374,7 +400,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsHealthStateProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Value.
         /// </summary>
@@ -383,7 +409,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsParameterValueProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Project path.
         /// </summary>
@@ -392,7 +418,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsProjectPathProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Launch profile.
         /// </summary>
@@ -401,7 +427,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsProjectLaunchProfileProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Start time.
         /// </summary>
@@ -410,7 +436,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsStartTimeProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to State.
         /// </summary>
@@ -419,7 +445,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsStateProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Stop time.
         /// </summary>
@@ -428,7 +454,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesDetailsStopTimeProperty", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Has filters.
         /// </summary>
@@ -437,7 +463,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesFiltered", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Reset.
         /// </summary>
@@ -446,7 +472,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesGraphResetButton", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Zoom in.
         /// </summary>
@@ -455,7 +481,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesGraphZoomInButton", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Zoom out.
         /// </summary>
@@ -464,7 +490,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesGraphZoomOutButton", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Resources.
         /// </summary>
@@ -473,7 +499,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesHeader", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Hide resource types.
         /// </summary>
@@ -482,7 +508,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesHideTypes", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to No resources found.
         /// </summary>
@@ -509,7 +535,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesNotFiltered", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to {0} resources.
         /// </summary>
@@ -518,7 +544,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesPageTitle", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to State.
         /// </summary>
@@ -527,7 +553,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesResourceStatesHeader", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Resource types.
         /// </summary>
@@ -536,7 +562,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesResourceTypesHeader", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Show resource types.
         /// </summary>
@@ -545,7 +571,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesShowTypes", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Source.
         /// </summary>
@@ -554,7 +580,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesSourceColumnHeader", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Start time.
         /// </summary>
@@ -563,7 +589,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesStartTimeColumnHeader", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to State.
         /// </summary>
@@ -572,7 +598,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesStateColumnHeader", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Type.
         /// </summary>
@@ -581,7 +607,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesTypeColumnHeader", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to URLs.
         /// </summary>
@@ -590,7 +616,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcesUrlsColumnHeader", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} resources&lt;/strong&gt;.
         /// </summary>
@@ -599,7 +625,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TotalItemsFooterPluralText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} resource&lt;/strong&gt;.
         /// </summary>
@@ -608,7 +634,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TotalItemsFooterSingularText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} parameters&lt;/strong&gt;.
         /// </summary>
@@ -617,7 +643,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TotalItemsFooterParametersPluralText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Showing &lt;strong&gt;{0} parameter&lt;/strong&gt;.
         /// </summary>
@@ -626,7 +652,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TotalItemsFooterParametersSingularText", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Waiting for health data....
         /// </summary>
@@ -635,7 +661,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("WaitingForHealthDataMessage", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Waiting....
         /// </summary>

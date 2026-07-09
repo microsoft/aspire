@@ -25,13 +25,19 @@ internal sealed class TestKubernetesService : IKubernetesService
     public ConcurrentQueue<string> DeletedResources { get; } = [];
 
     private readonly List<Channel<(WatchEventType, CustomResource)>> _watchChannels = [];
-    private readonly Func<CustomResource, string, Stream> _startStream;
+    private readonly Func<CustomResource, string, bool?, Stream> _startStream;
     private readonly bool _ignoreDeletes;
     private int _nextPort = StartOfAutoPortRange;
 
-    public TestKubernetesService(Func<CustomResource, string, Stream>? startStream = null, bool ignoreDeletes = false)
+    public TestKubernetesService(
+        Func<CustomResource, string, Stream>? startStream = null,
+        bool ignoreDeletes = false,
+        Func<CustomResource, string, bool?, Stream>? startStreamWithFollow = null)
     {
-        _startStream = startStream ?? ((obj, logStreamType) => new MemoryStream(Encoding.UTF8.GetBytes($"Logs for {obj.Metadata.Name} ({logStreamType})")));
+        _startStream = startStreamWithFollow ??
+            (startStream is not null
+                ? (obj, logStreamType, follow) => startStream(obj, logStreamType)
+                : (obj, logStreamType, follow) => new MemoryStream(Encoding.UTF8.GetBytes($"Logs for {obj.Metadata.Name} ({logStreamType})")));
         _ignoreDeletes = ignoreDeletes;
     }
 
@@ -226,7 +232,7 @@ internal sealed class TestKubernetesService : IKubernetesService
         long? skip = null
     ) where T : CustomResource, IKubernetesStaticMetadata
     {
-        return Task.FromResult(_startStream(obj, logStreamType));
+        return Task.FromResult(_startStream(obj, logStreamType, follow));
     }
 
     public Task<T> PatchAsync<T>(T obj, V1Patch patch, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata

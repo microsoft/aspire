@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -15,7 +16,7 @@ internal static class InteractionCommands
         resource
             .WithCommand("confirmation-interaction", "Confirmation interactions", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var resultTask1 = interactionService.PromptConfirmationAsync("Command confirmation", "Are you sure?", cancellationToken: commandContext.CancellationToken);
                 var resultTask2 = interactionService.PromptMessageBoxAsync("Command confirmation", "Are you really sure?", new MessageBoxInteractionOptions { Intent = MessageIntent.Warning, ShowSecondaryButton = true }, cancellationToken: commandContext.CancellationToken);
 
@@ -33,7 +34,7 @@ internal static class InteractionCommands
             {
                 await Task.Yield();
 
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 _ = interactionService.PromptNotificationAsync("Success bar", "The command successfully executed.", new NotificationInteractionOptions { Intent = MessageIntent.Success });
                 _ = interactionService.PromptNotificationAsync("Information bar", "The command successfully executed.", new NotificationInteractionOptions { Intent = MessageIntent.Information });
                 _ = interactionService.PromptNotificationAsync("Warning bar", "The command successfully executed.", new NotificationInteractionOptions { Intent = MessageIntent.Warning });
@@ -45,7 +46,7 @@ internal static class InteractionCommands
             })
             .WithCommand("html-interaction", "HTML interactions", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 _ = interactionService.PromptNotificationAsync("Success <strong>bar</strong>", "The **command** successfully executed.", new NotificationInteractionOptions { Intent = MessageIntent.Success });
                 _ = interactionService.PromptNotificationAsync("Success <strong>bar</strong>", "The **command** successfully executed.", new NotificationInteractionOptions { Intent = MessageIntent.Success, EnableMessageMarkdown = true });
@@ -66,7 +67,7 @@ internal static class InteractionCommands
             })
             .WithCommand("long-content-interaction", "Long content interactions", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 var inputHasMarkdown = new InteractionInput { Name = "Name", Label = "<strong>Name</strong>", InputType = InputType.Text, Placeholder = "Enter <strong>your</strong> name.", Description = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce id massa arcu. Morbi ac risus eget augue venenatis hendrerit. Morbi posuere, **neque id** efficitur ultrices, velit augue suscipit ante, vitae lacinia elit risus nec dui.", EnableDescriptionMarkdown = true };
                 var choiceWithLongContent = new InteractionInput
@@ -103,7 +104,7 @@ internal static class InteractionCommands
             })
             .WithCommand("value-interaction", "Value interactions", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var result = await interactionService.PromptInputAsync(
                     title: "Text request",
                     message: "Provide your name",
@@ -128,7 +129,7 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 var input = result.Data;
@@ -138,7 +139,7 @@ internal static class InteractionCommands
             })
             .WithCommand("choice-no-placeholder", "Choice with no placeholder", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var dinnerInput = new InteractionInput
                 {
                     Name = "Dinner",
@@ -178,7 +179,7 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 foreach (var updatedInput in result.Data)
@@ -190,7 +191,7 @@ internal static class InteractionCommands
             })
             .WithCommand("input-interaction", "Input interactions", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var dinnerInput = new InteractionInput
                 {
                     Name = "Dinner",
@@ -264,7 +265,7 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 foreach (var updatedInput in result.Data)
@@ -276,7 +277,7 @@ internal static class InteractionCommands
             })
             .WithCommand("choice-interaction", "Choice interactions", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var predefinedOptionsInput = new InteractionInput
                 {
                     Name = "PredefinedOptions",
@@ -403,7 +404,7 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 foreach (var updatedInput in result.Data)
@@ -415,7 +416,7 @@ internal static class InteractionCommands
             })
             .WithCommand("dynamic-error", "Dynamic error", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var predefinedOptionsInput = new InteractionInput
                 {
                     Name = "PredefinedOptions",
@@ -482,7 +483,8 @@ internal static class InteractionCommands
                {
                    predefinedOptionsInput,
                    customChoiceInput,
-                   dynamicInput
+                   dynamicInput,
+                   new InteractionInput { Name = "Receipt", InputType = InputType.File, Label = "Receipt", Placeholder = "Upload receipt", Required = true },
                };
                 var result = await interactionService.PromptInputsAsync(
                     "Choice inputs",
@@ -502,19 +504,24 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 foreach (var updatedInput in result.Data)
                 {
-                    logger.LogInformation("Input: {Name} = {Value}", updatedInput.Name, updatedInput.Value);
+                    var value = updatedInput.Value;
+                    if (updatedInput.InputType == InputType.File && updatedInput.Files is { Count: > 0 })
+                    {
+                        value += $" (Files: {string.Join(", ", updatedInput.Files.Select(f => f.Name))})";
+                    }
+                    logger.LogInformation("Input: {Name} = {Value}", updatedInput.Name, value);
                 }
 
                 return CommandResults.Success();
             })
             .WithCommand("dismiss-interaction", "Dismiss interaction tests", executeCommand: commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 RunInteractionWithDismissValues(nameof(IInteractionService.PromptNotificationAsync), (showDismiss, title) =>
                 {
@@ -555,7 +562,7 @@ internal static class InteractionCommands
             })
             .WithCommand("many-values", "Many values", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
                 var inputs = new List<InteractionInput>();
                 for (var i = 0; i < 50; i++)
                 {
@@ -578,7 +585,7 @@ internal static class InteractionCommands
                     return CommandResults.Failure("Canceled");
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 foreach (var input in result.Data)
@@ -590,7 +597,7 @@ internal static class InteractionCommands
             })
             .WithCommand("azure-provisioning-simulation", "Azure provisioning simulation", executeCommand: async commandContext =>
             {
-                var interactionService = commandContext.ServiceProvider.GetRequiredService<IInteractionService>();
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
 
                 var tenantInput = new InteractionInput
                 {
@@ -769,7 +776,7 @@ internal static class InteractionCommands
                     return CommandResults.Canceled();
                 }
 
-                var resourceLoggerService = commandContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
                 var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
 
                 foreach (var input in result.Data)
@@ -783,6 +790,299 @@ internal static class InteractionCommands
                 Description = "Simulates the Azure provisioning interaction inputs prompt with pretend data.",
                 IconName = "CloudArrowUp",
                 IconVariant = IconVariant.Filled
+            })
+            .WithCommand("progress-with-work", "Progress with work callback", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                var result = await interactionService.PromptProgressAsync(
+                    "Please wait while resources are being downloaded...",
+                    "Downloading resources",
+                    new ProgressInteractionOptions
+                    {
+                        PrimaryButtonText = "Cancel",
+                        Work = async ctx =>
+                        {
+                            await Task.Delay(10000, ctx.CancellationToken);
+                        }
+                    },
+                    commandContext.CancellationToken);
+
+                if (result.Canceled)
+                {
+                    return CommandResults.Failure("User canceled the operation.");
+                }
+
+                return CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Shows a progress dialog with a work callback that completes after 10 seconds. Can be canceled.",
+                IconName = "ArrowSync",
+                IconVariant = IconVariant.Regular
+            })
+            .WithCommand("progress-minimal", "Progress with only message", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                var result = await interactionService.PromptProgressAsync(
+                    "Please wait while resources are being downloaded...",
+                    title: null,
+                    options: new ProgressInteractionOptions
+                    {
+                        Work = async ctx =>
+                        {
+                            await Task.Delay(10000, ctx.CancellationToken);
+                        }
+                    },
+                    cancellationToken: commandContext.CancellationToken);
+
+                if (result.Canceled)
+                {
+                    return CommandResults.Failure("User canceled the operation.");
+                }
+
+                return CommandResults.Success();
+            }, new CommandOptions
+            {
+                IconName = "ArrowSync",
+                IconVariant = IconVariant.Regular
+            })
+            .WithCommand("progress-no-cancel", "Progress without cancel button", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                // Use a CTS to close the dialog after the work is done.
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(commandContext.CancellationToken);
+
+                var progressTask = interactionService.PromptProgressAsync(
+                    "This dialog has no cancel button. It will close automatically.",
+                    "Processing",
+                    cancellationToken: cts.Token);
+
+                // Simulate background work, then close the dialog.
+                await Task.Delay(10000, commandContext.CancellationToken);
+                cts.Cancel();
+
+                await progressTask;
+
+                return CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Shows a progress dialog without a cancel button that closes after 10 seconds.",
+                IconName = "ArrowSync",
+                IconVariant = IconVariant.Regular
+            })
+            .WithCommand("progress-with-title", "Progress with title", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                var result = await interactionService.PromptProgressAsync(
+                    "Please wait while data is being loaded...",
+                    "Loading",
+                    new ProgressInteractionOptions
+                    {
+                        Work = async ctx =>
+                        {
+                            await Task.Delay(10000, ctx.CancellationToken);
+                        }
+                    },
+                    commandContext.CancellationToken);
+
+                return result.Canceled ? CommandResults.Failure("Canceled") : CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Shows a progress dialog with a title and message.",
+                IconName = "ArrowSync",
+                IconVariant = IconVariant.Regular
+            })
+            .WithCommand("progress-no-title", "Progress without title", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                var result = await interactionService.PromptProgressAsync(
+                    "Please wait...",
+                    options: new ProgressInteractionOptions
+                    {
+                        PrimaryButtonText = "Cancel",
+                        Work = async ctx =>
+                        {
+                            await Task.Delay(10000, ctx.CancellationToken);
+                        }
+                    },
+                    cancellationToken: commandContext.CancellationToken);
+
+                return result.Canceled ? CommandResults.Failure("Canceled") : CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Shows a progress dialog with only a message (no title).",
+                IconName = "ArrowSync",
+                IconVariant = IconVariant.Regular
+            })
+            .WithCommand("progress-markdown-message", "Progress with markdown", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                var result = await interactionService.PromptProgressAsync(
+                    "Provisioning resources for **MyApp**.\n\nThis may take several minutes.",
+                    "Deploying to Azure",
+                    new ProgressInteractionOptions
+                    {
+                        PrimaryButtonText = "Abort deployment",
+                        EnableMessageMarkdown = true,
+                        Work = async ctx =>
+                        {
+                            await Task.Delay(10000, ctx.CancellationToken);
+                        }
+                    },
+                    commandContext.CancellationToken);
+
+                return result.Canceled ? CommandResults.Failure("Deployment aborted") : CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Shows a progress dialog with Markdown-formatted message and a cancel button.",
+                IconName = "CloudArrowUp",
+                IconVariant = IconVariant.Filled
+            })
+            .WithCommand("progress-run-forever", "Progress run forever", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+
+                var result = await interactionService.PromptProgressAsync(
+                    "Building and pushing container images to registry. This will take approximately 30 seconds.",
+                    "Building container images",
+                    new ProgressInteractionOptions
+                    {
+                        PrimaryButtonText = "Cancel build"
+                    },
+                    commandContext.CancellationToken);
+
+                if (result.Canceled)
+                {
+                    return CommandResults.Failure("Build was canceled by user.");
+                }
+
+                return CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Shows a progress dialog that only closes when the cancel button is clicked.",
+                IconName = "BuildingFactory",
+                IconVariant = IconVariant.Regular
+            })
+            .WithCommand("auto-progress", "Auto progress (CommandProgressOptions)", executeCommand: async commandContext =>
+            {
+                // The progress dialog is shown automatically via CommandProgressOptions.
+                // No explicit IInteractionService usage is needed.
+                await Task.Delay(10000, commandContext.CancellationToken);
+                return CommandResults.Success();
+            }, new CommandOptions
+            {
+                Description = "Automatically shows a progress dialog via CommandProgressOptions without explicit IInteractionService usage.",
+                IconName = "ArrowSync",
+                IconVariant = IconVariant.Regular,
+                Progress = new CommandProgressOptions
+                {
+                    Message = "Running automated task..."
+                }
+            })
+            .WithCommand("import-config", "Import configuration", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+                var fileInput = new InteractionInput
+                {
+                    Name = "ConfigFile",
+                    InputType = InputType.File,
+                    Label = "Configuration file",
+                    Placeholder = "Select a JSON or YAML configuration file",
+                    Required = true,
+                    FileFilter = ".json,.yaml,.yml",
+                    MaxFileSize = 5 * 1024 * 1024 // 5 MB
+                };
+                var result = await interactionService.PromptInputAsync(
+                    "Import configuration",
+                    "Select a configuration file to import. The file will be validated and applied to the resource.",
+                    fileInput,
+                    cancellationToken: commandContext.CancellationToken);
+
+                if (result.Canceled)
+                {
+                    return CommandResults.Failure("Import canceled.");
+                }
+
+                var input = result.Data;
+                if (input.Files is not { Count: > 0 })
+                {
+                    return CommandResults.Failure("No file was uploaded.");
+                }
+
+                var file = input.Files[0];
+                var content = await file.ReadAllBytesAsync(commandContext.CancellationToken);
+
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
+                var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
+                logger.LogInformation("Imported configuration from '{FileName}' ({Size} bytes)", file.Name, content.Length);
+
+                return CommandResults.Success($"Successfully imported **{file.Name}** ({content.Length:N0} bytes).");
+            }, new CommandOptions
+            {
+                Description = "Import a configuration file (JSON/YAML) into the resource.",
+                IconName = "DocumentArrowUp",
+                IconVariant = IconVariant.Regular
+            })
+            .WithCommand("upload-certificates", "Upload certificates", executeCommand: async commandContext =>
+            {
+                var interactionService = commandContext.Services.GetRequiredService<IInteractionService>();
+                var fileInput = new InteractionInput
+                {
+                    Name = "Certificates",
+                    InputType = InputType.File,
+                    Label = "Certificate files",
+                    Placeholder = "Select .pem or .pfx certificate files",
+                    AllowMultipleFiles = true,
+                    FileFilter = ".pem,.pfx,.crt",
+                    MaxFileSize = 1 * 1024 * 1024, // 1 MB
+                    Required = true
+                };
+                var result = await interactionService.PromptInputAsync(
+                    "Upload certificates",
+                    "Select one or more certificate files to install. Supported formats: `.pem`, `.pfx`, `.crt`.",
+                    fileInput,
+                    options: new InputsDialogInteractionOptions { EnableMessageMarkdown = true },
+                    cancellationToken: commandContext.CancellationToken);
+
+                if (result.Canceled)
+                {
+                    return CommandResults.Failure("Certificate upload canceled.");
+                }
+
+                var input = result.Data;
+                if (input.Files is not { Count: > 0 })
+                {
+                    return CommandResults.Failure("No certificates were uploaded.");
+                }
+
+                var resourceLoggerService = commandContext.Services.GetRequiredService<ResourceLoggerService>();
+                var logger = resourceLoggerService.GetLogger(commandContext.ResourceName);
+
+                var fileDetails = new List<object>();
+                foreach (var file in input.Files)
+                {
+                    var bytes = await file.ReadAllBytesAsync(commandContext.CancellationToken);
+                    logger.LogInformation("Installed certificate '{FileName}' ({Size} bytes)", file.Name, bytes.Length);
+                    fileDetails.Add(new { name = file.Name, size = bytes.Length });
+                }
+
+                var json = JsonSerializer.Serialize(fileDetails, new JsonSerializerOptions { WriteIndented = true });
+                var resultData = new CommandResultData
+                {
+                    Value = json,
+                    Format = CommandResultFormat.Json
+                };
+                return CommandResults.Success($"Installed {input.Files.Count} certificate(s).", resultData);
+            }, new CommandOptions
+            {
+                Description = "Upload TLS certificate files to install on the resource.",
+                IconName = "CertificateAdd",
+                IconVariant = IconVariant.Regular
             });
 
         return resource;
@@ -796,5 +1096,3 @@ internal static class InteractionCommands
         _ = action(false, $"{title} - ShowDismiss = false");
     }
 }
-
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

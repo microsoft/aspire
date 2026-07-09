@@ -423,5 +423,181 @@ class JsonSerializationTests(unittest.TestCase):
         self.assertEqual(result["signal_count"], len(result["triggered_signals"]))
 
 
+def _backport_pr(
+    *,
+    base_ref: str | None = None,
+    head_ref: str | None = None,
+    title: str | None = None,
+    body: str = "",
+    labels: list[str] | None = None,
+    number: int = 42,
+) -> dict:
+    """Build a PR payload that can carry base/head/title (which `_pr` omits)."""
+    pr: dict = {
+        "number": number,
+        "body": body,
+        "labels": [{"name": lab} for lab in (labels or [])],
+    }
+    if base_ref is not None:
+        pr["base"] = {"ref": base_ref}
+    if head_ref is not None:
+        pr["head"] = {"ref": head_ref}
+    if title is not None:
+        pr["title"] = title
+    return pr
+
+
+class BackportExclusionTests(unittest.TestCase):
+    """A backport PR must be hard-excluded so it never drafts a docs PR.
+
+    Exclusion requires a STRONG marker (head/title/body/label). A release base
+    alone is a weak indicator that also matches a direct release-only fix, so it
+    must NOT exclude on its own.
+    """
+
+    def test_base_branch_release_alone_is_not_excluded(self) -> None:
+        # A release base alone is NOT a backport: a direct release-only fix has
+        # the same base ref, and that is exactly what this workflow should catch.
+        # `detect_backport` still records the weak reason, but it must not drive
+        # exclusion, and the curated `exclusion_reasons` stays empty.
+        pr = _backport_pr(base_ref="release/13.3")
+        result = compute_signals.compute_signals(pr, [])
+        self.assertFalse(result["excluded"])
+        self.assertFalse(result["signals"]["is_backport"])
+        self.assertEqual(result["exclusion_reasons"], [])
+        self.assertIn(
+            "base_branch_is_release", compute_signals.detect_backport(pr)
+        )
+
+    def test_release_base_with_user_facing_signal_is_analyzed(self) -> None:
+        # The regression this guards: a direct release-only fix (release base,
+        # no strong backport marker) that carries a user-facing signal must be
+        # recommended for docs, not silently skipped as a "backport".
+        pr = _backport_pr(
+            base_ref="release/13.3",
+            head_ref="fix/hotfix-thing",
+            title="Fix the thing on release",
+        )
+        files = [
+            _file(
+                "src/Aspire.Hosting/api/Aspire.Hosting.cs",
+                patch="@@ +1,1 @@\n+public static IResourceBuilder<T> WithThing<T>(...)\n",
+            ),
+        ]
+        result = compute_signals.compute_signals(pr, files)
+        self.assertFalse(result["excluded"])
+        self.assertEqual(result["recommendation"], "docs_required")
+        self.assertIn("public_api_surface_file_changed", result["triggered_signals"])
+
+    def test_head_branch_backport_is_excluded(self) -> None:
+        pr = _backport_pr(head_ref="backport/pr-1234-to-release/13.3")
+        result = compute_signals.compute_signals(pr, [])
+        self.assertTrue(result["excluded"])
+        self.assertIn("head_branch_is_backport", result["exclusion_reasons"])
+
+    def test_title_release_prefix_is_excluded(self) -> None:
+        pr = _backport_pr(title="[release/13.3] Fix the thing")
+        result = compute_signals.compute_signals(pr, [])
+        self.assertTrue(result["excluded"])
+        self.assertIn("title_release_prefix", result["exclusion_reasons"])
+
+    def test_body_backport_marker_is_excluded(self) -> None:
+        pr = _backport_pr(body="Backport of #1234 to release/13.3\n\nDetails...")
+        result = compute_signals.compute_signals(pr, [])
+        self.assertTrue(result["excluded"])
+        self.assertIn("body_backport_marker", result["exclusion_reasons"])
+
+    def test_backport_label_is_excluded(self) -> None:
+        pr = _backport_pr(labels=["area-engineering", "backport"])
+        result = compute_signals.compute_signals(pr, [])
+        self.assertTrue(result["excluded"])
+        self.assertIn("backport_label", result["exclusion_reasons"])
+
+    def test_needs_backport_label_is_not_excluded(self) -> None:
+        # `backport_label` matches the WHOLE label, not a substring: an
+        # intent-to-port label such as `needs-backport` flags a forward PR that
+        # still needs documenting, so it must not be mistaken for a backport.
+        pr = _backport_pr(labels=["area-dashboard", "needs-backport"])
+        result = compute_signals.compute_signals(pr, [])
+        self.assertFalse(result["excluded"])
+        self.assertFalse(result["signals"]["is_backport"])
+        self.assertNotIn("backport_label", compute_signals.detect_backport(pr))
+
+    def test_release_base_plus_strong_marker_records_base_reason(self) -> None:
+        # When a strong marker excludes, the weak release base is still recorded
+        # alongside it in `exclusion_reasons` as supporting context.
+        pr = _backport_pr(
+            base_ref="release/13.3",
+            head_ref="backport/pr-1234-to-release/13.3",
+        )
+        result = compute_signals.compute_signals(pr, [])
+        self.assertTrue(result["excluded"])
+        self.assertIn("base_branch_is_release", result["exclusion_reasons"])
+        self.assertIn("head_branch_is_backport", result["exclusion_reasons"])
+
+    def test_excluded_overrides_gating_signals(self) -> None:
+        # A backport that ALSO carries a user-facing signal (new public API)
+        # must still be excluded and must not recommend docs.
+        pr = _backport_pr(
+            base_ref="release/13.3",
+            title="[release/13.3] Add a public extension method",
+        )
+        files = [
+            _file(
+                "src/Aspire.Hosting/api/Aspire.Hosting.cs",
+                patch="@@ +1,1 @@\n+public static IResourceBuilder<T> WithThing<T>(...)\n",
+            ),
+        ]
+        result = compute_signals.compute_signals(pr, files)
+        self.assertTrue(result["excluded"])
+        self.assertEqual(result["recommendation"], "docs_optional")
+        # The gating signal is still reported for the audit trail...
+        self.assertIn("public_api_surface_file_changed", result["triggered_signals"])
+        # ...but is_backport is never a gating signal.
+        self.assertNotIn("is_backport", result["triggered_signals"])
+
+    def test_multiple_reasons_are_all_recorded(self) -> None:
+        pr = _backport_pr(
+            base_ref="release/13.3",
+            head_ref="backport/pr-1234-to-release/13.3",
+            title="[release/13.3] Fix the thing",
+            body="Backport of #1234 to release/13.3",
+            labels=["backport"],
+        )
+        result = compute_signals.compute_signals(pr, [])
+        self.assertEqual(
+            sorted(result["exclusion_reasons"]),
+            sorted([
+                "base_branch_is_release",
+                "head_branch_is_backport",
+                "title_release_prefix",
+                "body_backport_marker",
+                "backport_label",
+            ]),
+        )
+
+    def test_normal_main_pr_is_not_excluded(self) -> None:
+        pr = _backport_pr(
+            base_ref="main",
+            head_ref="feature/add-widget",
+            title="Add a widget",
+            body="This adds a widget. We might backport it later.",
+            labels=["area-dashboard"],
+        )
+        result = compute_signals.compute_signals(pr, [])
+        self.assertFalse(result["excluded"])
+        self.assertEqual(result["exclusion_reasons"], [])
+        self.assertFalse(result["signals"]["is_backport"])
+
+    def test_missing_base_head_title_defaults_to_not_backport(self) -> None:
+        # The legacy `_pr()` shape (no base/head/title) must be safe.
+        result = compute_signals.compute_signals(_pr(), [])
+        self.assertFalse(result["excluded"])
+        self.assertEqual(result["exclusion_reasons"], [])
+
+    def test_detect_backport_helper_returns_empty_for_plain_pr(self) -> None:
+        self.assertEqual(compute_signals.detect_backport(_pr()), [])
+
+
 if __name__ == "__main__":
     unittest.main()

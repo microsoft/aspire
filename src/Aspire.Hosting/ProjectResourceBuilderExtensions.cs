@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREEXTENSION001
+#pragma warning disable ASPIRECERTIFICATES001
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
@@ -22,8 +23,6 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class ProjectResourceBuilderExtensions
 {
-    private const string AspNetCoreForwardedHeadersEnabledVariableName = "ASPNETCORE_FORWARDEDHEADERS_ENABLED";
-
     /// <summary>
     /// Adds a .NET project to the application model.
     /// </summary>
@@ -463,8 +462,8 @@ public static class ProjectResourceBuilderExtensions
         target.ExcludeKestrelEndpoints = source.ExcludeKestrelEndpoints;
     }
 
-    private static IResourceBuilder<TProjectResource> WithProjectDefaults<TProjectResource>(this IResourceBuilder<TProjectResource> builder, ProjectResourceOptions options)
-        where TProjectResource : ProjectResource
+    internal static IResourceBuilder<TProjectResource> WithProjectDefaults<TProjectResource>(this IResourceBuilder<TProjectResource> builder, ProjectResourceOptions options)
+        where TProjectResource : class, IProjectLaunchDefaultsResource
     {
         // .NET SDK has experimental support for retries. Enable with env var.
         // https://github.com/open-telemetry/opentelemetry-dotnet/pull/5495
@@ -502,6 +501,28 @@ public static class ProjectResourceBuilderExtensions
             return Task.CompletedTask;
         });
 
+        builder.WithHttpsCertificateConfiguration(ctx =>
+        {
+            if (!ctx.Resource.Annotations.OfType<EndpointAnnotation>().Any(e => e.TlsEnabled))
+            {
+                return Task.CompletedTask;
+            }
+
+            // Kestrel's default certificate configuration accepts PFX paths directly. This avoids
+            // PEM key-pair path handling differences in local development environments.
+            ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPath] = ctx.PfxPath;
+            if (ctx.Password is not null)
+            {
+                ctx.EnvironmentVariables[KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword] = ctx.Password;
+            }
+            else
+            {
+                ctx.EnvironmentVariables.Remove(KnownAspNetCoreConfigNames.KestrelCertificatesDefaultPassword);
+            }
+
+            return Task.CompletedTask;
+        });
+
         var projectResource = builder.Resource;
 
         // In run mode, create a hidden rebuilder resource for this project.
@@ -517,7 +538,7 @@ public static class ProjectResourceBuilderExtensions
                 // If we have any endpoints & the forwarded headers wasn't disabled then add it
                 if (projectResource.GetEndpoints().Any() && !projectResource.Annotations.OfType<DisableForwardedHeadersAnnotation>().Any())
                 {
-                    context.EnvironmentVariables[AspNetCoreForwardedHeadersEnabledVariableName] = "true";
+                    context.EnvironmentVariables[KnownAspNetCoreConfigNames.ForwardedHeadersEnabled] = "true";
                 }
             });
         }
@@ -934,9 +955,9 @@ public static class ProjectResourceBuilderExtensions
             context.WriteContainerAsync(container));
     }
 
-    private static IConfiguration GetConfiguration(ProjectResource projectResource)
+    private static IConfiguration GetConfiguration(IProjectLaunchDefaultsResource projectResource)
     {
-        var projectMetadata = projectResource.GetProjectMetadata();
+        var projectMetadata = projectResource.Annotations.OfType<IProjectMetadata>().Single();
 
         // For testing
         if (projectMetadata.Configuration is { } configuration)
@@ -945,7 +966,7 @@ public static class ProjectResourceBuilderExtensions
         }
 
         var projectDirectoryPath = Path.GetDirectoryName(projectMetadata.ProjectPath)!;
-        var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+        var env = Environment.GetEnvironmentVariable(KnownAspNetCoreConfigNames.Environment) ?? Environment.GetEnvironmentVariable(KnownAspNetCoreConfigNames.DotNetEnvironment);
         var appSettingsPath = Path.Combine(projectDirectoryPath, "appsettings.json");
         var appSettingsEnvironmentPath = Path.Combine(projectDirectoryPath, $"appsettings.{env}.json");
         // .NET 10 introduced support for application-specific settings files: https://github.com/dotnet/runtime/pull/116987
@@ -965,7 +986,7 @@ public static class ProjectResourceBuilderExtensions
     /// Creates a hidden rebuilder resource that runs 'dotnet build' on demand via the rebuild command.
     /// </summary>
     private static void AddRebuilderResource<TProjectResource>(IResourceBuilder<TProjectResource> builder, TProjectResource projectResource)
-        where TProjectResource : ProjectResource
+        where TProjectResource : class, IProjectLaunchDefaultsResource
     {
         var projectMetadata = projectResource.Annotations.OfType<IProjectMetadata>().SingleOrDefault();
         if (projectMetadata is null || projectMetadata.IsFileBasedApp)
@@ -992,11 +1013,12 @@ public static class ProjectResourceBuilderExtensions
             });
     }
 
-    private static void SetAspNetCoreUrls(this IResourceBuilder<ProjectResource> builder)
+    private static void SetAspNetCoreUrls<T>(this IResourceBuilder<T> builder)
+        where T : IProjectLaunchDefaultsResource
     {
         builder.WithEnvironment(context =>
         {
-            if (context.EnvironmentVariables.ContainsKey("ASPNETCORE_URLS"))
+            if (context.EnvironmentVariables.ContainsKey(KnownAspNetCoreConfigNames.Urls))
             {
                 // If the user has already set ASPNETCORE_URLS, we don't want to override it.
                 return;
@@ -1019,7 +1041,7 @@ public static class ProjectResourceBuilderExtensions
                 {
                     // Add the environment variable for the HTTPS port if we have an HTTPS service. This will make sure the
                     // HTTPS redirection middleware avoids redirecting to the internal port.
-                    context.EnvironmentVariables["ASPNETCORE_HTTPS_PORT"] = e.Property(EndpointProperty.Port);
+                    context.EnvironmentVariables[KnownAspNetCoreConfigNames.HttpsPort] = e.Property(EndpointProperty.Port);
 
                     processedHttpsPort = true;
                 }
@@ -1031,12 +1053,13 @@ public static class ProjectResourceBuilderExtensions
             if (!aspnetCoreUrls.IsEmpty)
             {
                 // Combine into a single expression
-                context.EnvironmentVariables["ASPNETCORE_URLS"] = aspnetCoreUrls.Build();
+                context.EnvironmentVariables[KnownAspNetCoreConfigNames.Urls] = aspnetCoreUrls.Build();
             }
         });
     }
 
-    private static void SetBothPortsEnvVariables(this IResourceBuilder<ProjectResource> builder)
+    private static void SetBothPortsEnvVariables<T>(this IResourceBuilder<T> builder)
+        where T : IProjectLaunchDefaultsResource
     {
         builder.WithEnvironment(context =>
         {
@@ -1045,7 +1068,8 @@ public static class ProjectResourceBuilderExtensions
         });
     }
 
-    private static void SetOnePortsEnvVariable(this IResourceBuilder<ProjectResource> builder, EnvironmentCallbackContext context, string portEnvVariable, string scheme)
+    private static void SetOnePortsEnvVariable<T>(this IResourceBuilder<T> builder, EnvironmentCallbackContext context, string portEnvVariable, string scheme)
+        where T : IProjectLaunchDefaultsResource
     {
         if (context.EnvironmentVariables.ContainsKey(portEnvVariable))
         {
@@ -1080,7 +1104,8 @@ public static class ProjectResourceBuilderExtensions
         }
     }
 
-    private static void SetKestrelUrlOverrideEnvVariables(this IResourceBuilder<ProjectResource> builder)
+    private static void SetKestrelUrlOverrideEnvVariables<T>(this IResourceBuilder<T> builder)
+        where T : IProjectLaunchDefaultsResource
     {
         builder.WithEnvironment(context =>
         {

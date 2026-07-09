@@ -4,13 +4,16 @@
 # 1. Downloads signed packages from a specified build
 # 2. Publishes packages to NuGet.org and npm
 # 3. Promotes the build to the Aspire GA channel via darc
-# 4. Submits WinGet manifests and validates the Homebrew cask
+# 4. Submits WinGet manifests and, when SkipHomebrewValidation=false,
+#    validates the Homebrew cask
 # 5. Optionally publishes the signed VS Code extension to the Marketplace
 # 6. Dispatches the release-github-tasks GitHub Actions workflow as the
 #    aspire-repo-bot GitHub App (tag, GitHub Release, merge-back PR,
 #    baseline PR) and waits for it to complete
 # 7. Uploads aspire-cli-* archives from the source build's BlobArtifacts
 #    onto the GitHub Release as the aspire-repo-bot
+# 8. Dispatches the Nix flake manifest update workflow after stable release
+#    assets are live
 #
 # For full documentation, see: docs/release-process.md
 
@@ -53,23 +56,13 @@ parameters:
     type: boolean
     default: false
 
-  - name: SkipNpmPublish
-    displayName: 'Skip npm Publishing (set true if already completed)'
-    type: boolean
-    default: false
-
   - name: SkipNpmRidPublish
-    displayName: 'Skip npm RID Package Publishing (set true if RID packages already completed but pointer package did not)'
+    displayName: '[Advanced] Skip npm RID Package Publishing (set true if RID packages already completed but pointer package did not)'
     type: boolean
     default: false
 
   - name: SkipNpmPointerPublish
-    displayName: 'Skip npm Pointer Package Publishing (set true if pointer package already completed)'
-    type: boolean
-    default: false
-
-  - name: AllowNpmLatestDistTagMove
-    displayName: '[Advanced] Allow npm latest dist-tag to move to an older stable version'
+    displayName: '[Advanced] Skip npm Pointer Package Publishing (set true if pointer package already completed)'
     type: boolean
     default: false
 
@@ -94,24 +87,30 @@ parameters:
     default: false
 
   - name: SkipHomebrewValidation
-    displayName: '[Advanced] Skip Homebrew cask validation against live GitHub release (re-run after success)'
+    displayName: '[Advanced] Skip Homebrew cask validation against live GitHub release (default; set false to opt in)'
+    type: boolean
+    default: true
+
+  - name: SkipNixPackageUpdate
+    displayName: '[Advanced] Skip Nix flake update on baseline PR (re-run after success)'
     type: boolean
     default: false
 
-  # Azure DevOps manual string parameters cannot be left blank. These defaults
-  # must include the NPM_PUBLISH_REQUIRED_* aliases from common-variables.yml.
+  # Azure DevOps manual string parameters cannot be left blank. Keep these
+  # defaults valid for unattended queue submissions: the owners must include a
+  # required ESRP owner alias, and the approver must be a single distinct alias.
   - name: NpmPublishOwners
-    displayName: 'npm ESRP owners (comma-separated Microsoft aliases or emails; leave unchanged for repo default)'
+    displayName: '[Advanced] npm ESRP owner (single Microsoft alias or email; must be joperezr or ankj)'
     type: string
-    default: 'joperezr,ankj'
+    default: 'joperezr'
 
   - name: NpmPublishApprovers
-    displayName: 'npm ESRP approvers (comma-separated Microsoft aliases or emails; leave unchanged for repo default)'
+    displayName: '[Advanced] npm ESRP approver (single Microsoft alias or email; must differ from the owner)'
     type: string
-    default: 'adamratzman,David.Pine'
+    default: 'adamratzman'
 
   - name: NpmRegistryPropagationDelayMinutes
-    displayName: 'Minutes to wait between npm RID and pointer package submissions'
+    displayName: '[Advanced] Minutes to wait between npm RID and pointer package submissions'
     type: number
     default: 10
 
@@ -120,20 +119,23 @@ parameters:
     type: boolean
     default: true
 
-  # Ref used when invoking `workflow_dispatch` against release-github-tasks.yml.
+  # Ref used when invoking `workflow_dispatch` against release GitHub workflows.
   # GitHub loads the workflow file *from this ref*, so it controls which version
   # of the workflow runs. The branch/commit being released is passed separately
   # via the `release_branch` and `commit_sha` workflow inputs, so this ref only
-  # affects the workflow source — not what gets tagged or released. Defaults to
-  # 'main' so workflow fixes don't require backporting to every release branch.
+  # affects the workflow source — not what gets tagged, released, or updated.
+  # Defaults to 'main' so workflow fixes don't require backporting to every
+  # release branch.
   - name: GitHubTasksWorkflowRef
-    displayName: '[Advanced] Ref to dispatch release-github-tasks.yml from (workflow source only)'
+    displayName: '[Advanced] Ref to dispatch release GitHub workflows from (workflow source only)'
     type: string
     default: 'main'
 
 variables:
   - template: /eng/pipelines/common-variables.yml@self
   - template: /eng/common/templates-official/variables/pool-providers.yml@self
+  - name: NPM_PUBLISH_REQUIRED_OWNERS
+    value: joperezr,ankj
   # Variable group containing VscePublishToken for VS Code Marketplace publishing and aspire-repo-bot credentials
   # Note: NuGet publishing uses service connection 'NuGet.org - dotnet/aspire' instead of API key
   - group: Aspire-Release-Secrets
@@ -205,6 +207,7 @@ extends:
               os: windows
             variables:
               SourceBuildId: $(resources.pipeline.aspire-build.runID)
+              SourceBuildPipeline: microsoft-aspire
             templateContext:
               # Disable the auto-injected MicroBuildAuthorizePublishPlugin@0 task for jobs
               # that do not perform an ESRP publish. PrepareJob only downloads artifacts
@@ -256,7 +259,13 @@ extends:
                   Write-Host "Source Build ID: $(resources.pipeline.aspire-build.runID)"
                   Write-Host "Source Build Name: $(resources.pipeline.aspire-build.runName)"
                   Write-Host "This stage downloads artifacts and re-publishes them so 1ES PT can generate SBOM."
-                  Write-Host "Installer-only mode: ${{ and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipNpmPublish, true), eq(parameters.SkipChannelPromotion, true)) }}"
+                  $installerOnlyMode = (
+                    "${{ parameters.SkipNuGetPublish }}" -eq "true" -and
+                    "${{ parameters.SkipNpmRidPublish }}" -eq "true" -and
+                    "${{ parameters.SkipNpmPointerPublish }}" -eq "true" -and
+                    "${{ parameters.SkipChannelPromotion }}" -eq "true"
+                  )
+                  Write-Host "Installer-only mode: $installerOnlyMode"
                   Write-Host "Skip VS Code Extension Publishing: ${{ parameters.SkipVSCodeExtensionPublish }}"
                   Write-Host "==============================="
                 displayName: 'Log Stage Info'
@@ -361,7 +370,7 @@ extends:
                   artifact: PackageArtifacts
                   patterns: '**/*.nupkg'
 
-              - ${{ if eq(parameters.SkipNpmPublish, false) }}:
+              - ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)) }}:
                 - download: aspire-build
                   displayName: 'Download npm packages from Source Build'
                   artifact: BlobArtifacts
@@ -369,17 +378,48 @@ extends:
                     **/microsoft-aspire-cli*.tgz
                     **/microsoft-aspire-cli*.tgz.sig
 
-                - download: aspire-build
+                # The source build publishes npm validation summaries with 1ES.PublishBuildArtifacts,
+                # so they are build/container artifacts. Use DownloadBuildArtifacts explicitly instead
+                # of the `download:` shortcut, which selects the pipeline-artifact downloader here and
+                # cannot read container artifact metadata such as #/<containerId>/<artifactName>.
+                - task: DownloadBuildArtifacts@0
                   displayName: 'Download npm validation summary from Source Build (win-x64)'
-                  artifact: $(NPM_VALIDATION_SUMMARY_WIN_X64_ARTIFACT)
+                  inputs:
+                    buildType: specific
+                    project: internal
+                    pipeline: $(SourceBuildPipeline)
+                    buildVersionToDownload: specific
+                    buildId: $(SourceBuildId)
+                    downloadType: single
+                    artifactName: $(NPM_VALIDATION_SUMMARY_WIN_X64_ARTIFACT)
+                    downloadPath: '$(Pipeline.Workspace)/aspire-build'
+                    checkDownloadedFiles: true
 
-                - download: aspire-build
+                - task: DownloadBuildArtifacts@0
                   displayName: 'Download npm validation summary from Source Build (linux-x64)'
-                  artifact: $(NPM_VALIDATION_SUMMARY_LINUX_X64_ARTIFACT)
+                  inputs:
+                    buildType: specific
+                    project: internal
+                    pipeline: $(SourceBuildPipeline)
+                    buildVersionToDownload: specific
+                    buildId: $(SourceBuildId)
+                    downloadType: single
+                    artifactName: $(NPM_VALIDATION_SUMMARY_LINUX_X64_ARTIFACT)
+                    downloadPath: '$(Pipeline.Workspace)/aspire-build'
+                    checkDownloadedFiles: true
 
-                - download: aspire-build
+                - task: DownloadBuildArtifacts@0
                   displayName: 'Download npm validation summary from Source Build (macOS)'
-                  artifact: $(NPM_VALIDATION_SUMMARY_OSX_ARTIFACT)
+                  inputs:
+                    buildType: specific
+                    project: internal
+                    pipeline: $(SourceBuildPipeline)
+                    buildVersionToDownload: specific
+                    buildId: $(SourceBuildId)
+                    downloadType: single
+                    artifactName: $(NPM_VALIDATION_SUMMARY_OSX_ARTIFACT)
+                    downloadPath: '$(Pipeline.Workspace)/aspire-build'
+                    checkDownloadedFiles: true
 
               - ${{ if eq(parameters.SkipWinGetPublish, false) }}:
                 - download: aspire-build
@@ -426,7 +466,7 @@ extends:
                     Write-Host "Installer-only run detected; created empty PackageArtifacts placeholder."
                   displayName: 'Prepare Empty PackageArtifacts Placeholder'
 
-              - ${{ if eq(parameters.SkipNpmPublish, false) }}:
+              - ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)) }}:
                 - powershell: |
                     $sourcePath = "$(Pipeline.Workspace)/aspire-build/BlobArtifacts"
                     $ridTargetPath = "$(Pipeline.Workspace)/npm/rid-packages"
@@ -457,7 +497,7 @@ extends:
                         "npm CLI packages ship as flat blobs in BlobArtifacts (configured via eng/Publishing.props).",
                         "Possible causes:",
                         "  1. The source build (azure-pipelines.yml) ran before the npm CLI package work landed.",
-                        "     Re-run the release pipeline with SkipNpmPublish=true, or rebuild from a newer commit.",
+                        "     Re-run the release pipeline with SkipNpmRidPublish=true and SkipNpmPointerPublish=true, or rebuild from a newer commit.",
                         "  2. The source build failed to produce or publish the BlobArtifacts pipeline artifact.",
                         "  3. The wrong source build was selected."
                       )
@@ -598,7 +638,7 @@ extends:
                     Write-Host "Prepared $($ridPackages.Count) RID npm package(s), pointer package version $($versions[0]), and $($signatureSidecars.Count) detached signature sidecar(s)."
                   displayName: 'Prepare npm Artifacts for Publishing'
 
-              - ${{ if eq(parameters.SkipNpmPublish, true) }}:
+              - ${{ if and(eq(parameters.SkipNpmRidPublish, true), eq(parameters.SkipNpmPointerPublish, true)) }}:
                 - powershell: |
                     New-Item -ItemType Directory -Path "$(Pipeline.Workspace)/npm/rid-packages" -Force | Out-Null
                     New-Item -ItemType Directory -Path "$(Pipeline.Workspace)/npm/pointer-package" -Force | Out-Null
@@ -607,7 +647,7 @@ extends:
                     New-Item -ItemType Directory -Path "$(Pipeline.Workspace)/npm/validation-summary/linux-x64" -Force | Out-Null
                     New-Item -ItemType Directory -Path "$(Pipeline.Workspace)/npm/validation-summary/osx" -Force | Out-Null
                     New-Item -ItemType Directory -Path "$(Pipeline.Workspace)/npm/signatures" -Force | Out-Null
-                    Write-Host "Created empty npm artifact placeholders because SkipNpmPublish=true."
+                    Write-Host "Created empty npm artifact placeholders because SkipNpmRidPublish=true and SkipNpmPointerPublish=true."
                   displayName: 'Prepare Empty npm Artifact Placeholders'
 
               # Copy installer artifacts to expected locations for output.
@@ -765,13 +805,19 @@ extends:
                   Write-Host "Is Prerelease: ${{ parameters.IsPrerelease }}"
                   Write-Host "Dry Run: ${{ parameters.DryRun }}"
                   Write-Host "Skip NuGet Publish: ${{ parameters.SkipNuGetPublish }}"
-                  Write-Host "Skip npm Publish: ${{ parameters.SkipNpmPublish }}"
                   Write-Host "Skip npm RID Publish: ${{ parameters.SkipNpmRidPublish }}"
                   Write-Host "Skip npm Pointer Publish: ${{ parameters.SkipNpmPointerPublish }}"
                   Write-Host "Skip Channel Promotion: ${{ parameters.SkipChannelPromotion }}"
-                  Write-Host "Installer-only mode: ${{ and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipNpmPublish, true), eq(parameters.SkipChannelPromotion, true)) }}"
+                  Write-Host "Skip Nix Package Update: ${{ parameters.SkipNixPackageUpdate }}"
+                  $installerOnlyMode = (
+                    "${{ parameters.SkipNuGetPublish }}" -eq "true" -and
+                    "${{ parameters.SkipNpmRidPublish }}" -eq "true" -and
+                    "${{ parameters.SkipNpmPointerPublish }}" -eq "true" -and
+                    "${{ parameters.SkipChannelPromotion }}" -eq "true"
+                  )
+                  Write-Host "Installer-only mode: $installerOnlyMode"
 
-                  if ("${{ parameters.SkipNpmPublish }}" -eq "false") {
+                  if ("${{ parameters.SkipNpmRidPublish }}" -ne "true" -or "${{ parameters.SkipNpmPointerPublish }}" -ne "true") {
                     # Validate ESRP owner/approver configuration on dry runs as well
                     # as real publishes so a misconfigured alias set fails the cheap
                     # dry run instead of only surfacing on the real release. The
@@ -779,23 +825,45 @@ extends:
                     # a dry run never actually publishes and is the documented way to
                     # exercise the npm path for a prerelease build.
                     if ("${{ parameters.DryRun }}" -eq "false" -and "${{ parameters.IsPrerelease }}" -eq "true") {
-                      Write-Error "npm publishing is blocked for prerelease runs because the MicroBuild npm publish template does not yet expose a dist-tag parameter. Set SkipNpmPublish=true or run with DryRun=true until prereleases can publish under a non-latest tag."
+                      Write-Error "npm publishing is blocked for prerelease runs because the MicroBuild npm publish template does not yet expose a dist-tag parameter. Set SkipNpmRidPublish=true and SkipNpmPointerPublish=true, or run with DryRun=true until prereleases can publish under a non-latest tag."
                       exit 1
+                    }
+
+                    # The alias-validation helpers below are mirrored in
+                    # eng/scripts/validate-npm-release-aliases.ps1, which is exercised directly by
+                    # ValidateNpmReleaseAliasesTests. releaseJob runs with `checkout: none`, so these
+                    # functions are inlined here instead of dot-sourced; the
+                    # ReleasePublishNugetPipelineTests.NpmAliasValidationHelpersMatchScript test keeps
+                    # the inline copy and the script in sync.
+                    # >>> BEGIN npm release alias helpers (keep in sync with eng/scripts/validate-npm-release-aliases.ps1) >>>
+                    function Format-NpmReleaseAliasForError([string] $value) {
+                      $escaped = $value.Replace("`r", '\r').Replace("`n", '\n')
+                      return [regex]::Replace($escaped, '##vso\[', '## vso[', [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
                     }
 
                     function ConvertTo-NpmReleaseAliasSet([string] $value, [string] $parameterName) {
                       $aliases = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 
+                      # Parse values supplied as:
+                      #   joperezr, ankj@microsoft.com
+                      # The normalized aliases are later emitted in Azure Pipelines logging commands, so
+                      # accept only a small single-line alias alphabet before writing them back to the log.
                       foreach ($entry in $value -split ',') {
                         $alias = $entry.Trim()
                         if ([string]::IsNullOrWhiteSpace($alias)) {
                           continue
                         }
 
+                        $originalAlias = $alias
                         if ($alias.EndsWith('@microsoft.com', [StringComparison]::OrdinalIgnoreCase)) {
                           $alias = $alias.Substring(0, $alias.Length - '@microsoft.com'.Length)
                         } elseif ($alias.Contains('@')) {
-                          Write-Error "$parameterName entry '$entry' must be a Microsoft alias or @microsoft.com email address."
+                          Write-Error "$parameterName entry '$(Format-NpmReleaseAliasForError $originalAlias)' must be a Microsoft alias or @microsoft.com email address."
+                          exit 1
+                        }
+
+                        if ([string]::IsNullOrWhiteSpace($alias) -or $alias -notmatch '\A[A-Za-z0-9][A-Za-z0-9._-]*\z') {
+                          Write-Error "$parameterName entry '$(Format-NpmReleaseAliasForError $originalAlias)' must be a non-empty Microsoft alias or @microsoft.com email address containing only letters, digits, '.', '_' or '-'."
                           exit 1
                         }
 
@@ -805,66 +873,89 @@ extends:
                       return ,$aliases
                     }
 
-                    function Assert-ContainsRequiredNpmAliases(
+                    function Assert-SingleNpmReleaseAlias(
                       [System.Collections.Generic.HashSet[string]] $actualAliases,
-                      [System.Collections.Generic.HashSet[string]] $requiredAliases,
                       [string] $parameterName) {
-                      $missing = @($requiredAliases | Where-Object { -not $actualAliases.Contains($_) })
-                      if ($missing.Count -gt 0) {
-                        Write-Error "$parameterName must include required ESRP alias(es): $($missing -join ', ')."
+                      if ($actualAliases.Count -ne 1) {
+                        Write-Error "$parameterName must contain exactly one Microsoft alias or @microsoft.com email address."
                         exit 1
                       }
                     }
 
-                    $owners = "${{ parameters.NpmPublishOwners }}"
-                    $approvers = "${{ parameters.NpmPublishApprovers }}"
-                    $requiredNpmOwnersValue = "$(NPM_PUBLISH_REQUIRED_OWNERS)"
-                    $requiredNpmApproversValue = "$(NPM_PUBLISH_REQUIRED_APPROVERS)"
-
-                    if ([string]::IsNullOrWhiteSpace($owners)) {
-                      $owners = $requiredNpmOwnersValue
-                      Write-Host "NpmPublishOwners not provided; using NPM_PUBLISH_REQUIRED_OWNERS."
+                    function Assert-ContainsAnyRequiredNpmOwnerAlias(
+                      [System.Collections.Generic.HashSet[string]] $actualAliases,
+                      [System.Collections.Generic.HashSet[string]] $requiredAliases,
+                      [string] $parameterName) {
+                      $matches = @($requiredAliases | Where-Object { $actualAliases.Contains($_) })
+                      if ($matches.Count -eq 0) {
+                        $requiredAliasList = ($requiredAliases | Sort-Object) -join ', '
+                        Write-Error "$parameterName must include at least one required ESRP owner alias: $requiredAliasList."
+                        exit 1
+                      }
                     }
 
-                    if ([string]::IsNullOrWhiteSpace($approvers)) {
-                      $approvers = $requiredNpmApproversValue
-                      Write-Host "NpmPublishApprovers not provided; using NPM_PUBLISH_REQUIRED_APPROVERS."
+                    function Invoke-NpmReleaseAliasValidation(
+                      [string] $owners,
+                      [string] $approvers,
+                      [string] $requiredNpmOwnersValue) {
+                      $requiredNpmOwners = ConvertTo-NpmReleaseAliasSet $requiredNpmOwnersValue 'NPM_PUBLISH_REQUIRED_OWNERS'
+                      $normalizedOwners = ConvertTo-NpmReleaseAliasSet $owners 'NpmPublishOwners'
+                      $normalizedApprovers = ConvertTo-NpmReleaseAliasSet $approvers 'NpmPublishApprovers'
+
+                      if ($normalizedOwners.Count -eq 0) {
+                        Write-Error "NpmPublishOwners must contain at least one alias before publishing npm packages."
+                        exit 1
+                      }
+
+                      if ($normalizedApprovers.Count -eq 0) {
+                        Write-Error "NpmPublishApprovers must contain at least one alias before publishing npm packages."
+                        exit 1
+                      }
+
+                      # ESRP accepts multiple owners, but the release process requires exactly one so that
+                      # ownership of the @microsoft/aspire-cli package maps to a single accountable alias.
+                      Assert-SingleNpmReleaseAlias $normalizedOwners 'NpmPublishOwners'
+                      Assert-ContainsAnyRequiredNpmOwnerAlias $normalizedOwners $requiredNpmOwners 'NpmPublishOwners'
+                      Assert-SingleNpmReleaseAlias $normalizedApprovers 'NpmPublishApprovers'
+
+                      $overlappingAliases = @($normalizedOwners | Where-Object { $normalizedApprovers.Contains($_) })
+                      if ($overlappingAliases.Count -gt 0) {
+                        Write-Error "NpmPublishOwners and NpmPublishApprovers must not contain the same alias(es): $($overlappingAliases -join ', ')."
+                        exit 1
+                      }
+
+                      $effectiveOwners = ($normalizedOwners | Sort-Object) -join ','
+                      $effectiveApprovers = ($normalizedApprovers | Sort-Object) -join ','
+
+                      Write-Host "##vso[task.setvariable variable=NpmPublishOwnersEffective]$effectiveOwners"
+                      Write-Host "##vso[task.setvariable variable=NpmPublishApproversEffective]$effectiveApprovers"
+                      Write-Host "npm ESRP owners and approvers were resolved and include the required release contacts."
                     }
+                    # <<< END npm release alias helpers <<<
 
-                    $requiredNpmOwners = ConvertTo-NpmReleaseAliasSet $requiredNpmOwnersValue 'NPM_PUBLISH_REQUIRED_OWNERS'
-                    $requiredNpmApprovers = ConvertTo-NpmReleaseAliasSet $requiredNpmApproversValue 'NPM_PUBLISH_REQUIRED_APPROVERS'
-                    $normalizedOwners = ConvertTo-NpmReleaseAliasSet $owners 'NpmPublishOwners'
-                    $normalizedApprovers = ConvertTo-NpmReleaseAliasSet $approvers 'NpmPublishApprovers'
+                    # Read queue-time owner/approver values from the environment instead of
+                    # interpolating template expressions into this script. Compile-time string
+                    # interpolation would let an operator-supplied value break out of the quoted
+                    # literal and run as code; passing them through the step's env block keeps the
+                    # values as data until ConvertTo-NpmReleaseAliasSet validates them.
+                    $owners = $env:NPM_PUBLISH_OWNERS
+                    $approvers = $env:NPM_PUBLISH_APPROVERS
+                    $requiredNpmOwnersValue = $env:NPM_PUBLISH_REQUIRED_OWNERS
 
-                    if ($normalizedOwners.Count -eq 0) {
-                      Write-Error "NpmPublishOwners must contain at least one alias before publishing npm packages."
-                      exit 1
-                    }
-
-                    if ($normalizedApprovers.Count -eq 0) {
-                      Write-Error "NpmPublishApprovers must contain at least one alias before publishing npm packages."
-                      exit 1
-                    }
-
-                    Assert-ContainsRequiredNpmAliases $normalizedOwners $requiredNpmOwners 'NpmPublishOwners'
-                    Assert-ContainsRequiredNpmAliases $normalizedApprovers $requiredNpmApprovers 'NpmPublishApprovers'
-
-                    $overlappingAliases = @($normalizedOwners | Where-Object { $normalizedApprovers.Contains($_) })
-                    if ($overlappingAliases.Count -gt 0) {
-                      Write-Error "NpmPublishOwners and NpmPublishApprovers must not contain the same alias(es): $($overlappingAliases -join ', ')."
-                      exit 1
-                    }
-
-                    $effectiveOwners = ($normalizedOwners | Sort-Object) -join ','
-                    $effectiveApprovers = ($normalizedApprovers | Sort-Object) -join ','
-
-                    Write-Host "##vso[task.setvariable variable=NpmPublishOwnersEffective]$effectiveOwners"
-                    Write-Host "##vso[task.setvariable variable=NpmPublishApproversEffective]$effectiveApprovers"
-                    Write-Host "npm ESRP owners and approvers were resolved and include the required release contacts."
+                    Invoke-NpmReleaseAliasValidation $owners $approvers $requiredNpmOwnersValue
                   }
 
                   Write-Host "==================================="
                 displayName: 'Validate Parameters'
+                # Forward the queue-time owner/approver values (and the hard-coded required
+                # owners) as environment variables so the inline script reads them as data.
+                # Embedding template expressions inside a string scalar keeps Azure Pipelines from
+                # preserving expression-object typing for the env value while still avoiding
+                # interpolation into the PowerShell source.
+                env:
+                  NPM_PUBLISH_OWNERS: '${{ parameters.NpmPublishOwners }}'
+                  NPM_PUBLISH_APPROVERS: '${{ parameters.NpmPublishApprovers }}'
+                  NPM_PUBLISH_REQUIRED_OWNERS: $(NPM_PUBLISH_REQUIRED_OWNERS)
 
               # ===== EXTRACT BAR BUILD ID =====
               - ${{ if eq(parameters.SkipChannelPromotion, false) }}:
@@ -1028,13 +1119,13 @@ extends:
                   displayName: 'Skip NuGet Publish (flagged)'
 
               # ===== PUBLISH TO npm =====
-              - ${{ if eq(parameters.SkipNpmPublish, false) }}:
+              - ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)) }}:
                 - task: NodeTool@0
                   displayName: 'Install Node.js for npm Validation'
                   inputs:
                     versionSpec: '22.x'
 
-              - ${{ if eq(parameters.SkipNpmPublish, false) }}:
+              - ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)) }}:
                 - powershell: |
                     $ErrorActionPreference = 'Stop'
                     $validationRoot = "$(Pipeline.Workspace)/npm/validation-summary"
@@ -1221,8 +1312,9 @@ extends:
                     # every staged RID and pointer tarball must be the exact version
                     # that was install-tested. NpmValidatedExpectedVersion is set by
                     # 'Validate npm Prepare-Stage Summaries' earlier in this job (both
-                    # gated on SkipNpmPublish==false). A missing/empty/unexpanded token
-                    # here means that gate did not run, so we must not publish.
+                    # gated on at least one npm package being scheduled). A missing/
+                    # empty/unexpanded token here means that gate did not run, so we
+                    # must not publish.
                     $validatedVersion = "$(NpmValidatedExpectedVersion)"
                     if ([string]::IsNullOrWhiteSpace($validatedVersion) -or $validatedVersion -like '$(*)') {
                       Write-Error "NpmValidatedExpectedVersion was not set by the prepare-stage validation gate (got '$validatedVersion'). Refusing to publish npm packages without a verified version."
@@ -1285,7 +1377,7 @@ extends:
                     Write-Host "All staged npm tarballs match validated version '$validatedVersion'."
                   displayName: 'Verify Staged npm Package Versions'
 
-              - ${{ if and(eq(parameters.DryRun, true), eq(parameters.SkipNpmPublish, false)) }}:
+              - ${{ if and(eq(parameters.DryRun, true), or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false))) }}:
                 - powershell: |
                     Write-Host "=== DRY RUN MODE ==="
                     Write-Host "The following packages would be submitted to ESRP for npm publishing."
@@ -1367,7 +1459,7 @@ extends:
                     Write-Host "Dry run skipped installing '$packageSpec' because the package has not been published."
                   displayName: 'Dry Run - Validate npm Registry Reachability'
 
-              - ${{ if and(eq(parameters.DryRun, false), eq(parameters.SkipNpmPublish, false), eq(parameters.IsPrerelease, false)) }}:
+              - ${{ if and(eq(parameters.DryRun, false), or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)), eq(parameters.IsPrerelease, false)) }}:
                 - pwsh: |
                     $ErrorActionPreference = 'Stop'
 
@@ -1451,7 +1543,7 @@ extends:
                     $semverRegex = '^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$'
                     $stableSemverRegex = '^\d+\.\d+\.\d+$'
 
-                    if ("${{ parameters.AllowNpmLatestDistTagMove }}" -ne "true" -and "${{ parameters.SkipNpmPointerPublish }}" -ne "true") {
+                    if ("${{ parameters.SkipNpmPointerPublish }}" -ne "true") {
                       $pointerPackages = @($scheduledPackages | Where-Object { $_.Name -eq '@microsoft/aspire-cli' })
                       if ($pointerPackages.Count -ne 1) {
                         Write-Error "Expected exactly one scheduled @microsoft/aspire-cli pointer package while checking the npm latest dist-tag, found $($pointerPackages.Count)."
@@ -1475,7 +1567,7 @@ extends:
                         }
 
                         if ([version]$pointerPackage.Version -lt [version]$latestVersion) {
-                          Write-Error "Publishing $($pointerPackage.Spec) would move the npm latest dist-tag backward from $latestVersion. Set SkipNpmPublish=true for older servicing releases, or set AllowNpmLatestDistTagMove=true only after release-owner approval."
+                          Write-Error "Publishing $($pointerPackage.Spec) would move the npm latest dist-tag backward from $latestVersion. Set SkipNpmRidPublish=true and SkipNpmPointerPublish=true for older servicing releases."
                           exit 1
                         }
 
@@ -1486,8 +1578,6 @@ extends:
                         Write-Error "Unable to query @microsoft/aspire-cli@latest before publishing. Output: $latestText"
                         exit 1
                       }
-                    } elseif ("${{ parameters.AllowNpmLatestDistTagMove }}" -eq "true") {
-                      Write-Warning "AllowNpmLatestDistTagMove=true; skipping npm latest dist-tag downgrade guard."
                     }
 
                     $collisions = [System.Collections.Generic.List[string]]::new()
@@ -1527,6 +1617,7 @@ extends:
                     }
 
                     Write-Host "No scheduled npm package versions already exist on npm."
+                    exit 0
                   displayName: 'Verify npm Packages Are Not Already Published'
 
                 - ${{ if eq(parameters.SkipNpmRidPublish, false) }}:
@@ -1894,10 +1985,10 @@ extends:
                     }
                   displayName: 'Validate Published npm Package from Registry'
 
-              - ${{ if eq(parameters.SkipNpmPublish, true) }}:
+              - ${{ if and(eq(parameters.SkipNpmRidPublish, true), eq(parameters.SkipNpmPointerPublish, true)) }}:
                 - powershell: |
-                    Write-Host "=== Skipping npm Publishing (SkipNpmPublish=true) ==="
-                  displayName: 'Skip npm Publish (flagged)'
+                    Write-Host "=== Skipping npm Publishing (SkipNpmRidPublish=true and SkipNpmPointerPublish=true) ==="
+                  displayName: 'Skip npm Packages (flagged)'
 
               # ===== PROMOTE TO CHANNEL =====
               - ${{ if eq(parameters.SkipChannelPromotion, false) }}:
@@ -1988,8 +2079,8 @@ extends:
                   } else {
                     Write-Host " (EXECUTED)"
                   }
-                  Write-Host "║ npm Publish:    ${{ parameters.SkipNpmPublish }}" -NoNewline
-                  if ("${{ parameters.SkipNpmPublish }}" -eq "true") {
+                  Write-Host "║ npm Publish:    RID skip=${{ parameters.SkipNpmRidPublish }}, pointer skip=${{ parameters.SkipNpmPointerPublish }}" -NoNewline
+                  if ("${{ parameters.SkipNpmRidPublish }}" -eq "true" -and "${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
                     Write-Host " (SKIPPED)"
                   } elseif ("${{ parameters.DryRun }}" -eq "true") {
                     Write-Host " (DRY RUN)"
@@ -1997,6 +2088,8 @@ extends:
                     Write-Host " (BLOCKED - prerelease requires non-latest npm dist-tag support)"
                   } elseif ("${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
                     Write-Host " (PARTIAL - pointer publish skipped; registry smoke still ran)"
+                  } elseif ("${{ parameters.SkipNpmRidPublish }}" -eq "true") {
+                    Write-Host " (PARTIAL - RID publish skipped; pointer publish still ran)"
                   } else {
                     Write-Host " (EXECUTED)"
                   }
@@ -2030,6 +2123,16 @@ extends:
                     Write-Host " (SKIPPED)"
                   } else {
                     Write-Host " (validates cask against live GH release after asset upload)"
+                  }
+                  Write-Host "║ Nix Flake:      ${{ parameters.SkipNixPackageUpdate }}" -NoNewline
+                  if ("${{ parameters.SkipNixPackageUpdate }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
+                    Write-Host " (SKIPPED - prerelease)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (dry-run dispatch after Release Assets job)"
+                  } else {
+                    Write-Host " (updates baseline PR after Release Assets job)"
                   }
                   Write-Host "║ VS Code Ext:    ${{ parameters.SkipVSCodeExtensionPublish }}" -NoNewline
                   if ("${{ parameters.SkipVSCodeExtensionPublish }}" -eq "true") {
@@ -2244,7 +2347,7 @@ extends:
                   dryRun: ${{ parameters.DryRun }}
 
       # ===== STAGE 3: GITHUB TASKS =====
-      # Three responsibilities, all running as (or against) the aspire-repo-bot
+      # Four responsibilities, all running as (or against) the aspire-repo-bot
       # GitHub App:
       #
       #   1. DispatchGitHubTasksJob — dispatches the release-github-tasks
@@ -2257,7 +2360,14 @@ extends:
       #      and uploads them as assets on the GitHub release that the
       #      dispatch job just created.
       #
-      #   3. HomebrewValidateJob — runs the full upstream-equivalent cask
+      #   3. UpdateNixPackageJob — dispatches the update-nix-cli-flake
+      #      GitHub Actions workflow after release asset upload. The workflow
+      #      reads the live .sha512 assets, commits eng/nix/versions.json to
+      #      the update-baseline-<version> branch, and opens the PR from that
+      #      branch (release-github-tasks.yml created only the branch via
+      #      defer_baseline_pr=true; PR creation is handled here).
+      #
+      #   4. HomebrewValidateJob — runs the full upstream-equivalent cask
       #      validation (`brew audit --cask --online --signing` + real
       #      `brew install`/`brew uninstall`) against the cask generated by
       #      the source build, with the live GitHub release URL it points
@@ -2268,20 +2378,25 @@ extends:
       #      end users (or block Homebrew/homebrew-cask's autobump PR).
       #
       # Each job has its own skip flag (SkipGitHubTasks / SkipReleaseAssets /
-      # SkipHomebrewValidation) so partial-failure re-runs can recover any
-      # piece independently. Skipping all three skips the stage entirely.
+      # SkipNixPackageUpdate / SkipHomebrewValidation) so partial-failure
+      # re-runs can recover any piece independently. Skipping all four skips
+      # the stage entirely.
       #
       # DryRun behavior: this stage still runs when DryRun=true. DryRun is
       # propagated to the GH workflow as dry_run=true (keeps it from
       # creating tags/releases/PRs) and to the asset script (downloads and
-      # verifies SHA512s but skips the gh release upload). HomebrewValidateJob
-      # also runs under DryRun — it does not publish anything, it only audits
-      # and `brew install`/`brew uninstall` against a public URL. If the
-      # release for the version being validated does not yet exist (DryRun,
-      # or a re-run after assets were already uploaded), the job is expected
-      # to surface that as a real failure rather than be silently skipped.
-      # This lets a release manager validate the full AzDO → GitHub path
-      # end-to-end without performing a real release.
+      # verifies SHA512s but skips the gh release upload). When
+      # SkipHomebrewValidation=false, HomebrewValidateJob also runs under DryRun
+      # — it does not publish anything, it only audits and `brew install`/
+      # `brew uninstall` against a public URL. The Nix workflow is dispatched
+      # with dry_run=true and intentionally does not read release assets in
+      # that mode because the AzDO dry-run path does not create/upload a live
+      # GitHub release. If the release for the version being validated does not
+      # yet exist when Homebrew validation runs (DryRun, or a re-run after
+      # assets were already uploaded), the job is expected to surface that as a
+      # real failure rather than be silently skipped. This lets a release
+      # manager validate the full AzDO → GitHub path end-to-end without
+      # performing a real release.
       - stage: GitHubTasks
         displayName: 'Dispatch GitHub Release Tasks'
         # PrepareArtifacts is listed explicitly (in addition to Release) so the
@@ -2300,6 +2415,10 @@ extends:
             or(
               eq('${{ parameters.SkipGitHubTasks }}', 'false'),
               eq('${{ parameters.SkipReleaseAssets }}', 'false'),
+              and(
+                eq('${{ parameters.SkipNixPackageUpdate }}', 'false'),
+                eq('${{ parameters.IsPrerelease }}', 'false')
+              ),
               eq('${{ parameters.SkipHomebrewValidation }}', 'false')
             )
           )
@@ -2350,6 +2469,11 @@ extends:
               # The legacy `powershell:` shorthand runs Windows PowerShell 5.1 on
               # .NET Framework, which doesn't have that API and would fail at runtime.
               - pwsh: |
+                  $deferBaselinePr = (
+                    -not [System.Convert]::ToBoolean("${{ parameters.IsPrerelease }}") -and
+                    -not [System.Convert]::ToBoolean("${{ parameters.SkipNixPackageUpdate }}")
+                  ).ToString().ToLowerInvariant()
+
                   $inputs = @{
                     release_version     = "$(ReleaseVersionEffective)"
                     commit_sha          = "$(CommitShaDerived)"
@@ -2365,6 +2489,7 @@ extends:
                     skip_github_release = "false"
                     skip_merge_pr       = "false"
                     skip_baseline_pr    = "false"
+                    defer_baseline_pr   = $deferBaselinePr
                   }
 
                   & "$(Build.SourcesDirectory)/eng/pipelines/scripts/dispatch-release-github-tasks.ps1" `
@@ -2525,6 +2650,71 @@ extends:
                 env:
                   ASPIRE_BOT_APP_ID: $(aspire-bot-app-id)
                   ASPIRE_BOT_PRIVATE_KEY: $(aspire-bot-private-key)
+
+          # Dispatch the Nix manifest update workflow only after the GitHub
+          # release assets are live. The updater reads the release .sha512
+          # assets, commits eng/nix/versions.json to the update-baseline-<version>
+          # branch created by release-github-tasks.yml (which deferred PR creation
+          # via defer_baseline_pr=true), and opens the PR from that branch.
+          # Accepting 'Skipped' supports partial-failure re-runs where the
+          # assets were already uploaded and SkipReleaseAssets=true is used.
+          - job: UpdateNixPackageJob
+            displayName: 'Update baseline PR with Nix flake manifest'
+            dependsOn: PublishReleaseAssetsJob
+            condition: |
+              and(
+                eq('${{ parameters.SkipNixPackageUpdate }}', 'false'),
+                eq('${{ parameters.IsPrerelease }}', 'false'),
+                in(dependencies.PublishReleaseAssetsJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
+              )
+            timeoutInMinutes: 45
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            variables:
+              # Pulled from the deriveReleaseVersion step in PrepareJob (PrepareArtifacts stage).
+              # Mapped here independently of sibling jobs so this job still gets the value when
+              # SkipGitHubTasks/SkipReleaseAssets cause those siblings to be skipped.
+              ReleaseVersionEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
+            templateContext:
+              # No ESRP publish in this job (dispatches a GitHub Actions workflow via GH App JWT
+              # and polls for completion). Skip the auto-injected publish auth task.
+              mb:
+                publish:
+                  enabled: false
+            steps:
+              - checkout: self
+                displayName: 'Checkout repo (for dispatch script)'
+                fetchDepth: 1
+
+              - pwsh: |
+                  $inputs = @{
+                    release_version = "$(ReleaseVersionEffective)"
+                    dry_run        = ([System.Convert]::ToBoolean("${{ parameters.DryRun }}")).ToString().ToLowerInvariant()
+                  }
+
+                  & "$(Build.SourcesDirectory)/eng/pipelines/scripts/dispatch-release-github-tasks.ps1" `
+                    -AppId              "$env:ASPIRE_BOT_APP_ID" `
+                    -PrivateKeyPem      "$env:ASPIRE_BOT_PRIVATE_KEY" `
+                    -Owner              'microsoft' `
+                    -Repo               'aspire' `
+                    -WorkflowFile       'update-nix-cli-flake.yml' `
+                    -Ref                '${{ parameters.GitHubTasksWorkflowRef }}' `
+                    -Inputs             $inputs `
+                    -PollTimeoutMinutes 30
+                displayName: 'Dispatch update-nix-cli-flake and wait'
+                env:
+                  ASPIRE_BOT_APP_ID: $(aspire-bot-app-id)
+                  ASPIRE_BOT_PRIVATE_KEY: $(aspire-bot-private-key)
+
+              - powershell: |
+                  Write-Host ""
+                  Write-Host "Dispatched run: $env:DISPATCHED_RUN_URL"
+                displayName: 'Print dispatched Nix update run URL'
+                condition: always()
+                env:
+                  DISPATCHED_RUN_URL: $(DispatchedRunUrl)
 
           # Validate the generated Homebrew cask against the live GitHub
           # release. Runs `brew audit --cask --online --signing` and a real

@@ -54,6 +54,7 @@ bin/aspire-package-map.json
 The top-level `package.json` declares:
 
 - `bin.aspire = "bin/aspire.js"`
+- `scripts.postinstall = "node bin/aspire.js --npm-postinstall-check"`
 - `optionalDependencies` for every supported RID package at the same version
 - `files = ["bin", "README.md"]`
 
@@ -104,6 +105,8 @@ The launcher:
 4. Finds `bin/aspire` or `bin/aspire.exe` inside that package.
 5. Copies the native binary to an Aspire-owned writable cache.
 6. Spawns the cached binary with inherited stdio and forwards all command-line arguments.
+
+During npm `postinstall`, the same launcher runs in `--npm-postinstall-check` mode. That mode stops after RID detection and native package resolution, so `npm install -g @microsoft/aspire-cli --omit=optional` fails immediately on supported platforms instead of leaving an installed `aspire` shim that can only fail later at first launch. Unsupported platforms continue to install the shim successfully and report the unsupported-platform diagnostic at first `aspire` launch, preserving the optional-dependency package behavior for transitive and exploratory installs. Package managers can still skip lifecycle scripts with `--ignore-scripts`, so the normal runtime launcher keeps the same missing-native-package diagnostic.
 
 The default cache path is:
 
@@ -188,11 +191,11 @@ The release pipeline prepares two npm artifact folders and one validation artifa
 
 The package split is intentional. The release job submits RID packages first, waits for the ESRP submission to complete, waits an additional npm registry propagation delay, and then submits the pointer package. Publishing the pointer package last avoids optional dependency resolution races when a user installs the top-level package immediately after release.
 
-Before publishing, the release pipeline validates that exactly one pointer tarball and exactly one tarball for each supported RID are present, that every tarball has a detached `.tgz.sig` sidecar, that all tarballs have one version, and that the `NpmValidationSummary` artifact reports `validatedByPreparePipeline: true` with every required check `passed` for Windows, Linux, and macOS install validation. Non-dry-run npm publishing resolves the default ESRP owner and approver aliases from `eng/pipelines/common-variables.yml`; explicit `NpmPublishOwners` and `NpmPublishApprovers` overrides are allowed only if they still include the required release aliases and do not overlap.
+Before publishing, the release pipeline validates that exactly one pointer tarball and exactly one tarball for each supported RID are present, that every tarball has a detached `.tgz.sig` sidecar, that all tarballs have one version, and that the `NpmValidationSummary` artifact reports `validatedByPreparePipeline: true` with every required check `passed` for Windows, Linux, and macOS install validation. npm publishing reads its ESRP identities from the `NpmPublishOwners` and `NpmPublishApprovers` pipeline parameters, which default to working values in `eng/pipelines/release-publish-nuget.yml` so an unattended queue submission does not fail and can be overridden per run: the owner must be a single alias that matches one of the required release owner aliases configured in the pipeline, approvers must contain exactly one Microsoft alias or `@microsoft.com` email address, and the owner and approver must not be the same alias. The pipeline forwards both parameters to the validation step as environment variables (rather than interpolating them into the inline script) so the operator-supplied values are treated as data. The validation logic lives in `eng/scripts/validate-npm-release-aliases.ps1`; the release job runs with `checkout: none`, so the same helpers are mirrored inline in the pipeline and kept in sync by a unit test.
 
-The release pipeline checks only the package groups scheduled for publishing before invoking MicroBuild. If `SkipNpmRidPublish=false`, every staged RID tarball is checked with `npm view <name>@<version> version`; if `SkipNpmPointerPublish=false`, the pointer tarball is checked the same way. Any scheduled package version that already exists on npm fails before ESRP submission, because npm versions are immutable and a duplicate publish would otherwise fail later in MicroBuild. Re-runs after partial success should use `SkipNpmRidPublish=true` only when every RID package for the selected version is already live, `SkipNpmPointerPublish=true` only when the pointer package is already live, and `SkipNpmPublish=true` only after the entire npm publish path has completed.
+The release pipeline checks only the package groups scheduled for publishing before invoking MicroBuild. If `SkipNpmRidPublish=false`, every staged RID tarball is checked with `npm view <name>@<version> version`; if `SkipNpmPointerPublish=false`, the pointer tarball is checked the same way. Any scheduled package version that already exists on npm fails before ESRP submission, because npm versions are immutable and a duplicate publish would otherwise fail later in MicroBuild. Re-runs after partial success should use `SkipNpmRidPublish=true` only when every RID package for the selected version is already live, `SkipNpmPointerPublish=true` only when the pointer package is already live, and both flags together only after the entire npm publish path has completed.
 
-Stable Aspire npm releases publish through npm's default `latest` dist-tag because MicroBuild's npm publish template does not currently expose a dist-tag parameter. To prevent older servicing releases from moving `@microsoft/aspire-cli@latest` backward, the release pipeline compares the scheduled pointer package version with the current public `@microsoft/aspire-cli@latest` version and fails if the scheduled version is lower. Older servicing releases should set `SkipNpmPublish=true`; `AllowNpmLatestDistTagMove=true` exists only as an emergency release-owner override for an intentional latest-tag move.
+Stable Aspire npm releases publish through npm's default `latest` dist-tag because MicroBuild's npm publish template does not currently expose a dist-tag parameter. To prevent older servicing releases from moving `@microsoft/aspire-cli@latest` backward, the release pipeline compares the scheduled pointer package version with the current public `@microsoft/aspire-cli@latest` version and fails if the scheduled version is lower. Older servicing releases should set both `SkipNpmRidPublish=true` and `SkipNpmPointerPublish=true`.
 
 MicroBuild's npm publish template documentation does not currently expose an npm `dist-tag` parameter. Non-dry-run prerelease npm publishing is blocked until preview packages can be submitted under a non-`latest` tag; release managers can still use `DryRun=true` to inspect the npm publish set without submitting packages.
 
@@ -208,5 +211,4 @@ MicroBuild's npm publish template documentation does not currently expose an npm
 ## Open follow-ups
 
 - Add Sigstore provenance once ESRP/MicroBuild's npm publish path supports it.
-- Add `npm install --no-optional` guidance and a clearer error message in the launcher when no RID package is installed.
 - Extract the large release-job PowerShell validation scripts once `releaseJob` can safely consume repository scripts. They remain inline today because `eng/pipelines/release-publish-nuget.yml` runs the ESRP-backed release job with `checkout: none`; extracting them now would require adding a trusted script artifact or changing release-job checkout behavior.

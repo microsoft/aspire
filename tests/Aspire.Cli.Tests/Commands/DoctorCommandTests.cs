@@ -21,7 +21,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Help_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -37,7 +37,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_IncludesCliVersionStatus()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var doc = await RunDoctorJsonAsync(workspace,
             configureOptions: options =>
             {
@@ -47,8 +47,8 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var cliVersionCheck = GetCheckByName(doc, "cli-version");
-        Assert.Equal("aspire", cliVersionCheck.GetProperty("category").GetString());
+        var cliVersionCheck = GetCheckByName(doc, AspireVersionCheck.CliVersionCheckName);
+        Assert.Equal(EnvironmentCheckCategories.Aspire, cliVersionCheck.GetProperty("category").GetString());
         Assert.Equal("warning", cliVersionCheck.GetProperty("status").GetString());
         Assert.Contains("13.0.0", cliVersionCheck.GetProperty("message").GetString()!);
         Assert.Contains("13.1.0", cliVersionCheck.GetProperty("message").GetString()!);
@@ -56,6 +56,62 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("13.0.0", cliVersionMetadata.GetProperty("currentVersion").GetString());
         Assert.Equal("13.1.0", cliVersionMetadata.GetProperty("latestVersion").GetString());
         Assert.Equal("aspire update", cliVersionMetadata.GetProperty("updateCommand").GetString());
+    }
+
+    [Fact]
+    public async Task DoctorCommand_Json_IncludesOperatingSystemStatus()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var doc = await RunDoctorJsonAsync(workspace,
+            configureOptions: options =>
+            {
+                options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
+            });
+
+        var osCheck = GetCheckByName(doc, OperatingSystemCheck.CheckName);
+        Assert.Equal(EnvironmentCheckCategories.Environment, osCheck.GetProperty("category").GetString());
+        Assert.Equal("pass", osCheck.GetProperty("status").GetString());
+        Assert.StartsWith("Operating system: ", osCheck.GetProperty("message").GetString(), StringComparison.Ordinal);
+        var metadata = osCheck.GetProperty("metadata");
+        Assert.True(metadata.TryGetProperty("osType", out _));
+        Assert.True(metadata.TryGetProperty("displayName", out _));
+        Assert.True(metadata.TryGetProperty("version", out _));
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Validates Linux /etc/os-release values.")]
+    public async Task DoctorCommand_Json_OnLinux_UsesOsReleaseValues()
+    {
+        Assert.SkipUnless(File.Exists("/etc/os-release"), "Linux /etc/os-release is required for this test.");
+
+        var osRelease = OperatingSystemCheck.ParseLinuxOsRelease(
+            await File.ReadAllTextAsync("/etc/os-release", TestContext.Current.CancellationToken));
+        Assert.True(TryGetOsReleaseValue(osRelease, "NAME", out var name), "Expected /etc/os-release to include NAME.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var doc = await RunDoctorJsonAsync(workspace,
+            configureOptions: options =>
+            {
+                options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
+            });
+
+        var osCheck = GetCheckByName(doc, OperatingSystemCheck.CheckName);
+        var metadata = osCheck.GetProperty("metadata");
+        var expectedDisplayName = GetExpectedLinuxDisplayName(name);
+
+        Assert.Equal("Linux", metadata.GetProperty("osType").GetString());
+        Assert.Equal(expectedDisplayName, metadata.GetProperty("displayName").GetString());
+
+        if (TryGetOsReleaseValue(osRelease, "VERSION_ID", out var version))
+        {
+            Assert.Equal(version, metadata.GetProperty("version").GetString());
+            Assert.Equal($"Operating system: {expectedDisplayName} {version}", osCheck.GetProperty("message").GetString());
+        }
+
+        if (TryGetOsReleaseValue(osRelease, "PRETTY_NAME", out var prettyName))
+        {
+            Assert.Equal(prettyName, metadata.GetProperty("description").GetString());
+        }
     }
 
     [Fact]
@@ -67,7 +123,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         // (UpdateNotificationsEnabled => false) so the banner does not fire at all — neither
         // on stdout (which would break JSON parsing) nor on stderr (where it would just be noise
         // duplicating checks[].cli-version).
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var errorWriter = new StringWriter();
         var notifierInvoked = false;
@@ -106,7 +162,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_IncludesAppHostVersionWhenAppHostExists()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
 
@@ -120,8 +176,8 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
-        Assert.Equal("apphost", appHostVersionCheck.GetProperty("category").GetString());
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
+        Assert.Equal(EnvironmentCheckCategories.AppHost, appHostVersionCheck.GetProperty("category").GetString());
         Assert.Equal("pass", appHostVersionCheck.GetProperty("status").GetString());
         Assert.Contains("13.0.0", appHostVersionCheck.GetProperty("message").GetString()!);
         Assert.Contains("AppHost.csproj", appHostVersionCheck.GetProperty("message").GetString()!);
@@ -133,7 +189,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_IncludesTypeScriptAppHostVersionFromAspireConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         await File.WriteAllTextAsync(appHostFile.FullName, "export {};");
         await File.WriteAllTextAsync(
@@ -169,8 +225,8 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         Assert.False(runnerCalled);
 
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
-        Assert.Equal("apphost", appHostVersionCheck.GetProperty("category").GetString());
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
+        Assert.Equal(EnvironmentCheckCategories.AppHost, appHostVersionCheck.GetProperty("category").GetString());
         Assert.Equal("pass", appHostVersionCheck.GetProperty("status").GetString());
         Assert.Contains("13.1.0", appHostVersionCheck.GetProperty("message").GetString()!);
         Assert.Contains("apphost.ts", appHostVersionCheck.GetProperty("message").GetString()!);
@@ -182,7 +238,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_DoesNotDiscoverNestedAppHostWithoutConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateDeepAppHostFile(workspace, depth: LanguageInfo.DetectionRecurseLimit + 1);
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
 
@@ -203,13 +259,13 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         Assert.False(versionLookupCalled);
         Assert.DoesNotContain(doc.RootElement.GetProperty("checks").EnumerateArray(),
-            check => check.GetProperty("name").GetString() == "apphost-version");
+            check => check.GetProperty("name").GetString() == AspireVersionCheck.AppHostVersionCheckName);
     }
 
     [Fact]
     public async Task DoctorCommand_Json_DoesNotShowAppHostVersionForNonAppHostProject()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Normal.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "<Project />");
 
@@ -231,13 +287,13 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         Assert.False(versionLookupCalled);
         Assert.DoesNotContain(doc.RootElement.GetProperty("checks").EnumerateArray(),
-            check => check.GetProperty("name").GetString() == "apphost-version");
+            check => check.GetProperty("name").GetString() == AspireVersionCheck.AppHostVersionCheckName);
     }
 
     [Fact]
     public async Task DoctorCommand_Json_DoesNotDiscoverNestedAppHostWhenAnotherProjectExists()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Normal.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "<Project />");
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("app");
@@ -257,13 +313,13 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
             });
 
         Assert.DoesNotContain(doc.RootElement.GetProperty("checks").EnumerateArray(),
-            check => check.GetProperty("name").GetString() == "apphost-version");
+            check => check.GetProperty("name").GetString() == AspireVersionCheck.AppHostVersionCheckName);
     }
 
     [Fact]
     public async Task DoctorCommand_Json_DoesNotChooseBetweenMultipleDirectAppHostsWithoutConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"), "<Project />");
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.fsproj"), "<Project />");
 
@@ -284,13 +340,13 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         Assert.False(versionLookupCalled);
         Assert.DoesNotContain(doc.RootElement.GetProperty("checks").EnumerateArray(),
-            check => check.GetProperty("name").GetString() == "apphost-version");
+            check => check.GetProperty("name").GetString() == AspireVersionCheck.AppHostVersionCheckName);
     }
 
     [Fact]
     public async Task DoctorCommand_Json_PreservesCliVersionWhenAppHostVersionResolutionFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
         await File.WriteAllTextAsync(appHostFile.FullName, "export {};");
 
@@ -307,8 +363,8 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var cliVersionCheck = GetCheckByName(doc, "cli-version");
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
+        var cliVersionCheck = GetCheckByName(doc, AspireVersionCheck.CliVersionCheckName);
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
 
         Assert.Equal("pass", cliVersionCheck.GetProperty("status").GetString());
         Assert.Equal("warning", appHostVersionCheck.GetProperty("status").GetString());
@@ -321,7 +377,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_PreservesCliVersionWhenAppHostDiscoveryFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         using var doc = await RunDoctorJsonAsync(workspace,
             configureOptions: options =>
@@ -333,8 +389,8 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var cliVersionCheck = GetCheckByName(doc, "cli-version");
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
+        var cliVersionCheck = GetCheckByName(doc, AspireVersionCheck.CliVersionCheckName);
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
 
         Assert.Equal("pass", cliVersionCheck.GetProperty("status").GetString());
         Assert.Equal("warning", appHostVersionCheck.GetProperty("status").GetString());
@@ -344,7 +400,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_UsesConfiguredAppHostBeyondLanguageDetectionLimit()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = CreateDeepAppHostFile(workspace, depth: LanguageInfo.DetectionRecurseLimit + 1);
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
         await File.WriteAllTextAsync(
@@ -367,8 +423,8 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
-        Assert.Equal("apphost", appHostVersionCheck.GetProperty("category").GetString());
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
+        Assert.Equal(EnvironmentCheckCategories.AppHost, appHostVersionCheck.GetProperty("category").GetString());
         Assert.Equal("pass", appHostVersionCheck.GetProperty("status").GetString());
         Assert.Contains("13.2.0", appHostVersionCheck.GetProperty("message").GetString()!);
         Assert.Contains("AppHost.csproj", appHostVersionCheck.GetProperty("message").GetString()!);
@@ -382,7 +438,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_CliVersion_IncludesIdentityChannelFromReader()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         // Override the channel reader registered by CliTestHelper with a fake
         // returning a deterministic value, so the assertion is not coupled to
         // whichever channel the test host's Aspire.Cli assembly happens to bake in.
@@ -400,7 +456,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 services.AddSingleton<IIdentityChannelReader>(_ => new FakeIdentityChannelReader("staging"));
             });
 
-        var cliVersionCheck = GetCheckByName(doc, "cli-version");
+        var cliVersionCheck = GetCheckByName(doc, AspireVersionCheck.CliVersionCheckName);
         var metadata = cliVersionCheck.GetProperty("metadata");
         Assert.Equal("staging", metadata.GetProperty("identityChannel").GetString());
         Assert.Contains("channel: staging", cliVersionCheck.GetProperty("message").GetString()!);
@@ -409,7 +465,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_CliVersion_OmitsIdentityChannelWhenReaderThrows()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var doc = await RunDoctorJsonAsync(workspace,
             configureOptions: options =>
             {
@@ -426,7 +482,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
             });
 
         // The channel lookup failing is informational; the rest of doctor should still complete.
-        var cliVersionCheck = GetCheckByName(doc, "cli-version");
+        var cliVersionCheck = GetCheckByName(doc, AspireVersionCheck.CliVersionCheckName);
         var metadata = cliVersionCheck.GetProperty("metadata");
         Assert.False(metadata.TryGetProperty("identityChannel", out _));
         Assert.DoesNotContain("channel:", cliVersionCheck.GetProperty("message").GetString()!);
@@ -435,7 +491,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_AppHostVersion_IncludesPinnedChannelFromAspireConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
         await File.WriteAllTextAsync(
@@ -456,7 +512,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
         var metadata = appHostVersionCheck.GetProperty("metadata");
         Assert.Equal("daily", metadata.GetProperty("pinnedChannel").GetString());
         Assert.Contains("channel: daily", appHostVersionCheck.GetProperty("message").GetString()!);
@@ -465,7 +521,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_AppHostVersion_IncludesPinnedChannelFromAspireConfigWhenAppHostIsNested()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var nestedAppHostDir = workspace.WorkspaceRoot.CreateSubdirectory("src").CreateSubdirectory("NestedAppHost");
         var appHostFile = new FileInfo(Path.Combine(nestedAppHostDir.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
@@ -490,7 +546,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
         var metadata = appHostVersionCheck.GetProperty("metadata");
         Assert.Equal("daily", metadata.GetProperty("pinnedChannel").GetString());
         Assert.Contains("channel: daily", appHostVersionCheck.GetProperty("message").GetString()!);
@@ -500,7 +556,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_AppHostVersion_OmitsPinnedChannelWhenAspireConfigAbsent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
         // Intentionally no aspire.config.json — verifies the lookup degrades silently.
@@ -515,7 +571,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 };
             });
 
-        var appHostVersionCheck = GetCheckByName(doc, "apphost-version");
+        var appHostVersionCheck = GetCheckByName(doc, AspireVersionCheck.AppHostVersionCheckName);
         var metadata = appHostVersionCheck.GetProperty("metadata");
         Assert.False(metadata.TryGetProperty("pinnedChannel", out _));
         Assert.DoesNotContain("channel:", appHostVersionCheck.GetProperty("message").GetString()!);
@@ -528,7 +584,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         // labels — identityChannel for the running CLI, latestVersionChannel
         // for the recommendation lane (stable vs prerelease) — so the user
         // can see exactly where the recommendation is being pulled from.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var doc = await RunDoctorJsonAsync(workspace,
             configureOptions: options =>
             {
@@ -548,7 +604,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 services.AddSingleton<IIdentityChannelReader>(_ => new FakeIdentityChannelReader("local"));
             });
 
-        var cliVersionCheck = GetCheckByName(doc, "cli-version");
+        var cliVersionCheck = GetCheckByName(doc, AspireVersionCheck.CliVersionCheckName);
 
         // Both channels surface in metadata.
         var metadata = cliVersionCheck.GetProperty("metadata");
@@ -569,7 +625,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_IncludesDiscoveredInstallations()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var doc = await RunDoctorJsonAsync(workspace,
             configureOptions: options =>
             {
@@ -624,7 +680,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         // human-readable table is the default; with --format json the
         // probe gets a machine-readable row. Either way, no environment
         // checks run and only the running CLI's row is rendered.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var output = new StringWriter();
         var console = AnsiConsole.Create(new AnsiConsoleSettings
         {
@@ -689,7 +745,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_HumanReadable_AppendsInstallationsAfterSummary()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var output = new StringWriter();
         var console = AnsiConsole.Create(new AnsiConsoleSettings
         {
@@ -752,7 +808,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_HumanReadable_EscapesUnknownPathStatus()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var output = new StringWriter();
         var console = AnsiConsole.Create(new AnsiConsoleSettings
         {
@@ -801,7 +857,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DoctorCommand_InfoCommandIsNotRegistered()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -813,7 +869,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_Self_ReturnsOnlyRunningInstallation()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var doc = await RunDoctorJsonAsync(workspace,
             commandLine: "doctor --self --format json",
             configureOptions: options =>
@@ -847,7 +903,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoctorCommand_Json_WhenInstallDiscoveryFails_StillReturnsDoctorResults()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var doc = await RunDoctorJsonAsync(workspace,
             configureOptions: options =>
             {
@@ -874,7 +930,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     [InlineData(InstallationInfoStatus.Ok, "(unknown)")]
     public async Task DoctorCommand_HumanReadable_RendersMissingInstallationValuesBasedOnStatus(string status, string expectedPlaceholder)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var output = new StringWriter();
         var console = AnsiConsole.Create(new AnsiConsoleSettings
         {
@@ -984,6 +1040,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure);
         services.RemoveAll<IEnvironmentCheck>();
         services.AddSingleton<IEnvironmentCheck, AspireVersionCheck>();
+        services.AddSingleton<IEnvironmentCheck, OperatingSystemCheck>();
         UseFakeInstallationDiscovery(
             services,
             self: new InstallationInfo
@@ -1018,5 +1075,32 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         }
 
         return new FileInfo(Path.Combine(directory.FullName, "AppHost.csproj"));
+    }
+
+    private static bool TryGetOsReleaseValue(Dictionary<string, string> osRelease, string key, out string value)
+    {
+        if (osRelease.TryGetValue(key, out var rawValue) && !string.IsNullOrWhiteSpace(rawValue))
+        {
+            value = rawValue;
+            return true;
+        }
+
+        value = string.Empty;
+        return false;
+    }
+
+    private static string GetExpectedLinuxDisplayName(string osReleaseName)
+    {
+        var name = osReleaseName.Trim();
+        foreach (var suffix in new[] { " GNU/Linux", " Linux" })
+        {
+            if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                name = name[..^suffix.Length];
+                break;
+            }
+        }
+
+        return name.Equals("Linux", StringComparison.OrdinalIgnoreCase) ? "Linux" : $"Linux {name}";
     }
 }

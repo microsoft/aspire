@@ -39,7 +39,7 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
 
     protected override bool SupportsKeyedRegistrations => true;
 
-    protected override string[] RequiredLogCategories => Array.Empty<string>();
+    protected override RequiredLogCategory[] RequiredLogCategories => [];
 
 #if RABBITMQ_V6
     protected override string ActivitySourceName => "Aspire.RabbitMQ.Client";

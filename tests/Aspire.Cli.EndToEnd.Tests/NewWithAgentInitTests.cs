@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Aspire.TestUtilities;
 using Xunit;
@@ -53,7 +52,10 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
 
         // Run aspire new with the Starter template, going through all prompts manually
         // so we can ACCEPT the agent init prompt instead of declining it.
-        await auto.TypeAsync("aspire new");
+        // Pass --skill-locations and --skills as CLI flags so the test does not depend on
+        // the position or count of entries in the interactive skill-selection menus, which
+        // change whenever the bundle ships a new skill.
+        await auto.TypeAsync("aspire new --skill-locations claudecode --skills playwright-cli");
         await auto.EnterAsync();
 
         // Template selection: accept default Starter App
@@ -107,32 +109,9 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         await auto.WaitAsync(500);
         await auto.TypeAsync("y");
 
-        // Agent init: skill location - select Claude Code
-        await auto.WaitUntilAsync(
-            s => s.ContainsText("skill files be installed"),
-            timeout: TimeSpan.FromSeconds(60),
-            description: "skill location prompt");
-        await auto.TypeAsync(" "); // Toggle off default Standard location
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Toggle on Claude Code location
-        await auto.EnterAsync();
-
-        // Agent init: skill selection - this test validates Playwright acquisition,
-        // so deselect the default Aspire bundle skills and select only Playwright CLI.
-        await auto.WaitUntilAsync(
-            s => s.ContainsText("skills should be installed"),
-            timeout: TimeSpan.FromSeconds(30),
-            description: "skill selection prompt");
-        await auto.TypeAsync(" "); // Toggle off Aspire
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Toggle off aspireify
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Toggle off aspire-deployment
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Toggle on Playwright CLI
-        await auto.EnterAsync();
-
         // Wait for agent init to complete (downloads @playwright/cli from npm).
+        // Skill location and skill selection are provided via --skill-locations/--skills flags
+        // on the aspire new invocation above, so no interactive navigation is needed here.
         // Fail the test immediately if a provenance verification error appears.
         await auto.WaitUntilAsync(s =>
         {

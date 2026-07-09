@@ -1,4 +1,3 @@
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -12,7 +11,6 @@ using Aspire.Cli.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
 using Spectre.Console.Rendering;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -24,7 +22,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_TextInputPrompt_SendsCorrectKeyPresses()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -70,7 +68,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_SecretTextPrompt_SendsCorrectKeyPresses()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -116,7 +114,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_ChoicePrompt_SendsCorrectSelection()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -169,7 +167,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_BooleanPrompt_SendsCorrectAnswer()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -215,7 +213,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_NumberPrompt_SendsCorrectNumericValue()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -258,10 +256,84 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     }
 
     [Fact]
+    public async Task PublishCommand_FilePrompt_RejectsMissingPathAndSendsFileMetadata()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var selectedFile = Path.Combine(workspace.WorkspaceRoot.FullName, "artifact.zip");
+        await File.WriteAllTextAsync(selectedFile, "artifact");
+
+        var missingFile = Path.Combine(workspace.WorkspaceRoot.FullName, "missing.zip");
+        var relativeMissingFile = Path.GetRelativePath(Directory.GetCurrentDirectory(), missingFile);
+        var relativeSelectedFile = Path.GetRelativePath(Directory.GetCurrentDirectory(), selectedFile);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("file-prompt-1", "Artifact", InputTypes.File, "Select artifact:", isRequired: true);
+        consoleService.SetupSequentialResponses(
+            (relativeMissingFile, ResponseType.String),
+            (relativeSelectedFile, ResponseType.String));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Single(consoleService.FilePathPromptCalls);
+        Assert.Empty(consoleService.StringPromptCalls);
+        Assert.Equal("File does not exist.", Assert.Single(consoleService.ValidationFailures));
+
+        var completedPrompt = Assert.Single(promptBackchannel.CompletedPrompts);
+        var answer = Assert.Single(completedPrompt.Answers);
+        Assert.NotNull(answer.Value);
+        Assert.Contains("\"Name\":\"artifact.zip\"", answer.Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_FilePrompt_TreatsOptionalWhitespaceAsEmpty()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("file-prompt-1", "Artifact", InputTypes.File, "Select artifact:", isRequired: false);
+        consoleService.SetupStringPromptResponse("   ");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        var completedPrompt = Assert.Single(promptBackchannel.CompletedPrompts);
+        var answer = Assert.Single(completedPrompt.Answers);
+        Assert.Empty(answer.Value!);
+    }
+
+    [Fact]
     public async Task PublishCommand_MultiplePrompts_HandlesSequentialInteractions()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -336,7 +408,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_SinglePromptWithMultipleInputs_HandlesAllInputs()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -420,7 +492,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_TextInputWithDefaultValue_UsesDefaultCorrectly()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -472,7 +544,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_TextInputWithValidationErrors_UsesValidationErrorsCorrectly()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -527,7 +599,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_MarkdownPromptText_ConvertsToSpectreMarkup()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -598,7 +670,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_DebugMode_HandlesPromptsWithoutProgressUI()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -642,7 +714,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_SingleInputPrompt_ShowsBothStatusTextAndLabel()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -685,7 +757,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_SingleInputPrompt_WhenStatusTextEqualsLabel_ShowsOnlyOnce()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -721,6 +793,210 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
         // Should show: [bold]Environment Name[/]
         Assert.Equal("[bold]Environment Name[/]", promptCall.PromptText);
     }
+
+    [Fact]
+    public async Task PublishCommand_FilePrompt_RejectsOversizedFileAndRePrompts()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        // Create a file that exceeds the max size (maxFileSize = 10 bytes)
+        var oversizedFile = Path.Combine(workspace.WorkspaceRoot.FullName, "large.bin");
+        await File.WriteAllTextAsync(oversizedFile, new string('x', 100));
+
+        var validFile = Path.Combine(workspace.WorkspaceRoot.FullName, "small.bin");
+        await File.WriteAllTextAsync(validFile, "ok");
+
+        var relativeOversized = Path.GetRelativePath(Directory.GetCurrentDirectory(), oversizedFile);
+        var relativeValid = Path.GetRelativePath(Directory.GetCurrentDirectory(), validFile);
+
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("file-prompt-1", "Upload", InputTypes.File, "Select file:", isRequired: true, maxFileSize: 10);
+        consoleService.SetupSequentialResponses(
+            (relativeOversized, ResponseType.String),
+            (relativeValid, ResponseType.String));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Single(consoleService.FilePathPromptCalls);
+        var validationError = Assert.Single(consoleService.ValidationFailures);
+        Assert.Equal("'large.bin' exceeds the maximum size of 10 B.", validationError);
+
+        var completedPrompt = Assert.Single(promptBackchannel.CompletedPrompts);
+        var answer = Assert.Single(completedPrompt.Answers);
+        Assert.Equal("[{\"Id\":\"testfileid0000000000000000000000\",\"Name\":\"small.bin\"}]", answer.Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_FilePrompt_RejectsWrongExtensionAndRePrompts()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var wrongExtFile = Path.Combine(workspace.WorkspaceRoot.FullName, "cert.txt");
+        await File.WriteAllTextAsync(wrongExtFile, "not a pem");
+
+        var correctFile = Path.Combine(workspace.WorkspaceRoot.FullName, "cert.pem");
+        await File.WriteAllTextAsync(correctFile, "pem content");
+
+        var relativeWrong = Path.GetRelativePath(Directory.GetCurrentDirectory(), wrongExtFile);
+        var relativeCorrect = Path.GetRelativePath(Directory.GetCurrentDirectory(), correctFile);
+
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("file-prompt-1", "Certificate", InputTypes.File, "Select certificate:", isRequired: true, fileFilter: ".pem,.crt");
+        consoleService.SetupSequentialResponses(
+            (relativeWrong, ResponseType.String),
+            (relativeCorrect, ResponseType.String));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Single(consoleService.FilePathPromptCalls);
+        var validationError = Assert.Single(consoleService.ValidationFailures);
+        Assert.Equal("'cert.txt' does not match the accepted file types (.pem,.crt).", validationError);
+
+        var completedPrompt = Assert.Single(promptBackchannel.CompletedPrompts);
+        var answer = Assert.Single(completedPrompt.Answers);
+        Assert.Equal("[{\"Id\":\"testfileid0000000000000000000000\",\"Name\":\"cert.pem\"}]", answer.Value);
+    }
+
+    [Fact]
+    public async Task PublishCommand_FilePrompt_SuccessfulUpload()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var validFile = Path.Combine(workspace.WorkspaceRoot.FullName, "deploy.zip");
+        await File.WriteAllTextAsync(validFile, "zip content");
+
+        var relativePath = Path.GetRelativePath(Directory.GetCurrentDirectory(), validFile);
+
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("file-prompt-1", "Package", InputTypes.File, "Select package:", isRequired: true, maxFileSize: 1024, fileFilter: ".zip,.tar.gz");
+        consoleService.SetupStringPromptResponse(relativePath);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(consoleService.ValidationFailures);
+
+        var filePromptCall = Assert.Single(consoleService.FilePathPromptCalls);
+        Assert.Equal("[bold]Select package:[/]\nPackage: ", filePromptCall.PromptText);
+
+        var (uploadedFilePath, uploadedFileName) = Assert.Single(promptBackchannel.UploadedFiles);
+        Assert.Equal(Path.GetFullPath(validFile), uploadedFilePath);
+        Assert.Equal("deploy.zip", uploadedFileName);
+
+        var completedPrompt = Assert.Single(promptBackchannel.CompletedPrompts);
+        var answer = Assert.Single(completedPrompt.Answers);
+        Assert.Equal("[{\"Id\":\"testfileid0000000000000000000000\",\"Name\":\"deploy.zip\"}]", answer.Value);
+    }
+
+    [Fact]
+    public async Task FileInput_CompoundExtension_MatchesFilter()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var validFile = Path.Combine(workspace.WorkspaceRoot.FullName, "archive.tar.gz");
+        await File.WriteAllTextAsync(validFile, "gzip content");
+
+        var relativePath = Path.GetRelativePath(Directory.GetCurrentDirectory(), validFile);
+
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("file-prompt-1", "Archive", InputTypes.File, "Select archive:", isRequired: true, fileFilter: ".tar.gz,.zip");
+        consoleService.SetupStringPromptResponse(relativePath);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Empty(consoleService.ValidationFailures);
+
+        var (uploadedFilePath, uploadedFileName) = Assert.Single(promptBackchannel.UploadedFiles);
+        Assert.Equal(Path.GetFullPath(validFile), uploadedFilePath);
+        Assert.Equal("archive.tar.gz", uploadedFileName);
+    }
+
+    [Fact]
+    public async Task PublishCommand_UnsupportedInputType_FailsWithError()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var promptBackchannel = new TestPromptBackchannel();
+        var consoleService = new TestInteractionService();
+
+        promptBackchannel.AddPrompt("unsupported-prompt-1", "Unknown", "totally-unknown-type", "Answer:", isRequired: true);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = (sp) => CreateTestRunnerWithPromptBackchannel(promptBackchannel);
+        });
+
+        services.AddSingleton<IInteractionService>(consoleService);
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("publish");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(0, exitCode);
+        var error = Assert.Single(consoleService.DisplayedErrors);
+        Assert.Contains("Unsupported input type: totally-unknown-type", error);
+    }
 }
 
 // Test implementation of IAppHostCliBackchannel that simulates prompt interactions
@@ -732,10 +1008,11 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
 
     public List<PromptData> ReceivedPrompts { get; } = [];
     public List<PromptCompletion> CompletedPrompts { get; } = [];
+    public List<(string FilePath, string FileName)> UploadedFiles { get; } = [];
 
-    public void AddPrompt(string promptId, string label, string inputType, string message, bool isRequired, IReadOnlyList<KeyValuePair<string, string>>? options = null, string? defaultValue = null, IReadOnlyList<string>? validationErrors = null)
+    public void AddPrompt(string promptId, string label, string inputType, string message, bool isRequired, IReadOnlyList<KeyValuePair<string, string>>? options = null, string? defaultValue = null, IReadOnlyList<string>? validationErrors = null, long? maxFileSize = null, string? fileFilter = null)
     {
-        _promptsToSend.Add(new PromptData(promptId, [new PromptInputData(promptId, label, inputType, isRequired, options, defaultValue, validationErrors)], message));
+        _promptsToSend.Add(new PromptData(promptId, [new PromptInputData(promptId, label, inputType, isRequired, options, defaultValue, validationErrors, maxFileSize, fileFilter)], message));
     }
 
     public void AddMultiInputPrompt(string promptId, string title, string message, IReadOnlyList<PromptInputData> inputs)
@@ -762,7 +1039,9 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
                 Required = input.IsRequired,
                 Options = input.Options,
                 Value = input.Value,
-                ValidationErrors = input.ValidationErrors
+                ValidationErrors = input.ValidationErrors,
+                MaxFileSize = input.MaxFileSize,
+                FileFilter = input.FileFilter
             }).ToList();
 
             yield return new PublishingActivity
@@ -836,15 +1115,20 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
 
     public Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken) =>
         Task.FromResult(new GetPipelineStepsResponse { Steps = [] });
+
+    public Task<UploadFileResponse> UploadFileAsync(string filePath, string fileName, CancellationToken cancellationToken)
+    {
+        UploadedFiles.Add((filePath, fileName));
+        return Task.FromResult(new UploadFileResponse { FileId = "testfileid0000000000000000000000" });
+    }
 }
 
 // Data structures for tracking prompts
-internal sealed record PromptInputData(string Name, string Label, string InputType, bool IsRequired, IReadOnlyList<KeyValuePair<string, string>>? Options = null, string? Value = null, IReadOnlyList<string>? ValidationErrors = null);
+internal sealed record PromptInputData(string Name, string Label, string InputType, bool IsRequired, IReadOnlyList<KeyValuePair<string, string>>? Options = null, string? Value = null, IReadOnlyList<string>? ValidationErrors = null, long? MaxFileSize = null, string? FileFilter = null);
 internal sealed record PromptData(string PromptId, IReadOnlyList<PromptInputData> Inputs, string Message, string? Title = null);
 internal sealed record PromptCompletion(string PromptId, PublishingPromptInputAnswer[] Answers, bool UpdateResponse);
 
 // Enhanced TestConsoleInteractionService that tracks interaction types
-[SuppressMessage("Usage", "ASPIREINTERACTION001:Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.")]
 internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInteractionService
 {
     private readonly Queue<(string response, ResponseType type)> _responses = new();
@@ -873,7 +1157,6 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
     {
         StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret));
-
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
             throw new OperationCanceledException();
@@ -983,4 +1266,5 @@ internal static class InputTypes
     public const string Choice = "choice";
     public const string Boolean = "boolean";
     public const string Number = "number";
+    public const string File = "File";
 }

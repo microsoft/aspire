@@ -44,3 +44,75 @@ jobs:
       attributeName: "OuterloopTest"
       extraTestArgs: "--filter-trait outerloop=true"
       enablePlaywrightInstall: true
+
+  # On a scheduled failure, file/append a single deduplicated issue: a
+  # 'failing-test' issue listing the failed outerloop tests, or an
+  # 'automation-broken' infra issue when the run broke before producing test
+  # results. PR-triggered runs (paths filter) are excluded so workflow edits
+  # don't file issues. See docs/ci/specialized-test-failure-issues.md.
+  report_failures:
+    name: Report failures
+    needs: [outerloop_tests]
+    if: ${{ failure() && github.event_name == 'schedule' && github.repository_owner == 'microsoft' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # checkout to require the local .js modules
+      actions: read
+      issues: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          persist-credentials: false
+
+      # The runner uploads per-job test logs (incl. .trx) as 'logs-*' artifacts.
+      - name: Download test result artifacts
+        id: download
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        continue-on-error: true
+        with:
+          pattern: 'logs-*'
+          path: ${{ github.workspace }}/all-logs
+
+      - name: Extract failed test names
+        id: failed
+        continue-on-error: true
+        env:
+          DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          OUT="$RUNNER_TEMP/out/failed-tests.json"
+          # extractionFailed distinguishes "we could not read the results" from
+          # "the run produced zero failed tests". The reporter classifies a
+          # genuinely-red run with unknown results as a test failure (not infra),
+          # so a transient download/tool flake doesn't silently misfile the issue
+          # or drop the failing-test list.
+          if [ -d "$GITHUB_WORKSPACE/all-logs" ]; then
+            if ./dotnet.sh run --project tools/GenerateTestSummary/GenerateTestSummary.csproj -- \
+                 "$GITHUB_WORKSPACE/all-logs" --failed-tests-json "$OUT"; then
+              :  # tool wrote $OUT (with or without failures)
+            else
+              echo '{"failedTests":[],"count":0,"extractionFailed":true}' > "$OUT"
+            fi
+          elif [ "$DOWNLOAD_OUTCOME" = "failure" ]; then
+            # No artifacts directory AND the download step errored — a download
+            # flake, not a clean "no results". A real build break still uploads
+            # logs-runsheet, so a present-but-empty result set stays infra below.
+            echo '{"failedTests":[],"count":0,"extractionFailed":true}' > "$OUT"
+          else
+            echo '{"failedTests":[],"count":0}' > "$OUT"
+          fi
+          echo "path=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: File or update failure issue
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          WORKFLOW_FILE: tests-outerloop.yml
+          DISPLAY_NAME: Outerloop Tests
+          IGNORE_TEST_FAILURES: 'false'
+          FAILED_TESTS_PATH: ${{ steps.failed.outputs.path }}
+        with:
+          script: |
+            const reporter = require('./.github/workflows/report-specialized-test-failures.js');
+            await require('./.github/workflows/specialized-test-failure-runner.js')({ github, context, core, reporter });
+

@@ -16,7 +16,6 @@ using ExecuteResourceCommandRequest = Aspire.Hosting.Backchannel.ExecuteResource
 
 namespace Aspire.Hosting.Tests;
 
-#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
 #pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
 #pragma warning disable CS0618 // Tests intentionally cover the deprecated TypeScript withProcessCommandFactory export.
 
@@ -1638,4 +1637,3 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
 }
 
 #pragma warning restore ASPIREPROCESSCOMMAND001
-#pragma warning restore ASPIREINTERACTION001

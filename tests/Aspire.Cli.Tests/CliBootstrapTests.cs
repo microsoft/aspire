@@ -9,6 +9,12 @@ using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
+#if DEBUG
+using System.Globalization;
+using Aspire.Cli.Commands;
+using Aspire.Cli.Resources;
+#endif
+
 namespace Aspire.Cli.Tests;
 
 /// <summary>
@@ -29,7 +35,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var logBufferContext = new ConsoleLogBufferContext();
         var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
         var identityChannelReader = new IdentityChannelReader(typeof(Program).Assembly);
-        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(processTerminationTimeout: Timeout.InfiniteTimeSpan), identityChannelReader);
+        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(finalDrainBudget: Timeout.InfiniteTimeSpan), identityChannelReader);
         return await Program.BuildApplicationAsync([], startupContext);
     }
 
@@ -112,7 +118,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ParseLoggingOptions_PrInstall_UsesInstallPrefixForDefaultLogsDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-pr-test");
         var binaryPath = WriteBinaryWithSidecar(Path.Combine(installPrefix, "dogfood", "pr-17159", "bin"), InstallSourceExtensions.PrWire);
 
@@ -125,17 +131,25 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     [Fact]
     public void BuildCliExecutionContext_PrInstall_UsesInstallPrefixForStateDirectoriesAndKeepsIdentityChannel()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-pr-test");
-        var binaryPath = WriteBinaryWithSidecar(Path.Combine(installPrefix, "dogfood", "pr-17159", "bin"), InstallSourceExtensions.PrWire);
+        var binaryDir = Path.Combine(installPrefix, "dogfood", "pr-17159", "bin");
+        var binaryPath = WriteBinaryWithSidecar(binaryDir, InstallSourceExtensions.PrWire, channel: "pr-17159");
         var logsDirectory = Path.Combine(installPrefix, "logs");
         var logFilePath = Path.Combine(logsDirectory, "aspire.log");
+
+        var environment = new TestEnvironment();
+        var resolver = new IdentityResolver(
+            CliTestHelper.CreateSidecarReader(outputHelper),
+            typeof(Program).Assembly,
+            binaryDir,
+            environment);
 
         var context = Program.BuildCliExecutionContext(
             debugMode: true,
             logsDirectory: logsDirectory,
             logFilePath: logFilePath,
-            channel: "pr-17159",
+            identityResolver: resolver,
             processPath: binaryPath);
 
         Assert.Equal(Path.Combine(installPrefix, "hives"), context.HivesDirectory.FullName);
@@ -149,12 +163,105 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         Assert.Equal("pr-17159", context.IdentityChannel);
     }
 
-    private static string WriteBinaryWithSidecar(string binaryDir, string source)
+    [Fact]
+    public void BuildCliExecutionContext_NuGetServiceIndexOverrideFromEnv_MarksIdentityOverridden()
+    {
+        // Setting only ASPIRE_CLI_NUGET_SERVICE_INDEX must still flag the run as an emulation so the
+        // startup override notice fires and tooling does not mistake a diagnostic run for a real build.
+        // Regression guard: this source was previously omitted from the identityOverridden computation.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var envVars = new Dictionary<string, string?> { [IdentityResolver.NuGetServiceIndexEnvVar] = "http://localhost:5000/v3/index.json" };
+        var environment = new TestEnvironment(envVars);
+        var resolver = new IdentityResolver(
+            CliTestHelper.CreateSidecarReader(outputHelper),
+            typeof(Program).Assembly,
+            binaryDir: null,
+            environment);
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: false,
+            logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
+            logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "aspire.log"),
+            identityResolver: resolver);
+
+        Assert.True(context.IdentityOverridden);
+        Assert.Equal("http://localhost:5000/v3/index.json", context.NuGetServiceIndexOverride);
+    }
+
+    [Fact]
+    public void BuildCliExecutionContext_NoOverrides_DoesNotMarkIdentityOverridden()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var environment = new TestEnvironment();
+        var resolver = new IdentityResolver(
+            CliTestHelper.CreateSidecarReader(outputHelper),
+            typeof(Program).Assembly,
+            binaryDir: null,
+            environment);
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: false,
+            logsDirectory: Path.Combine(workspace.WorkspaceRoot.FullName, "logs"),
+            logFilePath: Path.Combine(workspace.WorkspaceRoot.FullName, "logs", "aspire.log"),
+            identityResolver: resolver);
+
+        Assert.False(context.IdentityOverridden);
+        Assert.Null(context.NuGetServiceIndexOverride);
+    }
+
+#if DEBUG
+    [Theory]
+    [InlineData("ls --cli-wait-for-debugger")]
+    [InlineData("run --cli-wait-for-debugger")]
+    [InlineData("doctor --cli-wait-for-debugger")]
+    public void WaitForDebuggerIfRequested_WithSubcommand_CallsShowStatus(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var parseResult = command.Parse(commandLine);
+
+        var waitActionCalled = false;
+        Program.WaitForDebuggerIfRequested(parseResult, provider, waitAction: () => waitActionCalled = true);
+
+        Assert.True(waitActionCalled);
+        var expectedStatus = string.Format(CultureInfo.CurrentCulture, RootCommandStrings.WaitingForDebugger, Environment.ProcessId);
+        Assert.Collection(testInteractionService.ShownStatuses, status => Assert.Equal(expectedStatus, status));
+    }
+
+    [Fact]
+    public void WaitForDebuggerIfRequested_WithoutFlag_DoesNotCallShowStatus()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var parseResult = command.Parse("ls");
+
+        var waitActionCalled = false;
+        Program.WaitForDebuggerIfRequested(parseResult, provider, waitAction: () => waitActionCalled = true);
+
+        Assert.False(waitActionCalled);
+        Assert.Empty(testInteractionService.ShownStatuses);
+    }
+#endif
+
+    private static string WriteBinaryWithSidecar(string binaryDir, string source, string? channel = null)
     {
         Directory.CreateDirectory(binaryDir);
         var binaryPath = Path.Combine(binaryDir, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
         File.WriteAllText(binaryPath, string.Empty);
-        File.WriteAllText(Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName), $$"""{"source":"{{source}}"}""");
+        var channelField = channel is not null ? $",\"channel\":\"{channel}\"" : "";
+        File.WriteAllText(Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName), $$"""{"source":"{{source}}"{{channelField}}}""");
 
         return binaryPath;
     }
