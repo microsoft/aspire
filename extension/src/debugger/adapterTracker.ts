@@ -71,13 +71,15 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
 
                     // Listen for process event with isRestart (if supported by adapter)
                     if (message.type === 'event' && message.event === 'process') {
+                        // A new debuggee process invalidates any exit code captured from a prior run.
+                        // Reset before the PID guard: `systemProcessId` is optional in DAP, so a
+                        // restart reported without it must still clear the stale exit code.
+                        debuggeeExitCode = undefined;
+
                         if (typeof message.body?.systemProcessId !== 'number') {
                             extensionLogOutputChannel.warn(`Debug session ${session.id} does not have a valid system process ID.`);
                             return;
                         }
-
-                        // A new debuggee process invalidates any exit code captured from a prior run.
-                        debuggeeExitCode = undefined;
 
                         if (!dcpServer) {
                             extensionLogOutputChannel.warn(dcpServerNotInitialized);

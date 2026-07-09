@@ -266,6 +266,56 @@ suite('Debug Adapter Tracker Tests', () => {
         disposable.dispose();
     });
 
+    test('process event resets a captured exit code so a clean restart reports 0', async () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        // A prior run exited non-zero, then the debuggee restarts (process event with a
+        // valid PID) and exits cleanly. The stale 1 must not leak into the new run.
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'exited',
+            body: { exitCode: 1 }
+        });
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'process',
+            body: { systemProcessId: 4242 }
+        });
+        tracker.onExit(0);
+
+        const terminated = findSessionTerminated(dcpServer);
+        assert.strictEqual(terminated.exit_code, 0, 'The process event should clear the captured exit code from the prior run');
+
+        disposable.dispose();
+    });
+
+    test('process event without a system process ID still resets a captured exit code', async () => {
+        const disposable = createDebugAdapterTracker(dcpServer as any, 'coreclr');
+        const factory = registerFactoryStub.lastCall.args[1];
+        const tracker = factory.createDebugAdapterTracker(debugSession);
+
+        // `systemProcessId` is optional in DAP. Even when the restart is reported without
+        // it, the captured exit code must still be cleared for the new run.
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'exited',
+            body: { exitCode: 1 }
+        });
+        tracker.onDidSendMessage({
+            type: 'event',
+            event: 'process',
+            body: {}
+        });
+        tracker.onExit(0);
+
+        const terminated = findSessionTerminated(dcpServer);
+        assert.strictEqual(terminated.exit_code, 0, 'A PID-less process event must still clear the captured exit code');
+
+        disposable.dispose();
+    });
+
     test('exited event exit code 143 on Linux is converted to 0', async () => {
         const originalPlatform = process.platform;
         Object.defineProperty(process, 'platform', {
@@ -487,3 +537,14 @@ suite('Debug Adapter Tracker Tests', () => {
         disposable.dispose();
     });
 });
+
+// Returns the single sessionTerminated notification sent during a test. A restart
+// sequence also emits a processRestarted notification, so we can't rely on firstCall.
+function findSessionTerminated(dcpServer: sinon.SinonStubbedInstance<AspireDcpServer>): SessionTerminatedNotification {
+    const terminated = dcpServer.sendNotification.getCalls()
+        .map(call => call.args[0])
+        .find((notification): notification is SessionTerminatedNotification => notification.notification_type === 'sessionTerminated');
+
+    assert.ok(terminated, 'Expected a sessionTerminated notification to be sent');
+    return terminated;
+}
