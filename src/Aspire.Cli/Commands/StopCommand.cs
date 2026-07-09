@@ -146,7 +146,7 @@ internal sealed class StopCommand : BaseCommand
             return CliExitCodes.FailedToFindProject;
         }
 
-        var aspireHostingVersion = await project.GetAspireHostingVersionAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+        var aspireHostingVersion = await TryGetAspireHostingVersionAsync(project, appHostFile, cancellationToken).ConfigureAwait(false);
         if (!SupportsResourceCleanup(aspireHostingVersion))
         {
             InteractionService.DisplayMessage(
@@ -161,6 +161,23 @@ internal sealed class StopCommand : BaseCommand
         }
 
         return await _cleanupLauncher.CleanupAsync(project, appHostFile, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<string?> TryGetAspireHostingVersionAsync(IAppHostProject project, FileInfo appHostFile, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await project.GetAspireHostingVersionAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to inspect Aspire.Hosting version for resource cleanup.");
+            return null;
+        }
     }
 
     private static bool SupportsResourceCleanup(string? aspireHostingVersion)

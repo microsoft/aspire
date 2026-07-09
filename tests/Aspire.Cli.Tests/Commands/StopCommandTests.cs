@@ -654,6 +654,51 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopCommand_ForceWithVersionInspectionFailureStopsNormallyAndSkipsCleanup()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var cleanupRunCalled = false;
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            GetAspireHostingVersionAsyncCallback = (_, _) => throw new InvalidOperationException("Version unavailable."),
+            RunAsyncCallback = (_, _) =>
+            {
+                cleanupRunCalled = true;
+                return Task.FromResult(CliExitCodes.Success);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(cleanupRunCalled);
+        Assert.Contains(interactionService.DisplayedMessages, message =>
+            message.Emoji.Equals(KnownEmojis.Warning) &&
+            message.Message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ForceCleanupUnsupportedWarning, StopCommandStrings.UnknownAspireHostingVersion, "13.5.0"));
+    }
+
+    [Fact]
     public async Task StopCommand_ForceWithInvalidCleanupTimeoutStillStopsNormally()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
