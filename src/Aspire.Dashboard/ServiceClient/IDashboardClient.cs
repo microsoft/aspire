@@ -49,7 +49,7 @@ public interface IDashboardClient : IAsyncDisposable
 
     /// <summary>
     /// Gets the minimum dashboard version required by the connected AppHost,
-    /// or <see langword="null"/> if the version is compatible or not yet known.
+    /// or <see langword="null"/> if not yet known.
     /// </summary>
     string? MinRequiredVersion { get; }
 
