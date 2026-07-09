@@ -279,12 +279,14 @@ suite('Debug Adapter Tracker Tests', () => {
             const tracker = factory.createDebugAdapterTracker(debugSession);
 
             // SIGTERM-terminated debuggee reports 143 via the exited event.
+            // The adapter code is a distinct sentinel so the asserted 0 can only
+            // come from converting the exited-event 143, not the adapter code.
             tracker.onDidSendMessage({
                 type: 'event',
                 event: 'exited',
                 body: { exitCode: 143 }
             });
-            tracker.onExit(0);
+            tracker.onExit(7);
 
             assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
             const notification = dcpServer.sendNotification.firstCall.args[0] as SessionTerminatedNotification;
@@ -311,12 +313,15 @@ suite('Debug Adapter Tracker Tests', () => {
             const factory = registerFactoryStub.lastCall.args[1];
             const tracker = factory.createDebugAdapterTracker(debugSession);
 
+            // Windows never converts 143, so the exited-event code must survive as-is.
+            // The adapter code is a distinct sentinel so the asserted 143 can only
+            // come from the exited event, not the adapter code.
             tracker.onDidSendMessage({
                 type: 'event',
                 event: 'exited',
                 body: { exitCode: 143 }
             });
-            tracker.onExit(0);
+            tracker.onExit(7);
 
             assert.strictEqual(dcpServer.sendNotification.calledOnce, true);
             const notification = dcpServer.sendNotification.firstCall.args[0] as SessionTerminatedNotification;
