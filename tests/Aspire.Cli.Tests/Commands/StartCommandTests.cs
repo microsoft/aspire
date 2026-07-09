@@ -451,7 +451,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class TestDetachedProcessLauncher(Action onStart) : IDetachedProcessLauncher
     {
-        public Task<Process> StartAsync(
+        public Task<DetachedProcess> StartAsync(
             string fileName,
             IReadOnlyList<string> arguments,
             string workingDirectory,
@@ -466,7 +466,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             _ = cancellationToken;
 
             onStart();
-            return Task.FromResult(new Process { StartInfo = new ProcessStartInfo(fileName) });
+            return Task.FromResult(new DetachedProcess(new Process { StartInfo = new ProcessStartInfo(fileName) }));
         }
     }
 

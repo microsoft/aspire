@@ -1,11 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Aspire.Cli.Processes;
-using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Cli.Tests.Processes;
@@ -50,12 +49,22 @@ public class DetachedProcessLauncherTests(ITestOutputHelper outputHelper)
 if [ "$1" != "fork-process" ]; then
   exit 42
 fi
-if [ "$2" != "--" ]; then
+if [ "$2" != "--monitor" ]; then
   exit 43
 fi
-shift 2
+if [ "$4" != "--monitor-identity-time" ]; then
+  exit 44
+fi
+if [ "$6" != "--" ]; then
+  exit 45
+fi
+monitor_pid="$3"
+monitor_started="$5"
+shift 6
 {
   printf 'cwd=%s\n' "$PWD"
+  printf 'monitorPid=%s\n' "$monitor_pid"
+  printf 'monitorStarted=%s\n' "$monitor_started"
   printf 'cmd=%s\n' "$1"
   printf 'arg1=%s\n' "$2"
   printf 'arg2=%s\n' "$3"
@@ -63,11 +72,13 @@ shift 2
   printf 'added=%s\n' "$ASPIRE_TEST_ADDED"
 } > "$ASPIRE_TEST_CAPTURE"
 sleep 60 >/dev/null 2>&1 </dev/null &
-echo $!
+child_pid=$!
+echo $child_pid
+wait $child_pid
 """);
         File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 
-        using var child = await DetachedProcessLauncher.StartAsync(
+        using var detachedProcess = await DetachedProcessLauncher.StartAsync(
             "/bin/sh",
             ["-c", "exit 0"],
             workspace.WorkspaceRoot.FullName,
@@ -82,9 +93,11 @@ echo $!
 
         try
         {
-            Assert.True(child.Id > 0);
+            Assert.True(detachedProcess.Id > 0);
             Assert.Equal([
                 $"cwd={PathNormalizer.ResolveSymlinks(workspace.WorkspaceRoot.FullName)}",
+                $"monitorPid={Environment.ProcessId.ToString(CultureInfo.InvariantCulture)}",
+                $"monitorStarted={ProcessTreeGracefulShutdownService.FormatDcpProcessStartTime(DetachedProcessLauncher.GetCurrentProcessDcpMonitorStartTime())}",
                 "cmd=/bin/sh",
                 "arg1=-c",
                 "arg2=exit 0",
@@ -94,10 +107,10 @@ echo $!
         }
         finally
         {
-            if (!child.HasExited)
+            if (!detachedProcess.HasExited)
             {
-                child.Kill(entireProcessTree: true);
-                await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                detachedProcess.Kill(entireProcessTree: true);
+                await detachedProcess.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
             }
         }
     }
@@ -117,18 +130,23 @@ echo $!
 if [ "$1" != "fork-process" ]; then
   exit 42
 fi
-if [ "$2" != "--" ]; then
+if [ "$2" != "--monitor" ]; then
   exit 43
+fi
+if [ "$6" != "--" ]; then
+  exit 44
 fi
 printf 'started\n' > "$ASPIRE_TEST_STARTED"
 sleep 1
 sleep 60 >/dev/null 2>&1 </dev/null &
-echo $!
+child_pid=$!
+echo $child_pid
+wait $child_pid
 """);
         File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 
         using var cts = new CancellationTokenSource();
-        Process? child = null;
+        DetachedProcess? detachedProcess = null;
         var startTask = DetachedProcessLauncher.StartAsync(
             "/bin/sh",
             ["-c", "exit 0"],
@@ -145,17 +163,17 @@ echo $!
             await WaitForFileAsync(startedPath).WaitAsync(TimeSpan.FromSeconds(5));
             await cts.CancelAsync();
 
-            child = await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+            detachedProcess = await startTask.WaitAsync(TimeSpan.FromSeconds(5));
 
-            Assert.True(child.Id > 0);
+            Assert.True(detachedProcess.Id > 0);
         }
         finally
         {
-            if (child is null)
+            if (detachedProcess is null)
             {
                 try
                 {
-                    child = await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+                    detachedProcess = await startTask.WaitAsync(TimeSpan.FromSeconds(5));
                 }
                 catch
                 {
@@ -164,13 +182,13 @@ echo $!
                 }
             }
 
-            if (child is { HasExited: false })
+            if (detachedProcess is { HasExited: false })
             {
-                child.Kill(entireProcessTree: true);
-                await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                detachedProcess.Kill(entireProcessTree: true);
+                await detachedProcess.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
             }
 
-            child?.Dispose();
+            detachedProcess?.Dispose();
         }
     }
 

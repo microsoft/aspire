@@ -42,10 +42,19 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Assert.Contains("123", message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void GetDetachedFailureMessage_ReturnsUnknownExitCodeMessage_WhenExitCodeIsUnavailable()
+    {
+        var message = AppHostLauncher.GetDetachedFailureMessage(null);
+
+        Assert.Equal(RunCommandStrings.AppHostExitedWithoutExitCode, message);
+    }
+
     [Theory]
     [InlineData(CliExitCodes.Success, true)]
     [InlineData(CliExitCodes.FailedToDotnetRunAppHost, false)]
-    public void IsSuccessfulDetachedEarlyExit_OnlyTreatsZeroAsSuccess(int exitCode, bool expected)
+    [InlineData(null, false)]
+    public void IsSuccessfulDetachedEarlyExit_OnlyTreatsZeroAsSuccess(int? exitCode, bool expected)
     {
         var result = AppHostLauncher.IsSuccessfulDetachedEarlyExit(exitCode);
 
@@ -455,6 +464,129 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Assert.Contains(RunCommandStrings.AppHostFailedToBuild, harness.InteractionService.DisplayedErrors);
         Assert.Contains(harness.InteractionService.DisplayedLines, line => line.Line.Contains("error CS1002", StringComparison.Ordinal));
         Assert.Contains(harness.InteractionService.DisplayedLines, line => line.Line == "Build FAILED.");
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitor()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only test.");
+
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        Process? startedProcess = null;
+        Process? detachedHandle = null;
+        Process? forkProcess = null;
+        harness.ProcessLauncher.StartHandler = (_, _, _, _, _, _) =>
+        {
+            startedProcess = Process.Start(new ProcessStartInfo
+            {
+                FileName = "/bin/sh",
+                UseShellExecute = false,
+                ArgumentList = { "-c", "sleep 0.05; exit 11" }
+            }) ?? throw new InvalidOperationException("Failed to start test child process.");
+
+            forkProcess = Process.Start(new ProcessStartInfo
+            {
+                FileName = "/bin/sh",
+                UseShellExecute = false,
+                ArgumentList = { "-c", "sleep 0.2; exit 11" }
+            }) ?? throw new InvalidOperationException("Failed to start test DCP monitor process.");
+
+            detachedHandle = Process.GetProcessById(startedProcess.Id);
+            return Task.FromResult(new DetachedProcess(detachedHandle, forkProcess));
+        };
+
+        try
+        {
+            var result = await harness.Launcher.LaunchDetachedAsync(
+                harness.AppHostFile,
+                format: null,
+                isolated: false,
+                isExtensionHost: false,
+                waitForDebugger: false,
+                timeoutSeconds: 5,
+                globalArgs: [],
+                additionalArgs: [],
+                stopAfterLaunchDelay: null,
+                CancellationToken.None);
+
+            Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
+            Assert.Contains(RunCommandStrings.FailedToStartAppHost, harness.InteractionService.DisplayedErrors);
+            Assert.Contains(harness.InteractionService.DisplayedErrors, error => error.Contains("11", StringComparison.Ordinal));
+            Assert.DoesNotContain(RunCommandStrings.AppHostExitedWithoutExitCode, harness.InteractionService.DisplayedErrors);
+        }
+        finally
+        {
+            if (startedProcess is { HasExited: false })
+            {
+                startedProcess.Kill(entireProcessTree: true);
+                await startedProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            }
+
+            if (forkProcess is { HasExited: false })
+            {
+                forkProcess.Kill(entireProcessTree: true);
+                await forkProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            }
+
+            detachedHandle?.Dispose();
+            forkProcess?.Dispose();
+            startedProcess?.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_ReportsUnknownExitCodeWhenDetachedProcessHandleCannotReadExitCode()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only test.");
+
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        Process? startedProcess = null;
+        DetachedProcess? detachedHandle = null;
+        harness.ProcessLauncher.StartHandler = (_, _, _, _, _, _) =>
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "/bin/sh",
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add("-c");
+            startInfo.ArgumentList.Add("sleep 0.2; exit 11");
+
+            startedProcess = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start test process.");
+            detachedHandle = new DetachedProcess(Process.GetProcessById(startedProcess.Id));
+            return Task.FromResult(detachedHandle);
+        };
+
+        try
+        {
+            var result = await harness.Launcher.LaunchDetachedAsync(
+                harness.AppHostFile,
+                format: null,
+                isolated: false,
+                isExtensionHost: false,
+                waitForDebugger: false,
+                timeoutSeconds: 5,
+                globalArgs: [],
+                additionalArgs: [],
+                stopAfterLaunchDelay: null,
+                CancellationToken.None);
+
+            Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
+            Assert.Contains(RunCommandStrings.FailedToStartAppHost, harness.InteractionService.DisplayedErrors);
+            Assert.Contains(RunCommandStrings.AppHostExitedWithoutExitCode, harness.InteractionService.DisplayedErrors);
+            Assert.DoesNotContain(harness.InteractionService.DisplayedErrors, error => error.Contains("11", StringComparison.Ordinal));
+        }
+        finally
+        {
+            if (startedProcess is { HasExited: false })
+            {
+                startedProcess.Kill(entireProcessTree: true);
+                await startedProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            }
+
+            detachedHandle?.Dispose();
+            startedProcess?.Dispose();
+        }
     }
 
     [Fact]
@@ -885,7 +1017,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public Process? StartedProcess { get; private set; }
 
-        public Func<string, IReadOnlyList<string>, string, Func<string, bool>?, IReadOnlyDictionary<string, string>?, CancellationToken, Task<Process>>? StartHandler { get; set; }
+        public Func<string, IReadOnlyList<string>, string, Func<string, bool>?, IReadOnlyDictionary<string, string>?, CancellationToken, Task<DetachedProcess>>? StartHandler { get; set; }
 
         public void StopStartedProcess()
         {
@@ -896,7 +1028,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             }
         }
 
-        public Task<Process> StartAsync(
+        public Task<DetachedProcess> StartAsync(
             string fileName,
             IReadOnlyList<string> arguments,
             string workingDirectory,
@@ -922,7 +1054,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
             StartedProcess = Process.Start(CreateProcessStartInfo(workingDirectory)) ?? throw new InvalidOperationException("Failed to start test child process.");
             Started.SetResult();
-            return Task.FromResult(StartedProcess);
+            return Task.FromResult(new DetachedProcess(StartedProcess));
         }
 
         public void Dispose()

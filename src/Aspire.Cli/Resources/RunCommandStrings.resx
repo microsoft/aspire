@@ -226,6 +226,9 @@
   <data name="AppHostExitedWithCode" xml:space="preserve">
     <value>AppHost process exited with code {0}.</value>
   </data>
+  <data name="AppHostExitedWithoutExitCode" xml:space="preserve">
+    <value>AppHost process exited, but the exit code is unavailable.</value>
+  </data>
   <data name="AppHostFailedToBuild" xml:space="preserve">
     <value>AppHost failed to build.</value>
   </data>

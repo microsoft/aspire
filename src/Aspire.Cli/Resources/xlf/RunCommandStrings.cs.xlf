@@ -42,6 +42,11 @@
         <target state="needs-review-translation">Proces AppHost byl ukončen s kódem {0}.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostExitedWithoutExitCode">
+        <source>AppHost process exited, but the exit code is unavailable.</source>
+        <target state="new">AppHost process exited, but the exit code is unavailable.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostFailedToBuild">
         <source>AppHost failed to build.</source>
         <target state="new">AppHost failed to build.</target>

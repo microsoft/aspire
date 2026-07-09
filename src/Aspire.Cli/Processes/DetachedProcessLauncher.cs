@@ -11,7 +11,7 @@ namespace Aspire.Cli.Processes;
 
 internal interface IDetachedProcessLauncher
 {
-    Task<Process> StartAsync(
+    Task<DetachedProcess> StartAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
@@ -20,13 +20,67 @@ internal interface IDetachedProcessLauncher
         CancellationToken cancellationToken = default);
 }
 
+internal sealed class DetachedProcess(Process process, Process? exitMonitorProcess = null) : IDisposable
+{
+    private readonly Process _process = process;
+    private readonly Process? _exitMonitorProcess = exitMonitorProcess;
+
+    public int Id => _process.Id;
+
+    public bool HasExited => _exitMonitorProcess?.HasExited ?? _process.HasExited;
+
+    public DateTime StartTime => _process.StartTime;
+
+    public Task WaitForExitAsync(CancellationToken cancellationToken)
+    {
+        return _exitMonitorProcess is not null
+            ? _exitMonitorProcess.WaitForExitAsync(cancellationToken)
+            : _process.WaitForExitAsync(cancellationToken);
+    }
+
+    public int? ExitCode
+    {
+        get
+        {
+            if (_exitMonitorProcess is { HasExited: true } exitMonitorProcess)
+            {
+                return exitMonitorProcess.ExitCode;
+            }
+
+            try
+            {
+                return _process.ExitCode;
+            }
+            catch (InvalidOperationException)
+            {
+                // Process.GetProcessById returns a handle that can observe HasExited, but .NET only
+                // exposes ExitCode for Process instances started by this object. DCP fork-process
+                // gives us a PID for an already-detached child; when the DCP monitor process is not
+                // available, the real exit code cannot be recovered from this handle.
+                return null;
+            }
+        }
+    }
+
+    public void Kill(bool entireProcessTree)
+    {
+        _process.Kill(entireProcessTree);
+    }
+
+    public void Dispose()
+    {
+        _process.Dispose();
+        _exitMonitorProcess?.Dispose();
+    }
+}
+
 internal sealed class DefaultDetachedProcessLauncher(
     ILayoutDiscovery layoutDiscovery,
     IBundleService bundleService,
     CliExecutionContext executionContext,
     ILogger<DefaultDetachedProcessLauncher> logger) : IDetachedProcessLauncher
 {
-    public async Task<Process> StartAsync(
+    public async Task<DetachedProcess> StartAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
@@ -123,8 +177,8 @@ internal static partial class DetachedProcessLauncher
     /// <param name="additionalEnvironmentVariables">Optional dictionary of environment variables to add to the child process without mutating the parent.</param>
     /// <param name="dcpPath">The DCP executable path used for Unix detached launches.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A <see cref="Process"/> object representing the launched child.</returns>
-    public static Task<Process> StartAsync(
+    /// <returns>A <see cref="DetachedProcess"/> object representing the launched child.</returns>
+    public static Task<DetachedProcess> StartAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
@@ -135,7 +189,7 @@ internal static partial class DetachedProcessLauncher
     {
         if (OperatingSystem.IsWindows())
         {
-            return Task.FromResult(StartWindows(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables));
+            return Task.FromResult(new DetachedProcess(StartWindows(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables)));
         }
 
         if (dcpPath is null)

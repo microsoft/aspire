@@ -11,7 +11,7 @@ internal static partial class DetachedProcessLauncher
     /// <summary>
     /// Unix implementation using DCP's <c>fork-process</c> helper.
     /// </summary>
-    private static async Task<Process> StartUnix(
+    private static async Task<DetachedProcess> StartUnix(
         string dcpPath,
         string fileName,
         IReadOnlyList<string> arguments,
@@ -32,6 +32,10 @@ internal static partial class DetachedProcessLauncher
         };
 
         startInfo.ArgumentList.Add("fork-process");
+        startInfo.ArgumentList.Add("--monitor");
+        startInfo.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add("--monitor-identity-time");
+        startInfo.ArgumentList.Add(ProcessTreeGracefulShutdownService.FormatDcpProcessStartTime(GetCurrentProcessDcpMonitorStartTime()));
         startInfo.ArgumentList.Add("--");
         startInfo.ArgumentList.Add(fileName);
         foreach (var arg in arguments)
@@ -69,33 +73,67 @@ internal static partial class DetachedProcessLauncher
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        using var dcpProcess = Process.Start(startInfo)
+        var dcpProcess = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to start DCP fork-process.");
 
-        // Read both streams concurrently so DCP cannot block while reporting a launch error.
-        var stdoutTask = dcpProcess.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        // Read stderr concurrently so DCP cannot block while reporting a launch error.
         var stderrTask = dcpProcess.StandardError.ReadToEndAsync(CancellationToken.None);
+        var stdoutLineTask = dcpProcess.StandardOutput.ReadLineAsync(CancellationToken.None).AsTask();
 
-        // Once DCP has started, wait for it to report the detached child PID even if the caller
-        // cancels. Without the PID, AppHostLauncher cannot clean up a child that was already forked.
-        await dcpProcess.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
-        var stdout = await stdoutTask.ConfigureAwait(false);
-        var stderr = await stderrTask.ConfigureAwait(false);
-        var dcpOutput = $"stdout: '{stdout.Trim()}', stderr: '{stderr.Trim()}'";
-
-        if (dcpProcess.ExitCode != 0)
+        try
         {
-            throw new InvalidOperationException($"DCP fork-process exited with code {dcpProcess.ExitCode}. {dcpOutput}");
+            // Once DCP has started, wait for it to report the detached child PID even if the caller
+            // cancels. Without the PID, AppHostLauncher cannot clean up a child that was already forked.
+            var completedTask = await Task.WhenAny(stdoutLineTask, dcpProcess.WaitForExitAsync(CancellationToken.None)).ConfigureAwait(false);
+            if (completedTask != stdoutLineTask)
+            {
+                var stderr = await stderrTask.ConfigureAwait(false);
+                var stdout = stdoutLineTask.IsCompletedSuccessfully ? stdoutLineTask.Result : null;
+                throw new InvalidOperationException($"DCP fork-process exited with code {dcpProcess.ExitCode}. stdout: '{stdout?.Trim()}', stderr: '{stderr.Trim()}'");
+            }
+
+            var stdoutLine = await stdoutLineTask.ConfigureAwait(false);
+            if (stdoutLine is null)
+            {
+                await dcpProcess.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                var stderr = await stderrTask.ConfigureAwait(false);
+                throw new InvalidOperationException($"DCP fork-process did not return a child process ID. DCP fork-process exited with code {dcpProcess.ExitCode}. stderr: '{stderr.Trim()}'");
+            }
+
+            var trimmedStdout = stdoutLine.Trim();
+            // DCP fork-process writes only the detached child PID followed by a newline, for example:
+            //   12345
+            if (!int.TryParse(trimmedStdout, NumberStyles.None, CultureInfo.InvariantCulture, out var childPid))
+            {
+                throw new InvalidOperationException($"DCP fork-process did not return a valid child process ID. stdout: '{trimmedStdout}'");
+            }
+
+            return new DetachedProcess(Process.GetProcessById(childPid), dcpProcess);
+        }
+        catch
+        {
+            if (!dcpProcess.HasExited)
+            {
+                dcpProcess.Kill(entireProcessTree: true);
+                await dcpProcess.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+
+            dcpProcess.Dispose();
+            throw;
+        }
+    }
+
+    internal static DateTimeOffset GetCurrentProcessDcpMonitorStartTime()
+    {
+        if (OperatingSystem.IsLinux())
+        {
+            // DCP's Linux process identity is the /proc/<pid>/stat start tick converted to
+            // milliseconds since boot and represented as Go's zero time plus that duration.
+            // Build the same timestamp instead of using Process.StartTime, which is derived from
+            // wall-clock boot time and can drift after clock adjustments.
+            return DateTimeOffset.MinValue.AddMilliseconds(ProcessStartTimeHelper.GetCurrentProcessStartTimeUnixMilliseconds());
         }
 
-        var trimmedStdout = stdout.Trim();
-        // DCP fork-process writes only the detached child PID followed by a newline, for example:
-        //   12345
-        if (!int.TryParse(trimmedStdout, NumberStyles.None, CultureInfo.InvariantCulture, out var childPid))
-        {
-            throw new InvalidOperationException($"DCP fork-process did not return a valid child process ID. {dcpOutput}");
-        }
-
-        return Process.GetProcessById(childPid);
+        return ProcessStartTimeHelper.GetCurrentProcessStartTime();
     }
 }
