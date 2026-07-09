@@ -128,4 +128,46 @@ public class ContainerEnvironmentEmissionTests
         Assert.Contains("containerPort: 5000", bicep);
         Assert.Contains("protocol: 'TCP'", bicep);
     }
+
+    [Fact]
+    public void SecretParameter_EnvVar_EmittedAsSecureParam()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv");
+        var secret = builder.AddParameter("apikey", "s3cr3t", secret: true);
+        builder.AddContainer("api", "myapp/api", "latest")
+            .WithEnvironment("API_KEY", secret);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+
+        var bicep = Generate(model, radiusEnv);
+
+        // A secret-sourced env var is routed to a top-level Bicep param declared `@secure()`
+        // (so its value is never logged or written to the artifact) and referenced by the env
+        // entry — the literal 's3cr3t' must never appear in the emitted Bicep.
+        Assert.Matches(@"(?im)^\s*@secure\(\)\s*$\r?\n\s*param\s+apikey\s+string\s*$", bicep);
+        Assert.DoesNotContain("s3cr3t", bicep);
+    }
+
+    [Fact]
+    public void NonSecretParameter_EnvVar_EmittedAsPlainParam()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv");
+        var plain = builder.AddParameter("region", "westus", secret: false);
+        builder.AddContainer("api", "myapp/api", "latest")
+            .WithEnvironment("REGION", plain);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+
+        var bicep = Generate(model, radiusEnv);
+
+        // A non-secret parameter is emitted as a plain `param` with no `@secure()` decorator.
+        Assert.Contains("param region string", bicep);
+        Assert.DoesNotMatch(@"(?im)^\s*@secure\(\)\s*$\r?\n\s*param\s+region\s+string\s*$", bicep);
+    }
 }
