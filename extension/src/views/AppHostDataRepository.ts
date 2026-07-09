@@ -863,14 +863,16 @@ export class AppHostDataRepository {
 
     /**
      * Starts a single `aspire describe --follow --apphost <path>` stream, held in
-     * {@link _describeStreams} keyed by `appHostPath`. Every stream is an equal peer: it merges its
-     * resources into `appHost.resources` and, while its host remains in `_appHosts`, restarts with
-     * backoff. A describe is only ever started for a host `aspire ps` has confirmed running, so there
-     * is no proactive/eager start and no special "selected" stream.
+     * {@link _describeStreams} keyed by `appHostPath`. Every stream is an equal peer for resource
+     * population: it merges its resources into `appHost.resources` and, while its host remains in
+     * `_appHosts`, restarts with backoff. A describe is only ever started for a host `aspire ps` has
+     * confirmed running, so there is no proactive/eager start.
      *
-     * A no-data exit that looks like a compatibility problem surfaces the describe error banner once
-     * (via the idempotent {@link _setDescribeError}); any working describe from any host clears it,
-     * since a single working stream proves the CLI supports `describe`.
+     * The describe error banner tracks only the selected workspace AppHost.
+     * A no-data exit from that host that looks like a compatibility problem
+     * surfaces the banner once (via the idempotent {@link _setDescribeError}), and a working describe
+     * from that same host clears it. Non-selected peers are log-only and never touch the banner. Their
+     * failures do not masquerade as the selected host's, and their successes do not hide it.
      */
     private _startDescribe(appHostPath: string, forceIncludeDisabledCommands?: boolean, initialRestartDelay?: number): void {
         if (this._disposed) {
@@ -976,11 +978,15 @@ export class AppHostDataRepository {
                     }
 
                     // A stream that never produced resources and exits (cleanly or with an error) means the CLI
-                    // cannot describe the host. Surface it once through the describe banner
-                    const noDataError = this._getDescribeNoDataError(code, stream.nonJsonLines, stream.stderr);
-                    if (noDataError.message) {
-                        extensionLogOutputChannel.warn(`aspire describe --follow (--apphost ${appHostPath}) exited (code ${code}) without producing data.`);
-                        this._setDescribeError(noDataError.message, { compatibility: noDataError.isCompatibilityError });
+                    // cannot describe the host. Only the selected workspace AppHost surfaces this through the
+                    // shared describe banner; a non-selected peer is logged only so it can't masquerade as the
+                    // selected host's error.
+                    extensionLogOutputChannel.warn(`aspire describe --follow (--apphost ${appHostPath}) exited (code ${code}) without producing data.`);
+                    if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath)) {
+                        const noDataError = this._getDescribeNoDataError(code, stream.nonJsonLines, stream.stderr);
+                        if (noDataError.message) {
+                            this._setDescribeError(noDataError.message, { compatibility: noDataError.isCompatibilityError });
+                        }
                     }
 
                     stream.resources.clear();
@@ -1012,15 +1018,17 @@ export class AppHostDataRepository {
                         return;
                     }
 
-                    // Spawn/stream error (as opposed to a clean exit): surface it through the single
-                    // describe banner. `_setDescribeError` is idempotent, so the same error is shown only
-                    // once across peer streams. Drop the dead stream so the next `ps` reconcile recreates
-                    // it if the host is still running.
+                    // Spawn/stream error (as opposed to a clean exit). Only the selected workspace AppHost
+                    // surfaces it through the shared describe banner; a non-selected peer is logged only so it
+                    // can't masquerade as the selected host's error. Drop the dead stream so the next `ps`
+                    // reconcile recreates it if the host is still running.
                     extensionLogOutputChannel.warn(`aspire describe --follow --apphost ${appHostPath} error: ${error.message}`);
                     stream.process = undefined;
                     this._describeStreams.delete(appHostPath);
                     stream.resources.clear();
-                    this._setDescribeError(errorFetchingAppHosts(error.message));
+                    if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath)) {
+                        this._setDescribeError(errorFetchingAppHosts(error.message));
+                    }
                     this._attachResourcesToAppHosts();
                     this._onDidChangeData.fire();
                 }
@@ -1030,11 +1038,14 @@ export class AppHostDataRepository {
             if (this._disposed || this._describeStreams.get(appHostPath) !== stream || startVersion !== stream.version) {
                 return;
             }
-            // Resolving the CLI path failed, so no describe stream can run. Surface it once through the
-            // describe banner (workspace mode shows it; other modes swallow it, matching prior behavior).
+            // Resolving the CLI path failed, so no describe stream can run. Only the selected workspace
+            // AppHost surfaces this through the shared describe banner (workspace mode shows it; other modes
+            // swallow it, matching prior behavior); a non-selected peer is logged only.
             extensionLogOutputChannel.warn(`Failed to start describe watch (--apphost ${appHostPath}): ${error}`);
             this._describeStreams.delete(appHostPath);
-            this._setDescribeError(errorFetchingAppHosts(String(error)));
+            if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath)) {
+                this._setDescribeError(errorFetchingAppHosts(String(error)));
+            }
         });
     }
 
@@ -1049,7 +1060,11 @@ export class AppHostDataRepository {
             if (resource.name) {
                 stream.resources.set(resource.name, resource);
                 stream.receivedData = true;
-                this._setDescribeError(undefined);
+                // Only the selected workspace AppHost clears the shared banner; a non-selected peer
+                // producing data must not erase an error the selected host raised (mirrors the set path).
+                if (isMatchingAppHostPath(stream.appHostPath, this._workspaceAppHostPath)) {
+                    this._setDescribeError(undefined);
+                }
                 this._attachResourcesToAppHosts();
                 if (this._viewMode === 'workspace') {
                     this._updateWorkspaceContext();
