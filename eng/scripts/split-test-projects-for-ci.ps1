@@ -151,8 +151,13 @@ if ($mode -eq 'class') {
     $testOutput = & $RunCommand --filter-not-trait category=failing --list-tests --filter-not-trait outerloop=true --filter-not-trait quarantined=true 2>&1
   }
 
-  if ($LASTEXITCODE -ne 0) {
-    Write-Error "Test listing command failed with exit code $LASTEXITCODE"
+  $testListingExitCode = $LASTEXITCODE
+
+  # Microsoft.Testing.Platform uses exit code 8 when filters match zero tests.
+  # Positive trait discovery probes projects that may contain no matching tests,
+  # so treat only that no-tests code as retryable and keep other failures fatal.
+  if ($testListingExitCode -ne 0 -and -not ($IncludeTraitFilter -and $testListingExitCode -eq 8)) {
+    Write-Error "Test listing command failed with exit code $testListingExitCode"
   }
 
   # Extract class names from test listing

@@ -163,18 +163,27 @@ public class SplitTestProjectsTests : IDisposable
     public async Task IncludeTraitFilterGracefullySkipsWhenNoClassesFound()
     {
         // Arrange - assembly with no partition attributes → falls to class mode.
-        // "echo" as RunCommand produces output that won't match the class prefix,
-        // so zero classes are discovered. With IncludeTraitFilter set, the script
-        // should succeed gracefully instead of erroring.
+        // The fake list-tests command exits with MTP's no-tests exit code. With
+        // IncludeTraitFilter set, the script should succeed gracefully instead of
+        // erroring before it can write the empty partitions file.
         var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithNoAttributes(assemblyPath, "UnrelatedClass");
 
         var outputFile = Path.Combine(_workspace.Path, "partitions.json");
+        var listTestsScriptPath = Path.Combine(_workspace.Path, "list-tests.ps1");
+        await File.WriteAllTextAsync(listTestsScriptPath, """
+            param(
+                [Parameter(ValueFromRemainingArguments = $true)]
+                [string[]] $Arguments
+            )
+
+            exit 8
+            """);
 
         // Act
         var result = await RunScript(
             assemblyPath,
-            runCommand: "echo",
+            runCommand: listTestsScriptPath,
             testClassPrefix: "TestNamespace",
             outputFile: outputFile,
             includeTraitFilter: "quarantined=true");
