@@ -18,8 +18,6 @@ namespace Aspire.Hosting.Foundry;
 [AspireExport(ExposeProperties = true)]
 public partial class HostedAgentConfiguration(string image)
 {
-    private const string DefaultContainerProtocolVersion = "2.0.0";
-
     /// <summary>
     /// The description of the hosted agent.
     /// </summary>
@@ -50,9 +48,7 @@ public partial class HostedAgentConfiguration(string image)
     /// The protocols that the agent supports for ingress communication of the containers.
     /// </summary>
     [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
-    public IList<ProtocolVersionRecord> ProtocolVersions { get; init; } = [
-        new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, DefaultContainerProtocolVersion)
-    ];
+    public IList<ProtocolVersionRecord> ProtocolVersions { get; init; } = [];
 
     private decimal _cpu = 2.0m;
 
@@ -119,6 +115,7 @@ public partial class HostedAgentConfiguration(string image)
     {
         ValidateEnvironmentVariableNames(EnvironmentVariables.Keys, targetResourceName);
         ValidateEnvironmentVariableNamesAreNotReserved(EnvironmentVariables.Keys, targetResourceName);
+        ValidateProtocolVersions(targetResourceName);
 
         var def = new HostedAgentDefinition(
             cpu: CpuString,
@@ -151,6 +148,14 @@ public partial class HostedAgentConfiguration(string image)
             options.Metadata[kvp.Key] = kvp.Value;
         }
         return options;
+    }
+
+    private void ValidateProtocolVersions(string? targetResourceName)
+    {
+        if (ProtocolVersions.Count == 0)
+        {
+            throw new DistributedApplicationException($"Foundry hosted agent for target resource '{targetResourceName}' must declare at least one protocol version.");
+        }
     }
 
     private static void ValidateEnvironmentVariableNames(IEnumerable<string> environmentVariableNames, string? targetResourceName)

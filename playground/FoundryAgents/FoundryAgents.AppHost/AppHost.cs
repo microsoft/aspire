@@ -58,13 +58,16 @@ var searchAgent = project.AddPromptAgent("searchagent", chat,
 builder.AddPythonApp("weather-python", "../app", "main.py")
     .WithUv()
     .WithReference(chat).WaitFor(chat)
-    .AsHostedAgent(project);
+    .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
 builder.AddProject<Projects.DotNetHostedAgent>("weather-dotnet")
     .WithHttpEndpoint(targetPort: 9000)
     .WithReference(chat).WaitFor(chat)
     .WithReference(searchAgent).WaitFor(searchAgent)
-    .AsHostedAgent(project);
+    .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+
+builder.AddProject<Projects.DotNetInvocationHostedAgent>("echo-invocations-dotnet")
+    .AsHostedAgent(project, HostedAgentProtocol.Invocations, "1.0.0");
 
 builder.AddProject<Projects.PromptAgentChat>("chat-app")
     .WithExternalHttpEndpoints()

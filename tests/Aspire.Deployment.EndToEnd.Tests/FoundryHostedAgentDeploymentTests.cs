@@ -244,7 +244,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
 
                 builder.AddProject<Projects.DotNetHostedAgent>("dotnet-hosted-agent")
                     .WithReference(chat).WaitFor(chat)
-                    .AsHostedAgent(foundryProject);
+                    .AsHostedAgent(foundryProject, HostedAgentProtocol.Responses, "2.0.0");
 
                 builder.Build().Run();
                 """);

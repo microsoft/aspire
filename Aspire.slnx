@@ -259,6 +259,7 @@
   </Folder>
   <Folder Name="/playground/FoundryAgents/">
     <Project Path="playground/FoundryAgents/DotNetHostedAgent/DotNetHostedAgent.csproj" />
+    <Project Path="playground/FoundryAgents/DotNetInvocationHostedAgent/DotNetInvocationHostedAgent.csproj" />
     <Project Path="playground/FoundryAgents/FoundryAgents.AppHost/FoundryAgents.AppHost.csproj" />
     <Project Path="playground/FoundryAgents/PromptAgentChat/PromptAgentChat.csproj" />
   </Folder>

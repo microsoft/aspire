@@ -17,6 +17,7 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Python" />
     <ProjectReference Include="../DotNetHostedAgent/DotNetHostedAgent.csproj" />
+    <ProjectReference Include="../DotNetInvocationHostedAgent/DotNetInvocationHostedAgent.csproj" />
     <ProjectReference Include="../PromptAgentChat/PromptAgentChat.csproj" />
   </ItemGroup>
 

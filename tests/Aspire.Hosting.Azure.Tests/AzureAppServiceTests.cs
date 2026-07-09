@@ -240,7 +240,7 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
         var agent = builder.AddProject<Project>("agent", launchProfileName: null)
             .WithHttpEndpoint()
             .WithExternalHttpEndpoints();
-        agent.AsHostedAgent(project);
+        agent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         // The web app is deployed to App Service and references the Foundry hosted agent. The App
         // Service publisher must delegate endpoint resolution to the Foundry compute environment

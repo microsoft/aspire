@@ -70,6 +70,7 @@ public class HostedAgentConfigurationTests
             Description = "Test agent",
             Cpu = 1.0m,
         };
+        config.ProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "2.0.0"));
 
         var options = config.ToProjectsAgentVersionCreationOptions("target");
 
@@ -81,6 +82,7 @@ public class HostedAgentConfigurationTests
     public void ToProjectsAgentVersionCreationOptions_UsesProtocolVersionsAndContainerConfiguration()
     {
         var config = new HostedAgentConfiguration("myregistry.azurecr.io/myagent:v1");
+        config.ProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "2.0.0"));
 
         var options = config.ToProjectsAgentVersionCreationOptions("target");
         var payload = JsonNode.Parse(ModelReaderWriter.Write(options, ModelReaderWriterOptions.Json).ToString())!;
@@ -92,6 +94,16 @@ public class HostedAgentConfigurationTests
         Assert.Equal("myregistry.azurecr.io/myagent:v1", definition["container_configuration"]!["image"]!.GetValue<string>());
         Assert.Null(definition["container_protocol_versions"]);
         Assert.Null(definition["image"]);
+    }
+
+    [Fact]
+    public void ToProjectsAgentVersionCreationOptions_ThrowsWhenProtocolVersionIsNotDeclared()
+    {
+        var config = new HostedAgentConfiguration("myregistry.azurecr.io/myagent:v1");
+
+        var ex = Assert.Throws<DistributedApplicationException>(() => config.ToProjectsAgentVersionCreationOptions("target"));
+
+        Assert.Equal("Foundry hosted agent for target resource 'target' must declare at least one protocol version.", ex.Message);
     }
 
     [Fact]

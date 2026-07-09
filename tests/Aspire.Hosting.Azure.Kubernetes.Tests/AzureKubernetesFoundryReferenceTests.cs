@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES003
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
@@ -33,7 +34,7 @@ public class AzureKubernetesFoundryReferenceTests
         var agent = builder.AddProject<Project>("agent", launchProfileName: null)
             .WithHttpEndpoint()
             .WithExternalHttpEndpoints();
-        agent.AsHostedAgent(project);
+        agent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         // The web app is deployed to Azure Kubernetes and references the Foundry hosted agent.
         // The Kubernetes publisher must delegate endpoint resolution to the Foundry compute
