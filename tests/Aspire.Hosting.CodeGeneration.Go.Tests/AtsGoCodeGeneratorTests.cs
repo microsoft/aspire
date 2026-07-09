@@ -354,22 +354,26 @@ public class AtsGoCodeGeneratorTests
         Assert.Contains("WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions)", aspireGo);
         Assert.DoesNotContain("type WithHttpCommandOptions struct", aspireGo);
 
-        // The merged DTO is still sent under the original "options" arg, keeping the RPC payload identical.
-        Assert.Contains("reqArgs[\"options\"] = serializeValue(merged)", aspireGo);
+        // The merged DTO is sent under the original "options" arg, but only when a non-nil option
+        // was merged, so an all-nil variadic omits the key (matching the old wrapper's ToMap()).
+        Assert.Contains("applied := false", aspireGo);
+        Assert.Contains("if applied { reqArgs[\"options\"] = serializeValue(merged) }", aspireGo);
     }
 
     [Fact]
-    public void GeneratedCode_DoesNotFlattenWhenOptionsCoexistsWithOtherOptionals()
+    public void GeneratedCode_DoesNotFlattenWhenOptionsCoexistsWithCancellationToken()
     {
-        // More than just "options" is optional here (PromptProgress has title + options + a
-        // cancellation token), so Go's single-variadic rule keeps the wrapper struct.
+        // PromptInput's only non-cancellation-token optional is the "options" DTO, but Go models a
+        // trailing cancellation token as another variadic element, so its single-variadic rule keeps
+        // the wrapper. TypeScript threads the token separately and would flatten this capability.
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
         var aspireGo = files["aspire.go"];
 
-        Assert.Contains("type PromptProgressOptions struct", aspireGo);
-        Assert.Contains("Options *InteractionProgressOptions `json:\"options,omitempty\"`", aspireGo);
+        Assert.Contains("PromptInput(title string, message string, input InteractionInputBuilder, options ...*PromptInputOptions)", aspireGo);
+        Assert.Contains("type PromptInputOptions struct", aspireGo);
+        Assert.Contains("Options *InteractionInputsDialogOptions `json:\"options,omitempty\"`", aspireGo);
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()

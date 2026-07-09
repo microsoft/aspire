@@ -13,10 +13,11 @@ namespace Aspire.Shared.CodeGeneration;
 internal static class AtsOptionsFlattening
 {
     /// <summary>
-    /// Determines whether <paramref name="optionalParams"/> is exactly one DTO parameter named
-    /// <c>options</c> (no callback, no cancellation token) that can be flattened. The caller
-    /// supplies <paramref name="isCancellationToken"/> because languages differ on what type ids
-    /// count as a cancellation token.
+    /// Determines whether the candidate optionals reduce to exactly one DTO parameter named
+    /// <c>options</c> (no callback) that can be flattened. How a cancellation token affects the
+    /// candidate set is controlled by <paramref name="cancellationTokenIsSeparateParameter"/>. The
+    /// caller supplies <paramref name="isCancellationToken"/> because languages differ on what type
+    /// ids count as a cancellation token.
     /// </summary>
     /// <remarks>
     /// When <paramref name="cancellationTokenIsSeparateParameter"/> is <see langword="true"/>
