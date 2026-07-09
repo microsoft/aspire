@@ -2,26 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using Aspire.TypeSystem;
 
-namespace Aspire.TypeSystem;
-
-/// <summary>
-/// Controls how a coexisting cancellation token affects options-flattening.
-/// </summary>
-internal enum CoexistingCancellationTokenPolicy
-{
-    /// <summary>
-    /// The cancellation token is emitted as its own trailing parameter, so it is ignored when
-    /// deciding whether a lone <c>options</c> DTO can be flattened (e.g. TypeScript).
-    /// </summary>
-    ThreadSeparately,
-
-    /// <summary>
-    /// The language models all optionals as a single trailing variadic and permits only one, so a
-    /// coexisting cancellation token blocks flattening (e.g. Go).
-    /// </summary>
-    BlockFlattening,
-}
+namespace Aspire.Shared.CodeGeneration;
 
 /// <summary>
 /// Shared decision for flattening a single optional <c>options</c> DTO so callers pass the DTO
@@ -35,17 +18,21 @@ internal static class AtsOptionsFlattening
     /// supplies <paramref name="isCancellationToken"/> because languages differ on what type ids
     /// count as a cancellation token.
     /// </summary>
+    /// <remarks>
+    /// When <paramref name="cancellationTokenIsSeparateParameter"/> is <see langword="true"/>
+    /// a trailing cancellation token is rendered as its own parameter and is ignored when
+    /// counting candidates; when <see langword="false"/> all optionals share one trailing
+    /// variadic, so a coexisting cancellation token blocks flattening.
+    /// </remarks>
     public static bool TryGetDirectOptionsParameter(
         IReadOnlyList<AtsParameterInfo> optionalParams,
         Func<AtsParameterInfo, bool> isCancellationToken,
-        CoexistingCancellationTokenPolicy cancellationTokenPolicy,
+        bool cancellationTokenIsSeparateParameter,
         [NotNullWhen(true)] out AtsParameterInfo? directOptionsParam)
     {
         directOptionsParam = null;
 
-        // ThreadSeparately languages drop coexisting cancellation tokens before counting because
-        // they render them as their own trailing parameter; BlockFlattening languages cannot.
-        IReadOnlyList<AtsParameterInfo> candidates = cancellationTokenPolicy == CoexistingCancellationTokenPolicy.ThreadSeparately
+        IReadOnlyList<AtsParameterInfo> candidates = cancellationTokenIsSeparateParameter
             ? optionalParams.Where(p => !isCancellationToken(p)).ToList()
             : optionalParams;
 

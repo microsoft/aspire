@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
+using Aspire.Shared.CodeGeneration;
 using Aspire.Shared.Json;
 using Aspire.TypeSystem;
 
@@ -1050,9 +1051,8 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     /// wrapper struct. Mirrors the TypeScript generator's flattening.
     /// </summary>
     /// <remarks>
-    /// Uses <see cref="CoexistingCancellationTokenPolicy.BlockFlattening"/>: Go models all optionals
-    /// as a single trailing variadic and allows only one, so a coexisting cancellation token keeps
-    /// the wrapper.
+    /// Passes <c>cancellationTokenIsSeparateParameter: false</c>: Go models all optionals as a single
+    /// trailing variadic and allows only one, so a coexisting cancellation token keeps the wrapper.
     /// </remarks>
     private static bool TryGetDirectOptionsParameter(
         IReadOnlyList<AtsParameterInfo> optionalParams,
@@ -1060,7 +1060,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
         => AtsOptionsFlattening.TryGetDirectOptionsParameter(
             optionalParams,
             IsCancellationToken,
-            CoexistingCancellationTokenPolicy.BlockFlattening,
+            cancellationTokenIsSeparateParameter: false,
             out directOptionsParam);
 
     private string RenderParameterList(

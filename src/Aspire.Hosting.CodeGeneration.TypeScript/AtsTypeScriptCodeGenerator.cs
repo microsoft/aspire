@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
+using Aspire.Shared.CodeGeneration;
 using Aspire.Shared.Json;
 using Aspire.TypeSystem;
 
@@ -1428,13 +1429,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     }
 
     private static bool TryGetDirectOptionsParameter(List<AtsParameterInfo> optionalParams, out AtsParameterInfo? directOptionsParam)
-        // ThreadSeparately: a trailing cancellation token is rendered as its own parameter (see
+        // A trailing cancellation token is rendered as its own parameter (see
         // GetTrailingCancellationTokenParameter), so it is ignored when deciding whether the lone
         // "options" DTO can be threaded directly instead of wrapped in a generated options object.
         => AtsOptionsFlattening.TryGetDirectOptionsParameter(
             optionalParams,
             p => IsCancellationTokenType(p.Type),
-            CoexistingCancellationTokenPolicy.ThreadSeparately,
+            cancellationTokenIsSeparateParameter: true,
             out directOptionsParam);
 
     /// <summary>
