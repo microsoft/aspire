@@ -22,6 +22,26 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ViewOptionsMenu_ReportsExpandedState()
+    {
+        await RunTestAsync(async page =>
+        {
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+
+            var viewOptionsButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourcesChangeViewOptions, Exact = true });
+            await Assertions.Expect(viewOptionsButton).ToHaveAttributeAsync("aria-expanded", "false");
+
+            await viewOptionsButton.ClickAsync();
+            await Assertions.Expect(viewOptionsButton).ToHaveAttributeAsync("aria-expanded", "true");
+
+            var showResourceTypes = page.GetByRole(AriaRole.Menuitem, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourcesShowTypes, Exact = true });
+            await showResourceTypes.ClickAsync();
+            await Assertions.Expect(viewOptionsButton).ToHaveAttributeAsync("aria-expanded", "false");
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task UrlLink_EnterDoesNotOpenResourceDetails()
     {
         await RunTestAsync(async page =>
