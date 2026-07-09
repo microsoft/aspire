@@ -14,11 +14,11 @@ using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting;
 using Grpc.Core;
-using Semver;
 using Grpc.Net.Client;
 using Grpc.Net.Client.Configuration;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
+using Semver;
 using DashboardResources = Aspire.Dashboard.Resources.Resources;
 using ResourceCommandResponseKind = Aspire.Dashboard.Model.ResourceCommandResponseKind;
 
