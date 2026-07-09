@@ -440,6 +440,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchSettingsEnvVars[KnownConfigNames.DcpResourceCleanupMode] = resourceCleanupMode;
             }
 
+            if (context.EnvironmentVariables.TryGetValue(KnownConfigNames.DcpWaitForResourceCleanup, out var waitForResourceCleanup))
+            {
+                launchSettingsEnvVars[KnownConfigNames.DcpWaitForResourceCleanup] = waitForResourceCleanup;
+            }
+
             // Apply certificate environment variables (e.g., SSL_CERT_DIR on Linux)
             foreach (var kvp in certEnvVars)
             {

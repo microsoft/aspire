@@ -928,7 +928,7 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
-    public async Task RunAsync_PassesResourceCleanupModeToAppHostServerEnvironment()
+    public async Task RunAsync_PassesResourceCleanupSettingsToAppHostServerEnvironment()
     {
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
         await File.WriteAllTextAsync(appHostPath, "// test apphost");
@@ -958,7 +958,8 @@ public class GuestAppHostProjectTests : IDisposable
             WorkingDirectory = _workspace.WorkspaceRoot,
             EnvironmentVariables = new Dictionary<string, string>
             {
-                [KnownConfigNames.DcpResourceCleanupMode] = "true"
+                [KnownConfigNames.DcpResourceCleanupMode] = "true",
+                [KnownConfigNames.DcpWaitForResourceCleanup] = "true"
             }
         };
 
@@ -968,6 +969,7 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.True(serverSession.StartAsyncCalled);
         Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
         Assert.Equal("true", sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpResourceCleanupMode]);
+        Assert.Equal("true", sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWaitForResourceCleanup]);
     }
 
     [Fact]
