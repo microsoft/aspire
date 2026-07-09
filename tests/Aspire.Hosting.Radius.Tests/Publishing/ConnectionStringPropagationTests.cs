@@ -67,8 +67,9 @@ public class ConnectionStringPropagationTests
         var context = new RadiusBicepPublishingContext(radiusEnv);
         var bicep = context.GenerateBicep(model);
 
-        // Container without references should NOT have connections block
-        // Split by resource blocks and check the container block specifically
+        // Container without references should NOT have a connections block. This AppHost
+        // has only the single container, so asserting the whole Bicep output contains no
+        // "connections:" block is sufficient.
         Assert.DoesNotContain("connections:", bicep);
     }
 
