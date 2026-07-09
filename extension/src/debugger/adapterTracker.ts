@@ -76,6 +76,9 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
                             return;
                         }
 
+                        // A new debuggee process invalidates any exit code captured from a prior run.
+                        debuggeeExitCode = undefined;
+
                         if (!dcpServer) {
                             extensionLogOutputChannel.warn(dcpServerNotInitialized);
                             return;
