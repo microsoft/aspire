@@ -765,7 +765,6 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
     public async Task ConfigSetCommand_LocalAppHostPath_RemainsAllowed(string key)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        File.Delete(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json"));
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();

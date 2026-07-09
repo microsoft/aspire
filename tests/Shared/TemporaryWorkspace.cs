@@ -215,6 +215,25 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
         var tempPath = IOPath.GetTempPath();
         var parentDir = Directory.CreateDirectory(IOPath.Combine(tempPath, typeof(TemporaryWorkspace).Assembly.GetName().Name!, "Workspace"));
 
+        // Remove stale aspire.config.json from previous test runs so it cannot
+        // contaminate tests whose directory-walking searches escape their workspace.
+        var staleConfig = IOPath.Combine(parentDir.FullName, "aspire.config.json");
+        if (File.Exists(staleConfig))
+        {
+            File.Delete(staleConfig);
+        }
+
+        // Place a backstop .aspire/settings.json in the parent directory so that
+        // directory-walking searches stop here rather than reaching the user's
+        // home directory, even if a test deletes its own workspace sentinel.
+        var backstopDir = IOPath.Combine(parentDir.FullName, ".aspire");
+        var backstopSettings = IOPath.Combine(backstopDir, "settings.json");
+        if (!File.Exists(backstopSettings))
+        {
+            Directory.CreateDirectory(backstopDir);
+            File.WriteAllText(backstopSettings, "{}");
+        }
+
         return parentDir;
     }
 

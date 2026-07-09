@@ -108,19 +108,16 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        // Delete the sentinel .aspire/settings.json so there is truly no settings file
-        var sentinelPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json");
-        if (File.Exists(sentinelPath))
-        {
-            File.Delete(sentinelPath);
-        }
-
-        var (service, settingsFilePath) = CreateService(workspace);
+        // The workspace has .aspire/settings.json (the legacy sentinel) but no
+        // aspire.config.json. FindNearestSettingsFile will find the sentinel and
+        // write to it.
+        var legacySettingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.json");
+        var (service, _) = CreateService(workspace);
 
         await service.SetConfigurationAsync("channel", "staging", isGlobal: false);
 
-        Assert.True(File.Exists(settingsFilePath));
-        var result = File.ReadAllText(settingsFilePath);
+        Assert.True(File.Exists(legacySettingsPath));
+        var result = File.ReadAllText(legacySettingsPath);
         Assert.Contains("staging", result);
     }
 
