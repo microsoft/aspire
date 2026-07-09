@@ -400,7 +400,7 @@ internal sealed class AppHostLauncher(
             }
         }
 
-        var childStartedAt = ProcessStartTimeHelper.TryGetProcessStartTime(childProcess.Id) ?? new DateTimeOffset(childProcess.StartTime);
+        var childStartedAt = childProcess.StartTime;
         logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.Id);
 
         var startTime = timeProvider.GetUtcNow();
@@ -539,7 +539,7 @@ internal sealed class AppHostLauncher(
         return new LaunchResult(childProcess, null, dashboardUrls, false, 0, childStartedAt);
     }
 
-    private Task RequestGracefulShutdownThenForceKillAsync(DetachedProcess childProcess, DateTimeOffset childStartedAt)
+    private Task RequestGracefulShutdownThenForceKillAsync(DetachedProcess childProcess, DateTimeOffset? childStartedAt)
     {
         return processShutdownService.StopProcessTreeAsync(
             childProcess.Id,
@@ -548,7 +548,7 @@ internal sealed class AppHostLauncher(
             CancellationToken.None);
     }
 
-    private LaunchResult CreateChildExitedLaunchResult(DetachedProcess childProcess, ProfilingTelemetry.ActivityScope waitForBackchannelActivity, DateTimeOffset childStartedAt)
+    private LaunchResult CreateChildExitedLaunchResult(DetachedProcess childProcess, ProfilingTelemetry.ActivityScope waitForBackchannelActivity, DateTimeOffset? childStartedAt)
     {
         var exitCode = childProcess.ExitCode;
         if (exitCode is { } knownExitCode)

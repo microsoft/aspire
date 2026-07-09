@@ -467,7 +467,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitor()
+    public async Task LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitorAndStartTimeIsUnavailable()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only test.");
 
@@ -481,7 +481,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             {
                 FileName = "/bin/sh",
                 UseShellExecute = false,
-                ArgumentList = { "-c", "sleep 0.05; exit 11" }
+                ArgumentList = { "-c", "exit 11" }
             }) ?? throw new InvalidOperationException("Failed to start test child process.");
 
             forkProcess = Process.Start(new ProcessStartInfo
@@ -492,7 +492,12 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             }) ?? throw new InvalidOperationException("Failed to start test DCP monitor process.");
 
             detachedHandle = Process.GetProcessById(startedProcess.Id);
-            return Task.FromResult(new DetachedProcess(detachedHandle, forkProcess));
+            if (!startedProcess.WaitForExit(TimeSpan.FromSeconds(5)))
+            {
+                throw new TimeoutException("Test child process did not exit.");
+            }
+
+            return Task.FromResult(new DetachedProcess(detachedHandle, forkProcess, startTime: null));
         };
 
         try

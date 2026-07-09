@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ComponentModel;
 using System.Diagnostics;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
@@ -20,16 +21,32 @@ internal interface IDetachedProcessLauncher
         CancellationToken cancellationToken = default);
 }
 
-internal sealed class DetachedProcess(Process process, Process? exitMonitorProcess = null) : IDisposable
+internal sealed class DetachedProcess : IDisposable
 {
-    private readonly Process _process = process;
-    private readonly Process? _exitMonitorProcess = exitMonitorProcess;
+    private readonly Process _process;
+    private readonly Process? _exitMonitorProcess;
 
-    public int Id => _process.Id;
+    public DetachedProcess(Process process, Process? exitMonitorProcess = null)
+        : this(process, exitMonitorProcess, GetStartTime(process))
+    {
+    }
+
+    internal DetachedProcess(Process process, Process? exitMonitorProcess, DateTimeOffset? startTime)
+    {
+        _process = process;
+        _exitMonitorProcess = exitMonitorProcess;
+        Id = process.Id;
+        StartTime = startTime;
+    }
+
+    public int Id { get; }
 
     public bool HasExited => _exitMonitorProcess?.HasExited ?? _process.HasExited;
 
-    public DateTime StartTime => _process.StartTime;
+    // DCP fork-process returns a PID before the detached Unix child reaches AppHostLauncher.
+    // The child can exit in that gap, so cache a nullable start time instead of re-querying a
+    // potentially dead PID and masking the DCP monitor's exit code with Process.StartTime failures.
+    public DateTimeOffset? StartTime { get; }
 
     public Task WaitForExitAsync(CancellationToken cancellationToken)
     {
@@ -71,6 +88,18 @@ internal sealed class DetachedProcess(Process process, Process? exitMonitorProce
     {
         _process.Dispose();
         _exitMonitorProcess?.Dispose();
+    }
+
+    private static DateTimeOffset? GetStartTime(Process process)
+    {
+        try
+        {
+            return ProcessStartTimeHelper.TryGetProcessStartTime(process.Id) ?? new DateTimeOffset(process.StartTime);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or Win32Exception)
+        {
+            return null;
+        }
     }
 }
 
