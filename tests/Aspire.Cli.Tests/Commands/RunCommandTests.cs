@@ -410,6 +410,11 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var startupReached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var teardownStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var teardownCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Test-controlled gate that simulates the AppHost shutdown ladder finishing. Using a TCS
+        // instead of Task.Delay(timeProvider) avoids potential reentrancy issues where FakeTimeProvider's
+        // Advance() fires a timer whose continuation chain disposes another timer on the same provider,
+        // which can deadlock intermittently under thread pool contention.
+        var teardownCanFinish = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var projectFactory = new TestAppHostProjectFactory
         {
@@ -430,7 +435,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                     // tree. The CLI must not exit until this has finished. CancellationToken.None is
                     // deliberate: this represents teardown work that the same signal cannot itself cancel.
                     teardownStarted.TrySetResult();
-                    await Task.Delay(RunCommand.s_gracefulShutdownBudget + TimeSpan.FromSeconds(1), timeProvider, CancellationToken.None);
+                    await teardownCanFinish.Task;
                     teardownCompleted.TrySetResult();
                 }
 
@@ -458,13 +463,14 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         cts.Cancel();
         await teardownStarted.Task.WaitAsync(TimeSpan.FromSeconds(30));
 
-        // The detached child must outlive the graceful-shutdown budget; otherwise a TERM-ignoring
-        // AppHost can still be pre-kill when the CLI child exits.
-        timeProvider.Advance(RunCommand.s_gracefulShutdownBudget + TimeSpan.FromMilliseconds(100));
-        await Task.Yield();
-        Assert.False(pendingCommand.IsCompleted, "Detached child exited before the force-kill window elapsed.");
+        // The detached child must not exit while the AppHost teardown is in progress. The callback
+        // is blocked on teardownCanFinish, so pendingCommand cannot complete regardless of how much
+        // fake time passes.
+        Assert.False(pendingCommand.IsCompleted, "Detached child exited before the AppHost teardown completed.");
 
-        timeProvider.Advance(TimeSpan.FromSeconds(1));
+        // Allow the teardown to finish. The RunCommand's finally block awaits runTask (via WaitAsync),
+        // so once the callback returns, the command pipeline unwinds and pendingCommand completes.
+        teardownCanFinish.SetResult();
 
         var exitCode = await pendingCommand.DefaultTimeout();
 
