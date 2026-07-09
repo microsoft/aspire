@@ -64,7 +64,7 @@ builder.AddProject<Projects.DotNetHostedAgent>("weather-dotnet")
     .WithHttpEndpoint(targetPort: 9000)
     .WithReference(chat).WaitFor(chat)
     .WithReference(searchAgent).WaitFor(searchAgent)
-    .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
+    .AsHostedAgent(project);
 
 builder.AddProject<Projects.DotNetInvocationHostedAgent>("echo-invocations-dotnet")
     .AsHostedAgent(project, HostedAgentProtocol.Invocations, "1.0.0");

@@ -19,6 +19,7 @@ public static class HostedAgentResourceBuilderExtensions
     private static readonly JsonSerializerOptions s_indentedJsonOptions = new() { WriteIndented = true };
     private const string ResponsesProtocol = "responses";
     private const string InvocationsProtocol = "invocations";
+    private const string DefaultResponsesProtocolVersion = "2.0.0";
 
     /// <summary>
     /// Configures the resource to run locally as a Microsoft Foundry hosted agent.
@@ -49,6 +50,28 @@ public static class HostedAgentResourceBuilderExtensions
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
         return AsHostedAgent(builder, project: null, protocol, protocolVersion, configure: null);
+    }
+
+    /// <summary>
+    /// Configures the resource to run and publish as a Microsoft Foundry hosted agent using the Responses protocol version 2.0.0.
+    /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <param name="project">The Microsoft Foundry project the hosted agent is deployed into.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// This C# convenience overload is not exported to polyglot app hosts. Polyglot hosts must declare the
+    /// hosted agent protocol and protocol version explicitly.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "C# convenience overload; polyglot hosts must pass protocol and version explicitly.")]
+    public static IResourceBuilder<T> AsHostedAgent<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureCognitiveServicesProjectResource> project)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(project);
+
+        return AsHostedAgent(builder, project, HostedAgentProtocol.Responses, DefaultResponsesProtocolVersion, configure: null);
     }
 
     // The internal AsHostedAgentForExport overload below is the polyglot-exported version of AsHostedAgent.
