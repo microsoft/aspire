@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
+using Semver;
 using Xunit;
 using DashboardResources = Aspire.Dashboard.Resources.Resources;
 
@@ -403,7 +404,7 @@ public sealed class DashboardClientTests
     public async Task ConnectWithRetry_UnsupportedDashboardVersion_SetsUnsupportedState()
     {
         await using var instance = CreateResourceServiceClient();
-        instance.SetDashboardServiceClient(new MockDashboardServiceClient { MinDashboardApiVersion = int.MaxValue });
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient { MinDashboardVersion = "99.0.0" });
 
         IDashboardClient client = instance;
         var unsupportedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -421,6 +422,57 @@ public sealed class DashboardClientTests
 
         Assert.Equal(DashboardConnectionState.Unsupported, client.ConnectionState);
         Assert.False(client.WhenConnected.IsCompleted);
+    }
+
+    [Theory]
+    [InlineData("13.5.0", "13.5.0", true)]
+    [InlineData("13.5.0-dev", "13.5.0", true)]
+    [InlineData("13.5.0-preview.1.26307.2", "13.5.0", true)]
+    [InlineData("13.6.0", "13.5.0", true)]
+    [InlineData("14.0.0", "13.5.0", true)]
+    [InlineData("13.5.1", "13.5.0", true)]
+    [InlineData("13.4.0", "13.5.0", false)]
+    [InlineData("13.4.9", "13.5.0", false)]
+    [InlineData("12.0.0", "13.5.0", false)]
+    [InlineData("13.5.0-dev", "13.5.1", false)]
+    [InlineData("13.5.0", null, true)]
+    [InlineData("13.5.0", "", true)]
+    [InlineData(null, "13.5.0", false)]
+    [InlineData(null, null, true)]
+    [InlineData(null, "", true)]
+    public void IsDashboardVersionSufficient_ReturnsExpectedResult(string? dashboardVersion, string? requiredVersion, bool expected)
+    {
+        var dashboard = dashboardVersion is not null ? SemVersion.Parse(dashboardVersion, SemVersionStyles.Any) : null;
+
+        var result = DashboardClient.IsDashboardVersionSufficient(dashboard, requiredVersion);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("0.0.0")]
+    [InlineData("1.0.0")]
+    public async Task ConnectWithRetry_CompatibleMinVersion_SetsConnectedState(string minDashboardVersion)
+    {
+        await using var instance = CreateResourceServiceClient();
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient { MinDashboardVersion = minDashboardVersion });
+
+        IDashboardClient client = instance;
+        var connectedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.ConnectionStateChanged += state =>
+        {
+            if (state == DashboardConnectionState.Connected)
+            {
+                connectedTcs.TrySetResult();
+            }
+        };
+
+        _ = client.WhenConnected;
+
+        await connectedTcs.Task.DefaultTimeout();
+
+        Assert.Equal(DashboardConnectionState.Connected, client.ConnectionState);
     }
 
     [Fact]
@@ -469,7 +521,7 @@ public sealed class DashboardClientTests
         public bool FailOnGetApplicationInformation { get; init; }
         public bool FailOnExecuteResourceCommand { get; init; }
         public bool CancelExecuteResourceCommandOnCallCancellation { get; init; }
-        public int MinDashboardApiVersion { get; init; }
+        public string MinDashboardVersion { get; init; } = "";
 
         public override AsyncDuplexStreamingCall<WatchInteractionsRequestUpdate, WatchInteractionsResponseUpdate> WatchInteractions(CallOptions options)
         {
@@ -498,7 +550,7 @@ public sealed class DashboardClientTests
                 Task.FromResult(new ApplicationInformationResponse
                 {
                     ApplicationName = "TestApplication",
-                    MinDashboardApiVersion = MinDashboardApiVersion
+                    MinDashboardVersion = MinDashboardVersion
                 }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,

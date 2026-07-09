@@ -72,7 +72,7 @@ public sealed class ResourceServiceConnectionProvider : ComponentBase, IAsyncDis
         else if (state is DashboardConnectionState.Unsupported)
         {
             _disconnectedCount = 0;
-            await JS.InvokeVoidAsync("updateResourceServiceConnectionState", "unsupported", false, DashboardClient.ApplicationName);
+            await JS.InvokeVoidAsync("updateResourceServiceConnectionState", "unsupported", false, DashboardClient.ApplicationName, DashboardClient.MinRequiredVersion);
         }
         else if (state is DashboardConnectionState.Disconnected)
         {

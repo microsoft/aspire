@@ -241,69 +241,6 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Failed to rejoin.&lt;br /&gt;Please retry or reload the page..
-        /// </summary>
-        public static string ReconnectFailedText {
-            get {
-                return ResourceManager.GetString("ReconnectFailedText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Rejoining the server....
-        /// </summary>
-        public static string ReconnectFirstAttemptText {
-            get {
-                return ResourceManager.GetString("ReconnectFirstAttemptText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Rejoin failed... trying again in &lt;span id=&quot;components-seconds-to-next-attempt&quot;&gt;&lt;/span&gt; seconds..
-        /// </summary>
-        public static string ReconnectRepeatedAttemptText {
-            get {
-                return ResourceManager.GetString("ReconnectRepeatedAttemptText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Retry.
-        /// </summary>
-        public static string ReconnectRetryButtonText {
-            get {
-                return ResourceManager.GetString("ReconnectRetryButtonText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Lost connection to the AppHost. Attempting to reconnect....
-        /// </summary>
-        public static string ResourceServiceReconnectDisconnectedText {
-            get {
-                return ResourceManager.GetString("ResourceServiceReconnectDisconnectedText", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to The {0} app requires a newer version of the Aspire dashboard.&lt;br /&gt;&lt;br /&gt;See &lt;a href=&quot;{1}&quot; target=&quot;_blank&quot; rel=&quot;noreferrer noopener&quot;&gt;upgrade Aspire&lt;/a&gt; for more information..
-        /// </summary>
-        public static string ResourceServiceReconnectUnsupportedText {
-            get {
-                return ResourceManager.GetString("ResourceServiceReconnectUnsupportedText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Retry.
-        /// </summary>
-        public static string ResourceServiceReconnectRetryButtonText {
-            get {
-                return ResourceManager.GetString("ResourceServiceReconnectRetryButtonText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to AI agents.
         /// </summary>
         public static string MainLayoutLaunchAIAgents {

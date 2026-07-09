@@ -8,29 +8,29 @@
         </div>
         @* Blazor circuit reconnection messages *@
         <p class="components-reconnect-first-attempt-visible">
-            @((MarkupString)Loc[nameof(Layout.ReconnectFirstAttemptText)].Value)
+            @((MarkupString)Loc[nameof(Reconnect.ReconnectFirstAttemptText)].Value)
         </p>
         <p class="components-reconnect-repeated-attempt-visible">
-            @((MarkupString)Loc[nameof(Layout.ReconnectRepeatedAttemptText)].Value)
+            @((MarkupString)Loc[nameof(Reconnect.ReconnectRepeatedAttemptText)].Value)
         </p>
         <p class="components-reconnect-failed-visible">
-            @((MarkupString)Loc[nameof(Layout.ReconnectFailedText)].Value)
+            @((MarkupString)Loc[nameof(Reconnect.ReconnectFailedText)].Value)
         </p>
         <div class="components-reconnect-failed-visible">
             <FluentButton Id="components-reconnect-button" Appearance="Appearance.Accent">
-                @Loc[nameof(Layout.ReconnectRetryButtonText)]
+                @Loc[nameof(Reconnect.ReconnectRetryButtonText)]
             </FluentButton>
         </div>
         @* Resource service connection messages *@
         <p class="components-reconnect-resource-service-disconnected-visible">
-            @Loc[nameof(Layout.ResourceServiceReconnectDisconnectedText)]
+            @Loc[nameof(Reconnect.ResourceServiceReconnectDisconnectedText)]
         </p>
         <p id="components-reconnect-resource-service-unsupported-text" class="components-reconnect-resource-service-unsupported-visible">
-            @((MarkupString)string.Format(CultureInfo.CurrentCulture, Loc[nameof(Layout.ResourceServiceReconnectUnsupportedText)], "<span id=\"reconnect-unsupported-app-name\"></span>", UpgradeAspireUrl))
+            @((MarkupString)string.Format(CultureInfo.CurrentCulture, Loc[nameof(Reconnect.ResourceServiceReconnectUnsupportedText)], "<span id=\"reconnect-unsupported-app-name\"></span>", UpgradeAspireUrl, "<span id=\"reconnect-unsupported-required-version\"></span>"))
         </p>
         <div class="components-reconnect-resource-service-retry-visible">
             <FluentButton Id="components-reconnect-resource-service-button" Appearance="Appearance.Accent">
-                @Loc[nameof(Layout.ResourceServiceReconnectRetryButtonText)]
+                @Loc[nameof(Reconnect.ResourceServiceReconnectRetryButtonText)]
             </FluentButton>
         </div>
     </div>

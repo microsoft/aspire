@@ -45,8 +45,8 @@ function handleReconnectStateChanged(event) {
 // does not show a modal — it's normal startup behavior, just like Blazor's circuit
 // doesn't show a reconnect dialog on initial page load.
 // The optional "show-retry" flag adds the retry button after repeated failures.
-// The optional "appName" parameter is used for the unsupported state to display the application name.
-window.updateResourceServiceConnectionState = function (state, showRetry, appName) {
+// The optional "appName" and "requiredVersion" parameters are used for the unsupported state.
+window.updateResourceServiceConnectionState = function (state, showRetry, appName, requiredVersion) {
     if (state === "disconnected") {
         // Only show resource service modal if we're not already in circuit mode.
         if (currentMode === "circuit") {
@@ -67,11 +67,14 @@ window.updateResourceServiceConnectionState = function (state, showRetry, appNam
             return;
         }
         currentMode = "resource-service";
-        // The third argument carries the application name resolved from the AppHost.
-        // Set it in the DOM before showing the modal so the message displays correctly.
+        // Set the application name and required version in the DOM before showing the modal.
         const appNameSpan = document.getElementById("reconnect-unsupported-app-name");
         if (appNameSpan) {
             appNameSpan.textContent = appName || "";
+        }
+        const versionSpan = document.getElementById("reconnect-unsupported-required-version");
+        if (versionSpan) {
+            versionSpan.textContent = requiredVersion || "";
         }
         setModalClass("components-reconnect-resource-service-unsupported");
         if (!reconnectModal.open) {

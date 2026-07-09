@@ -107,41 +107,6 @@
         <target state="translated">フィルターの表示</target>
         <note />
       </trans-unit>
-      <trans-unit id="ReconnectFailedText">
-        <source>Failed to rejoin.&lt;br /&gt;Please retry or reload the page.</source>
-        <target state="translated">再接続できませんでした。&lt;br /&gt;もう一度お試しになるか、ページを再読み込みしてみてください。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectFirstAttemptText">
-        <source>Rejoining the server...</source>
-        <target state="translated">サーバーに再接続しています...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectRepeatedAttemptText">
-        <source>Rejoin failed... trying again in &lt;span id="components-seconds-to-next-attempt"&gt;&lt;/span&gt; seconds.</source>
-        <target state="translated">再接続に失敗しました... &lt;span id="components-seconds-to-next-attempt"&gt; &lt;/span&gt; 秒後に再試行します。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectRetryButtonText">
-        <source>Retry</source>
-        <target state="translated">再試行</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourceServiceReconnectDisconnectedText">
-        <source>Lost connection to the AppHost. Attempting to reconnect...</source>
-        <target state="new">Lost connection to the AppHost. Attempting to reconnect...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourceServiceReconnectRetryButtonText">
-        <source>Retry</source>
-        <target state="new">Retry</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourceServiceReconnectUnsupportedText">
-        <source>The {0} app requires a newer version of the Aspire dashboard.&lt;br /&gt;&lt;br /&gt;See &lt;a href="{1}" target="_blank" rel="noreferrer noopener"&gt;upgrade Aspire&lt;/a&gt; for more information.</source>
-        <target state="new">The {0} app requires a newer version of the Aspire dashboard.&lt;br /&gt;&lt;br /&gt;See &lt;a href="{1}" target="_blank" rel="noreferrer noopener"&gt;upgrade Aspire&lt;/a&gt; for more information.</target>
-        <note />
-      </trans-unit>
     </body>
   </file>
 </xliff>

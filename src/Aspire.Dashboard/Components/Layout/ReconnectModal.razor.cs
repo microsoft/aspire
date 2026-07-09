@@ -3,7 +3,7 @@
 
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using LayoutResources = Aspire.Dashboard.Resources.Layout;
+using ReconnectResources = Aspire.Dashboard.Resources.Reconnect;
 
 namespace Aspire.Dashboard.Components.Layout;
 
@@ -12,5 +12,5 @@ public sealed partial class ReconnectModal : ComponentBase
     private const string UpgradeAspireUrl = "https://aka.ms/aspire/update-latest";
 
     [Inject]
-    public required IStringLocalizer<LayoutResources> Loc { get; init; }
+    public required IStringLocalizer<ReconnectResources> Loc { get; init; }
 }

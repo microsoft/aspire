@@ -13,8 +13,8 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting;
-using Aspire.Hosting.Dashboard;
 using Grpc.Core;
+using Semver;
 using Grpc.Net.Client;
 using Grpc.Net.Client.Configuration;
 using Microsoft.Extensions.Localization;
@@ -46,6 +46,10 @@ internal sealed class DashboardClient : IDashboardClient
     private const string ApiKeyHeaderName = "x-resource-service-api-key";
     private const string TroubleshootingUrl = "https://aka.ms/aspire/dashboard-apphost-connection-failed";
 
+    // The dashboard's own version, extracted from its assembly at startup. Used to compare against
+    // the minimum version required by the AppHost.
+    private static readonly SemVersion? s_dashboardVersion = GetDashboardVersion();
+
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly InteractionCollection _pendingInteractionCollection = new();
     private readonly CancellationTokenSource _cts = new();
@@ -66,6 +70,7 @@ internal sealed class DashboardClient : IDashboardClient
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
     private ImmutableHashSet<Channel<WatchInteractionsResponseUpdate>> _outgoingInteractionChannels = [];
     private string? _applicationName;
+    private string? _minRequiredVersion;
 
     private DashboardConnectionState _connectionState;
     private readonly object _connectionStateLock = new();
@@ -411,10 +416,11 @@ internal sealed class DashboardClient : IDashboardClient
                 var response = await _client!.GetApplicationInformationAsync(request, headers: _headers, cancellationToken: cancellationToken);
 
                 _applicationName = response.ApplicationName;
+                _minRequiredVersion = response.MinDashboardVersion;
 
-                // MinDashboardApiVersion is 0 when the server predates this field or hasn't set it,
+                // MinDashboardVersion is empty when the server predates this field or hasn't set it,
                 // which means the dashboard is always considered supported.
-                if (response.MinDashboardApiVersion > DashboardApiVersions.Current)
+                if (!IsDashboardVersionSufficient(s_dashboardVersion, _minRequiredVersion))
                 {
                     SetConnectionState(DashboardConnectionState.Unsupported);
                     return false;
@@ -771,6 +777,8 @@ internal sealed class DashboardClient : IDashboardClient
             ?? "Aspire";
     }
 
+    public string? MinRequiredVersion => _minRequiredVersion;
+
     public ResourceViewModel? GetResource(string resourceName)
     {
         EnsureInitialized();
@@ -1120,5 +1128,51 @@ internal sealed class DashboardClient : IDashboardClient
     {
         Retry,
         DoNotRetry
+    }
+
+    private static SemVersion? GetDashboardVersion()
+    {
+        // The informational version contains the full semver string stamped at build time
+        // (e.g. "13.5.0-preview.1.26307.2+commitHash").
+        var informationalVersion = Shared.AssemblyVersionHelper.GetInformationalVersion(typeof(DashboardClient).Assembly);
+        if (informationalVersion is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        return SemVersion.TryParse(informationalVersion, SemVersionStyles.Any, out var version) ? version : null;
+    }
+
+    /// <summary>
+    /// Compares the dashboard version against the required version, ignoring pre-release labels.
+    /// A dashboard version of "13.5.0-dev" is considered sufficient for a requirement of "13.5.0".
+    /// Returns <see langword="true"/> when no version requirement is specified or the dashboard meets it.
+    /// </summary>
+    internal static bool IsDashboardVersionSufficient(SemVersion? dashboardVersion, string? requiredVersionText)
+    {
+        // No requirement specified — always sufficient.
+        if (string.IsNullOrEmpty(requiredVersionText))
+        {
+            return true;
+        }
+
+        // Can't parse the requirement — treat as sufficient to avoid blocking users.
+        if (!SemVersion.TryParse(requiredVersionText, SemVersionStyles.Any, out var requiredVersion))
+        {
+            return true;
+        }
+
+        // Dashboard version unknown — can't verify, treat as insufficient.
+        if (dashboardVersion is null)
+        {
+            return false;
+        }
+
+        // Strip pre-release from both versions so that dev/preview builds
+        // are treated as equivalent to their release counterpart.
+        var dashboardRelease = new SemVersion(dashboardVersion.Major, dashboardVersion.Minor, dashboardVersion.Patch);
+        var requiredRelease = new SemVersion(requiredVersion.Major, requiredVersion.Minor, requiredVersion.Patch);
+
+        return SemVersion.ComparePrecedence(dashboardRelease, requiredRelease) >= 0;
     }
 }
