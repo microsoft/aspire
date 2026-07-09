@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The `aspire doctor` command now detects when VS Code is present but the Aspire VS Code extension is not installed, and surfaces a warning with a Marketplace link. When the extension is already installed it reports a pass; when VS Code is not detected at all the check stays silent.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🩺",
+  "firstMergedAt": "2026-07-08T21:08:29Z",
+  "lastMergedAt": "2026-07-08T21:08:29Z",
+  "name": "aspire doctor recommends VS Code extension",
+  "owner": "ellahathaway",
+  "prs": [
+    18624
+  ]
+}

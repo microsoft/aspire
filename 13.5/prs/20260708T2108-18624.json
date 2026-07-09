@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "CLI improvement: aspire doctor now checks for the VS Code extension and recommends installing it when VS Code is present but the extension is missing",
+  "mergedAt": "2026-07-08T21:08:29Z",
+  "number": 18624,
+  "runDate": "2026-07-09T00:24:58Z",
+  "status": "included",
+  "title": "Recommend the VS Code extension in aspire doctor"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Dashboard bug fix: removed the hardcoded 1 MB cap on IInteractionService file uploads; now defers to the server-configured limit",
+  "mergedAt": "2026-07-08T19:42:36Z",
+  "number": 18669,
+  "runDate": "2026-07-09T00:24:58Z",
+  "status": "included",
+  "title": "Remove Dashboard's 1MB file upload fallback, rely on server limit"
+}

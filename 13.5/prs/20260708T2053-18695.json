@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Test-only: fixes focus detection in a Playwright test helper script; only the test file changed, no production code",
+  "mergedAt": "2026-07-08T20:53:52Z",
+  "number": 18695,
+  "runDate": "2026-07-09T00:24:58Z",
+  "status": "excluded",
+  "title": "Fix MobileNavMenuClosesWhenFocusLeavesMenu: correct focus detection in IsFocusInsideMobileNavMenuScript"
+}

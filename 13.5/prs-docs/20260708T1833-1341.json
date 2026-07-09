@@ -1,0 +1,9 @@
+{
+  "author": "alistairmatthews",
+  "comment": "Documentation diagram fix only (mermaid rendering error in Blazor hosting article); not documenting a product changelog entry",
+  "mergedAt": "2026-07-08T18:33:31Z",
+  "number": 1341,
+  "runDate": "2026-07-09T00:24:58Z",
+  "status": "excluded",
+  "title": "Fix mermaid diagram in the \"Get started with Blazor hosting\" article"
+}

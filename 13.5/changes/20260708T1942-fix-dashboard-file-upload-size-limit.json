@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The Dashboard was silently capping IInteractionService file uploads at 1 MB instead of deferring to the server-configured limit (100 MB by default). Files between 1 MB and 100 MB are now accepted correctly.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📤",
+  "firstMergedAt": "2026-07-08T19:42:36Z",
+  "lastMergedAt": "2026-07-08T19:42:36Z",
+  "name": "Fix Dashboard file upload size limit",
+  "owner": "radical",
+  "prs": [
+    18669
+  ]
+}

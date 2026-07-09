@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Test-only: hardens CI smoke tests by setting explicit startup timeout for raw `aspire run`; no user-facing product changes",
+  "mergedAt": "2026-07-08T20:04:12Z",
+  "number": 18671,
+  "runDate": "2026-07-09T00:24:58Z",
+  "status": "excluded",
+  "title": "Harden Daily CLI Smoke Tests: set an explicit AppHost startup budget for raw `aspire run`"
+}
