@@ -3379,6 +3379,45 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WaitForResourceCleanupPropagatesCleanupFailures()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("database", "image")
+            .WithPersistentLifetime();
+
+        var configDict = new Dictionary<string, string?>
+        {
+            ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+        var dcpOptions = new DcpOptions
+        {
+            DashboardPath = "./dashboard",
+            ResourceCleanupMode = true,
+            WaitForResourceCleanup = true
+        };
+
+        var expectedException = new InvalidOperationException("DCP cleanup failed.");
+        var kubernetesService = new TestKubernetesService
+        {
+            CleanupResourcesAsyncCallback = _ => Task.FromException(expectedException)
+        };
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            configuration: configuration,
+            dcpOptions: dcpOptions);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => appExecutor.StopAsync(CancellationToken.None));
+        Assert.Same(expectedException, exception);
+    }
+
+    [Fact]
     public async Task PersistentProjectWithReplicasThrows()
     {
         var builder = DistributedApplication.CreateBuilder();

@@ -23,6 +23,7 @@ internal sealed class TestKubernetesService : IKubernetesService
 
     public ConcurrentQueue<CustomResource> CreatedResources { get; } = [];
     public ConcurrentQueue<string> DeletedResources { get; } = [];
+    public Func<CancellationToken, Task>? CleanupResourcesAsyncCallback { get; set; }
 
     private readonly List<Channel<(WatchEventType, CustomResource)>> _watchChannels = [];
     private readonly Func<CustomResource, string, bool?, Stream> _startStream;
@@ -325,6 +326,11 @@ internal sealed class TestKubernetesService : IKubernetesService
 
     public Task CleanupResourcesAsync(CancellationToken cancellationToken = default)
     {
+        if (CleanupResourcesAsyncCallback is not null)
+        {
+            return CleanupResourcesAsyncCallback(cancellationToken);
+        }
+
         return StopServerAsync("Full", cancellationToken);
     }
 
