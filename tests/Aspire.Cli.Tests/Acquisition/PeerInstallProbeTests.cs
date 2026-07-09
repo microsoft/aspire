@@ -64,7 +64,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
     public async Task ProbeAsync_BinaryNotFound_ReturnsFailed()
     {
         var probe = CreateProbeWithGenerousTimeout();
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var missing = Path.Combine(workspace.WorkspaceRoot.FullName, "does-not-exist");
 
         var result = await probe.ProbeAsync(missing, TestContext.Current.CancellationToken);
@@ -388,7 +388,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
         Assert.SkipWhen(OperatingSystem.IsWindows(),
             "This regression test records the shell process id using POSIX $$; Windows process-tree cancellation is covered by production code.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var pidFile = Path.Combine(workspace.WorkspaceRoot.FullName, "peer.pid");
         using var fakePeer = FakePeerScript.BuildSleeperWithPidFile(outputHelper, pidFile, sleepSeconds: 30);
 
@@ -516,7 +516,7 @@ internal static class FakePeerScript
     /// </summary>
     internal static FakeScriptResult BuildArgvRecorder(ITestOutputHelper outputHelper)
     {
-        var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var argvFile = Path.Combine(workspace.WorkspaceRoot.FullName, "argv.txt");
         var path = OperatingSystem.IsWindows()
             ? Path.Combine(workspace.WorkspaceRoot.FullName, "peer.cmd")
@@ -540,7 +540,7 @@ internal static class FakePeerScript
 
     private static FakeScriptResult BuildInternal(ITestOutputHelper outputHelper, ScriptBody body)
     {
-        var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var path = OperatingSystem.IsWindows()
             ? Path.Combine(workspace.WorkspaceRoot.FullName, "peer.cmd")
             : Path.Combine(workspace.WorkspaceRoot.FullName, "peer");

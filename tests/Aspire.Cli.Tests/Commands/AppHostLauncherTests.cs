@@ -74,7 +74,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
             "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.WorkspaceRoot.FullName;
 
         // Reference the same AppHost through a directory symlink ("link" -> "real"). This mirrors the
@@ -566,7 +566,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ReadChildLogTail_ReturnsBoundedRelevantNonEmptyTail()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var childLogFile = Path.Combine(workspace.WorkspaceRoot.FullName, "child.log");
         await File.WriteAllLinesAsync(childLogFile, [
             "[2026-05-15 17:07:24.674] [DBUG] [Features] Feature updateNotificationsEnabled = True (default: True)",
@@ -594,7 +594,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ReadChildLogTail_IncludesBuildOutput()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var childLogFile = Path.Combine(workspace.WorkspaceRoot.FullName, "child.log");
         await File.WriteAllLinesAsync(childLogFile, [
             "[2026-05-16 19:07:51.709] [INFO] [Build]   Determining projects to restore...",
@@ -617,7 +617,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ReadChildLogReplayTail_ReturnsRicherBoundedRelevantTail()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var childLogFile = Path.Combine(workspace.WorkspaceRoot.FullName, "child.log");
         await File.WriteAllLinesAsync(childLogFile, [
             "[2026-05-15 17:07:24.674] [DBUG] [Features] Feature updateNotificationsEnabled = True (default: True)",
@@ -679,7 +679,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ReadChildLogReplayTail_IncludesBuildOutput()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var childLogFile = Path.Combine(workspace.WorkspaceRoot.FullName, "child.log");
         await File.WriteAllLinesAsync(childLogFile, [
             "[2026-05-16 19:07:51.709] [INFO] [Build]   Determining projects to restore...",
@@ -755,7 +755,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper)
         {
-            var workspace = TemporaryWorkspace.Create(outputHelper);
+            var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var homeDirectory = workspace.WorkspaceRoot.CreateSubdirectory("home");
             var hivesDirectory = workspace.WorkspaceRoot.CreateSubdirectory("hives");
             var cacheDirectory = workspace.WorkspaceRoot.CreateSubdirectory("cache");

@@ -17,7 +17,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithHelpArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -32,7 +32,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithStepArgumentSucceeds()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -90,7 +90,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithDeployStepSucceeds()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -143,7 +143,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithPublishStepSucceeds()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -196,7 +196,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandPassesOutputPathWhenSpecified()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -254,7 +254,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandFailsWithInvalidProjectFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -286,7 +286,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithListStepsReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var requestStopCalled = new TaskCompletionSource();
         var getPipelineStepsCalled = new TaskCompletionSource();
@@ -343,7 +343,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         // `aspire do --list-steps` with no step argument used to launch the AppHost
         // and crash mid-pipeline. It should now fail validation with a friendly
         // error pointing at concrete examples.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -367,7 +367,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         // GetRunArgumentsAsync prompts the user interactively. But `--list-steps` does
         // not flow through that prompt, so without the validator firing the extension
         // would still hit the original crash from https://github.com/microsoft/aspire/issues/17526.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -392,7 +392,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithListStepsAndStepArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var requestStopCalled = new TaskCompletionSource();
 
@@ -441,7 +441,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithListStepsDoesNotExecutePipeline()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var publishingActivitiesRequested = false;
         var requestStopCalled = new TaskCompletionSource();
@@ -496,7 +496,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandListStepsDisplaysCustomSteps()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var requestStopCalled = new TaskCompletionSource();
 
@@ -552,7 +552,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandWithHelpShowsListStepsOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -567,7 +567,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandForwardsPipelineLogLevelAsLogLevelToAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         string[]? capturedArgs = null;
 
@@ -622,7 +622,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DoCommandDoesNotForwardCliLogLevelToAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         string[]? capturedArgs = null;
 

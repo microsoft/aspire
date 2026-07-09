@@ -16,7 +16,7 @@ public class AspireJsLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void LauncherFailsWhenRidPackageVersionMismatchesPointerPackageVersion()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var pointerVersion = "1.2.3";
         var ridPackageVersion = "1.2.4";
 
@@ -36,7 +36,7 @@ public class AspireJsLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void LauncherFailsWithRepairGuidanceWhenRidPackageJsonIsInvalid()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var pointerVersion = "1.2.3";
         var rid = GetCurrentRid();
         var ridPackageName = $"@microsoft/aspire-cli-{rid}";
@@ -57,7 +57,7 @@ public class AspireJsLauncherTests(ITestOutputHelper outputHelper)
     {
         Assert.SkipUnless(!RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "chmod is POSIX-only");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var pointerVersion = "1.0.0";
         var rid = GetCurrentRid();
         var ridPackageName = $"@microsoft/aspire-cli-{rid}";
@@ -86,7 +86,7 @@ public class AspireJsLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void LauncherCleansUpTempFileWhenCopyFailsAfterCreatingTempFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var pointerVersion = "1.0.0";
         var rid = GetCurrentRid();
         var ridPackageName = $"@microsoft/aspire-cli-{rid}";
@@ -115,7 +115,7 @@ public class AspireJsLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public void LauncherCopiesBinaryToCacheAndSetsEnvironmentVariables()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var pointerVersion = "2.0.0";
         var rid = GetCurrentRid();
         var ridPackageName = $"@microsoft/aspire-cli-{rid}";
@@ -146,7 +146,7 @@ public class AspireJsLauncherTests(ITestOutputHelper outputHelper)
         var supportedRids = GetSupportedRidsFromPackScript(scriptPath);
         var launcherScriptPath = Path.Combine(GetRepoRoot(), "eng", "clipack", "npm", "aspire.js");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var probeScript = Path.Combine(workspace.Path, "detect-rids.js");
         File.WriteAllText(probeScript, $$"""
             const launcher = require({{JsonSerializer.Serialize(launcherScriptPath)}});
@@ -164,7 +164,7 @@ public class AspireJsLauncherTests(ITestOutputHelper outputHelper)
 
     private string GetCurrentRid()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var launcherScriptPath = Path.Combine(GetRepoRoot(), "eng", "clipack", "npm", "aspire.js");
         var probeScript = Path.Combine(workspace.Path, "detect-current-rid.js");
 

@@ -28,7 +28,7 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void RegisterSettingsFiles_LoadsValidJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var config = BuildConfigurationFromSettingsFile(workspace, """
             {
@@ -44,7 +44,7 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void RegisterSettingsFiles_HandlesJsonComments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var config = BuildConfigurationFromSettingsFile(workspace, """
             {
@@ -63,7 +63,7 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void RegisterSettingsFiles_HandlesTrailingCommas()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var config = BuildConfigurationFromSettingsFile(workspace, """
             {
@@ -78,7 +78,7 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void RegisterSettingsFiles_HandlesBlockComments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var config = BuildConfigurationFromSettingsFile(workspace, """
             {
@@ -93,7 +93,7 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void RegisterSettingsFiles_HandlesCommentsAndTrailingCommas()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var config = BuildConfigurationFromSettingsFile(workspace, """
             {
@@ -113,7 +113,7 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryNormalizeSettingsFile_PreservesBooleanTypes()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         // File has a colon-separated key with a boolean value
@@ -144,7 +144,7 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetConfigRootDirectory_UsesNearestAspireConfigDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var configRoot = workspace.CreateDirectory("project");
         Directory.CreateDirectory(Path.Combine(configRoot.FullName, "nested", "apphost"));
@@ -159,7 +159,7 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetWorkspaceAspireDirectory_UsesLegacySettingsParentDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "nested", "apphost"));
         appHostDirectory.Create();
@@ -185,7 +185,7 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
         // (aspire run/add/init/update/etc.). Startup must register the legacy file
         // directly so legacy settings remain readable from IConfiguration without
         // materializing aspire.config.json.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var legacyDir = workspace.CreateDirectory(AspireJsonConfiguration.SettingsFolder);
         var legacySettingsPath = Path.Combine(legacyDir.FullName, AspireJsonConfiguration.FileName);
@@ -220,7 +220,7 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void RegisterSettingsFiles_DoesNotOverwriteExistingAspireConfigJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Both files present: the workspace was already migrated but the legacy file was
         // retained (this is the documented transition state — see AspireConfigFile.LoadOrCreate
@@ -257,7 +257,7 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void RegisterSettingsFiles_UnparseableLegacyFileDoesNotCreateAspireConfigJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var legacyDir = workspace.CreateDirectory(AspireJsonConfiguration.SettingsFolder);
         var legacySettingsPath = Path.Combine(legacyDir.FullName, AspireJsonConfiguration.FileName);

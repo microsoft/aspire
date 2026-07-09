@@ -17,7 +17,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ExtensionInternalCommandIsHidden()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -29,7 +29,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExtensionInternalCommand_WithHelpArgument_ReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -43,7 +43,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExtensionInternalCommand_WithNoSubcommand_ReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -57,7 +57,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostsCommand_WithSingleProject_ReturnsSuccessWithValidJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "MyApp.AppHost.csproj"));
         
         var capturedOutput = new TestOutputTextWriter(outputHelper);
@@ -98,7 +98,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostsCommand_WithRealDiscovery_ReturnsOnlyJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "MyApp.AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, """
             <Project Sdk="Aspire.AppHost.Sdk">
@@ -133,7 +133,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostsCommand_WithMultipleProjects_ReturnsSuccessWithAllCandidates()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile1 = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "App1.AppHost.csproj"));
         var projectFile2 = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "App2.AppHost.csproj"));
 
@@ -176,7 +176,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostsCommand_WithNoProjects_ReturnsFailureExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -194,7 +194,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostsCommand_WhenProjectLocatorThrows_ReturnsFailureExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -212,7 +212,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostsCommand_WithHelpArgument_ReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 

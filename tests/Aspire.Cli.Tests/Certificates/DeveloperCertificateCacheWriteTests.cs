@@ -17,7 +17,7 @@ public class DeveloperCertificateCacheWriteTests(ITestOutputHelper outputHelper)
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "Only supported on Linux in CI.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var options = new RemoteInvokeOptions();
         options.StartInfo.Environment["HOME"] = workspace.Path;
         options.StartInfo.Environment["USERPROFILE"] = workspace.Path;

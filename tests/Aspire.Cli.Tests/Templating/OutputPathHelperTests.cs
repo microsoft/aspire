@@ -10,7 +10,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetUniqueDefaultOutputPath_ReturnsTemplateName_WhenDirectoryDoesNotExist()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var result = OutputPathHelper.GetUniqueDefaultOutputPath("aspire-starter", workspace.WorkspaceRoot.FullName);
 
@@ -20,7 +20,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetUniqueDefaultOutputPath_ReturnsTemplateName_WhenDirectoryExistsButIsEmpty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         workspace.CreateDirectory("aspire-starter");
 
         var result = OutputPathHelper.GetUniqueDefaultOutputPath("aspire-starter", workspace.WorkspaceRoot.FullName);
@@ -31,7 +31,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetUniqueDefaultOutputPath_AppendsSuffix_WhenDirectoryExistsAndIsNonEmpty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.CreateDirectory("aspire-starter");
         File.WriteAllText(Path.Combine(dir.FullName, "file.txt"), "content");
 
@@ -43,7 +43,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetUniqueDefaultOutputPath_IncrementsUntilUnique()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create non-empty directories for aspire-starter and aspire-starter-2
         foreach (var name in new[] { "aspire-starter", "aspire-starter-2" })
@@ -60,7 +60,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetUniqueDefaultOutputPath_SkipsNonEmptyAndUsesEmptySlot()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // aspire-starter is non-empty, aspire-starter-2 is empty
         var dir = workspace.CreateDirectory("aspire-starter");
@@ -75,7 +75,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetUniqueDefaultOutputPath_StripsInvalidPathCharacters()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var result = OutputPathHelper.GetUniqueDefaultOutputPath("my\0app", workspace.WorkspaceRoot.FullName);
 
@@ -85,7 +85,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetUniqueDefaultOutputPath_FallsBackToOutput_WhenAllCharsInvalid()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var result = OutputPathHelper.GetUniqueDefaultOutputPath("\0", workspace.WorkspaceRoot.FullName);
 
@@ -95,7 +95,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ValidateOutputPath_ReturnsNull_WhenDirectoryDoesNotExist()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var path = Path.Combine(workspace.WorkspaceRoot.FullName, "new-dir");
 
         var result = OutputPathHelper.ValidateOutputPath(path, workspace.WorkspaceRoot.FullName);
@@ -106,7 +106,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ValidateOutputPath_ReturnsNull_WhenDirectoryExistsButIsEmpty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.CreateDirectory("empty-dir");
 
         var result = OutputPathHelper.ValidateOutputPath(dir.FullName, workspace.WorkspaceRoot.FullName);
@@ -117,7 +117,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ValidateOutputPath_ReturnsError_WhenDirectoryExistsAndIsNonEmpty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.CreateDirectory("non-empty-dir");
         File.WriteAllText(Path.Combine(dir.FullName, "file.txt"), "content");
 
@@ -130,7 +130,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreateOutputPathValidator_ReturnsSuccess_WhenDirectoryDoesNotExist()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var validator = OutputPathHelper.CreateOutputPathValidator(workspace.WorkspaceRoot.FullName);
 
         var result = validator("./new-dir");
@@ -141,7 +141,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreateOutputPathValidator_ReturnsSuccess_WhenDirectoryExistsButIsEmpty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         workspace.CreateDirectory("empty-dir");
 
         var validator = OutputPathHelper.CreateOutputPathValidator(workspace.WorkspaceRoot.FullName);
@@ -154,7 +154,7 @@ public class OutputPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreateOutputPathValidator_ReturnsError_WhenDirectoryExistsAndIsNonEmpty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.CreateDirectory("non-empty-dir");
         File.WriteAllText(Path.Combine(dir.FullName, "file.txt"), "content");
 

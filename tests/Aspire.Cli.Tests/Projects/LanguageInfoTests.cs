@@ -61,7 +61,7 @@ public sealed class LanguageInfoTests(ITestOutputHelper outputHelper)
     [Fact]
     public void FindInDirectory_FindsExactFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"), "");
 
         var result = s_typescript.FindInDirectory(workspace.WorkspaceRoot.FullName);
@@ -72,7 +72,7 @@ public sealed class LanguageInfoTests(ITestOutputHelper outputHelper)
     [Fact]
     public void FindInDirectory_FindsGlobPattern()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "MyApp.csproj"), "");
 
         var result = s_csharp.FindInDirectory(workspace.WorkspaceRoot.FullName);
@@ -83,7 +83,7 @@ public sealed class LanguageInfoTests(ITestOutputHelper outputHelper)
     [Fact]
     public void FindInDirectory_FindsInNestedDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var nested = Path.Combine(workspace.WorkspaceRoot.FullName, "src", "AppHost");
         Directory.CreateDirectory(nested);
         File.WriteAllText(Path.Combine(nested, "apphost.cs"), "");
@@ -96,7 +96,7 @@ public sealed class LanguageInfoTests(ITestOutputHelper outputHelper)
     [Fact]
     public void FindInDirectory_RespectsRecurseLimit()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         // Create a file deeper than DetectionRecurseLimit (5)
         var deep = Path.Combine(workspace.WorkspaceRoot.FullName, "a", "b", "c", "d", "e", "f");
         Directory.CreateDirectory(deep);
@@ -109,7 +109,7 @@ public sealed class LanguageInfoTests(ITestOutputHelper outputHelper)
     [Fact]
     public void FindInDirectory_ReturnsNullForEmptyDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var result = s_csharp.FindInDirectory(workspace.WorkspaceRoot.FullName);
         Assert.Null(result);

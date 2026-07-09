@@ -28,7 +28,7 @@ public class GuestAppHostProjectTests : IDisposable
 
     public GuestAppHostProjectTests(ITestOutputHelper outputHelper)
     {
-        _workspace = TemporaryWorkspace.Create(outputHelper);
+        _workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         _configuration = new ConfigurationBuilder().Build();
         _profilingTelemetry = new ProfilingTelemetry(_configuration);
     }

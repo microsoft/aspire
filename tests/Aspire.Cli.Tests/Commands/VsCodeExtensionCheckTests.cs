@@ -12,7 +12,7 @@ public class VsCodeExtensionCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_ReturnsEmpty_WhenVsCodeNotInstalled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         // No TERM_PROGRAM and nothing resolvable on PATH, so real detection reports VS Code absent.
         var environment = new TestEnvironment(new Dictionary<string, string?>());
@@ -27,7 +27,7 @@ public class VsCodeExtensionCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_ReturnsWarning_WhenExtensionMissing()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var extensions = workspace.CreateDirectory("extensions");
         // VS Code is present (TERM_PROGRAM) but the override extensions directory is empty.
@@ -56,7 +56,7 @@ public class VsCodeExtensionCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_ReturnsPass_WhenExtensionInstalled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var extensions = workspace.CreateDirectory("extensions");
         // VS Code is present and the Aspire extension is installed in the override extensions directory.
@@ -85,7 +85,7 @@ public class VsCodeExtensionCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Detect_FindsExtension_ViaVsCodeExtensionsOverride()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var extensions = workspace.CreateDirectory("extensions");
         Directory.CreateDirectory(Path.Combine(extensions.FullName, "microsoft-aspire.aspire-vscode-1.2.3"));
@@ -109,7 +109,7 @@ public class VsCodeExtensionCheckTests(ITestOutputHelper outputHelper)
     [InlineData(".vscode-server-insiders")]
     public void Detect_FindsExtension_ViaEachDefaultExtensionsRoot(string rootFolder)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         // Exercise each default extensions root that GetExtensionDirectories composes (desktop
         // stable/Insiders and remote/server) rather than the VSCODE_EXTENSIONS override.
@@ -129,7 +129,7 @@ public class VsCodeExtensionCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Detect_IgnoresDefaultRoots_WhenVsCodeExtensionsOverrideSet()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var overrideDirectory = workspace.CreateDirectory("override");
         // The extension is present in the default desktop root but absent from the override directory.
@@ -153,7 +153,7 @@ public class VsCodeExtensionCheckTests(ITestOutputHelper outputHelper)
     [InlineData("code-insiders")]
     public void Detect_DetectsVsCode_ViaPathFallback_WhenTermProgramNotVsCode(string launcherOnPath)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         // No TERM_PROGRAM, so detection falls back to probing the CLI launchers on PATH via the
         // injected resolver.
@@ -169,7 +169,7 @@ public class VsCodeExtensionCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Detect_ReportsVsCodeNotInstalled_WhenTermProgramAbsentAndNotOnPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var environment = new TestEnvironment(new Dictionary<string, string?>());
 
@@ -182,7 +182,7 @@ public class VsCodeExtensionCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Detect_MatchesExtensionFolder_CaseInsensitively()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var extensions = workspace.CreateDirectory("extensions");
         Directory.CreateDirectory(Path.Combine(extensions.FullName, "Microsoft-Aspire.Aspire-VSCode-9.9.9"));
@@ -201,7 +201,7 @@ public class VsCodeExtensionCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Detect_ReportsExtensionMissing_WhenOnlyUnrelatedExtensionsPresent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var extensions = workspace.CreateDirectory("extensions");
         Directory.CreateDirectory(Path.Combine(extensions.FullName, "ms-dotnettools.csharp-2.0.0"));
@@ -221,7 +221,7 @@ public class VsCodeExtensionCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Detect_ReportsExtensionMissing_WhenFolderSharesPrefixWithDifferentId()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var extensions = workspace.CreateDirectory("extensions");
         // A different extension whose id begins with ours. Without the digit boundary the prefix match
@@ -242,7 +242,7 @@ public class VsCodeExtensionCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Detect_ReportsExtensionMissing_WhenExtensionsDirectoryDoesNotExist()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         // Point the override at a path that is never created so DirectoryContainsExtension hits the
         // Directory.Exists == false guard. VS Code being present must still yield a clean "missing"

@@ -10,7 +10,7 @@ public class LegacyTypeScriptAppHostHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void IsLegacyLayout_WithLegacyAppHostOnly_ReturnsTrue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"), "// legacy");
 
         Assert.True(LegacyTypeScriptAppHost.IsLegacyLayout(workspace.WorkspaceRoot.FullName));
@@ -19,7 +19,7 @@ public class LegacyTypeScriptAppHostHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void IsLegacyLayout_WithModernAppHostPresent_ReturnsFalse()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"), "// legacy");
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts"), "// modern");
 
@@ -29,7 +29,7 @@ public class LegacyTypeScriptAppHostHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void IsLegacyLayout_WithNoAppHost_ReturnsFalse()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         Assert.False(LegacyTypeScriptAppHost.IsLegacyLayout(workspace.WorkspaceRoot.FullName));
     }

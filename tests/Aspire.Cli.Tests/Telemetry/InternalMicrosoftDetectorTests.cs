@@ -17,7 +17,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task IsInternalMicrosoftMachineAsync_UsesFreshCache()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
         var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
@@ -56,7 +56,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task IsInternalMicrosoftMachineAsync_RunsProbesWhenCacheIsStaleAndUpdatesCache()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var now = new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero);
         var cacheFilePath = Path.Combine(workspace.Path, "cache", "detector.json");
         Directory.CreateDirectory(Path.GetDirectoryName(cacheFilePath)!);
@@ -91,7 +91,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task IsInternalMicrosoftMachineAsync_RunsNextStageOnlyWhenPreviousStageDoesNotDetect()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var calls = new List<string>();
         var detector = CreateDetector(
             Path.Combine(workspace.Path, "cache", "detector.json"),
@@ -126,7 +126,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task IsInternalMicrosoftMachineAsync_CancelsOtherProbesInStageAfterSuccessfulProbe()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var slowProbeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var slowProbeCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var detector = CreateDetector(
@@ -170,7 +170,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task IsInternalMicrosoftMachineAsync_ReturnsPositiveResultWhenCancelledProbeFaultsDuringDrain()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var faultingProbeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var detector = CreateDetector(
             Path.Combine(workspace.Path, "cache", "detector.json"),
@@ -211,7 +211,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task IsInternalMicrosoftMachineAsync_RunsLaterStagesWhenProbeThrowsUnexpectedException()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var detector = CreateDetector(
             Path.Combine(workspace.Path, "cache", "detector.json"),
             new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
@@ -231,7 +231,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task CheckWindowsUserDnsDomainAsync_UsesExecutionContextEnvironment()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var detector = CreateDetector(
             Path.Combine(workspace.Path, "cache", "detector.json"),
             new DateTimeOffset(2026, 6, 16, 12, 0, 0, TimeSpan.Zero),
@@ -252,7 +252,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task CheckWindowsWorkplaceJoinAsync_UsesExecutionContextEnvironmentAndProcessFactory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "dsregcmd"), string.Empty);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "dsregcmd.EXE"), string.Empty);
         var processFactory = new TestProcessExecutionFactory
@@ -289,7 +289,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task CheckGitHubMembershipWithTokenAsync_ReturnsFalseWhenUserRequestFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var handler = new TestGitHubHttpMessageHandler((request, _) =>
             Task.FromResult(request.RequestUri?.AbsolutePath switch
             {
@@ -311,7 +311,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task CheckGitHubMembershipWithTokenAsync_ReturnsTrueForActivePrivateMembership()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var handler = new TestGitHubHttpMessageHandler((request, _) =>
             Task.FromResult(request.RequestUri?.AbsolutePath switch
             {
@@ -334,7 +334,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task CheckGitHubMembershipWithTokenAsync_ReturnsTrueForExplicitPublicMembership()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var handler = new TestGitHubHttpMessageHandler((request, _) =>
             Task.FromResult(request.RequestUri?.AbsolutePath switch
             {
@@ -358,7 +358,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task CheckGitHubMembershipWithTokenAsync_ReturnsFalseForNonMember()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var handler = new TestGitHubHttpMessageHandler((request, _) =>
             Task.FromResult(request.RequestUri?.AbsolutePath switch
             {
@@ -382,7 +382,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task CheckCopilotCliAsync_ChecksTokenCandidatesWithoutCopilotCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var handler = new TestGitHubHttpMessageHandler((request, _) =>
             Task.FromResult(request.RequestUri?.AbsolutePath switch
             {
@@ -411,7 +411,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task CheckCopilotCliAsync_LimitsGitHubTokenCandidates()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var handler = new TestGitHubHttpMessageHandler((request, _) =>
             Task.FromResult(request.RequestUri?.AbsolutePath switch
             {
@@ -438,7 +438,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task CheckCopilotCliAsync_UsesOverallGitHubTokenCandidateTimeout()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var handler = new TestGitHubHttpMessageHandler(async (_, cancellationToken) =>
         {
             await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);

@@ -11,7 +11,7 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DetectAsync_WithNoScanners_ReturnsEmptyArray()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var detector = new AgentEnvironmentDetector([]);
         var context = new AgentEnvironmentScanContext
         {
@@ -27,7 +27,7 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DetectAsync_WithScanner_RunsScannerWithCorrectContext()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scanner = new TestAgentEnvironmentScanner();
         var detector = new AgentEnvironmentDetector([scanner]);
         var context = new AgentEnvironmentScanContext
@@ -46,7 +46,7 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DetectAsync_WithScannerThatAddsApplicator_ReturnsApplicator()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scanner = new TestAgentEnvironmentScanner
         {
             ApplicatorToAdd = new AgentEnvironmentApplicator(
@@ -69,7 +69,7 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DetectAsync_WithMultipleScanners_RunsAllScanners()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scanner1 = new TestAgentEnvironmentScanner
         {
             ApplicatorToAdd = new AgentEnvironmentApplicator(
@@ -99,7 +99,7 @@ public class AgentEnvironmentDetectorTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DetectAsync_WithConfigurePlaywrightTrue_PassesContextToScanner()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scanner = new TestAgentEnvironmentScanner();
         var detector = new AgentEnvironmentDetector([scanner]);
         var context = new AgentEnvironmentScanContext

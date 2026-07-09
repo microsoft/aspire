@@ -139,7 +139,7 @@ public partial class PipelineCommandListStepsTests(ITestOutputHelper outputHelpe
 
     private (PipelineCommandBase Command, StringWriter Writer) CreateCommandWithCapturedOutput()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var writer = new StringWriter();
         var console = AnsiConsole.Create(new AnsiConsoleSettings
         {

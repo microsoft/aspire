@@ -24,7 +24,7 @@ public class DotNetToolDetectionTests(ITestOutputHelper outputHelper)
     [Fact]
     public void IsRunningAsDotNetTool_ReturnsTrueForCustomToolPathWithSiblingStore()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var toolPath = Path.Combine(workspace.Path, "custom tool path");
         var processPath = Path.Combine(toolPath, GetAspireExecutableName());
         var storeExecutablePath = Path.Combine(
@@ -51,7 +51,7 @@ public class DotNetToolDetectionTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetDotNetToolUpdateCommand_ReturnsToolPathCommandForCustomToolStorePath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var toolPath = Path.Combine(workspace.Path, "custom tool path");
         var processPath = Path.Combine(
             toolPath,
@@ -79,7 +79,7 @@ public class DotNetToolDetectionTests(ITestOutputHelper outputHelper)
     [Fact]
     public void IsRunningAsDotNetTool_ReturnsFalseForCustomToolPathWithoutSiblingStore()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var processPath = Path.Combine(workspace.Path, GetAspireExecutableName());
         File.WriteAllText(processPath, string.Empty);
 

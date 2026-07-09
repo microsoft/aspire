@@ -263,7 +263,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
         using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStopped: stoppedActivities.Add);
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var spec = CreateTestSpec(
             execute: new CommandSpec
@@ -777,7 +777,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
         using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStopped: stoppedActivities.Add);
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var launcher = CreateLauncher(
             commandResolver: cmd => cmd == "dotnet" ? "dotnet" : null);
@@ -887,7 +887,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsync_CreatesMissingMigrationFiles()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.Path;
 
         var migrationFileName = "tsconfig.apphost.json";
@@ -930,7 +930,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsync_DoesNotOverwriteExistingMigrationFiles()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.Path;
 
         var migrationFileName = "tsconfig.apphost.json";

@@ -18,7 +18,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandWithHelpArgumentReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
@@ -33,7 +33,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandFailsWithInvalidProjectFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -65,7 +65,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandFailsWhenAppHostIsNotCompatible()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -99,7 +99,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandFailsWhenAppHostBuildFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -133,7 +133,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandSucceedsWithoutOutputPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -201,7 +201,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandSucceedsEndToEnd()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -270,7 +270,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandIncludesDeployFlagInArguments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Use a cross-platform path for testing
         var testOutputPath = Path.Combine(Path.GetTempPath(), "test");
@@ -341,7 +341,7 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DeployCommandReturnsNonZeroExitCodeWhenDeploymentFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Arrange
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>

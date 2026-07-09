@@ -21,7 +21,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_WhenNoDcpBundleIsDiscovered_ReturnsWarningAndSkipsConnectionTests()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tester = new TestDcpConnectionChecker
         {
             TestConnectionAsyncCallback = (_, _, _) => throw new InvalidOperationException("Should not be called.")
@@ -41,7 +41,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_WhenDcpExecutableIsMissing_ReturnsFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dcpDirectory = workspace.WorkspaceRoot.CreateSubdirectory("dcp");
         var check = new DcpConnectionHealthCheck(
             new FixedLayoutDiscovery(LayoutComponent.Dcp, dcpDirectory.FullName),
@@ -59,7 +59,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_WhenDcpConnectionsSucceed_ReturnsSingleSuccessResult()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dcpDirectory = CreateDcpDirectoryWithExecutable(workspace);
         var seenUseDeveloperCertificateValues = new ConcurrentBag<bool>();
         var tester = new TestDcpConnectionChecker
@@ -91,7 +91,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_WhenDeveloperCertificateConnectionFails_ReturnsFailureWithFix()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dcpDirectory = CreateDcpDirectoryWithExecutable(workspace);
         var tester = new TestDcpConnectionChecker
         {
@@ -142,7 +142,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DcpKubeconfig_ReadFileWithRetryAsync_RetriesWhenInitialContentIsPartial()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var kubeconfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "kubeconfig");
         await File.WriteAllTextAsync(kubeconfigPath, "clusters:", TestContext.Current.CancellationToken);
 
@@ -173,7 +173,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "Only supported on Linux in CI.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var options = new RemoteInvokeOptions();
         options.StartInfo.Environment["HOME"] = workspace.Path;
         options.StartInfo.Environment["USERPROFILE"] = workspace.Path;

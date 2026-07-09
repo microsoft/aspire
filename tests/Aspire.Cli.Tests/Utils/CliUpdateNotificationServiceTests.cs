@@ -21,7 +21,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
         var currentVersion = VersionHelper.GetDefaultTemplateVersion();
         TaskCompletionSource<string> suggestedVersionTcs = new();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             configure.NuGetPackageCacheFactory = (sp) =>
@@ -77,7 +77,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
         var currentVersion = VersionHelper.GetDefaultTemplateVersion();
         TaskCompletionSource<string> suggestedVersionTcs = new();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             configure.NuGetPackageCacheFactory = (sp) =>
@@ -130,7 +130,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
         var currentVersion = VersionHelper.GetDefaultTemplateVersion();
         TaskCompletionSource<string> suggestedVersionTcs = new();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             configure.NuGetPackageCacheFactory = (sp) =>
@@ -180,7 +180,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void NotifyIfUpdateAvailable_WithoutCachedPackages_DoesNotNotify()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             configure.InteractionServiceFactory = sp =>
@@ -213,7 +213,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NotifyIfUpdateAvailable_UsesDotnetToolCommandForNativeAotToolStorePath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         TestInteractionService? interactionService = null;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
@@ -256,7 +256,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NotifyIfUpdateAvailable_UsesToolPathCommandForCustomToolPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var toolPath = Path.Combine(workspace.CreateDirectory("install").FullName, "custom tool path");
         var processPath = CreateCustomToolPathInstall(toolPath);
         TestInteractionService? interactionService = null;
@@ -301,7 +301,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NotifyIfUpdateAvailable_UsesAspireUpdateCommandForStandaloneArchivePath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         TestInteractionService? interactionService = null;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
@@ -344,7 +344,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NotifyIfUpdateAvailable_UsesNpmCommandForNpmInstall()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var npmScope = NpmInstallDetection.UseEnvironmentForTesting(CreateNpmInstallEnvironment());
         TestInteractionService? interactionService = null;
 
@@ -390,7 +390,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     {
         var currentVersion = VersionHelper.GetDefaultTemplateVersion();
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
         {
             configure.NuGetPackageCacheFactory = (sp) =>
@@ -435,7 +435,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     public async Task NotifyIfUpdateAvailableAsync_WithNewerStableVersion_DoesNotThrow()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
 
         // Replace the NuGetPackageCache with our test implementation
@@ -460,7 +460,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     public async Task NotifyIfUpdateAvailableAsync_WithEmptyPackages_DoesNotThrow()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
 
         // Replace the NuGetPackageCache with our test implementation

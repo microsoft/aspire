@@ -14,7 +14,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostInfoAsync_UsesDiskCacheWhenPresent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
         var runner = new TestDotNetCliRunner
         {
@@ -55,7 +55,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostInfoAsync_CachesSuccessfulMsBuildEvaluationInMemory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
         var msbuildCalls = 0;
         var runner = new TestDotNetCliRunner
@@ -79,7 +79,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostInfoAsync_DoesNotCacheFailedMsBuildEvaluationInMemory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
         var msbuildCalls = 0;
         var runner = new TestDotNetCliRunner
@@ -105,7 +105,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostInfoAsync_CoalescesConcurrentMsBuildEvaluationInMemory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var complete = new TaskCompletionSource<(int ExitCode, JsonDocument? Output)>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -136,7 +136,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostInfoAsync_CallerCancellationDoesNotCancelSharedEvaluation()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var complete = new TaskCompletionSource<(int ExitCode, JsonDocument? Output)>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -170,7 +170,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetAppHostInfoAsync_RequestsComputeRunArgumentsTarget()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
         string[]? capturedTargets = null;
         var runner = new TestDotNetCliRunner

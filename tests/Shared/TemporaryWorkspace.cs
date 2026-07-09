@@ -9,7 +9,7 @@ using IOPath = System.IO.Path;
 
 namespace Aspire.Tests.Utils;
 
-public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, DirectoryInfo repoDirectory) : IDisposable
+public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, DirectoryInfo workspaceDirectory) : IDisposable
 {
     private static readonly ConcurrentDictionary<string, byte> s_preservedWorkspaces = new(StringComparer.Ordinal);
 
@@ -19,18 +19,18 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
     // safety: two tests creating workspaces concurrently will never corrupt the file.
     private static readonly Lazy<DirectoryInfo> s_workspacesParent = new(InitializeWorkspacesParent);
 
-    public DirectoryInfo WorkspaceRoot => repoDirectory;
+    public DirectoryInfo WorkspaceRoot => workspaceDirectory;
 
-    public string Path => repoDirectory.FullName;
+    public string Path => workspaceDirectory.FullName;
 
     public DirectoryInfo CreateDirectory(string name)
     {
-        return repoDirectory.CreateSubdirectory(name);
+        return workspaceDirectory.CreateSubdirectory(name);
     }
 
     public async Task InitializeGitAsync(CancellationToken cancellationToken = default)
     {
-        outputHelper.WriteLine($"Initializing git repository at: {repoDirectory.FullName}");
+        outputHelper.WriteLine($"Initializing git repository at: {workspaceDirectory.FullName}");
 
         using var process = new Process
         {
@@ -38,7 +38,7 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
             {
                 FileName = "git",
                 Arguments = "init",
-                WorkingDirectory = repoDirectory.FullName,
+                WorkingDirectory = workspaceDirectory.FullName,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -58,21 +58,21 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
 
     public void Dispose()
     {
-        if (s_preservedWorkspaces.ContainsKey(repoDirectory.FullName))
+        if (s_preservedWorkspaces.ContainsKey(workspaceDirectory.FullName))
         {
-            outputHelper.WriteLine($"Preserved temporary workspace at: {repoDirectory.FullName}");
+            outputHelper.WriteLine($"Preserved temporary workspace at: {workspaceDirectory.FullName}");
             return;
         }
 
-        outputHelper.WriteLine($"Disposing temporary workspace at: {repoDirectory.FullName}");
+        outputHelper.WriteLine($"Disposing temporary workspace at: {workspaceDirectory.FullName}");
 
         try
         {
-            DeleteDirectoryWithRetries(repoDirectory);
+            DeleteDirectoryWithRetries(workspaceDirectory);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            outputHelper.WriteLine($"Failed to delete temporary workspace '{repoDirectory.FullName}': {ex.Message}");
+            outputHelper.WriteLine($"Failed to delete temporary workspace '{workspaceDirectory.FullName}': {ex.Message}");
         }
     }
 
@@ -184,8 +184,8 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
 
     public void Preserve()
     {
-        s_preservedWorkspaces[repoDirectory.FullName] = 0;
-        outputHelper.WriteLine($"Marked temporary workspace for preservation: {repoDirectory.FullName}");
+        s_preservedWorkspaces[workspaceDirectory.FullName] = 0;
+        outputHelper.WriteLine($"Marked temporary workspace for preservation: {workspaceDirectory.FullName}");
     }
 
     public static void ReleasePreservation(string workspacePath, bool deleteDirectory = true)
@@ -215,28 +215,35 @@ public sealed class TemporaryWorkspace(ITestOutputHelper outputHelper, Directory
         var tempPath = IOPath.GetTempPath();
         var parentDir = Directory.CreateDirectory(IOPath.Combine(tempPath, typeof(TemporaryWorkspace).Assembly.GetName().Name!, "Workspace"));
 
-        // Place the .aspire/settings.json sentinel in the shared parent directory so
-        // directory-walking searches stop here. Individual workspace subdirectories
-        // remain clean, avoiding interference with tests that enumerate their contents.
-        var settingsPath = IOPath.Combine(parentDir.FullName, ".aspire", "settings.json");
-        if (!File.Exists(settingsPath))
-        {
-            Directory.CreateDirectory(IOPath.Combine(parentDir.FullName, ".aspire"));
-            File.WriteAllText(settingsPath, "{}");
-        }
-
         return parentDir;
     }
 
     public static TemporaryWorkspace Create(ITestOutputHelper outputHelper)
     {
         var parentDir = s_workspacesParent.Value;
-        var repoDirectory = parentDir.CreateSubdirectory(IOPath.GetRandomFileName());
-        outputHelper.WriteLine($"Temporary workspace created at: {repoDirectory.FullName}");
+        var workspaceDirectory = parentDir.CreateSubdirectory(IOPath.GetRandomFileName());
+        outputHelper.WriteLine($"Temporary workspace created at: {workspaceDirectory.FullName}");
 
         // Register workspace path for CaptureWorkspaceOnFailure attribute
-        TestContext.Current?.KeyValueStorage["WorkspacePath"] = repoDirectory.FullName;
+        TestContext.Current?.KeyValueStorage["WorkspacePath"] = workspaceDirectory.FullName;
 
-        return new TemporaryWorkspace(outputHelper, repoDirectory);
+        return new TemporaryWorkspace(outputHelper, workspaceDirectory);
+    }
+
+    /// <summary>
+    /// Creates a workspace with <c>.aspire/settings.json</c> so that directory-walking
+    /// searches (ConfigurationHelper.GetConfigRootDirectory) resolve to this workspace
+    /// rather than walking up to the user's actual ~/.aspire/settings.json.
+    /// </summary>
+    public static TemporaryWorkspace CreateForCli(ITestOutputHelper outputHelper)
+    {
+        var workspace = Create(outputHelper);
+
+        var aspireDir = IOPath.Combine(workspace.Path, ".aspire");
+        var settingsPath = IOPath.Combine(aspireDir, "settings.json");
+        Directory.CreateDirectory(aspireDir);
+        File.WriteAllText(settingsPath, "{}");
+
+        return workspace;
     }
 }

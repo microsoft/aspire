@@ -28,7 +28,7 @@ public class BundleServiceComputeDefaultExtractDirTests(ITestOutputHelper output
         // so extraction must land at <prefix>/ (parent of the binary's dir) so
         // the eventual versions/<id>/ tree sits next to the bin/ directory
         // rather than inside it.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var prefixDir = Path.Combine(workspace.Path, "aspire");
         var binDir = Path.Combine(prefixDir, "bin");
         Directory.CreateDirectory(binDir);
@@ -51,7 +51,7 @@ public class BundleServiceComputeDefaultExtractDirTests(ITestOutputHelper output
         // directory layout. Extraction must land at the dogfood/pr-<N>/ directory
         // — not the outer install root — to keep stable and PR-route versions/
         // trees from colliding.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var prDir = Path.Combine(workspace.Path, "dogfood", "pr-12345");
         var binDir = Path.Combine(prDir, "bin");
         Directory.CreateDirectory(binDir);
@@ -72,7 +72,7 @@ public class BundleServiceComputeDefaultExtractDirTests(ITestOutputHelper output
         // same install dir. Extraction must land in that directory (beside the binary),
         // not its parent — otherwise versions/<id>/ would leak above the package-managed
         // prefix that winget owns.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var installDir = Path.Combine(workspace.Path, "WindowsApps", "Microsoft.Aspire_8wekyb3d8bbwe");
         Directory.CreateDirectory(installDir);
 
@@ -98,7 +98,7 @@ public class BundleServiceComputeDefaultExtractDirTests(ITestOutputHelper output
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
             "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var cellarDir = Path.Combine(workspace.Path, "Caskroom", "aspire", "13.2.0");
         Directory.CreateDirectory(cellarDir);
@@ -126,7 +126,7 @@ public class BundleServiceComputeDefaultExtractDirTests(ITestOutputHelper output
         // with aspire and .aspire-install.json colocated. The dotnet-tool runtime
         // launches the binary directly from this RID directory; extraction must stay
         // within that same directory so versions/<id>/ moves with the tool.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var ridDir = Path.Combine(
             workspace.Path,
             ".dotnet",
@@ -156,7 +156,7 @@ public class BundleServiceComputeDefaultExtractDirTests(ITestOutputHelper output
         // No sidecar anywhere means no install route opted in to writing next to
         // the binary, so the fallback must be user-owned Aspire home rather than
         // an arbitrary binary parent that may be read-only.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var prefixDir = Path.Combine(workspace.Path, "nix", "store", "aspire");
         var binDir = Path.Combine(prefixDir, "bin");
         Directory.CreateDirectory(binDir);

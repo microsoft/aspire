@@ -23,7 +23,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StopCommand_Help_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -38,7 +38,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StopCommand_RejectsPositionalResourceArgument()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -52,7 +52,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StopCommand_WithInvalidExplicitAppHost_ReturnsFailedToFindProject()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ProjectLocatorFactory = _ => new TestProjectLocator
@@ -74,7 +74,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StopCommand_WithExplicitAppHost_UsesProjectLocatorResolution()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectLocatorInvoked = false;
         var interactionService = new TestInteractionService();
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("some-directory");
@@ -110,7 +110,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StopCommand_AllIncludesEachAppHostPathInMessages()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
         var statusMessages = new ConcurrentQueue<string>();
         interactionService.ShowStatusCallback = statusMessages.Enqueue;
@@ -145,7 +145,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StopCommand_AllIncludesProcessIdWhenAppHostPathsCollide()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
         var statusMessages = new ConcurrentQueue<string>();
         interactionService.ShowStatusCallback = statusMessages.Enqueue;
@@ -182,7 +182,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StopCommand_SingleAppHostIncludesIdentifierInStatusAndSuccessMessages()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
         var statusMessages = new ConcurrentQueue<string>();
         interactionService.ShowStatusCallback = statusMessages.Enqueue;
@@ -213,7 +213,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StopCommand_SingleOutOfScopeAppHostUsesFullPathInMessages()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outOfScopeDir = workspace.CreateDirectory("out-of-scope");
         var interactionService = new TestInteractionService();
         var statusMessages = new ConcurrentQueue<string>();
@@ -245,7 +245,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task StopCommand_AllEmitsProfilingActivities()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var stoppedActivities = new ConcurrentQueue<Activity>();
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -297,7 +297,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     [InlineData("stop --all")]
     public async Task StopCommand_NoRunningAppHosts_ReturnsSuccess(string commandLine)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
         var monitor = new TestAuxiliaryBackchannelMonitor();
 
@@ -325,7 +325,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         // Regression test for https://github.com/microsoft/aspire/issues/17587: 'aspire stop' is the command
         // that leaks the socket, so it must delete the socket file once the AppHost has been confirmed stopped.
         // Otherwise a later command rediscovers the stale socket and tries to connect to a dead process.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
 
         // The AppHost is reported with a process id that does not exist, so ProcessShutdownService observes

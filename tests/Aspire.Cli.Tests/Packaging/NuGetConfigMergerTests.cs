@@ -31,7 +31,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_CreatesConfigFromMappings_WhenNoExistingConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         var mappings = new[]
@@ -55,7 +55,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_GeneratesConfigFromMappings_WhenChannelProvided()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         var mappings = new[]
@@ -83,7 +83,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_AddsMissingSources_WhenUpdatingExistingConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Existing config with one source only
@@ -123,7 +123,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_RemapsPatternsAndRemovesEmptySources()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Existing config: pattern Lib.* mapped to old source only
@@ -166,7 +166,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_RemapsAspirePackagesFromStagingToStableSource()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
         const string stagingSource = "https://pkgs.dev.azure.com/dnceng/public/_packaging/aspire-staging/nuget/v3/index.json";
         const string stableSource = "https://api.nuget.org/v3/index.json";
@@ -210,7 +210,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_CreatesPackageSourceMapping_WhenAbsent()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Existing config without packageSourceMapping
@@ -243,7 +243,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public void HasMissingSources_ReturnsTrue_WhenConfigAbsent()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
     var mappings = new[] { new PackageMapping("Aspire.*", "https://feed.example") };
     var channel = CreateChannel(mappings);
@@ -253,7 +253,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task HasMissingSources_ReturnsTrue_WhenPatternMappedToWrongSource()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         await WriteConfigAsync(root,
@@ -284,7 +284,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task HasMissingSources_ReturnsFalse_WhenAllSourcesAndMappingsPresent()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         await WriteConfigAsync(root,
@@ -319,7 +319,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_ReusesExistingSourceKeys_WhenMappingToExistingSourcesByUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Existing config with custom key names (like "nuget" instead of URL)
@@ -368,7 +368,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_PreservesAllExistingSources_WhenCreatingPackageSourceMappingForFirstTime()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Scenario from @mitchdenny: config has multiple sources but NO packageSourceMapping
@@ -431,7 +431,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_AddsSpecificMappings_WhenExistingWildcardMappingPresent()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Scenario: existing config already has a wildcard mapping on nuget.org
@@ -494,7 +494,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_DoesNotAddWildcardToPrivateSourceWithExistingPatterns()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // User has nuget.org with wildcard and a private source with specific patterns
@@ -548,7 +548,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_RemovesUnrequiredSources_InsteadOfAddingWildcardPattern()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Existing config with a PR hive source that should be removed and a user-defined source that should be preserved
@@ -631,7 +631,7 @@ public class NuGetConfigMergerTests
         // sources must remove the old source from <packageSources>, not just from
         // <packageSourceMapping>. If the stale path lingers, subsequent `dotnet restore`
         // fails with NU1301 when that hive directory has since been deleted/cleaned.
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         const string oldHive = "/Users/midenn/.aspire/hives/pr-17182/packages";
@@ -688,7 +688,7 @@ public class NuGetConfigMergerTests
         // became empty *during the merge*, a source that never had a mapping element
         // survives the merge and breaks subsequent `dotnet restore` once the hive
         // directory is deleted.
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         const string oldHive = "/Users/midenn/.aspire/hives/pr-17182/packages";
@@ -725,7 +725,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_CallbackInvokedForNewConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         var mappings = new[]
@@ -764,7 +764,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_CallbackCanPreventNewConfigCreation()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         var mappings = new[]
@@ -793,7 +793,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_CallbackInvokedForExistingConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Create an existing config
@@ -844,7 +844,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_CallbackCanPreventExistingConfigUpdate()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         // Create an existing config
@@ -887,7 +887,7 @@ public class NuGetConfigMergerTests
     [Fact]
     public async Task CreateOrUpdateAsync_WorksWithoutCallback()
     {
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var root = workspace.WorkspaceRoot;
 
         var mappings = new[]
