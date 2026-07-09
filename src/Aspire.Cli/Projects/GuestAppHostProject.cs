@@ -435,6 +435,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
                 args: context.UnmatchedTokens);
 
+            if (context.EnvironmentVariables.TryGetValue(KnownConfigNames.DcpResourceCleanupMode, out var resourceCleanupMode))
+            {
+                launchSettingsEnvVars[KnownConfigNames.DcpResourceCleanupMode] = resourceCleanupMode;
+            }
+
             // Apply certificate environment variables (e.g., SSL_CERT_DIR on Linux)
             foreach (var kvp in certEnvVars)
             {

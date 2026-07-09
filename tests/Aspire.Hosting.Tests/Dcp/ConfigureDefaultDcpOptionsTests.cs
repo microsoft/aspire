@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Dcp.Model;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Tests.Dcp;
@@ -96,6 +97,30 @@ public class ConfigureDefaultDcpOptionsTests
         Assert.Equal("custom-subcommand", options.TerminalHostInvocationArgs);
     }
 
+    [Fact]
+    public void ResourceLifecycleModeIsConfiguredFromDcpPublisher()
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:ResourceLifecycleMode"] = ResourceLifecycleMode.Cleanup,
+        });
+
+        Assert.Equal(ResourceLifecycleMode.Cleanup, options.ResourceLifecycleMode);
+        Assert.Equal(ResourceLifecycleMode.Cleanup, options.GetPersistentResourceLifecycleMode());
+    }
+
+    [Fact]
+    public void ResourceCleanupModeIsConfiguredFromDcpPublisher()
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["DcpPublisher:ResourceCleanupMode"] = "true",
+        });
+
+        Assert.True(options.ResourceCleanupMode);
+        Assert.Equal(ResourceLifecycleMode.Cleanup, options.GetPersistentResourceLifecycleMode());
+    }
+
     private static DcpOptions ConfigureWithDcpPublisher(Dictionary<string, string?> dcpPublisherSettings)
     {
         var configuration = new ConfigurationBuilder()
@@ -117,4 +142,3 @@ public class ConfigureDefaultDcpOptionsTests
         return options;
     }
 }
-

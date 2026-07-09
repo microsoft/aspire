@@ -59,11 +59,17 @@ internal sealed class ContainerSpec
     public List<string>? RunArgs { get; set; }
 
     // Should this container be created and persisted between DCP runs?
+    // Deprecated by Mode, but kept for compatibility with older DCP versions.
     [JsonPropertyName("persistent")]
     public bool? Persistent { get; set; }
 
+    // Controls how the container is created, reused, and cleaned up.
+    // Ignored by DCP when Persistent is true.
+    [JsonPropertyName("mode")]
+    public string? Mode { get; set; }
+
     // Optional parent process PID used to scope persistent container cleanup to a process lifecycle.
-    // When set, MonitorTimestamp must also be set and Persistent must be true.
+    // When set, MonitorTimestamp must also be set and the effective lifecycle mode must be persistent.
     [JsonPropertyName("monitorPid")]
     public int? MonitorPid { get; set; }
 

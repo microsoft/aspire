@@ -21,7 +21,7 @@ public class ResourceSnapshotBuilderTests
         var container = Container.Create("container", "redis:latest");
         container.Spec.Command = "redis-server";
         container.Spec.Ports = [new() { ContainerPort = 6379 }];
-        container.Spec.Persistent = true;
+        container.Spec.Mode = ResourceLifecycleMode.Persistent;
         container.Status = new ContainerStatus
         {
             ContainerId = "1234567890abcdef",

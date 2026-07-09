@@ -89,7 +89,7 @@ internal class ResourceSnapshotBuilder
 
         ContainerLifetime GetContainerLifetime()
         {
-            return (container.Spec.Persistent ?? false) ? ContainerLifetime.Persistent : ContainerLifetime.Session;
+            return container.Spec.Mode == ResourceLifecycleMode.Persistent || (container.Spec.Persistent ?? false) ? ContainerLifetime.Persistent : ContainerLifetime.Session;
         }
     }
 

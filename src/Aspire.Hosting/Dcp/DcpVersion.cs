@@ -5,7 +5,7 @@ namespace Aspire.Hosting.Dcp;
 
 internal static class DcpVersion
 {
-    public static Version MinimumVersionInclusive = new Version(0, 23, 3); // Aspire 13.3
+    public static Version MinimumVersionInclusive = new Version(0, 25, 4); // Aspire 13.5
 
     /// <summary>
     /// Development build version proxy, considered always "current" and supporting latest features. 

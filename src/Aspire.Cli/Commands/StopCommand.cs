@@ -6,10 +6,13 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Semver;
 
 namespace Aspire.Cli.Commands;
 
@@ -25,6 +28,11 @@ internal sealed class StopCommand : BaseCommand
     private readonly IEnvironment _environment;
     private readonly ProcessTreeGracefulShutdownService _processShutdownService;
     private readonly ProfilingTelemetry _profilingTelemetry;
+    private readonly IProjectLocator _projectLocator;
+    private readonly IAppHostProjectFactory _projectFactory;
+    private readonly AppHostCleanupLauncher _cleanupLauncher;
+    private readonly IConfiguration _configuration;
+    private static readonly SemVersion s_minimumResourceCleanupVersion = SemVersion.Parse("13.5.0");
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", StopCommandStrings.ProjectArgumentDescription);
 
@@ -33,11 +41,20 @@ internal sealed class StopCommand : BaseCommand
         Description = StopCommandStrings.AllOptionDescription
     };
 
+    private static readonly Option<bool> s_forceOption = new("--force")
+    {
+        Description = StopCommandStrings.ForceOptionDescription
+    };
+
     public StopCommand(
         AppHostConnectionResolver connectionResolver,
         ICliHostEnvironment hostEnvironment,
         IEnvironment environment,
         ProcessTreeGracefulShutdownService processShutdownService,
+        IProjectLocator projectLocator,
+        IAppHostProjectFactory projectFactory,
+        AppHostCleanupLauncher cleanupLauncher,
+        IConfiguration configuration,
         ILogger<StopCommand> logger,
         ProfilingTelemetry profilingTelemetry,
         CommonCommandServices services)
@@ -47,23 +64,39 @@ internal sealed class StopCommand : BaseCommand
         _hostEnvironment = hostEnvironment;
         _environment = environment;
         _processShutdownService = processShutdownService;
+        _projectLocator = projectLocator;
+        _projectFactory = projectFactory;
+        _cleanupLauncher = cleanupLauncher;
+        _configuration = configuration;
         _logger = logger;
         _profilingTelemetry = profilingTelemetry;
 
         Options.Add(s_appHostOption);
         Options.Add(s_allOption);
+        Options.Add(s_forceOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var stopAll = parseResult.GetValue(s_allOption);
+        var force = parseResult.GetValue(s_forceOption);
         using var activity = _profilingTelemetry.StartStopCommand(stopAll, passedAppHostProjectFile is not null);
 
         // Validate mutual exclusivity of --all and --project
         if (stopAll && passedAppHostProjectFile is not null)
         {
             return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.FailedToFindProject), string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_appHostOption.Name));
+        }
+
+        if (stopAll && force)
+        {
+            return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.InvalidCommand), string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_forceOption.Name));
+        }
+
+        if (force)
+        {
+            return CommandResult.FromExitCode(CompleteStopActivity(activity, await ForceStopAppHostAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false)));
         }
 
         // Handle --all: stop all running AppHosts
@@ -79,6 +112,90 @@ internal sealed class StopCommand : BaseCommand
         }
 
         return CommandResult.FromExitCode(CompleteStopActivity(activity, await ExecuteInteractiveAsync(passedAppHostProjectFile, cancellationToken)));
+    }
+
+    private async Task<int> ForceStopAppHostAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
+    {
+        var appHostFile = await TryResolveAppHostFileAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false);
+
+        var stopExitCode = appHostFile is not null
+            ? await ExecuteInteractiveAsync(appHostFile, cancellationToken).ConfigureAwait(false)
+            : _hostEnvironment.SupportsInteractiveInput
+                ? await ExecuteInteractiveAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false)
+                : await ExecuteNonInteractiveAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false);
+
+        if (stopExitCode != CliExitCodes.Success || appHostFile is null)
+        {
+            return stopExitCode;
+        }
+
+        var project = _projectFactory.TryGetProject(appHostFile);
+        if (project is null)
+        {
+            InteractionService.DisplayError("Unrecognized app host type.");
+            return CliExitCodes.FailedToFindProject;
+        }
+
+        var aspireHostingVersion = await project.GetAspireHostingVersionAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+        if (!SupportsResourceCleanup(aspireHostingVersion))
+        {
+            InteractionService.DisplayMessage(
+                KnownEmojis.Warning,
+                string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ForceCleanupUnsupportedWarning, aspireHostingVersion ?? StopCommandStrings.UnknownAspireHostingVersion, s_minimumResourceCleanupVersion));
+            return CliExitCodes.Success;
+        }
+
+        if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))
+        {
+            return CliExitCodes.InvalidCommand;
+        }
+
+        return await _cleanupLauncher.CleanupAsync(project, appHostFile, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static bool SupportsResourceCleanup(string? aspireHostingVersion)
+    {
+        if (!SemVersion.TryParse(aspireHostingVersion, out var version))
+        {
+            return false;
+        }
+
+        return version.Major > s_minimumResourceCleanupVersion.Major ||
+            version.Major == s_minimumResourceCleanupVersion.Major && version.Minor > s_minimumResourceCleanupVersion.Minor ||
+            version.Major == s_minimumResourceCleanupVersion.Major && version.Minor == s_minimumResourceCleanupVersion.Minor && version.Patch >= s_minimumResourceCleanupVersion.Patch;
+    }
+
+    private async Task<FileInfo?> TryResolveAppHostFileAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
+    {
+        var multipleAppHostBehavior = _hostEnvironment.SupportsInteractiveInput
+            ? MultipleAppHostProjectsFoundBehavior.Prompt
+            : MultipleAppHostProjectsFoundBehavior.Throw;
+
+        try
+        {
+            var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(
+                passedAppHostProjectFile,
+                multipleAppHostBehavior,
+                createSettingsFile: false,
+                cancellationToken).ConfigureAwait(false);
+
+            return searchResult.SelectedProjectFile;
+        }
+        catch (ProjectLocatorException ex)
+        {
+            if (passedAppHostProjectFile is not null)
+            {
+                var projectOptionSpecifiedAsDirectory = Directory.Exists(passedAppHostProjectFile.FullName);
+                var (_, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(ex, projectOptionSpecifiedAsDirectory);
+                InteractionService.DisplayError(errorMessage);
+            }
+            else
+            {
+                _logger.LogDebug(ex, "Failed to resolve AppHost project file for resource cleanup.");
+            }
+
+            return null;
+        }
     }
 
     /// <summary>

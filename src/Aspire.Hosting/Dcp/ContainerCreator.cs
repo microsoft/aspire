@@ -114,7 +114,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         var network = ContainerNetwork.Create(KnownNetworkIdentifiers.DefaultAspireContainerNetwork.Value);
         if (containerResources.Any(cr => cr.GetLifetimeType() == Lifetime.Persistent))
         {
-            network.Spec.Persistent = true;
+            network.Spec.Mode = _options.Value.GetPersistentResourceLifecycleMode();
             network.Spec.NetworkName = $"{DcpExecutor.DefaultAspirePersistentNetworkName}-{_nameGenerator.GetProjectHashSuffix()}";
         }
         else
@@ -154,8 +154,16 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
             if (container.GetLifetimeType() == Lifetime.Persistent)
             {
-                ctr.Spec.Persistent = true;
-                ApplyMonitorProcess(container, ctr.Spec);
+                ctr.Spec.Mode = _options.Value.GetPersistentResourceLifecycleMode();
+                if (ctr.Spec.Mode == ResourceLifecycleMode.Persistent)
+                {
+                    ApplyMonitorProcess(container, ctr.Spec);
+                }
+            }
+
+            if (_options.Value.ShouldStopResourceOnCreation())
+            {
+                ctr.Spec.Stop = true;
             }
 
             if (container.TryGetContainerImagePullPolicy(out var pullPolicy))
@@ -251,7 +259,8 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
     public bool IsReadyToCreate(RenderedModelResource<Container> resource, ContainerCreationContext cctx)
     {
-        return !DcpModelUtilities.ShouldDeferCreateForExplicitStart(resource.ModelResource, resource.DcpResource.Spec.Start);
+        return _options.Value.ShouldStopResourceOnCreation() ||
+            !DcpModelUtilities.ShouldDeferCreateForExplicitStart(resource.ModelResource, resource.DcpResource.Spec.Start);
     }
 
     public async Task CreateObjectAsync(RenderedModelResource<Container> cr, ContainerCreationContext cctx, ILogger logger, IDcpObjectFactory factory, CancellationToken cancellationToken)

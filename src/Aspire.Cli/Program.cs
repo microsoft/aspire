@@ -597,6 +597,7 @@ public class Program
         // Commands.
         builder.Services.AddSingleton<CommonCommandServices>();
         builder.Services.AddTransient<AppHostLauncher>();
+        builder.Services.AddTransient<AppHostCleanupLauncher>();
         builder.Services.AddTransient<NewCommand>();
         builder.Services.AddTransient<InitCommand>();
         builder.Services.AddTransient<RunCommand>();

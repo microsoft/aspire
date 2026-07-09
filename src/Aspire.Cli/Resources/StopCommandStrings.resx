@@ -150,6 +150,15 @@
   <data name="AllOptionDescription" xml:space="preserve">
     <value>Stop all running AppHosts</value>
   </data>
+  <data name="ForceOptionDescription" xml:space="preserve">
+    <value>Stop the AppHost and clean up its persistent resources</value>
+  </data>
+  <data name="ForceCleanupUnsupportedWarning" xml:space="preserve">
+    <value>The AppHost uses Aspire.Hosting {0}, which does not support persistent resource cleanup. Update the AppHost SDK to Aspire {1} or newer; --force only stopped the AppHost.</value>
+  </data>
+  <data name="UnknownAspireHostingVersion" xml:space="preserve">
+    <value>unknown</value>
+  </data>
   <data name="MultipleAppHostsNonInteractive" xml:space="preserve">
     <value>Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</value>
   </data>

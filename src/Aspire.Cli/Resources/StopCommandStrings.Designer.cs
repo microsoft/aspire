@@ -111,6 +111,24 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string ForceOptionDescription {
+            get {
+                return ResourceManager.GetString("ForceOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string ForceCleanupUnsupportedWarning {
+            get {
+                return ResourceManager.GetString("ForceCleanupUnsupportedWarning", resourceCulture);
+            }
+        }
+
+        public static string UnknownAspireHostingVersion {
+            get {
+                return ResourceManager.GetString("UnknownAspireHostingVersion", resourceCulture);
+            }
+        }
+
         public static string MultipleAppHostsNonInteractive {
             get {
                 return ResourceManager.GetString("MultipleAppHostsNonInteractive", resourceCulture);

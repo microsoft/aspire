@@ -27,6 +27,16 @@
         <target state="new">Failed to stop {0}.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ForceCleanupUnsupportedWarning">
+        <source>The AppHost uses Aspire.Hosting {0}, which does not support persistent resource cleanup. Update the AppHost SDK to Aspire {1} or newer; --force only stopped the AppHost.</source>
+        <target state="new">The AppHost uses Aspire.Hosting {0}, which does not support persistent resource cleanup. Update the AppHost SDK to Aspire {1} or newer; --force only stopped the AppHost.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ForceOptionDescription">
+        <source>Stop the AppHost and clean up its persistent resources</source>
+        <target state="new">Stop the AppHost and clean up its persistent resources</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FoundRunningAppHost">
         <source>Found running AppHost: {0}</source>
         <target state="new">Found running AppHost: {0}</target>
@@ -65,6 +75,11 @@
       <trans-unit id="AllAndProjectMutuallyExclusive">
         <source>The {0} and {1} options cannot be used together.</source>
         <target state="translated">Las opciones {0} y {1} no se pueden usar juntas.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UnknownAspireHostingVersion">
+        <source>unknown</source>
+        <target state="new">unknown</target>
         <note />
       </trans-unit>
     </body>
