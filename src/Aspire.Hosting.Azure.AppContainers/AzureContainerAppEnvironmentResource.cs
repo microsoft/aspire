@@ -199,6 +199,10 @@ public class AzureContainerAppEnvironmentResource :
             this,
             services);
 
+        // Container apps targeted to this environment, in model order. Collected so that after all
+        // deployment targets are materialized we can chain them into a serial deployment order.
+        var targets = new List<IResource>();
+
         foreach (var r in appModel.GetComputeResources())
         {
             // Skip resources that are explicitly targeted to a different compute environment
@@ -218,10 +222,201 @@ public class AzureContainerAppEnvironmentResource :
                 ContainerRegistry = this,
                 ComputeEnvironment = this
             });
+
+            targets.Add(r);
         }
+
+        AddSerialDeploymentOrdering(targets);
 
         // Log once about all HTTP endpoints upgraded to HTTPS
         containerAppEnvironmentContext.LogHttpsUpgradeIfNeeded();
+    }
+
+    // Relationship type used to serialize deployment of container apps that share a managed
+    // environment. Defined locally because KnownRelationshipTypes is internal to Aspire.Hosting and
+    // not visible to this assembly.
+    private const string DependsOnRelationshipType = "DependsOn";
+
+    // Relationship types that express an ordering dependency between resources. These mirror the
+    // internal KnownRelationshipTypes values added by WithReference/WaitFor.
+    private const string ReferenceRelationshipType = "Reference";
+    private const string WaitForRelationshipType = "WaitFor";
+
+    /// <summary>
+    /// Chains the container apps targeted to this managed environment into a single serial
+    /// deployment order using <c>DependsOn</c> relationships.
+    /// </summary>
+    /// <remarks>
+    /// Azure Container Apps serializes write operations within a single managed environment:
+    /// creating or updating two container apps in the same environment concurrently fails with
+    /// <c>ContainerAppOperationInProgress</c>. The application model otherwise has no edge telling a
+    /// model-graph-driven deployer that these apps must not deploy in parallel. To make the
+    /// constraint explicit, the apps are linearized into one total order so that at most one app in
+    /// the environment deploys at a time. User-declared dependencies (via <c>WithReference</c> or
+    /// <c>WaitFor</c>) are honored: the total order is a topological sort of those dependencies, and
+    /// a synthetic edge is only added between two consecutive apps when the existing graph does not
+    /// already order them, avoiding redundant relationships. See
+    /// https://github.com/microsoft/aspire/issues/18682.
+    /// </remarks>
+    private static void AddSerialDeploymentOrdering(IReadOnlyList<IResource> targets)
+    {
+        if (targets.Count < 2)
+        {
+            return;
+        }
+
+        var comparer = new ResourceNameComparer();
+
+        // dependencies[x] = the apps (within this environment) that x already depends on, so those
+        // apps must deploy before x. Only same-environment targets participate; a dependency on a
+        // resource outside this set doesn't affect ordering within the environment.
+        var targetSet = new HashSet<IResource>(targets, comparer);
+        var dependencies = new Dictionary<IResource, HashSet<IResource>>(comparer);
+        foreach (var target in targets)
+        {
+            dependencies[target] = GetExistingDependencies(target, targetSet, comparer);
+        }
+
+        // Linearize the apps into a total order consistent with the existing dependencies. Model
+        // order is used as a stable tie-break so the chain is deterministic.
+        var order = TopologicalSort(targets, dependencies, comparer);
+
+        // Add a DependsOn edge between each consecutive pair, unless the existing dependency graph
+        // already orders the later app after the earlier one. Because the pairs follow the
+        // topological order, the earlier app never already depends on the later one, so no cycle can
+        // be introduced.
+        for (var i = 1; i < order.Count; i++)
+        {
+            var previous = order[i - 1];
+            var current = order[i];
+
+            if (!DependsOnTransitively(current, previous, dependencies, comparer))
+            {
+                current.Annotations.Add(new ResourceRelationshipAnnotation(previous, DependsOnRelationshipType));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the set of resources in <paramref name="candidates"/> that <paramref name="resource"/>
+    /// already depends on via a reference or wait-for relationship.
+    /// </summary>
+    private static HashSet<IResource> GetExistingDependencies(IResource resource, HashSet<IResource> candidates, IEqualityComparer<IResource?> comparer)
+    {
+        var result = new HashSet<IResource>(comparer);
+
+        if (!resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships))
+        {
+            return result;
+        }
+
+        foreach (var relationship in relationships)
+        {
+            if (relationship.Type is not (ReferenceRelationshipType or WaitForRelationshipType))
+            {
+                continue;
+            }
+
+            // A self-relationship does not order the app relative to any other app.
+            if (comparer.Equals(relationship.Resource, resource))
+            {
+                continue;
+            }
+
+            if (candidates.Contains(relationship.Resource))
+            {
+                result.Add(relationship.Resource);
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Produces a topological ordering of <paramref name="targets"/> where each app appears after the
+    /// apps it depends on, using model order as a stable tie-break. If the dependencies contain a
+    /// cycle (which shouldn't occur for valid models), the remaining apps are appended in model order.
+    /// </summary>
+    private static List<IResource> TopologicalSort(IReadOnlyList<IResource> targets, Dictionary<IResource, HashSet<IResource>> dependencies, IEqualityComparer<IResource?> comparer)
+    {
+        var order = new List<IResource>(targets.Count);
+        var added = new HashSet<IResource>(comparer);
+
+        while (order.Count < targets.Count)
+        {
+            IResource? next = null;
+
+            // Pick the first app (in model order) whose remaining dependencies have all been added.
+            foreach (var target in targets)
+            {
+                if (added.Contains(target))
+                {
+                    continue;
+                }
+
+                if (dependencies[target].All(added.Contains))
+                {
+                    next = target;
+                    break;
+                }
+            }
+
+            if (next is null)
+            {
+                // A dependency cycle prevents further progress; append the rest in model order so a
+                // total order is still produced.
+                foreach (var target in targets)
+                {
+                    if (added.Add(target))
+                    {
+                        order.Add(target);
+                    }
+                }
+
+                break;
+            }
+
+            added.Add(next);
+            order.Add(next);
+        }
+
+        return order;
+    }
+
+    /// <summary>
+    /// Determines whether <paramref name="from"/> already depends on <paramref name="to"/>, directly
+    /// or transitively, through the existing dependency graph.
+    /// </summary>
+    private static bool DependsOnTransitively(IResource from, IResource to, Dictionary<IResource, HashSet<IResource>> dependencies, IEqualityComparer<IResource?> comparer)
+    {
+        var visited = new HashSet<IResource>(comparer);
+        var stack = new Stack<IResource>();
+        stack.Push(from);
+
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+
+            if (!dependencies.TryGetValue(current, out var deps))
+            {
+                continue;
+            }
+
+            foreach (var dep in deps)
+            {
+                if (comparer.Equals(dep, to))
+                {
+                    return true;
+                }
+
+                if (visited.Add(dep))
+                {
+                    stack.Push(dep);
+                }
+            }
+        }
+
+        return false;
     }
 
     internal bool UseAzdNamingConvention { get; set; }
