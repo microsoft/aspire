@@ -1428,32 +1428,14 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     }
 
     private static bool TryGetDirectOptionsParameter(List<AtsParameterInfo> optionalParams, out AtsParameterInfo? directOptionsParam)
-    {
-        directOptionsParam = null;
-
-        // When ATS already exposes a single DTO parameter named "options", reuse that DTO type
-        // directly so the generated TypeScript API stays flat instead of wrapping it in another
-        // generated options object.
-        //
-        // A trailing cancellation token is threaded as its own parameter (see
-        // GetTrailingCancellationTokenParameter), so ignore it here. That keeps the generated
-        // signature flat — e.g. promptNotification(title, message, options?, cancellationToken?)
-        // — instead of bundling both optionals into a generated { options?, cancellationToken? } bag.
-        var nonCancellationOptionals = optionalParams.Where(p => !IsCancellationTokenType(p.Type)).ToList();
-        if (nonCancellationOptionals.Count != 1)
-        {
-            return false;
-        }
-
-        var candidate = nonCancellationOptionals[0];
-        if (!string.Equals(candidate.Name, "options", StringComparison.Ordinal) || candidate.Type?.Category != AtsTypeCategory.Dto)
-        {
-            return false;
-        }
-
-        directOptionsParam = candidate;
-        return true;
-    }
+        // ThreadSeparately: a trailing cancellation token is rendered as its own parameter (see
+        // GetTrailingCancellationTokenParameter), so it is ignored when deciding whether the lone
+        // "options" DTO can be threaded directly instead of wrapped in a generated options object.
+        => AtsOptionsFlattening.TryGetDirectOptionsParameter(
+            optionalParams,
+            p => IsCancellationTokenType(p.Type),
+            CoexistingCancellationTokenPolicy.ThreadSeparately,
+            out directOptionsParam);
 
     /// <summary>
     /// When the options DTO is threaded directly (see <see cref="TryGetDirectOptionsParameter"/>),

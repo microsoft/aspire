@@ -69,4 +69,10 @@
     <AssemblyVersion>13.4.5.0</AssemblyVersion>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Shared internal helpers (e.g. AtsOptionsFlattening) consumed by the polyglot generators. -->
+    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.Go" />
+    <InternalsVisibleTo Include="Aspire.Hosting.CodeGeneration.TypeScript" />
+  </ItemGroup>
+
 </Project>

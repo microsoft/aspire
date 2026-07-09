@@ -1050,35 +1050,18 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
     /// wrapper struct. Mirrors the TypeScript generator's flattening.
     /// </summary>
     /// <remarks>
-    /// Stricter than TypeScript: Go models all optionals as a single trailing variadic and allows
-    /// only one, so we flatten only when the optional set is exactly one DTO named "options" with no
-    /// coexisting cancellation token or callback.
+    /// Uses <see cref="CoexistingCancellationTokenPolicy.BlockFlattening"/>: Go models all optionals
+    /// as a single trailing variadic and allows only one, so a coexisting cancellation token keeps
+    /// the wrapper.
     /// </remarks>
     private static bool TryGetDirectOptionsParameter(
         IReadOnlyList<AtsParameterInfo> optionalParams,
         [NotNullWhen(true)] out AtsParameterInfo? directOptionsParam)
-    {
-        directOptionsParam = null;
-        if (optionalParams.Count != 1)
-        {
-            return false;
-        }
-        var p = optionalParams[0];
-        if (p.IsCallback || IsCancellationToken(p))
-        {
-            return false;
-        }
-        if (!string.Equals(p.Name, "options", StringComparison.Ordinal))
-        {
-            return false;
-        }
-        if (p.Type?.Category != AtsTypeCategory.Dto)
-        {
-            return false;
-        }
-        directOptionsParam = p;
-        return true;
-    }
+        => AtsOptionsFlattening.TryGetDirectOptionsParameter(
+            optionalParams,
+            IsCancellationToken,
+            CoexistingCancellationTokenPolicy.BlockFlattening,
+            out directOptionsParam);
 
     private string RenderParameterList(
         List<AtsParameterInfo> requiredParams,
