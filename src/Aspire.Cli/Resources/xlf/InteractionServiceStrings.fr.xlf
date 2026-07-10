@@ -83,7 +83,7 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</source>
+        <source>An error occurred while connecting to the AppHost: {0}</source>
         <target state="needs-review-translation">Une erreur s’est produite lors de la connexion à l’hôte d’application. L’hôte d’application s’est peut-être bloqué avant qu’il ne soit disponible : {0}.</target>
         <note />
       </trans-unit>
