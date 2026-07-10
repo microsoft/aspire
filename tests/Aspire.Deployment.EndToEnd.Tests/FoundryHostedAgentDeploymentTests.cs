@@ -118,14 +118,15 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
                     <Nullable>enable</Nullable>
                     <ImplicitUsings>enable</ImplicitUsings>
                     <!-- Suppress experimental API warnings from Agent Framework Foundry packages -->
-                    <NoWarn>$(NoWarn);OPENAI001;MAIF001</NoWarn>
+                    <NoWarn>$(NoWarn);OPENAI001;MAIF001;MAAI001</NoWarn>
                   </PropertyGroup>
                   <ItemGroup>
-                    <PackageReference Include="Azure.AI.Projects" Version="2.1.0-beta.1" />
+                    <PackageReference Include="Azure.AI.Projects" Version="2.1.0-beta.3" />
                     <PackageReference Include="Azure.Identity" Version="1.21.0" />
-                    <PackageReference Include="Microsoft.Agents.AI.Foundry.Hosting" Version="1.4.0-preview.260505.1" />
-                    <PackageReference Include="Microsoft.Extensions.AI" Version="10.5.0" />
+                    <PackageReference Include="Microsoft.Agents.AI.Foundry.Hosting" Version="1.12.0-preview.260629.1" />
+                    <PackageReference Include="Microsoft.Extensions.AI" Version="10.7.0" />
                     <PackageReference Include="ModelContextProtocol" Version="1.1.0" />
+                    <PackageReference Include="Azure.Core" Version="1.59.0" />
                   </ItemGroup>
                 </Project>
                 """);
