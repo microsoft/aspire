@@ -1,0 +1,29 @@
+{
+  "run_id": 29060131780,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29060131780",
+  "analyzed_at": "2026-07-10T01:22:31Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 18696,
+    "title": "Add Aspire.Hosting.Radius: Radius as a compute environment (+ cloud providers)",
+    "author": "nellshamrell",
+    "state": "closed",
+    "head_branch": "radius/pr1-compute-env-and-cloud",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18696"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Azure / Hosting.Azure (windows-latest)",
+      "id": 86263269758,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29060131780/job/86263269758",
+      "classification": "transient-infra",
+      "reason": "All 1579 tests passed successfully. Post-test steps (Check for hang dump files, Upload logs, Copy CLI E2E recordings) failed with exit code -1073741502 (0xC0000142), a known Windows process initialization failure that is a transient infrastructure issue unrelated to PR changes.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["windows-process-init-failure-0xc0000142"]
+}

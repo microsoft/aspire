@@ -1,0 +1,16 @@
+{
+  "id": "windows-process-init-failure-0xc0000142",
+  "type": "infra-failure",
+  "title": "Windows process initialization failure (exit code -1073741502 / 0xC0000142) in post-test steps",
+  "error_pattern": "Process completed with exit code -1073741502. (0xC0000142 STATUS_DLL_INIT_FAILED) occurring in post-test upload/cleanup steps after all tests pass successfully on Windows runners.",
+  "occurrences": [
+    {
+      "run_id": 29060131780,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/29060131780",
+      "job": "Tests / Hosting.Azure / Hosting.Azure (windows-latest)",
+      "pr_number": 18696,
+      "observed_at": "2026-07-10T01:22:31Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18720"
+}
