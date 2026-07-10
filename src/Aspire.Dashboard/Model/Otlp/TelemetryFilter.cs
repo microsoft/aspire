@@ -13,12 +13,10 @@ public abstract class TelemetryFilter : IEquatable<TelemetryFilter>
 {
     public bool Enabled { get; set; } = true;
 
-    /// <summary>
-    /// Returns true when this filter uses negative matching (e.g. NotEqual, NotContains).
-    /// Negative filters require ALL spans in a trace to satisfy the condition for the trace
-    /// to pass, rather than the default ANY-span semantics used by positive filters.
-    /// </summary>
-    public virtual bool IsNegativeFilter => false;
+    // Returns true when this filter uses negative matching (e.g. NotEqual, NotContains).
+    // Negative filters require ALL spans in a trace to satisfy the condition for the trace
+    // to pass, rather than the default ANY-span semantics used by positive filters.
+    internal virtual bool IsNegativeFilter => false;
 
     public abstract bool Equals(TelemetryFilter? other);
 
@@ -35,7 +33,7 @@ public class FieldTelemetryFilter : TelemetryFilter
     public FilterCondition Condition { get; set; }
     public string Value { get; set; } = default!;
 
-    public override bool IsNegativeFilter => Condition is FilterCondition.NotEqual or FilterCondition.NotContains;
+    internal override bool IsNegativeFilter => Condition is FilterCondition.NotEqual or FilterCondition.NotContains;
 
     private string DebuggerDisplayText => $"{Field} {ConditionToString(Condition, null)} {Value}";
 

@@ -3052,6 +3052,23 @@ public class TraceTests
                         }
                     }
                 }
+            },
+            // Trace 3: satisfies both conditions — env=prod and no span name contains "1-1".
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "3", spanId: "3-1", startTime: s_testTime.AddMinutes(20), endTime: s_testTime.AddMinutes(25),
+                                attributes: [KeyValuePair.Create("env", "prod")])
+                        }
+                    }
+                }
             }
         });
 
@@ -3073,7 +3090,9 @@ public class TraceTests
 
         // Trace 1 is excluded (root span name contains "1-1" even though env=prod matches).
         // Trace 2 doesn't match the positive filter (env=staging, not prod).
-        Assert.Empty(traces.PagedResult.Items);
+        // Trace 3 satisfies both: env=prod AND no span name contains "1-1".
+        Assert.Collection(traces.PagedResult.Items,
+            trace => AssertId("3", trace.TraceId));
     }
 
     [Fact]
@@ -3182,5 +3201,135 @@ public class TraceTests
         });
 
         Assert.Empty(traces.PagedResult.Items);
+    }
+
+    [Fact]
+    public void GetSpans_NotContainsFilter_AbsentAttributeIncludesSpan()
+    {
+        // Verifies that span-level negative filtering correctly includes spans that lack the
+        // filtered attribute. A span without the field trivially satisfies "not contains X".
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5),
+                                attributes: [KeyValuePair.Create("http.method", "GET")]),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3),
+                                parentSpanId: "1-1", attributes: [KeyValuePair.Create("http.method", "POST")]),
+                            // Span without http.method attribute — should still be included.
+                            CreateSpan(traceId: "1", spanId: "1-3", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(4),
+                                parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        // Filter: http.method not contains "GET"
+        // Span 1-1 has GET → excluded
+        // Span 1-2 has POST → included (POST doesn't contain GET)
+        // Span 1-3 has no http.method → included (absent field trivially satisfies "not contains")
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = "http.method",
+                    Condition = FilterCondition.NotContains,
+                    Value = "GET"
+                }
+            ]
+        });
+
+        Assert.Equal(2, result.PagedResult.TotalItemCount);
+        Assert.Contains(result.PagedResult.Items, s => GetStringId(s.SpanId) == "1-2");
+        Assert.Contains(result.PagedResult.Items, s => GetStringId(s.SpanId) == "1-3");
+    }
+
+    [Fact]
+    public void GetTraces_NotEqualTimestampFilter_ExcludesTraceViaUnoptimizedPath()
+    {
+        // Verifies that the non-optimized MatchesFilters path (used for date/numeric fields)
+        // correctly applies ALL-span semantics for negative filters. A timestamp NotEqual
+        // filter excludes a trace when any span's timestamp matches the filter value.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // Span 1: starts at s_testTime (violates "timestamp != s_testTime")
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5)),
+                            // Span 2: starts later (satisfies "timestamp != s_testTime")
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3),
+                                parentSpanId: "1-1")
+                        }
+                    }
+                }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // Trace 2: starts at a different time (satisfies the filter)
+                            CreateSpan(traceId: "2", spanId: "2-1", startTime: s_testTime.AddMinutes(10), endTime: s_testTime.AddMinutes(15))
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        // Timestamp is a date field, so StringFilter.TryCreate returns false and
+        // CreateOptimizedTraceFilters falls through to the non-optimized path.
+        // Filter: Timestamp != "1970-01-01T00:00:00Z" — span 1-1 violates this (its timestamp
+        // equals the filter value), so trace 1 is excluded. Trace 2 passes.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.TimestampField,
+                    Condition = FilterCondition.NotEqual,
+                    Value = "1970-01-01T00:00:00Z"
+                }
+            ]
+        });
+
+        Assert.Collection(traces.PagedResult.Items,
+            trace => AssertId("2", trace.TraceId));
     }
 }
