@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
 import { Button } from "./Button";
 
 export interface ConfirmRequest {
@@ -16,6 +16,8 @@ export function ConfirmDialog({
   request: ConfirmRequest | null;
   onClose: () => void;
 }) {
+  const titleId = useId();
+
   useEffect(() => {
     if (!request) {
       return;
@@ -41,8 +43,14 @@ export function ConfirmDialog({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
-        <div className="modal__title">{request.title}</div>
+      <div
+        className="modal"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        <div className="modal__title" id={titleId}>{request.title}</div>
         <div className="modal__text">{request.message}</div>
         <div className="modal__actions">
           <Button onClick={onClose}>Cancel</Button>

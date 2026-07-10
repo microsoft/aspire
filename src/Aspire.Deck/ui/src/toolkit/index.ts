@@ -3,6 +3,7 @@ export * from "./Button";
 export * from "./ConfirmDialog";
 export * from "./DataTable";
 export * from "./DeckProvider";
+export * from "./Drawer";
 export * from "./EmptyState";
 export * from "./Icons";
 export * from "./SearchBox";

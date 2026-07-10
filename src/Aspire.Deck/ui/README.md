@@ -30,6 +30,10 @@ Open the dev URL in a normal browser. You get a fully interactive dashboard back
 mock backend: live resource state changes, streaming console logs, growing telemetry, and
 an animated sample canvas.
 
+Open `http://localhost:1430/?view=toolkit` for the standalone toolkit playground. It exercises
+the shared controls without depending on the Deck backend or mock data layer, making it the
+starting point for new dashboard UI and visual regression coverage.
+
 ## Build & preview
 
 ```bash
