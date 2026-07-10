@@ -92,8 +92,12 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task StartLaunchesDetachedProcessesOutsideOriginalProcessGroup()
+    public async Task StartLaunchesDetachedCliAndAppHostOutsideLauncherProcessGroupAndSession()
     {
+        // This validates that `aspire start` detaches both the background CLI and AppHost from the
+        // invoking shell's process group and session. The Python script reads the JSON emitted by
+        // `aspire start`, compares each started process with the launcher PGID/SID captured below,
+        // and prints a success marker only after both processes are verified.
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var projectSuffix = Guid.NewGuid().ToString("N")[..6];
@@ -113,8 +117,12 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
         await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(projectName)}", counter);
 
+        // The Python script prints this marker only after it verifies both started processes are
+        // outside the launcher's process group and session. Waiting for this marker makes the
+        // success condition explicit instead of relying only on the script's zero exit code.
+        const string assertionSuccessMarker = "detached process group and session assertions passed";
         var assertionScript = Path.Combine(workspace.WorkspaceRoot.FullName, "assert-detached-process-group.py");
-        File.WriteAllText(assertionScript, """
+        File.WriteAllText(assertionScript, $$"""
 import json
 import os
 import subprocess
@@ -142,13 +150,30 @@ for name, pid in (("detached CLI", start_info["cliPid"]), ("AppHost", start_info
         raise SystemExit(f"{name} PID {pid} is still in the launcher's process group {launcher_pgid}")
     if sid == launcher_sid:
         raise SystemExit(f"{name} PID {pid} is still in the launcher's session {launcher_sid}")
+
+print("{{assertionSuccessMarker}}")
 """);
 
         var containerAssertionScript = CliE2ETestHelpers.ToContainerPath(assertionScript, workspace);
 
+        // Capture the invoking shell's process group and session. The detached CLI and AppHost must
+        // not share either value or Ctrl+C/terminal teardown can still affect the started app.
         await auto.RunCommandAsync("export ASPIRE_E2E_LAUNCHER_PGID=$(ps -o pgid= -p $$ | tr -d ' ') ASPIRE_E2E_LAUNCHER_SID=$(ps -o sid= -p $$ | tr -d ' ')", counter);
         await auto.RunCommandAsync("aspire start --format json > /tmp/aspire-start.json", counter, TimeSpan.FromMinutes(2));
-        await auto.RunCommandAsync($"python3 {AspireCliShellCommandHelpers.QuoteBashArg(containerAssertionScript)}", counter, TimeSpan.FromSeconds(30));
+        await auto.TypeAsync($"python3 {AspireCliShellCommandHelpers.QuoteBashArg(containerAssertionScript)}");
+        await auto.EnterAsync();
+
+        var assertionSuccessSearcher = new CellPatternSearcher()
+            .Find(assertionSuccessMarker);
+        var assertionErrorSearcher = new CellPatternSearcher()
+            .FindPattern(counter.Value.ToString())
+            .RightText(" ERR:");
+        await auto.WaitUntilAsync(
+            snapshot => assertionSuccessSearcher.Search(snapshot).Count > 0 ||
+                assertionErrorSearcher.Search(snapshot).Count > 0,
+            timeout: TimeSpan.FromSeconds(30),
+            description: "detached process group assertion success marker or failure prompt");
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromSeconds(30));
 
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
