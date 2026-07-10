@@ -99,6 +99,18 @@ public static class DashboardEndpointsBuilder
             .RequireAuthorization(FrontendAuthorizationDefaults.PolicyName)
             .SkipStatusCodePages();
 
+        group.MapGet("/config", (IDashboardClient dashboardClient) =>
+        {
+            var config = new DeckConfig(
+                ApplicationName: dashboardClient.ApplicationName,
+                ResourceServiceUrl: null,
+                OtlpGrpcUrl: null,
+                OtlpHttpUrl: null,
+                Version: VersionHelpers.DashboardDisplayVersion ?? string.Empty);
+
+            return Results.Json(config, DeckApiJsonSerializerContext.Default.DeckConfig);
+        });
+
         group.MapGet("/resources", (
             HttpContext httpContext,
             IDashboardClient dashboardClient,

@@ -3,6 +3,13 @@
 
 namespace Aspire.Dashboard.Api;
 
+internal sealed record DeckConfig(
+    string? ApplicationName,
+    string? ResourceServiceUrl,
+    string? OtlpGrpcUrl,
+    string? OtlpHttpUrl,
+    string Version);
+
 internal sealed record DeckResource(
     string Name,
     string ResourceType,

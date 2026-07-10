@@ -8,5 +8,6 @@ namespace Aspire.Dashboard.Api;
 // Keep the React transport compatible with Native AOT. Reflection-based serialization
 // would make this endpoint harder to move into the standalone dashboard backend later.
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(DeckConfig))]
 [JsonSerializable(typeof(DeckResource[]))]
 internal sealed partial class DeckApiJsonSerializerContext : JsonSerializerContext;

@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
@@ -19,6 +20,32 @@ namespace Aspire.Dashboard.Tests.Integration;
 
 public class DeckApiTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task GetConfig_ReturnsDeckConfigContract()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            testOutputHelper,
+            preConfigureBuilder: builder => builder.Services.AddSingleton<IDashboardClient>(
+                new TestDashboardClient(isEnabled: true, applicationName: "StressApp")));
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        var response = await httpClient.GetAsync("/api/deck/config").DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var actual = JsonNode.Parse(await response.Content.ReadAsStringAsync().DefaultTimeout());
+        var expected = new JsonObject
+        {
+            ["applicationName"] = "StressApp",
+            ["resourceServiceUrl"] = null,
+            ["otlpGrpcUrl"] = null,
+            ["otlpHttpUrl"] = null,
+            ["version"] = VersionHelpers.DashboardDisplayVersion ?? string.Empty
+        };
+
+        Assert.True(JsonNode.DeepEquals(expected, actual), $"Expected:{Environment.NewLine}{expected}{Environment.NewLine}Actual:{Environment.NewLine}{actual}");
+    }
+
     [Fact]
     public async Task GetResources_ReturnsDeckResourceContract()
     {
