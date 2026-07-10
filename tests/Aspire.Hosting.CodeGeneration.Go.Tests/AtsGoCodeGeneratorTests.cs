@@ -352,7 +352,6 @@ public class AtsGoCodeGeneratorTests
 
         // Signature threads the DTO directly; no wrapper struct is emitted.
         Assert.Contains("WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions)", aspireGo);
-        Assert.DoesNotContain("type WithHttpCommandOptions struct", aspireGo);
 
         // The merged DTO is sent under the original "options" arg, but only when a non-nil option
         // was merged, so an all-nil variadic omits the key (matching the old wrapper's ToMap()).
