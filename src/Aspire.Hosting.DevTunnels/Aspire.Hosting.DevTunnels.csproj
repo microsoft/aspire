@@ -20,6 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Polly.Core" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.DevTunnels.Tests" />
   </ItemGroup>
 

@@ -14,6 +14,7 @@ namespace Aspire.Hosting.Maui.Annotations;
 internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
 {
     private int _isOtlpEndpointResolved;
+    private readonly object _otlpEndpointLock = new();
 
     /// <summary>
     /// The OTLP loopback stub resource that acts as the service discovery target.
@@ -31,7 +32,7 @@ internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
     public IResourceBuilder<DevTunnelResource> DevTunnel { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the OTLP endpoint has been resolved from dashboard/configuration.
+    /// Gets a value indicating whether the first OTLP endpoint allocation has been published.
     /// </summary>
     public bool IsOtlpEndpointResolved => Volatile.Read(ref _isOtlpEndpointResolved) != 0;
 
@@ -47,11 +48,35 @@ internal sealed class OtlpDevTunnelConfigurationAnnotation : IResourceAnnotation
         _isOtlpEndpointResolved = isOtlpEndpointResolved ? 1 : 0;
     }
 
-    /// <summary>
-    /// Attempts to mark the tunneled OTLP endpoint as resolved.
-    /// </summary>
-    public bool TryMarkOtlpEndpointResolved()
+    internal OtlpEndpointUpdateResult UpdateOtlpEndpoint(string scheme, int port, string transport)
     {
-        return Interlocked.CompareExchange(ref _isOtlpEndpointResolved, 1, 0) == 0;
+        lock (_otlpEndpointLock)
+        {
+            var endpoint = OtlpStub.OtlpEndpoint;
+            var hasChanged = !string.Equals(endpoint.UriScheme, scheme, StringComparisons.EndpointAnnotationName) ||
+                endpoint.Port != port ||
+                endpoint.TargetPort != port ||
+                !string.Equals(endpoint.Transport, transport, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(endpoint.AllocatedEndpoint?.UriString, $"{scheme}://localhost:{port}", StringComparison.Ordinal);
+
+            endpoint.UriScheme = scheme;
+            endpoint.Port = port;
+            endpoint.TargetPort = port;
+            endpoint.Transport = transport;
+            endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", port);
+
+            return Interlocked.CompareExchange(ref _isOtlpEndpointResolved, 1, 0) == 0
+                ? OtlpEndpointUpdateResult.FirstResolution
+                : hasChanged
+                    ? OtlpEndpointUpdateResult.Updated
+                    : OtlpEndpointUpdateResult.Unchanged;
+        }
     }
+}
+
+internal enum OtlpEndpointUpdateResult
+{
+    Unchanged,
+    FirstResolution,
+    Updated
 }

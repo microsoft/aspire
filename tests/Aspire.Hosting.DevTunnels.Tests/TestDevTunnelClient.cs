@@ -21,6 +21,16 @@ internal sealed class TestDevTunnelClient(Version? cliVersion = null) : IDevTunn
 
     public DevTunnelAccessStatus AccessStatus { get; set; } = new();
 
+    public Exception? CreatePortException { get; set; }
+    public Exception? GetAccessException { get; set; }
+    public Func<int?, Exception?>? GetAccessExceptionFactory { get; set; }
+    public TaskCompletionSource? GetAccessStarted { get; set; }
+    public TaskCompletionSource? AllowGetAccess { get; set; }
+    public TaskCompletionSource<int>? DeletePortStarted { get; set; }
+    public TaskCompletionSource? AllowDeletePort { get; set; }
+    public bool CreatePortCalledWhileDeleteBlocked { get; private set; }
+    public Action? OnGetPortList { get; set; }
+
     public Task<Version> GetVersionAsync(ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         Calls.Enqueue(new(nameof(GetVersionAsync)));
@@ -48,19 +58,36 @@ internal sealed class TestDevTunnelClient(Version? cliVersion = null) : IDevTunn
     public Task<DevTunnelPortList> GetPortListAsync(string tunnelId, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         Calls.Enqueue(new(nameof(GetPortListAsync), tunnelId));
+        OnGetPortList?.Invoke();
         return Task.FromResult(PortList);
     }
 
     public Task<DevTunnelPortStatus> CreatePortAsync(string tunnelId, int portNumber, DevTunnelPortOptions options, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         Calls.Enqueue(new(nameof(CreatePortAsync), tunnelId, portNumber));
+        if (AllowDeletePort is { } allowDeletePort && !allowDeletePort.Task.IsCompleted)
+        {
+            CreatePortCalledWhileDeleteBlocked = true;
+        }
+
+        if (CreatePortException is { } exception)
+        {
+            throw exception;
+        }
+
         return Task.FromResult(new DevTunnelPortStatus(tunnelId, portNumber, options.Protocol ?? "https", ClientConnections: 0));
     }
 
-    public Task<DevTunnelPortDeleteResult> DeletePortAsync(string tunnelId, int portNumber, ILogger? logger = null, CancellationToken cancellationToken = default)
+    public async Task<DevTunnelPortDeleteResult> DeletePortAsync(string tunnelId, int portNumber, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         Calls.Enqueue(new(nameof(DeletePortAsync), tunnelId, portNumber));
-        return Task.FromResult(new DevTunnelPortDeleteResult(portNumber.ToString(CultureInfo.InvariantCulture)));
+        DeletePortStarted?.TrySetResult(portNumber);
+        if (AllowDeletePort is { } allowDeletePort)
+        {
+            await allowDeletePort.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return new DevTunnelPortDeleteResult(portNumber.ToString(CultureInfo.InvariantCulture));
     }
 
     public Task<DevTunnelStatus> GetTunnelAsync(string tunnelId, ILogger? logger = null, CancellationToken cancellationToken = default)
@@ -69,10 +96,22 @@ internal sealed class TestDevTunnelClient(Version? cliVersion = null) : IDevTunn
         return Task.FromResult(TunnelStatus);
     }
 
-    public Task<DevTunnelAccessStatus> GetAccessAsync(string tunnelId, int? portNumber = null, ILogger? logger = null, CancellationToken cancellationToken = default)
+    public async Task<DevTunnelAccessStatus> GetAccessAsync(string tunnelId, int? portNumber = null, ILogger? logger = null, CancellationToken cancellationToken = default)
     {
         Calls.Enqueue(new(nameof(GetAccessAsync), tunnelId, portNumber));
-        return Task.FromResult(AccessStatus);
+        GetAccessStarted?.TrySetResult();
+        if (AllowGetAccess is { } allowGetAccess)
+        {
+            await allowGetAccess.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var exception = GetAccessExceptionFactory?.Invoke(portNumber) ?? GetAccessException;
+        if (exception is not null)
+        {
+            throw exception;
+        }
+
+        return AccessStatus;
     }
 }
 

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
@@ -39,6 +40,30 @@ public sealed class DevTunnelResource(string name, string tunnelId, string comma
     internal DevTunnelStatus? LastKnownStatus { get; set; }
 
     internal DevTunnelAccessStatus? LastKnownAccessStatus { get; set; }
+
+    private readonly object _targetEndpointWatcherLock = new();
+    private CancellationTokenSource? _targetEndpointWatcherCts;
+
+    internal CancellationTokenSource ResetTargetEndpointWatcher(CancellationToken cancellationToken)
+    {
+        lock (_targetEndpointWatcherLock)
+        {
+            _targetEndpointWatcherCts?.Cancel();
+            _targetEndpointWatcherCts?.Dispose();
+            _targetEndpointWatcherCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            return _targetEndpointWatcherCts;
+        }
+    }
+
+    internal void StopTargetEndpointWatcher()
+    {
+        lock (_targetEndpointWatcherLock)
+        {
+            _targetEndpointWatcherCts?.Cancel();
+            _targetEndpointWatcherCts?.Dispose();
+            _targetEndpointWatcherCts = null;
+        }
+    }
 }
 
 /// <summary>
@@ -91,6 +116,12 @@ public sealed class DevTunnelPortResource : Resource, IResourceWithServiceDiscov
     internal EndpointReference TargetEndpoint { get; init; }
     internal DevTunnelPort? LastKnownStatus { get; set; }
     internal DevTunnelAccessStatus? LastKnownAccessStatus { get; set; }
+    internal int? ActiveTunnelPort { get; set; }
+    internal ConcurrentDictionary<int, byte> StaleTunnelPorts { get; } = [];
+    internal SemaphoreSlim PortUpdateLock { get; } = new(1, 1);
+    internal TimeSpan TunnelPortReadyRetryDelay { get; set; } = TimeSpan.FromMilliseconds(500);
+    internal TimeSpan TunnelPortReadyMaxRetryDelay { get; set; } = TimeSpan.FromSeconds(5);
+    internal int TunnelPortReadyRetryCount { get; set; } = 20;
 
     internal async ValueTask<int> GetTunnelPortAsync(CancellationToken cancellationToken = default)
     {
