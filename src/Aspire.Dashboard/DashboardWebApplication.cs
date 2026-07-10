@@ -532,6 +532,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.MapGrpcService<OtlpGrpcLogsService>();
 
         _app.MapTelemetryApi(dashboardOptions);
+        _app.MapDeckApi();
         _app.MapDashboardApi(dashboardOptions);
         _app.MapDashboardHealthChecks();
     }

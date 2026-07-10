@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Dashboard;
@@ -90,6 +91,29 @@ public static class DashboardEndpointsBuilder
             return Results.LocalRedirect(redirectUrl);
         }).SkipStatusCodePages();
 
+    }
+
+    public static void MapDeckApi(this IEndpointRouteBuilder endpoints)
+    {
+        var group = endpoints.MapGroup("/api/deck")
+            .RequireAuthorization(FrontendAuthorizationDefaults.PolicyName)
+            .SkipStatusCodePages();
+
+        group.MapGet("/resources", (
+            HttpContext httpContext,
+            IDashboardClient dashboardClient,
+            IStringLocalizer<Resources.Resources> localizer) =>
+        {
+            // The payload can include environment variables and sensitive resource properties.
+            // Prevent authenticated responses from being retained by browser or intermediary caches.
+            httpContext.Response.Headers.CacheControl = "no-store";
+
+            var resources = dashboardClient.GetResources()
+                .Select(resource => DeckResourceMapper.Map(resource, localizer))
+                .ToArray();
+
+            return Results.Json(resources, DeckApiJsonSerializerContext.Default.DeckResourceArray);
+        });
     }
 
     public static void MapTelemetryApi(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)
