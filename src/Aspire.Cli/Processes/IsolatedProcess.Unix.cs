@@ -18,11 +18,6 @@ internal sealed partial class IsolatedProcess
             throw new InvalidOperationException("Unix detached process launch requires a DCP executable path.");
         }
 
-        if (startInfo.StdioMode != ProcessStdioMode.Suppress)
-        {
-            throw new InvalidOperationException("Unix detached process launch only supports suppressed stdio.");
-        }
-
         var dcpStartInfo = new ProcessStartInfo
         {
             FileName = startInfo.DetachedUnixLauncherPath,
@@ -91,6 +86,8 @@ internal sealed partial class IsolatedProcess
                 childProcess,
                 TextReader.Null,
                 TextReader.Null,
+                static (_, _) => { },
+                static (_, _) => { },
                 extraDispose: () =>
                 {
                     dcpProcess.Dispose();

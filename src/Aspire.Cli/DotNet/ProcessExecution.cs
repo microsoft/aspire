@@ -33,8 +33,6 @@ internal sealed class ProcessExecution : IProcessExecution
     private readonly IBundleService? _bundleService;
     private readonly CliExecutionContext? _executionContext;
     private IsolatedProcess? _process;
-    private ProcessPump? _standardOutputPump;
-    private ProcessPump? _standardErrorPump;
     private long _lastActivityTimestamp = Stopwatch.GetTimestamp();
     private int _disposed;
 
@@ -93,24 +91,18 @@ internal sealed class ProcessExecution : IProcessExecution
 
         using var layoutLease = await ResolveDetachedUnixLauncherAsync(cancellationToken).ConfigureAwait(false);
 
-        // IsolatedProcess.StartAsync spawns the child and returns its stdio readers. It throws on spawn
-        // failure, so a successful return always means the child is running — there is no
+        // IsolatedProcess.StartAsync spawns the child and starts the stdout/stderr pumps. It throws on
+        // spawn failure, so a successful return always means the child is running — there is no
         // false-on-failure case to model. Process.Start() returning false is not applicable when
         // UseShellExecute=false.
-        var process = await IsolatedProcess.StartAsync(
+        _process = await IsolatedProcess.StartAsync(
             _startInfo,
+            OnOutputLine,
+            OnErrorLine,
             cancellationToken,
             stderr => _logger.LogDebug("DCP fork-process stderr: {DcpStderr}", stderr)).ConfigureAwait(false);
-        _process = process;
-        StartOutputPumps(process);
         _logger.LogDebug("{FileName}({ProcessId}) started in {WorkingDirectory}", _fileName, _process.Id, _startInfo.WorkingDirectory);
         return true;
-    }
-
-    private void StartOutputPumps(IsolatedProcess process)
-    {
-        _standardOutputPump = ProcessPump.Start(process.StandardOutput, line => OnOutputLine(process, line));
-        _standardErrorPump = ProcessPump.Start(process.StandardError, line => OnErrorLine(process, line));
     }
 
     private async Task<IDisposable?> ResolveDetachedUnixLauncherAsync(CancellationToken cancellationToken)
@@ -443,10 +435,9 @@ internal sealed class ProcessExecution : IProcessExecution
         // WaitForExitAsync(token) first, so the shutdown ladder has already exited or killed the
         // process by the time we get here and this is a no-op. It matters for the path where an
         // execution was started but never driven (e.g. a fault between Start and the caller wiring up
-        // its wait loop): IsolatedProcess.DisposeAsync only releases process handles and stdio
-        // resources — it does NOT terminate the process — so without this kill the child would be
-        // orphaned. Owning "kill if still alive on dispose" here keeps that responsibility off every
-        // consumer.
+        // its wait loop): IsolatedProcess.DisposeAsync only drains pumps and releases handles — it
+        // does NOT terminate the process — so without this kill the child would be orphaned. Owning
+        // "kill if still alive on dispose" here keeps that responsibility off every consumer.
         try
         {
             if (!process.HasExited)
@@ -498,9 +489,7 @@ internal sealed class ProcessExecution : IProcessExecution
 
     private async Task DrainOutputAsync(IsolatedProcess process, CancellationToken cancellationToken)
     {
-        var drained = Task.WhenAll(
-            _standardOutputPump?.Completion ?? Task.CompletedTask,
-            _standardErrorPump?.Completion ?? Task.CompletedTask);
+        var drained = Task.WhenAll(process.StandardOutputClosed, process.StandardErrorClosed);
 
         while (true)
         {

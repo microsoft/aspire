@@ -104,11 +104,6 @@ internal sealed class ProcessInvocationOptions
     public bool Detached { get; set; }
 
     /// <summary>
-    /// Controls how the child process standard streams are wired.
-    /// </summary>
-    public ProcessStdioMode StdioMode { get; set; } = ProcessStdioMode.Pump;
-
-    /// <summary>
     /// Test hook for overriding the DCP executable used to launch detached Unix processes.
     /// </summary>
     internal string? DetachedUnixLauncherPathOverride { get; set; }
@@ -150,7 +145,6 @@ internal sealed class ProcessInvocationOptions
         IsolateConsole = IsolateConsole,
         KillOnParentExit = KillOnParentExit,
         Detached = Detached,
-        StdioMode = StdioMode,
         DetachedUnixLauncherPathOverride = DetachedUnixLauncherPathOverride,
         EnvironmentVariableFilter = EnvironmentVariableFilter,
         GracefulShutdownSignaler = GracefulShutdownSignaler,
@@ -383,7 +377,6 @@ internal sealed class DotNetCliRunner(
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
             Detached = options.Detached,
-            StdioMode = options.StdioMode,
             DetachedUnixLauncherPathOverride = options.DetachedUnixLauncherPathOverride,
             EnvironmentVariableFilter = options.EnvironmentVariableFilter,
             GracefulShutdownSignaler = options.GracefulShutdownSignaler,

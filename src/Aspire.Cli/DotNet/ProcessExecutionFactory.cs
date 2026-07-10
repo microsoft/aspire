@@ -60,7 +60,6 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
             Detached = options.Detached,
-            StdioMode = options.StdioMode,
             DetachedUnixLauncherPath = options.DetachedUnixLauncherPathOverride,
         };
 
@@ -98,7 +97,6 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
             Detached = options.Detached,
-            StdioMode = options.StdioMode,
             DetachedUnixLauncherPath = options.DetachedUnixLauncherPathOverride,
         };
 

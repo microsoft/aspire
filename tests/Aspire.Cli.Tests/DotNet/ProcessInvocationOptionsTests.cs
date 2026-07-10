@@ -3,7 +3,6 @@
 
 using System.Reflection;
 using Aspire.Cli.DotNet;
-using Aspire.Cli.Processes;
 using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.DotNet;
@@ -29,7 +28,6 @@ public sealed class ProcessInvocationOptionsTests
             IsolateConsole = true,
             KillOnParentExit = true,
             Detached = true,
-            StdioMode = ProcessStdioMode.Suppress,
             EnvironmentVariableFilter = _ => false,
             GracefulShutdownSignaler = new RecordingGracefulSignaler(),
             ShutdownService = new TestGracefulShutdownWindow(),

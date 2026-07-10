@@ -284,7 +284,6 @@ wait $child_pid
             {
                 Detached = true,
                 IsolateConsole = true,
-                StdioMode = ProcessStdioMode.Suppress,
                 EnvironmentVariableFilter = environmentVariableFilter,
                 DetachedUnixLauncherPathOverride = dcpPath
             });
