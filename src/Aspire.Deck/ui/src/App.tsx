@@ -28,11 +28,13 @@ export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
 
   useEffect(() => {
     let cancelled = false;
-    void getConfig().then((result) => {
-      if (!cancelled) {
-        setConfig(result);
-      }
-    });
+    void getConfig()
+      .then((result) => {
+        if (!cancelled) {
+          setConfig(result);
+        }
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };

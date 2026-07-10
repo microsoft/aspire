@@ -1,12 +1,14 @@
-// Dual-mode data layer. When running inside Tauri it dispatches to the real
-// Rust backend via `invoke`/`listen`. Otherwise it serves the in-process mock
-// backend. Both paths expose the SAME function surface so callers are identical.
+// Transport-neutral data layer. Tauri dispatches to the Rust backend via
+// `invoke`/`listen`, explicit `?backend=http` mode calls the ASP.NET dashboard,
+// and standalone browser development uses the in-process mock. Every transport
+// exposes the same function surface so feature code remains independent of it.
 //
-// Detection: Tauri injects `__TAURI_INTERNALS__` (v2) / `__TAURI__` onto window
-// before the UI bundle runs.
+// Tauri injects `__TAURI_INTERNALS__` (v2) / `__TAURI__` before the bundle runs.
+// HTTP mode is opt-in so a missing live backend can never silently become demo data.
 
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { httpBackend } from "./http";
 import { mockBackend } from "./mock";
 import type {
   AppHostInfo,
@@ -33,6 +35,10 @@ export function isTauri(): boolean {
   return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
 }
 
+export function isHttpBackend(): boolean {
+  return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("backend") === "http";
+}
+
 // Bridges Tauri's promise-returning `listen` (which resolves to an unlisten fn)
 // to a synchronous unsubscribe so call sites in both modes look the same.
 function bridgeListen<T>(event: string, cb: (payload: T) => void): Unsubscribe {
@@ -55,12 +61,18 @@ export function getConfig(): Promise<DeckConfig> {
   if (isTauri()) {
     return invoke<DeckConfig>("deck_get_config");
   }
+  if (isHttpBackend()) {
+    return httpBackend.getConfig();
+  }
   return Promise.resolve(mockBackend.getConfig());
 }
 
 export function listResources(): Promise<Resource[]> {
   if (isTauri()) {
     return invoke<Resource[]>("deck_list_resources");
+  }
+  if (isHttpBackend()) {
+    return httpBackend.listResources();
   }
   return Promise.resolve(mockBackend.listResources());
 }
@@ -69,6 +81,9 @@ export function listCanvases(): Promise<CanvasManifest[]> {
   if (isTauri()) {
     return invoke<CanvasManifest[]>("deck_list_canvases");
   }
+  if (isHttpBackend()) {
+    return httpBackend.listCanvases();
+  }
   return Promise.resolve(mockBackend.listCanvases());
 }
 
@@ -76,12 +91,18 @@ export function listApphosts(): Promise<AppHostInfo[]> {
   if (isTauri()) {
     return invoke<AppHostInfo[]>("deck_list_apphosts");
   }
+  if (isHttpBackend()) {
+    return httpBackend.listApphosts();
+  }
   return Promise.resolve(mockBackend.listApphosts());
 }
 
 export function selectApphost(id: string): Promise<void> {
   if (isTauri()) {
     return invoke<void>("deck_select_apphost", { id });
+  }
+  if (isHttpBackend()) {
+    return httpBackend.selectApphost(id);
   }
   mockBackend.selectApphost(id);
   return Promise.resolve();
@@ -93,6 +114,9 @@ export function onApphosts(cb: (apphosts: AppHostInfo[]) => void): Unsubscribe {
     void listApphosts().then(cb);
     return unlisten;
   }
+  if (isHttpBackend()) {
+    return httpBackend.onApphosts(cb);
+  }
   return mockBackend.onApphosts(cb);
 }
 
@@ -102,6 +126,9 @@ export function onApphosts(cb: (apphosts: AppHostInfo[]) => void): Unsubscribe {
 export function onInteractions(cb: (interactions: InteractionInfo[]) => void): Unsubscribe {
   if (isTauri()) {
     return bridgeListen<InteractionInfo[]>("deck://interactions", cb);
+  }
+  if (isHttpBackend()) {
+    return httpBackend.onInteractions(cb);
   }
   return mockBackend.onInteractions(cb);
 }
@@ -113,12 +140,19 @@ export function respondInteraction(interactionId: number, action: string, values
     void invoke("deck_respond_interaction", { interactionId, action, values });
     return;
   }
+  if (isHttpBackend()) {
+    httpBackend.respondInteraction(interactionId, action, values);
+    return;
+  }
   mockBackend.respondInteraction(interactionId, action, values);
 }
 
 export function getTelemetrySummary(): Promise<TelemetrySummary> {
   if (isTauri()) {
     return invoke<TelemetrySummary>("deck_get_telemetry_summary");
+  }
+  if (isHttpBackend()) {
+    return httpBackend.getTelemetrySummary();
   }
   return Promise.resolve(mockBackend.getTelemetrySummary());
 }
@@ -134,12 +168,18 @@ export function getMetricSeries(query: MetricSeriesQuery): Promise<MetricSeriesR
       maxPoints: query.maxPoints ?? null,
     });
   }
+  if (isHttpBackend()) {
+    return httpBackend.getMetricSeries(query);
+  }
   return Promise.resolve(mockBackend.getMetricSeries(query));
 }
 
 export function executeCommand(args: ExecuteCommandArgs): Promise<CommandResponse> {
   if (isTauri()) {
     return invoke<CommandResponse>("deck_execute_command", { ...args });
+  }
+  if (isHttpBackend()) {
+    return httpBackend.executeCommand(args);
   }
   return Promise.resolve(mockBackend.executeCommand(args));
 }
@@ -160,6 +200,9 @@ export function subscribeConsoleLogs(
       unlisten();
     };
   }
+  if (isHttpBackend()) {
+    return httpBackend.subscribeConsoleLogs(resourceName, cb);
+  }
   return mockBackend.subscribeConsoleLogs(resourceName, cb);
 }
 
@@ -170,12 +213,18 @@ export function onResources(cb: (event: ResourcesEvent) => void): Unsubscribe {
     void listResources().then((resources) => cb({ type: "snapshot", resources }));
     return unlisten;
   }
+  if (isHttpBackend()) {
+    return httpBackend.onResources(cb);
+  }
   return mockBackend.onResources(cb);
 }
 
 export function onConnection(cb: (status: ConnectionStatus) => void): Unsubscribe {
   if (isTauri()) {
     return bridgeListen<ConnectionStatus>("deck://connection", cb);
+  }
+  if (isHttpBackend()) {
+    return httpBackend.onConnection(cb);
   }
   return mockBackend.onConnection(cb);
 }
@@ -185,6 +234,9 @@ export function onTelemetry(cb: (summary: TelemetrySummary) => void): Unsubscrib
     const unlisten = bridgeListen<TelemetrySummary>("deck://telemetry", cb);
     void getTelemetrySummary().then(cb);
     return unlisten;
+  }
+  if (isHttpBackend()) {
+    return httpBackend.onTelemetry(cb);
   }
   return mockBackend.onTelemetry(cb);
 }

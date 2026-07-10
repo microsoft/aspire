@@ -1,17 +1,21 @@
 # Aspire Deck — UI
 
 The web UI for **Aspire Deck**, a native desktop replacement for the Aspire Blazor
-dashboard. It is a Vite + React 18 + TypeScript (strict) app that runs in two modes from
+dashboard. It is a Vite + React 18 + TypeScript (strict) app that runs in three modes from
 the **same** code:
 
 - **Standalone (browser / preview)** — when no Tauri runtime is detected, the UI serves
   rich mock data from `src/api/mock.ts`. Resources, console logs, telemetry, and canvases
   all animate so the whole app is demonstrable without the Rust backend.
+- **ASP.NET dashboard** — `?backend=http` explicitly loads configuration and resources from
+  the authenticated `/api/deck` endpoints. The adapter polls for resource changes and reports
+  connection failures without falling back to mock data.
 - **Tauri-embedded** — when running inside the Tauri shell, the data layer
   (`src/api/deck.ts`) calls the real backend via `invoke(...)` / `listen(...)` exactly as
   described in [`../CONTRACT.md`](../CONTRACT.md).
 
-Mode detection is automatic (`"__TAURI_INTERNALS__" in window`), so callers never branch.
+Tauri detection is automatic (`"__TAURI_INTERNALS__" in window`); HTTP mode is deliberately
+explicit. Callers never branch because all transports implement the same data-layer surface.
 
 The UI is built on the reusable module in `src/toolkit`. The toolkit owns the Fluent React
 provider, Fluent System Icons, and domain-neutral controls such as buttons, badges, search,
@@ -82,7 +86,8 @@ Rust app; otherwise links still open in a new tab.
 
 ```
 src/
-  api/      types.ts (mirrors CONTRACT.md), deck.ts (dual-mode), mock.ts (standalone data)
+  api/      types.ts (mirrors CONTRACT.md), deck.ts (transport router), http.ts (ASP.NET),
+            mock.ts (standalone data)
   toolkit/  Fluent provider and reusable, domain-neutral UI primitives
   components/  Deck shell and domain components such as Sidebar, TopBar, DetailsDrawer,
                InteractionPane, NotificationStack, and MetricChart
