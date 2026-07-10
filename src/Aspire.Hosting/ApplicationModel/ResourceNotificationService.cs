@@ -409,8 +409,21 @@ public class ResourceNotificationService : IDisposable
         }
     }
 
-    internal static bool ShouldYieldCompletionWait(CustomResourceSnapshot snapshot) =>
-        KnownResourceStates.TerminalStates.Contains(snapshot.State?.Text, StringComparers.ResourceState);
+    internal static bool ShouldYieldCompletionWait(CustomResourceSnapshot snapshot)
+    {
+        var state = snapshot.State?.Text;
+        if (!KnownResourceStates.TerminalStates.Contains(state, StringComparers.ResourceState))
+        {
+            return false;
+        }
+
+        // DCP can publish an Exited state before the exit code snapshot arrives. Keep waiting
+        // unless DCP explicitly reported Terminated, which is normalized to Exited and does not
+        // carry an exit code for WaitForCompletion to compare.
+        return !string.Equals(state, KnownResourceStates.Exited, StringComparisons.ResourceState) ||
+               snapshot.ExitCode is not null ||
+               snapshot.IsDcpExecutableTerminated;
+    }
 
     private async Task WaitUntilStateAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior,
         Func<ILogger, string, string, ResourceEvent, CancellationToken, Task> postRunningAction, CancellationToken cancellationToken, Func<string, Task>? onDependencyReady = null)
@@ -927,6 +940,14 @@ public class ResourceNotificationService : IDisposable
                 };
             }
 
+            if (ShouldClearResourceReadyEvent(previousState, newState))
+            {
+                newState = newState with
+                {
+                    ResourceReadyEvent = null
+                };
+            }
+
             // Increment the snapshot version, this is a per resource version.
             newState = newState with { Version = notificationState.GetNextVersion() };
 
@@ -1012,6 +1033,23 @@ public class ResourceNotificationService : IDisposable
         }
 
         return Task.CompletedTask;
+    }
+
+    internal static bool ShouldClearResourceReadyEvent(CustomResourceSnapshot previousState, CustomResourceSnapshot newState)
+    {
+        if (newState.ResourceReadyEvent is null || !Equals(previousState.ResourceReadyEvent, newState.ResourceReadyEvent))
+        {
+            return false;
+        }
+
+        if (!string.Equals(newState.State?.Text, KnownResourceStates.Running, StringComparisons.ResourceState))
+        {
+            return true;
+        }
+
+        return previousState.StartTimeStamp is not null &&
+               newState.StartTimeStamp is not null &&
+               previousState.StartTimeStamp != newState.StartTimeStamp;
     }
 
     private void RecordResourceLifecycleMilestones(

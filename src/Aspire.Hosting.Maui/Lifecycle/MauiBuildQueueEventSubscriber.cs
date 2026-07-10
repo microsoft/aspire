@@ -37,6 +37,12 @@ internal class MauiBuildQueueEventSubscriber(
     /// </summary>
     internal TimeSpan BuildTimeout { get; set; } = TimeSpan.FromMinutes(10);
 
+    /// <summary>
+    /// Maximum time to wait for DCP's launch process to reach a queue handoff state after the build succeeds.
+    /// Prevents a hung deploy or runtime upload from blocking the queue indefinitely.
+    /// </summary>
+    internal TimeSpan LaunchHandoffTimeout { get; set; } = TimeSpan.FromMinutes(10);
+
     /// <inheritdoc/>
     public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
     {
@@ -300,23 +306,18 @@ internal class MauiBuildQueueEventSubscriber(
         try
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(BuildTimeout);
+            cts.CancelAfter(LaunchHandoffTimeout);
             await notificationService.WaitForResourceAsync(
                 resource.Name,
                 e =>
                 {
-                    var text = e.Snapshot.State?.Text;
-                    // Skip the replayed snapshot that matches the state when we were called.
-                    if (string.Equals(text, stateAtCallTime, StringComparisons.ResourceState))
-                    {
-                        return false;
-                    }
-
-                    return (releaseOnRunning && string.Equals(text, KnownResourceStates.Running, StringComparisons.ResourceState))
-                        || string.Equals(text, KnownResourceStates.RuntimeUnhealthy, StringComparisons.ResourceState)
-                        || KnownResourceStates.TerminalStates.Contains(text, StringComparers.ResourceState);
+                    return ShouldReleaseBuildLockForLaunchState(e.Snapshot.State?.Text, stateAtCallTime, releaseOnRunning);
                 },
                 cts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(ex, "Timed out waiting for resource '{ResourceName}' to reach a launch handoff state after {Timeout}; releasing build lock.", resource.Name, LaunchHandoffTimeout);
         }
         catch (Exception ex)
         {
@@ -327,6 +328,19 @@ internal class MauiBuildQueueEventSubscriber(
             ReleaseSemaphoreSafely(semaphore);
             logger.LogDebug("Released build lock (resource '{ResourceName}').", resource.Name);
         }
+    }
+
+    internal static bool ShouldReleaseBuildLockForLaunchState(string? state, string? stateAtCallTime, bool releaseOnRunning)
+    {
+        // Skip the replayed snapshot that matches the state when we were called.
+        if (string.Equals(state, stateAtCallTime, StringComparisons.ResourceState))
+        {
+            return false;
+        }
+
+        return (releaseOnRunning && string.Equals(state, KnownResourceStates.Running, StringComparisons.ResourceState))
+            || string.Equals(state, KnownResourceStates.RuntimeUnhealthy, StringComparisons.ResourceState)
+            || KnownResourceStates.TerminalStates.Contains(state, StringComparers.ResourceState);
     }
 
     /// <summary>

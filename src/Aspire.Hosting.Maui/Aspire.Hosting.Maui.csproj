@@ -31,4 +31,8 @@
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
     <ProjectReference Include="..\Aspire.Hosting.DevTunnels\Aspire.Hosting.DevTunnels.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Polly.Core" />
+  </ItemGroup>
 </Project>

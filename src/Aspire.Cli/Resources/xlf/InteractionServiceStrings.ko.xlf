@@ -83,7 +83,7 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the AppHost: {0}</source>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</source>
         <target state="needs-review-translation">앱 호스트에 연결하는 동안 오류가 발생했습니다. 앱 호스트가 사용 가능하기 전에 충돌했을 수 있음: {0}.</target>
         <note />
       </trans-unit>

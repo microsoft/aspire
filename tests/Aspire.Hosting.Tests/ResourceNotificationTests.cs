@@ -45,18 +45,21 @@ public class ResourceNotificationTests
     }
 
     [Theory]
-    [InlineData(nameof(KnownResourceStates.Finished), null, true)]
-    [InlineData(nameof(KnownResourceStates.Exited), null, true)]
-    [InlineData(nameof(KnownResourceStates.FailedToStart), null, true)]
-    [InlineData(nameof(KnownResourceStates.Running), 0, false)]
-    [InlineData(null, 0, false)]
-    public void CompletionWaitOnlyYieldsOnTerminalStates(string? state, int? exitCode, bool expected)
+    [InlineData(nameof(KnownResourceStates.Finished), null, false, true)]
+    [InlineData(nameof(KnownResourceStates.Exited), null, false, false)]
+    [InlineData(nameof(KnownResourceStates.Exited), null, true, true)]
+    [InlineData(nameof(KnownResourceStates.Exited), 0, false, true)]
+    [InlineData(nameof(KnownResourceStates.FailedToStart), null, false, true)]
+    [InlineData(nameof(KnownResourceStates.Running), 0, false, false)]
+    [InlineData(null, 0, false, false)]
+    public void CompletionWaitOnlyYieldsOnTerminalStates(string? state, int? exitCode, bool isDcpExecutableTerminated, bool expected)
     {
         var snapshot = new CustomResourceSnapshot
         {
             ResourceType = "test",
             State = state,
             ExitCode = exitCode,
+            IsDcpExecutableTerminated = isDcpExecutableTerminated,
             Properties = []
         };
 
@@ -571,7 +574,7 @@ public class ResourceNotificationTests
     }
 
     [Fact]
-    public async Task WaitForDependenciesThrowsWhenCompletionDependencyExitsWithoutExitCode()
+    public async Task WaitForDependenciesWaitsWhenCompletionDependencyExitsBeforeExitCode()
     {
         var dependency = new CustomResource("dependency");
         var resource = new CustomResource("resource");
@@ -591,6 +594,41 @@ public class ResourceNotificationTests
         await notificationService.PublishUpdateAsync(dependency, s => s with
         {
             State = "exited"
+        }).DefaultTimeout();
+
+        Assert.False(waitTask.IsCompleted);
+
+        await notificationService.PublishUpdateAsync(dependency, s => s with
+        {
+            State = "exited",
+            ExitCode = 0
+        }).DefaultTimeout();
+
+        await waitTask.DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesThrowsWhenCompletionDependencyIsDcpTerminatedWithoutExitCode()
+    {
+        var dependency = new CustomResource("dependency");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency, WaitType.WaitForCompletion));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(resource, cts.Token);
+
+        await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                GetWaitingForDependencies(re).SequenceEqual(new[] { dependency.Name }),
+            cts.Token).DefaultTimeout();
+
+        await notificationService.PublishUpdateAsync(dependency, s => s with
+        {
+            State = "exited",
+            IsDcpExecutableTerminated = true
         }).DefaultTimeout();
 
         var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
@@ -1489,6 +1527,54 @@ public class ResourceNotificationTests
         // The wait task should propagate the exception
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => waitTask.DefaultTimeout());
         Assert.Equal("ResourceReady failed", ex.Message);
+    }
+
+    [Fact]
+    public async Task WaitForResourceHealthyAsyncDoesNotUseStaleResourceReadyEventAfterRestart()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var firstResourceReadyEvent = new EventSnapshot(Task.CompletedTask);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = firstResourceReadyEvent
+        }).DefaultTimeout();
+
+        var firstHealthyEvent = await notificationService.WaitForResourceHealthyAsync(resource.Name).DefaultTimeout();
+        Assert.Same(firstResourceReadyEvent.EventTask, firstHealthyEvent.Snapshot.ResourceReadyEvent?.EventTask);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Starting
+        }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var startingEvent));
+        Assert.Null(startingEvent.Snapshot.ResourceReadyEvent);
+
+        var secondWaitTask = notificationService.WaitForResourceHealthyAsync(resource.Name);
+
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        Assert.False(secondWaitTask.IsCompleted);
+
+        var secondResourceReadyTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(secondResourceReadyTcs.Task)
+        }).DefaultTimeout();
+
+        Assert.False(secondWaitTask.IsCompleted);
+
+        secondResourceReadyTcs.SetResult();
+
+        var secondHealthyEvent = await secondWaitTask.DefaultTimeout();
+        Assert.Same(secondResourceReadyTcs.Task, secondHealthyEvent.Snapshot.ResourceReadyEvent?.EventTask);
     }
 
     [Fact]
