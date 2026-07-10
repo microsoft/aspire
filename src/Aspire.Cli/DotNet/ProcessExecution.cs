@@ -5,7 +5,6 @@ using System.Diagnostics;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Processes;
-using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.DotNet;
@@ -116,26 +115,41 @@ internal sealed class ProcessExecution : IProcessExecution
             throw new InvalidOperationException("Detached Unix process launch requires Aspire layout services.");
         }
 
-        var layoutLease = await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dcp-fork-process", cancellationToken).ConfigureAwait(false);
-        var dcpDirectory = layoutLease?.Layout.GetDcpPath() ??
-            _layoutDiscovery.GetComponentPath(LayoutComponent.Dcp, _executionContext.WorkingDirectory.FullName);
-        if (dcpDirectory is null)
+        var dcpExecutable = await DcpExecutableResolver.TryGetDcpExecutableAsync(
+            _layoutDiscovery,
+            _bundleService,
+            _executionContext,
+            "dcp-fork-process",
+            cancellationToken).ConfigureAwait(false);
+        if (dcpExecutable is null)
         {
-            layoutLease?.Dispose();
-            throw new InvalidOperationException("Could not find DCP in the Aspire layout.");
+            throw new InvalidOperationException("Could not find DCP executable in the Aspire layout.");
         }
 
-        var dcpPath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
-        if (!File.Exists(dcpPath))
+        try
         {
-            layoutLease?.Dispose();
-            throw new InvalidOperationException($"Could not find DCP executable at '{dcpPath}'.");
-        }
+            if (dcpExecutable.LayoutLease is not null)
+            {
+                var environment = _startInfo.Environment
+                    .Where(static kvp => kvp.Value is not null)
+                    .ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value!, ProcessEnvironment.Comparer);
+                dcpExecutable.LayoutLease.AddEnvironment(environment);
 
-        layoutLease?.AddEnvironment(_startInfo.Environment.Where(static kvp => kvp.Value is not null).ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value!, ProcessEnvironment.Comparer));
-        _startInfo.DetachedUnixLauncherPath = dcpPath;
-        _logger.LogDebug("Launching detached child process through DCP fork-process: {DcpPath}", dcpPath);
-        return layoutLease;
+                foreach (var (key, value) in environment)
+                {
+                    _startInfo.Environment[key] = value;
+                }
+            }
+
+            _startInfo.DetachedUnixLauncherPath = dcpExecutable.ExecutablePath;
+            _logger.LogDebug("Launching detached child process through DCP fork-process: {DcpPath}", dcpExecutable.ExecutablePath);
+            return dcpExecutable;
+        }
+        catch
+        {
+            dcpExecutable.Dispose();
+            throw;
+        }
     }
 
     /// <inheritdoc />

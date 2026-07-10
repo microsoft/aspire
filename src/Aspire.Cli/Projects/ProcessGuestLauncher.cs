@@ -124,13 +124,16 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             startInfo.Environment[key] = value;
         }
 
+        var isolateConsoleForGracefulShutdown = options?.IsolateConsoleForGracefulShutdown == true;
         var invocationOptions = new ProcessInvocationOptions
         {
             StandardOutputCallback = HandleStdoutLine,
             StandardErrorCallback = HandleStderrLine,
             // Run-path spawn: isolated console group + anonymous-pipe stdio so a graceful CTRL+C can
-            // target the guest without also signalling the CLI.
-            IsolateConsole = options?.IsolateConsoleForGracefulShutdown == true,
+            // target the guest without also signalling the CLI. The Windows kill-on-close job is the
+            // matching hard-kill safety net if the launching CLI is terminated before graceful cleanup.
+            IsolateConsole = isolateConsoleForGracefulShutdown,
+            KillOnParentExit = isolateConsoleForGracefulShutdown,
             GracefulShutdownSignaler = options?.GracefulShutdownSignaler,
             ShutdownService = options?.ShutdownService,
             // The guest is the AppHost's primary process; always tree-kill on escalation so no

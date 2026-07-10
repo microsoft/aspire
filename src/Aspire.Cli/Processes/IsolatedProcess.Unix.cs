@@ -54,14 +54,6 @@ internal sealed partial class IsolatedProcess
         {
             // Once DCP has started, wait for it to report the detached child PID even if the caller
             // cancels. Without the PID, callers cannot clean up a child that was already forked.
-            var completedTask = await Task.WhenAny(stdoutLineTask, dcpProcess.WaitForExitAsync(CancellationToken.None)).ConfigureAwait(false);
-            if (completedTask != stdoutLineTask)
-            {
-                var stderr = await stderrTask.ConfigureAwait(false);
-                var stdout = stdoutLineTask.IsCompletedSuccessfully ? stdoutLineTask.Result : null;
-                throw new InvalidOperationException($"DCP fork-process exited with code {dcpProcess.ExitCode}. stdout: '{stdout?.Trim()}', stderr: '{stderr.Trim()}'");
-            }
-
             var stdoutLine = await stdoutLineTask.ConfigureAwait(false);
             if (stdoutLine is null)
             {

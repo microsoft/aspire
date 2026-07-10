@@ -4,10 +4,13 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Layout;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -292,6 +295,62 @@ exit "$exit_code"
         await detachedProcess.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
     }
 
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    [SupportedOSPlatform("macos")]
+    public async Task StartAsync_OnUnix_PassesBundleLeaseEnvironmentToDcp()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only test.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var versionDirectory = workspace.CreateDirectory("version");
+        var dcpDirectory = versionDirectory.CreateSubdirectory(BundleDiscovery.DcpDirectoryName);
+        var dcpPath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory.FullName);
+        var capturePath = Path.Combine(workspace.WorkspaceRoot.FullName, "bundle-version-dir.txt");
+        await File.WriteAllTextAsync(dcpPath, """
+#!/bin/sh
+if [ "$1" != "fork-process" ]; then
+  exit 42
+fi
+if [ "$2" != "--monitor" ]; then
+  exit 43
+fi
+if [ "$6" != "--" ]; then
+  exit 44
+fi
+printf '%s\n' "${ASPIRE_BUNDLE_VERSION_DIR:-missing}" > "$ASPIRE_TEST_CAPTURE"
+sleep 0.1 >/dev/null 2>&1 </dev/null &
+child_pid=$!
+printf '%s\n' "$child_pid"
+wait "$child_pid"
+""");
+        File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        var layout = new LayoutConfiguration
+        {
+            LayoutPath = versionDirectory.FullName
+        };
+        var versionLease = BundleVersionLease.Acquire(versionDirectory.FullName, "test", "dcp-fork-process");
+        using var layoutLease = new BundleLayoutLease(layout, versionLease);
+
+        await using var detachedProcess = CreateDetachedExecution(
+            "/bin/sh",
+            ["-c", "exit 0"],
+            workspace.WorkspaceRoot.FullName,
+            environment: new Dictionary<string, string>
+            {
+                ["ASPIRE_TEST_CAPTURE"] = capturePath
+            },
+            layout: layout,
+            bundleService: new FixedBundleService(layoutLease),
+            executionContext: workspace.CreateExecutionContext());
+
+        Assert.True(await detachedProcess.StartAsync(CancellationToken.None));
+        await detachedProcess.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(Path.GetFullPath(versionDirectory.FullName), (await File.ReadAllTextAsync(capturePath)).Trim());
+    }
+
     private static async Task WaitForFileAsync(string path)
     {
         while (!File.Exists(path))
@@ -307,9 +366,19 @@ exit "$exit_code"
         Func<string, bool>? environmentVariableFilter = null,
         IReadOnlyDictionary<string, string>? environment = null,
         string? dcpPath = null,
-        ILogger<ProcessExecutionFactory>? logger = null)
+        ILogger<ProcessExecutionFactory>? logger = null,
+        LayoutConfiguration? layout = null,
+        IBundleService? bundleService = null,
+        CliExecutionContext? executionContext = null)
     {
-        var factory = new ProcessExecutionFactory(new TestEnvironment(), logger ?? NullLogger<ProcessExecutionFactory>.Instance);
+        var factory = layout is null && bundleService is null && executionContext is null
+            ? new ProcessExecutionFactory(new TestEnvironment(), logger ?? NullLogger<ProcessExecutionFactory>.Instance)
+            : new ProcessExecutionFactory(
+                new TestEnvironment(),
+                logger ?? NullLogger<ProcessExecutionFactory>.Instance,
+                new FixedLayoutDiscovery(layout ?? new LayoutConfiguration()),
+                bundleService,
+                executionContext ?? TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(workingDirectory)));
         return factory.CreateExecution(
             fileName,
             arguments.ToArray(),
@@ -322,5 +391,59 @@ exit "$exit_code"
                 EnvironmentVariableFilter = environmentVariableFilter,
                 DetachedUnixLauncherPathOverride = dcpPath
             });
+    }
+
+    private sealed class FixedLayoutDiscovery(LayoutConfiguration layout) : ILayoutDiscovery
+    {
+        public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null)
+        {
+            _ = projectDirectory;
+            return layout;
+        }
+
+        public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null)
+        {
+            _ = projectDirectory;
+            return layout.GetComponentPath(component);
+        }
+
+        public bool IsBundleModeAvailable(string? projectDirectory = null)
+        {
+            _ = projectDirectory;
+            return true;
+        }
+    }
+
+    private sealed class FixedBundleService(BundleLayoutLease layoutLease) : IBundleService
+    {
+        public bool IsBundle => true;
+
+        public Task EnsureExtractedAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+
+        public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
+        {
+            _ = destinationPath;
+            _ = force;
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(BundleExtractResult.AlreadyUpToDate);
+        }
+
+        public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
+        {
+            _ = holderKind;
+            _ = commandName;
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult<BundleLayoutLease?>(layoutLease);
+        }
+
+        public string? GetDefaultExtractDir(string processPath)
+        {
+            _ = processPath;
+            return null;
+        }
     }
 }
