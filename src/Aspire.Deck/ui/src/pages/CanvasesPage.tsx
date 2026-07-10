@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CanvasManifest } from "../api/types";
 import { listCanvases } from "../api/deck";
 import { attachCanvasBridge } from "../lib/canvasBridge";
-import { BackIcon, CanvasIcon, EmptyState } from "../toolkit";
+import { BackIcon, CanvasHost, CanvasIcon, EmptyState } from "../toolkit";
 
 // Resolves a canvas url against the app base so it loads under both the native
 // `canvas://` scheme (Tauri) and http (dev/preview). Absolute-scheme and
@@ -19,7 +19,6 @@ export function CanvasesPage() {
   const [canvases, setCanvases] = useState<CanvasManifest[]>([]);
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,15 +34,6 @@ export function CanvasesPage() {
   }, []);
 
   const open = useMemo(() => canvases.find((c) => c.id === openId) ?? null, [canvases, openId]);
-
-  // Bridge the host's data layer to the sandboxed canvas iframe while one is open.
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!open || iframe === null) {
-      return;
-    }
-    return attachCanvasBridge(iframe);
-  }, [open]);
 
   if (open) {
     return (
@@ -61,15 +51,11 @@ export function CanvasesPage() {
           </div>
         </div>
         <div className="page__body">
-          <div className="canvas-viewer">
-            <iframe
-              ref={iframeRef}
-              className="canvas-viewer__frame"
-              src={resolveCanvasUrl(open.url)}
-              title={open.title}
-              sandbox="allow-scripts allow-same-origin"
-            />
-          </div>
+          <CanvasHost
+            src={resolveCanvasUrl(open.url)}
+            title={open.title}
+            connect={attachCanvasBridge}
+          />
         </div>
       </div>
     );
