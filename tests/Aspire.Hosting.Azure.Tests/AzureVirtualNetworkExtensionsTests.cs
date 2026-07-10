@@ -205,6 +205,43 @@ public class AzureVirtualNetworkExtensionsTests
     }
 
     [Fact]
+    public void WithServiceDelegation_CalledMultipleTimes_KeepsOnlyLastDelegation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithServiceDelegation("Microsoft.Sql/managedInstances")
+            .WithServiceDelegation("Microsoft.Web/serverFarms", name: "WebDelegation");
+
+        var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().Single();
+        Assert.Equal("WebDelegation", delegationAnnotation.Name);
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithServiceDelegation_WithEmptyName_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23");
+
+        Assert.Throws<ArgumentException>(() => subnet.WithServiceDelegation("Microsoft.App/environments", name: ""));
+    }
+
+    [Fact]
+    public void WithServiceDelegation_WithEmptyServiceName_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23");
+
+        Assert.Throws<ArgumentException>(() => subnet.WithServiceDelegation(""));
+    }
+
+    [Fact]
     public void AddSubnet_WithParameterResource_CreatesSubnetResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

@@ -320,10 +320,10 @@ public static class AzureVirtualNetworkExtensions
         builder.WithAnnotation(
             new DelegatedSubnetAnnotation(ReferenceExpression.Create($"{subnet.Resource.Id}")));
 
-        // Add service delegation annotation to the subnet
-        subnet.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(
-            target.DelegatedSubnetServiceName,
-            target.DelegatedSubnetServiceName));
+        // Delegate the subnet to the target's service. Routed through WithServiceDelegation so every
+        // service-delegation producer shares the same last-write-wins (Replace) behavior, ensuring the
+        // subnet retains a single delegation annotation and Replace never encounters duplicates.
+        subnet.WithServiceDelegation(target.DelegatedSubnetServiceName);
 
         return builder;
     }
@@ -338,8 +338,8 @@ public static class AzureVirtualNetworkExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Service delegation grants the specified Azure service permission to create service-specific
-    /// resources in the subnet. Because a subnet emits only its most recently added delegation,
-    /// calling this multiple times keeps the last delegation applied.
+    /// resources in the subnet. A subnet supports a single service delegation, so calling this
+    /// multiple times replaces any previously configured delegation with the most recent one.
     /// </remarks>
     /// <example>
     /// This example delegates a subnet to Azure Container Apps:
@@ -358,11 +358,18 @@ public static class AzureVirtualNetworkExtensions
         ArgumentNullException.ThrowIfNull(subnet);
         ArgumentException.ThrowIfNullOrEmpty(serviceName);
 
-        // The delegation name defaults to the service name so callers don't have to
-        // repeat the value; AzureSubnetResource emits the last delegation (last-write-wins).
+        // The delegation name defaults to the service name so callers don't have to repeat the
+        // value. Validate after defaulting so an explicitly empty name is rejected here rather
+        // than surfacing as an invalid (empty) delegation name at deployment time.
         name ??= serviceName;
+        ArgumentException.ThrowIfNullOrEmpty(name);
 
-        return subnet.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(name, serviceName));
+        // A subnet supports a single service delegation, so replace any previously configured
+        // delegation instead of appending. This keeps the app model to one delegation annotation
+        // (last-write-wins) and matches AzureSubnetResource, which emits only the last delegation.
+        return subnet.WithAnnotation(
+            new AzureSubnetServiceDelegationAnnotation(name, serviceName),
+            ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>
