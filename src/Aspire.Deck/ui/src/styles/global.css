@@ -690,7 +690,7 @@ table.data thead th {
   font-weight: 550;
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
   color: var(--text-muted);
   background: var(--bg-surface-2);
   padding: 10px 14px;
@@ -709,6 +709,8 @@ table.data thead th {
   border: 0;
   font: inherit;
   text-align: left;
+  text-transform: inherit;
+  letter-spacing: inherit;
 }
 .data__sort:focus-visible {
   outline: 2px solid var(--border-focus);

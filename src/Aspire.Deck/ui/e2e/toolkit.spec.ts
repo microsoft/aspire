@@ -292,6 +292,7 @@ test(`${features("TK-DATA-SORT-001")} sorts and activates data rows accessibly`,
   const sortByName = nameHeader.getByRole("button", { name: "Name" });
   const names = table.locator("tbody td:nth-child(2)");
 
+  await expect(sortByName).toHaveCSS("text-transform", "uppercase");
   await sortByName.click();
   await expect(nameHeader).toHaveAttribute("aria-sort", "ascending");
   await expect(names).toHaveText(["catalog-db", "frontend", "migration"]);

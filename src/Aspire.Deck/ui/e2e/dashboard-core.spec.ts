@@ -146,7 +146,7 @@ test(`${features("APP-NOTIFICATION-001")} completes every notification action`, 
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test(`${features("RES-LIST-001", "RES-FILTER-001", "RES-ENDPOINT-001")} lists and filters resource endpoints`, async ({ page }) => {
+test(`${features("RES-LIST-001", "RES-SORT-001", "RES-FILTER-001", "RES-ENDPOINT-001")} lists, sorts, and filters resource endpoints`, async ({ page }) => {
   const table = page.getByRole("table");
   const rows = table.getByRole("row");
   await expect(rows).toHaveCount(6);
@@ -157,6 +157,21 @@ test(`${features("RES-LIST-001", "RES-FILTER-001", "RES-ENDPOINT-001")} lists an
   await expect(rows.nth(5)).toContainText("postgres");
   await expect(table).not.toContainText("hiddenContainer");
   await expect(table).not.toContainText("apikey");
+
+  const nameHeader = table.getByRole("columnheader", { name: "Name" });
+  const sortByName = nameHeader.getByRole("button", { name: "Name" });
+  await expect(nameHeader).toHaveAttribute("aria-sort", "ascending");
+  await sortByName.click();
+  await expect(nameHeader).toHaveAttribute("aria-sort", "descending");
+  await expect(table.locator("tbody td:nth-child(2)")).toHaveText([
+    "postgres",
+    "migration",
+    "frontend",
+    "cache",
+    "apiservice",
+  ]);
+  await sortByName.click();
+  await expect(nameHeader).toHaveAttribute("aria-sort", "ascending");
 
   const endpoint = page.getByRole("link", { name: "https://localhost:7233" });
   await expect(endpoint).toHaveAttribute("href", "https://localhost:7233");
@@ -251,13 +266,20 @@ test(`${features("RES-INTERACTION-001")} validates and submits an input command`
   await expect(interaction).toHaveCount(0);
 });
 
-test(`${features("PARAM-LIST-001", "PARAM-FILTER-001", "PARAM-SECRET-001")} filters and reveals parameter values`, async ({ page }) => {
+test(`${features("PARAM-LIST-001", "PARAM-SORT-001", "PARAM-FILTER-001", "PARAM-SECRET-001")} sorts, filters, and reveals parameter values`, async ({ page }) => {
   await navigationButton(page, "Parameters").click();
   const table = page.getByRole("table");
   await expect(table.getByRole("row")).toHaveCount(4);
   await expect(table).toContainText("Not set");
   await expect(table).toContainText("1000");
   await expect(table).not.toContainText("sk-9f2b7c1e4a8d");
+
+  const nameHeader = table.getByRole("columnheader", { name: "Name" });
+  const sortByName = nameHeader.getByRole("button", { name: "Name" });
+  await expect(nameHeader).toHaveAttribute("aria-sort", "ascending");
+  await sortByName.click();
+  await expect(table.locator("tbody td:nth-child(2)")).toHaveText(["insertionrows", "greeting", "apikey"]);
+  await sortByName.click();
 
   await table.getByRole("button", { name: "Reveal value" }).click();
   await expect(table).toContainText("sk-9f2b7c1e4a8d");

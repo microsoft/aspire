@@ -47,7 +47,7 @@ export function ResourcesPage() {
             (r.state ?? "").toLowerCase().includes(trimmed),
         )
       : list;
-    return [...filtered].sort((a, b) => a.displayName.localeCompare(b.displayName));
+    return filtered;
   }, [resources, query]);
 
   // Resolve the selected resource from the live list so the drawer reflects updates.
@@ -83,6 +83,7 @@ export function ResourcesPage() {
       header: "State",
       width: "170px",
       render: (r) => <StateDot state={r.state} stateStyle={r.stateStyle} health={r.health} />,
+      compare: (left, right) => (left.state ?? "").localeCompare(right.state ?? ""),
     },
     {
       key: "name",
@@ -93,12 +94,14 @@ export function ResourcesPage() {
           {r.displayName}
         </span>
       ),
+      compare: (left, right) => left.displayName.localeCompare(right.displayName),
     },
     {
       key: "type",
       header: "Type",
       width: "120px",
       render: (r) => <span className="cell-muted">{r.resourceType}</span>,
+      compare: (left, right) => left.resourceType.localeCompare(right.resourceType),
     },
     {
       key: "endpoints",
@@ -135,6 +138,9 @@ export function ResourcesPage() {
       header: "Started",
       width: "120px",
       render: (r) => <span className="cell-muted">{formatRelativeTime(r.startedAt)}</span>,
+      compare: (left, right) =>
+        (left.startedAt ? Date.parse(left.startedAt) : 0) -
+        (right.startedAt ? Date.parse(right.startedAt) : 0),
     },
   ];
 
@@ -160,6 +166,7 @@ export function ResourcesPage() {
           rowKey={(r) => r.name}
           onRowClick={(r) => setSelectedName(r.name)}
           isSelected={(r) => r.name === selectedName}
+          defaultSort={{ columnKey: "name", direction: "ascending" }}
           emptyMessage={ready ? "No resources match your filter." : "Connecting to resource service…"}
         />
       </PageBody>

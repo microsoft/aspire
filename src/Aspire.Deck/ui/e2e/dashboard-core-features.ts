@@ -9,6 +9,7 @@ export const dashboardCoreFeatures = {
   "APP-NOTIFICATION-001": "Notifications expose primary, secondary, and dismiss actions.",
   "APP-RESPONSIVE-001": "The shell, navigation, resource table, and drawer remain usable on mobile.",
   "RES-LIST-001": "Resources exclude hidden and parameter resources and retain stable ordering.",
+  "RES-SORT-001": "Resources sort by supported columns in ascending and descending order.",
   "RES-FILTER-001": "Resources filter by name, type, and state and expose an empty result.",
   "RES-ENDPOINT-001": "External resource endpoints retain actionable URLs without selecting the row.",
   "RES-DETAILS-001": "Resource details include overview, endpoints, properties, environment, health, and relationships.",
@@ -18,6 +19,7 @@ export const dashboardCoreFeatures = {
   "RES-CONFIRM-001": "Destructive resource commands require confirmation and report their result.",
   "RES-INTERACTION-001": "Input commands support text, choice, boolean, live validation, and submission.",
   "PARAM-LIST-001": "Parameters distinguish plain, secret, and unresolved values.",
+  "PARAM-SORT-001": "Parameters sort by supported columns in ascending and descending order.",
   "PARAM-FILTER-001": "Parameters filter by name and state.",
   "PARAM-SECRET-001": "Secret parameter values reveal without selecting the resource row.",
 } as const;

@@ -54,7 +54,7 @@ export function ParametersPage() {
             (r.state ?? "").toLowerCase().includes(trimmed),
         )
       : list;
-    return [...filtered].sort((a, b) => a.displayName.localeCompare(b.displayName));
+    return filtered;
   }, [resources, query]);
 
   const selected = useMemo(
@@ -86,6 +86,7 @@ export function ParametersPage() {
       header: "State",
       width: "170px",
       render: (r) => <StateDot state={r.state} stateStyle={r.stateStyle} health={r.health} />,
+      compare: (left, right) => (left.state ?? "").localeCompare(right.state ?? ""),
     },
     {
       key: "name",
@@ -97,6 +98,7 @@ export function ParametersPage() {
           {r.displayName}
         </span>
       ),
+      compare: (left, right) => left.displayName.localeCompare(right.displayName),
     },
     {
       key: "value",
@@ -127,6 +129,7 @@ export function ParametersPage() {
           rowKey={(r) => r.name}
           onRowClick={(r) => setSelectedName(r.name)}
           isSelected={(r) => r.name === selectedName}
+          defaultSort={{ columnKey: "name", direction: "ascending" }}
           emptyMessage={ready ? "This AppHost has no parameters." : "Connecting to resource service…"}
         />
       </PageBody>
