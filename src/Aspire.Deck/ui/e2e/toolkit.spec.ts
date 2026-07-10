@@ -183,6 +183,44 @@ test(`${features("TK-SELECT-001", "TK-CHECKBOX-001", "TK-SECRET-001")} exercises
   await expect(inputs.getByText("deck-secret-123", { exact: true })).toHaveCount(0);
 });
 
+test(`${features("TK-TABS-001", "TK-ACCORDION-001", "TK-DIVIDER-001", "TK-HIGHLIGHT-001")} exercises navigation and disclosure controls`, async ({ page }) => {
+  const region = page.getByRole("region", { name: "Navigation and disclosure" });
+  const tablist = region.getByRole("tablist", { name: "Toolkit views" });
+  const overviewTab = tablist.getByRole("tab", { name: "Overview" });
+  const logsTab = tablist.getByRole("tab", { name: "Logs 3" });
+  const overviewPanel = region.locator("#deck-tab-panel-overview");
+  const logsPanel = region.locator("#deck-tab-panel-logs");
+
+  await expect(overviewTab).toHaveAttribute("aria-selected", "true");
+  await expect(overviewPanel).toHaveAttribute("role", "tabpanel");
+  await expect(overviewPanel).toHaveAttribute("aria-labelledby", "deck-tab-overview");
+  await expect(overviewPanel).toBeVisible();
+  await expect(logsPanel).toBeHidden();
+  await overviewTab.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(logsTab).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(logsTab).toHaveAttribute("aria-selected", "true");
+  await expect(logsPanel).toBeVisible();
+  await expect(overviewPanel).toBeHidden();
+  await expect(overviewPanel).toHaveCount(1);
+
+  const environment = region.getByRole("button", { name: "Environment 2" });
+  const endpoints = region.getByRole("button", { name: "Endpoints 1" });
+  await expect(environment).toHaveAttribute("aria-expanded", "true");
+  await expect(endpoints).toHaveAttribute("aria-expanded", "false");
+  await endpoints.click();
+  await expect(endpoints).toHaveAttribute("aria-expanded", "true");
+  await environment.click();
+  await expect(environment).toHaveAttribute("aria-expanded", "false");
+
+  await expect(region.getByRole("separator", { name: "Horizontal divider" })).toHaveAttribute("aria-orientation", "horizontal");
+  await expect(region.getByRole("separator", { name: "Vertical divider" })).toHaveAttribute("aria-orientation", "vertical");
+  const highlighted = region.getByTestId("toolkit-highlight");
+  await expect(highlighted).toHaveText("frontend calls FrontEnd API");
+  await expect(highlighted.locator("mark")).toHaveText(["frontend", "FrontEnd"]);
+});
+
 test(`${features("TK-DATA-001")} filters semantic table rows and exposes empty results`, async ({ page }) => {
   const table = page.getByRole("table");
   const search = page.getByRole("textbox", { name: "Filter toolkit resources…" });

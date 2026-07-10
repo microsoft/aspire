@@ -11,6 +11,10 @@ export const toolkitFeatures = {
   "TK-SELECT-001": "Select controls expose labels, placeholders, disabled options, and controlled values.",
   "TK-CHECKBOX-001": "Checkboxes support checked, unchecked, mixed, and disabled states.",
   "TK-SECRET-001": "Sensitive values are masked by default and can be explicitly revealed and hidden.",
+  "TK-TABS-001": "Tabs support pointer and keyboard selection while preserving inactive panel state.",
+  "TK-ACCORDION-001": "Accordion sections expose controlled expanded state, counts, and disclosure semantics.",
+  "TK-DIVIDER-001": "Horizontal and vertical dividers expose semantic orientation.",
+  "TK-HIGHLIGHT-001": "Search highlighting is case-insensitive and preserves the original text.",
   "TK-A11Y-001": "The playground has a reviewed accessibility-tree contract.",
   "TK-RESPONSIVE-001": "Toolkit controls remain contained and usable at desktop and mobile widths.",
 } as const;

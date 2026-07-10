@@ -1,13 +1,16 @@
 import { useMemo, useState } from "react";
 import {
+  Accordion,
   Badge,
   Button,
   Checkbox,
   ConfirmDialog,
   DataTable,
+  Divider,
   Drawer,
   EmptyState,
   IconButton,
+  Highlighter,
   MoonIcon,
   NotificationStack,
   ResourcesIcon,
@@ -16,6 +19,7 @@ import {
   Select,
   StateDot,
   SunIcon,
+  Tabs,
   type Column,
   type ConfirmRequest,
   type DeckTheme,
@@ -60,6 +64,8 @@ export function ToolkitPlayground({
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [environment, setEnvironment] = useState("development");
   const [includeHidden, setIncludeHidden] = useState(false);
+  const [selectedTab, setSelectedTab] = useState("overview");
+  const [openAccordionItems, setOpenAccordionItems] = useState(["environment"]);
 
   const filteredResources = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -160,6 +166,62 @@ export function ToolkitPlayground({
                 hideLabel="Hide API key"
               />
             </div>
+          </div>
+        </section>
+
+        <section className="toolkit-section" aria-labelledby="toolkit-navigation-title">
+          <div className="toolkit-section__heading">
+            <h2 id="toolkit-navigation-title">Navigation and disclosure</h2>
+          </div>
+          <div className="toolkit-disclosure-grid">
+            <Tabs
+              ariaLabel="Toolkit views"
+              selectedId={selectedTab}
+              onTabChange={setSelectedTab}
+              tabs={[
+                {
+                  id: "overview",
+                  label: "Overview",
+                  content: <div className="toolkit-tab-sample">Overview panel</div>,
+                },
+                {
+                  id: "logs",
+                  label: (
+                    <>
+                      <span>Logs</span>
+                      <Badge>3</Badge>
+                    </>
+                  ),
+                  content: <div className="toolkit-tab-sample">Logs panel</div>,
+                },
+              ]}
+            />
+            <Accordion
+              items={[
+                {
+                  id: "environment",
+                  heading: "Environment",
+                  count: 2,
+                  content: <div className="cell-muted">ASPNETCORE_ENVIRONMENT and HTTP_PORTS</div>,
+                },
+                {
+                  id: "endpoints",
+                  heading: "Endpoints",
+                  count: 1,
+                  content: <div className="cell-muted">https://localhost:7233</div>,
+                },
+              ]}
+              openItems={openAccordionItems}
+              onOpenItemsChange={setOpenAccordionItems}
+            />
+          </div>
+          <Divider orientation="horizontal" label="Horizontal divider" />
+          <div className="toolkit-inline-sample">
+            <span>Resource</span>
+            <Divider label="Vertical divider" />
+            <span data-testid="toolkit-highlight">
+              <Highlighter text="frontend calls FrontEnd API" highlightedText="frontEnd" />
+            </span>
           </div>
         </section>
 
