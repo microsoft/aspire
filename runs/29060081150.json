@@ -1,0 +1,38 @@
+{
+  "run_id": 29060081150,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29060081150",
+  "analyzed_at": "2026-07-10T00:57:36Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18698,
+    "title": "Flatten single optional DTO 'options' parameter in Go polyglot generator",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-flatten-go-dto-option-params",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18698"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Docker / Hosting.Docker (ubuntu-latest)",
+      "id": 86260217408,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29060081150/job/86260217408",
+      "classification": "flaky-test",
+      "reason": "Docker compose failed to bind host port 54398 (address already in use) — a transient port conflict on the CI runner. The failing test is in Aspire.Hosting.Docker.Tests which is unrelated to the PR's Go/TypeScript code generation changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints",
+      "job": "Tests / Hosting.Docker / Hosting.Docker (ubuntu-latest)",
+      "error": "Assert.Contains() Failure: Filter not matched in collection\nCollection: []",
+      "stack_trace": "at Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Docker.Tests/DockerComposeTests.cs:line 460\n   at Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Docker.Tests/DockerComposeTests.cs:line 500",
+      "classification": "flaky",
+      "reason": "The test failed because docker compose up could not bind port 54398 (address already in use on the CI runner). This is a transient port conflict, not caused by the PR's changes to Go/TypeScript code generation. The test is in Aspire.Hosting.Docker.Tests which has no files changed in this PR."
+    }
+  ],
+  "causes": ["docker-compose-port-already-in-use"]
+}
