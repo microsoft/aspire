@@ -25,9 +25,9 @@ import type {
 
 type Unsubscribe = () => void;
 
-function nowNano(offsetMs = 0): string {
+function toUnixNano(timestampMs: number): string {
   // OTLP uses unix nanoseconds; keep as string to avoid bigint loss.
-  return (BigInt(Date.now() + offsetMs) * 1_000_000n).toString();
+  return (BigInt(timestampMs) * 1_000_000n).toString();
 }
 
 function isoMinutesAgo(minutes: number): string {
@@ -399,6 +399,7 @@ class MockBackend {
       pointCount: 1,
     })),
   };
+  private telemetryTick = 0;
 
   // Per-metric timestamped history so the Metrics chart has a real time series.
   // Each entry holds the raw value samples; for histograms we also keep synthetic
@@ -433,8 +434,11 @@ class MockBackend {
     this.started = true;
 
     // Seed a few traces/logs so the pages aren't empty on first paint.
+    const seedNow = Date.now();
     for (let i = 0; i < 4; i++) {
-      this.tickTelemetry();
+      // Seed realistic spacing so cursor and drag-to-zoom interactions work on
+      // first paint instead of waiting for the first live polling interval.
+      this.tickTelemetry(seedNow - (3 - i) * 1500);
     }
 
     // Telemetry grows steadily so charts and tables animate.
@@ -750,14 +754,16 @@ class MockBackend {
     }
   }
 
-  private tickTelemetry(): void {
+  private tickTelemetry(timestampMs = Date.now()): void {
     // Append a new log record.
-    const isErr = Math.random() < 0.18;
+    // Keep browser-mode telemetry representative and deterministic so visual and
+    // interaction tests always exercise both successful and failed traces.
+    const isErr = this.telemetryTick++ % 4 === 0;
     const resourceName = this.resources[Math.floor(Math.random() * 3)]?.name ?? "frontend";
     const traceId = randomHex(32);
     const spanId = randomHex(16);
     const log: LogRecordSummary = {
-      timeUnixNano: nowNano(),
+      timeUnixNano: toUnixNano(timestampMs),
       severity: isErr ? "Error" : "Information",
       severityNumber: isErr ? 17 : 9,
       body: isErr
@@ -772,7 +778,7 @@ class MockBackend {
 
     // Append a nested trace: a server root span with a few staggered child spans
     // (and one grandchild) so the waterfall shows a realistic call timeline.
-    const t0 = Date.now() - 220;
+    const t0 = timestampMs - 220;
     const at = (offsetMs: number) => String(BigInt(t0 + offsetMs) * 1_000_000n);
     const durNanos = (ms: number) => String(Math.floor(ms * 1_000_000));
     const pick = <T,>(items: T[]) => items[Math.floor(Math.random() * items.length)]!;
@@ -811,7 +817,7 @@ class MockBackend {
 
     // Advance each metric's last value with bounded jitter, and append a
     // timestamped sample to its history so the chart shows a real time series.
-    const now = Date.now();
+    const now = timestampMs;
     this.telemetry.metrics = this.telemetry.metrics.map((metric, i) => {
       const def = metricDefs[i]!;
       const prev = metric.lastValue ?? def.base;

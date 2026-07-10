@@ -1715,7 +1715,7 @@ table.data tbody tr.selected {
    --------------------------------------------------------------------------- */
 .notif-stack {
   position: absolute;
-  top: calc(var(--topbar-h) + 14px);
+  bottom: 18px;
   right: 18px;
   z-index: 40; /* above the modal drawer so notifications stay visible/actionable */
   display: flex;
@@ -1957,7 +1957,7 @@ table.data tbody tr.selected {
 
   .notif-stack,
   .app:has(.drawer) .notif-stack {
-    top: calc(var(--topbar-h) + 10px);
+    bottom: 80px;
     right: 12px;
     left: 12px;
     width: auto;
