@@ -7,6 +7,7 @@ export const toolkitFeatures = {
   "TK-DATA-001": "Data tables retain semantic headers, filtering, row content, and empty results.",
   "TK-STATUS-001": "Badges and resource state indicators expose every semantic status tone.",
   "TK-EMPTY-001": "Empty states expose an icon, title, and supporting content.",
+  "TK-NOTIFICATION-001": "Notifications expose semantic intent, actions, links, and explicit dismissal.",
   "TK-A11Y-001": "The playground has a reviewed accessibility-tree contract.",
   "TK-RESPONSIVE-001": "Toolkit controls remain contained and usable at desktop and mobile widths.",
 } as const;

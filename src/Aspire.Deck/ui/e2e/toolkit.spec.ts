@@ -127,6 +127,33 @@ test(`${features("TK-DIALOG-001", "TK-DRAWER-001")} exercises modal surfaces`, a
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
+test(`${features("TK-NOTIFICATION-001")} exercises reusable notification actions`, async ({ page }) => {
+  const showNotification = page.getByRole("button", { name: "Show notification" });
+  const status = page.getByRole("status");
+
+  await showNotification.click();
+  const notification = page.getByRole("alert");
+  await expect(notification).toContainText("Toolkit notification");
+  await expect(notification).toContainText("Review the unresolved sample value.");
+  await expect(notification).toHaveClass(/notif--warning/);
+  await notification.getByRole("button", { name: "Open documentation" }).click();
+  await expect(status).toHaveText("Notification link action");
+  await expect(notification).toBeVisible();
+  await notification.getByRole("button", { name: "Not now" }).click();
+  await expect(notification).toHaveCount(0);
+  await expect(status).toHaveText("Notification secondary action");
+
+  await showNotification.click();
+  await page.getByRole("alert").getByRole("button", { name: "Review" }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(status).toHaveText("Notification primary action");
+
+  await showNotification.click();
+  await page.getByRole("button", { name: "Dismiss notification" }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(status).toHaveText("Notification dismissed");
+});
+
 test(`${features("TK-DATA-001")} filters semantic table rows and exposes empty results`, async ({ page }) => {
   const table = page.getByRole("table");
   const search = page.getByRole("textbox", { name: "Filter toolkit resources…" });

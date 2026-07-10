@@ -5,12 +5,15 @@ import {
   Board24Regular,
   Box24Regular,
   ChevronRight24Regular,
+  CheckmarkCircle24Regular,
   Code24Regular,
   DataTrending24Regular,
   Dismiss24Regular,
+  ErrorCircle24Regular,
   Eye24Regular,
   EyeOff24Regular,
   Grid24Regular,
+  Info24Regular,
   Link24Regular,
   Open24Regular,
   Pause24Regular,
@@ -22,6 +25,7 @@ import {
   Timeline24Regular,
   WeatherMoon24Regular,
   WeatherSunny24Regular,
+  Warning24Regular,
   Window24Regular,
   WindowConsole20Regular,
 } from "@fluentui/react-icons";
@@ -58,6 +62,10 @@ export const MoonIcon = createIcon(WeatherMoon24Regular);
 export const BackIcon = createIcon(ArrowLeft24Regular);
 export const LinkIcon = createIcon(Link24Regular);
 export const ChevronIcon = createIcon(ChevronRight24Regular);
+export const SuccessIcon = createIcon(CheckmarkCircle24Regular);
+export const WarningIcon = createIcon(Warning24Regular);
+export const ErrorIcon = createIcon(ErrorCircle24Regular);
+export const InfoIcon = createIcon(Info24Regular);
 
 export function ResourceTypeIcon({ type, ...props }: { type: string } & IconProps) {
   const normalizedType = type.toLowerCase();

@@ -6,5 +6,6 @@ export * from "./DeckProvider";
 export * from "./Drawer";
 export * from "./EmptyState";
 export * from "./Icons";
+export * from "./NotificationStack";
 export * from "./SearchBox";
 export * from "./StateDot";

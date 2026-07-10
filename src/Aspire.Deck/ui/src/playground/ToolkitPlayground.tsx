@@ -8,6 +8,7 @@ import {
   EmptyState,
   IconButton,
   MoonIcon,
+  NotificationStack,
   ResourcesIcon,
   SearchBox,
   StateDot,
@@ -53,6 +54,7 @@ export function ToolkitPlayground({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<ConfirmRequest | null>(null);
   const [lastAction, setLastAction] = useState("No action selected");
+  const [notificationVisible, setNotificationVisible] = useState(false);
 
   const filteredResources = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -68,6 +70,11 @@ export function ToolkitPlayground({
       confirmLabel: "Restart",
       onConfirm: () => setLastAction("Restart confirmed"),
     });
+  };
+
+  const completeNotification = (message: string): void => {
+    setNotificationVisible(false);
+    setLastAction(message);
   };
 
   return (
@@ -98,6 +105,7 @@ export function ToolkitPlayground({
             <Button variant="ghost" onClick={() => setLastAction("Ghost selected")}>Ghost</Button>
             <Button data-testid="toolkit-confirm" onClick={requestConfirmation}>Confirm command</Button>
             <Button data-testid="toolkit-open-drawer" onClick={() => setDrawerOpen(true)}>Open drawer</Button>
+            <Button onClick={() => setNotificationVisible(true)}>Show notification</Button>
           </div>
         </section>
 
@@ -157,6 +165,31 @@ export function ToolkitPlayground({
       ) : null}
 
       <ConfirmDialog request={confirmation} onClose={() => setConfirmation(null)} />
+      <NotificationStack
+        notifications={notificationVisible
+          ? [
+              {
+                id: "toolkit-notification",
+                intent: "warning",
+                title: "Toolkit notification",
+                message: "Review the unresolved sample value.",
+                link: {
+                  label: "Open documentation",
+                  onClick: () => setLastAction("Notification link action"),
+                },
+                secondaryAction: {
+                  label: "Not now",
+                  onClick: () => completeNotification("Notification secondary action"),
+                },
+                primaryAction: {
+                  label: "Review",
+                  onClick: () => completeNotification("Notification primary action"),
+                },
+                onDismiss: () => completeNotification("Notification dismissed"),
+              },
+            ]
+          : []}
+      />
     </main>
   );
 }

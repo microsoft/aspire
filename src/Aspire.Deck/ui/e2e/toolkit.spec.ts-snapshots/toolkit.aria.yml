@@ -11,6 +11,7 @@
     - button "Ghost"
     - button "Confirm command"
     - button "Open drawer"
+    - button "Show notification"
   - region "Status":
     - heading "Status" [level=2]
     - text: Neutral Healthy Starting Degraded Failed Selected
