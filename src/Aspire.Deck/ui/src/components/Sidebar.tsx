@@ -7,7 +7,7 @@ import {
   ParametersIcon,
   ResourcesIcon,
   TracesIcon,
-} from "./Icons";
+} from "../toolkit";
 
 export type PageId = "resources" | "parameters" | "console" | "logs" | "traces" | "metrics" | "canvases";
 

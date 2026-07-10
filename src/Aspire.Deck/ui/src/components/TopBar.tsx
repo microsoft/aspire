@@ -1,7 +1,7 @@
 import type { AppHostInfo, ConnectionState, ConnectionTarget, DeckConfig } from "../api/types";
 import { ConnectionPill } from "./ConnectionPill";
 import { AppHostSwitcher } from "./AppHostSwitcher";
-import { MoonIcon, SunIcon } from "./Icons";
+import { MoonIcon, SunIcon } from "../toolkit";
 import type { Theme } from "../lib/theme";
 
 const TARGET_ORDER: ConnectionTarget[] = ["resourceService", "otlpGrpc", "otlpHttp"];

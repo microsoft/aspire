@@ -3,9 +3,8 @@ import type { SpanSummary } from "../api/types";
 import { useTelemetry } from "../lib/useDeckEvent";
 import { formatDurationNanos } from "../lib/format";
 import { buildResourceColorMap, colorFor } from "../lib/colors";
-import { SearchBox } from "../components/SearchBox";
 import { SpanDetailDrawer } from "../components/SpanDetailDrawer";
-import { ChevronIcon } from "../components/Icons";
+import { ChevronIcon, SearchBox } from "../toolkit";
 
 // Minimum-duration filter options. Spans shorter than the selected threshold are
 // hidden so insignificant work doesn't clutter the waterfall.

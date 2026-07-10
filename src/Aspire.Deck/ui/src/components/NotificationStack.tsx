@@ -1,6 +1,6 @@
 import type { InteractionInfo } from "../api/types";
 import { respondInteraction, openExternal } from "../api/deck";
-import { CloseIcon, ExternalIcon } from "./Icons";
+import { CloseIcon, ExternalIcon } from "../toolkit";
 
 // Non-blocking notification toasts for notification-kind interactions (errors, the
 // "parameters required" prompt, status messages). Each toast is backed by a live

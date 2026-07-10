@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { InteractionInfo, InteractionInputInfo } from "../api/types";
 import { respondInteraction } from "../api/deck";
-import { CloseIcon } from "./Icons";
+import { CloseIcon } from "../toolkit";
 
 // Side pane (like the resource details drawer) that renders a blocking interaction
 // from the AppHost: a command-input dialog with per-field validation, or a message

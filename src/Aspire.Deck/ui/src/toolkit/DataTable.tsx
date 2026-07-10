@@ -1,4 +1,12 @@
 import type { Key, ReactNode } from "react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
+} from "@fluentui/react-components";
 
 export interface Column<T> {
   key: string;
@@ -26,42 +34,42 @@ export function DataTable<T>({
 }) {
   return (
     <div className="table-wrap">
-      <table className="data">
-        <thead>
-          <tr>
-            {columns.map((col) => (
-              <th key={col.key} style={col.width ? { width: col.width } : undefined}>
-                {col.header}
-              </th>
+      <Table className="data" size="small">
+        <TableHeader>
+          <TableRow>
+            {columns.map((column) => (
+              <TableHeaderCell key={column.key} style={column.width ? { width: column.width } : undefined}>
+                {column.header}
+              </TableHeaderCell>
             ))}
-          </tr>
-        </thead>
-        <tbody>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.length === 0 ? (
-            <tr>
-              <td colSpan={columns.length} className="cell-muted" style={{ textAlign: "center", padding: "28px" }}>
+            <TableRow>
+              <TableCell colSpan={columns.length} className="cell-muted" style={{ textAlign: "center", padding: "28px" }}>
                 {emptyMessage}
-              </td>
-            </tr>
+              </TableCell>
+            </TableRow>
           ) : (
             rows.map((row) => {
               const selected = isSelected?.(row) ?? false;
               const extra = rowClassName?.(row) ?? "";
               return (
-                <tr
+                <TableRow
                   key={rowKey(row)}
                   className={`${onRowClick ? "clickable" : ""} ${selected ? "selected" : ""} ${extra}`.trim()}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
                 >
-                  {columns.map((col) => (
-                    <td key={col.key}>{col.render(row)}</td>
+                  {columns.map((column) => (
+                    <TableCell key={column.key}>{column.render(row)}</TableCell>
                   ))}
-                </tr>
+                </TableRow>
               );
             })
           )}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
     </div>
   );
 }

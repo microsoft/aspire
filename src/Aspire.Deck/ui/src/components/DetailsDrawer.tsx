@@ -7,9 +7,8 @@ import type {
 } from "../api/types";
 import { openExternal } from "../api/deck";
 import { formatTime } from "../lib/format";
-import { Badge } from "./Badge";
-import { StateDot } from "./StateDot";
 import {
+  Badge,
   CloseIcon,
   ExternalIcon,
   EyeIcon,
@@ -18,9 +17,10 @@ import {
   PlayIcon,
   RestartIcon,
   ResourceTypeIcon,
+  StateDot,
   StopIcon,
-} from "./Icons";
-import type { ConfirmRequest } from "./ConfirmDialog";
+  type ConfirmRequest,
+} from "../toolkit";
 
 function commandIcon(name: string) {
   if (name.includes("start")) {

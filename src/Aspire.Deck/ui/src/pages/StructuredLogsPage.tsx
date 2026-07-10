@@ -2,9 +2,7 @@ import { useMemo, useState } from "react";
 import type { LogRecordSummary } from "../api/types";
 import { useTelemetry } from "../lib/useDeckEvent";
 import { dateFromUnixNano, formatTimeWithMillis } from "../lib/format";
-import { DataTable, type Column } from "../components/DataTable";
-import { SearchBox } from "../components/SearchBox";
-import { Badge } from "../components/Badge";
+import { Badge, DataTable, SearchBox, type Column } from "../toolkit";
 
 const SEVERITIES = ["All", "Trace", "Debug", "Information", "Warning", "Error", "Critical"];
 

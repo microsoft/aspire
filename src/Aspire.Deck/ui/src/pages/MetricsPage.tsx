@@ -4,8 +4,7 @@ import { useTelemetry } from "../lib/useDeckEvent";
 import { getMetricSeries } from "../api/deck";
 import { formatMetricValue, displayUnit } from "../lib/format";
 import { MetricChart, type ChartLine } from "../components/MetricChart";
-import { EmptyState } from "../components/EmptyState";
-import { MetricsIcon, PauseIcon, PlayIcon } from "../components/Icons";
+import { EmptyState, MetricsIcon, PauseIcon, PlayIcon } from "../toolkit";
 
 const TIME_RANGES: { label: string; seconds: number }[] = [
   { label: "1m", seconds: 60 },

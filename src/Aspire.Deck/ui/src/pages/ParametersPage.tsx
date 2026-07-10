@@ -3,12 +3,18 @@ import type { Resource, ResourceCommand } from "../api/types";
 import { PARAMETER_RESOURCE_TYPE, PARAMETER_VALUE_PROPERTY } from "../api/types";
 import { executeCommand } from "../api/deck";
 import { useResources } from "../lib/useDeckEvent";
-import { DataTable, type Column } from "../components/DataTable";
-import { SearchBox } from "../components/SearchBox";
-import { StateDot } from "../components/StateDot";
 import { DetailsDrawer } from "../components/DetailsDrawer";
-import { ConfirmDialog, type ConfirmRequest } from "../components/ConfirmDialog";
-import { ParametersIcon, EyeIcon, EyeOffIcon } from "../components/Icons";
+import {
+  ConfirmDialog,
+  DataTable,
+  EyeIcon,
+  EyeOffIcon,
+  ParametersIcon,
+  SearchBox,
+  StateDot,
+  type Column,
+  type ConfirmRequest,
+} from "../toolkit";
 
 interface Toast {
   message: string;

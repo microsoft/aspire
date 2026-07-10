@@ -21,6 +21,12 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+.deck-provider {
+  height: 100%;
+  background: var(--bg-app);
+  color: var(--text);
+}
+
 a {
   color: var(--accent);
   text-decoration: none;

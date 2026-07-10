@@ -2,8 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ConsoleLogLine } from "../api/types";
 import { subscribeConsoleLogs } from "../api/deck";
 import { useResources } from "../lib/useDeckEvent";
-import { EmptyState } from "../components/EmptyState";
-import { ConsoleIcon } from "../components/Icons";
+import { ConsoleIcon, EmptyState } from "../toolkit";
 
 const MAX_LINES = 5000;
 const LINE_HEIGHT = 21;

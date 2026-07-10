@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CanvasManifest } from "../api/types";
 import { listCanvases } from "../api/deck";
 import { attachCanvasBridge } from "../lib/canvasBridge";
-import { EmptyState } from "../components/EmptyState";
-import { BackIcon, CanvasIcon } from "../components/Icons";
+import { BackIcon, CanvasIcon, EmptyState } from "../toolkit";
 
 // Resolves a canvas url against the app base so it loads under both the native
 // `canvas://` scheme (Tauri) and http (dev/preview). Absolute-scheme and

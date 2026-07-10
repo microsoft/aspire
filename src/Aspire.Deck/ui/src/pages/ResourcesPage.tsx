@@ -4,12 +4,17 @@ import { PARAMETER_RESOURCE_TYPE } from "../api/types";
 import { executeCommand, openExternal } from "../api/deck";
 import { useResources } from "../lib/useDeckEvent";
 import { formatRelativeTime } from "../lib/format";
-import { DataTable, type Column } from "../components/DataTable";
-import { SearchBox } from "../components/SearchBox";
-import { StateDot } from "../components/StateDot";
 import { DetailsDrawer } from "../components/DetailsDrawer";
-import { ConfirmDialog, type ConfirmRequest } from "../components/ConfirmDialog";
-import { ExternalIcon, ResourceTypeIcon } from "../components/Icons";
+import {
+  ConfirmDialog,
+  DataTable,
+  ExternalIcon,
+  ResourceTypeIcon,
+  SearchBox,
+  StateDot,
+  type Column,
+  type ConfirmRequest,
+} from "../toolkit";
 
 interface Toast {
   message: string;

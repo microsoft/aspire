@@ -1,7 +1,6 @@
 import type { SpanSummary } from "../api/types";
 import { formatDurationNanos, formatTimeWithMillis, dateFromUnixNano } from "../lib/format";
-import { Badge } from "./Badge";
-import { CloseIcon } from "./Icons";
+import { Badge, CloseIcon } from "../toolkit";
 
 function statusTone(code: string | null): "neutral" | "success" | "error" {
   switch (code) {

@@ -16,6 +16,7 @@ import { MetricsPage } from "./pages/MetricsPage";
 import { CanvasesPage } from "./pages/CanvasesPage";
 import { InteractionPane } from "./components/InteractionPane";
 import { NotificationStack } from "./components/NotificationStack";
+import { DeckProvider } from "./toolkit";
 
 export function App() {
   const { theme, toggleTheme } = useTheme();
@@ -63,35 +64,37 @@ export function App() {
   const notifications = interactions.filter((i) => i.kind === "notification");
 
   return (
-    <div className="app">
-      <div className="app__sidebar">
-        <Sidebar
-          active={page}
-          onNavigate={setPage}
-          counts={counts}
-          version={config?.version ?? ""}
-        />
+    <DeckProvider theme={theme}>
+      <div className="app">
+        <div className="app__sidebar">
+          <Sidebar
+            active={page}
+            onNavigate={setPage}
+            counts={counts}
+            version={config?.version ?? ""}
+          />
+        </div>
+        <div className="app__topbar">
+          <TopBar config={config} connection={connection} apphosts={apphosts} theme={theme} onToggleTheme={toggleTheme} />
+        </div>
+        <main className="app__content">
+          {showNotConnected ? (
+            <NotConnected config={config} state={resourceState === "error" ? "error" : "disconnected"} />
+          ) : (
+            <>
+              {page === "resources" ? <ResourcesPage /> : null}
+              {page === "parameters" ? <ParametersPage /> : null}
+              {page === "console" ? <ConsolePage /> : null}
+              {page === "logs" ? <StructuredLogsPage /> : null}
+              {page === "traces" ? <TracesPage /> : null}
+              {page === "metrics" ? <MetricsPage /> : null}
+              {page === "canvases" ? <CanvasesPage /> : null}
+            </>
+          )}
+        </main>
+        {dialog ? <InteractionPane interaction={dialog} /> : null}
+        <NotificationStack notifications={notifications} />
       </div>
-      <div className="app__topbar">
-        <TopBar config={config} connection={connection} apphosts={apphosts} theme={theme} onToggleTheme={toggleTheme} />
-      </div>
-      <main className="app__content">
-        {showNotConnected ? (
-          <NotConnected config={config} state={resourceState === "error" ? "error" : "disconnected"} />
-        ) : (
-          <>
-            {page === "resources" ? <ResourcesPage /> : null}
-            {page === "parameters" ? <ParametersPage /> : null}
-            {page === "console" ? <ConsolePage /> : null}
-            {page === "logs" ? <StructuredLogsPage /> : null}
-            {page === "traces" ? <TracesPage /> : null}
-            {page === "metrics" ? <MetricsPage /> : null}
-            {page === "canvases" ? <CanvasesPage /> : null}
-          </>
-        )}
-      </main>
-      {dialog ? <InteractionPane interaction={dialog} /> : null}
-      <NotificationStack notifications={notifications} />
-    </div>
+    </DeckProvider>
   );
 }

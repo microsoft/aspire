@@ -13,6 +13,12 @@ the **same** code:
 
 Mode detection is automatic (`"__TAURI_INTERNALS__" in window`), so callers never branch.
 
+The UI is built on the reusable module in `src/toolkit`. The toolkit owns the Fluent React
+provider, Fluent System Icons, and domain-neutral controls such as buttons, badges, search,
+tables, state indicators, empty states, and confirmation dialogs. Deck pages import those
+controls only through `src/toolkit/index.ts`; AppHost, resource, and telemetry behavior remains
+in `src/api`, `src/components`, and `src/pages`.
+
 ## Develop
 
 ```bash
@@ -56,8 +62,9 @@ Rust app; otherwise links still open in a new tab.
 ```
 src/
   api/      types.ts (mirrors CONTRACT.md), deck.ts (dual-mode), mock.ts (standalone data)
-  components/  Sidebar, TopBar, ConnectionPill, StateDot, DataTable, DetailsDrawer,
-               SearchBox, Sparkline (uPlot), ConfirmDialog, EmptyState, Badge, Icons
+  toolkit/  Fluent provider and reusable, domain-neutral UI primitives
+  components/  Deck shell and domain components such as Sidebar, TopBar, DetailsDrawer,
+               InteractionPane, NotificationStack, and MetricChart
   pages/    ResourcesPage, ConsolePage, StructuredLogsPage, TracesPage, MetricsPage,
             CanvasesPage
   lib/      format.ts (duration/time/bytes), useDeckEvent.ts (live hooks), theme.ts
@@ -69,6 +76,10 @@ public/
 ## Conventions
 
 - TypeScript strict; static imports only (no dynamic `import()`).
+- Domain-neutral UI is exported from `src/toolkit/index.ts`; feature code does not import
+  toolkit implementation files directly.
+- Toolkit controls use Fluent React components and Fluent System Icons while Deck CSS tokens
+  define the product-specific color, spacing, and density.
 - Dark theme by default; light theme via the top-bar toggle (`[data-theme]` on `<html>`).
 - Charts use `uplot` (canvas-based). The telemetry summary only exposes `lastValue`, so the
   Metrics page keeps a small client-side ring buffer per metric to animate the series.
