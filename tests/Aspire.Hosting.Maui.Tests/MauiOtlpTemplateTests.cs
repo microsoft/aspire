@@ -21,7 +21,7 @@ public class MauiOtlpTemplateTests
     [InlineData("MacCatalyst", "net10.0-maccatalyst")]
     public async Task PlatformResource_OtelServiceName_DoesNotContainDcpPlaceholders(string platform, string tfm)
     {
-        using var dir = new TestTempDirectory();
+        using var dir = new SharedTestTempDirectory();
         var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(tfm));
 
@@ -48,7 +48,7 @@ public class MauiOtlpTemplateTests
     [InlineData("MacCatalyst", "net10.0-maccatalyst")]
     public async Task PlatformResource_OtelResourceAttributes_DoesNotContainDcpPlaceholders(string platform, string tfm)
     {
-        using var dir = new TestTempDirectory();
+        using var dir = new SharedTestTempDirectory();
         var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(tfm));
 
@@ -71,7 +71,7 @@ public class MauiOtlpTemplateTests
     [Fact]
     public async Task PlatformResource_HasOtelExporterEndpoint()
     {
-        using var dir = new TestTempDirectory();
+        using var dir = new SharedTestTempDirectory();
         var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 

@@ -13,7 +13,7 @@ public class MauiUnsupportedPlatformTests
     [Fact]
     public void WindowsDevice_HasUnsupportedPlatformAnnotation_OnlyWhenNotOnWindows()
     {
-        using var dir = new TestTempDirectory();
+        using var dir = new SharedTestTempDirectory();
         var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-windows10.0.19041.0"));
 
@@ -37,7 +37,7 @@ public class MauiUnsupportedPlatformTests
     [Fact]
     public void MacCatalystDevice_HasUnsupportedPlatformAnnotation_OnlyWhenNotOnMac()
     {
-        using var dir = new TestTempDirectory();
+        using var dir = new SharedTestTempDirectory();
         var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-maccatalyst"));
 
@@ -61,7 +61,7 @@ public class MauiUnsupportedPlatformTests
     [Fact]
     public void iOSDevice_HasUnsupportedPlatformAnnotation_OnlyWhenNotOnMac()
     {
-        using var dir = new TestTempDirectory();
+        using var dir = new SharedTestTempDirectory();
         var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
@@ -85,7 +85,7 @@ public class MauiUnsupportedPlatformTests
     [Fact]
     public void iOSSimulator_HasUnsupportedPlatformAnnotation_OnlyWhenNotOnMac()
     {
-        using var dir = new TestTempDirectory();
+        using var dir = new SharedTestTempDirectory();
         var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
@@ -110,7 +110,7 @@ public class MauiUnsupportedPlatformTests
     public void AndroidDevice_AlwaysSupported_NoUnsupportedAnnotation()
     {
         // Android is always allowed on all platforms (validation happens at dotnet run time)
-        using var dir = new TestTempDirectory();
+        using var dir = new SharedTestTempDirectory();
         var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
@@ -125,7 +125,7 @@ public class MauiUnsupportedPlatformTests
     [Fact]
     public void AndroidEmulator_AlwaysSupported_NoUnsupportedAnnotation()
     {
-        using var dir = new TestTempDirectory();
+        using var dir = new SharedTestTempDirectory();
         var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
