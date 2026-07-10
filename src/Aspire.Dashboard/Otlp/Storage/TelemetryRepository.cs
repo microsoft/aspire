@@ -989,6 +989,8 @@ public sealed partial class TelemetryRepository : IDisposable
         var hasPositiveMatch = false;
         foreach (var span in trace.Spans)
         {
+            // Once a positive match has been found on an earlier span, skip re-evaluating
+            // positive filters on subsequent spans (only negative filters still need checking).
             var positiveMatch = !hasPositiveMatch;
             foreach (var filter in filters)
             {
@@ -1039,6 +1041,8 @@ public sealed partial class TelemetryRepository : IDisposable
         var hasPositiveMatch = false;
         foreach (var span in trace.Spans)
         {
+            // Once a positive match has been found on an earlier span, skip re-evaluating
+            // positive filters on subsequent spans (only negative filters still need checking).
             var positiveMatch = !hasPositiveMatch;
             foreach (var filter in optimizedFilters)
             {
@@ -1202,7 +1206,14 @@ public sealed partial class TelemetryRepository : IDisposable
             }
             else
             {
-                if (fieldValue.Value1 is not null && IsMatch(fieldValue.Value1))
+                // And — both values must satisfy the not-equal/not-contains condition.
+                // When the field is absent (Value1 is null), the span trivially satisfies the
+                // negative condition — a span without the field cannot contain/equal the value.
+                if (fieldValue.Value1 is null)
+                {
+                    return true;
+                }
+                if (IsMatch(fieldValue.Value1))
                 {
                     if (fieldValue.Value2 is null || IsMatch(fieldValue.Value2))
                     {

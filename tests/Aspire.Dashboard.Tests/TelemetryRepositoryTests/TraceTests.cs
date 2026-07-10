@@ -3075,4 +3075,112 @@ public class TraceTests
         // Trace 2 doesn't match the positive filter (env=staging, not prod).
         Assert.Empty(traces.PagedResult.Items);
     }
+
+    [Fact]
+    public void GetTraces_NotContainsFilter_AbsentAttributeDoesNotExcludeTrace()
+    {
+        // Verifies that a negative filter on an attribute field does NOT exclude a trace
+        // just because some spans lack the attribute. A span without the field trivially
+        // satisfies "not contains X" — it cannot contain the value.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // Span with http.method = POST (satisfies "not contains GET").
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5),
+                                attributes: [KeyValuePair.Create("http.method", "POST")]),
+                            // Span without http.method attribute at all — should NOT cause exclusion.
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3),
+                                parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        // Filter: http.method not contains "GET" — span 1-1 has POST (passes), span 1-2
+        // has no http.method (trivially passes). The trace should be included.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = "http.method",
+                    Condition = FilterCondition.NotContains,
+                    Value = "GET"
+                }
+            ]
+        });
+
+        Assert.Collection(traces.PagedResult.Items,
+            trace => AssertId("1", trace.TraceId));
+    }
+
+    [Fact]
+    public void GetTraces_NotContainsFilter_AbsentAttributeWithViolatingSpanExcludes()
+    {
+        // Verifies that a trace is excluded when one span has the attribute and violates
+        // the negative condition, even though another span lacks the attribute entirely.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // Span with http.method = GET (violates "not contains GET").
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(5),
+                                attributes: [KeyValuePair.Create("http.method", "GET")]),
+                            // Span without http.method — trivially passes, but trace still excluded.
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3),
+                                parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        var resourceKey = new ResourceKey("service1", InstanceId: null);
+
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = "http.method",
+                    Condition = FilterCondition.NotContains,
+                    Value = "GET"
+                }
+            ]
+        });
+
+        Assert.Empty(traces.PagedResult.Items);
+    }
 }

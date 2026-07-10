@@ -271,8 +271,13 @@ public class FieldTelemetryFilter : TelemetryFilter
         else
         {
             // And — both values must satisfy the not-equal/not-contains condition.
-            // When Value2 is null (most fields only have one value), Value1 alone is sufficient.
-            if (fieldValues.Value1 != null && IsMatch(fieldValues.Value1, Value, Condition, fieldType))
+            // When the field is absent (Value1 is null), the span trivially satisfies the
+            // negative condition — a span without the field cannot contain/equal the value.
+            if (fieldValues.Value1 is null)
+            {
+                return true;
+            }
+            if (IsMatch(fieldValues.Value1, Value, Condition, fieldType))
             {
                 if (fieldValues.Value2 is null || IsMatch(fieldValues.Value2, Value, Condition, fieldType))
                 {
