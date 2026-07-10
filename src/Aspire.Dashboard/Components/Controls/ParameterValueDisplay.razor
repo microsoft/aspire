@@ -8,6 +8,7 @@
             class="value-not-set-link"
             disabled="@IsSetCommandDisabled"
             @onclick="OnClickAsync"
+            @onkeydown:stopPropagation="true"
             title="@ControlsStringsLoc[nameof(ControlsStrings.ParameterSetValueAction)]">
         @ControlsStringsLoc[nameof(ControlsStrings.ParameterValueNotSet)]
     </button>

@@ -504,6 +504,11 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">OK</target>
         <note />
       </trans-unit>
+      <trans-unit id="InteractionFileExceedsMaxSize">
+        <source>Exceeds the maximum size of {0}</source>
+        <target state="new">Exceeds the maximum size of {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InteractionFilePlaceholder">
         <source>Choose a file</source>
         <target state="new">Choose a file</target>
@@ -514,14 +519,9 @@ For more information about using AI agents with the dashboard, including setting
         <target state="new">Choose files</target>
         <note />
       </trans-unit>
-      <trans-unit id="InteractionUnsupportedVersionMessage">
-        <source>This action requires a newer version of the Aspire dashboard. Please update your Aspire tools to use this feature.</source>
-        <target state="new">This action requires a newer version of the Aspire dashboard. Please update your Aspire tools to use this feature.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InteractionUnsupportedVersionTitle">
-        <source>Dashboard Update Required</source>
-        <target state="new">Dashboard Update Required</target>
+      <trans-unit id="InteractionFileUploadFailed">
+        <source>Upload failed</source>
+        <target state="new">Upload failed</target>
         <note />
       </trans-unit>
       <trans-unit id="ManageDataAllDataCheckboxLabel">

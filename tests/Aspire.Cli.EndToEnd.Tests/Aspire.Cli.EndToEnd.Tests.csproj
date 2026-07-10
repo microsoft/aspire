@@ -47,14 +47,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Include="Aspire.Tests.Utils" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
     <PackageReference Include="ModelContextProtocol" />
   </ItemGroup>
-
   <ItemGroup>
       <Compile Include="$(SharedDir)CliExitCodes.cs" Link="shared\CliExitCodes.cs" />
-      <Compile Include="$(TestsSharedDir)TemporaryRepo.cs" Link="shared\TemporaryRepo.cs" />
+      <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared\TemporaryWorkspace.cs" />
       <Compile Include="$(TestsSharedDir)CliInstallStrategy.cs" Link="shared\CliInstallStrategy.cs" />
       <Compile Include="$(TestsSharedDir)CliPackageDiscovery.cs" Link="shared\CliPackageDiscovery.cs" />
       <Compile Include="$(TestsSharedDir)Hex1bTestHelpers.cs" Link="shared\Hex1bTestHelpers.cs" />

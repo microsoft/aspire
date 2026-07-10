@@ -13,7 +13,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApiCommand_WithNoSubcommand_ShowsHelp()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
@@ -30,7 +30,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApiListCommand_WithScope_ReturnsEntries()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
@@ -47,7 +47,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApiSearchCommand_WithLanguageFilter_ReturnsResults()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
@@ -64,7 +64,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApiGetCommand_WithValidId_ReturnsContent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();
@@ -81,7 +81,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApiGetCommand_WithInvalidId_ReturnsError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.ApiDocsIndexServiceFactory = _ => new TestApiDocsIndexService();

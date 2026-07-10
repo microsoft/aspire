@@ -14,7 +14,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetPackageVersionsAsync_ExpandsAllVersionsFromExactMatchResult()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var layout = new LayoutConfiguration
         {
@@ -69,7 +69,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
         // The aspire-managed NuGet search helper can hang against a slow/unresponsive source, so the
         // search launch must bind it to the Windows kill-on-close job (KillOnParentExit) as an OS-level
         // backstop against leaking the helper when the CLI is hard-killed.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var layout = new LayoutConfiguration
         {

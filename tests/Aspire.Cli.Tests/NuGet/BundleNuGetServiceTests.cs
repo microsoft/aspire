@@ -16,7 +16,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_UsesWorkspaceAspireDirectoryForRestoreArtifacts()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -57,7 +57,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_UsesDistinctCachePathsForDifferentSources()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -91,7 +91,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_PassesNuGetConfigToRestore()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -128,7 +128,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_UsesCachedManifestWithoutRunningHelper()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -172,7 +172,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_RegeneratesCachedManifestWhenManifestIsInvalid()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -225,7 +225,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_UsesDistinctCachePathsWhenManagedHelperChanges()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -259,7 +259,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_SharesRestoreCacheAcrossAppHostsInSameWorkspace()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var firstAppHost = workspace.CreateDirectory(Path.Combine("apps", "api"));
         var secondAppHost = workspace.CreateDirectory(Path.Combine("apps", "web"));
@@ -304,7 +304,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_SerializesConcurrentRestoreForSameCachePath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");
@@ -375,7 +375,7 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestorePackagesAsync_IgnoresLockedLegacyLibsDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var appHostDirectory = workspace.CreateDirectory("apphost");
         var layoutRoot = workspace.CreateDirectory("layout");

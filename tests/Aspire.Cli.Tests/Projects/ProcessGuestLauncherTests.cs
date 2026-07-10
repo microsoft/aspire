@@ -179,7 +179,7 @@ public class ProcessGuestLauncherTests(ITestOutputHelper outputHelper) : IDispos
         // it (the canonical tsx-swallows-Ctrl+Break scenario on Windows). Expiring the central token
         // must break the ladder out of WaitForExitAsync and escalate to Kill(entireProcessTree: true)
         // so the tree dies even when the cooperative path fails.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var launcher = CreateLauncher();
         var descendantPidFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "descendant.pid"));
         var (command, args) = await GetProcessTreeCommandAsync(workspace.WorkspaceRoot, descendantPidFile);

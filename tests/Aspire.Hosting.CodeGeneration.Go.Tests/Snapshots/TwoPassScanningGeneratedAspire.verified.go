@@ -1434,8 +1434,8 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithConfig(config *TestConfigDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithContainerFiles(destinationPath string, sourcePath string, options ...*ContainerFilesOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*ContainerFilesOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerName(name string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerNetworkAlias(alias string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerRegistry(registry Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1461,7 +1461,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithHealthCheck(key string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHidden() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1499,7 +1499,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithReference(source any, options ...*WithReferenceOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRelationship(resourceBuilder Resource, type_ string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -2065,7 +2065,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerC
 }
 
 // WithContainerFiles creates or updates files and folders in a container by copying them from a source path on the host.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*ContainerFilesOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -2074,18 +2074,19 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerF
 	reqArgs["destinationPath"] = serializeValue(destinationPath)
 	reqArgs["sourcePath"] = serializeValue(sourcePath)
 	if len(options) > 0 {
-		merged := &WithContainerFilesOptions{}
+		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
 // WithContainerFilesCallback creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*ContainerFilesOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -2100,11 +2101,12 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerF
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithContainerFilesCallbackOptions{}
+		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFilesCallback", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -2494,7 +2496,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHiddenOnCo
 }
 
 // WithHttpCommand adds an HTTP resource command
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -2503,11 +2505,12 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpComman
 	reqArgs["path"] = serializeValue(path)
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
-		merged := &WithHttpCommandOptions{}
+		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -3128,7 +3131,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCom
 }
 
 // WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -3144,11 +3147,12 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCom
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
+		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -3673,7 +3677,7 @@ type CSharpAppResource interface {
 	WithHealthCheck(key string) CSharpAppResource
 	WithHidden() CSharpAppResource
 	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) CSharpAppResource
-	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) CSharpAppResource
+	WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) CSharpAppResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) CSharpAppResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) CSharpAppResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) CSharpAppResource
@@ -3705,7 +3709,7 @@ type CSharpAppResource interface {
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) CSharpAppResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) CSharpAppResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) CSharpAppResource
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) CSharpAppResource
+	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) CSharpAppResource
 	WithReference(source any, options ...*WithReferenceOptions) CSharpAppResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) CSharpAppResource
 	WithRelationship(resourceBuilder Resource, type_ string) CSharpAppResource
@@ -4502,7 +4506,7 @@ func (s *cSharpAppResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompl
 }
 
 // WithHttpCommand adds an HTTP resource command
-func (s *cSharpAppResource) WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) CSharpAppResource {
+func (s *cSharpAppResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -4511,11 +4515,12 @@ func (s *cSharpAppResource) WithHttpCommand(path string, displayName string, opt
 	reqArgs["path"] = serializeValue(path)
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
-		merged := &WithHttpCommandOptions{}
+		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -5057,7 +5062,7 @@ func (s *cSharpAppResource) WithProcessCommand(commandName string, displayName s
 }
 
 // WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
-func (s *cSharpAppResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) CSharpAppResource {
+func (s *cSharpAppResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -5073,11 +5078,12 @@ func (s *cSharpAppResource) WithProcessCommandFactory(commandName string, displa
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
+		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -6542,7 +6548,7 @@ type ContainerRegistryResource interface {
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ContainerRegistryResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ContainerRegistryResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerRegistryResource
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ContainerRegistryResource
+	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ContainerRegistryResource
 	WithRelationship(resourceBuilder Resource, type_ string) ContainerRegistryResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerRegistryResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ContainerRegistryResource
@@ -7272,7 +7278,7 @@ func (s *containerRegistryResource) WithProcessCommand(commandName string, displ
 }
 
 // WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
-func (s *containerRegistryResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ContainerRegistryResource {
+func (s *containerRegistryResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -7288,11 +7294,12 @@ func (s *containerRegistryResource) WithProcessCommandFactory(commandName string
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
+		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -7531,8 +7538,8 @@ type ContainerResource interface {
 	WithConfig(config *TestConfigDto) ContainerResource
 	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) ContainerResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) ContainerResource
-	WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) ContainerResource
-	WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) ContainerResource
+	WithContainerFiles(destinationPath string, sourcePath string, options ...*ContainerFilesOptions) ContainerResource
+	WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*ContainerFilesOptions) ContainerResource
 	WithContainerName(name string) ContainerResource
 	WithContainerNetworkAlias(alias string) ContainerResource
 	WithContainerRegistry(registry Resource) ContainerResource
@@ -7558,7 +7565,7 @@ type ContainerResource interface {
 	WithHealthCheck(key string) ContainerResource
 	WithHidden() ContainerResource
 	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ContainerResource
-	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) ContainerResource
+	WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) ContainerResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) ContainerResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) ContainerResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ContainerResource
@@ -7596,7 +7603,7 @@ type ContainerResource interface {
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ContainerResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ContainerResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerResource
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ContainerResource
+	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ContainerResource
 	WithReference(source any, options ...*WithReferenceOptions) ContainerResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) ContainerResource
 	WithRelationship(resourceBuilder Resource, type_ string) ContainerResource
@@ -8161,7 +8168,7 @@ func (s *containerResource) WithContainerCertificatePaths(options ...*WithContai
 }
 
 // WithContainerFiles creates or updates files and folders in a container by copying them from a source path on the host.
-func (s *containerResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) ContainerResource {
+func (s *containerResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*ContainerFilesOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -8170,18 +8177,19 @@ func (s *containerResource) WithContainerFiles(destinationPath string, sourcePat
 	reqArgs["destinationPath"] = serializeValue(destinationPath)
 	reqArgs["sourcePath"] = serializeValue(sourcePath)
 	if len(options) > 0 {
-		merged := &WithContainerFilesOptions{}
+		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
 // WithContainerFilesCallback creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
-func (s *containerResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) ContainerResource {
+func (s *containerResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*ContainerFilesOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -8196,11 +8204,12 @@ func (s *containerResource) WithContainerFilesCallback(destinationPath string, c
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithContainerFilesCallbackOptions{}
+		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFilesCallback", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -8590,7 +8599,7 @@ func (s *containerResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompl
 }
 
 // WithHttpCommand adds an HTTP resource command
-func (s *containerResource) WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) ContainerResource {
+func (s *containerResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -8599,11 +8608,12 @@ func (s *containerResource) WithHttpCommand(path string, displayName string, opt
 	reqArgs["path"] = serializeValue(path)
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
-		merged := &WithHttpCommandOptions{}
+		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -9224,7 +9234,7 @@ func (s *containerResource) WithProcessCommand(commandName string, displayName s
 }
 
 // WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
-func (s *containerResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ContainerResource {
+func (s *containerResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -9240,11 +9250,12 @@ func (s *containerResource) WithProcessCommandFactory(commandName string, displa
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
+		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -11195,7 +11206,7 @@ type DotnetToolResource interface {
 	WithHealthCheck(key string) DotnetToolResource
 	WithHidden() DotnetToolResource
 	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) DotnetToolResource
-	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) DotnetToolResource
+	WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) DotnetToolResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) DotnetToolResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) DotnetToolResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) DotnetToolResource
@@ -11227,7 +11238,7 @@ type DotnetToolResource interface {
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) DotnetToolResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) DotnetToolResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) DotnetToolResource
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) DotnetToolResource
+	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) DotnetToolResource
 	WithReference(source any, options ...*WithReferenceOptions) DotnetToolResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) DotnetToolResource
 	WithRelationship(resourceBuilder Resource, type_ string) DotnetToolResource
@@ -11998,7 +12009,7 @@ func (s *dotnetToolResource) WithHiddenOnCompletion(options ...*WithHiddenOnComp
 }
 
 // WithHttpCommand adds an HTTP resource command
-func (s *dotnetToolResource) WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) DotnetToolResource {
+func (s *dotnetToolResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -12007,11 +12018,12 @@ func (s *dotnetToolResource) WithHttpCommand(path string, displayName string, op
 	reqArgs["path"] = serializeValue(path)
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
-		merged := &WithHttpCommandOptions{}
+		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -12553,7 +12565,7 @@ func (s *dotnetToolResource) WithProcessCommand(commandName string, displayName 
 }
 
 // WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
-func (s *dotnetToolResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) DotnetToolResource {
+func (s *dotnetToolResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -12569,11 +12581,12 @@ func (s *dotnetToolResource) WithProcessCommandFactory(commandName string, displ
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
+		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -13995,7 +14008,7 @@ type ExecutableResource interface {
 	WithHealthCheck(key string) ExecutableResource
 	WithHidden() ExecutableResource
 	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ExecutableResource
-	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) ExecutableResource
+	WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) ExecutableResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) ExecutableResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) ExecutableResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ExecutableResource
@@ -14027,7 +14040,7 @@ type ExecutableResource interface {
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ExecutableResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ExecutableResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExecutableResource
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ExecutableResource
+	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ExecutableResource
 	WithReference(source any, options ...*WithReferenceOptions) ExecutableResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) ExecutableResource
 	WithRelationship(resourceBuilder Resource, type_ string) ExecutableResource
@@ -14792,7 +14805,7 @@ func (s *executableResource) WithHiddenOnCompletion(options ...*WithHiddenOnComp
 }
 
 // WithHttpCommand adds an HTTP resource command
-func (s *executableResource) WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) ExecutableResource {
+func (s *executableResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -14801,11 +14814,12 @@ func (s *executableResource) WithHttpCommand(path string, displayName string, op
 	reqArgs["path"] = serializeValue(path)
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
-		merged := &WithHttpCommandOptions{}
+		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -15347,7 +15361,7 @@ func (s *executableResource) WithProcessCommand(commandName string, displayName 
 }
 
 // WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
-func (s *executableResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ExecutableResource {
+func (s *executableResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -15363,11 +15377,12 @@ func (s *executableResource) WithProcessCommandFactory(commandName string, displ
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
+		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -15974,7 +15989,7 @@ type ExternalServiceResource interface {
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ExternalServiceResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ExternalServiceResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExternalServiceResource
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ExternalServiceResource
+	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ExternalServiceResource
 	WithRelationship(resourceBuilder Resource, type_ string) ExternalServiceResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExternalServiceResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ExternalServiceResource
@@ -16722,7 +16737,7 @@ func (s *externalServiceResource) WithProcessCommand(commandName string, display
 }
 
 // WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
-func (s *externalServiceResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ExternalServiceResource {
+func (s *externalServiceResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -16738,11 +16753,12 @@ func (s *externalServiceResource) WithProcessCommandFactory(commandName string, 
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
+		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -17762,7 +17778,7 @@ func (s *inputsInteractionResult) Inputs() InteractionInputCollection {
 type InteractionInputBuilder interface {
 	handleReference
 	WithChoiceOptions(choices []*InteractionChoiceOption) InteractionInputBuilder
-	WithDynamicLoading(callback func(arg InteractionInputLoadContext), options ...*WithDynamicLoadingOptions) InteractionInputBuilder
+	WithDynamicLoading(callback func(arg InteractionInputLoadContext), options ...*DynamicLoadingOptions) InteractionInputBuilder
 	WithValue(value string) InteractionInputBuilder
 	Err() error
 }
@@ -17790,7 +17806,7 @@ func (s *interactionInputBuilder) WithChoiceOptions(choices []*InteractionChoice
 }
 
 // WithDynamicLoading attaches a callback that dynamically loads or updates the input after the prompt starts.
-func (s *interactionInputBuilder) WithDynamicLoading(callback func(arg InteractionInputLoadContext), options ...*WithDynamicLoadingOptions) InteractionInputBuilder {
+func (s *interactionInputBuilder) WithDynamicLoading(callback func(arg InteractionInputLoadContext), options ...*DynamicLoadingOptions) InteractionInputBuilder {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -17805,11 +17821,12 @@ func (s *interactionInputBuilder) WithDynamicLoading(callback func(arg Interacti
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithDynamicLoadingOptions{}
+		merged := &DynamicLoadingOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/withDynamicLoading", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -18014,12 +18031,12 @@ func (s *interactionLoadingInput) SetValue(value string) error {
 // InteractionService is the public interface for handle type InteractionService.
 type InteractionService interface {
 	handleReference
-	CreateBooleanInput(name string, options ...*CreateBooleanInputOptions) InteractionInputBuilder
+	CreateBooleanInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder
 	CreateChoiceInput(name string, options ...*CreateChoiceInputOptions) InteractionInputBuilder
-	CreateFileInput(name string, options ...*CreateFileInputOptions) InteractionInputBuilder
-	CreateNumberInput(name string, options ...*CreateNumberInputOptions) InteractionInputBuilder
-	CreateSecretInput(name string, options ...*CreateSecretInputOptions) InteractionInputBuilder
-	CreateTextInput(name string, options ...*CreateTextInputOptions) InteractionInputBuilder
+	CreateFileInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder
+	CreateNumberInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder
+	CreateSecretInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder
+	CreateTextInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder
 	IsAvailable() (bool, error)
 	PromptConfirmation(title string, message string, options ...*PromptConfirmationOptions) (*BoolInteractionResult, error)
 	PromptInput(title string, message string, input InteractionInputBuilder, options ...*PromptInputOptions) (*InputInteractionResult, error)
@@ -18041,7 +18058,7 @@ func newInteractionServiceFromHandle(h *handle, c *client) InteractionService {
 }
 
 // CreateBooleanInput creates a boolean (checkbox) input.
-func (s *interactionService) CreateBooleanInput(name string, options ...*CreateBooleanInputOptions) InteractionInputBuilder {
+func (s *interactionService) CreateBooleanInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder {
 	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -18049,11 +18066,12 @@ func (s *interactionService) CreateBooleanInput(name string, options ...*CreateB
 	}
 	reqArgs["name"] = serializeValue(name)
 	if len(options) > 0 {
-		merged := &CreateBooleanInputOptions{}
+		merged := &CreateInteractionInputOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createBooleanInput", reqArgs)
 	if err != nil {
@@ -18095,7 +18113,7 @@ func (s *interactionService) CreateChoiceInput(name string, options ...*CreateCh
 }
 
 // CreateFileInput creates a file input.
-func (s *interactionService) CreateFileInput(name string, options ...*CreateFileInputOptions) InteractionInputBuilder {
+func (s *interactionService) CreateFileInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder {
 	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -18103,11 +18121,12 @@ func (s *interactionService) CreateFileInput(name string, options ...*CreateFile
 	}
 	reqArgs["name"] = serializeValue(name)
 	if len(options) > 0 {
-		merged := &CreateFileInputOptions{}
+		merged := &CreateInteractionInputOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createFileInput", reqArgs)
 	if err != nil {
@@ -18122,7 +18141,7 @@ func (s *interactionService) CreateFileInput(name string, options ...*CreateFile
 }
 
 // CreateNumberInput creates a numeric input.
-func (s *interactionService) CreateNumberInput(name string, options ...*CreateNumberInputOptions) InteractionInputBuilder {
+func (s *interactionService) CreateNumberInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder {
 	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -18130,11 +18149,12 @@ func (s *interactionService) CreateNumberInput(name string, options ...*CreateNu
 	}
 	reqArgs["name"] = serializeValue(name)
 	if len(options) > 0 {
-		merged := &CreateNumberInputOptions{}
+		merged := &CreateInteractionInputOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createNumberInput", reqArgs)
 	if err != nil {
@@ -18149,7 +18169,7 @@ func (s *interactionService) CreateNumberInput(name string, options ...*CreateNu
 }
 
 // CreateSecretInput creates a secret (masked) text input.
-func (s *interactionService) CreateSecretInput(name string, options ...*CreateSecretInputOptions) InteractionInputBuilder {
+func (s *interactionService) CreateSecretInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder {
 	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -18157,11 +18177,12 @@ func (s *interactionService) CreateSecretInput(name string, options ...*CreateSe
 	}
 	reqArgs["name"] = serializeValue(name)
 	if len(options) > 0 {
-		merged := &CreateSecretInputOptions{}
+		merged := &CreateInteractionInputOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createSecretInput", reqArgs)
 	if err != nil {
@@ -18176,7 +18197,7 @@ func (s *interactionService) CreateSecretInput(name string, options ...*CreateSe
 }
 
 // CreateTextInput creates a single-line text input.
-func (s *interactionService) CreateTextInput(name string, options ...*CreateTextInputOptions) InteractionInputBuilder {
+func (s *interactionService) CreateTextInput(name string, options ...*CreateInteractionInputOptions) InteractionInputBuilder {
 	if s.err != nil { return &interactionInputBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -18184,11 +18205,12 @@ func (s *interactionService) CreateTextInput(name string, options ...*CreateText
 	}
 	reqArgs["name"] = serializeValue(name)
 	if len(options) > 0 {
-		merged := &CreateTextInputOptions{}
+		merged := &CreateInteractionInputOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/createTextInput", reqArgs)
 	if err != nil {
@@ -18640,7 +18662,7 @@ type ParameterResource interface {
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ParameterResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ParameterResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ParameterResource
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ParameterResource
+	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ParameterResource
 	WithRelationship(resourceBuilder Resource, type_ string) ParameterResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ParameterResource
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...*WithRequiredCommandValidationOptions) ParameterResource
@@ -19401,7 +19423,7 @@ func (s *parameterResource) WithProcessCommand(commandName string, displayName s
 }
 
 // WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
-func (s *parameterResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ParameterResource {
+func (s *parameterResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -19417,11 +19439,12 @@ func (s *parameterResource) WithProcessCommandFactory(commandName string, displa
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
+		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -20374,7 +20397,7 @@ type ProjectResource interface {
 	WithHealthCheck(key string) ProjectResource
 	WithHidden() ProjectResource
 	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ProjectResource
-	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) ProjectResource
+	WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) ProjectResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) ProjectResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) ProjectResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ProjectResource
@@ -20406,7 +20429,7 @@ type ProjectResource interface {
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ProjectResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ProjectResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ProjectResource
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ProjectResource
+	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ProjectResource
 	WithReference(source any, options ...*WithReferenceOptions) ProjectResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) ProjectResource
 	WithRelationship(resourceBuilder Resource, type_ string) ProjectResource
@@ -21203,7 +21226,7 @@ func (s *projectResource) WithHiddenOnCompletion(options ...*WithHiddenOnComplet
 }
 
 // WithHttpCommand adds an HTTP resource command
-func (s *projectResource) WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) ProjectResource {
+func (s *projectResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -21212,11 +21235,12 @@ func (s *projectResource) WithHttpCommand(path string, displayName string, optio
 	reqArgs["path"] = serializeValue(path)
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
-		merged := &WithHttpCommandOptions{}
+		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -21758,7 +21782,7 @@ func (s *projectResource) WithProcessCommand(commandName string, displayName str
 }
 
 // WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
-func (s *projectResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ProjectResource {
+func (s *projectResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -21774,11 +21798,12 @@ func (s *projectResource) WithProcessCommandFactory(commandName string, displayN
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
+		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -23726,8 +23751,8 @@ type TestDatabaseResource interface {
 	WithConfig(config *TestConfigDto) TestDatabaseResource
 	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) TestDatabaseResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestDatabaseResource
-	WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) TestDatabaseResource
-	WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) TestDatabaseResource
+	WithContainerFiles(destinationPath string, sourcePath string, options ...*ContainerFilesOptions) TestDatabaseResource
+	WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*ContainerFilesOptions) TestDatabaseResource
 	WithContainerName(name string) TestDatabaseResource
 	WithContainerNetworkAlias(alias string) TestDatabaseResource
 	WithContainerRegistry(registry Resource) TestDatabaseResource
@@ -23753,7 +23778,7 @@ type TestDatabaseResource interface {
 	WithHealthCheck(key string) TestDatabaseResource
 	WithHidden() TestDatabaseResource
 	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) TestDatabaseResource
-	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) TestDatabaseResource
+	WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) TestDatabaseResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) TestDatabaseResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) TestDatabaseResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) TestDatabaseResource
@@ -23791,7 +23816,7 @@ type TestDatabaseResource interface {
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) TestDatabaseResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) TestDatabaseResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestDatabaseResource
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) TestDatabaseResource
+	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) TestDatabaseResource
 	WithReference(source any, options ...*WithReferenceOptions) TestDatabaseResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) TestDatabaseResource
 	WithRelationship(resourceBuilder Resource, type_ string) TestDatabaseResource
@@ -24356,7 +24381,7 @@ func (s *testDatabaseResource) WithContainerCertificatePaths(options ...*WithCon
 }
 
 // WithContainerFiles creates or updates files and folders in a container by copying them from a source path on the host.
-func (s *testDatabaseResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) TestDatabaseResource {
+func (s *testDatabaseResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*ContainerFilesOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -24365,18 +24390,19 @@ func (s *testDatabaseResource) WithContainerFiles(destinationPath string, source
 	reqArgs["destinationPath"] = serializeValue(destinationPath)
 	reqArgs["sourcePath"] = serializeValue(sourcePath)
 	if len(options) > 0 {
-		merged := &WithContainerFilesOptions{}
+		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
 // WithContainerFilesCallback creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
-func (s *testDatabaseResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) TestDatabaseResource {
+func (s *testDatabaseResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*ContainerFilesOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -24391,11 +24417,12 @@ func (s *testDatabaseResource) WithContainerFilesCallback(destinationPath string
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithContainerFilesCallbackOptions{}
+		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFilesCallback", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -24785,7 +24812,7 @@ func (s *testDatabaseResource) WithHiddenOnCompletion(options ...*WithHiddenOnCo
 }
 
 // WithHttpCommand adds an HTTP resource command
-func (s *testDatabaseResource) WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) TestDatabaseResource {
+func (s *testDatabaseResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -24794,11 +24821,12 @@ func (s *testDatabaseResource) WithHttpCommand(path string, displayName string, 
 	reqArgs["path"] = serializeValue(path)
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
-		merged := &WithHttpCommandOptions{}
+		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -25419,7 +25447,7 @@ func (s *testDatabaseResource) WithProcessCommand(commandName string, displayNam
 }
 
 // WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
-func (s *testDatabaseResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) TestDatabaseResource {
+func (s *testDatabaseResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -25435,11 +25463,12 @@ func (s *testDatabaseResource) WithProcessCommandFactory(commandName string, dis
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
+		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -25944,8 +25973,8 @@ type TestRedisResource interface {
 	WithConnectionStringDirect(connectionString string) TestRedisResource
 	WithContainerBuildOptions(callback func(arg ContainerBuildOptionsCallbackContext)) TestRedisResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestRedisResource
-	WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) TestRedisResource
-	WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) TestRedisResource
+	WithContainerFiles(destinationPath string, sourcePath string, options ...*ContainerFilesOptions) TestRedisResource
+	WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*ContainerFilesOptions) TestRedisResource
 	WithContainerName(name string) TestRedisResource
 	WithContainerNetworkAlias(alias string) TestRedisResource
 	WithContainerRegistry(registry Resource) TestRedisResource
@@ -25972,7 +26001,7 @@ type TestRedisResource interface {
 	WithHealthCheck(key string) TestRedisResource
 	WithHidden() TestRedisResource
 	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) TestRedisResource
-	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) TestRedisResource
+	WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) TestRedisResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) TestRedisResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) TestRedisResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) TestRedisResource
@@ -26012,7 +26041,7 @@ type TestRedisResource interface {
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) TestRedisResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) TestRedisResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestRedisResource
-	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) TestRedisResource
+	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) TestRedisResource
 	WithRedisSpecific(option string) TestRedisResource
 	WithReference(source any, options ...*WithReferenceOptions) TestRedisResource
 	WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) TestRedisResource
@@ -26779,7 +26808,7 @@ func (s *testRedisResource) WithContainerCertificatePaths(options ...*WithContai
 }
 
 // WithContainerFiles creates or updates files and folders in a container by copying them from a source path on the host.
-func (s *testRedisResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) TestRedisResource {
+func (s *testRedisResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*ContainerFilesOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -26788,18 +26817,19 @@ func (s *testRedisResource) WithContainerFiles(destinationPath string, sourcePat
 	reqArgs["destinationPath"] = serializeValue(destinationPath)
 	reqArgs["sourcePath"] = serializeValue(sourcePath)
 	if len(options) > 0 {
-		merged := &WithContainerFilesOptions{}
+		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
 // WithContainerFilesCallback creates or updates files and/or folders at the destination path in the container using entries produced by a callback.
-func (s *testRedisResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*WithContainerFilesCallbackOptions) TestRedisResource {
+func (s *testRedisResource) WithContainerFilesCallback(destinationPath string, callback func(arg1 ContainerFileSystemCallbackContext, arg2 *CancellationToken) []ContainerFileSystemItem, options ...*ContainerFilesOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -26814,11 +26844,12 @@ func (s *testRedisResource) WithContainerFilesCallback(destinationPath string, c
 		reqArgs["callback"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithContainerFilesCallbackOptions{}
+		merged := &ContainerFilesOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFilesCallback", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -27226,7 +27257,7 @@ func (s *testRedisResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompl
 }
 
 // WithHttpCommand adds an HTTP resource command
-func (s *testRedisResource) WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) TestRedisResource {
+func (s *testRedisResource) WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -27235,11 +27266,12 @@ func (s *testRedisResource) WithHttpCommand(path string, displayName string, opt
 	reqArgs["path"] = serializeValue(path)
 	reqArgs["displayName"] = serializeValue(displayName)
 	if len(options) > 0 {
-		merged := &WithHttpCommandOptions{}
+		merged := &HttpCommandExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHttpCommand", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -27897,7 +27929,7 @@ func (s *testRedisResource) WithProcessCommand(commandName string, displayName s
 }
 
 // WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
-func (s *testRedisResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) TestRedisResource {
+func (s *testRedisResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*ProcessCommandResultExportOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
@@ -27913,11 +27945,12 @@ func (s *testRedisResource) WithProcessCommandFactory(commandName string, displa
 		reqArgs["createProcessSpec"] = s.client.registerCallback(shim)
 	}
 	if len(options) > 0 {
-		merged := &WithProcessCommandFactoryOptions{}
+		merged := &ProcessCommandResultExportOptions{}
+		applied := false
 		for _, opt := range options {
-			if opt != nil { merged = deepUpdate(merged, opt) }
+			if opt != nil { merged = deepUpdate(merged, opt); applied = true }
 		}
-		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if applied { reqArgs["options"] = serializeValue(merged) }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withProcessCommandFactory", reqArgs); err != nil { s.setErr(err) }
 	return s
@@ -28641,30 +28674,6 @@ func (o *WithContainerCertificatePathsOptions) ToMap() map[string]any {
 	return m
 }
 
-// WithContainerFilesOptions carries optional parameters for WithContainerFiles.
-type WithContainerFilesOptions struct {
-	Options *ContainerFilesOptions `json:"options,omitempty"`
-}
-
-func (o *WithContainerFilesOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	if o.Options != nil { m["options"] = serializeValue(o.Options) }
-	return m
-}
-
-// WithContainerFilesCallbackOptions carries optional parameters for WithContainerFilesCallback.
-type WithContainerFilesCallbackOptions struct {
-	Options *ContainerFilesOptions `json:"options,omitempty"`
-}
-
-func (o *WithContainerFilesCallbackOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	if o.Options != nil { m["options"] = serializeValue(o.Options) }
-	return m
-}
-
 // WithDockerfileBuilderOptions carries optional parameters for WithDockerfileBuilder.
 type WithDockerfileBuilderOptions struct {
 	Stage *string `json:"stage,omitempty"`
@@ -29051,30 +29060,6 @@ func (o *WithCommandOptions) ToMap() map[string]any {
 	return m
 }
 
-// WithProcessCommandFactoryOptions carries optional parameters for WithProcessCommandFactory.
-type WithProcessCommandFactoryOptions struct {
-	Options *ProcessCommandResultExportOptions `json:"options,omitempty"`
-}
-
-func (o *WithProcessCommandFactoryOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	if o.Options != nil { m["options"] = serializeValue(o.Options) }
-	return m
-}
-
-// WithHttpCommandOptions carries optional parameters for WithHttpCommand.
-type WithHttpCommandOptions struct {
-	Options *HttpCommandExportOptions `json:"options,omitempty"`
-}
-
-func (o *WithHttpCommandOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	if o.Options != nil { m["options"] = serializeValue(o.Options) }
-	return m
-}
-
 // WithHttpsDeveloperCertificateOptions carries optional parameters for WithHttpsDeveloperCertificate.
 type WithHttpsDeveloperCertificateOptions struct {
 	Password *ParameterResource `json:"password,omitempty"`
@@ -29345,66 +29330,6 @@ func (o *PromptInputsOptions) ToMap() map[string]any {
 	return m
 }
 
-// CreateTextInputOptions carries optional parameters for CreateTextInput.
-type CreateTextInputOptions struct {
-	Options *CreateInteractionInputOptions `json:"options,omitempty"`
-}
-
-func (o *CreateTextInputOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	if o.Options != nil { m["options"] = serializeValue(o.Options) }
-	return m
-}
-
-// CreateSecretInputOptions carries optional parameters for CreateSecretInput.
-type CreateSecretInputOptions struct {
-	Options *CreateInteractionInputOptions `json:"options,omitempty"`
-}
-
-func (o *CreateSecretInputOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	if o.Options != nil { m["options"] = serializeValue(o.Options) }
-	return m
-}
-
-// CreateBooleanInputOptions carries optional parameters for CreateBooleanInput.
-type CreateBooleanInputOptions struct {
-	Options *CreateInteractionInputOptions `json:"options,omitempty"`
-}
-
-func (o *CreateBooleanInputOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	if o.Options != nil { m["options"] = serializeValue(o.Options) }
-	return m
-}
-
-// CreateNumberInputOptions carries optional parameters for CreateNumberInput.
-type CreateNumberInputOptions struct {
-	Options *CreateInteractionInputOptions `json:"options,omitempty"`
-}
-
-func (o *CreateNumberInputOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	if o.Options != nil { m["options"] = serializeValue(o.Options) }
-	return m
-}
-
-// CreateFileInputOptions carries optional parameters for CreateFileInput.
-type CreateFileInputOptions struct {
-	Options *CreateInteractionInputOptions `json:"options,omitempty"`
-}
-
-func (o *CreateFileInputOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
-	if o.Options != nil { m["options"] = serializeValue(o.Options) }
-	return m
-}
-
 // CreateChoiceInputOptions carries optional parameters for CreateChoiceInput.
 type CreateChoiceInputOptions struct {
 	Choices []*InteractionChoiceOption `json:"choices,omitempty"`
@@ -29415,18 +29340,6 @@ func (o *CreateChoiceInputOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.Choices != nil { m["choices"] = serializeValue(o.Choices) }
-	if o.Options != nil { m["options"] = serializeValue(o.Options) }
-	return m
-}
-
-// WithDynamicLoadingOptions carries optional parameters for WithDynamicLoading.
-type WithDynamicLoadingOptions struct {
-	Options *DynamicLoadingOptions `json:"options,omitempty"`
-}
-
-func (o *WithDynamicLoadingOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil { return m }
 	if o.Options != nil { m["options"] = serializeValue(o.Options) }
 	return m
 }

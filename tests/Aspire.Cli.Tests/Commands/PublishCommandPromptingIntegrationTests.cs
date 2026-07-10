@@ -22,7 +22,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_TextInputPrompt_SendsCorrectKeyPresses()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -68,7 +68,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_SecretTextPrompt_SendsCorrectKeyPresses()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -114,7 +114,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_ChoicePrompt_SendsCorrectSelection()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -167,7 +167,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_BooleanPrompt_SendsCorrectAnswer()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -213,7 +213,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_NumberPrompt_SendsCorrectNumericValue()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -258,7 +258,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     [Fact]
     public async Task PublishCommand_FilePrompt_RejectsMissingPathAndSendsFileMetadata()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var selectedFile = Path.Combine(workspace.WorkspaceRoot.FullName, "artifact.zip");
         await File.WriteAllTextAsync(selectedFile, "artifact");
 
@@ -301,7 +301,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     [Fact]
     public async Task PublishCommand_FilePrompt_TreatsOptionalWhitespaceAsEmpty()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -333,7 +333,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_MultiplePrompts_HandlesSequentialInteractions()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -408,7 +408,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_SinglePromptWithMultipleInputs_HandlesAllInputs()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -492,7 +492,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_TextInputWithDefaultValue_UsesDefaultCorrectly()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -544,7 +544,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_TextInputWithValidationErrors_UsesValidationErrorsCorrectly()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -599,7 +599,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_MarkdownPromptText_ConvertsToSpectreMarkup()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -670,7 +670,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_DebugMode_HandlesPromptsWithoutProgressUI()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -714,7 +714,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_SingleInputPrompt_ShowsBothStatusTextAndLabel()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -757,7 +757,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     public async Task PublishCommand_SingleInputPrompt_WhenStatusTextEqualsLabel_ShowsOnlyOnce()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
 
@@ -797,7 +797,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     [Fact]
     public async Task PublishCommand_FilePrompt_RejectsOversizedFileAndRePrompts()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create a file that exceeds the max size (maxFileSize = 10 bytes)
         var oversizedFile = Path.Combine(workspace.WorkspaceRoot.FullName, "large.bin");
@@ -844,7 +844,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     [Fact]
     public async Task PublishCommand_FilePrompt_RejectsWrongExtensionAndRePrompts()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var wrongExtFile = Path.Combine(workspace.WorkspaceRoot.FullName, "cert.txt");
         await File.WriteAllTextAsync(wrongExtFile, "not a pem");
@@ -890,7 +890,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     [Fact]
     public async Task PublishCommand_FilePrompt_SuccessfulUpload()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var validFile = Path.Combine(workspace.WorkspaceRoot.FullName, "deploy.zip");
         await File.WriteAllTextAsync(validFile, "zip content");
@@ -935,7 +935,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     [Fact]
     public async Task FileInput_CompoundExtension_MatchesFilter()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var validFile = Path.Combine(workspace.WorkspaceRoot.FullName, "archive.tar.gz");
         await File.WriteAllTextAsync(validFile, "gzip content");
 
@@ -972,7 +972,7 @@ public class PublishCommandPromptingIntegrationTests(ITestOutputHelper outputHel
     [Fact]
     public async Task PublishCommand_UnsupportedInputType_FailsWithError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var promptBackchannel = new TestPromptBackchannel();
         var consoleService = new TestInteractionService();
