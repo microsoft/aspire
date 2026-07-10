@@ -302,8 +302,19 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 22: Deploying to Radius via aspire deploy (rad deploy app.bicep)...");
             await auto.TypeAsync("aspire deploy");
             await auto.EnterAsync();
-            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(15));
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+            // Wait on this command's sequence-numbered prompt (not WaitForPipelineSuccessAsync).
+            // WaitForPipelineSuccessAsync scans the whole viewport for "Pipeline succeeded", but the
+            // earlier `aspire publish` (Step 20) already printed that exact marker and it is still
+            // on screen, so the pipeline wait could match the stale publish marker and return
+            // immediately -- collapsing the real deploy budget down to the following prompt wait.
+            // The counter-scoped prompt wait is bound to this deploy command alone, carries the full
+            // deploy budget, and already fails fast on a non-zero deploy via the `[n ERR:]`
+            // prompt. (Unlike the sibling ACA/AKS tests, deploy here only runs `rad deploy` against
+            // the already-provisioned AKS cluster, so the pipeline helper's transient-Azure-capacity
+            // Assert.Skip -- which targets AKS *provisioning* -- does not apply.)
+            // 17m preserves the previous effective ceiling (15m pipeline detect + 2m prompt) so the
+            // single combined wait does not shrink the deploy's headroom.
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(17));
 
             // ===== PHASE 6: Verify the deployed application =====
 
