@@ -1,0 +1,12 @@
+{
+  "appHost": {
+    "path": "apphost.mts",
+    "language": "typescript/nodejs"
+  },
+  "packages": {
+    "Aspire.Hosting.Foundry": "13.5.0-dev",
+    "Aspire.Hosting.JavaScript": "13.5.0-dev",
+    "Aspire.Hosting.DevTunnels": "13.5.0-dev",
+    "Aspire.Hosting.Azure.AppContainers": "13.5.0-dev"
+  }
+}
