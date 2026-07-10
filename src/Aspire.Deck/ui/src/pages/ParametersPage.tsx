@@ -7,10 +7,9 @@ import { DetailsDrawer } from "../components/DetailsDrawer";
 import {
   ConfirmDialog,
   DataTable,
-  EyeIcon,
-  EyeOffIcon,
   ParametersIcon,
   SearchBox,
+  SecretValue,
   StateDot,
   type Column,
   type ConfirmRequest,
@@ -149,7 +148,6 @@ export function ParametersPage() {
 // Shows the parameter's value: a muted "Not set" when unresolved, the value when
 // plain, or a reveal-on-demand mask when the parameter is a secret.
 function ValueCell({ resource }: { resource: Resource }) {
-  const [revealed, setRevealed] = useState(false);
   const prop = valueProperty(resource);
 
   if (isUnset(resource) || !prop || prop.value.length === 0) {
@@ -162,19 +160,7 @@ function ValueCell({ resource }: { resource: Resource }) {
 
   return (
     <span className="param-value param-value--secret">
-      <span className="secret">{revealed ? prop.value : "•".repeat(Math.min(prop.value.length, 24))}</span>
-      <button
-        type="button"
-        className="icon-btn"
-        title={revealed ? "Hide value" : "Reveal value"}
-        aria-label={revealed ? "Hide value" : "Reveal value"}
-        onClick={(e) => {
-          e.stopPropagation();
-          setRevealed((v) => !v);
-        }}
-      >
-        {revealed ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
-      </button>
+      <SecretValue value={prop.value} />
     </span>
   );
 }

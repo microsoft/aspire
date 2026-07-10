@@ -1,5 +1,6 @@
 export * from "./Badge";
 export * from "./Button";
+export * from "./Checkbox";
 export * from "./ConfirmDialog";
 export * from "./DataTable";
 export * from "./DeckProvider";
@@ -8,4 +9,6 @@ export * from "./EmptyState";
 export * from "./Icons";
 export * from "./NotificationStack";
 export * from "./SearchBox";
+export * from "./SecretValue";
+export * from "./Select";
 export * from "./StateDot";

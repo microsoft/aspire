@@ -15,6 +15,21 @@
   - region "Status":
     - heading "Status" [level=2]
     - text: Neutral Healthy Starting Degraded Failed Selected
+  - region "Inputs":
+    - heading "Inputs" [level=2]
+    - text: Environment
+    - combobox "Environment":
+      - option "Development" [selected]
+      - option "Staging"
+      - option "Production"
+      - option "Retired" [disabled]
+    - checkbox "Include hidden resources"
+    - text: Include hidden resources
+    - checkbox "Select all resources" [checked=mixed]
+    - text: Select all resources
+    - checkbox "Unavailable option" [disabled]
+    - text: Unavailable option API key •••••••••••••••
+    - button "Reveal API key"
   - region "Resource data":
     - heading "Resource data" [level=2]
     - text: 3 resources

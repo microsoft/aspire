@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type {
   Resource,
   ResourceCommand,
@@ -12,12 +11,11 @@ import {
   Button,
   Drawer,
   ExternalIcon,
-  EyeIcon,
-  EyeOffIcon,
   LinkIcon,
   PlayIcon,
   RestartIcon,
   ResourceTypeIcon,
+  SecretValue,
   StateDot,
   StopIcon,
   type ConfirmRequest,
@@ -34,23 +32,6 @@ function commandIcon(name: string) {
     return <RestartIcon size={15} />;
   }
   return null;
-}
-
-function SecretValue({ value }: { value: string }) {
-  const [revealed, setRevealed] = useState(false);
-  return (
-    <>
-      <span className="secret">{revealed ? value : "•".repeat(Math.min(value.length, 24))}</span>
-      <button
-        className="reveal-btn"
-        onClick={() => setRevealed((current) => !current)}
-        title={revealed ? "Hide value" : "Reveal value"}
-        aria-label={revealed ? "Hide value" : "Reveal value"}
-      >
-        {revealed ? <EyeOffIcon size={15} /> : <EyeIcon size={15} />}
-      </button>
-    </>
-  );
 }
 
 function PropertyRow({ prop }: { prop: ResourceProperty }) {

@@ -393,6 +393,25 @@ a:focus-visible {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+.deck-select-field {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  min-width: 220px;
+}
+.deck-select-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.deck-checkbox {
+  color: var(--text);
+}
+.deck-checkbox--disabled {
+  opacity: var(--disabled-opacity);
+}
 
 /* ---------- Buttons ---------- */
 .deck-provider button.btn {
@@ -730,6 +749,12 @@ table.data tbody tr.selected {
 }
 .reveal-btn:hover {
   color: var(--text);
+}
+.deck-secret-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
 
 /* ---------- Health report ---------- */
@@ -2040,6 +2065,19 @@ table.data tbody tr.selected {
   align-items: center;
   gap: 10px;
 }
+.toolkit-input-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  align-items: center;
+  gap: 14px 24px;
+}
+.toolkit-secret-sample {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
 .toolkit-visually-hidden {
   position: absolute;
   width: 1px;
@@ -2064,5 +2102,8 @@ table.data tbody tr.selected {
   }
   .toolkit-section__heading--data .searchbox {
     width: 100%;
+  }
+  .toolkit-input-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

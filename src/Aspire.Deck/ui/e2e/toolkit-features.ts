@@ -8,6 +8,9 @@ export const toolkitFeatures = {
   "TK-STATUS-001": "Badges and resource state indicators expose every semantic status tone.",
   "TK-EMPTY-001": "Empty states expose an icon, title, and supporting content.",
   "TK-NOTIFICATION-001": "Notifications expose semantic intent, actions, links, and explicit dismissal.",
+  "TK-SELECT-001": "Select controls expose labels, placeholders, disabled options, and controlled values.",
+  "TK-CHECKBOX-001": "Checkboxes support checked, unchecked, mixed, and disabled states.",
+  "TK-SECRET-001": "Sensitive values are masked by default and can be explicitly revealed and hidden.",
   "TK-A11Y-001": "The playground has a reviewed accessibility-tree contract.",
   "TK-RESPONSIVE-001": "Toolkit controls remain contained and usable at desktop and mobile widths.",
 } as const;

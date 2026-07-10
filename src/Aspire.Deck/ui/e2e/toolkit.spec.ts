@@ -154,6 +154,35 @@ test(`${features("TK-NOTIFICATION-001")} exercises reusable notification actions
   await expect(status).toHaveText("Notification dismissed");
 });
 
+test(`${features("TK-SELECT-001", "TK-CHECKBOX-001", "TK-SECRET-001")} exercises input and sensitive-value controls`, async ({ page }) => {
+  const inputs = page.getByRole("region", { name: "Inputs" });
+  const environment = inputs.getByRole("combobox", { name: "Environment" });
+  await expect(environment).toHaveValue("development");
+  await expect(environment.locator("option")).toHaveText([
+    "Choose an environment",
+    "Development",
+    "Staging",
+    "Production",
+    "Retired",
+  ]);
+  await expect(environment.locator("option", { hasText: "Retired" })).toBeDisabled();
+  await environment.selectOption("production");
+  await expect(environment).toHaveValue("production");
+
+  const includeHidden = inputs.getByRole("checkbox", { name: "Include hidden resources" });
+  await expect(includeHidden).not.toBeChecked();
+  await includeHidden.check();
+  await expect(includeHidden).toBeChecked();
+  await expect(inputs.getByRole("checkbox", { name: "Select all resources" })).toBeChecked({ indeterminate: true });
+  await expect(inputs.getByRole("checkbox", { name: "Unavailable option" })).toBeDisabled();
+
+  await expect(inputs.getByText("deck-secret-123", { exact: true })).toHaveCount(0);
+  await inputs.getByRole("button", { name: "Reveal API key" }).click();
+  await expect(inputs.getByText("deck-secret-123", { exact: true })).toBeVisible();
+  await inputs.getByRole("button", { name: "Hide API key" }).click();
+  await expect(inputs.getByText("deck-secret-123", { exact: true })).toHaveCount(0);
+});
+
 test(`${features("TK-DATA-001")} filters semantic table rows and exposes empty results`, async ({ page }) => {
   const table = page.getByRole("table");
   const search = page.getByRole("textbox", { name: "Filter toolkit resources…" });

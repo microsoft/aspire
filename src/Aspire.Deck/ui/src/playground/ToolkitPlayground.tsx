@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   Badge,
   Button,
+  Checkbox,
   ConfirmDialog,
   DataTable,
   Drawer,
@@ -11,6 +12,8 @@ import {
   NotificationStack,
   ResourcesIcon,
   SearchBox,
+  SecretValue,
+  Select,
   StateDot,
   SunIcon,
   type Column,
@@ -55,6 +58,8 @@ export function ToolkitPlayground({
   const [confirmation, setConfirmation] = useState<ConfirmRequest | null>(null);
   const [lastAction, setLastAction] = useState("No action selected");
   const [notificationVisible, setNotificationVisible] = useState(false);
+  const [environment, setEnvironment] = useState("development");
+  const [includeHidden, setIncludeHidden] = useState(false);
 
   const filteredResources = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -120,6 +125,41 @@ export function ToolkitPlayground({
             <Badge tone="warning">Degraded</Badge>
             <Badge tone="error">Failed</Badge>
             <Badge tone="accent">Selected</Badge>
+          </div>
+        </section>
+
+        <section className="toolkit-section" aria-labelledby="toolkit-inputs-title">
+          <div className="toolkit-section__heading">
+            <h2 id="toolkit-inputs-title">Inputs</h2>
+          </div>
+          <div className="toolkit-input-grid">
+            <Select
+              label="Environment"
+              value={environment}
+              placeholder="Choose an environment"
+              options={[
+                { value: "development", label: "Development" },
+                { value: "staging", label: "Staging" },
+                { value: "production", label: "Production" },
+                { value: "retired", label: "Retired", disabled: true },
+              ]}
+              onValueChange={setEnvironment}
+            />
+            <Checkbox
+              label="Include hidden resources"
+              checked={includeHidden}
+              onCheckedChange={setIncludeHidden}
+            />
+            <Checkbox label="Select all resources" checked={false} indeterminate />
+            <Checkbox label="Unavailable option" checked={false} disabled />
+            <div className="toolkit-secret-sample">
+              <span>API key</span>
+              <SecretValue
+                value="deck-secret-123"
+                revealLabel="Reveal API key"
+                hideLabel="Hide API key"
+              />
+            </div>
           </div>
         </section>
 
