@@ -3,7 +3,9 @@
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Net;
 using System.Runtime.CompilerServices;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Tests.Utils;
@@ -149,6 +151,39 @@ public class HostedAgentExtensionTests
 
         Assert.Equal("Invocations Endpoint", url.DisplayText);
         Assert.Equal("http://localhost:1234/invocations", url.Url);
+    }
+
+    [Fact]
+    public async Task AsHostedAgent_InRunMode_WithInvocationsProtocol_SendsTextPlainRequestBody()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK, "agent response", "text/plain");
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var agent = builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project, HostedAgentProtocol.Invocations, "1.0.0");
+        var endpoint = Assert.Single(agent.Resource.Annotations.OfType<EndpointAnnotation>());
+        endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 1234);
+
+        using var app = builder.Build();
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "message",
+                InputType = InputType.Text,
+                Value = "hello from dashboard"
+            }
+        ]);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "send-message", arguments);
+
+        Assert.True(result.Success);
+        Assert.Equal("hello from dashboard", fakeHandler.RequestContent);
+        Assert.Equal("text/plain", fakeHandler.RequestContentType);
     }
 
     [Fact]
@@ -612,6 +647,26 @@ public class HostedAgentExtensionTests
         Assert.Contains(account, targets);
         Assert.Contains(account2, targets);
 #pragma warning restore ASPIREAZURE003
+    }
+
+    private sealed class FakeHttpMessageHandler(HttpStatusCode statusCode, string responseBody, string mediaType) : HttpMessageHandler
+    {
+        public string? RequestContent { get; private set; }
+
+        public string? RequestContentType { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestContent = request.Content is not null
+                ? await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false)
+                : null;
+            RequestContentType = request.Content?.Headers.ContentType?.MediaType;
+
+            return new HttpResponseMessage(statusCode)
+            {
+                Content = new StringContent(responseBody, Encoding.UTF8, mediaType)
+            };
+        }
     }
 
     private sealed class Project : IProjectMetadata

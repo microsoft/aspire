@@ -31,7 +31,7 @@ public static class HostedAgentResourceBuilderExtensions
     /// <param name="protocolVersion">The version of the protocol exposed by the hosted agent container.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
-    /// This method applies in run mode. It configures the resource with the hosted agent responses endpoint,
+    /// This method applies in run mode. It configures the resource with the hosted agent protocol endpoint,
     /// a dashboard command for sending messages to the agent, and OpenTelemetry environment variables expected
     /// by the Microsoft Foundry agent server SDK.
     /// </remarks>
