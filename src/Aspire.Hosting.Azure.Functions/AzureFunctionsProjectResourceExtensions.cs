@@ -223,6 +223,7 @@ public static class AzureFunctionsProjectResourceExtensions
                     var endpoint = resource.GetEndpoint("http");
                     context.EnvironmentVariables["ASPNETCORE_URLS"] = ReferenceExpression.Create($"http://+:{endpoint.Property(EndpointProperty.TargetPort)}");
                 }
+                
                 // Set the storage connection string.
                 ((IResourceWithAzureFunctionsConfig)resource.HostStorage).ApplyAzureFunctionsConfiguration(context.EnvironmentVariables, "AzureWebJobsStorage");
 
