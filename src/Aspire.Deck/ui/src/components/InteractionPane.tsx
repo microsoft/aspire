@@ -24,13 +24,11 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
   const close = () => respondInteraction(interaction.interactionId, "cancel", {});
 
   function setValue(name: string, value: string, updateOnChange: boolean) {
-    setValues((prev) => {
-      const next = { ...prev, [name]: value };
-      if (updateOnChange) {
-        respondInteraction(interaction.interactionId, "update", next);
-      }
-      return next;
-    });
+    const next = { ...values, [name]: value };
+    setValues(next);
+    if (updateOnChange) {
+      respondInteraction(interaction.interactionId, "update", next);
+    }
   }
 
   const isInputs = interaction.kind === "inputsDialog";

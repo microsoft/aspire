@@ -56,6 +56,7 @@ export function Sidebar({
           <button
             key={entry.id}
             className={`nav-item ${active === entry.id ? "active" : ""}`}
+            aria-current={active === entry.id ? "page" : undefined}
             onClick={() => onNavigate(entry.id)}
           >
             <Icon size={18} className="nav-item__icon" />

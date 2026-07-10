@@ -169,7 +169,7 @@ export function ResourcesPage() {
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
 
       {toast ? (
-        <div className="toast">
+        <div className="toast" role="status" aria-live="polite">
           <span className={`state__dot ${toast.tone === "success" ? "success" : "error"}`} />
           {toast.message}
         </div>

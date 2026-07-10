@@ -189,7 +189,7 @@ test(`${features("TK-RESPONSIVE-001")} contains the toolkit at desktop and mobil
   const bounds = await page.getByRole("dialog", { name: "Toolkit resource details" }).boundingBox();
   expect(bounds).not.toBeNull();
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
-  expect(bounds!.width).toBeLessThanOrEqual(390);
+  expect(bounds!.width).toBeCloseTo(390, 2);
   await attachScreenshot(page, testInfo, "toolkit-light-mobile-drawer");
 });
 
