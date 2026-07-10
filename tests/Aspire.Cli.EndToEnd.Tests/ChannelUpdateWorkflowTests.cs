@@ -529,22 +529,25 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         }
 
         using var doc = JsonDocument.Parse(File.ReadAllText(aspireConfigPath));
-        if (!doc.RootElement.TryGetProperty("packages", out var packages) ||
-            packages.ValueKind != JsonValueKind.Object)
+
+        // New files write the "integrations" key; older files used "packages". Read the new key first
+        // and fall back to the legacy key so this helper works across both formats.
+        if ((!doc.RootElement.TryGetProperty("integrations", out var packages) || packages.ValueKind != JsonValueKind.Object) &&
+            (!doc.RootElement.TryGetProperty("packages", out packages) || packages.ValueKind != JsonValueKind.Object))
         {
             throw new InvalidOperationException(
-                $"aspire.config.json has no 'packages' object — was '{packageId}' actually added? Path: {aspireConfigPath}");
+                $"aspire.config.json has no 'integrations' object — was '{packageId}' actually added? Path: {aspireConfigPath}");
         }
 
         if (!packages.TryGetProperty(packageId, out var versionElement) ||
             versionElement.ValueKind != JsonValueKind.String)
         {
             throw new InvalidOperationException(
-                $"aspire.config.json#packages does not contain a string entry for '{packageId}'. Path: {aspireConfigPath}");
+                $"aspire.config.json#integrations does not contain a string entry for '{packageId}'. Path: {aspireConfigPath}");
         }
 
         return versionElement.GetString()
             ?? throw new InvalidOperationException(
-                $"aspire.config.json#packages.{packageId} was null. Path: {aspireConfigPath}");
+                $"aspire.config.json#integrations.{packageId} was null. Path: {aspireConfigPath}");
     }
 }

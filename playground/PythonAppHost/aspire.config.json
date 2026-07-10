@@ -3,7 +3,7 @@
     "path": "apphost.py",
     "language": "python"
   },
-  "packages": {
+  "integrations": {
     "Aspire.Hosting.JavaScript": "",
     "Aspire.Hosting.Python": "",
     "Aspire.Hosting.Redis": ""

@@ -25,6 +25,8 @@ export interface AspireConfigFile {
     channel?: string;
     features?: { [key: string]: boolean };
     profiles?: { [key: string]: AspireConfigProfile };
+    integrations?: { [key: string]: string };
+    /** @deprecated Use `integrations` instead. */
     packages?: { [key: string]: string };
 }
 

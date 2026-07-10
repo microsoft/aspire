@@ -3,7 +3,7 @@
     "path": "apphost.mts",
     "language": "typescript/nodejs"
   },
-  "packages": {
+  "integrations": {
     "Aspire.Hosting.PostgreSQL": "",
     "Aspire.Hosting.Redis": "",
     "Aspire.Hosting.JavaScript": "",
