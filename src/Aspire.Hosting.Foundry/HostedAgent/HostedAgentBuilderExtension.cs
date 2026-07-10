@@ -18,7 +18,6 @@ public static class HostedAgentResourceBuilderExtensions
     private static readonly JsonSerializerOptions s_indentedJsonOptions = new() { WriteIndented = true };
     private const string ResponsesProtocol = "responses";
     private const string InvocationsProtocol = "invocations";
-    private const string DefaultResponsesProtocolVersion = "2.0.0";
 
     /// <summary>
     /// Configures the resource to run and publish as a Microsoft Foundry hosted agent.
@@ -71,7 +70,7 @@ public static class HostedAgentResourceBuilderExtensions
         Action<HostedAgentConfiguration>? configure = null)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        return ConfigureAsHostedAgent(builder, project, HostedAgentProtocol.Responses, DefaultResponsesProtocolVersion, configure);
+        return ConfigureAsHostedAgent(builder, project, HostedAgentProtocol.Responses, AzureHostedAgentResource.DefaultResponsesProtocolVersion, configure);
     }
 
     // The internal AsHostedAgentForExport overload below is the polyglot-exported version of AsHostedAgent.

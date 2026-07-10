@@ -107,6 +107,31 @@ public class HostedAgentConfigurationTests
     }
 
     [Fact]
+    public void EnsureProtocolVersions_AddsDefaultResponsesProtocolWhenEmpty()
+    {
+        var config = new HostedAgentConfiguration("myregistry.azurecr.io/myagent:v1");
+
+        AzureHostedAgentResource.EnsureProtocolVersions(config);
+
+        var protocol = Assert.Single(config.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Responses, protocol.Protocol);
+        Assert.Equal("2.0.0", protocol.Version);
+    }
+
+    [Fact]
+    public void EnsureProtocolVersions_PreservesDeclaredProtocol()
+    {
+        var config = new HostedAgentConfiguration("myregistry.azurecr.io/myagent:v1");
+        config.ProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.0.0"));
+
+        AzureHostedAgentResource.EnsureProtocolVersions(config);
+
+        var protocol = Assert.Single(config.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Invocations, protocol.Protocol);
+        Assert.Equal("1.0.0", protocol.Version);
+    }
+
+    [Fact]
     public void EnvironmentVariables_CanBeAdded()
     {
         var config = new HostedAgentConfiguration("myimage:latest");
