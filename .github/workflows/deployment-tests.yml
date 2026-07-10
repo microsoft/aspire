@@ -302,6 +302,25 @@ jobs:
         with:
           version: v4.2.0
 
+      # Install the Radius (`rad`) CLI only for the Radius deployment scenario. `aspire deploy`
+      # against a Radius environment shells out to `rad deploy`, so the CLI must be on PATH.
+      # Gated to the single matrix class so the ~dozens of other split jobs neither pay the
+      # download cost nor fail if the install endpoint is unavailable. RADIUS_VERSION pins the
+      # control-plane version (`rad install kubernetes` in the test installs the matching plane),
+      # keeping CI deterministic across Radius releases.
+      - name: Setup Radius
+        if: ${{ contains(matrix.classname, 'RadiusStarterDeploymentTests') }}
+        env:
+          # Full release tag component; install.sh resolves this to tag v0.59.0. Keep aligned
+          # with RadiusBicepExtension.Version (major.minor 0.59) so the installed control plane
+          # matches the Bicep types the publisher emits.
+          RADIUS_VERSION: "0.59.0"
+        run: |
+          curl -fsSL "https://raw.githubusercontent.com/radius-project/radius/main/deploy/install.sh" | \
+            /bin/bash -s -- --version "$RADIUS_VERSION" --install-dir "$HOME/.rad/bin"
+          echo "$HOME/.rad/bin" >> "$GITHUB_PATH"
+          "$HOME/.rad/bin/rad" version --cli
+
       - name: Run deployment test (${{ matrix.shortname }})
         id: run_tests
         env:

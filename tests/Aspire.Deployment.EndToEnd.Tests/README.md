@@ -158,10 +158,29 @@ Aspire.Deployment.EndToEnd.Tests/
 ├── AzureServiceBusDeploymentTests.cs      # Azure Service Bus resource
 ├── AzureStorageDeploymentTests.cs         # Azure Storage resource
 ├── PythonFastApiDeploymentTests.cs        # Python FastAPI to Azure Container Apps
+├── RadiusStarterDeploymentTests.cs        # Starter template to Radius on AKS (rad deploy)
 ├── TypeScriptAzureContainerAppJobDeploymentTests.cs # TypeScript AppHost ACA jobs
 ├── xunit.runner.json                  # Test runner config
 └── README.md                          # This file
 ```
+
+## Radius deployment coverage
+
+`RadiusStarterDeploymentTests.DeployStarterTemplateToRadiusOnAks` is the live counterpart to the
+`Aspire.Hosting.Radius` unit/snapshot tests. Those prove the Bicep serializer output; this test
+proves that `aspire publish` + `rad deploy app.bicep` produce a working deployment. It provisions an
+AKS cluster + ACR, installs the Radius control plane onto the cluster, deploys the starter app
+(`AddRadiusEnvironment`), and verifies the workloads become ready and serve HTTP traffic.
+
+Radius-specific notes:
+
+- **`rad` CLI prerequisite.** `aspire deploy` against a Radius environment shells out to `rad`. In
+  CI the gated **Setup Radius** step in `deployment-tests.yml` installs a pinned `rad` version;
+  locally, install `rad` from <https://docs.radapp.io/installation/> before running the test.
+- **Images must be pre-pushed.** The Radius publisher does not build or push images for project
+  resources yet (<https://github.com/microsoft/aspire/issues/16844>). The test builds/pushes the
+  starter images to ACR and attaches them with `WithContainerImage` (Experimental
+  `ASPIRERADIUS057`) so the generated `app.bicep` references pullable images.
 
 ## TypeScript deployment coverage
 
