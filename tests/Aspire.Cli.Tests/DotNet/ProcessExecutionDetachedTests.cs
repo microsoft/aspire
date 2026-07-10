@@ -10,7 +10,6 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.DotNet;
 
@@ -207,7 +206,7 @@ wait $child_pid
     [Fact]
     [SupportedOSPlatform("linux")]
     [SupportedOSPlatform("macos")]
-    public async Task StartAsync_OnUnix_LogsDcpForkProcessStderrAfterSuccessfulLaunch()
+    public async Task StartAsync_OnUnix_DcpForkProcessStderrDoesNotBlockSuccessfulLaunch()
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only test.");
 
@@ -231,35 +230,20 @@ printf 'diagnostic warning\n' >&2
 wait $child_pid
 """);
         File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        var logger = new FakeLogger<ProcessExecutionFactory>();
 
         await using var detachedProcess = CreateDetachedExecution(
             "/bin/sh",
             ["-c", "exit 0"],
             workspace.WorkspaceRoot.FullName,
-            dcpPath: dcpPath,
-            logger: logger);
+            dcpPath: dcpPath);
 
         Assert.True(await detachedProcess.StartAsync(CancellationToken.None));
         await detachedProcess.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
-        await WaitForLogAsync(logger, "DCP fork-process stderr: diagnostic warning").WaitAsync(TimeSpan.FromSeconds(5));
-
-        Assert.Contains(logger.Collector.GetSnapshot(),
-            record => record.Level == LogLevel.Debug
-                && string.Equals(record.Message, "DCP fork-process stderr: diagnostic warning", StringComparison.Ordinal));
     }
 
     private static async Task WaitForFileAsync(string path)
     {
         while (!File.Exists(path))
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(50));
-        }
-    }
-
-    private static async Task WaitForLogAsync(FakeLogger logger, string message)
-    {
-        while (!logger.Collector.GetSnapshot().Any(record => string.Equals(record.Message, message, StringComparison.Ordinal)))
         {
             await Task.Delay(TimeSpan.FromMilliseconds(50));
         }

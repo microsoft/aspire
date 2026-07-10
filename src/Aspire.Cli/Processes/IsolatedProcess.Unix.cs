@@ -8,10 +8,9 @@ namespace Aspire.Cli.Processes;
 
 internal sealed partial class IsolatedProcess
 {
-    private static async Task<IsolatedProcess> StartDetachedUnixAsync(
+    private static async Task<StartedProcess> StartDetachedUnixAsync(
         IsolatedProcessStartInfo startInfo,
-        CancellationToken cancellationToken,
-        Action<string>? launcherDiagnosticCallback)
+        CancellationToken cancellationToken)
     {
         if (startInfo.DetachedUnixLauncherPath is null)
         {
@@ -79,24 +78,21 @@ internal sealed partial class IsolatedProcess
                 throw new InvalidOperationException($"DCP fork-process did not return a valid child process ID. stdout: '{trimmedStdout}'");
             }
 
-            ObserveDcpForkProcessStderr(stderrTask, launcherDiagnosticCallback);
+            ObserveDcpForkProcessStderr(stderrTask);
             var childProcess = Process.GetProcessById(childPid);
-            return WrapStartedProcess(
-                startInfo,
+            return new StartedProcess(
                 childProcess,
                 TextReader.Null,
                 TextReader.Null,
-                static (_, _) => { },
-                static (_, _) => { },
-                extraDispose: () =>
+                ExtraDispose: () =>
                 {
                     dcpProcess.Dispose();
                     return ValueTask.CompletedTask;
                 },
-                exitCodeProvider: () => dcpProcess.HasExited ? dcpProcess.ExitCode : childProcess.ExitCode,
-                hasExitedProvider: () => dcpProcess.HasExited,
-                waitForExitProvider: dcpProcess.WaitForExitAsync,
-                startTime: GetStartTime(childProcess));
+                ExitCodeProvider: () => dcpProcess.HasExited ? dcpProcess.ExitCode : childProcess.ExitCode,
+                HasExitedProvider: () => dcpProcess.HasExited,
+                WaitForExitProvider: dcpProcess.WaitForExitAsync,
+                StartTime: GetStartTime(childProcess));
         }
         catch
         {
@@ -111,25 +107,20 @@ internal sealed partial class IsolatedProcess
         }
     }
 
-    private static void ObserveDcpForkProcessStderr(Task<string> stderrTask, Action<string>? launcherDiagnosticCallback)
+    private static void ObserveDcpForkProcessStderr(Task<string> stderrTask)
     {
         _ = stderrTask.ContinueWith(
             static (completedTask, state) =>
             {
-                var launcherDiagnosticCallback = (Action<string>?)state;
                 if (!completedTask.IsCompletedSuccessfully)
                 {
                     _ = completedTask.Exception;
                     return;
                 }
 
-                var stderr = completedTask.Result.Trim();
-                if (stderr.Length > 0)
-                {
-                    launcherDiagnosticCallback?.Invoke(stderr);
-                }
+                _ = completedTask.Result;
             },
-            launcherDiagnosticCallback,
+            state: null,
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);

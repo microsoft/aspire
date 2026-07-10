@@ -26,11 +26,10 @@ public class IsolatedProcessTests
             startInfo.ArgumentList.Add(arg);
         }
 
-        await using var child = await IsolatedProcess.StartAsync(
-            startInfo,
-            standardOutputHandler: (_, line) => stdout.Enqueue(line),
-            standardErrorHandler: (_, line) => stderr.Enqueue(line),
-            CancellationToken.None);
+        await using var child = new IsolatedProcess(startInfo);
+        child.OutputDataReceived += (_, line) => stdout.Enqueue(line);
+        child.ErrorDataReceived += (_, line) => stderr.Enqueue(line);
+        await child.StartAsync(CancellationToken.None);
 
         // Both pumps complete on pipe EOF — child exits within tens of milliseconds, but
         // the OS pipe close + StreamReader drain can take a bit longer under load.
@@ -56,11 +55,8 @@ public class IsolatedProcessTests
             startInfo.ArgumentList.Add(arg);
         }
 
-        await using var child = await IsolatedProcess.StartAsync(
-            startInfo,
-            standardOutputHandler: static (_, _) => { },
-            standardErrorHandler: static (_, _) => { },
-            CancellationToken.None);
+        await using var child = new IsolatedProcess(startInfo);
+        await child.StartAsync(CancellationToken.None);
 
         // Carried explicitly because Process.GetProcessById returns a Process whose
         // StartInfo is empty — telemetry callers depend on these fields.
@@ -89,18 +85,16 @@ public class IsolatedProcessTests
             startInfo.ArgumentList.Add(arg);
         }
 
-        await using var child = await IsolatedProcess.StartAsync(
-            startInfo,
-            standardOutputHandler: (_, line) =>
+        await using var child = new IsolatedProcess(startInfo);
+        child.OutputDataReceived += (_, line) =>
+        {
+            seenLines.Enqueue(line);
+            if (line.Contains("line-one"))
             {
-                seenLines.Enqueue(line);
-                if (line.Contains("line-one"))
-                {
-                    throw new InvalidOperationException("intentional callback failure");
-                }
-            },
-            standardErrorHandler: static (_, _) => { },
-            CancellationToken.None);
+                throw new InvalidOperationException("intentional callback failure");
+            }
+        };
+        await child.StartAsync(CancellationToken.None);
 
         // StandardOutputClosed should fault with the recorded exception, but only AFTER
         // draining every line. The first OperationCanceledException-style early-exit was the bug.

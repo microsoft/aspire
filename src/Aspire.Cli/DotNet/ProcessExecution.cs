@@ -95,12 +95,11 @@ internal sealed class ProcessExecution : IProcessExecution
         // spawn failure, so a successful return always means the child is running — there is no
         // false-on-failure case to model. Process.Start() returning false is not applicable when
         // UseShellExecute=false.
-        _process = await IsolatedProcess.StartAsync(
-            _startInfo,
-            OnOutputLine,
-            OnErrorLine,
-            cancellationToken,
-            stderr => _logger.LogDebug("DCP fork-process stderr: {DcpStderr}", stderr)).ConfigureAwait(false);
+        var process = new IsolatedProcess(_startInfo);
+        process.OutputDataReceived += OnOutputLine;
+        process.ErrorDataReceived += OnErrorLine;
+        await process.StartAsync(cancellationToken).ConfigureAwait(false);
+        _process = process;
         _logger.LogDebug("{FileName}({ProcessId}) started in {WorkingDirectory}", _fileName, _process.Id, _startInfo.WorkingDirectory);
         return true;
     }

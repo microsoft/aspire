@@ -30,10 +30,7 @@ internal sealed partial class IsolatedProcess
     /// some test runners in the past.
     /// </remarks>
     [SupportedOSPlatform("windows")]
-    private static IsolatedProcess StartWindows(
-        IsolatedProcessStartInfo startInfo,
-        Action<IsolatedProcess, string> standardOutputHandler,
-        Action<IsolatedProcess, string> standardErrorHandler)
+    private static StartedProcess StartWindows(IsolatedProcessStartInfo startInfo)
     {
         if (startInfo.Detached)
         {
@@ -130,10 +127,8 @@ internal sealed partial class IsolatedProcess
                 var stdoutReader = new StreamReader(stdoutPipe, encoding, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
                 var stderrReader = new StreamReader(stderrPipe, encoding, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
 
-                // Capture these for the extraDispose closure below — the shared
-                // WrapStartedProcess helper owns the Process and the drain orchestration,
-                // but the pipe/reader resources are launcher-local and must be torn down
-                // after the pumps finish.
+                // The Process wrapper owns drain orchestration, but these pipe/reader resources
+                // are launcher-local and must be torn down after the pumps finish.
                 var capturedStdoutReader = stdoutReader;
                 var capturedStderrReader = stderrReader;
                 var capturedStdoutPipe = stdoutPipe;
@@ -158,17 +153,14 @@ internal sealed partial class IsolatedProcess
                 stderrPipe = null;
                 processHandle = null;
 
-                return WrapStartedProcess(
-                    startInfo,
+                return new StartedProcess(
                     process,
                     stdoutReader,
                     stderrReader,
-                    standardOutputHandler,
-                    standardErrorHandler,
-                    ExtraDispose,
-                    exitCodeProvider: () => GetExitCode(capturedProcessHandle),
-                    hasExitedProvider: () => GetHasExited(capturedProcessHandle),
-                    waitForExitProvider: ct => WaitForProcessHandleExitAsync(capturedProcessHandle, ct));
+                    ExtraDispose: ExtraDispose,
+                    ExitCodeProvider: () => GetExitCode(capturedProcessHandle),
+                    HasExitedProvider: () => GetHasExited(capturedProcessHandle),
+                    WaitForExitProvider: ct => WaitForProcessHandleExitAsync(capturedProcessHandle, ct));
             }
             catch
             {
@@ -197,7 +189,7 @@ internal sealed partial class IsolatedProcess
     }
 
     [SupportedOSPlatform("windows")]
-    private static IsolatedProcess StartWindowsSuppressed(IsolatedProcessStartInfo startInfo)
+    private static StartedProcess StartWindowsSuppressed(IsolatedProcessStartInfo startInfo)
     {
         using var nulHandle = WindowsProcessInterop.CreateFileW(
             "NUL",
@@ -248,17 +240,14 @@ internal sealed partial class IsolatedProcess
                 return ValueTask.CompletedTask;
             }
 
-            return WrapStartedProcess(
-                startInfo,
+            return new StartedProcess(
                 process,
                 TextReader.Null,
                 TextReader.Null,
-                static (_, _) => { },
-                static (_, _) => { },
-                ExtraDispose,
-                exitCodeProvider: () => GetExitCode(capturedProcessHandle),
-                hasExitedProvider: () => GetHasExited(capturedProcessHandle),
-                waitForExitProvider: ct => WaitForProcessHandleExitAsync(capturedProcessHandle, ct));
+                ExtraDispose: ExtraDispose,
+                ExitCodeProvider: () => GetExitCode(capturedProcessHandle),
+                HasExitedProvider: () => GetHasExited(capturedProcessHandle),
+                WaitForExitProvider: ct => WaitForProcessHandleExitAsync(capturedProcessHandle, ct));
         }
         catch
         {
