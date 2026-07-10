@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -137,6 +138,37 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         var values = jsonDocument.RootElement.GetProperty("values");
         Assert.Equal(400, values.GetArrayLength());
         Assert.Equal("value-399", values[399].GetString());
+    }
+
+    [Fact]
+    public async Task WaitForExitAsync_CallbackThrows_PumpDrainsToEnd()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var scriptFile = await CreateTwoLineScriptAsync(workspace.WorkspaceRoot);
+        var seenLines = new ConcurrentQueue<string>();
+
+        await using var execution = CreateExecution(
+            scriptFile,
+            new ProcessInvocationOptions
+            {
+                StandardOutputCallback = line =>
+                {
+                    seenLines.Enqueue(line);
+                    if (line.Contains("line-one", StringComparison.Ordinal))
+                    {
+                        throw new InvalidOperationException("intentional callback failure");
+                    }
+                }
+            });
+
+        Assert.True(await execution.StartAsync(CancellationToken.None));
+
+        var exitCode = await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        Assert.Equal(0, exitCode);
+        Assert.Contains(seenLines, line => line.Contains("line-one", StringComparison.Ordinal));
+        Assert.Contains(seenLines, line => line.Contains("line-two", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -330,6 +362,35 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
             return scriptFile;
         }
+    }
+
+    private static async Task<FileInfo> CreateTwoLineScriptAsync(DirectoryInfo workspaceRoot)
+    {
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            var scriptFile = new FileInfo(Path.Combine(workspaceRoot.FullName, "emit-two-lines.cmd"));
+            var content =
+                "@echo off" + Environment.NewLine +
+                "echo line-one" + Environment.NewLine +
+                "echo line-two" + Environment.NewLine;
+            await File.WriteAllTextAsync(scriptFile.FullName, content);
+            return scriptFile;
+        }
+
+        var unixScriptFile = new FileInfo(Path.Combine(workspaceRoot.FullName, "emit-two-lines.sh"));
+        var unixContent =
+            "#!/usr/bin/env bash" + Environment.NewLine +
+            "echo line-one" + Environment.NewLine +
+            "echo line-two" + Environment.NewLine;
+        await File.WriteAllTextAsync(unixScriptFile.FullName, unixContent);
+
+        File.SetUnixFileMode(
+            unixScriptFile.FullName,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+
+        return unixScriptFile;
     }
 
     private static async Task<FileInfo> CreateLongRunningScriptAsync(DirectoryInfo workspaceRoot)

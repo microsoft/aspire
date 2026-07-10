@@ -33,6 +33,8 @@ internal sealed class ProcessExecution : IProcessExecution
     private readonly IBundleService? _bundleService;
     private readonly CliExecutionContext? _executionContext;
     private IsolatedProcess? _process;
+    private ProcessPump? _standardOutputPump;
+    private ProcessPump? _standardErrorPump;
     private long _lastActivityTimestamp = Stopwatch.GetTimestamp();
     private int _disposed;
 
@@ -91,18 +93,24 @@ internal sealed class ProcessExecution : IProcessExecution
 
         using var layoutLease = await ResolveDetachedUnixLauncherAsync(cancellationToken).ConfigureAwait(false);
 
-        // IsolatedProcess.StartAsync spawns the child and starts the stdout/stderr pumps. It throws on
-        // spawn failure (matching the old ProcessExecution, whose Process.Start could also throw),
-        // so a successful return always means the child is running — there is no false-on-failure
-        // case to model. The old Process.Start() == false path was dead for UseShellExecute=false.
-        _process = await IsolatedProcess.StartAsync(
+        // IsolatedProcess.StartAsync spawns the child and returns its stdio readers. It throws on spawn
+        // failure, so a successful return always means the child is running — there is no
+        // false-on-failure case to model. Process.Start() returning false is not applicable when
+        // UseShellExecute=false.
+        var process = await IsolatedProcess.StartAsync(
             _startInfo,
-            OnOutputLine,
-            OnErrorLine,
             cancellationToken,
             stderr => _logger.LogDebug("DCP fork-process stderr: {DcpStderr}", stderr)).ConfigureAwait(false);
+        _process = process;
+        StartOutputPumps(process);
         _logger.LogDebug("{FileName}({ProcessId}) started in {WorkingDirectory}", _fileName, _process.Id, _startInfo.WorkingDirectory);
         return true;
+    }
+
+    private void StartOutputPumps(IsolatedProcess process)
+    {
+        _standardOutputPump = ProcessPump.Start(process.StandardOutput, line => OnOutputLine(process, line));
+        _standardErrorPump = ProcessPump.Start(process.StandardError, line => OnErrorLine(process, line));
     }
 
     private async Task<IDisposable?> ResolveDetachedUnixLauncherAsync(CancellationToken cancellationToken)
@@ -422,11 +430,9 @@ internal sealed class ProcessExecution : IProcessExecution
             return;
         }
 
-        // IsolatedProcess exposes only DisposeAsync — it drains the pumps then tears the
-        // pipes/handles down. DotNetCliRunner does not dispose the execution (StartBackchannelAsync
-        // runs fire-and-forget and reads HasExited/ExitCode after the await — see DotNetCliRunner.cs),
-        // so this path is reached only by explicit `await using` consumers (the session, guest
-        // launcher) and tests.
+        // DotNetCliRunner does not dispose the execution (StartBackchannelAsync runs fire-and-forget
+        // and reads HasExited/ExitCode after the await — see DotNetCliRunner.cs), so this path is
+        // reached only by explicit `await using` consumers (the session, guest launcher) and tests.
         var process = _process;
         if (process is null)
         {
@@ -437,9 +443,10 @@ internal sealed class ProcessExecution : IProcessExecution
         // WaitForExitAsync(token) first, so the shutdown ladder has already exited or killed the
         // process by the time we get here and this is a no-op. It matters for the path where an
         // execution was started but never driven (e.g. a fault between Start and the caller wiring up
-        // its wait loop): IsolatedProcess.DisposeAsync only drains pumps and releases handles — it
-        // does NOT terminate the process — so without this kill the child would be orphaned. Owning
-        // "kill if still alive on dispose" here keeps that responsibility off every consumer.
+        // its wait loop): IsolatedProcess.DisposeAsync only releases process handles and stdio
+        // resources — it does NOT terminate the process — so without this kill the child would be
+        // orphaned. Owning "kill if still alive on dispose" here keeps that responsibility off every
+        // consumer.
         try
         {
             if (!process.HasExited)
@@ -453,6 +460,8 @@ internal sealed class ProcessExecution : IProcessExecution
             // unkillable. The drain/handle release below still runs.
         }
 
+        await DrainOutputAsync(process, CancellationToken.None).ConfigureAwait(false);
+
         try
         {
             await process.DisposeAsync().ConfigureAwait(false);
@@ -465,7 +474,7 @@ internal sealed class ProcessExecution : IProcessExecution
 
     private void OnOutputLine(IsolatedProcess sender, string line)
     {
-        // RecordActivity brackets the callback (matching the old forwarder) so a slow consumer
+        // RecordActivity brackets the callback so a slow consumer
         // keeps the drain budget alive both while we hand it the line and while it processes it.
         RecordActivity();
         if (_logger.IsEnabled(LogLevel.Trace))
@@ -489,7 +498,9 @@ internal sealed class ProcessExecution : IProcessExecution
 
     private async Task DrainOutputAsync(IsolatedProcess process, CancellationToken cancellationToken)
     {
-        var drained = Task.WhenAll(process.StandardOutputClosed, process.StandardErrorClosed);
+        var drained = Task.WhenAll(
+            _standardOutputPump?.Completion ?? Task.CompletedTask,
+            _standardErrorPump?.Completion ?? Task.CompletedTask);
 
         while (true)
         {
@@ -513,7 +524,8 @@ internal sealed class ProcessExecution : IProcessExecution
             // Idle-based budget: a slow-but-progressing consumer keeps resetting the timer via
             // RecordActivity, so only a genuinely stalled pump (no output for the whole window)
             // gives up. The pumps keep running in the background and are reaped by DisposeAsync —
-            // we never force the streams closed (that's the isolated path's already-accepted shape).
+            // we leave teardown to DisposeAsync so this method never closes streams while callbacks
+            // may still be processing data.
             if (Stopwatch.GetElapsedTime(Interlocked.Read(ref _lastActivityTimestamp)) >= s_drainIdleTimeout)
             {
                 _logger.LogWarning("{FileName}({ProcessId}) stdout/stderr pumps did not drain within idle timeout after exit", _fileName, process.Id);

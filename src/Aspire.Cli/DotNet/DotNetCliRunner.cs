@@ -158,12 +158,6 @@ internal sealed class ProcessInvocationOptions
     };
 }
 
-internal enum ProcessStdioMode
-{
-    Pump,
-    Suppress
-}
-
 internal sealed class DotNetCliRunner(
     ILogger<DotNetCliRunner> logger,
     IServiceProvider serviceProvider,

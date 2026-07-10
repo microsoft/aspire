@@ -7,7 +7,6 @@ using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
-using Aspire.Cli.DotNet;
 using Microsoft.Win32.SafeHandles;
 
 namespace Aspire.Cli.Processes;
@@ -23,23 +22,19 @@ internal sealed partial class IsolatedProcess
     /// (<c>PROC_THREAD_ATTRIBUTE_JOB_LIST</c>) even if the child does not need a new console group.
     /// </summary>
     /// <remarks>
-    /// In pumped stdio mode this launcher consumes the child's stdout/stderr line-by-line via
-    /// anonymous pipes. stdin is wired to NUL because we
-    /// don't supply input to the interactive child, but Windows still requires a valid
-    /// handle when STARTF_USESTDHANDLES is set and the other two stdio handles are real
-    /// pipes — passing IntPtr.Zero in that combination leaves child stdin referencing
-    /// whatever default the loader picks, which has tripped up some test runners in the
-    /// past.
+    /// In pumped stdio mode this launcher returns stdout/stderr readers backed by anonymous
+    /// pipes. stdin is wired to NUL because we don't supply input to the interactive child,
+    /// but Windows still requires a valid handle when STARTF_USESTDHANDLES is set and the
+    /// other two stdio handles are real pipes — passing IntPtr.Zero in that combination leaves
+    /// child stdin referencing whatever default the loader picks, which has tripped up some
+    /// test runners in the past.
     /// </remarks>
     [SupportedOSPlatform("windows")]
-    private static IsolatedProcess StartWindows(
-        IsolatedProcessStartInfo startInfo,
-        Action<IsolatedProcess, string> standardOutputHandler,
-        Action<IsolatedProcess, string> standardErrorHandler)
+    private static IsolatedProcess StartWindows(IsolatedProcessStartInfo startInfo)
     {
         if (startInfo.StdioMode == ProcessStdioMode.Suppress)
         {
-            return StartWindowsSuppressed(startInfo, standardOutputHandler, standardErrorHandler);
+            return StartWindowsSuppressed(startInfo);
         }
 
         var nulStdinHandle = WindowsProcessInterop.CreateFileW(
@@ -165,8 +160,6 @@ internal sealed partial class IsolatedProcess
                     process,
                     stdoutReader,
                     stderrReader,
-                    standardOutputHandler,
-                    standardErrorHandler,
                     ExtraDispose,
                     exitCodeProvider: () => GetExitCode(capturedProcessHandle),
                     hasExitedProvider: () => GetHasExited(capturedProcessHandle),
@@ -199,10 +192,7 @@ internal sealed partial class IsolatedProcess
     }
 
     [SupportedOSPlatform("windows")]
-    private static IsolatedProcess StartWindowsSuppressed(
-        IsolatedProcessStartInfo startInfo,
-        Action<IsolatedProcess, string> standardOutputHandler,
-        Action<IsolatedProcess, string> standardErrorHandler)
+    private static IsolatedProcess StartWindowsSuppressed(IsolatedProcessStartInfo startInfo)
     {
         using var nulHandle = WindowsProcessInterop.CreateFileW(
             "NUL",
@@ -258,8 +248,6 @@ internal sealed partial class IsolatedProcess
                 process,
                 TextReader.Null,
                 TextReader.Null,
-                standardOutputHandler,
-                standardErrorHandler,
                 ExtraDispose,
                 exitCodeProvider: () => GetExitCode(capturedProcessHandle),
                 hasExitedProvider: () => GetHasExited(capturedProcessHandle),

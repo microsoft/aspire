@@ -4,10 +4,8 @@
 namespace Aspire.Cli.Processes;
 
 /// <summary>
-/// Shared line-pump used by both Unix and Windows variants of
-/// <see cref="IsolatedProcess"/>. A pump reads complete lines from a
-/// <see cref="TextReader"/> and dispatches them to a callback, completing when the
-/// reader hits EOF.
+/// Reads complete lines from a <see cref="TextReader"/> and dispatches them to a callback,
+/// completing when the reader hits EOF.
 /// </summary>
 /// <remarks>
 /// Callback exceptions do NOT terminate the drain — the pump continues reading until

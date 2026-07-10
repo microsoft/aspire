@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.DotNet;

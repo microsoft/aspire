@@ -11,14 +11,14 @@ internal sealed partial class IsolatedProcess
     private static async Task<IsolatedProcess> StartDetachedUnixAsync(
         IsolatedProcessStartInfo startInfo,
         CancellationToken cancellationToken,
-        Action<string>? detachedLauncherDiagnosticCallback)
+        Action<string>? launcherDiagnosticCallback)
     {
         if (startInfo.DetachedUnixLauncherPath is null)
         {
             throw new InvalidOperationException("Unix detached process launch requires a DCP executable path.");
         }
 
-        if (startInfo.StdioMode != Aspire.Cli.DotNet.ProcessStdioMode.Suppress)
+        if (startInfo.StdioMode != ProcessStdioMode.Suppress)
         {
             throw new InvalidOperationException("Unix detached process launch only supports suppressed stdio.");
         }
@@ -84,15 +84,13 @@ internal sealed partial class IsolatedProcess
                 throw new InvalidOperationException($"DCP fork-process did not return a valid child process ID. stdout: '{trimmedStdout}'");
             }
 
-            ObserveDcpForkProcessStderr(stderrTask, detachedLauncherDiagnosticCallback);
+            ObserveDcpForkProcessStderr(stderrTask, launcherDiagnosticCallback);
             var childProcess = Process.GetProcessById(childPid);
             return WrapStartedProcess(
                 startInfo,
                 childProcess,
                 TextReader.Null,
                 TextReader.Null,
-                static (_, _) => { },
-                static (_, _) => { },
                 extraDispose: () =>
                 {
                     dcpProcess.Dispose();
@@ -116,12 +114,12 @@ internal sealed partial class IsolatedProcess
         }
     }
 
-    private static void ObserveDcpForkProcessStderr(Task<string> stderrTask, Action<string>? detachedLauncherDiagnosticCallback)
+    private static void ObserveDcpForkProcessStderr(Task<string> stderrTask, Action<string>? launcherDiagnosticCallback)
     {
         _ = stderrTask.ContinueWith(
             static (completedTask, state) =>
             {
-                var detachedLauncherDiagnosticCallback = (Action<string>?)state;
+                var launcherDiagnosticCallback = (Action<string>?)state;
                 if (!completedTask.IsCompletedSuccessfully)
                 {
                     _ = completedTask.Exception;
@@ -131,10 +129,10 @@ internal sealed partial class IsolatedProcess
                 var stderr = completedTask.Result.Trim();
                 if (stderr.Length > 0)
                 {
-                    detachedLauncherDiagnosticCallback?.Invoke(stderr);
+                    launcherDiagnosticCallback?.Invoke(stderr);
                 }
             },
-            detachedLauncherDiagnosticCallback,
+            launcherDiagnosticCallback,
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
