@@ -697,6 +697,70 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task RunAsync_ResourceCleanupSettingsBypassLaunchProfileOverrides()
+    {
+        var appHostFile = CreateProjectAppHost();
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "http": {
+                  "commandName": "Project",
+                  "environmentVariables": {
+                    "DcpPublisher__ResourceCleanupMode": "false",
+                    "DcpPublisher__WaitForResourceCleanup": "false"
+                  }
+                }
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+            {
+                return (0, JsonDocument.Parse($$"""
+                    {
+                      "Properties": {
+                        "MSBuildVersion": "17.0.0",
+                        "IsAspireHost": "true",
+                        "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
+                        "TargetFramework": "net10.0"
+                      },
+                      "Items": {}
+                    }
+                    """));
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAsyncCallback = (_, _, _, _, _, env, _, options, _) =>
+        {
+            Assert.True(options.NoLaunchProfile);
+            Assert.NotNull(env);
+            Assert.Equal("true", env[KnownConfigNames.DcpResourceCleanupMode]);
+            Assert.Equal("true", env[KnownConfigNames.DcpWaitForResourceCleanup]);
+            return Task.FromResult(124);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                [KnownConfigNames.DcpResourceCleanupMode] = "true",
+                [KnownConfigNames.DcpWaitForResourceCleanup] = "true"
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(124, exitCode);
+    }
+
+    [Fact]
     public async Task RunAsync_ProjectAppHostDirectLaunchCanBeDisabledByConfig()
     {
         var appHostFile = CreateProjectAppHost();

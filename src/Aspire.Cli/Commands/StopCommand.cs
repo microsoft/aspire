@@ -119,7 +119,9 @@ internal sealed class StopCommand : BaseCommand
 
     private async Task<int> ForceStopAppHostAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
     {
-        var appHostFile = await TryResolveAppHostFileAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false);
+        var appHostFile = passedAppHostProjectFile is not null
+            ? await TryResolveAppHostFileAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false)
+            : null;
 
         var stopResult = appHostFile is not null
             ? new StopAppHostResult(await ExecuteInteractiveAsync(appHostFile, cancellationToken).ConfigureAwait(false), appHostFile)
@@ -133,6 +135,7 @@ internal sealed class StopCommand : BaseCommand
         }
 
         appHostFile ??= stopResult.AppHostFile;
+        appHostFile ??= await TryResolveAppHostFileAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false);
         if (appHostFile is null)
         {
             InteractionService.DisplayError(StopCommandStrings.CouldNotDetermineAppHostPath);

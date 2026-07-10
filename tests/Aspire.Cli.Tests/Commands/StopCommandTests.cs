@@ -385,6 +385,73 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopCommand_ForceWithoutAppHostUsesRunningAppHostPathBeforeProjectDiscovery()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var runningAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("RunningAppHost");
+        var runningAppHostFile = new FileInfo(Path.Combine(runningAppHostDirectory.FullName, "Running.AppHost.csproj"));
+        await File.WriteAllTextAsync(runningAppHostFile.FullName, "<Project />");
+        var discoveredAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("DiscoveredAppHost");
+        var discoveredAppHostFile = new FileInfo(Path.Combine(discoveredAppHostDirectory.FullName, "Discovered.AppHost.csproj"));
+        await File.WriteAllTextAsync(discoveredAppHostFile.FullName, "<Project />");
+        FileInfo? cleanupAppHostFile = null;
+        var projectLocatorInvoked = false;
+        var backchannel = new TestAppHostBackchannel
+        {
+            RequestStopAsyncCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(runningAppHostFile.FullName, int.MaxValue - 11));
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+            {
+                projectLocatorInvoked = true;
+                return Task.FromResult(new AppHostProjectSearchResult(discoveredAppHostFile, [discoveredAppHostFile]));
+            }
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            GetAspireHostingVersionAsyncCallback = (file, _) =>
+            {
+                Assert.Equal(runningAppHostFile.FullName, file.FullName);
+                return Task.FromResult<string?>("13.5.0");
+            },
+            RunAsyncCallback = async (context, _) =>
+            {
+                cleanupAppHostFile = context.AppHostFile;
+                context.BuildCompletionSource?.SetResult(true);
+                context.BackchannelCompletionSource?.SetResult(backchannel);
+                await backchannel.RequestStopAsyncCalled.Task.DefaultTimeout();
+                return CliExitCodes.Success;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("stop --force");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(projectLocatorInvoked);
+        Assert.NotNull(cleanupAppHostFile);
+        Assert.Equal(runningAppHostFile.FullName, cleanupAppHostFile.FullName);
+    }
+
+    [Fact]
     public async Task StopCommand_ForceReturnsCleanupRunExitCodeWhenAppHostExitsBeforeBackchannel()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -476,11 +543,17 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             IsInScope = true
         };
         monitor.AddConnection("hash1", connection.SocketPath, connection);
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(null, []))
+        };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.ProjectLocatorFactory = _ => projectLocator;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
         });
 
