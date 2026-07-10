@@ -593,10 +593,22 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task LaunchDetachedAsync_TreatsCancellationFromDetachedLauncherAsCancelledStart()
+    public async Task LaunchDetachedAsync_ForwardsCancellationTokenToDetachedLauncher()
     {
         using var harness = AppHostLauncherHarness.Create(outputHelper);
-        harness.ProcessLauncher.StartHandler = (_, _, _, _, _, cancellationToken) => throw new OperationCanceledException(cancellationToken);
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var launcherCalled = false;
+        var observedToken = default(CancellationToken);
+        harness.ProcessLauncher.StartHandler = (_, _, _, _, _, cancellationToken) =>
+        {
+            launcherCalled = true;
+            observedToken = cancellationToken;
+            cancellationToken.ThrowIfCancellationRequested();
+
+            throw new InvalidOperationException("Expected the cancelled token to stop launch.");
+        };
 
         var result = await harness.Launcher.LaunchDetachedAsync(
             harness.AppHostFile,
@@ -608,10 +620,51 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             globalArgs: [],
             additionalArgs: [],
             stopAfterLaunchDelay: null,
-            CancellationToken.None);
+            cts.Token);
 
+        Assert.True(launcherCalled);
+        Assert.Equal(cts.Token, observedToken);
+        Assert.True(observedToken.IsCancellationRequested);
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Empty(harness.InteractionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_CleansUpChildProcessWhenCancelledAfterStart()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        using var cts = new CancellationTokenSource();
+
+        var launchTask = harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: false,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            cts.Token);
+
+        await harness.ProcessLauncher.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var startedProcess = harness.ProcessLauncher.StartedProcess ?? throw new InvalidOperationException("Expected child process to start.");
+
+        try
+        {
+            Assert.False(startedProcess.HasExited);
+
+            await cts.CancelAsync();
+            var result = await launchTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(CliExitCodes.Success, result.ExitCode);
+            Assert.Empty(harness.InteractionService.DisplayedErrors);
+            Assert.True(startedProcess.HasExited);
+        }
+        finally
+        {
+            harness.ProcessLauncher.StopStartedProcess();
+        }
     }
 
     [Fact]
