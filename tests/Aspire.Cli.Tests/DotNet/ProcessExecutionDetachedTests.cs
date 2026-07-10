@@ -241,6 +241,57 @@ wait $child_pid
         await detachedProcess.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
     }
 
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    [SupportedOSPlatform("macos")]
+    public async Task StartAsync_OnUnix_ReturnsMonitorExitCodeWhenForkedProcessAlreadyExited()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only test.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dcpPath = Path.Combine(workspace.WorkspaceRoot.FullName, "fake-dcp");
+        var capturePath = Path.Combine(workspace.WorkspaceRoot.FullName, "child-pid.txt");
+        await File.WriteAllTextAsync(dcpPath, """
+#!/bin/sh
+if [ "$1" != "fork-process" ]; then
+  exit 42
+fi
+if [ "$2" != "--monitor" ]; then
+  exit 43
+fi
+if [ "$6" != "--" ]; then
+  exit 44
+fi
+/bin/sh -c 'exit 11' >/dev/null 2>&1 </dev/null &
+child_pid=$!
+wait $child_pid
+exit_code=$?
+printf '%s\n' "$child_pid" > "$ASPIRE_TEST_CAPTURE"
+printf '%s\n' "$child_pid"
+sleep 0.2
+exit "$exit_code"
+""");
+        File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        await using var detachedProcess = CreateDetachedExecution(
+            "/bin/sh",
+            ["-c", "exit 0"],
+            workspace.WorkspaceRoot.FullName,
+            environment: new Dictionary<string, string>
+            {
+                ["ASPIRE_TEST_CAPTURE"] = capturePath
+            },
+            dcpPath: dcpPath);
+
+        Assert.True(await detachedProcess.StartAsync(CancellationToken.None));
+
+        var childPid = int.Parse(await File.ReadAllTextAsync(capturePath), CultureInfo.InvariantCulture);
+        Assert.Equal(childPid, detachedProcess.ProcessId);
+        Assert.True(detachedProcess.HasExited);
+        Assert.Equal(11, detachedProcess.ExitCode);
+        await detachedProcess.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
     private static async Task WaitForFileAsync(string path)
     {
         while (!File.Exists(path))

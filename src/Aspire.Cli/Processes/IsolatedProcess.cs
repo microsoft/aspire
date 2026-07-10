@@ -316,7 +316,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     private void InitializeStartedProcess(StartedProcess startedProcess)
     {
         _process = startedProcess.Process;
-        _id = startedProcess.Process.Id;
+        _id = startedProcess.ProcessId ?? startedProcess.Process.Id;
         Arguments = _startInfo.ArgumentList.ToArray();
         _exitCodeProvider = startedProcess.ExitCodeProvider;
         _hasExitedProvider = startedProcess.HasExitedProvider;
@@ -373,7 +373,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         Func<int>? ExitCodeProvider = null,
         Func<bool>? HasExitedProvider = null,
         Func<CancellationToken, Task>? WaitForExitProvider = null,
-        DateTimeOffset? StartTime = null);
+        DateTimeOffset? StartTime = null,
+        int? ProcessId = null);
 
     private static DateTimeOffset? GetStartTime(Process process)
     {

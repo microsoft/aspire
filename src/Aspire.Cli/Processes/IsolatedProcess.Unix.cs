@@ -79,7 +79,29 @@ internal sealed partial class IsolatedProcess
             }
 
             ObserveDcpForkProcessStderr(stderrTask);
-            var childProcess = Process.GetProcessById(childPid);
+
+            Process? childProcess;
+            try
+            {
+                childProcess = Process.GetProcessById(childPid);
+            }
+            catch (ArgumentException)
+            {
+                // A short-lived detached child can exit and be reaped by the DCP monitor between
+                // DCP printing its PID and this parent opening a Process handle. In that case the
+                // monitor process is the only remaining handle that can report the child's exit code.
+                await dcpProcess.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+                return new StartedProcess(
+                    dcpProcess,
+                    TextReader.Null,
+                    TextReader.Null,
+                    ExtraDispose: null,
+                    ExitCodeProvider: () => dcpProcess.ExitCode,
+                    HasExitedProvider: () => true,
+                    WaitForExitProvider: dcpProcess.WaitForExitAsync,
+                    ProcessId: childPid);
+            }
+
             return new StartedProcess(
                 childProcess,
                 TextReader.Null,
@@ -92,7 +114,8 @@ internal sealed partial class IsolatedProcess
                 ExitCodeProvider: () => dcpProcess.HasExited ? dcpProcess.ExitCode : childProcess.ExitCode,
                 HasExitedProvider: () => dcpProcess.HasExited,
                 WaitForExitProvider: dcpProcess.WaitForExitAsync,
-                StartTime: GetStartTime(childProcess));
+                StartTime: GetStartTime(childProcess),
+                ProcessId: childPid);
         }
         catch
         {
