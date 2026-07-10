@@ -118,7 +118,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ParseLoggingOptions_PrInstall_UsesInstallPrefixForDefaultLogsDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-pr-test");
         var binaryPath = WriteBinaryWithSidecar(Path.Combine(installPrefix, "dogfood", "pr-17159", "bin"), InstallSourceExtensions.PrWire);
 
@@ -131,7 +131,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     [Fact]
     public void BuildCliExecutionContext_PrInstall_UsesInstallPrefixForStateDirectoriesAndKeepsIdentityChannel()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-pr-test");
         var binaryDir = Path.Combine(installPrefix, "dogfood", "pr-17159", "bin");
         var binaryPath = WriteBinaryWithSidecar(binaryDir, InstallSourceExtensions.PrWire, channel: "pr-17159");
@@ -169,7 +169,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         // Setting only ASPIRE_CLI_NUGET_SERVICE_INDEX must still flag the run as an emulation so the
         // startup override notice fires and tooling does not mistake a diagnostic run for a real build.
         // Regression guard: this source was previously omitted from the identityOverridden computation.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var envVars = new Dictionary<string, string?> { [IdentityResolver.NuGetServiceIndexEnvVar] = "http://localhost:5000/v3/index.json" };
         var environment = new TestEnvironment(envVars);
         var resolver = new IdentityResolver(
@@ -191,7 +191,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     [Fact]
     public void BuildCliExecutionContext_NoOverrides_DoesNotMarkIdentityOverridden()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var environment = new TestEnvironment();
         var resolver = new IdentityResolver(
             CliTestHelper.CreateSidecarReader(outputHelper),
@@ -216,7 +216,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     [InlineData("doctor --cli-wait-for-debugger")]
     public void WaitForDebuggerIfRequested_WithSubcommand_CallsShowStatus(string commandLine)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -237,7 +237,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
     [Fact]
     public void WaitForDebuggerIfRequested_WithoutFlag_DoesNotCallShowStatus()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var testInteractionService = new TestInteractionService();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {

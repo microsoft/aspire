@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREEXTENSION001
+#pragma warning disable ASPIRECOMMAND001
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -32,6 +33,17 @@ public static class JavaScriptHostingExtensions
     private const string DefaultNodeVersion = "22";
     private const string DefaultJavaScriptRunScriptName = "dev";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
+
+    // Help links surfaced when a required command is missing, mapped to a command by ResolveHelpLink.
+    private const string NodeHelpLink = "https://nodejs.org/en/download/";
+    private const string NpmHelpLink = "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm";
+    private const string BunHelpLink = "https://bun.sh/docs/installation";
+    private const string YarnHelpLink = "https://yarnpkg.com/getting-started/install";
+    private const string PnpmHelpLink = "https://pnpm.io/installation";
+
+    // npm/yarn/pnpm are Node CLIs: whether they install packages or launch the app's run script, they spawn
+    // node, so node must be on PATH too. bun is a full Node replacement and needs no node.
+    private static readonly string[] s_nodeBasedPackageManagers = ["npm", "yarn", "pnpm"];
 
     // This is the order of config files that Vite will look for by default
     // See https://github.com/vitejs/vite/blob/main/packages/vite/src/node/constants.ts#L97
@@ -288,7 +300,7 @@ public static class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithNodeDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
         builder.WithOtlpExporter()
-            .WithRequiredCommand("node", "https://nodejs.org/en/download/")
+            .WithRequiredCommandsFromPackageManager("node")
             .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
             .WithCertificateTrustConfiguration((ctx) =>
             {
@@ -316,6 +328,91 @@ public static class JavaScriptHostingExtensions
 
                 return Task.CompletedTask;
             });
+
+    // Registers a hook that materializes the resource's required commands just before start. The annotations are
+    // added on BeforeStartEvent in every execution context, but they only have an effect in run mode, where
+    // RequiredCommandValidationEventingSubscriber validates them against the local PATH on
+    // BeforeResourceStartedEvent (which fires after BeforeStartEvent). Resolving them here - rather than eagerly
+    // as each With* method runs - lets the package-manager selection settle first, so a later selection fully
+    // replaces an earlier one without having to remove stale RequiredCommandAnnotations.
+    // See https://github.com/microsoft/aspire/issues/18625.
+    //
+    // runtimeCommand is the executable the app was created to run with (node for
+    // AddNodeApp/AddViteApp/AddJavaScriptApp, bun for AddBunApp); it launches the app whenever the app is not
+    // routed through a package-manager run script.
+    private static IResourceBuilder<TResource> WithRequiredCommandsFromPackageManager<TResource>(
+        this IResourceBuilder<TResource> builder,
+        string runtimeCommand) where TResource : JavaScriptAppResource
+    {
+        var resource = builder.Resource;
+        builder.ApplicationBuilder.OnBeforeStart((_, _) =>
+        {
+            foreach (var (command, helpLink) in ResolveRequiredCommands(resource, runtimeCommand))
+            {
+                // Idempotent: skip commands already present so an unexpected second publish of BeforeStartEvent
+                // cannot add duplicate RequiredCommandAnnotations for the same command.
+                if (!resource.Annotations.OfType<RequiredCommandAnnotation>().Any(a => string.Equals(a.Command, command, StringComparison.Ordinal)))
+                {
+                    resource.Annotations.Add(new RequiredCommandAnnotation(command) { HelpLink = helpLink });
+                }
+            }
+
+            return Task.CompletedTask;
+        });
+
+        return builder;
+    }
+
+    // Resolves the executables that must be on PATH for the app to install and run, from how the app is actually
+    // launched. Two independent axes:
+    //   - Runtime: apps that launch via a named package-manager run script (npm run dev / bun run dev) - which is
+    //     every AddViteApp/AddJavaScriptApp, plus AddNodeApp/AddBunApp when WithRunScript is used - are launched by
+    //     the package manager, so the package manager is the runtime. Apps that invoke a script file directly
+    //     (AddNodeApp "server.js" / AddBunApp "server.ts" with no run script) are launched by their fixed runtime
+    //     (node/bun) regardless of any package manager.
+    //   - Install: a selected package manager also runs at install time, so it must be on PATH even when a
+    //     different runtime launches the app - e.g. AddNodeApp(...).WithBun() runs `node server.js` but installs
+    //     with `bun`, so both node and bun are required.
+    // npm/yarn/pnpm additionally require node (they are Node CLIs); bun does not. This projection is what fixes
+    // https://github.com/microsoft/aspire/issues/18625 (AddViteApp(...).WithBun() requires only bun) without
+    // dropping the runtime for direct-script apps.
+    private static IEnumerable<(string Command, string? HelpLink)> ResolveRequiredCommands(IResource resource, string runtimeCommand)
+    {
+        resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager);
+
+        // A package manager only replaces the runtime when the app launches through a run script; otherwise the
+        // runtime executes the script file directly.
+        var launchesViaRunScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _);
+        var runCommand = launchesViaRunScript && packageManager is not null
+            ? packageManager.ExecutableName
+            : runtimeCommand;
+
+        var commands = new HashSet<string>(StringComparer.Ordinal) { runCommand };
+
+        if (packageManager is not null)
+        {
+            commands.Add(packageManager.ExecutableName);
+        }
+
+        if (commands.Overlaps(s_nodeBasedPackageManagers))
+        {
+            commands.Add("node");
+        }
+
+        return commands.Select(static command => (command, ResolveHelpLink(command)));
+    }
+
+    // Maps a required executable to the install/help link surfaced when the command is missing on PATH.
+    private static string? ResolveHelpLink(string command) => command switch
+    {
+        "node" => NodeHelpLink,
+        "npm" => NpmHelpLink,
+        "bun" => BunHelpLink,
+        "yarn" => YarnHelpLink,
+        "pnpm" => PnpmHelpLink,
+        // Unknown/custom package manager: no specific install help link.
+        _ => null,
+    };
 
     // The default Docker image used for AddBunApp build and runtime stages.
     // Pinned to the major version tag to keep generated Dockerfiles deterministic
@@ -630,7 +727,7 @@ public static class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithBunDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
         builder.WithOtlpExporter()
-            .WithRequiredCommand("bun", "https://bun.sh/docs/installation")
+            .WithRequiredCommandsFromPackageManager("bun")
             // Bun honors NODE_ENV for module resolution and runtime mode the same way Node does.
             // See https://bun.com/docs/runtime/env
             .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
@@ -1681,8 +1778,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation([installCommand, .. installArgs ?? []])
             {
                 ProductionInstallArgs = "--omit=dev"
-            })
-            .WithRequiredCommand("npm", "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm");
+            });
 
         AddInstaller(resource, install);
         return resource;
@@ -1748,8 +1844,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--production"
-            })
-            .WithRequiredCommand("bun", "https://bun.sh/docs/installation");
+            });
 
         if (!resource.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out _))
         {
@@ -1827,8 +1922,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--production"
-            })
-            .WithRequiredCommand("yarn", "https://yarnpkg.com/getting-started/install");
+            });
 
         AddInstaller(resource, install);
         return resource;
@@ -1904,8 +1998,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--prod"
-            })
-            .WithRequiredCommand("pnpm", "https://pnpm.io/installation");
+            });
 
         AddInstaller(resource, install);
         return resource;

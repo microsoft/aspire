@@ -58,6 +58,7 @@
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
     <PackageReference Include="OpenAI" />
     <PackageReference Include="Markdig" />
+    <PackageReference Include="Semver" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Certificate" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" />
@@ -166,6 +167,11 @@
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
       <DependentUpon>KnownUrlsDisplay.resx</DependentUpon>
+    </Compile>
+    <Compile Update="Resources\Reconnect.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Reconnect.resx</DependentUpon>
     </Compile>
   </ItemGroup>
 
@@ -276,6 +282,13 @@
     <EmbeddedResource Update="Resources\KnownUrlsDisplay.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>KnownUrlsDisplay.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Resources\Reconnect.resx">
+      <XlfSourceFormat>Resx</XlfSourceFormat>
+      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
+      <SubType>Designer</SubType>
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Reconnect.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
 

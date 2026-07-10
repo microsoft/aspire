@@ -26,6 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)CodeGeneration\AtsOptionsFlattening.cs" Link="AtsOptionsFlattening.cs" />
     <Compile Include="$(SharedDir)Json\AtsJsonCodeWriter.cs" Link="AtsJsonCodeWriter.cs" />
   </ItemGroup>
 

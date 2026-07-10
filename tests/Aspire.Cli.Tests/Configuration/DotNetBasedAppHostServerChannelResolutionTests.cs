@@ -25,7 +25,7 @@ public class DotNetBasedAppHostServerChannelResolutionTests(ITestOutputHelper ou
     [Fact]
     public async Task DotNetBasedAppHostServerProject_CreateProjectFiles_ReturnsNullChannel_WhenNoPerProjectChannelAndOnlyImplicit()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appPath = workspace.WorkspaceRoot.FullName;
 
         var project = CreateProject(appPath, MockPackagingServiceFactory.Create());
@@ -42,7 +42,7 @@ public class DotNetBasedAppHostServerChannelResolutionTests(ITestOutputHelper ou
     [Fact]
     public async Task DotNetBasedAppHostServerProject_CreateProjectFiles_HonorsAspireConfigJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appPath = workspace.WorkspaceRoot.FullName;
 
         var config = AspireConfigFile.LoadOrCreate(appPath);
@@ -63,7 +63,7 @@ public class DotNetBasedAppHostServerChannelResolutionTests(ITestOutputHelper ou
         // Migration safety: projects scaffolded before per-project aspire.config.json landed
         // wrote their channel into .aspire/settings.json (AspireJsonConfiguration). The reader
         // must still honor the legacy file so existing on-disk projects keep working.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appPath = workspace.WorkspaceRoot.FullName;
 
         var legacy = new AspireJsonConfiguration { Channel = "daily", SdkVersion = "13.3.0" };
@@ -84,7 +84,7 @@ public class DotNetBasedAppHostServerChannelResolutionTests(ITestOutputHelper ou
     {
         // When both files exist, the new format wins. Pins the `??` operand order in the
         // reader so an accidental swap is caught.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appPath = workspace.WorkspaceRoot.FullName;
 
         var legacy = new AspireJsonConfiguration { Channel = "daily", SdkVersion = "13.3.0" };

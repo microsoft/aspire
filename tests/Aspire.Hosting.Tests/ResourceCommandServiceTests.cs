@@ -1542,8 +1542,8 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     {
         const string rebuildOutputMarker = "ASPIRE_REBUILD_OUTPUT_MARKER";
 
-        using var tempDirectory = new TestTempDirectory();
-        var projectPath = CreateBuildOutputTestProject(tempDirectory.Path, rebuildOutputMarker);
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var projectPath = CreateBuildOutputTestProject(workspace.WorkspaceRoot.FullName, rebuildOutputMarker);
 
         using var builder = CreateBuilder();
         var project = builder.AddProject("myProject", projectPath, options => options.ExcludeLaunchProfile = true);
@@ -1740,4 +1740,3 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
     }
 }
-

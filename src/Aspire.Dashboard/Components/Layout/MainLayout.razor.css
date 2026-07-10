@@ -88,11 +88,12 @@
            visible viewport instead of extending underneath the header at high zoom. */
         --mobile-header-height: 52px;
         --mobile-nav-menu-offset: 2px;
+        --mobile-nav-menu-focus-padding: 4px;
         height: 100vh;
         width: 100vw;
         display: grid;
         grid-template-columns: auto 1fr;
-        grid-template-rows: var(--mobile-header-height) auto auto 1fr;
+        grid-template-rows: var(--mobile-header-height) minmax(0, auto) auto minmax(0, 1fr);
         grid-template-areas:
             "icon head"
             "nav-menu nav-menu"

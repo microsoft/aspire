@@ -8,6 +8,7 @@ using System.Text.Json;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -609,5 +610,45 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         }, "Expected a Debug log for client disconnect and no Error logs from AuxiliaryBackchannelService");
 
         await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public void GetSocketKeyAppHostPath_ResolvesSymlinksSoSocketKeyMatchesCli()
+    {
+        // The CLI resolves symlinks before searching for an AppHost's backchannel socket
+        // (AppHostHelper.FindMatchingNonOrphanedSockets), so the AppHost must key its socket off the same
+        // symlink-resolved physical path. File-based AppHosts otherwise report AppHost:FilePath as
+        // Path.GetFullPath(EntryPointFilePath), which leaves intermediate symlinks unresolved and made
+        // 'aspire describe/stop --apphost' miss the AppHost. See https://github.com/microsoft/aspire/issues/17618.
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
+
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-auxbch-symlink-");
+        try
+        {
+            var realDirectory = Directory.CreateDirectory(Path.Combine(tempRoot.FullName, "real"));
+            var symlinkDirectory = Path.Combine(tempRoot.FullName, "link");
+            Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
+
+            var appHostFileViaSymlink = Path.Combine(symlinkDirectory, "apphost.cs");
+            File.WriteAllText(appHostFileViaSymlink, "// apphost");
+
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["AppHost:FilePath"] = appHostFileViaSymlink,
+                })
+                .Build();
+
+            var socketKeyPath = AuxiliaryBackchannelService.GetSocketKeyAppHostPath(configuration);
+
+            Assert.Equal(PathNormalizer.ResolveSymlinks(appHostFileViaSymlink), socketKeyPath);
+            // Guards against the symlink not actually being unwrapped (otherwise the assertion above is vacuous).
+            Assert.NotEqual(appHostFileViaSymlink, socketKeyPath);
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
     }
 }

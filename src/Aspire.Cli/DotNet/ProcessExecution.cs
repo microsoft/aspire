@@ -9,11 +9,9 @@ namespace Aspire.Cli.DotNet;
 
 /// <summary>
 /// The single <see cref="IProcessExecution"/> implementation. Wraps an <see cref="IsolatedProcess"/>
-/// for both the isolated-console run path (Windows AppHost graceful shutdown) and ordinary
-/// non-isolated subprocesses — the only difference is the
-/// <see cref="IsolatedProcessStartInfo.IsolateConsole"/> flag the factory sets. The child is
-/// spawned lazily on <see cref="Start"/> so callers that build an execution but never start it
-/// (e.g. the extension-host launch path, which reads <see cref="Arguments"/> /
+/// for isolated-console, kill-on-parent-exit, and ordinary redirected subprocesses. The child is
+/// spawned lazily on <see cref="Start"/> so callers that build an execution but never start it (e.g.
+/// the extension-host launch path, which reads <see cref="Arguments"/> /
 /// <see cref="EnvironmentVariables"/> and returns before starting) don't orphan a process.
 /// </summary>
 internal sealed class ProcessExecution : IProcessExecution

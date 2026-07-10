@@ -376,7 +376,7 @@ interface PsAppHost {
 }
 
 async function getRunningAppHostAccordingToCli(appHostPath: string): Promise<PsAppHost | undefined> {
-    const result = await runProcess(getCliPath(), ['ps', '--format', 'json'], {
+    const result = await runProcess(getCliPath(), ['ps', '--format', 'json', '--nologo'], {
         cwd: getWorkspaceRoot(),
         timeoutMs: 30000,
     });
@@ -624,7 +624,7 @@ if (args.includes('--include-disabled-commands')) {
   process.exit(123);
 }
 
-if (args.length === 3 && args[0] === 'config' && args[1] === 'info' && args[2] === '--json') {
+if (args[0] === 'config' && args[1] === 'info' && args.includes('--json')) {
 ${options.configInfoJson === undefined
         ? `  console.error(${JSON.stringify(options.configInfoStderr ?? 'config info is not available')});
   process.exit(${options.configInfoExitCode ?? 1});`

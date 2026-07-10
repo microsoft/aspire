@@ -365,96 +365,36 @@ jobs:
           echo "::error::Deployment test ${{ matrix.shortname }} failed. Check the test results artifact for details."
           exit 1
 
-  # Create GitHub issue on nightly failure
+  # File/append a single deduplicated issue on a scheduled-run failure. One issue
+  # is kept open per workflow and a row is appended per failed run; a human closes
+  # it once fixed. See docs/ci/pipeline-failure-issues.md.
   create_issue_on_failure:
     name: Create Issue on Failure
     needs: [deploy-test]
     runs-on: ubuntu-latest
-    if: ${{ failure() && github.event_name == 'schedule' }}
+    if: ${{ failure() && github.event_name == 'schedule' && github.repository_owner == 'microsoft' }}
     permissions:
+      contents: read   # checkout to require the local .js modules
       issues: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          persist-credentials: false
 
-      - name: Create GitHub Issue
+      - name: File or update failure issue
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          WORKFLOW_FILE: deployment-tests.yml
+          DISPLAY_NAME: Deployment E2E Tests
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const date = new Date().toISOString().split('T')[0];
-
-            const issueTitle = `[Deployment E2E] Nightly test failure - ${date}`;
-            const issueBody = `## Deployment E2E Test Failure
-
-            The nightly deployment E2E tests failed on ${date}.
-
-            **Workflow Run:** ${runUrl}
-
-            ### Investigation Checklist
-
-            - [ ] Review workflow logs for error details
-            - [ ] Check if failures are timeout-related or deployment failures
-            - [ ] Download test artifacts (logs, asciinema recordings)
-            - [ ] Identify common failure patterns across tests
-            - [ ] Check Azure authentication and resource provisioning status
-
-            ### Resources
-
-            - **Workflow Logs:** See link above for detailed test output
-            - **Test Artifacts:** Download recordings and logs from the workflow run (testresults/recordings, testresults/logs)
-            - **Deployment E2E Tests:** \`tests/Aspire.Deployment.EndToEnd.Tests/\`
-            - **Test Helpers:** \`tests/Shared/Hex1bAutomatorTestHelpers.cs\`
-
-            ### Next Steps
-
-            1. Check the workflow run for detailed error logs
-            2. Download test artifacts for asciinema recordings and error logs
-            3. Investigate which specific tests are failing
-            4. Determine if this is a timeout, deployment, or test automation issue
-            5. Implement fix and verify with local test run
-
-            ### Labels
-
-            This issue was automatically created by the deployment E2E test workflow.
-
-            /cc @microsoft/aspire-team
-            `;
-
-            // Check if a similar issue already exists (created today)
-            const existingIssues = await github.rest.issues.listForRepo({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'open',
-              labels: 'area-testing,deployment-e2e',
-              per_page: 10
+            await require('./.github/workflows/report-pipeline-failure.js').report({
+              github, context, core,
+              labels: ['automation-broken', 'area-testing', 'deployment-e2e'],
+              cc: '@microsoft/aspire-team',
             });
-
-            const todayIssue = existingIssues.data.find(issue =>
-              issue.title.includes(date) && issue.title.includes('[Deployment E2E]')
-            );
-
-            if (todayIssue) {
-              console.log(`Issue already exists for today: ${todayIssue.html_url}`);
-              // Add a comment instead
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: todayIssue.number,
-                body: `Another failure occurred. See: ${runUrl}`
-              });
-            } else {
-              // Create new issue
-              const issue = await github.rest.issues.create({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                title: issueTitle,
-                body: issueBody,
-                labels: ['area-testing', 'area-deployment', 'deployment-e2e'],
-                assignees: ['mitchdenny']
-              });
-              console.log(`Created issue: ${issue.data.html_url}`);
-            }
 
   # Post completion comment back to PR when triggered via /deployment-test command
   post_pr_comment:

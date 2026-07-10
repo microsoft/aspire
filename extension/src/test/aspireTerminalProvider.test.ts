@@ -147,6 +147,38 @@ suite('AspireTerminalProvider tests', () => {
                 platformStub.restore();
             }
         });
+
+        test('recreates terminal after all Aspire terminals are closed for an environment change', () => {
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const firstTerminal = {
+                name: 'Aspire terminal',
+                dispose: sinon.stub(),
+            } as unknown as vscode.Terminal;
+            const secondTerminal = {
+                name: 'Aspire terminal',
+                dispose: sinon.stub(),
+            } as unknown as vscode.Terminal;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal');
+            createTerminalStub.onFirstCall().returns(firstTerminal);
+            createTerminalStub.onSecondCall().returns(secondTerminal);
+            const terminalsStub = sinon.stub(vscode.window, 'terminals').value([firstTerminal]);
+
+            try {
+                assert.strictEqual(terminalProvider.getAspireTerminal().terminal, firstTerminal);
+
+                terminalProvider.closeAllOpenAspireTerminals();
+
+                assert.strictEqual((firstTerminal.dispose as sinon.SinonStub).called, true);
+                assert.strictEqual(terminalProvider.getAspireTerminal().terminal, secondTerminal);
+                assert.strictEqual(createTerminalStub.callCount, 2);
+            }
+            finally {
+                terminalProvider.dispose();
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
+                terminalsStub.restore();
+            }
+        });
     });
 
     suite('sendAspireCommandToAspireTerminal', () => {
@@ -687,6 +719,62 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, undefined);
         });
 
+        test('forwards an existing absolute aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution can pick it up', () => {
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns(__filename);
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, __filename);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('forwards AspireCliPath even when extension backchannel variables are suppressed', () => {
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns(__filename);
+            try {
+                const env = terminalProvider.createEnvironment(undefined, undefined, true);
+                assert.strictEqual(env.AspireCliPath, __filename);
+                assert.strictEqual(env.ASPIRE_EXTENSION_ENDPOINT, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('omits AspireCliPath when the configured path is empty', () => {
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('');
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('omits AspireCliPath when the configured path is a bare command name', () => {
+            // A relative or bare-name value would fail ResolveAspireCliBundle's
+            // File.Exists guard, so leaving the env var unset is the correct
+            // behavior. The task then falls back to its PATH/ASPIRE_HOME logic.
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('aspire');
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('omits AspireCliPath when the configured absolute path does not exist', () => {
+            // A stale absolute value would fail ResolveAspireCliBundle's
+            // File.Exists guard and suppress PATH/ASPIRE_HOME fallback.
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('/work/aspire/missing/aspire');
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
         test('preserves locale override for hidden CLI commands without extension backchannel variables', () => {
             const inheritedVariables: Record<string, string> = {
                 ASPIRE_BACKCHANNEL_PATH: 'inherited-backchannel-path',
@@ -758,7 +846,6 @@ suite('AspireTerminalProvider tests', () => {
                     restoreEnvironmentVariable(key, value);
                 }
             }
-
             for (const key of Object.keys(inheritedVariables)) {
                 assert.strictEqual(env[key], undefined, key);
             }

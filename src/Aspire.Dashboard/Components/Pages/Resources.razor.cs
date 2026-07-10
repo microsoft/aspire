@@ -1005,6 +1005,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     public async ValueTask DisposeAsync()
     {
         _aiContext?.Dispose();
+        CompleteContextMenuClosed();
 
         _resourcesInteropReference?.Dispose();
         _cts.Cancel();
@@ -1015,13 +1016,39 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
     }
 
-    private async Task ContextMenuClosed(Microsoft.AspNetCore.Components.Web.MouseEventArgs args)
+    private async Task ContextMenuClosedAsync(Microsoft.AspNetCore.Components.Web.MouseEventArgs args)
     {
-        if (_contextMenu is { } menu)
+        await CloseContextMenuAsync(closeMenu: true);
+    }
+
+    private async Task ContextMenuOpenChangedAsync(bool open)
+    {
+        if (open)
         {
-            await menu.CloseAsync();
+            _contextMenuOpen = true;
+            return;
         }
 
+        await CloseContextMenuAsync(closeMenu: false);
+    }
+
+    private async Task CloseContextMenuAsync(bool closeMenu)
+    {
+        _contextMenuOpen = false;
+
+        if (_contextMenu is { } menu)
+        {
+            if (closeMenu)
+            {
+                await menu.CloseAsync();
+            }
+        }
+
+        CompleteContextMenuClosed();
+    }
+
+    private void CompleteContextMenuClosed()
+    {
         _contextMenuClosedTcs?.TrySetResult();
         _contextMenuClosedTcs = null;
     }

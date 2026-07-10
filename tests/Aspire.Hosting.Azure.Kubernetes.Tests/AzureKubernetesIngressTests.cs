@@ -8,13 +8,13 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureKubernetesIngressTests
+public class AzureKubernetesIngressTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task AksAddIngress_WithPath_GeneratesIngressInHelmOutput()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var ingress = aks.AddIngress("public")
@@ -30,7 +30,7 @@ public class AzureKubernetesIngressTests
         app.Run();
 
         // With AKS, the Helm output goes to the inner K8S env subdirectory
-        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var ingressPath = Path.Combine(workspace.Path, "templates", "public", "public.yaml");
         Assert.True(File.Exists(ingressPath), $"Expected ingress YAML at {ingressPath}");
 
         var content = await File.ReadAllTextAsync(ingressPath);
@@ -134,8 +134,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public void AksAddIngress_WithPath_NonExternalEndpoint_ThrowsOnPublish()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var ingress = aks.AddIngress("public").WithIngressClass("nginx");
@@ -156,8 +156,8 @@ public class AzureKubernetesIngressTests
     [Fact]
     public void AksAddGateway_WithRoute_NonExternalEndpoint_ThrowsOnPublish()
     {
-        using var tempDir = new TestTempDirectory();
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var gateway = aks.AddGateway("public").WithGatewayClass("nginx");
