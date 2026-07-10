@@ -194,20 +194,34 @@ test(`${features("RES-DETAILS-001", "RES-SECRETS-001")} inspects resource detail
   await expect(dialog.getByRole("button", { name: "Hide value" })).toHaveCount(1);
 });
 
-test(`${features("RES-COMMANDS-001", "RES-CONFIRM-001")} confirms commands and updates live resource state`, async ({ page }) => {
+test(`${features("RES-COMMANDS-001", "RES-ACTION-MENU-001", "RES-CONFIRM-001")} confirms commands and updates live resource state`, async ({ page }) => {
   await page.getByRole("row", { name: /frontend Project/ }).click();
   const details = page.getByRole("dialog", { name: "frontend" });
-  await expect(details.getByRole("button", { name: "Start", exact: true })).toBeDisabled();
-  await expect(details.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
+  await expect(details.getByRole("button", { name: "Restart", exact: true })).toBeEnabled();
+  const commands = details.getByRole("button", { name: "Resource commands" });
+  await commands.click();
+  let menu = page.getByRole("menu", { name: "Resource commands" });
+  await expect(menu.getByRole("menuitem", { name: /Start/ })).toBeDisabled();
+  await expect(menu.getByRole("menuitem", { name: /Stop/ })).toBeEnabled();
+  await expect(menu.getByRole("menuitem", { name: /Scale/ })).toBeEnabled();
+  const [drawerBounds, menuBounds] = await Promise.all([details.boundingBox(), menu.boundingBox()]);
+  expect(drawerBounds).not.toBeNull();
+  expect(menuBounds).not.toBeNull();
+  expect(menuBounds!.x).toBeGreaterThanOrEqual(drawerBounds!.x);
+  expect(menuBounds!.x + menuBounds!.width).toBeLessThanOrEqual(drawerBounds!.x + drawerBounds!.width);
 
-  await details.getByRole("button", { name: "Stop", exact: true }).click();
+  await menu.getByRole("menuitem", { name: /Stop/ }).click();
   const confirmation = page.getByRole("dialog", { name: "Stop" });
   await expect(confirmation).toContainText("Are you sure you want to stop this resource?");
   await confirmation.getByRole("button", { name: "Stop", exact: true }).click();
   await expect(page.getByRole("status")).toHaveText("Stop succeeded");
   await expect(details).toContainText("Exited");
   await expect(details.getByRole("button", { name: "Start", exact: true })).toBeEnabled();
-  await expect(details.getByRole("button", { name: "Stop", exact: true })).toBeDisabled();
+  await commands.click();
+  menu = page.getByRole("menu", { name: "Resource commands" });
+  await expect(menu.getByRole("menuitem", { name: /Stop/ })).toBeDisabled();
+  await expect(menu.getByRole("menuitem", { name: /Restart/ })).toBeDisabled();
+  await page.keyboard.press("Escape");
 
   await details.getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.getByRole("status")).toHaveText("Start succeeded");
@@ -216,7 +230,8 @@ test(`${features("RES-COMMANDS-001", "RES-CONFIRM-001")} confirms commands and u
 
 test(`${features("RES-INTERACTION-001")} validates and submits an input command`, async ({ page }) => {
   await page.getByRole("row", { name: /frontend Project/ }).click();
-  await page.getByRole("dialog", { name: "frontend" }).getByRole("button", { name: "Scale…" }).click();
+  await page.getByRole("dialog", { name: "frontend" }).getByRole("button", { name: "Resource commands" }).click();
+  await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: /Scale/ }).click();
   const interaction = page.getByRole("dialog", { name: "Scale resource" });
   const replicas = interaction.getByRole("spinbutton", { name: "Replicas" });
   const tier = interaction.getByRole("combobox", { name: "Tier" });

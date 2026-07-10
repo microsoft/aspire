@@ -9,9 +9,11 @@ import { formatTime } from "../lib/format";
 import {
   Badge,
   Button,
+  CommandMenu,
   Drawer,
   ExternalIcon,
   LinkIcon,
+  MoreIcon,
   PlayIcon,
   RestartIcon,
   ResourceTypeIcon,
@@ -91,20 +93,44 @@ export function DetailsDrawer({
     .filter((url) => !url.isInactive)
     .sort((left, right) => left.sortOrder - right.sortOrder);
   const visibleCommands = resource.commands.filter((command) => command.state !== "hidden");
+  const highlightedCommands = visibleCommands.filter((command) => command.isHighlighted);
+  const overflowCommands = visibleCommands.filter((command) => !command.isHighlighted);
   const footer = visibleCommands.length > 0
-    ? visibleCommands.map((command) => (
-        <Button
-          key={command.name}
-          size="small"
-          variant={command.name.includes("stop") ? "danger" : command.isHighlighted ? "primary" : "secondary"}
-          disabled={command.state === "disabled"}
-          title={command.displayDescription ?? command.displayName}
-          onClick={() => handleCommand(command)}
-        >
-          {commandIcon(command.name)}
-          {command.displayName}
-        </Button>
-      ))
+    ? (
+        <>
+          {highlightedCommands.map((command) => (
+            <Button
+              key={command.name}
+              size="small"
+              variant={command.name.includes("stop") ? "danger" : "primary"}
+              disabled={command.state === "disabled"}
+              title={command.displayDescription ?? command.displayName}
+              onClick={() => handleCommand(command)}
+            >
+              {commandIcon(command.name)}
+              {command.displayName}
+            </Button>
+          ))}
+          {overflowCommands.length > 0 ? (
+            <CommandMenu
+              ariaLabel="Resource commands"
+              triggerContent={null}
+              triggerIcon={<MoreIcon size={16} />}
+              triggerSize="small"
+              placement="above-start"
+              entries={overflowCommands.map((command) => ({
+                id: command.name,
+                label: command.displayName,
+                description: command.displayDescription ?? undefined,
+                icon: commandIcon(command.name) ?? undefined,
+                disabled: command.state === "disabled",
+                tone: command.name.includes("stop") ? "danger" : "default",
+                onSelect: () => handleCommand(command),
+              }))}
+            />
+          ) : null}
+        </>
+      )
     : undefined;
 
   return (

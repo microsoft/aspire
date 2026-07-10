@@ -33,7 +33,7 @@ export interface CommandMenuProps {
   triggerIcon?: ReactElement;
   triggerVariant?: ButtonVariant;
   triggerSize?: "small" | "medium";
-  placement?: "below-start" | "above-end";
+  placement?: "below-start" | "below-end" | "above-start" | "above-end";
   entries: readonly CommandMenuEntry[];
 }
 
@@ -123,6 +123,7 @@ export function CommandMenu({
       nextIndex = indexes[indexes.length - 1];
     } else if (event.key === "Escape") {
       event.preventDefault();
+      event.stopPropagation();
       close(true);
       return;
     } else if (event.key === "Tab") {

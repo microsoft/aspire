@@ -14,6 +14,7 @@ export const dashboardCoreFeatures = {
   "RES-DETAILS-001": "Resource details include overview, endpoints, properties, environment, health, and relationships.",
   "RES-SECRETS-001": "Every environment value is masked until the user explicitly reveals it.",
   "RES-COMMANDS-001": "Resource commands expose enabled state and update the live resource state.",
+  "RES-ACTION-MENU-001": "Highlighted resource commands stay directly available while remaining commands use the shared overflow menu.",
   "RES-CONFIRM-001": "Destructive resource commands require confirmation and report their result.",
   "RES-INTERACTION-001": "Input commands support text, choice, boolean, live validation, and submission.",
   "PARAM-LIST-001": "Parameters distinguish plain, secret, and unresolved values.",
