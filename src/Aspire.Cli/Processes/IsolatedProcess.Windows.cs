@@ -7,7 +7,6 @@ using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
-using Microsoft.Win32.SafeHandles;
 
 namespace Aspire.Cli.Processes;
 
@@ -98,7 +97,7 @@ internal sealed partial class IsolatedProcess
             // its handle on exit — without this, the pump would never see EOF and disposal
             // would always have to wait for the drain timeout.
 
-            // Take ownership of pi.hProcess in a SafeProcessHandle FIRST so that any failure
+            // Take ownership of pi.hProcess in a WindowsProcessHandleTracker FIRST so that any failure
             // below (including OOM in the inner try) cannot leak the raw handle — the
             // SafeProcessHandle finalizer will close it. We keep this handle for the lifetime
             // of the IsolatedProcess so that ExitCode / HasExited can query the child via
@@ -108,7 +107,7 @@ internal sealed partial class IsolatedProcess
             // CreateProcess handle also pins the OS process object so a recycled PID cannot
             // redirect GetProcessById to a different process during the brief window between
             // CreateProcess returning and GetProcessById running.
-            SafeProcessHandle? processHandle = new SafeProcessHandle(pi.hProcess, ownsHandle: true);
+            WindowsProcessHandleTracker? processHandle = new(new(pi.hProcess, ownsHandle: true), nameof(IsolatedProcess));
             try
             {
                 stdoutPipe.DisposeLocalCopyOfClientHandle();
@@ -120,7 +119,7 @@ internal sealed partial class IsolatedProcess
 
                 var process = Process.GetProcessById(pi.dwProcessId);
 
-                // pi.hThread is no longer needed; the SafeProcessHandle owns pi.hProcess.
+                // pi.hThread is no longer needed; the WindowsProcessHandleTracker owns pi.hProcess.
                 WindowsProcessInterop.CloseHandle(pi.hThread);
 
                 // UTF-8 with non-throwing fallback — a stray OEM-encoded byte from a tsx
@@ -137,7 +136,7 @@ internal sealed partial class IsolatedProcess
                 var capturedStderrReader = stderrReader;
                 var capturedStdoutPipe = stdoutPipe;
                 var capturedStderrPipe = stderrPipe;
-                var capturedProcessHandle = processHandle;
+                var capturedProcessHandle = processHandle ?? throw new InvalidOperationException("Windows process handle was not initialized.");
 
                 ValueTask ExtraDispose()
                 {
@@ -145,66 +144,10 @@ internal sealed partial class IsolatedProcess
                     try { capturedStderrReader.Dispose(); } catch { }
                     try { capturedStdoutPipe.Dispose(); } catch { }
                     try { capturedStderrPipe.Dispose(); } catch { }
-                    // Closes the kept CreateProcess handle. Disposed after the wrapped
-                    // Process so any final ExitCode read from inside Process.Dispose
-                    // semantics can still consult our override; not that we expect it to,
-                    // but the ordering keeps the override path live for the whole disposal
-                    // window.
+                    // Closes the kept CreateProcess handle. Disposed after the wrapped Process so the
+                    // override path stays live for the whole disposal window.
                     try { capturedProcessHandle.Dispose(); } catch { }
                     return ValueTask.CompletedTask;
-                }
-
-                // ExitCode/HasExited overrides for IsolatedProcess.cs. The handle reference
-                // is the captured local — by the time these closures run, ExtraDispose may
-                // also be queued, but the closures and ExtraDispose share a single
-                // SafeProcessHandle whose Dispose state both can observe. After the wrapper
-                // is disposed, calls to ExitCode/HasExited will throw via the
-                // SafeHandle-closed path, which matches the contract that the wrapper is
-                // unusable after disposal.
-                int GetExitCode()
-                {
-                    if (capturedProcessHandle.IsClosed || capturedProcessHandle.IsInvalid)
-                    {
-                        throw new InvalidOperationException("Cannot read ExitCode after the IsolatedProcess has been disposed.");
-                    }
-
-                    // Disambiguate STILL_ACTIVE (259) from a real 259 exit code via a
-                    // zero-timeout wait. The handle was opened by CreateProcess with full
-                    // access including SYNCHRONIZE, so WaitForSingleObject succeeds.
-                    var waitResult = WindowsProcessInterop.WaitForSingleObject(capturedProcessHandle, 0);
-                    if (waitResult == WindowsProcessInterop.WaitTimeout)
-                    {
-                        throw new InvalidOperationException("Process has not exited; cannot read ExitCode.");
-                    }
-                    if (waitResult == WindowsProcessInterop.WaitFailed)
-                    {
-                        throw new Win32Exception(Marshal.GetLastWin32Error(), "WaitForSingleObject failed while reading IsolatedProcess.ExitCode");
-                    }
-
-                    if (!WindowsProcessInterop.GetExitCodeProcess(capturedProcessHandle, out var exitCode))
-                    {
-                        throw new Win32Exception(Marshal.GetLastWin32Error(), "GetExitCodeProcess failed while reading IsolatedProcess.ExitCode");
-                    }
-                    return unchecked((int)exitCode);
-                }
-
-                bool GetHasExited()
-                {
-                    if (capturedProcessHandle.IsClosed || capturedProcessHandle.IsInvalid)
-                    {
-                        // After dispose, mirror Process.HasExited's behavior of throwing —
-                        // callers shouldn't be querying a disposed wrapper.
-                        throw new InvalidOperationException("Cannot read HasExited after the IsolatedProcess has been disposed.");
-                    }
-
-                    var waitResult = WindowsProcessInterop.WaitForSingleObject(capturedProcessHandle, 0);
-                    return waitResult switch
-                    {
-                        WindowsProcessInterop.WaitObject0 => true,
-                        WindowsProcessInterop.WaitTimeout => false,
-                        WindowsProcessInterop.WaitFailed => throw new Win32Exception(Marshal.GetLastWin32Error(), "WaitForSingleObject failed while reading IsolatedProcess.HasExited"),
-                        _ => throw new InvalidOperationException($"Unexpected WaitForSingleObject result: 0x{waitResult:X8}"),
-                    };
                 }
 
                 // From here, pipe/reader/handle ownership has transferred to ExtraDispose;
@@ -221,9 +164,9 @@ internal sealed partial class IsolatedProcess
                     standardOutputHandler,
                     standardErrorHandler,
                     ExtraDispose,
-                    exitCodeProvider: GetExitCode,
-                    hasExitedProvider: GetHasExited,
-                    waitForExitProvider: ct => WindowsProcessInterop.WaitForExitAsync(capturedProcessHandle, ct));
+                    exitCodeProvider: () => capturedProcessHandle.ExitCode,
+                    hasExitedProvider: () => capturedProcessHandle.HasExited,
+                    waitForExitProvider: capturedProcessHandle.WaitForExitAsync);
             }
             catch
             {

@@ -81,27 +81,15 @@ internal sealed class IsolatedProcessStartInfo
     /// so the spawn uses this explicit block rather than re-inheriting the parent.
     /// </summary>
     internal IDictionary<string, string?> UseEmptyEnvironment()
-        => _environment = new Dictionary<string, string?>(EnvironmentComparer);
+        => _environment = new Dictionary<string, string?>(ProcessEnvironment.Comparer);
 
     private static Dictionary<string, string?> LoadParentEnvironment()
     {
         // Snapshot the parent env on first access. ProcessStartInfo.Environment has the
         // same semantics — touching the property materializes the inherited block so the
         // caller can mutate it freely without affecting the parent process.
-        var parent = System.Environment.GetEnvironmentVariables();
-        var dict = new Dictionary<string, string?>(parent.Count, EnvironmentComparer);
-        foreach (System.Collections.DictionaryEntry entry in parent)
-        {
-            dict[(string)entry.Key] = entry.Value as string;
-        }
-        return dict;
+        return ProcessEnvironment.LoadParentEnvironment();
     }
-
-    // OrdinalIgnoreCase mirrors ProcessStartInfo's behavior on Windows (env vars are
-    // case-insensitive). Using it on all platforms is slightly less strict than the
-    // Unix kernel (which treats env names as bytes) but it matches what ProcessStartInfo
-    // does and prevents the trap of accidentally having both "Path" and "PATH" entries.
-    private static StringComparer EnvironmentComparer => StringComparer.OrdinalIgnoreCase;
 }
 
 /// <summary>
@@ -312,19 +300,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         // IsolatedProcessStartInfo.Environment. Otherwise leave ProcessStartInfo to inherit
         // the parent's env verbatim — saves a snapshot-and-copy round trip for the common
         // case where nothing was customized.
-        if (startInfo.HasCustomEnvironment)
-        {
-            psi.Environment.Clear();
-            foreach (var (key, value) in startInfo.Environment)
-            {
-                // Match ProcessStartInfo.Environment semantics: a null value means "do not
-                // set this variable in the child" — we get there by simply not adding it.
-                if (value is not null)
-                {
-                    psi.Environment[key] = value;
-                }
-            }
-        }
+        ProcessEnvironment.ApplyTo(psi, startInfo.GetEnvironmentForSpawn());
 
         var process = Process.Start(psi)
             ?? throw new InvalidOperationException($"Failed to start child process: {startInfo.FileName}");

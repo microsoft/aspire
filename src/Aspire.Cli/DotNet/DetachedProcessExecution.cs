@@ -48,8 +48,8 @@ internal sealed partial class DetachedProcessExecution(
         cancellationToken.ThrowIfCancellationRequested();
 
         var effectiveEnvironment = environment
-            .Where(static kvp => kvp.Value is not null)
-            .ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value!, StringComparer.OrdinalIgnoreCase);
+            .Where(kvp => kvp.Value is not null && !ShouldRemoveEnvironmentVariable(kvp.Key))
+            .ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value, ProcessEnvironment.Comparer);
 
         string? dcpPath = dcpPathOverride;
         if (!OperatingSystem.IsWindows())
@@ -70,7 +70,7 @@ internal sealed partial class DetachedProcessExecution(
                 }
 
                 dcpPath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
-                layoutLease?.AddEnvironment(effectiveEnvironment);
+                layoutLease?.AddEnvironment(effectiveEnvironment.ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value!, ProcessEnvironment.Comparer));
             }
 
             if (!File.Exists(dcpPath))
@@ -85,7 +85,6 @@ internal sealed partial class DetachedProcessExecution(
             startInfo.FileName,
             startInfo.ArgumentList,
             startInfo.WorkingDirectory,
-            ShouldRemoveEnvironmentVariable,
             effectiveEnvironment,
             dcpPath,
             cancellationToken,
@@ -127,15 +126,14 @@ internal sealed partial class DetachedProcessExecution(
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
-        Func<string, bool>? shouldRemoveEnvironmentVariable = null,
-        IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null,
+        IReadOnlyDictionary<string, string?> environment,
         string? dcpPath = null,
         CancellationToken cancellationToken = default,
         ILogger? logger = null)
     {
         if (OperatingSystem.IsWindows())
         {
-            return Task.FromResult(new DetachedChildProcess(StartWindows(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables)));
+            return Task.FromResult(StartWindows(fileName, arguments, workingDirectory, environment));
         }
 
         if (dcpPath is null)
@@ -143,30 +141,37 @@ internal sealed partial class DetachedProcessExecution(
             throw new InvalidOperationException("Unix detached process launch requires a DCP executable path.");
         }
 
-        return StartUnix(dcpPath, fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables, cancellationToken, logger);
+        return StartUnix(dcpPath, fileName, arguments, workingDirectory, environment, cancellationToken, logger);
     }
 
     private sealed class DetachedChildProcess : IDisposable
     {
         private readonly Process _process;
         private readonly Process? _exitMonitorProcess;
+        private readonly IProcessHandleTracker? _processHandleTracker;
 
-        public DetachedChildProcess(Process process, Process? exitMonitorProcess = null)
-            : this(process, exitMonitorProcess, GetStartTime(process))
+        public DetachedChildProcess(Process process, Process? exitMonitorProcess = null, IProcessHandleTracker? processHandleTracker = null)
+            : this(process, exitMonitorProcess, processHandleTracker, GetStartTime(process))
         {
         }
 
         internal DetachedChildProcess(Process process, Process? exitMonitorProcess, DateTimeOffset? startTime)
+            : this(process, exitMonitorProcess, processHandleTracker: null, startTime)
+        {
+        }
+
+        private DetachedChildProcess(Process process, Process? exitMonitorProcess, IProcessHandleTracker? processHandleTracker, DateTimeOffset? startTime)
         {
             _process = process;
             _exitMonitorProcess = exitMonitorProcess;
+            _processHandleTracker = processHandleTracker;
             Id = process.Id;
             StartTime = startTime;
         }
 
         public int Id { get; }
 
-        public bool HasExited => _exitMonitorProcess?.HasExited ?? _process.HasExited;
+        public bool HasExited => _processHandleTracker?.HasExited ?? _exitMonitorProcess?.HasExited ?? _process.HasExited;
 
         // DCP fork-process returns a PID before the detached Unix child reaches AppHostLauncher.
         // The child can exit in that gap, so cache a nullable start time instead of re-querying a
@@ -177,13 +182,25 @@ internal sealed partial class DetachedProcessExecution(
         {
             return _exitMonitorProcess is not null
                 ? _exitMonitorProcess.WaitForExitAsync(cancellationToken)
-                : _process.WaitForExitAsync(cancellationToken);
+                : _processHandleTracker?.WaitForExitAsync(cancellationToken) ?? _process.WaitForExitAsync(cancellationToken);
         }
 
         public int? ExitCode
         {
             get
             {
+                if (_processHandleTracker is not null)
+                {
+                    try
+                    {
+                        return _processHandleTracker.ExitCode;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        return null;
+                    }
+                }
+
                 if (_exitMonitorProcess is { HasExited: true } exitMonitorProcess)
                 {
                     return exitMonitorProcess.ExitCode;
@@ -213,6 +230,7 @@ internal sealed partial class DetachedProcessExecution(
         {
             _process.Dispose();
             _exitMonitorProcess?.Dispose();
+            _processHandleTracker?.Dispose();
         }
 
         private static DateTimeOffset? GetStartTime(Process process)

@@ -18,8 +18,7 @@ internal sealed partial class DetachedProcessExecution
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
-        Func<string, bool>? shouldRemoveEnvironmentVariable,
-        IReadOnlyDictionary<string, string>? additionalEnvironmentVariables,
+        IReadOnlyDictionary<string, string?> environment,
         CancellationToken cancellationToken,
         ILogger? logger)
     {
@@ -46,33 +45,8 @@ internal sealed partial class DetachedProcessExecution
             startInfo.ArgumentList.Add(arg);
         }
 
-        // Remove specified environment variables from the child process.
-        // Accessing startInfo.Environment auto-populates from the current process.
-        if (shouldRemoveEnvironmentVariable is not null)
-        {
-            var keysToRemove = new List<string>();
-            foreach (var key in startInfo.Environment.Keys)
-            {
-                if (shouldRemoveEnvironmentVariable(key))
-                {
-                    keysToRemove.Add(key);
-                }
-            }
-
-            foreach (var key in keysToRemove)
-            {
-                startInfo.Environment.Remove(key);
-            }
-        }
-
-        // Add additional environment variables to the child process without mutating the parent.
-        if (additionalEnvironmentVariables is not null)
-        {
-            foreach (var (key, value) in additionalEnvironmentVariables)
-            {
-                startInfo.Environment[key] = value;
-            }
-        }
+        // DCP inherits this complete environment and then execs the detached child with it.
+        ProcessEnvironment.ApplyTo(startInfo, environment);
 
         cancellationToken.ThrowIfCancellationRequested();
 

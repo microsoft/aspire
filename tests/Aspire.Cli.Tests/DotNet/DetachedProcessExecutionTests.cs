@@ -284,8 +284,14 @@ wait $child_pid
             startInfo.ArgumentList.Add(argument);
         }
 
-        var environmentSnapshot = environment?.ToDictionary(static kvp => kvp.Key, static kvp => (string?)kvp.Value)
-            ?? new Dictionary<string, string?>();
+        var environmentSnapshot = ProcessEnvironment.LoadParentEnvironment();
+        if (environment is not null)
+        {
+            foreach (var (key, value) in environment)
+            {
+                environmentSnapshot[key] = value;
+            }
+        }
 
         return new DetachedProcessExecution(
             startInfo,
