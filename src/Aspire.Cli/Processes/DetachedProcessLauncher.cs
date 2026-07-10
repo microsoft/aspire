@@ -155,7 +155,8 @@ internal sealed class DefaultDetachedProcessLauncher(
             shouldRemoveEnvironmentVariable,
             effectiveEnvironment,
             dcpPath,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken,
+            logger).ConfigureAwait(false);
     }
 }
 
@@ -206,6 +207,7 @@ internal static partial class DetachedProcessLauncher
     /// <param name="additionalEnvironmentVariables">Optional dictionary of environment variables to add to the child process without mutating the parent.</param>
     /// <param name="dcpPath">The DCP executable path used for Unix detached launches.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="logger">Optional logger used for Unix DCP fork-process diagnostics.</param>
     /// <returns>A <see cref="DetachedProcess"/> object representing the launched child.</returns>
     public static Task<DetachedProcess> StartAsync(
         string fileName,
@@ -214,7 +216,8 @@ internal static partial class DetachedProcessLauncher
         Func<string, bool>? shouldRemoveEnvironmentVariable = null,
         IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null,
         string? dcpPath = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        ILogger? logger = null)
     {
         if (OperatingSystem.IsWindows())
         {
@@ -226,6 +229,6 @@ internal static partial class DetachedProcessLauncher
             throw new InvalidOperationException("Unix detached process launch requires a DCP executable path.");
         }
 
-        return StartUnix(dcpPath, fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables, cancellationToken);
+        return StartUnix(dcpPath, fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables, cancellationToken, logger);
     }
 }

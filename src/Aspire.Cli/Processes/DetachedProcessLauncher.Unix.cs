@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Processes;
 
@@ -18,7 +19,8 @@ internal static partial class DetachedProcessLauncher
         string workingDirectory,
         Func<string, bool>? shouldRemoveEnvironmentVariable,
         IReadOnlyDictionary<string, string>? additionalEnvironmentVariables,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ILogger? logger)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -108,6 +110,7 @@ internal static partial class DetachedProcessLauncher
                 throw new InvalidOperationException($"DCP fork-process did not return a valid child process ID. stdout: '{trimmedStdout}'");
             }
 
+            ObserveDcpForkProcessStderr(stderrTask, logger);
             return new DetachedProcess(Process.GetProcessById(childPid), dcpProcess);
         }
         catch
@@ -121,6 +124,36 @@ internal static partial class DetachedProcessLauncher
             dcpProcess.Dispose();
             throw;
         }
+    }
+
+    private static void ObserveDcpForkProcessStderr(Task<string> stderrTask, ILogger? logger)
+    {
+        _ = stderrTask.ContinueWith(
+            static (completedTask, state) =>
+            {
+                var logger = (ILogger?)state;
+                if (completedTask.IsFaulted)
+                {
+                    logger?.LogDebug(completedTask.Exception, "Failed to read DCP fork-process stderr.");
+                    _ = completedTask.Exception;
+                    return;
+                }
+
+                if (completedTask.IsCanceled)
+                {
+                    return;
+                }
+
+                var stderr = completedTask.Result.Trim();
+                if (stderr.Length > 0)
+                {
+                    logger?.LogDebug("DCP fork-process stderr: {DcpStderr}", stderr);
+                }
+            },
+            logger,
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     internal static DateTimeOffset GetCurrentProcessDcpMonitorStartTime()

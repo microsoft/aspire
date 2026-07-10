@@ -6,6 +6,8 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Aspire.Cli.Processes;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.Processes;
 
@@ -192,9 +194,65 @@ wait $child_pid
         }
     }
 
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    [SupportedOSPlatform("macos")]
+    public async Task StartAsync_OnUnix_LogsDcpForkProcessStderrAfterSuccessfulLaunch()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only test.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dcpPath = Path.Combine(workspace.WorkspaceRoot.FullName, "fake-dcp");
+        await File.WriteAllTextAsync(dcpPath, """
+#!/bin/sh
+if [ "$1" != "fork-process" ]; then
+  exit 42
+fi
+if [ "$2" != "--monitor" ]; then
+  exit 43
+fi
+if [ "$6" != "--" ]; then
+  exit 44
+fi
+sleep 0.1 >/dev/null 2>&1 </dev/null &
+child_pid=$!
+echo $child_pid
+printf 'diagnostic warning\n' >&2
+wait $child_pid
+""");
+        File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        var logger = new FakeLogger<DetachedProcessLauncherTests>();
+
+        using var detachedProcess = await DetachedProcessLauncher.StartAsync(
+            "/bin/sh",
+            ["-c", "exit 0"],
+            workspace.WorkspaceRoot.FullName,
+            dcpPath: dcpPath,
+            cancellationToken: CancellationToken.None,
+            logger: logger);
+
+        await detachedProcess.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+        await WaitForLogAsync(logger, "DCP fork-process stderr: diagnostic warning").WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Collection(logger.Collector.GetSnapshot(),
+            record =>
+            {
+                Assert.Equal(LogLevel.Debug, record.Level);
+                Assert.Equal("DCP fork-process stderr: diagnostic warning", record.Message);
+            });
+    }
+
     private static async Task WaitForFileAsync(string path)
     {
         while (!File.Exists(path))
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(50));
+        }
+    }
+
+    private static async Task WaitForLogAsync(FakeLogger logger, string message)
+    {
+        while (!logger.Collector.GetSnapshot().Any(record => string.Equals(record.Message, message, StringComparison.Ordinal)))
         {
             await Task.Delay(TimeSpan.FromMilliseconds(50));
         }
