@@ -266,6 +266,11 @@ internal sealed class StopCommand : BaseCommand
         // In non-interactive mode, only consider in-scope AppHosts (under current directory)
         // to avoid accidentally stopping unrelated AppHosts
         var inScopeConnections = allConnections.Where(c => c.Connection!.IsInScope).ToArray();
+        if (inScopeConnections.Length == 0 && treatNotRunningAsSuccess)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.AppHostNotRunning);
+            return new StopAppHostResult(CliExitCodes.Success, null, []);
+        }
 
         // Single in-scope AppHost: auto-select it
         if (inScopeConnections.Length == 1)
