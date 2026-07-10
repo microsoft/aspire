@@ -1,11 +1,8 @@
 # Executes quarantined tests
 #
 # COPILOT INSTRUCTIONS:
-# - Keep the shared 'paths:' entries (specialized-test-runner.yml,
-#   run-tests-core.yml, run-tests.yml, build-cli-e2e-image.yml, and
-#   .github/actions/enumerate-tests/**) in sync across tests-outerloop.yml
-#   and tests-quarantine.yml. Each workflow also lists itself, and both list
-#   eng/scripts/generate-specialized-test-projects-list.sh.
+# - Keep the shared 'paths:' entries in sync across tests-outerloop.yml
+#   and tests-quarantine.yml. Each workflow also lists itself.
 # - Validate that each path exists in the repository before adding or
 #   updating the list
 # - No external YAML file is used—only the workflow YAMLs themselves
