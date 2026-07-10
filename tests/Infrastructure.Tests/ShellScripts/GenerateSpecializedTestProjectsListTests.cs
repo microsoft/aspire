@@ -35,6 +35,22 @@ public sealed class GenerateSpecializedTestProjectsListTests : IDisposable
         Assert.DoesNotContain("tests/Aspire.Playground.Tests/Aspire.Playground.Tests.csproj", props);
     }
 
+    [Fact]
+    [RequiresTools(["bash", "git"])]
+    public async Task ExcludesQuarantineToolsProjectFromSpecializedTestProjectList()
+    {
+        var outputFile = Path.Combine(_workspace.Path, "BeforeBuildProps.props");
+        var scriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "generate-specialized-test-projects-list.sh");
+
+        var result = await RunBashAsync(scriptPath, ["QuarantinedTest", outputFile]);
+
+        result.EnsureSuccessful("generate-specialized-test-projects-list.sh failed.");
+
+        var props = await File.ReadAllTextAsync(outputFile);
+        Assert.Contains("tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj", props);
+        Assert.DoesNotContain("tests/QuarantineTools.Tests/QuarantineTools.Tests.csproj", props);
+    }
+
     private async Task<CommandResult> RunBashAsync(string scriptPath, string[] arguments)
     {
         using var process = new System.Diagnostics.Process();

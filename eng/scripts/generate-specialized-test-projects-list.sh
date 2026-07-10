@@ -30,7 +30,7 @@ PROJECTS=$(grep -Erl "^[[:space:]]*\\[(assembly:[[:space:]]*)?${ATTRIBUTE_NAME}(
         rel_path="${file#$REPO_ROOT/}"
         echo "$rel_path" | cut -d'/' -f1-2
     done \
-    | grep -v '^tests/Aspire\.Playground\.Tests$' \
+    | grep -Ev '^(tests/Aspire\.Playground\.Tests|tests/QuarantineTools\.Tests)$' \
     | sort -u || true)
 
 # Generate the MSBuild props file
