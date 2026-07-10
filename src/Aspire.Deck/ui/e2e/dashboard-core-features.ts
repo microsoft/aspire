@@ -2,6 +2,7 @@ export const dashboardCoreFeatures = {
   "APP-BROWSER-001": "The dashboard loads without browser, page, or network errors.",
   "APP-SHELL-001": "The shell identifies the app, version, navigation, and initial page.",
   "APP-NAV-001": "Every dashboard page is reachable from navigation and reports the active page.",
+  "APP-PAGE-001": "Every dashboard route uses a named page region, heading, body, and named toolbar where tools are available.",
   "APP-CONNECTION-001": "Resource service and OTLP connection states become connected.",
   "APP-APPHOST-001": "The AppHost switcher lists attached hosts and changes the active host.",
   "APP-THEME-001": "The dashboard switches and persists light and dark themes.",

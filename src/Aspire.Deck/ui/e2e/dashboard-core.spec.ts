@@ -102,6 +102,35 @@ test(`${features("APP-NAV-001", "APP-APPHOST-001", "APP-THEME-001")} navigates, 
   await expect(root).toHaveAttribute("data-theme", "light");
 });
 
+test(`${features("APP-PAGE-001")} composes every route from the page toolkit`, async ({ page }) => {
+  const pages = [
+    { navigation: "Resources", title: "Resources", toolbar: "Resource tools" },
+    { navigation: "Parameters", title: "Parameters", toolbar: "Parameter tools" },
+    { navigation: "Console", title: "Console", toolbar: "Console tools" },
+    { navigation: "Structured Logs", title: "Structured Logs", toolbar: "Structured log tools" },
+    { navigation: "Traces", title: "Traces", toolbar: "Trace tools" },
+    { navigation: "Metrics", title: "Metrics" },
+    { navigation: "Canvases", title: "Canvases" },
+  ] as const;
+
+  for (const item of pages) {
+    if (item.navigation !== "Resources") {
+      await navigationButton(page, item.navigation).click();
+    }
+
+    const route = page.getByRole("main").getByRole("region", { name: item.title });
+    await expect(route).toBeVisible();
+    await expect(route.getByRole("heading", { level: 1, name: item.title })).toBeVisible();
+    await expect(route.locator(":scope > .page__body")).toHaveCount(1);
+
+    if ("toolbar" in item) {
+      await expect(route.getByRole("toolbar", { name: item.toolbar })).toBeVisible();
+    } else {
+      await expect(route.getByRole("toolbar")).toHaveCount(0);
+    }
+  }
+});
+
 test(`${features("APP-NOTIFICATION-001")} completes every notification action`, async ({ page }) => {
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("Unresolved parameters");

@@ -2,7 +2,17 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ConsoleLogLine } from "../api/types";
 import { subscribeConsoleLogs } from "../api/deck";
 import { useResources } from "../lib/useDeckEvent";
-import { ConsoleIcon, EmptyState } from "../toolkit";
+import {
+  ConsoleIcon,
+  EmptyState,
+  Page,
+  PageBody,
+  PageHeader,
+  PageHeading,
+  PageSubtitle,
+  PageTitle,
+  PageToolbar,
+} from "../toolkit";
 
 const MAX_LINES = 5000;
 const LINE_HEIGHT = 21;
@@ -105,15 +115,15 @@ export function ConsolePage() {
   const errorCount = useMemo(() => lines.filter((l) => l.isStdErr).length, [lines]);
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <div className="page__title">Console</div>
-          <div className="page__subtitle">Streaming standard output and error</div>
-        </div>
-      </div>
+    <Page aria-labelledby="deck-page-console-title">
+      <PageHeader>
+        <PageHeading>
+          <PageTitle id="deck-page-console-title">Console</PageTitle>
+          <PageSubtitle>Streaming standard output and error</PageSubtitle>
+        </PageHeading>
+      </PageHeader>
 
-      <div className="page__toolbar">
+      <PageToolbar ariaLabel="Console tools">
         <select className="select" value={selected} onChange={(e) => setSelected(e.target.value)}>
           {resources.length === 0 ? <option value="">No resources</option> : null}
           {resources
@@ -131,9 +141,9 @@ export function ConsolePage() {
         ) : (
           <span className="badge accent">Live · following</span>
         )}
-      </div>
+      </PageToolbar>
 
-      <div className="page__body" style={{ display: "flex" }}>
+      <PageBody style={{ display: "flex" }}>
         {selected === "" ? (
           <EmptyState icon={<ConsoleIcon size={26} />} title="No resource selected">
             Pick a resource above to stream its console output.
@@ -162,7 +172,7 @@ export function ConsolePage() {
             </div>
           </div>
         )}
-      </div>
-    </div>
+      </PageBody>
+    </Page>
   );
 }

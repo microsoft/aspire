@@ -4,7 +4,17 @@ import { useTelemetry } from "../lib/useDeckEvent";
 import { formatDurationNanos } from "../lib/format";
 import { buildResourceColorMap, colorFor } from "../lib/colors";
 import { SpanDetailDrawer } from "../components/SpanDetailDrawer";
-import { ChevronIcon, SearchBox } from "../toolkit";
+import {
+  ChevronIcon,
+  Page,
+  PageBody,
+  PageHeader,
+  PageHeading,
+  PageSubtitle,
+  PageTitle,
+  PageToolbar,
+  SearchBox,
+} from "../toolkit";
 
 // Minimum-duration filter options. Spans shorter than the selected threshold are
 // hidden so insignificant work doesn't clutter the waterfall.
@@ -209,17 +219,17 @@ export function TracesPage() {
   const traceCount = useMemo(() => new Set(spans.map((s) => s.traceId)).size, [spans]);
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <div className="page__title">Traces</div>
-          <div className="page__subtitle">
+    <Page aria-labelledby="deck-page-traces-title">
+      <PageHeader>
+        <PageHeading>
+          <PageTitle id="deck-page-traces-title">Traces</PageTitle>
+          <PageSubtitle>
             {telemetry ? `${traceCount} traces \u00b7 ${telemetry.spanCount.toLocaleString()} spans` : "Loading\u2026"}
-          </div>
-        </div>
-      </div>
+          </PageSubtitle>
+        </PageHeading>
+      </PageHeader>
 
-      <div className="page__toolbar">
+      <PageToolbar ariaLabel="Trace tools">
         <SearchBox value={query} onChange={setQuery} placeholder="Filter traces…" />
         <label className="min-duration">
           <span className="min-duration__label">Min duration</span>
@@ -231,9 +241,9 @@ export function TracesPage() {
             ))}
           </select>
         </label>
-      </div>
+      </PageToolbar>
 
-      <div className="page__body wf">
+      <PageBody className="wf">
         {traces.length === 0 ? (
           <div className="wf__empty">
             {telemetry ? "No traces match your filter." : "Waiting for telemetry\u2026"}
@@ -250,7 +260,7 @@ export function TracesPage() {
             />
           ))
         )}
-      </div>
+      </PageBody>
 
       {selected ? (
         <SpanDetailDrawer
@@ -259,7 +269,7 @@ export function TracesPage() {
           onClose={() => setSelected(null)}
         />
       ) : null}
-    </div>
+    </Page>
   );
 }
 

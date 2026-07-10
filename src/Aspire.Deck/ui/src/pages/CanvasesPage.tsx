@@ -2,7 +2,18 @@ import { useEffect, useMemo, useState } from "react";
 import type { CanvasManifest } from "../api/types";
 import { listCanvases } from "../api/deck";
 import { attachCanvasBridge } from "../lib/canvasBridge";
-import { BackIcon, CanvasHost, CanvasIcon, EmptyState } from "../toolkit";
+import {
+  BackIcon,
+  CanvasHost,
+  CanvasIcon,
+  EmptyState,
+  Page,
+  PageBody,
+  PageHeader,
+  PageHeading,
+  PageSubtitle,
+  PageTitle,
+} from "../toolkit";
 
 // Resolves a canvas url against the app base so it loads under both the native
 // `canvas://` scheme (Tauri) and http (dev/preview). Absolute-scheme and
@@ -37,40 +48,40 @@ export function CanvasesPage() {
 
   if (open) {
     return (
-      <div className="page">
-        <div className="page__header">
+      <Page aria-labelledby="deck-page-canvas-title">
+        <PageHeader>
           <button className="icon-btn" onClick={() => setOpenId(null)} aria-label="Back to canvases">
             <BackIcon size={17} />
           </button>
-          <div>
-            <div className="page__title">
+          <PageHeading>
+            <PageTitle id="deck-page-canvas-title">
               {open.icon ? `${open.icon} ` : ""}
               {open.title}
-            </div>
-            {open.description ? <div className="page__subtitle">{open.description}</div> : null}
-          </div>
-        </div>
-        <div className="page__body">
+            </PageTitle>
+            {open.description ? <PageSubtitle>{open.description}</PageSubtitle> : null}
+          </PageHeading>
+        </PageHeader>
+        <PageBody>
           <CanvasHost
             src={resolveCanvasUrl(open.url)}
             title={open.title}
             connect={attachCanvasBridge}
           />
-        </div>
-      </div>
+        </PageBody>
+      </Page>
     );
   }
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <div className="page__title">Canvases</div>
-          <div className="page__subtitle">Custom interactive panels for your app</div>
-        </div>
-      </div>
+    <Page aria-labelledby="deck-page-canvases-title">
+      <PageHeader>
+        <PageHeading>
+          <PageTitle id="deck-page-canvases-title">Canvases</PageTitle>
+          <PageSubtitle>Custom interactive panels for your app</PageSubtitle>
+        </PageHeading>
+      </PageHeader>
 
-      <div className="page__body">
+      <PageBody>
         {loading ? (
           <div className="center-fill">
             <div className="spinner" />
@@ -93,7 +104,7 @@ export function CanvasesPage() {
             ))}
           </div>
         )}
-      </div>
-    </div>
+      </PageBody>
+    </Page>
   );
 }

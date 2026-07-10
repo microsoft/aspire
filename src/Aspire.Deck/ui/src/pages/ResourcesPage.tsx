@@ -9,6 +9,13 @@ import {
   ConfirmDialog,
   DataTable,
   ExternalIcon,
+  Page,
+  PageBody,
+  PageHeader,
+  PageHeading,
+  PageSubtitle,
+  PageTitle,
+  PageToolbar,
   ResourceTypeIcon,
   SearchBox,
   StateDot,
@@ -132,21 +139,21 @@ export function ResourcesPage() {
   ];
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <div className="page__title">Resources</div>
-          <div className="page__subtitle">
+    <Page aria-labelledby="deck-page-resources-title">
+      <PageHeader>
+        <PageHeading>
+          <PageTitle id="deck-page-resources-title">Resources</PageTitle>
+          <PageSubtitle>
             {ready ? `${visible.length} resource${visible.length === 1 ? "" : "s"}` : "Loading…"}
-          </div>
-        </div>
-      </div>
+          </PageSubtitle>
+        </PageHeading>
+      </PageHeader>
 
-      <div className="page__toolbar">
+      <PageToolbar ariaLabel="Resource tools">
         <SearchBox value={query} onChange={setQuery} placeholder="Filter by name, type or state…" />
-      </div>
+      </PageToolbar>
 
-      <div className="page__body">
+      <PageBody>
         <DataTable
           columns={columns}
           rows={visible}
@@ -155,7 +162,7 @@ export function ResourcesPage() {
           isSelected={(r) => r.name === selectedName}
           emptyMessage={ready ? "No resources match your filter." : "Connecting to resource service…"}
         />
-      </div>
+      </PageBody>
 
       {selected ? (
         <DetailsDrawer
@@ -174,6 +181,6 @@ export function ResourcesPage() {
           {toast.message}
         </div>
       ) : null}
-    </div>
+    </Page>
   );
 }

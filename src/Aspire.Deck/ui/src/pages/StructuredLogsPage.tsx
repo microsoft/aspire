@@ -2,7 +2,19 @@ import { useMemo, useState } from "react";
 import type { LogRecordSummary } from "../api/types";
 import { useTelemetry } from "../lib/useDeckEvent";
 import { dateFromUnixNano, formatTimeWithMillis } from "../lib/format";
-import { Badge, DataTable, SearchBox, type Column } from "../toolkit";
+import {
+  Badge,
+  DataTable,
+  Page,
+  PageBody,
+  PageHeader,
+  PageHeading,
+  PageSubtitle,
+  PageTitle,
+  PageToolbar,
+  SearchBox,
+  type Column,
+} from "../toolkit";
 
 const SEVERITIES = ["All", "Trace", "Debug", "Information", "Warning", "Error", "Critical"];
 
@@ -72,17 +84,17 @@ export function StructuredLogsPage() {
   ];
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <div className="page__title">Structured Logs</div>
-          <div className="page__subtitle">
+    <Page aria-labelledby="deck-page-structured-logs-title">
+      <PageHeader>
+        <PageHeading>
+          <PageTitle id="deck-page-structured-logs-title">Structured Logs</PageTitle>
+          <PageSubtitle>
             {telemetry ? `${telemetry.logCount.toLocaleString()} total · showing ${filtered.length}` : "Loading…"}
-          </div>
-        </div>
-      </div>
+          </PageSubtitle>
+        </PageHeading>
+      </PageHeader>
 
-      <div className="page__toolbar">
+      <PageToolbar ariaLabel="Structured log tools">
         <SearchBox value={query} onChange={setQuery} placeholder="Filter messages…" />
         <select className="select" value={severity} onChange={(e) => setSeverity(e.target.value)}>
           {SEVERITIES.map((s) => (
@@ -91,16 +103,16 @@ export function StructuredLogsPage() {
             </option>
           ))}
         </select>
-      </div>
+      </PageToolbar>
 
-      <div className="page__body">
+      <PageBody>
         <DataTable
           columns={columns}
           rows={filtered}
           rowKey={(l) => `${l.timeUnixNano}-${l.spanId ?? ""}-${l.body}`}
           emptyMessage={telemetry ? "No logs match your filter." : "Waiting for telemetry…"}
         />
-      </div>
-    </div>
+      </PageBody>
+    </Page>
   );
 }

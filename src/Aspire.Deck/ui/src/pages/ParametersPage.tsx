@@ -7,6 +7,13 @@ import { DetailsDrawer } from "../components/DetailsDrawer";
 import {
   ConfirmDialog,
   DataTable,
+  Page,
+  PageBody,
+  PageHeader,
+  PageHeading,
+  PageSubtitle,
+  PageTitle,
+  PageToolbar,
   ParametersIcon,
   SearchBox,
   SecretValue,
@@ -99,21 +106,21 @@ export function ParametersPage() {
   ];
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <div className="page__title">Parameters</div>
-          <div className="page__subtitle">
+    <Page aria-labelledby="deck-page-parameters-title">
+      <PageHeader>
+        <PageHeading>
+          <PageTitle id="deck-page-parameters-title">Parameters</PageTitle>
+          <PageSubtitle>
             {ready ? `${visible.length} parameter${visible.length === 1 ? "" : "s"}` : "Loading…"}
-          </div>
-        </div>
-      </div>
+          </PageSubtitle>
+        </PageHeading>
+      </PageHeader>
 
-      <div className="page__toolbar">
+      <PageToolbar ariaLabel="Parameter tools">
         <SearchBox value={query} onChange={setQuery} placeholder="Filter by name or state…" />
-      </div>
+      </PageToolbar>
 
-      <div className="page__body">
+      <PageBody>
         <DataTable
           columns={columns}
           rows={visible}
@@ -122,7 +129,7 @@ export function ParametersPage() {
           isSelected={(r) => r.name === selectedName}
           emptyMessage={ready ? "This AppHost has no parameters." : "Connecting to resource service…"}
         />
-      </div>
+      </PageBody>
 
       {selected ? (
         <DetailsDrawer
@@ -141,7 +148,7 @@ export function ParametersPage() {
           {toast.message}
         </div>
       ) : null}
-    </div>
+    </Page>
   );
 }
 

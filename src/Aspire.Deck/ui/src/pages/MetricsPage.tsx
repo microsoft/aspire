@@ -4,7 +4,18 @@ import { useTelemetry } from "../lib/useDeckEvent";
 import { getMetricSeries } from "../api/deck";
 import { formatMetricValue, displayUnit } from "../lib/format";
 import { MetricChart, type ChartLine } from "../components/MetricChart";
-import { EmptyState, MetricsIcon, PauseIcon, PlayIcon } from "../toolkit";
+import {
+  EmptyState,
+  MetricsIcon,
+  Page,
+  PageBody,
+  PageHeader,
+  PageHeading,
+  PageSubtitle,
+  PageTitle,
+  PauseIcon,
+  PlayIcon,
+} from "../toolkit";
 
 const TIME_RANGES: { label: string; seconds: number }[] = [
   { label: "1m", seconds: 60 },
@@ -114,32 +125,32 @@ export function MetricsPage() {
 
   if (!telemetry || metrics.length === 0) {
     return (
-      <div className="page">
-        <div className="page__header">
-          <div>
-            <div className="page__title">Metrics</div>
-            <div className="page__subtitle">Loading…</div>
-          </div>
-        </div>
-        <div className="page__body">
+      <Page aria-labelledby="deck-page-metrics-title">
+        <PageHeader>
+          <PageHeading>
+            <PageTitle id="deck-page-metrics-title">Metrics</PageTitle>
+            <PageSubtitle>Loading…</PageSubtitle>
+          </PageHeading>
+        </PageHeader>
+        <PageBody>
           <EmptyState icon={<MetricsIcon size={26} />} title="No metrics yet">
             Metrics will appear here as OTLP data arrives.
           </EmptyState>
-        </div>
-      </div>
+        </PageBody>
+      </Page>
     );
   }
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <div className="page__title">Metrics</div>
-          <div className="page__subtitle">{metrics.length} instruments</div>
-        </div>
-      </div>
+    <Page aria-labelledby="deck-page-metrics-title">
+      <PageHeader>
+        <PageHeading>
+          <PageTitle id="deck-page-metrics-title">Metrics</PageTitle>
+          <PageSubtitle>{metrics.length} instruments</PageSubtitle>
+        </PageHeading>
+      </PageHeader>
 
-      <div className="page__body">
+      <PageBody>
         <div className="metrics-layout">
           <div className="metric-list">
             {metrics.map((metric) => {
@@ -224,7 +235,7 @@ export function MetricsPage() {
             )}
           </div>
         </div>
-      </div>
-    </div>
+      </PageBody>
+    </Page>
   );
 }
