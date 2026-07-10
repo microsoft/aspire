@@ -162,7 +162,7 @@ public class SplitTestProjectsTests : IDisposable
     [RequiresTools(["pwsh"])]
     public async Task IncludeTraitFilterGracefullySkipsWhenNoClassesFound()
     {
-        // Arrange - assembly with no partition attributes → falls to class mode.
+        // An assembly with no partition attributes falls back to class mode.
         // The fake list-tests command exits with MTP's no-tests exit code. With
         // IncludeTraitFilter set, the script should succeed gracefully instead of
         // erroring before it can write the empty partitions file.
@@ -180,7 +180,6 @@ public class SplitTestProjectsTests : IDisposable
             exit 8
             """);
 
-        // Act
         var result = await RunScript(
             assemblyPath,
             runCommand: listTestsScriptPath,
@@ -188,7 +187,6 @@ public class SplitTestProjectsTests : IDisposable
             outputFile: outputFile,
             includeTraitFilter: "quarantined=true");
 
-        // Assert - script succeeds and produces valid JSON with empty partitions
         result.EnsureSuccessful("split-test-projects-for-ci.ps1 should succeed with IncludeTraitFilter when no classes match");
         Assert.Contains("will be skipped", result.Output);
 
@@ -201,21 +199,19 @@ public class SplitTestProjectsTests : IDisposable
     [RequiresTools(["pwsh"])]
     public async Task WithoutIncludeTraitFilterFailsWhenNoClassesFound()
     {
-        // Arrange - assembly with no partition attributes → falls to class mode.
+        // An assembly with no partition attributes falls back to class mode.
         // Without IncludeTraitFilter, zero discovered classes should be an error.
         var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithNoAttributes(assemblyPath, "UnrelatedClass");
 
         var outputFile = Path.Combine(_workspace.Path, "partitions.json");
 
-        // Act
         var result = await RunScript(
             assemblyPath,
             runCommand: "echo",
             testClassPrefix: "TestNamespace",
             outputFile: outputFile);
 
-        // Assert - script should fail without IncludeTraitFilter
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("No test classes discovered", result.Output);
     }

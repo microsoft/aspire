@@ -75,10 +75,35 @@ jobs:
       - name: Identify relevant test projects
         run: ./eng/scripts/generate-specialized-test-projects-list.sh "${{ inputs.attributeName }}" "${{ github.workspace }}/artifacts/BeforeBuildProps.props"
 
+      - name: Prepare scoped restore
+        id: project_list
+        shell: bash
+        run: |
+          if ! grep -q '<OverrideProjectToBuild Include=' "${{ github.workspace }}/artifacts/BeforeBuildProps.props"; then
+            echo "has_projects=false" >> "$GITHUB_OUTPUT"
+            echo "No projects contain ${{ inputs.attributeName }}; generating an empty matrix."
+            exit 0
+          fi
+
+          echo "has_projects=true" >> "$GITHUB_OUTPUT"
+          {
+            echo '<Project>'
+            echo '  <ItemGroup>'
+            grep '<OverrideProjectToBuild Include=' "${{ github.workspace }}/artifacts/BeforeBuildProps.props"
+            echo '    <OverrideProjectToBuild Include="$(RepoRoot)tools/ExtractTestPartitions/ExtractTestPartitions.csproj" />'
+            echo '  </ItemGroup>'
+            echo '</Project>'
+          } > "${{ github.workspace }}/artifacts/SpecializedRestore.props"
+
       - name: Restore
-        run: ./restore.sh
+        if: ${{ steps.project_list.outputs.has_projects == 'true' }}
+        run: >
+          ./restore.sh
+          /p:BeforeBuildPropsPath=${{ github.workspace }}/artifacts/SpecializedRestore.props
+          ${{ steps.derive_props.outputs.msbuild_prop }}
 
       - name: Build ExtractTestPartitions tool
+        if: ${{ steps.project_list.outputs.has_projects == 'true' }}
         run: dotnet build tools/ExtractTestPartitions/ExtractTestPartitions.csproj -c Release --nologo -v quiet
 
       # Generate the canonical test matrix using the new metadata-driven pipeline.
@@ -90,6 +115,7 @@ jobs:
       # - SpecializedTraitFilter moves the execution filter into each matrix entry so
       #   split entries intersect the specialized trait with the class/partition shard.
       - name: Generate canonical test matrix
+        if: ${{ steps.project_list.outputs.has_projects == 'true' }}
         run: >
           ./build.sh -test
           /p:TestRunnerName=TestEnumerationRunsheetBuilder
@@ -164,6 +190,7 @@ jobs:
           name: logs-runsheet
           path: |
             ${{ github.workspace }}/artifacts/BeforeBuildProps.props
+            ${{ github.workspace }}/artifacts/SpecializedRestore.props
             ${{ github.workspace }}/artifacts/log/**/*.binlog
             ${{ github.workspace }}/artifacts/**/*tests-partitions.json
             ${{ github.workspace }}/artifacts/**/*tests-metadata.json

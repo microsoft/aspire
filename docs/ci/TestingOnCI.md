@@ -155,14 +155,15 @@ In `.github/workflows/tests.yml`, the workflow:
    - `tests_matrix_requires_nugets_windows`
    - `tests_matrix_requires_nugets_macos`
    - `tests_matrix_requires_cli_archive`
-3. Runs the CI jobs so the critical path stays as short as possible:
-    - `tests_no_nugets`: Runs immediately after enumeration
-    - `tests_no_nugets_overflow`: Runs immediately (handles entries beyond the 250-entry threshold)
-    - `build_packages`: Produces the shared package feed used by all package-dependent jobs
-    - `build_cli_archive_linux`, `build_cli_archive_windows`, `build_cli_archive_macos`: Build native CLI archives and the matching RID-specific DCP/Dashboard packages in parallel with `build_packages`
-    - `tests_requires_nugets_linux`, `tests_requires_nugets_windows`, `tests_requires_nugets_macos`: Wait for `build_packages` plus only the CLI archive job for their OS
-    - `tests_requires_cli_archive`: Waits for `build_packages` and `build_cli_archive_linux`
-    - `polyglot_validation`: Waits for `build_packages` and `build_cli_archive_linux`
+3. Builds the shared package feed and CLI archives in parallel, then calls the shared `run_tests` reusable workflow after setup succeeds.
+4. `run-tests-core.yml` fans the six matrix buckets back out to `run-tests.yml`:
+    - `tests_no_nugets`
+    - `tests_no_nugets_overflow`
+    - `tests_requires_nugets_linux`
+    - `tests_requires_nugets_windows`
+    - `tests_requires_nugets_macos`
+    - `tests_requires_cli_archive`
+5. Runs adjacent validation jobs such as `polyglot_validation`, which still keep their own workflow-specific dependencies.
 
 Each job invokes `.github/workflows/run-tests.yml` with matrix parameters including `extraTestArgs` for filtering (e.g., `--filter-trait "Partition=X"`).
 
@@ -172,13 +173,12 @@ Specialized workflows (`tests-outerloop.yml` and `tests-quarantine.yml`) generat
 
 ### Why the jobs are structured this way
 
-The workflow intentionally favors shorter dependency chains over a smaller number of larger jobs:
+The workflow intentionally favors one shared test-bucket implementation over duplicated job definitions:
 
-1. **`no_nugets` jobs start first** so pure managed/unit test coverage begins as soon as enumeration finishes.
-2. **`build_packages` and the CLI archive jobs run in parallel** because the CLI archive workflow builds its own RID-specific DCP and Dashboard packages locally. That removes a serial dependency where archive creation would otherwise wait for the shared package build.
-3. **`requires_nugets` is split by OS** because each OS-specific test group needs the RID-specific DCP/Dashboard packages produced by that platform's CLI archive job. Splitting the jobs prevents Linux tests from waiting on the slower Windows or macOS archive builds.
-4. **`tests_requires_cli_archive` and `polyglot_validation` only depend on the Linux archive** because the current consumers in those buckets use the Linux CLI archive path. That keeps linux-only validation on the fastest available path instead of blocking on unrelated Windows or macOS work.
-5. **The `results` job depends on every relevant lane** so the workflow still reports a single final status after the parallelized work completes.
+1. **`run-tests-core.yml` owns the six bucket jobs** so `tests.yml`, `tests-quarantine.yml`, and `tests-outerloop.yml` all use the same empty-matrix, artifact-download, and result-gate behavior.
+2. **`build_packages` and CLI archive jobs still run in parallel** before the shared test workflow starts.
+3. **Bucket jobs remain split by dependency type and OS** inside `run-tests-core.yml`, which keeps logs and failures attributed to the bucket that needed the artifacts.
+4. **The `results` job depends on every relevant lane** so the workflow still reports a single final status after the parallelized work completes.
 
 #### GitHub Actions 256-Job Limit
 
@@ -324,7 +324,7 @@ Each `CITestsProperty` item has three attributes:
 
 ### How it flows through the system
 
-1. **MSBuild targets** (`TestEnumerationRunsheetBuilder.targets`, `SpecializedTestRunsheetBuilderBase.targets`) import this file and iterate `@(CITestsProperty)` to dynamically resolve property values and emit the `"properties"` JSON object — no hardcoded property names in the targets.
+1. **MSBuild targets** (`TestEnumerationRunsheetBuilder.targets`) import this file and iterate `@(CITestsProperty)` to dynamically resolve property values and emit the `"properties"` JSON object — no hardcoded property names in the targets.
 2. **PowerShell scripts** (`build-test-matrix.ps1`) parse the `.props` XML at startup to build the defaults dictionary and copy properties generically — no per-property code blocks.
 3. **GitHub Actions workflows** (`run-tests.yml`) read properties from the opaque `properties` JSON string with bespoke `if:` conditions for each property that controls unique workflow behavior.
 
