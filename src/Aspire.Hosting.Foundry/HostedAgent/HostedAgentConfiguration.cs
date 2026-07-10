@@ -47,6 +47,10 @@ public partial class HostedAgentConfiguration(string image)
     /// <summary>
     /// The protocols that the agent supports for ingress communication of the containers.
     /// </summary>
+    /// <remarks>
+    /// This collection has no configuration-level default. The <c>AsHostedAgent</c> overloads add the selected
+    /// protocol version before deployment, and the C# convenience overload defaults that selection to Responses 2.0.0.
+    /// </remarks>
     [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
     public IList<ProtocolVersionRecord> ProtocolVersions { get; init; } = [];
 

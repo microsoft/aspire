@@ -21,18 +21,19 @@ public static class HostedAgentResourceBuilderExtensions
     private const string DefaultResponsesProtocolVersion = "2.0.0";
 
     /// <summary>
-    /// Configures the resource to run locally as a Microsoft Foundry hosted agent.
+    /// Configures the resource to run and publish as a Microsoft Foundry hosted agent.
     /// </summary>
-    /// <ats-summary>Configures the resource to run locally as a Microsoft Foundry hosted agent.</ats-summary>
+    /// <ats-summary>Configures the resource to run and publish as a Microsoft Foundry hosted agent.</ats-summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder for the compute resource.</param>
     /// <param name="protocol">The protocol exposed by the hosted agent container.</param>
     /// <param name="protocolVersion">The version of the protocol exposed by the hosted agent container.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
-    /// This method applies in run mode. It configures the resource with the hosted agent protocol endpoint,
-    /// a dashboard command for sending messages to the agent, and OpenTelemetry environment variables expected
-    /// by the Microsoft Foundry agent server SDK.
+    /// In run mode, this method configures the resource with the hosted agent protocol endpoint, a dashboard
+    /// command for sending messages to the agent, and OpenTelemetry environment variables expected by the
+    /// Microsoft Foundry agent server SDK. In publish mode, it resolves or creates a Microsoft Foundry project
+    /// and configures the resource to deploy as a hosted agent using the selected protocol version.
     /// </remarks>
     /// <example>
     /// <code lang="csharp">
