@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@richlander"
+  ],
+  "description": "The dotnet-inspect skill bundled with the Aspire CLI is now a thin bootstrapper that delegates to the installed tool's own skill guide. AI-assisted inspection guidance is always current and reflects the installed dotnet-inspect version rather than being frozen at the CLI release.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔄",
+  "firstMergedAt": "2026-07-10T06:26:58Z",
+  "lastMergedAt": "2026-07-10T06:26:58Z",
+  "name": "dotnet-inspect AI skill stays current across releases",
+  "owner": "JamesNK",
+  "prs": [
+    18723
+  ]
+}

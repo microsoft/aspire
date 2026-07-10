@@ -1,0 +1,9 @@
+{
+  "author": "nellshamrell",
+  "comment": "New preview hosting integration for Radius compute environment",
+  "mergedAt": "2026-07-10T00:30:37Z",
+  "number": 18696,
+  "runDate": "2026-07-10T07:07:26Z",
+  "status": "included",
+  "title": "Add Aspire.Hosting.Radius: Radius as a compute environment (+ cloud providers)"
+}

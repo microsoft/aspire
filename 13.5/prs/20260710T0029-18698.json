@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Improvement to Go polyglot code generator - cleaner API for single optional DTO parameters",
+  "mergedAt": "2026-07-10T00:29:24Z",
+  "number": 18698,
+  "runDate": "2026-07-10T07:07:26Z",
+  "status": "included",
+  "title": "Flatten single optional DTO options parameter in Go polyglot generator"
+}

@@ -1,0 +1,21 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@nellshamrell"
+  ],
+  "description": "A new preview integration `Aspire.Hosting.Radius` lets Aspire AppHosts target Radius as a compute environment alongside Kubernetes, Docker Compose, and Azure Container Apps. Call `AddRadiusEnvironment()` and `aspire publish`/deploy emits a native `app.bicep` and runs `rad deploy`. Run mode is inert — local development is unchanged. Includes in-code Azure and AWS cloud providers with typed credential modes that are never inlined into generated Bicep.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-07-10T00:30:37Z",
+  "lastMergedAt": "2026-07-10T00:30:37Z",
+  "name": "Aspire.Hosting.Radius integration (preview)",
+  "owner": "mitchdenny",
+  "prs": [
+    18696
+  ]
+}

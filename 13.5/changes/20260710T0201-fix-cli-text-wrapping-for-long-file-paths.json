@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed incorrect text wrapping when rendering long file paths (e.g. log file names) at narrow terminal widths by updating Spectre.Console to 0.57.2.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎨",
+  "firstMergedAt": "2026-07-10T02:01:20Z",
+  "lastMergedAt": "2026-07-10T02:01:20Z",
+  "name": "Fix CLI text wrapping for long file paths",
+  "owner": "JamesNK",
+  "prs": [
+    18705
+  ]
+}

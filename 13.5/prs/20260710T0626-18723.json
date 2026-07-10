@@ -1,0 +1,9 @@
+{
+  "author": "richlander",
+  "comment": "CLI improvement: dotnet-inspect skill bootstrapper keeps AI guidance current",
+  "mergedAt": "2026-07-10T06:26:58Z",
+  "number": 18723,
+  "runDate": "2026-07-10T07:07:26Z",
+  "status": "included",
+  "title": "Make bundled dotnet-inspect skill a thin bootstrapper that defers to the tool"
+}

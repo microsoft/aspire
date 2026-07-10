@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Bug fix for text wrapping in CLI output for long file paths via Spectre.Console 0.57.2",
+  "mergedAt": "2026-07-10T02:01:20Z",
+  "number": 18705,
+  "runDate": "2026-07-10T07:07:26Z",
+  "status": "included",
+  "title": "Update Spectre.Console to 0.57.2"
+}
