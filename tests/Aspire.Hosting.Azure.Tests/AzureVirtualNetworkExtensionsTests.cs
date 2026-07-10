@@ -160,6 +160,51 @@ public class AzureVirtualNetworkExtensionsTests
     }
 
     [Fact]
+    public void WithServiceDelegation_AddsAnnotationWithServiceNameAsName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithServiceDelegation("Microsoft.App/environments");
+
+        var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().SingleOrDefault();
+        Assert.NotNull(delegationAnnotation);
+        Assert.Equal("Microsoft.App/environments", delegationAnnotation.Name);
+        Assert.Equal("Microsoft.App/environments", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithServiceDelegation_WithExplicitName_SetsNameAndServiceName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithServiceDelegation("Microsoft.App/environments", name: "ContainerAppsDelegation");
+
+        var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().SingleOrDefault();
+        Assert.NotNull(delegationAnnotation);
+        Assert.Equal("ContainerAppsDelegation", delegationAnnotation.Name);
+        Assert.Equal("Microsoft.App/environments", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithContainerInstanceDelegation_DelegatesToContainerGroups()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithContainerInstanceDelegation();
+
+        var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().SingleOrDefault();
+        Assert.NotNull(delegationAnnotation);
+        Assert.Equal("Microsoft.ContainerInstance/containerGroups", delegationAnnotation.ServiceName);
+        Assert.Equal("Microsoft.ContainerInstance/containerGroups", delegationAnnotation.Name);
+    }
+
+    [Fact]
     public void AddSubnet_WithParameterResource_CreatesSubnetResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
