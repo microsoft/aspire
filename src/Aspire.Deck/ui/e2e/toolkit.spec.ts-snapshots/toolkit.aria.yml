@@ -2,6 +2,15 @@
   - heading "Deck Toolkit" [level=1]
   - paragraph: Fluent React primitives with Aspire density and tokens
   - button "Use light theme"
+  - region "Page composition":
+    - heading "Page composition" [level=2]
+    - region "Sample resources":
+      - heading "Sample resources" [level=2]
+      - paragraph: 3 resources
+      - status: Not refreshed
+      - button "Refresh sample resources"
+      - toolbar "Sample resource tools":
+        - textbox "Filter sample resources…"
   - region "Actions":
     - heading "Actions" [level=2]
     - status: No action selected

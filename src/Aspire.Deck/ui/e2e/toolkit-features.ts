@@ -1,6 +1,7 @@
 export const toolkitFeatures = {
   "TK-BROWSER-001": "The toolkit loads without browser, page, or network errors.",
   "TK-SHELL-001": "The Fluent provider applies Deck typography, color, radius, and theme tokens.",
+  "TK-PAGE-001": "Pages compose an accessible header, heading, actions, toolbar, and independently scrolling body.",
   "TK-ACTIONS-001": "Secondary, primary, danger, ghost, and icon buttons expose consistent behavior.",
   "TK-DIALOG-001": "Confirmation dialogs support cancel, confirm, and Escape dismissal.",
   "TK-DRAWER-001": "Drawers expose an accessible title, footer actions, close command, and Escape dismissal.",

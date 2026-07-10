@@ -13,6 +13,14 @@ import {
   Highlighter,
   MoonIcon,
   NotificationStack,
+  Page,
+  PageActions,
+  PageBody,
+  PageHeader,
+  PageHeading,
+  PageSubtitle,
+  PageTitle,
+  PageToolbar,
   ResourcesIcon,
   SearchBox,
   SecretValue,
@@ -66,6 +74,7 @@ export function ToolkitPlayground({
   const [includeHidden, setIncludeHidden] = useState(false);
   const [selectedTab, setSelectedTab] = useState("overview");
   const [openAccordionItems, setOpenAccordionItems] = useState(["environment"]);
+  const [pageRefreshCount, setPageRefreshCount] = useState(0);
 
   const filteredResources = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -104,6 +113,46 @@ export function ToolkitPlayground({
       </header>
 
       <div className="toolkit-playground__content">
+        <section className="toolkit-section" aria-labelledby="toolkit-page-title">
+          <div className="toolkit-section__heading">
+            <h2 id="toolkit-page-title">Page composition</h2>
+          </div>
+          <div className="toolkit-page-sample">
+            <Page
+              data-testid="toolkit-page-sample"
+              aria-labelledby="toolkit-page-sample-title"
+            >
+              <PageHeader>
+                <PageHeading>
+                  <PageTitle as="h2" id="toolkit-page-sample-title">Sample resources</PageTitle>
+                  <PageSubtitle>3 resources</PageSubtitle>
+                </PageHeading>
+                <PageActions>
+                  <span role="status" aria-live="polite">
+                    {pageRefreshCount === 0 ? "Not refreshed" : `Refreshed ${pageRefreshCount} time${pageRefreshCount === 1 ? "" : "s"}`}
+                  </span>
+                  <Button size="small" onClick={() => setPageRefreshCount((count) => count + 1)}>
+                    Refresh sample resources
+                  </Button>
+                </PageActions>
+              </PageHeader>
+              <PageToolbar ariaLabel="Sample resource tools">
+                <SearchBox value={query} onChange={setQuery} placeholder="Filter sample resources…" />
+              </PageToolbar>
+              <PageBody data-testid="toolkit-page-body">
+                <div className="toolkit-page-sample__resources">
+                  {filteredResources.map((resource) => (
+                    <div className="toolkit-page-sample__resource" key={resource.name}>
+                      <span>{resource.name}</span>
+                      <StateDot state={resource.state} stateStyle={resource.stateStyle} health={resource.health} />
+                    </div>
+                  ))}
+                </div>
+              </PageBody>
+            </Page>
+          </div>
+        </section>
+
         <section className="toolkit-section" aria-labelledby="toolkit-actions-title">
           <div className="toolkit-section__heading">
             <h2 id="toolkit-actions-title">Actions</h2>

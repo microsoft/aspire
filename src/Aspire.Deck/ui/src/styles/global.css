@@ -322,17 +322,31 @@ a:focus-visible {
   padding: 18px 22px 14px;
   flex-shrink: 0;
 }
+.page__heading {
+  min-width: 0;
+}
 .page__title {
+  margin: 0;
   font-size: 18px;
   font-weight: 650;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 .page__subtitle {
   font-size: 12.5px;
   color: var(--text-muted);
-  margin-top: 2px;
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
 }
 .page__header-spacer {
   flex: 1;
+}
+.page__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-inline-start: auto;
 }
 .page__body {
   flex: 1;
@@ -2161,6 +2175,29 @@ table.data tbody tr.selected {
 .toolkit-section__heading--data > div > span {
   display: block;
   margin-top: 2px;
+}
+.toolkit-page-sample {
+  height: 320px;
+  overflow: hidden;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.toolkit-page-sample__resources {
+  display: grid;
+  gap: 8px;
+}
+.toolkit-page-sample__resource {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12.5px;
 }
 .toolkit-row {
   display: flex;

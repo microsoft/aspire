@@ -81,7 +81,7 @@ test(`${features("TK-BROWSER-001", "TK-STATUS-001", "TK-EMPTY-001", "TK-A11Y-001
 });
 
 test(`${features("TK-ACTIONS-001")} exercises every button variant`, async ({ page }) => {
-  const status = page.getByRole("status");
+  const status = page.getByRole("region", { name: "Actions" }).getByRole("status");
   const actions = [
     ["Secondary", "Secondary selected"],
     ["Primary", "Primary selected"],
@@ -95,6 +95,27 @@ test(`${features("TK-ACTIONS-001")} exercises every button variant`, async ({ pa
   }
 
   await expect(page.getByRole("button", { name: "Use light theme" })).toHaveAttribute("title", "Use light theme");
+});
+
+test(`${features("TK-PAGE-001")} composes an accessible dashboard page`, async ({ page }) => {
+  const sample = page.getByTestId("toolkit-page-sample");
+
+  await expect(sample).toHaveAttribute("aria-labelledby", "toolkit-page-sample-title");
+  await expect(sample.getByRole("heading", { level: 2, name: "Sample resources" })).toHaveAttribute(
+    "id",
+    "toolkit-page-sample-title",
+  );
+  await expect(sample.getByText("3 resources", { exact: true })).toBeVisible();
+  const refresh = sample.getByRole("button", { name: "Refresh sample resources" });
+  await expect(refresh).toBeVisible();
+  await refresh.click();
+  await expect(sample.getByRole("status")).toHaveText("Refreshed 1 time");
+
+  const toolbar = sample.getByRole("toolbar", { name: "Sample resource tools" });
+  await expect(toolbar.getByRole("textbox", { name: "Filter sample resources…" })).toBeVisible();
+  const body = sample.getByTestId("toolkit-page-body");
+  await expect(body).toHaveCSS("overflow", "auto");
+  await expect(body).toContainText("frontend");
 });
 
 test(`${features("TK-DIALOG-001", "TK-DRAWER-001")} exercises modal surfaces`, async ({ page }) => {
@@ -111,7 +132,7 @@ test(`${features("TK-DIALOG-001", "TK-DRAWER-001")} exercises modal surfaces`, a
 
   await openConfirmation.click();
   await page.getByRole("button", { name: "Restart", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText("Restart confirmed");
+  await expect(page.getByRole("region", { name: "Actions" }).getByRole("status")).toHaveText("Restart confirmed");
 
   await page.getByRole("button", { name: "Open drawer" }).click();
   const drawer = page.getByRole("dialog", { name: "Toolkit resource details" });
@@ -129,7 +150,7 @@ test(`${features("TK-DIALOG-001", "TK-DRAWER-001")} exercises modal surfaces`, a
 
 test(`${features("TK-NOTIFICATION-001")} exercises reusable notification actions`, async ({ page }) => {
   const showNotification = page.getByRole("button", { name: "Show notification" });
-  const status = page.getByRole("status");
+  const status = page.getByRole("region", { name: "Actions" }).getByRole("status");
 
   await showNotification.click();
   const notification = page.getByRole("alert");

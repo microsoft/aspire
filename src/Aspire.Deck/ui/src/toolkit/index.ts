@@ -12,6 +12,7 @@ export * from "./EmptyState";
 export * from "./Highlighter";
 export * from "./Icons";
 export * from "./NotificationStack";
+export * from "./Page";
 export * from "./SearchBox";
 export * from "./SecretValue";
 export * from "./Select";
