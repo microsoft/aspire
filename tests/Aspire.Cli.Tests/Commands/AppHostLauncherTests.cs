@@ -189,7 +189,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
             WaitForAppHostReadyHandler = ct => readiness.Task.WaitAsync(ct)
         });
-        harness.ProcessLauncher.Mode = TestDetachedProcessLauncher.ChildProcessMode.StayAlive;
+        harness.ProcessFactory.Mode = TestDetachedProcessFactory.ChildProcessMode.StayAlive;
 
         var launchTask = harness.Launcher.LaunchDetachedAsync(
             harness.AppHostFile,
@@ -203,7 +203,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             stopAfterLaunchDelay: null,
             CancellationToken.None);
 
-        await harness.ProcessLauncher.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await harness.ProcessFactory.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.NotSame(launchTask, await Task.WhenAny(launchTask, Task.Delay(TimeSpan.FromMilliseconds(100))));
 
         readiness.SetResult(new WaitForAppHostReadyResponse { IsReady = true });
@@ -226,7 +226,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
             WaitForAppHostReadyHandler = _ => Task.FromResult<WaitForAppHostReadyResponse?>(new WaitForAppHostReadyResponse { IsReady = true })
         });
-        harness.ProcessLauncher.Mode = TestDetachedProcessLauncher.ChildProcessMode.StayAlive;
+        harness.ProcessFactory.Mode = TestDetachedProcessFactory.ChildProcessMode.StayAlive;
 
         var result = await harness.Launcher.LaunchDetachedAsync(
             harness.AppHostFile,
@@ -258,8 +258,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 return null;
             }
         });
-        harness.ProcessLauncher.Mode = TestDetachedProcessLauncher.ChildProcessMode.ExitWithFailure;
-        harness.ProcessLauncher.ChildLogLines =
+        harness.ProcessFactory.Mode = TestDetachedProcessFactory.ChildProcessMode.ExitWithFailure;
+        harness.ProcessFactory.ChildLogLines =
         [
             "[2026-05-15 17:07:30.501] [INFO] [AppHost] apphost.ts(5,22): error TS1109: Expression expected.",
             "[2026-05-15 17:07:30.521] [FAIL] [GuestAppHostProject] TypeScript (Node.js) apphost exited with code 2"
@@ -302,8 +302,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
             WaitForAppHostReadyHandler = _ => throw new IOException("connection lost")
         });
-        harness.ProcessLauncher.Mode = TestDetachedProcessLauncher.ChildProcessMode.StayAlive;
-        harness.ProcessLauncher.ChildLogLines =
+        harness.ProcessFactory.Mode = TestDetachedProcessFactory.ChildProcessMode.StayAlive;
+        harness.ProcessFactory.ChildLogLines =
         [
             "[2026-05-15 17:07:30.501] [FAIL] [GuestAppHostProject] AppHost failed after the backchannel was established."
         ];
@@ -323,7 +323,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         await connectionLostStatusDisplayed.Task.WaitAsync(TimeSpan.FromSeconds(10));
         Assert.NotSame(launchTask, await Task.WhenAny(launchTask, Task.Delay(TimeSpan.FromMilliseconds(100))));
 
-        harness.ProcessLauncher.StopStartedProcess();
+        harness.ProcessFactory.StopStartedProcess();
         var result = await launchTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
@@ -408,7 +408,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 return Task.FromResult<List<ResourceSnapshot>>([]);
             }
         });
-        harness.ProcessLauncher.Mode = TestDetachedProcessLauncher.ChildProcessMode.StayAlive;
+        harness.ProcessFactory.Mode = TestDetachedProcessFactory.ChildProcessMode.StayAlive;
 
         var result = await harness.Launcher.LaunchDetachedAsync(
             harness.AppHostFile,
@@ -424,7 +424,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Empty(harness.InteractionService.DisplayedErrors);
-        Assert.False(harness.ProcessLauncher.StartedProcess?.HasExited);
+        Assert.False(harness.ProcessFactory.StartedProcess?.HasExited);
         Assert.Equal(1, probeCount);
     }
 
@@ -439,8 +439,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
             GetResourceSnapshotsHandler = _ => throw new IOException("model unavailable")
         });
-        harness.ProcessLauncher.Mode = TestDetachedProcessLauncher.ChildProcessMode.ExitWithFailure;
-        harness.ProcessLauncher.ChildLogLines =
+        harness.ProcessFactory.Mode = TestDetachedProcessFactory.ChildProcessMode.ExitWithFailure;
+        harness.ProcessFactory.ChildLogLines =
         [
             "[2026-05-16 19:07:52.383] [INFO] [Build] /work/BrokenAppHost/Program.cs(3,41): error CS1002: ; expected [/work/BrokenAppHost/BrokenAppHost.csproj]",
             "[2026-05-16 19:07:52.392] [INFO] [Build] Build FAILED."
@@ -474,7 +474,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Process? startedProcess = null;
         Process? detachedHandle = null;
         Process? forkProcess = null;
-        harness.ProcessLauncher.StartHandler = (_, _, _, _, _, _) =>
+        harness.ProcessFactory.StartHandler = (_, _, _, _, _, _) =>
         {
             startedProcess = Process.Start(new ProcessStartInfo
             {
@@ -496,7 +496,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 throw new TimeoutException("Test child process did not exit.");
             }
 
-            return Task.FromResult<IProcessExecution>(new DetachedProcessExecutionAdapter(new DetachedProcess(detachedHandle, forkProcess, startTime: null)));
+            return Task.FromResult<IProcessExecution>(new MonitoredProcessExecutionAdapter(detachedHandle, forkProcess, startTime: null));
         };
 
         try
@@ -545,8 +545,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         using var harness = AppHostLauncherHarness.Create(outputHelper);
         Process? startedProcess = null;
-        DetachedProcessExecutionAdapter? detachedHandle = null;
-        harness.ProcessLauncher.StartHandler = (_, _, _, _, _, _) =>
+        MonitoredProcessExecutionAdapter? detachedHandle = null;
+        harness.ProcessFactory.StartHandler = (_, _, _, _, _, _) =>
         {
             var startInfo = new ProcessStartInfo
             {
@@ -557,7 +557,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             startInfo.ArgumentList.Add("sleep 0.2; exit 11");
 
             startedProcess = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start test process.");
-            detachedHandle = new DetachedProcessExecutionAdapter(new DetachedProcess(Process.GetProcessById(startedProcess.Id)));
+            detachedHandle = new MonitoredProcessExecutionAdapter(Process.GetProcessById(startedProcess.Id));
             return Task.FromResult<IProcessExecution>(detachedHandle);
         };
 
@@ -605,7 +605,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         var launcherCalled = false;
         var observedToken = default(CancellationToken);
-        harness.ProcessLauncher.StartHandler = (_, _, _, _, _, cancellationToken) =>
+        harness.ProcessFactory.StartHandler = (_, _, _, _, _, cancellationToken) =>
         {
             launcherCalled = true;
             observedToken = cancellationToken;
@@ -651,8 +651,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             stopAfterLaunchDelay: null,
             cts.Token);
 
-        await harness.ProcessLauncher.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        var startedProcess = harness.ProcessLauncher.StartedProcess ?? throw new InvalidOperationException("Expected child process to start.");
+        await harness.ProcessFactory.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var startedProcess = harness.ProcessFactory.StartedProcess ?? throw new InvalidOperationException("Expected child process to start.");
 
         try
         {
@@ -667,7 +667,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         }
         finally
         {
-            harness.ProcessLauncher.StopStartedProcess();
+            harness.ProcessFactory.StopStartedProcess();
         }
     }
 
@@ -945,7 +945,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             FileInfo appHostFile,
             TestInteractionService interactionService,
             TestAuxiliaryBackchannelMonitor monitor,
-            TestDetachedProcessLauncher processLauncher)
+            TestDetachedProcessFactory processFactory)
         {
             _workspace = workspace;
             _homeDirectory = homeDirectory;
@@ -954,7 +954,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             AppHostFile = appHostFile;
             InteractionService = interactionService;
             Monitor = monitor;
-            ProcessLauncher = processLauncher;
+            ProcessFactory = processFactory;
         }
 
         public AppHostLauncher Launcher { get; }
@@ -965,7 +965,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public TestAuxiliaryBackchannelMonitor Monitor { get; }
 
-        public TestDetachedProcessLauncher ProcessLauncher { get; }
+        public TestDetachedProcessFactory ProcessFactory { get; }
 
         public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper)
         {
@@ -989,7 +989,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 homeDirectory: homeDirectory);
             var interactionService = new TestInteractionService();
             var monitor = new TestAuxiliaryBackchannelMonitor();
-            var processLauncher = new TestDetachedProcessLauncher();
+            var processFactory = new TestDetachedProcessFactory();
             var fileLoggerProvider = new FileLoggerProvider(executionContext.LogFilePath, new TestStartupErrorWriter());
             var processShutdownService = new ProcessTreeGracefulShutdownService(
                 new FixedLayoutDiscovery(),
@@ -1008,7 +1008,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 new ProfilingTelemetry(new ConfigurationBuilder().Build()),
                 fileLoggerProvider,
                 processShutdownService,
-                processLauncher,
+                processFactory,
                 NullLogger<AppHostLauncher>.Instance,
                 TimeProvider.System);
 
@@ -1020,7 +1020,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 appHostFile,
                 interactionService,
                 monitor,
-                processLauncher);
+                processFactory);
         }
 
         public void AddConnection(TestAppHostAuxiliaryBackchannel connection)
@@ -1055,13 +1055,13 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public void Dispose()
         {
-            ProcessLauncher.Dispose();
+            ProcessFactory.Dispose();
             _fileLoggerProvider.Dispose();
             _workspace.Dispose();
         }
     }
 
-    private sealed class TestDetachedProcessLauncher : IProcessExecutionFactory, IDisposable
+    private sealed class TestDetachedProcessFactory : IProcessExecutionFactory, IDisposable
     {
         public enum ChildProcessMode
         {
@@ -1131,7 +1131,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
             StartedProcess = Process.Start(CreateProcessStartInfo(workingDirectory)) ?? throw new InvalidOperationException("Failed to start test child process.");
             Started.SetResult();
-            return Task.FromResult<IProcessExecution>(new DetachedProcessExecutionAdapter(new DetachedProcess(StartedProcess)));
+            return Task.FromResult<IProcessExecution>(new MonitoredProcessExecutionAdapter(StartedProcess));
         }
 
         public void Dispose()
@@ -1195,7 +1195,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         }
 
         private sealed class TestDetachedProcessExecution(
-            TestDetachedProcessLauncher launcher,
+            TestDetachedProcessFactory launcher,
             string fileName,
             IReadOnlyList<string> arguments,
             string workingDirectory,
@@ -1237,7 +1237,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         }
     }
 
-    private sealed class DetachedProcessExecutionAdapter(DetachedProcess process) : IProcessExecution
+    private sealed class MonitoredProcessExecutionAdapter(Process process, Process? exitMonitorProcess = null, DateTimeOffset? startTime = null) : IProcessExecution
     {
         public string FileName => string.Empty;
 
@@ -1245,13 +1245,31 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public IReadOnlyDictionary<string, string?> EnvironmentVariables => new Dictionary<string, string?>();
 
-        public int ProcessId => process.Id;
+        public int ProcessId { get; } = process.Id;
 
-        public DateTimeOffset? StartTime => process.StartTime;
+        public DateTimeOffset? StartTime { get; } = startTime ?? GetStartTime(process);
 
-        public bool HasExited => process.HasExited;
+        public bool HasExited => exitMonitorProcess?.HasExited ?? process.HasExited;
 
-        public int? ExitCode => process.ExitCode;
+        public int? ExitCode
+        {
+            get
+            {
+                if (exitMonitorProcess is { HasExited: true } monitorProcess)
+                {
+                    return monitorProcess.ExitCode;
+                }
+
+                try
+                {
+                    return process.ExitCode;
+                }
+                catch (InvalidOperationException)
+                {
+                    return null;
+                }
+            }
+        }
 
         public Task<bool> StartAsync(CancellationToken cancellationToken)
         {
@@ -1261,8 +1279,16 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)
         {
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            return process.ExitCode ?? -1;
+            if (exitMonitorProcess is not null)
+            {
+                await exitMonitorProcess.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return ExitCode ?? -1;
         }
 
         public void Kill(bool entireProcessTree) => process.Kill(entireProcessTree);
@@ -1270,7 +1296,20 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         public ValueTask DisposeAsync()
         {
             process.Dispose();
+            exitMonitorProcess?.Dispose();
             return ValueTask.CompletedTask;
+        }
+
+        private static DateTimeOffset? GetStartTime(Process process)
+        {
+            try
+            {
+                return ProcessStartTimeHelper.TryGetProcessStartTime(process.Id) ?? new DateTimeOffset(process.StartTime);
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                return null;
+            }
         }
     }
 

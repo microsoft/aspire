@@ -22,7 +22,7 @@ internal sealed partial class IsolatedProcess
     /// (<c>PROC_THREAD_ATTRIBUTE_JOB_LIST</c>) even if the child does not need a new console group.
     /// </summary>
     /// <remarks>
-    /// Unlike <see cref="DetachedProcessLauncher"/>, this launcher consumes the child's
+    /// Unlike <see cref="Aspire.Cli.DotNet.DetachedProcessExecution"/>, this launcher consumes the child's
     /// stdout/stderr line-by-line via anonymous pipes. stdin is wired to NUL because we
     /// don't supply input to the interactive child, but Windows still requires a valid
     /// handle when STARTF_USESTDHANDLES is set and the other two stdio handles are real

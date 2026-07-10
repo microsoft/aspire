@@ -6,10 +6,11 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using Aspire.Cli.Processes;
 
-namespace Aspire.Cli.Processes;
+namespace Aspire.Cli.DotNet;
 
-internal static partial class DetachedProcessLauncher
+internal sealed partial class DetachedProcessExecution
 {
     /// <summary>
     /// Windows implementation using <see cref="WindowsProcessInterop.SpawnProcess"/>
@@ -48,7 +49,7 @@ internal static partial class DetachedProcessLauncher
             Stdout: nulRawHandle,
             Stderr: nulRawHandle);
 
-        // The detached launcher's caller-facing surface takes (predicate, additional) — translate
+        // The detached execution surface takes (predicate, additional) — translate
         // here into the single-dict shape that SpawnProcess now expects. When the
         // caller passes neither, leave environment null so the child inherits the parent env
         // verbatim (no allocation).
@@ -91,7 +92,7 @@ internal static partial class DetachedProcessLauncher
         Process detachedProcess;
         try
         {
-            detachedProcess = Process.GetProcessById(pi.dwProcessId);
+            detachedProcess = System.Diagnostics.Process.GetProcessById(pi.dwProcessId);
         }
         finally
         {

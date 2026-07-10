@@ -3,16 +3,17 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using Aspire.Cli.Processes;
 using Microsoft.Extensions.Logging;
 
-namespace Aspire.Cli.Processes;
+namespace Aspire.Cli.DotNet;
 
-internal static partial class DetachedProcessLauncher
+internal sealed partial class DetachedProcessExecution
 {
     /// <summary>
     /// Unix implementation using DCP's <c>fork-process</c> helper.
     /// </summary>
-    private static async Task<DetachedProcess> StartUnix(
+    private static async Task<DetachedChildProcess> StartUnix(
         string dcpPath,
         string fileName,
         IReadOnlyList<string> arguments,
@@ -75,7 +76,7 @@ internal static partial class DetachedProcessLauncher
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        var dcpProcess = Process.Start(startInfo)
+        var dcpProcess = System.Diagnostics.Process.Start(startInfo)
             ?? throw new InvalidOperationException("Failed to start DCP fork-process.");
 
         // Read stderr concurrently so DCP cannot block while reporting a launch error.
@@ -111,7 +112,7 @@ internal static partial class DetachedProcessLauncher
             }
 
             ObserveDcpForkProcessStderr(stderrTask, logger);
-            return new DetachedProcess(Process.GetProcessById(childPid), dcpProcess);
+            return new DetachedChildProcess(System.Diagnostics.Process.GetProcessById(childPid), dcpProcess);
         }
         catch
         {

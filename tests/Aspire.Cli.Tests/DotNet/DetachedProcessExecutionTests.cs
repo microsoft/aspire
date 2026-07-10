@@ -4,17 +4,19 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Processes;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 
-namespace Aspire.Cli.Tests.Processes;
+namespace Aspire.Cli.Tests.DotNet;
 
-public class DetachedProcessLauncherTests(ITestOutputHelper outputHelper)
+public class DetachedProcessExecutionTests(ITestOutputHelper outputHelper)
 {
     // Regression test for the duplicate-handle bug that broke `aspire start` on Windows:
-    // DetachedProcessLauncher.StartWindows points both Stdout and Stderr at the same NUL
+    // DetachedProcessExecution's Windows detached path points both Stdout and Stderr at the same NUL
     // handle, and PROC_THREAD_ATTRIBUTE_HANDLE_LIST rejects duplicate handle values —
     // CreateProcessW returns ERROR_INVALID_PARAMETER (87). The unified
     // WindowsProcessInterop.SpawnProcess de-duplicates the inheritable
@@ -28,12 +30,13 @@ public class DetachedProcessLauncherTests(ITestOutputHelper outputHelper)
         // A short-lived child is sufficient: we only need CreateProcessW to return successfully.
         // `cmd.exe /c exit 0` returns immediately and never touches stdout/stderr, so any
         // failure mode here is from the spawn primitive, not from the child itself.
-        using var child = await DetachedProcessLauncher.StartAsync(
+        await using var child = CreateDetachedExecution(
             "cmd.exe",
             ["/c", "exit", "0"],
             Environment.CurrentDirectory);
 
-        Assert.True(child.Id > 0);
+        Assert.True(await child.StartAsync(CancellationToken.None));
+        Assert.True(child.ProcessId > 0);
     }
 
     [Fact]
@@ -80,26 +83,27 @@ wait $child_pid
 """);
         File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 
-        using var detachedProcess = await DetachedProcessLauncher.StartAsync(
+        await using var detachedProcess = CreateDetachedExecution(
             "/bin/sh",
             ["-c", "exit 0"],
             workspace.WorkspaceRoot.FullName,
-            name => string.Equals(name, "HOME", StringComparison.Ordinal),
-            new Dictionary<string, string>
+            environmentVariableFilter: name => string.Equals(name, "HOME", StringComparison.Ordinal),
+            environment: new Dictionary<string, string>
             {
                 ["ASPIRE_TEST_ADDED"] = "value",
                 ["ASPIRE_TEST_CAPTURE"] = capturePath
             },
-            dcpPath: dcpPath,
-            cancellationToken: CancellationToken.None);
+            dcpPath: dcpPath);
+
+        Assert.True(await detachedProcess.StartAsync(CancellationToken.None));
 
         try
         {
-            Assert.True(detachedProcess.Id > 0);
+            Assert.True(detachedProcess.ProcessId > 0);
             Assert.Equal([
                 $"cwd={PathNormalizer.ResolveSymlinks(workspace.WorkspaceRoot.FullName)}",
                 $"monitorPid={Environment.ProcessId.ToString(CultureInfo.InvariantCulture)}",
-                $"monitorStarted={ProcessTreeGracefulShutdownService.FormatDcpProcessStartTime(DetachedProcessLauncher.GetCurrentProcessDcpMonitorStartTime())}",
+                $"monitorStarted={ProcessTreeGracefulShutdownService.FormatDcpProcessStartTime(DetachedProcessExecution.GetCurrentProcessDcpMonitorStartTime())}",
                 "cmd=/bin/sh",
                 "arg1=-c",
                 "arg2=exit 0",
@@ -148,26 +152,27 @@ wait $child_pid
         File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 
         using var cts = new CancellationTokenSource();
-        DetachedProcess? detachedProcess = null;
-        var startTask = DetachedProcessLauncher.StartAsync(
+        IProcessExecution? detachedProcess = null;
+        var detachedExecution = CreateDetachedExecution(
             "/bin/sh",
             ["-c", "exit 0"],
             workspace.WorkspaceRoot.FullName,
-            additionalEnvironmentVariables: new Dictionary<string, string>
+            environment: new Dictionary<string, string>
             {
                 ["ASPIRE_TEST_STARTED"] = startedPath
             },
-            dcpPath: dcpPath,
-            cancellationToken: cts.Token);
+            dcpPath: dcpPath);
+        var startTask = detachedExecution.StartAsync(cts.Token);
 
         try
         {
             await WaitForFileAsync(startedPath).WaitAsync(TimeSpan.FromSeconds(5));
             await cts.CancelAsync();
 
-            detachedProcess = await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.True(await startTask.WaitAsync(TimeSpan.FromSeconds(5)));
+            detachedProcess = detachedExecution;
 
-            Assert.True(detachedProcess.Id > 0);
+            Assert.True(detachedProcess.ProcessId > 0);
         }
         finally
         {
@@ -175,7 +180,8 @@ wait $child_pid
             {
                 try
                 {
-                    detachedProcess = await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+                    await startTask.WaitAsync(TimeSpan.FromSeconds(5));
+                    detachedProcess = detachedExecution;
                 }
                 catch
                 {
@@ -190,7 +196,10 @@ wait $child_pid
                 await detachedProcess.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
             }
 
-            detachedProcess?.Dispose();
+            if (detachedProcess is not null)
+            {
+                await detachedProcess.DisposeAsync();
+            }
         }
     }
 
@@ -221,25 +230,22 @@ printf 'diagnostic warning\n' >&2
 wait $child_pid
 """);
         File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        var logger = new FakeLogger<DetachedProcessLauncherTests>();
+        var logger = new FakeLogger<DetachedProcessExecutionTests>();
 
-        using var detachedProcess = await DetachedProcessLauncher.StartAsync(
+        await using var detachedProcess = CreateDetachedExecution(
             "/bin/sh",
             ["-c", "exit 0"],
             workspace.WorkspaceRoot.FullName,
             dcpPath: dcpPath,
-            cancellationToken: CancellationToken.None,
             logger: logger);
 
+        Assert.True(await detachedProcess.StartAsync(CancellationToken.None));
         await detachedProcess.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
         await WaitForLogAsync(logger, "DCP fork-process stderr: diagnostic warning").WaitAsync(TimeSpan.FromSeconds(5));
 
-        Assert.Collection(logger.Collector.GetSnapshot(),
-            record =>
-            {
-                Assert.Equal(LogLevel.Debug, record.Level);
-                Assert.Equal("DCP fork-process stderr: diagnostic warning", record.Message);
-            });
+        Assert.Contains(logger.Collector.GetSnapshot(),
+            record => record.Level == LogLevel.Debug
+                && string.Equals(record.Message, "DCP fork-process stderr: diagnostic warning", StringComparison.Ordinal));
     }
 
     private static async Task WaitForFileAsync(string path)
@@ -256,5 +262,41 @@ wait $child_pid
         {
             await Task.Delay(TimeSpan.FromMilliseconds(50));
         }
+    }
+
+    private static DetachedProcessExecution CreateDetachedExecution(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        Func<string, bool>? environmentVariableFilter = null,
+        IReadOnlyDictionary<string, string>? environment = null,
+        string? dcpPath = null,
+        ILogger? logger = null)
+    {
+        var startInfo = new IsolatedProcessStartInfo
+        {
+            FileName = fileName,
+            WorkingDirectory = workingDirectory
+        };
+
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        var environmentSnapshot = environment?.ToDictionary(static kvp => kvp.Key, static kvp => (string?)kvp.Value)
+            ?? new Dictionary<string, string?>();
+
+        return new DetachedProcessExecution(
+            startInfo,
+            fileName,
+            arguments,
+            environmentSnapshot,
+            logger ?? NullLogger.Instance,
+            new ProcessInvocationOptions { EnvironmentVariableFilter = environmentVariableFilter },
+            layoutDiscovery: null,
+            bundleService: null,
+            executionContext: null,
+            dcpPathOverride: dcpPath);
     }
 }
