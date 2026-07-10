@@ -119,8 +119,8 @@ public static class HostedAgentResourceBuilderExtensions
     /// <param name="configure">A callback to configure hosted agent deployment options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
-    /// The <paramref name="protocol"/> and <paramref name="protocolVersion"/> parameters affect both run and
-    /// publish mode. The configuration callback is applied in publish mode.
+    /// The <paramref name="protocol"/> parameter affects both run and publish mode. The <paramref name="protocolVersion"/>
+    /// parameter is emitted in publish mode. The configuration callback is applied in publish mode.
     /// </remarks>
     [AspireExportIgnore(Reason = "Action callback shape is awkward for polyglot hosts; the HostedAgentOptions DTO shape is exported instead.")]
     public static IResourceBuilder<T> AsHostedAgent<T>(
