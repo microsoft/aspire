@@ -70,14 +70,12 @@ internal sealed class ProcessInvocationOptions
     /// <summary>
     /// When <c>true</c>, the spawned process is given its own hidden console group (Windows) so the
     /// shutdown ladder in <see cref="ProcessExecution"/> can target the child with DCP's
-    /// <c>stop-process-tree</c> CTRL+C dance without also signalling the CLI. On Windows a
-    /// console-isolated child is additionally bound to the process-wide
-    /// <see cref="WindowsConsoleProcessJob"/> kill-on-close job as its crash-time safety net.
+    /// <c>stop-process-tree</c> CTRL+C dance without also signalling the CLI.
     /// </summary>
     /// <remarks>
     /// Pair with <see cref="GracefulShutdownSignaler"/> and <see cref="ShutdownService"/> for
-    /// graceful shutdown. A non-isolated background helper that should not outlive the CLI can opt
-    /// into the same kill-on-close job — without a new console group — via <see cref="KillOnParentExit"/>.
+    /// graceful shutdown. Pair with <see cref="KillOnParentExit"/> when the child should also be
+    /// bound to the Windows kill-on-close job as a crash-time safety net.
     /// Leaving the signaler/service unset means cancellation falls back to
     /// <see cref="ProcessExecution"/>'s force-kill mode, preserving back-compat
     /// for the many non-Run callers (build, restore, package add, layout, etc.).
@@ -104,6 +102,16 @@ internal sealed class ProcessInvocationOptions
     /// When <c>true</c>, the process is launched as a detached child that survives the launching CLI.
     /// </summary>
     public bool Detached { get; set; }
+
+    /// <summary>
+    /// Controls how the child process standard streams are wired.
+    /// </summary>
+    public ProcessStdioMode StdioMode { get; set; } = ProcessStdioMode.Pump;
+
+    /// <summary>
+    /// Test hook for overriding the DCP executable used to launch detached Unix processes.
+    /// </summary>
+    internal string? DetachedUnixLauncherPathOverride { get; set; }
 
     /// <summary>
     /// Optional predicate for inherited environment variable names that should be removed before applying caller-supplied variables.
@@ -142,10 +150,18 @@ internal sealed class ProcessInvocationOptions
         IsolateConsole = IsolateConsole,
         KillOnParentExit = KillOnParentExit,
         Detached = Detached,
+        StdioMode = StdioMode,
+        DetachedUnixLauncherPathOverride = DetachedUnixLauncherPathOverride,
         EnvironmentVariableFilter = EnvironmentVariableFilter,
         GracefulShutdownSignaler = GracefulShutdownSignaler,
         ShutdownService = ShutdownService,
     };
+}
+
+internal enum ProcessStdioMode
+{
+    Pump,
+    Suppress
 }
 
 internal sealed class DotNetCliRunner(
@@ -373,6 +389,8 @@ internal sealed class DotNetCliRunner(
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
             Detached = options.Detached,
+            StdioMode = options.StdioMode,
+            DetachedUnixLauncherPathOverride = options.DetachedUnixLauncherPathOverride,
             EnvironmentVariableFilter = options.EnvironmentVariableFilter,
             GracefulShutdownSignaler = options.GracefulShutdownSignaler,
             ShutdownService = options.ShutdownService,

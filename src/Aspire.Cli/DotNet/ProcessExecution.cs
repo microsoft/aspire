@@ -2,7 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.Bundles;
+using Aspire.Cli.Layout;
 using Aspire.Cli.Processes;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.DotNet;
@@ -26,6 +29,9 @@ internal sealed class ProcessExecution : IProcessExecution
     private readonly ILogger _logger;
     private readonly ProcessInvocationOptions _options;
     private readonly IEnvironment _hostEnvironment;
+    private readonly ILayoutDiscovery? _layoutDiscovery;
+    private readonly IBundleService? _bundleService;
+    private readonly CliExecutionContext? _executionContext;
     private IsolatedProcess? _process;
     private long _lastActivityTimestamp = Stopwatch.GetTimestamp();
     private int _disposed;
@@ -37,7 +43,10 @@ internal sealed class ProcessExecution : IProcessExecution
         IReadOnlyDictionary<string, string?> environment,
         ILogger logger,
         ProcessInvocationOptions options,
-        IEnvironment hostEnvironment)
+        IEnvironment hostEnvironment,
+        ILayoutDiscovery? layoutDiscovery = null,
+        IBundleService? bundleService = null,
+        CliExecutionContext? executionContext = null)
     {
         _startInfo = startInfo;
         _fileName = fileName;
@@ -46,6 +55,9 @@ internal sealed class ProcessExecution : IProcessExecution
         _logger = logger;
         _options = options;
         _hostEnvironment = hostEnvironment;
+        _layoutDiscovery = layoutDiscovery;
+        _bundleService = bundleService;
+        _executionContext = executionContext;
     }
 
     /// <inheritdoc />
@@ -67,36 +79,64 @@ internal sealed class ProcessExecution : IProcessExecution
     public int? ExitCode => Process.ExitCode;
 
     /// <inheritdoc />
-    public DateTimeOffset? StartTime
-    {
-        get
-        {
-            try
-            {
-                return ProcessStartTimeHelper.TryGetProcessStartTime(ProcessId) ?? new DateTimeOffset(Process.Process.StartTime);
-            }
-            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
-            {
-                return null;
-            }
-        }
-    }
+    public DateTimeOffset? StartTime => Process.StartTime;
 
     private IsolatedProcess Process =>
         _process ?? throw new InvalidOperationException($"{nameof(ProcessExecution)} has not been started. Call {nameof(StartAsync)} first.");
 
     /// <inheritdoc />
-    public Task<bool> StartAsync(CancellationToken cancellationToken)
+    public async Task<bool> StartAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        // IsolatedProcess.Start spawns the child and starts the stdout/stderr pumps. It throws on
+        using var layoutLease = await ResolveDetachedUnixLauncherAsync(cancellationToken).ConfigureAwait(false);
+
+        // IsolatedProcess.StartAsync spawns the child and starts the stdout/stderr pumps. It throws on
         // spawn failure (matching the old ProcessExecution, whose Process.Start could also throw),
         // so a successful return always means the child is running — there is no false-on-failure
         // case to model. The old Process.Start() == false path was dead for UseShellExecute=false.
-        _process = IsolatedProcess.Start(_startInfo, OnOutputLine, OnErrorLine);
+        _process = await IsolatedProcess.StartAsync(
+            _startInfo,
+            OnOutputLine,
+            OnErrorLine,
+            cancellationToken,
+            stderr => _logger.LogDebug("DCP fork-process stderr: {DcpStderr}", stderr)).ConfigureAwait(false);
         _logger.LogDebug("{FileName}({ProcessId}) started in {WorkingDirectory}", _fileName, _process.Id, _startInfo.WorkingDirectory);
-        return Task.FromResult(true);
+        return true;
+    }
+
+    private async Task<IDisposable?> ResolveDetachedUnixLauncherAsync(CancellationToken cancellationToken)
+    {
+        if (!_options.Detached || OperatingSystem.IsWindows() || _startInfo.DetachedUnixLauncherPath is not null)
+        {
+            return null;
+        }
+
+        if (_layoutDiscovery is null || _bundleService is null || _executionContext is null)
+        {
+            throw new InvalidOperationException("Detached Unix process launch requires Aspire layout services.");
+        }
+
+        var layoutLease = await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dcp-fork-process", cancellationToken).ConfigureAwait(false);
+        var dcpDirectory = layoutLease?.Layout.GetDcpPath() ??
+            _layoutDiscovery.GetComponentPath(LayoutComponent.Dcp, _executionContext.WorkingDirectory.FullName);
+        if (dcpDirectory is null)
+        {
+            layoutLease?.Dispose();
+            throw new InvalidOperationException("Could not find DCP in the Aspire layout.");
+        }
+
+        var dcpPath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
+        if (!File.Exists(dcpPath))
+        {
+            layoutLease?.Dispose();
+            throw new InvalidOperationException($"Could not find DCP executable at '{dcpPath}'.");
+        }
+
+        layoutLease?.AddEnvironment(_startInfo.Environment.Where(static kvp => kvp.Value is not null).ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value!, ProcessEnvironment.Comparer));
+        _startInfo.DetachedUnixLauncherPath = dcpPath;
+        _logger.LogDebug("Launching detached child process through DCP fork-process: {DcpPath}", dcpPath);
+        return layoutLease;
     }
 
     /// <inheritdoc />

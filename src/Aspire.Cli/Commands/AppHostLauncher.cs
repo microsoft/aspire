@@ -387,6 +387,8 @@ internal sealed class AppHostLauncher(
                 var options = new ProcessInvocationOptions
                 {
                     Detached = true,
+                    IsolateConsole = true,
+                    StdioMode = ProcessStdioMode.Suppress,
                     EnvironmentVariableFilter = IsExtensionEnvironmentVariable
                 };
                 childProcess = processExecutionFactory.CreateExecution(

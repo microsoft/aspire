@@ -59,6 +59,9 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
             WorkingDirectory = workingDirectory.FullName,
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
+            Detached = options.Detached,
+            StdioMode = options.StdioMode,
+            DetachedUnixLauncherPath = options.DetachedUnixLauncherPathOverride,
         };
 
         foreach (var a in args)
@@ -94,6 +97,9 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
             WorkingDirectory = startInfo.WorkingDirectory,
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
+            Detached = options.Detached,
+            StdioMode = options.StdioMode,
+            DetachedUnixLauncherPath = options.DetachedUnixLauncherPathOverride,
         };
 
         foreach (var arg in startInfo.ArgumentList)
@@ -185,25 +191,6 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
         var argsSnapshot = startInfo.ArgumentList.ToArray();
         var envSnapshot = new Dictionary<string, string?>(startInfo.Environment, StringComparer.OrdinalIgnoreCase);
 
-        if (options.Detached)
-        {
-            if (layoutDiscovery is null || bundleService is null || executionContext is null)
-            {
-                throw new InvalidOperationException("Detached process launch requires Aspire layout services.");
-            }
-
-            return new DetachedProcessExecution(
-                startInfo,
-                fileName,
-                argsSnapshot,
-                envSnapshot,
-                logger,
-                options,
-                layoutDiscovery,
-                bundleService,
-                executionContext);
-        }
-
-        return new ProcessExecution(startInfo, fileName, argsSnapshot, envSnapshot, logger, options, environment);
+        return new ProcessExecution(startInfo, fileName, argsSnapshot, envSnapshot, logger, options, environment, layoutDiscovery, bundleService, executionContext);
     }
 }

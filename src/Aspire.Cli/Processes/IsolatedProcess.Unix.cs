@@ -3,64 +3,63 @@
 
 using System.Diagnostics;
 using System.Globalization;
-using Aspire.Cli.Processes;
-using Microsoft.Extensions.Logging;
 
-namespace Aspire.Cli.DotNet;
+namespace Aspire.Cli.Processes;
 
-internal sealed partial class DetachedProcessExecution
+internal sealed partial class IsolatedProcess
 {
-    /// <summary>
-    /// Unix implementation using DCP's <c>fork-process</c> helper.
-    /// </summary>
-    private static async Task<DetachedChildProcess> StartUnix(
-        string dcpPath,
-        string fileName,
-        IReadOnlyList<string> arguments,
-        string workingDirectory,
-        IReadOnlyDictionary<string, string?> environment,
+    private static async Task<IsolatedProcess> StartDetachedUnixAsync(
+        IsolatedProcessStartInfo startInfo,
         CancellationToken cancellationToken,
-        ILogger? logger)
+        Action<string>? detachedLauncherDiagnosticCallback)
     {
-        var startInfo = new ProcessStartInfo
+        if (startInfo.DetachedUnixLauncherPath is null)
         {
-            FileName = dcpPath,
+            throw new InvalidOperationException("Unix detached process launch requires a DCP executable path.");
+        }
+
+        if (startInfo.StdioMode != Aspire.Cli.DotNet.ProcessStdioMode.Suppress)
+        {
+            throw new InvalidOperationException("Unix detached process launch only supports suppressed stdio.");
+        }
+
+        var dcpStartInfo = new ProcessStartInfo
+        {
+            FileName = startInfo.DetachedUnixLauncherPath,
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             RedirectStandardInput = false,
-            WorkingDirectory = workingDirectory
+            WorkingDirectory = startInfo.WorkingDirectory
         };
 
-        startInfo.ArgumentList.Add("fork-process");
-        startInfo.ArgumentList.Add("--monitor");
-        startInfo.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
-        startInfo.ArgumentList.Add("--monitor-identity-time");
-        startInfo.ArgumentList.Add(ProcessTreeGracefulShutdownService.FormatDcpProcessStartTime(GetCurrentProcessDcpMonitorStartTime()));
-        startInfo.ArgumentList.Add("--");
-        startInfo.ArgumentList.Add(fileName);
-        foreach (var arg in arguments)
+        dcpStartInfo.ArgumentList.Add("fork-process");
+        dcpStartInfo.ArgumentList.Add("--monitor");
+        dcpStartInfo.ArgumentList.Add(Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
+        dcpStartInfo.ArgumentList.Add("--monitor-identity-time");
+        dcpStartInfo.ArgumentList.Add(ProcessTreeGracefulShutdownService.FormatDcpProcessStartTime(GetCurrentProcessDcpMonitorStartTime()));
+        dcpStartInfo.ArgumentList.Add("--");
+        dcpStartInfo.ArgumentList.Add(startInfo.FileName);
+        foreach (var arg in startInfo.ArgumentList)
         {
-            startInfo.ArgumentList.Add(arg);
+            dcpStartInfo.ArgumentList.Add(arg);
         }
 
-        // DCP inherits this complete environment and then execs the detached child with it.
-        ProcessEnvironment.ApplyTo(startInfo, environment);
+        ProcessEnvironment.ApplyTo(dcpStartInfo, startInfo.GetEnvironmentForSpawn());
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        var dcpProcess = System.Diagnostics.Process.Start(startInfo)
+        var dcpProcess = Process.Start(dcpStartInfo)
             ?? throw new InvalidOperationException("Failed to start DCP fork-process.");
 
-        // Read stderr concurrently so DCP cannot block while reporting a launch error.
         var stderrTask = dcpProcess.StandardError.ReadToEndAsync(CancellationToken.None);
         var stdoutLineTask = dcpProcess.StandardOutput.ReadLineAsync(CancellationToken.None).AsTask();
 
         try
         {
             // Once DCP has started, wait for it to report the detached child PID even if the caller
-            // cancels. Without the PID, AppHostLauncher cannot clean up a child that was already forked.
+            // cancels. Without the PID, callers cannot clean up a child that was already forked.
             var completedTask = await Task.WhenAny(stdoutLineTask, dcpProcess.WaitForExitAsync(CancellationToken.None)).ConfigureAwait(false);
             if (completedTask != stdoutLineTask)
             {
@@ -85,8 +84,24 @@ internal sealed partial class DetachedProcessExecution
                 throw new InvalidOperationException($"DCP fork-process did not return a valid child process ID. stdout: '{trimmedStdout}'");
             }
 
-            ObserveDcpForkProcessStderr(stderrTask, logger);
-            return new DetachedChildProcess(System.Diagnostics.Process.GetProcessById(childPid), dcpProcess);
+            ObserveDcpForkProcessStderr(stderrTask, detachedLauncherDiagnosticCallback);
+            var childProcess = Process.GetProcessById(childPid);
+            return WrapStartedProcess(
+                startInfo,
+                childProcess,
+                TextReader.Null,
+                TextReader.Null,
+                static (_, _) => { },
+                static (_, _) => { },
+                extraDispose: () =>
+                {
+                    dcpProcess.Dispose();
+                    return ValueTask.CompletedTask;
+                },
+                exitCodeProvider: () => dcpProcess.HasExited ? dcpProcess.ExitCode : childProcess.ExitCode,
+                hasExitedProvider: () => dcpProcess.HasExited,
+                waitForExitProvider: dcpProcess.WaitForExitAsync,
+                startTime: GetStartTime(childProcess));
         }
         catch
         {
@@ -101,31 +116,25 @@ internal sealed partial class DetachedProcessExecution
         }
     }
 
-    private static void ObserveDcpForkProcessStderr(Task<string> stderrTask, ILogger? logger)
+    private static void ObserveDcpForkProcessStderr(Task<string> stderrTask, Action<string>? detachedLauncherDiagnosticCallback)
     {
         _ = stderrTask.ContinueWith(
             static (completedTask, state) =>
             {
-                var logger = (ILogger?)state;
-                if (completedTask.IsFaulted)
+                var detachedLauncherDiagnosticCallback = (Action<string>?)state;
+                if (!completedTask.IsCompletedSuccessfully)
                 {
-                    logger?.LogDebug(completedTask.Exception, "Failed to read DCP fork-process stderr.");
                     _ = completedTask.Exception;
-                    return;
-                }
-
-                if (completedTask.IsCanceled)
-                {
                     return;
                 }
 
                 var stderr = completedTask.Result.Trim();
                 if (stderr.Length > 0)
                 {
-                    logger?.LogDebug("DCP fork-process stderr: {DcpStderr}", stderr);
+                    detachedLauncherDiagnosticCallback?.Invoke(stderr);
                 }
             },
-            logger,
+            detachedLauncherDiagnosticCallback,
             CancellationToken.None,
             TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);

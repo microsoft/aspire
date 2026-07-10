@@ -4,13 +4,13 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Text;
+using Aspire.Cli.DotNet;
 
 namespace Aspire.Cli.Processes;
 
 /// <summary>
 /// Mirrors <see cref="ProcessStartInfo"/>. Differences from the BCL shape:
-/// stdout/stderr are always redirected (so there is no <c>RedirectStandardOutput</c>
-/// flag — see <see cref="IsolatedProcess.Start"/>), and <see cref="KillOnParentExit"/> adds
+/// stdout/stderr handling is controlled by <see cref="StdioMode"/>, and <see cref="KillOnParentExit"/> adds
 /// a parent-lifetime safety net for children that should not outlive the CLI.
 /// </summary>
 internal sealed class IsolatedProcessStartInfo
@@ -49,12 +49,25 @@ internal sealed class IsolatedProcessStartInfo
     /// group on Windows (CREATE_NEW_CONSOLE | SW_HIDE) so a graceful CTRL+C can target it without
     /// also signalling the CLI. When <see langword="false"/> the child
     /// is spawned via an ordinary redirected <see cref="Process.Start(ProcessStartInfo)"/> unless
-    /// <see cref="KillOnParentExit"/> is also supplied. Job-protected Windows children use the suspended-create
-    /// launcher even when they do not need graceful console isolation so they are atomically assigned
-    /// to the kill-on-parent-exit job. On Unix both modes are identical because SIGTERM via the process
-    /// group covers teardown, so only Windows branches on this flag.
+    /// <see cref="KillOnParentExit"/> or <see cref="Detached"/> requires the Windows interop launcher.
+    /// On Unix this flag does not affect process creation.
     /// </summary>
     public bool IsolateConsole { get; init; } = true;
+
+    /// <summary>
+    /// When <see langword="true"/>, launch the child so it can outlive the current CLI process.
+    /// </summary>
+    public bool Detached { get; init; }
+
+    /// <summary>
+    /// Controls how stdout/stderr are wired for the child process.
+    /// </summary>
+    public ProcessStdioMode StdioMode { get; init; } = ProcessStdioMode.Pump;
+
+    /// <summary>
+    /// DCP executable used to create detached Unix process groups until the platform exposes this directly.
+    /// </summary>
+    public string? DetachedUnixLauncherPath { get; set; }
 
     /// <summary>
     /// Returns true when the caller has read or modified <see cref="Environment"/>. The
@@ -93,7 +106,7 @@ internal sealed class IsolatedProcessStartInfo
 }
 
 /// <summary>
-/// Mirrors <see cref="System.Diagnostics.Process"/> for a child spawned by <see cref="Start"/>.
+/// Mirrors <see cref="System.Diagnostics.Process"/> for a child spawned by <see cref="StartAsync"/>.
 /// On Windows, callers can request either kill-on-parent-exit, a hidden console
 /// (CREATE_NEW_CONSOLE | SW_HIDE) for targeted graceful shutdown, or both. On Unix it's a thin
 /// <see cref="Process.Start(ProcessStartInfo)"/> wrapper because SIGTERM via the process group is
@@ -102,7 +115,7 @@ internal sealed class IsolatedProcessStartInfo
 /// <remarks>
 /// Differences from the BCL shape worth knowing about:
 /// <list type="bullet">
-///   <item>Stdout/stderr handlers are required at <see cref="Start"/> time — no
+///   <item>Stdout/stderr handlers are required at <see cref="StartAsync"/> time — no
 ///   <c>OutputDataReceived</c> event you can forget to subscribe, no <c>BeginOutputReadLine</c>
 ///   to forget to call. Handlers receive <c>(sender, line)</c>, mirroring
 ///   <see cref="DataReceivedEventHandler"/>.</item>
@@ -117,6 +130,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     private readonly Func<int>? _exitCodeProvider;
     private readonly Func<bool>? _hasExitedProvider;
     private readonly Func<CancellationToken, Task>? _waitForExitProvider;
+    private readonly DateTimeOffset? _startTime;
     private int _disposed;
 
     private IsolatedProcess(
@@ -128,7 +142,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         Func<TimeSpan, ValueTask> disposeAsync,
         Func<int>? exitCodeProvider,
         Func<bool>? hasExitedProvider,
-        Func<CancellationToken, Task>? waitForExitProvider)
+        Func<CancellationToken, Task>? waitForExitProvider,
+        DateTimeOffset? startTime)
     {
         Process = process;
         Id = process.Id;
@@ -140,6 +155,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         _exitCodeProvider = exitCodeProvider;
         _hasExitedProvider = hasExitedProvider;
         _waitForExitProvider = waitForExitProvider;
+        _startTime = startTime;
     }
 
     /// <summary>The underlying <see cref="System.Diagnostics.Process"/> for escape-hatch scenarios.</summary>
@@ -177,6 +193,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     /// See https://github.com/dotnet/runtime/issues/45003.
     /// </summary>
     public int ExitCode => _exitCodeProvider?.Invoke() ?? Process.ExitCode;
+
+    public DateTimeOffset? StartTime => _startTime;
 
     /// <summary>
     /// Completes when the stdout pump finishes (pipe EOF — i.e. child closed the stream
@@ -234,24 +252,33 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     /// draining so the child cannot back-pressure on a full pipe.
     /// </param>
     /// <param name="standardErrorHandler">Stderr counterpart of <paramref name="standardOutputHandler"/>.</param>
-    public static IsolatedProcess Start(
+    /// <param name="cancellationToken">Cancellation token for asynchronous launch work.</param>
+    /// <param name="detachedLauncherDiagnosticCallback">Receives detached-launcher diagnostics, when a launcher is used.</param>
+    public static Task<IsolatedProcess> StartAsync(
         IsolatedProcessStartInfo startInfo,
         Action<IsolatedProcess, string> standardOutputHandler,
-        Action<IsolatedProcess, string> standardErrorHandler)
+        Action<IsolatedProcess, string> standardErrorHandler,
+        CancellationToken cancellationToken,
+        Action<string>? detachedLauncherDiagnosticCallback = null)
     {
         ArgumentNullException.ThrowIfNull(startInfo);
         ArgumentNullException.ThrowIfNull(standardOutputHandler);
         ArgumentNullException.ThrowIfNull(standardErrorHandler);
 
+        if (startInfo.Detached && !OperatingSystem.IsWindows())
+        {
+            return StartDetachedUnixAsync(startInfo, cancellationToken, detachedLauncherDiagnosticCallback);
+        }
+
         // Windows parent-exit protection requires the suspended-create / assign / resume ceremony in
         // StartWindows. Route protected helpers through that path even when they do not need a
         // graceful CTRL+C console group; otherwise use the ordinary redirected Process.Start shape.
-        if (OperatingSystem.IsWindows() && (startInfo.IsolateConsole || startInfo.KillOnParentExit))
+        if (OperatingSystem.IsWindows() && (startInfo.IsolateConsole || startInfo.KillOnParentExit || startInfo.Detached))
         {
-            return StartWindows(startInfo, standardOutputHandler, standardErrorHandler);
+            return Task.FromResult(StartWindows(startInfo, standardOutputHandler, standardErrorHandler));
         }
 
-        return StartRedirected(startInfo, standardOutputHandler, standardErrorHandler, redirectStandardInput: !startInfo.IsolateConsole);
+        return Task.FromResult(StartRedirected(startInfo, standardOutputHandler, standardErrorHandler, redirectStandardInput: !startInfo.IsolateConsole));
     }
 
     /// <summary>
@@ -275,6 +302,11 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         Action<IsolatedProcess, string> standardErrorHandler,
         bool redirectStandardInput)
     {
+        if (startInfo.StdioMode != ProcessStdioMode.Pump)
+        {
+            throw new InvalidOperationException($"The redirected Process.Start path does not support {nameof(ProcessStdioMode)}.{startInfo.StdioMode}.");
+        }
+
         var psi = new ProcessStartInfo
         {
             FileName = startInfo.FileName,
@@ -361,6 +393,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     /// consistent with the ExitCode/HasExited reads; Unix uses the default
     /// <see cref="Process.WaitForExitAsync(CancellationToken)"/>.
     /// </param>
+    /// <param name="startTime">Optional cached child process start time.</param>
     private static IsolatedProcess WrapStartedProcess(
         IsolatedProcessStartInfo startInfo,
         Process process,
@@ -371,7 +404,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         Func<ValueTask>? extraDispose,
         Func<int>? exitCodeProvider = null,
         Func<bool>? hasExitedProvider = null,
-        Func<CancellationToken, Task>? waitForExitProvider = null)
+        Func<CancellationToken, Task>? waitForExitProvider = null,
+        DateTimeOffset? startTime = null)
     {
         // Snapshot identity off startInfo now — the caller may mutate the startInfo after
         // we return and we don't want the wrapper to observe those changes.
@@ -434,7 +468,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
             DisposeAsync,
             exitCodeProvider,
             hasExitedProvider,
-            waitForExitProvider);
+            waitForExitProvider,
+            startTime ?? GetStartTime(process));
 
         // The pumps capture 'isolated' as the handler's "sender". The assignment is fully
         // visible to the pump's Task.Run worker by happens-before semantics.
@@ -445,6 +480,18 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         _ = ForwardPumpAsync(errorPump.Completion, errorTcs);
 
         return isolated;
+    }
+
+    private static DateTimeOffset? GetStartTime(Process process)
+    {
+        try
+        {
+            return ProcessStartTimeHelper.TryGetProcessStartTime(process.Id) ?? new DateTimeOffset(process.StartTime);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            return null;
+        }
     }
 
     /// <summary>

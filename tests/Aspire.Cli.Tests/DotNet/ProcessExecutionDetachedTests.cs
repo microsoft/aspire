@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Processes;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -13,10 +14,10 @@ using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.DotNet;
 
-public class DetachedProcessExecutionTests(ITestOutputHelper outputHelper)
+public class ProcessExecutionDetachedTests(ITestOutputHelper outputHelper)
 {
     // Regression test for the duplicate-handle bug that broke `aspire start` on Windows:
-    // DetachedProcessExecution's Windows detached path points both Stdout and Stderr at the same NUL
+    // The Windows detached path points both Stdout and Stderr at the same NUL
     // handle, and PROC_THREAD_ATTRIBUTE_HANDLE_LIST rejects duplicate handle values —
     // CreateProcessW returns ERROR_INVALID_PARAMETER (87). The unified
     // WindowsProcessInterop.SpawnProcess de-duplicates the inheritable
@@ -103,7 +104,7 @@ wait $child_pid
             Assert.Equal([
                 $"cwd={PathNormalizer.ResolveSymlinks(workspace.WorkspaceRoot.FullName)}",
                 $"monitorPid={Environment.ProcessId.ToString(CultureInfo.InvariantCulture)}",
-                $"monitorStarted={ProcessTreeGracefulShutdownService.FormatDcpProcessStartTime(DetachedProcessExecution.GetCurrentProcessDcpMonitorStartTime())}",
+                $"monitorStarted={ProcessTreeGracefulShutdownService.FormatDcpProcessStartTime(IsolatedProcess.GetCurrentProcessDcpMonitorStartTime())}",
                 "cmd=/bin/sh",
                 "arg1=-c",
                 "arg2=exit 0",
@@ -230,7 +231,7 @@ printf 'diagnostic warning\n' >&2
 wait $child_pid
 """);
         File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        var logger = new FakeLogger<DetachedProcessExecutionTests>();
+        var logger = new FakeLogger<ProcessExecutionFactory>();
 
         await using var detachedProcess = CreateDetachedExecution(
             "/bin/sh",
@@ -264,45 +265,28 @@ wait $child_pid
         }
     }
 
-    private static DetachedProcessExecution CreateDetachedExecution(
+    private static IProcessExecution CreateDetachedExecution(
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
         Func<string, bool>? environmentVariableFilter = null,
         IReadOnlyDictionary<string, string>? environment = null,
         string? dcpPath = null,
-        ILogger? logger = null)
+        ILogger<ProcessExecutionFactory>? logger = null)
     {
-        var startInfo = new IsolatedProcessStartInfo
-        {
-            FileName = fileName,
-            WorkingDirectory = workingDirectory
-        };
-
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        var environmentSnapshot = ProcessEnvironment.LoadParentEnvironment();
-        if (environment is not null)
-        {
-            foreach (var (key, value) in environment)
-            {
-                environmentSnapshot[key] = value;
-            }
-        }
-
-        return new DetachedProcessExecution(
-            startInfo,
+        var factory = new ProcessExecutionFactory(new TestEnvironment(), logger ?? NullLogger<ProcessExecutionFactory>.Instance);
+        return factory.CreateExecution(
             fileName,
-            arguments,
-            environmentSnapshot,
-            logger ?? NullLogger.Instance,
-            new ProcessInvocationOptions { EnvironmentVariableFilter = environmentVariableFilter },
-            layoutDiscovery: null,
-            bundleService: null,
-            executionContext: null,
-            dcpPathOverride: dcpPath);
+            arguments.ToArray(),
+            environment?.ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value),
+            new DirectoryInfo(workingDirectory),
+            new ProcessInvocationOptions
+            {
+                Detached = true,
+                IsolateConsole = true,
+                StdioMode = ProcessStdioMode.Suppress,
+                EnvironmentVariableFilter = environmentVariableFilter,
+                DetachedUnixLauncherPathOverride = dcpPath
+            });
     }
 }

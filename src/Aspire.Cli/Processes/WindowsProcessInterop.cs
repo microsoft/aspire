@@ -11,10 +11,10 @@ namespace Aspire.Cli.Processes;
 /// <summary>
 /// Helpers and Win32 interop declarations shared by Windows process launchers that hand off
 /// raw command lines, environment blocks, and STARTUPINFO structures to <c>CreateProcessW</c>.
-/// Both <see cref="Aspire.Cli.DotNet.DetachedProcessExecution"/> and <see cref="IsolatedProcess"/>
-/// open the same console-isolation flags, attribute-list shape, and stdio-handle plumbing, so
-/// the constants, structs, and P/Invoke declarations live here to prevent the two callers from
-/// silently drifting apart on something like "this one accidentally lacks
+/// Detached and console-isolated <see cref="IsolatedProcess"/> launches open the same
+/// console-isolation flags, attribute-list shape, and stdio-handle plumbing, so the constants,
+/// structs, and P/Invoke declarations live here to prevent the callers from silently drifting
+/// apart on something like "this one accidentally lacks
 /// <c>CREATE_UNICODE_ENVIRONMENT</c>" or "these struct layouts diverged after a Win32 SDK update".
 /// </summary>
 internal static partial class WindowsProcessInterop
@@ -335,9 +335,8 @@ internal static partial class WindowsProcessInterop
     /// no window in which the child exists outside the job — even a launcher that dies (or is
     /// SIGKILL'd) the instant after <c>CreateProcess</c> returns cannot leak it, and no child can spawn
     /// a grandchild that escapes the job before the safety net is in place.
-    /// <see cref="Aspire.Cli.DotNet.DetachedProcessExecution"/> passes <see langword="null" /> because detached children
-    /// must outlive the CLI; <see cref="IsolatedProcess"/> passes the singleton CLI job so children
-    /// die with a parent crash.
+    /// Detached launches pass <see langword="null" /> because detached children must outlive
+    /// the CLI; parent-owned launches pass the singleton CLI job so children die with a parent crash.
     /// </param>
     /// <returns>
     /// The raw <see cref="PROCESS_INFORMATION"/> from <c>CreateProcessW</c>. The caller owns
@@ -362,8 +361,8 @@ internal static partial class WindowsProcessInterop
         //
         // The whitelist MUST NOT contain duplicate handle values. PROC_THREAD_ATTRIBUTE_HANDLE_LIST
         // is documented to reject duplicates and CreateProcessW returns ERROR_INVALID_PARAMETER
-        // (87) if any handle appears more than once. DetachedProcessExecution legitimately points
-        // both Stdout and Stderr at the same NUL handle (child writes go nowhere), so we
+        // (87) if any handle appears more than once. Suppressed-stdio launches legitimately point both
+        // Stdout and Stderr at the same NUL handle (child writes go nowhere), so we
         // de-duplicate by handle value before populating the attribute. See:
         // https://devblogs.microsoft.com/oldnewthing/20111216-00/?p=8873
         var inheritable = new List<nint>(3);

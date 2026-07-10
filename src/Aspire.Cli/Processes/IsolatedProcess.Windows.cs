@@ -7,6 +7,7 @@ using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
+using Aspire.Cli.DotNet;
 
 namespace Aspire.Cli.Processes;
 
@@ -21,8 +22,8 @@ internal sealed partial class IsolatedProcess
     /// (<c>PROC_THREAD_ATTRIBUTE_JOB_LIST</c>) even if the child does not need a new console group.
     /// </summary>
     /// <remarks>
-    /// Unlike <see cref="Aspire.Cli.DotNet.DetachedProcessExecution"/>, this launcher consumes the child's
-    /// stdout/stderr line-by-line via anonymous pipes. stdin is wired to NUL because we
+    /// In pumped stdio mode this launcher consumes the child's stdout/stderr line-by-line via
+    /// anonymous pipes. stdin is wired to NUL because we
     /// don't supply input to the interactive child, but Windows still requires a valid
     /// handle when STARTF_USESTDHANDLES is set and the other two stdio handles are real
     /// pipes — passing IntPtr.Zero in that combination leaves child stdin referencing
@@ -35,6 +36,11 @@ internal sealed partial class IsolatedProcess
         Action<IsolatedProcess, string> standardOutputHandler,
         Action<IsolatedProcess, string> standardErrorHandler)
     {
+        if (startInfo.StdioMode == ProcessStdioMode.Suppress)
+        {
+            return StartWindowsSuppressed(startInfo, standardOutputHandler, standardErrorHandler);
+        }
+
         var nulStdinHandle = WindowsProcessInterop.CreateFileW(
             "NUL",
             WindowsProcessInterop.GenericRead,
@@ -75,13 +81,10 @@ internal sealed partial class IsolatedProcess
             // null = inherit parent env block.
             var environment = startInfo.GetEnvironmentForSpawn();
 
-            // Assign the child to the process-wide kill-on-close job when EITHER console isolation or
-            // explicit parent-exit protection is requested. Console-isolated children (e.g. the AppHost
-            // run path) have always relied on the job as their crash-time safety net, so that coupling is
-            // preserved here; KillOnParentExit additionally opts non-console background helpers
-            // (aspire-managed nuget / dashboard, the profiling collector) into the same job so they cannot
-            // outlive a hard-killed CLI. 
-            var jobHandle = (startInfo.IsolateConsole || startInfo.KillOnParentExit) ? WindowsConsoleProcessJob.Shared.Handle : null;
+            // Parent-exit protection is independent from console isolation. A child can need a fresh
+            // console group for targeted CTRL+C without also needing the kill-on-close job, and detached
+            // children intentionally omit the job so they survive the launching CLI.
+            var jobHandle = startInfo.KillOnParentExit ? WindowsConsoleProcessJob.Shared.Handle : null;
             var pi = WindowsProcessInterop.SpawnProcess(
                 startInfo.FileName,
                 startInfo.ArgumentList,
@@ -190,6 +193,82 @@ internal sealed partial class IsolatedProcess
             // null-equivalent by calling Dispose() inline; the SafeFileHandle still tracks
             // disposed state so a second Dispose call is a no-op.)
             nulStdinHandle.Dispose();
+            throw;
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static IsolatedProcess StartWindowsSuppressed(
+        IsolatedProcessStartInfo startInfo,
+        Action<IsolatedProcess, string> standardOutputHandler,
+        Action<IsolatedProcess, string> standardErrorHandler)
+    {
+        using var nulHandle = WindowsProcessInterop.CreateFileW(
+            "NUL",
+            WindowsProcessInterop.GenericWrite,
+            WindowsProcessInterop.FileShareWrite,
+            nint.Zero,
+            WindowsProcessInterop.OpenExisting,
+            0,
+            nint.Zero);
+
+        if (nulHandle.IsInvalid)
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to open NUL device");
+        }
+
+        if (!WindowsProcessInterop.SetHandleInformation(nulHandle, WindowsProcessInterop.HandleFlagInherit, WindowsProcessInterop.HandleFlagInherit))
+        {
+            throw new Win32Exception(Marshal.GetLastWin32Error(), "Failed to set NUL handle inheritance");
+        }
+
+        var nulRawHandle = nulHandle.DangerousGetHandle();
+        var stdio = new WindowsProcessInterop.StdioHandles(
+            Stdin: nint.Zero,
+            Stdout: nulRawHandle,
+            Stderr: nulRawHandle);
+
+        var pi = WindowsProcessInterop.SpawnProcess(
+            startInfo.FileName,
+            startInfo.ArgumentList,
+            startInfo.WorkingDirectory,
+            stdio,
+            startInfo.GetEnvironmentForSpawn(),
+            createNewConsole: startInfo.IsolateConsole,
+            jobHandle: startInfo.KillOnParentExit ? WindowsConsoleProcessJob.Shared.Handle : null);
+
+        WindowsProcessHandleTracker? processHandle = new(new(pi.hProcess, ownsHandle: true), nameof(IsolatedProcess));
+        try
+        {
+            var process = Process.GetProcessById(pi.dwProcessId);
+            WindowsProcessInterop.CloseHandle(pi.hThread);
+
+            var capturedProcessHandle = processHandle ?? throw new InvalidOperationException("Windows process handle was not initialized.");
+            processHandle = null;
+
+            ValueTask ExtraDispose()
+            {
+                try { capturedProcessHandle.Dispose(); } catch { }
+                return ValueTask.CompletedTask;
+            }
+
+            return WrapStartedProcess(
+                startInfo,
+                process,
+                TextReader.Null,
+                TextReader.Null,
+                standardOutputHandler,
+                standardErrorHandler,
+                ExtraDispose,
+                exitCodeProvider: () => capturedProcessHandle.ExitCode,
+                hasExitedProvider: () => capturedProcessHandle.HasExited,
+                waitForExitProvider: capturedProcessHandle.WaitForExitAsync);
+        }
+        catch
+        {
+            try { WindowsProcessInterop.TerminateProcess(pi.hProcess, 1); } catch { }
+            try { WindowsProcessInterop.CloseHandle(pi.hThread); } catch { }
+            processHandle?.Dispose();
             throw;
         }
     }
