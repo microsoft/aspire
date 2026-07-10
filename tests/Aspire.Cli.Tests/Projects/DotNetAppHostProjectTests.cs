@@ -697,18 +697,19 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public async Task RunAsync_ResourceCleanupSettingsBypassLaunchProfileOverrides()
+    public async Task RunAsync_ResourceCleanupSettingsPreserveLaunchProfileInputs()
     {
         var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
         Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
         File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
             {
               "profiles": {
                 "http": {
                   "commandName": "Project",
+                  "commandLineArgs": "--from-profile profile-value",
                   "environmentVariables": {
-                    "DcpPublisher__ResourceCleanupMode": "false",
-                    "DcpPublisher__WaitForResourceCleanup": "false"
+                    "CUSTOM_ENV": "from-profile"
                   }
                 }
               }
@@ -718,27 +719,19 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         var runner = new TestDotNetCliRunner
         {
             BuildAsyncCallback = (_, _, _, _) => 0,
-            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
-            {
-                return (0, JsonDocument.Parse($$"""
-                    {
-                      "Properties": {
-                        "MSBuildVersion": "17.0.0",
-                        "IsAspireHost": "true",
-                        "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
-                        "TargetFramework": "net10.0"
-                      },
-                      "Items": {}
-                    }
-                    """));
-            }
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("dotnet run should not be used when the built target is known.")
         };
         var project = CreateDotNetAppHostProject(runner);
 
-        runner.RunAsyncCallback = (_, _, _, _, _, env, _, options, _) =>
+        runner.RunAppHostCommandAsyncCallback = (_, command, _, args, env, _, options, _) =>
         {
-            Assert.True(options.NoLaunchProfile);
+            Assert.Equal(appHostCommand.FullName, command);
+            Assert.False(options.NoLaunchProfile);
+            Assert.Equal(["--from-profile", "profile-value"], args);
             Assert.NotNull(env);
+            Assert.Equal("http", env["DOTNET_LAUNCH_PROFILE"]);
+            Assert.Equal("from-profile", env["CUSTOM_ENV"]);
             Assert.Equal("true", env[KnownConfigNames.DcpResourceCleanupMode]);
             Assert.Equal("true", env[KnownConfigNames.DcpWaitForResourceCleanup]);
             return Task.FromResult(124);
