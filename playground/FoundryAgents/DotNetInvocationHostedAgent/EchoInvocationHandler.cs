@@ -13,11 +13,24 @@ internal sealed class EchoInvocationHandler(EchoAIAgent agent) : InvocationHandl
         InvocationContext context,
         CancellationToken cancellationToken)
     {
-        using var reader = new StreamReader(request.Body);
-        var input = await reader.ReadToEndAsync(cancellationToken);
+        var input = await ReadInputAsync(request, cancellationToken);
         var agentResponse = await agent.RunAsync(input, cancellationToken: cancellationToken);
 
         response.ContentType = "text/plain";
         await response.WriteAsync(agentResponse.Text, cancellationToken);
     }
+
+    private static async Task<string> ReadInputAsync(HttpRequest request, CancellationToken cancellationToken)
+    {
+        if (request.HasJsonContentType())
+        {
+            var payload = await request.ReadFromJsonAsync<InvocationMessage>(cancellationToken).ConfigureAwait(false);
+            return payload?.Message ?? string.Empty;
+        }
+
+        using var reader = new StreamReader(request.Body);
+        return await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    private sealed record InvocationMessage(string Message);
 }

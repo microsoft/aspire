@@ -6,6 +6,7 @@
 using System.Net;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Tests.Utils;
@@ -154,7 +155,7 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public async Task AsHostedAgent_InRunMode_WithInvocationsProtocol_SendsTextPlainRequestBody()
+    public async Task AsHostedAgent_InRunMode_WithInvocationsProtocol_SendsJsonMessageRequestBody()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK, "agent response", "text/plain");
@@ -182,8 +183,8 @@ public class HostedAgentExtensionTests
         var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "send-message", arguments);
 
         Assert.True(result.Success);
-        Assert.Equal("hello from dashboard", fakeHandler.RequestContent);
-        Assert.Equal("text/plain", fakeHandler.RequestContentType);
+        Assert.Equal("application/json", fakeHandler.RequestContentType);
+        Assert.Equal("hello from dashboard", JsonNode.Parse(fakeHandler.RequestContent!)?["message"]?.GetValue<string>());
     }
 
     [Fact]
@@ -278,6 +279,31 @@ public class HostedAgentExtensionTests
         var configuration = new HostedAgentConfiguration("test-image");
         hostedAgent.Configure!(configuration);
 
+        var protocol = Assert.Single(configuration.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Responses, protocol.Protocol);
+        Assert.Equal("2.0.0", protocol.Version);
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithProjectAndConfigure_UsesDefaultResponsesProtocolAndAppliesConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project, options =>
+            {
+                options.Description = "configured agent";
+            });
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
+        Assert.Equal("configured agent", configuration.Description);
         var protocol = Assert.Single(configuration.ProtocolVersions);
         Assert.Equal(ProjectsAgentProtocol.Responses, protocol.Protocol);
         Assert.Equal("2.0.0", protocol.Version);
@@ -397,6 +423,54 @@ public class HostedAgentExtensionTests
         Assert.Equal(2m, configuration.Memory);
         Assert.Equal("unit-test", configuration.Metadata["scenario"]);
         Assert.Equal("my-value", configuration.EnvironmentVariables["MY_VAR"]);
+        var protocol = Assert.Single(configuration.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Invocations, protocol.Protocol);
+        Assert.Equal("1.0.0", protocol.Version);
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithConfigureCallback_EnsuresSelectedProtocolRemainsInConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project, HostedAgentProtocol.Invocations, "1.0.0", configuration =>
+            {
+                configuration.ProtocolVersions.Clear();
+            });
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
+        var protocol = Assert.Single(configuration.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Invocations, protocol.Protocol);
+        Assert.Equal("1.0.0", protocol.Version);
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithConfigureCallback_DoesNotDuplicateSelectedProtocol()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project, HostedAgentProtocol.Invocations, "1.0.0", configuration =>
+            {
+                configuration.ProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.0.0"));
+            });
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
         var protocol = Assert.Single(configuration.ProtocolVersions);
         Assert.Equal(ProjectsAgentProtocol.Invocations, protocol.Protocol);
         Assert.Equal("1.0.0", protocol.Version);

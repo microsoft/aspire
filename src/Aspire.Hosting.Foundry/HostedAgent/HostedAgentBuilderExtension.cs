@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -57,21 +56,21 @@ public static class HostedAgentResourceBuilderExtensions
     /// </summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder for the compute resource.</param>
-    /// <param name="project">The Microsoft Foundry project the hosted agent is deployed into.</param>
+    /// <param name="project">Optional Microsoft Foundry project resource used for both run and publish mode configuration. When <see langword="null"/>, an existing Foundry project in the model is reused or a new project is created in publish mode.</param>
+    /// <param name="configure">A callback to configure hosted agent deployment options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
     /// This C# convenience overload is not exported to polyglot app hosts. Polyglot hosts must declare the
-    /// hosted agent protocol and protocol version explicitly.
+    /// hosted agent protocol and protocol version explicitly. The configuration callback is applied in publish mode.
     /// </remarks>
     [AspireExportIgnore(Reason = "C# convenience overload; polyglot hosts must pass protocol and version explicitly.")]
     public static IResourceBuilder<T> AsHostedAgent<T>(
         this IResourceBuilder<T> builder,
-        IResourceBuilder<AzureCognitiveServicesProjectResource> project)
+        IResourceBuilder<AzureCognitiveServicesProjectResource>? project,
+        Action<HostedAgentConfiguration>? configure = null)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        ArgumentNullException.ThrowIfNull(project);
-
-        return AsHostedAgent(builder, project, HostedAgentProtocol.Responses, DefaultResponsesProtocolVersion, configure: null);
+        return ConfigureAsHostedAgent(builder, project, HostedAgentProtocol.Responses, DefaultResponsesProtocolVersion, configure);
     }
 
     // The internal AsHostedAgentForExport overload below is the polyglot-exported version of AsHostedAgent.
@@ -511,9 +510,18 @@ public static class HostedAgentResourceBuilderExtensions
     {
         return configuration =>
         {
-            configuration.ProtocolVersions.Add(protocolVersion);
             configure?.Invoke(configuration);
+            if (!configuration.ProtocolVersions.Any(existing => ProtocolVersionsEqual(existing, protocolVersion)))
+            {
+                configuration.ProtocolVersions.Add(protocolVersion);
+            }
         };
+    }
+
+    private static bool ProtocolVersionsEqual(ProtocolVersionRecord left, ProtocolVersionRecord right)
+    {
+        return left.Protocol == right.Protocol &&
+            string.Equals(left.Version, right.Version, StringComparison.Ordinal);
     }
 
     private static ProtocolVersionRecord CreateProtocolVersionRecord(HostedAgentProtocol protocol, string protocolVersion)
@@ -545,8 +553,9 @@ public static class HostedAgentResourceBuilderExtensions
             EndpointDisplayText = "Invocations Endpoint",
             PromptTitle = "Invocations API",
             ExpectsJsonResponse = false,
-            // Agent Framework's .NET invocations host passes the raw request body to InvocationHandler.
-            CreateRequestContent = input => new StringContent(input, Encoding.UTF8, "text/plain")
+            // Agent Framework's Python invocations host expects a JSON body with a "message" field:
+            // https://github.com/microsoft/agent-framework/blob/main/python/packages/foundry_hosting/agent_framework_foundry_hosting/_invocations.py
+            CreateRequestContent = input => JsonContent.Create(new { message = input })
         };
 
         public required string Path { get; init; }
