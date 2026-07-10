@@ -118,6 +118,33 @@ test(`${features("TK-PAGE-001")} composes an accessible dashboard page`, async (
   await expect(body).toContainText("frontend");
 });
 
+test(`${features("TK-MENU-001")} exercises the command menu with pointer and keyboard`, async ({ page }, testInfo) => {
+  const trigger = page.getByRole("button", { name: "Resource commands" });
+
+  await trigger.click();
+  const menu = page.getByRole("menu", { name: "Resource commands" });
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: /Start/ })).toBeDisabled();
+  await expect(menu.getByRole("menuitem", { name: /Restart/ })).toContainText("Restart the current process");
+  await expect(menu.getByRole("menuitem", { name: /Stop/ })).toHaveClass(/command-menu__item--danger/);
+  await attachScreenshot(page, testInfo, "toolkit-command-menu");
+
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+
+  await trigger.press("ArrowDown");
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: "Actions" }).getByRole("status")).toHaveText("Restart selected");
+  await expect(menu).toHaveCount(0);
+
+  await trigger.click();
+  await menu.getByRole("menuitem", { name: /Stop/ }).click();
+  await expect(page.getByRole("region", { name: "Actions" }).getByRole("status")).toHaveText("Stop selected");
+});
+
 test(`${features("TK-DIALOG-001", "TK-DRAWER-001")} exercises modal surfaces`, async ({ page }) => {
   const openConfirmation = page.getByRole("button", { name: "Confirm command" });
 

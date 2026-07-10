@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactElement } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ReactElement } from "react";
 import { Button as FluentButton } from "@fluentui/react-components";
 
 export type ButtonVariant = "secondary" | "primary" | "danger" | "ghost";
@@ -8,13 +8,17 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: "small" | "medium";
 }
 
-export function Button({ variant = "secondary", size = "medium", className, type = "button", ...props }: ButtonProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant = "secondary", size = "medium", className, type = "button", ...props },
+  ref,
+) {
   const variantClass = variant === "secondary" ? "" : `btn--${variant}`;
   const sizeClass = size === "small" ? "btn--sm" : "";
   const classes = ["btn", variantClass, sizeClass, className].filter(Boolean).join(" ");
 
   return (
     <FluentButton
+      ref={ref}
       {...props}
       type={type}
       appearance={variant === "primary" ? "primary" : variant === "ghost" ? "subtle" : "secondary"}
@@ -22,7 +26,7 @@ export function Button({ variant = "secondary", size = "medium", className, type
       className={classes}
     />
   );
-}
+});
 
 export function IconButton({
   label,

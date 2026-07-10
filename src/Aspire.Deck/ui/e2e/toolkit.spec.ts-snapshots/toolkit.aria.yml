@@ -21,6 +21,7 @@
     - button "Confirm command"
     - button "Open drawer"
     - button "Show notification"
+    - button "Resource commands"
   - region "Status":
     - heading "Status" [level=2]
     - text: Neutral Healthy Starting Degraded Failed Selected

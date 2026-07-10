@@ -308,6 +308,87 @@ a:focus-visible {
   border-color: var(--border-strong);
 }
 
+/* ---------- Command menu ---------- */
+.command-menu-root {
+  position: relative;
+  display: inline-flex;
+}
+.command-menu {
+  position: absolute;
+  z-index: 80;
+  min-width: 240px;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 4px;
+  color: var(--text);
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-pop);
+}
+.command-menu--below-start {
+  top: calc(100% + 6px);
+  left: 0;
+}
+.command-menu--above-end {
+  right: 0;
+  bottom: calc(100% + 6px);
+}
+.command-menu__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-xs);
+  text-align: left;
+}
+.command-menu__item:hover,
+.command-menu__item:focus-visible {
+  background: var(--bg-hover);
+  outline: none;
+}
+.command-menu__item[aria-disabled="true"] {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+.command-menu__item--danger {
+  color: var(--error);
+}
+.command-menu__item--danger:hover,
+.command-menu__item--danger:focus-visible {
+  color: var(--error);
+}
+.command-menu__icon {
+  width: 16px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 16px;
+}
+.command-menu__content {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+.command-menu__label {
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.command-menu__description {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.command-menu__divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
 /* ---------- Page layout ---------- */
 .page {
   height: 100%;

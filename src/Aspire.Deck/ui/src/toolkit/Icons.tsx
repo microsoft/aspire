@@ -15,6 +15,7 @@ import {
   Grid24Regular,
   Info24Regular,
   Link24Regular,
+  MoreHorizontal24Regular,
   Open24Regular,
   Pause24Regular,
   Play24Filled,
@@ -61,6 +62,7 @@ export const SunIcon = createIcon(WeatherSunny24Regular);
 export const MoonIcon = createIcon(WeatherMoon24Regular);
 export const BackIcon = createIcon(ArrowLeft24Regular);
 export const LinkIcon = createIcon(Link24Regular);
+export const MoreIcon = createIcon(MoreHorizontal24Regular);
 export const ChevronIcon = createIcon(ChevronRight24Regular);
 export const SuccessIcon = createIcon(CheckmarkCircle24Regular);
 export const WarningIcon = createIcon(Warning24Regular);

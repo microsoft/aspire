@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Checkbox,
+  CommandMenu,
   ConfirmDialog,
   DataTable,
   Divider,
@@ -12,6 +13,7 @@ import {
   IconButton,
   Highlighter,
   MoonIcon,
+  MoreIcon,
   NotificationStack,
   Page,
   PageActions,
@@ -21,11 +23,14 @@ import {
   PageSubtitle,
   PageTitle,
   PageToolbar,
+  PlayIcon,
   ResourcesIcon,
+  RestartIcon,
   SearchBox,
   SecretValue,
   Select,
   StateDot,
+  StopIcon,
   SunIcon,
   Tabs,
   type Column,
@@ -166,6 +171,37 @@ export function ToolkitPlayground({
             <Button data-testid="toolkit-confirm" onClick={requestConfirmation}>Confirm command</Button>
             <Button data-testid="toolkit-open-drawer" onClick={() => setDrawerOpen(true)}>Open drawer</Button>
             <Button onClick={() => setNotificationVisible(true)}>Show notification</Button>
+            <CommandMenu
+              ariaLabel="Resource commands"
+              triggerContent="Resource commands"
+              triggerIcon={<MoreIcon size={15} />}
+              entries={[
+                {
+                  id: "start",
+                  label: "Start",
+                  description: "Resource is already running",
+                  icon: <PlayIcon size={15} />,
+                  disabled: true,
+                  onSelect: () => setLastAction("Start selected"),
+                },
+                {
+                  id: "restart",
+                  label: "Restart",
+                  description: "Restart the current process",
+                  icon: <RestartIcon size={15} />,
+                  onSelect: () => setLastAction("Restart selected"),
+                },
+                { id: "command-divider", kind: "divider" },
+                {
+                  id: "stop",
+                  label: "Stop",
+                  description: "Stop the current process",
+                  icon: <StopIcon size={15} />,
+                  tone: "danger",
+                  onSelect: () => setLastAction("Stop selected"),
+                },
+              ]}
+            />
           </div>
         </section>
 
