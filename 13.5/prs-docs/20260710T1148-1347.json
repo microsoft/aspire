@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Documents interaction service updates; matched to 4 changelog entries (progress dialog, polyglot, file upload, stable promotion)",
+  "mergedAt": "2026-07-10T11:48:09Z",
+  "number": 1347,
+  "runDate": "2026-07-10T12:44:59Z",
+  "status": "included",
+  "title": "Document interaction service updates: progress dialogs, file input, and TypeScript support"
+}

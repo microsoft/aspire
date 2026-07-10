@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Website-only change replacing demo videos with image carousel on aspire.dev landing page; no product feature to document",
+  "mergedAt": "2026-07-10T12:32:10Z",
+  "number": 1333,
+  "runDate": "2026-07-10T12:44:59Z",
+  "status": "excluded",
+  "title": "Replace dashboard demo videos with a coverflow image carousel"
+}

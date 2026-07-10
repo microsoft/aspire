@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Documents --skills and --skill-locations flags; matched to skills-flag-for-aspire-init entry (PRs 18191, 18192)",
+  "mergedAt": "2026-07-10T11:26:48Z",
+  "number": 1348,
+  "runDate": "2026-07-10T12:44:59Z",
+  "status": "included",
+  "title": "Document --skills and --skill-locations flags for init and new commands"
+}
