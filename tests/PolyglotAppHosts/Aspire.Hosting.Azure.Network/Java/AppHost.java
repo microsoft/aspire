@@ -14,6 +14,17 @@ void main() throws Exception {
     stringVnet.addSubnet("string-subnet", "10.1.1.0/24", "string-subnet-name");
     parameterVnet.addSubnet("parameter-subnet", subnetPrefix, "parameter-subnet-name");
 
+    var delegationVnet = builder.addAzureVirtualNetwork("vnet-delegation", "10.2.0.0/16");
+
+    var aciSubnet = delegationVnet.addSubnet("aci-subnet", "10.2.0.0/23", null);
+    aciSubnet.withContainerInstanceDelegation();
+
+    var appEnvSubnet = delegationVnet.addSubnet("app-subnet", "10.2.2.0/23", null);
+    appEnvSubnet.withServiceDelegation("Microsoft.App/environments", null);
+
+    var namedDelegationSubnet = delegationVnet.addSubnet("named-subnet", "10.2.4.0/23", null);
+    namedDelegationSubnet.withServiceDelegation("Microsoft.App/environments", "app-delegation");
+
     var perimeter = builder.addNetworkSecurityPerimeter("data-boundary");
     var accessRule = new AzureNspAccessRule();
     accessRule.setName("allow-corp-network");
