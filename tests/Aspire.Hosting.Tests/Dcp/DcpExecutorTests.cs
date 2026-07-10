@@ -3415,6 +3415,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => appExecutor.StopAsync(CancellationToken.None));
         Assert.Same(expectedException, exception);
+        Assert.Equal(1, kubernetesService.StopServerCallCount);
     }
 
     [Fact]

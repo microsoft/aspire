@@ -24,11 +24,13 @@ internal sealed class TestKubernetesService : IKubernetesService
     public ConcurrentQueue<CustomResource> CreatedResources { get; } = [];
     public ConcurrentQueue<string> DeletedResources { get; } = [];
     public Func<CancellationToken, Task>? CleanupResourcesAsyncCallback { get; set; }
+    public int StopServerCallCount => _stopServerCallCount;
 
     private readonly List<Channel<(WatchEventType, CustomResource)>> _watchChannels = [];
     private readonly Func<CustomResource, string, bool?, Stream> _startStream;
     private readonly bool _ignoreDeletes;
     private int _nextPort = StartOfAutoPortRange;
+    private int _stopServerCallCount;
 
     public TestKubernetesService(
         Func<CustomResource, string, Stream>? startStream = null,
@@ -312,6 +314,7 @@ internal sealed class TestKubernetesService : IKubernetesService
     public Task StopServerAsync(string resourceCleanup = "Full", CancellationToken cancellation = default)
     {
         cancellation.ThrowIfCancellationRequested();
+        Interlocked.Increment(ref _stopServerCallCount);
 
         lock (CreatedResources)
         {
