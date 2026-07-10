@@ -103,6 +103,32 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
+            // Step 1b: Isolate kubeconfig and the Radius (`rad`) config to throwaway files under the
+            // TemporaryWorkspace so this test never mutates the developer's real ~/.kube/config or
+            // ~/.rad/config.yaml (test-isolation requirement, .github/instructions/test-review-guidelines).
+            //
+            // - KUBECONFIG: az/kubectl/rad all honor it, so `az aks get-credentials` writes here and
+            //   every kube-touching command uses this file. Removed with the workspace on dispose.
+            // - rad config: `rad` only accepts a `--config` flag (no config env var), and `aspire deploy`
+            //   spawns `rad deploy` internally (FileName="rad", UseShellExecute=false -> PATH lookup;
+            //   see src/Aspire.Hosting.Radius/Publishing/RadiusDeploymentPipelineStep.cs). So we shadow
+            //   `rad` with a workspace-local shim earlier on PATH that injects
+            //   `--config <ws>/.rad/config.yaml` into every invocation (global flag, valid before any
+            //   subcommand). REAL_RAD is resolved BEFORE prepending the shim dir, so the shim never
+            //   recurses. This isolates the config file and its lock without backing up/restoring the
+            //   user's real config (which would race with any concurrent `rad` for the ~55-min run).
+            var wsRoot = workspace.WorkspaceRoot.FullName;
+            output.WriteLine("Step 1b: Isolating kubeconfig and rad config to the workspace...");
+            await auto.TypeAsync(
+                $"REAL_RAD=\"$(command -v rad)\" && " +
+                $"mkdir -p \"{wsRoot}/bin\" \"{wsRoot}/.rad\" \"{wsRoot}/.kube\" && " +
+                $"printf '#!/usr/bin/env bash\\nexec \"%s\" --config \"%s\" \"$@\"\\n' \"$REAL_RAD\" \"{wsRoot}/.rad/config.yaml\" > \"{wsRoot}/bin/rad\" && " +
+                $"chmod +x \"{wsRoot}/bin/rad\" && " +
+                $"export PATH=\"{wsRoot}/bin:$PATH\" && " +
+                $"export KUBECONFIG=\"{wsRoot}/.kube/config\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+
             output.WriteLine("Step 2: Registering required resource providers...");
             await auto.TypeAsync("az provider register --namespace Microsoft.ContainerService --wait && " +
                   "az provider register --namespace Microsoft.ContainerRegistry --wait");
@@ -146,6 +172,7 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             output.WriteLine("Step 7: Configuring kubectl credentials...");
+            // Writes to the isolated $KUBECONFIG (Step 1b), not the developer's ~/.kube/config.
             await auto.TypeAsync($"az aks get-credentials --resource-group {resourceGroupName} --name {clusterName} --overwrite-existing");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
@@ -169,9 +196,12 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // kubernetes` already ensures the `default` group and environment exist; `rad deploy`
             // (invoked by `aspire deploy`) passes no --workspace/--group/--environment, so it
             // resolves the default workspace scope. Create the workspace explicitly instead of
-            // relying on the interactive `rad init`.
+            // relying on the interactive `rad init`. This (and every other `rad`) goes through the
+            // Step 1b shim, so it writes the workspace-local config and sets itself current there.
+            // No `--force`: the isolated config starts empty, so the name can never collide with a
+            // pre-existing workspace (and there is no user workspace to clobber).
             output.WriteLine("Step 10: Creating Radius workspace (default scope)...");
-            await auto.TypeAsync($"rad workspace create kubernetes radius-e2e --context $(kubectl config current-context) --group default --environment default --force");
+            await auto.TypeAsync($"rad workspace create kubernetes radius-e2e --context $(kubectl config current-context) --group default --environment default");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
@@ -231,10 +261,16 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
                 $"builder.AddRadiusEnvironment(\"radius\").WithNamespace(\"{appNamespace}\");\n\nbuilder.Build().Run();");
 
             // WithContainerImage is Experimental (ASPIRERADIUS057) and the pipeline APIs used by
-            // compute environments are Experimental (ASPIREPIPELINES001); suppress both.
+            // compute environments are Experimental (ASPIREPIPELINES001); suppress both. Add each
+            // pragma independently so one already being present (e.g. a future template that emits
+            // ASPIREPIPELINES001 itself) never skips adding the other and fails the warning-as-error build.
             if (!content.Contains("#pragma warning disable ASPIREPIPELINES001"))
             {
-                content = "#pragma warning disable ASPIREPIPELINES001\n#pragma warning disable ASPIRERADIUS057\n" + content;
+                content = "#pragma warning disable ASPIREPIPELINES001\n" + content;
+            }
+            if (!content.Contains("#pragma warning disable ASPIRERADIUS057"))
+            {
+                content = "#pragma warning disable ASPIRERADIUS057\n" + content;
             }
 
             File.WriteAllText(appHostFilePath, content);
