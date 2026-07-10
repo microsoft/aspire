@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site frontend change - og:image:type meta tag, not related to any milestone changelog entry",
+  "mergedAt": "2026-07-09T11:17:31Z",
+  "number": 1337,
+  "runDate": "2026-07-10T00:25:47Z",
+  "status": "excluded",
+  "title": "Add og:image:type meta tag to social cards"
+}

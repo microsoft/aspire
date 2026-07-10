@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI bug fix - reverts ProjectLocator regression that stopped parent directory walk incorrectly",
+  "mergedAt": "2026-07-09T23:51:41Z",
+  "number": 18700,
+  "runDate": "2026-07-10T00:25:47Z",
+  "status": "included",
+  "title": "Revert ProjectLocator walk-stop behavior from #18683"
+}

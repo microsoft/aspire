@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard improvement - shows unsupported version modal when AppHost requires newer dashboard",
+  "mergedAt": "2026-07-09T08:53:28Z",
+  "number": 18679,
+  "runDate": "2026-07-10T00:25:47Z",
+  "status": "included",
+  "title": "Show unsupported AppHost dashboard version dialog"
+}

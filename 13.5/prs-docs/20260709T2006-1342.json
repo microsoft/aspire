@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "GitHub Actions workflow fix - CI infrastructure change, not milestone documentation",
+  "mergedAt": "2026-07-09T20:06:22Z",
+  "number": 1342,
+  "runDate": "2026-07-10T00:25:47Z",
+  "status": "excluded",
+  "title": "Fix Integration Data Updater auth via copilot-requests permission"
+}

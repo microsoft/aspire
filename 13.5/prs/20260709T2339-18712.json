@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "VS Code extension bug fix - debuggee exit code incorrectly reported as 0 causing dependent resources to start on failure",
+  "mergedAt": "2026-07-09T23:39:01Z",
+  "number": 18712,
+  "runDate": "2026-07-10T00:25:47Z",
+  "status": "included",
+  "title": "Fix VS Code extension ignoring non-zero debuggee exit code"
+}

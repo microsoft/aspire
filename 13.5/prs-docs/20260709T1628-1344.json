@@ -1,0 +1,9 @@
+{
+  "author": "alistairmatthews",
+  "comment": "KeyVault documentation correction - no matching changelog entry in current milestone batch",
+  "mergedAt": "2026-07-09T16:28:45Z",
+  "number": 1344,
+  "runDate": "2026-07-10T00:25:47Z",
+  "status": "excluded",
+  "title": "Correct the 'Reference an existing secret' code in the KeyVault documentation."
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Test-only fix for flaky test - no user-facing changes",
+  "mergedAt": "2026-07-09T19:37:10Z",
+  "number": 18702,
+  "runDate": "2026-07-10T00:25:47Z",
+  "status": "excluded",
+  "title": "Fix flaky RunCommand_DetachedChild_WhenSignaledBeforeReadiness test timeout"
+}

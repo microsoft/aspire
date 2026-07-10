@@ -1,0 +1,9 @@
+{
+  "author": "alistairmatthews",
+  "comment": "aspire init ServiceDefaults documentation correction - no matching changelog entry found for this change",
+  "mergedAt": "2026-07-09T16:29:29Z",
+  "number": 1340,
+  "runDate": "2026-07-10T00:25:47Z",
+  "status": "excluded",
+  "title": "Remove ServiceDefaults project from the aspire init output in 'Add Aspire to an existing app'"
+}

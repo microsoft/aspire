@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a regression in the Aspire CLI where project discovery incorrectly stopped searching parent directories for AppHost projects when encountering certain workspace configuration files.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-07-09T23:51:41Z",
+  "lastMergedAt": "2026-07-09T23:51:41Z",
+  "name": "Fix CLI project discovery regression",
+  "owner": "JamesNK",
+  "prs": [
+    18700
+  ]
+}
