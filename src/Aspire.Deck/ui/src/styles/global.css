@@ -697,6 +697,23 @@ table.data thead th {
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
+.data__sort {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  text-align: left;
+}
+.data__sort:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 3px;
+}
 table.data tbody td {
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);

@@ -1,5 +1,7 @@
 import type { FluentIcon, FluentIconsProps } from "@fluentui/react-icons";
 import {
+  ArrowSortDown24Regular,
+  ArrowSortUp24Regular,
   ArrowClockwise24Regular,
   ArrowLeft24Regular,
   Board24Regular,
@@ -61,6 +63,8 @@ export const EyeOffIcon = createIcon(EyeOff24Regular);
 export const SunIcon = createIcon(WeatherSunny24Regular);
 export const MoonIcon = createIcon(WeatherMoon24Regular);
 export const BackIcon = createIcon(ArrowLeft24Regular);
+export const SortAscendingIcon = createIcon(ArrowSortUp24Regular);
+export const SortDescendingIcon = createIcon(ArrowSortDown24Regular);
 export const LinkIcon = createIcon(Link24Regular);
 export const MoreIcon = createIcon(MoreHorizontal24Regular);
 export const ChevronIcon = createIcon(ChevronRight24Regular);

@@ -7,6 +7,7 @@ export const toolkitFeatures = {
   "TK-DIALOG-001": "Confirmation dialogs support cancel, confirm, and Escape dismissal.",
   "TK-DRAWER-001": "Drawers expose an accessible title, footer actions, close command, and Escape dismissal.",
   "TK-DATA-001": "Data tables retain semantic headers, filtering, row content, and empty results.",
+  "TK-DATA-SORT-001": "Data tables provide stable pointer sorting, aria-sort state, keyboard row activation, and selected-row semantics.",
   "TK-STATUS-001": "Badges and resource state indicators expose every semantic status tone.",
   "TK-EMPTY-001": "Empty states expose an icon, title, and supporting content.",
   "TK-NOTIFICATION-001": "Notifications expose semantic intent, actions, links, and explicit dismissal.",

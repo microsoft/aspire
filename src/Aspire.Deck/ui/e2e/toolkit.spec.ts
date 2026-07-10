@@ -286,6 +286,28 @@ test(`${features("TK-DATA-001")} filters semantic table rows and exposes empty r
   await expect(table).toContainText("No matching resources.");
 });
 
+test(`${features("TK-DATA-SORT-001")} sorts and activates data rows accessibly`, async ({ page }) => {
+  const table = page.getByRole("table");
+  const nameHeader = table.getByRole("columnheader", { name: "Name" });
+  const sortByName = nameHeader.getByRole("button", { name: "Name" });
+  const names = table.locator("tbody td:nth-child(2)");
+
+  await sortByName.click();
+  await expect(nameHeader).toHaveAttribute("aria-sort", "ascending");
+  await expect(names).toHaveText(["catalog-db", "frontend", "migration"]);
+
+  await sortByName.click();
+  await expect(nameHeader).toHaveAttribute("aria-sort", "descending");
+  await expect(names).toHaveText(["migration", "frontend", "catalog-db"]);
+
+  const frontend = table.getByRole("row", { name: /frontend/ });
+  await expect(frontend).toHaveAttribute("aria-selected", "false");
+  await frontend.focus();
+  await frontend.press("Enter");
+  await expect(frontend).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("region", { name: "Actions" }).getByRole("status")).toHaveText("frontend selected");
+});
+
 test(`${features("TK-SHELL-001")} switches and persists a readable Fluent theme`, async ({ page }) => {
   const root = page.locator("html");
   const secondary = page.getByRole("button", { name: "Secondary", exact: true });

@@ -59,7 +59,12 @@ const columns: Column<SampleResource>[] = [
     render: (resource) => <StateDot state={resource.state} stateStyle={resource.stateStyle} health={resource.health} />,
     width: "240px",
   },
-  { key: "name", header: "Name", render: (resource) => <span className="cell-name">{resource.name}</span> },
+  {
+    key: "name",
+    header: "Name",
+    render: (resource) => <span className="cell-name">{resource.name}</span>,
+    compare: (left, right) => left.name.localeCompare(right.name),
+  },
   { key: "type", header: "Type", render: (resource) => <Badge>{resource.type}</Badge>, width: "180px" },
 ];
 
@@ -80,6 +85,7 @@ export function ToolkitPlayground({
   const [selectedTab, setSelectedTab] = useState("overview");
   const [openAccordionItems, setOpenAccordionItems] = useState(["environment"]);
   const [pageRefreshCount, setPageRefreshCount] = useState(0);
+  const [selectedResource, setSelectedResource] = useState<string | null>(null);
 
   const filteredResources = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -319,7 +325,17 @@ export function ToolkitPlayground({
             <SearchBox value={query} onChange={setQuery} placeholder="Filter toolkit resources…" />
           </div>
           <div data-testid="toolkit-table">
-            <DataTable columns={columns} rows={filteredResources} rowKey={(resource) => resource.name} emptyMessage="No matching resources." />
+            <DataTable
+              columns={columns}
+              rows={filteredResources}
+              rowKey={(resource) => resource.name}
+              onRowClick={(resource) => {
+                setSelectedResource(resource.name);
+                setLastAction(`${resource.name} selected`);
+              }}
+              isSelected={(resource) => resource.name === selectedResource}
+              emptyMessage="No matching resources."
+            />
           </div>
         </section>
 
