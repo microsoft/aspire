@@ -96,7 +96,7 @@ Set in:
 - `tests/Directory.Build.targets` — filter shortcuts (`--filter-method`, `--filter-class`, `--filter-namespace`)
 - `tests/Shared/RepoTesting/Aspire.RepoTesting.targets` — `--filter-not-trait "category=failing"`, TRX filename
 
-The `category=failing` simple filter is skipped when `DisableDefaultFailingTestFilter=true`. Specialized partition entries use xUnit `--filter-query` because they must intersect two traits (`outerloop`/`quarantined` and `Partition`), and xUnit.net does not allow query filters to be mixed with simple filters. Those generated query filters include `category!=failing` instead.
+The `category=failing` simple filter is skipped when `DisableDefaultFailingTestFilter=true`. If a matrix entry uses xUnit `--filter-query`, xUnit.net does not allow that query filter to be mixed with simple filters, so `run-tests.yml` omits the explicit simple failing-test filter for that entry. Specialized partition-mode projects are collapsed to a single project-level trait-filtered entry, so the regular simple failing-test filter still applies there.
 
 **Do not put diagnostic args here.** They would duplicate with the explicit `-- <args>` passed by `run-tests.yml`.
 
@@ -120,7 +120,7 @@ dotnet <assembly>.dll \
   ${{ inputs.extraTestArgs }}
 ```
 
-MSBuild does not run in this path, so `TestingPlatformCommandLineArguments` does not apply. The `--filter-not-trait "category=failing"` is explicit here for that reason. When `inputs.extraTestArgs` contains `--filter-query`, `run-tests.yml` omits this simple filter because the generated query already includes `category!=failing`.
+MSBuild does not run in this path, so `TestingPlatformCommandLineArguments` does not apply. The `--filter-not-trait "category=failing"` is explicit here for that reason. When `inputs.extraTestArgs` contains `--filter-query`, `run-tests.yml` omits this simple filter because xUnit.net does not allow query filters to be mixed with simple filters.
 
 ### Non-nuget tests (`dotnet test`)
 

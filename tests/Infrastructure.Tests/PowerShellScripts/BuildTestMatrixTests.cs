@@ -284,7 +284,7 @@ public class BuildTestMatrixTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task SpecializedTraitFilterIsIntersectedWithEachShardFilter()
+    public async Task SpecializedTraitFilterCollapsesPartitionModeAndIntersectsClassShardFilter()
     {
         var artifactsDir = Path.Combine(_workspace.Path, "artifacts");
         Directory.CreateDirectory(artifactsDir);
@@ -326,11 +326,9 @@ public class BuildTestMatrixTests : IDisposable
         var regularEntry = Assert.Single(matrix.Tests, e => e.ProjectName == "RegularProject");
         Assert.Equal("--filter-trait \"outerloop=true\"", regularEntry.ExtraTestArgs);
 
-        var partitionEntry = Assert.Single(matrix.Tests, e => e.ProjectName == "PartitionProject" && e.Collection == "MyPartition");
-        Assert.Equal("--filter-query \"/[(outerloop=true)&(category!=failing)&(Partition=MyPartition)]\"", partitionEntry.ExtraTestArgs);
-
-        var uncollectedEntry = Assert.Single(matrix.Tests, e => e.ProjectName == "PartitionProject" && e.Collection == "*");
-        Assert.Equal("--filter-query \"/[(outerloop=true)&(category!=failing)&(Partition!=*)]\"", uncollectedEntry.ExtraTestArgs);
+        var partitionEntry = Assert.Single(matrix.Tests, e => e.ProjectName == "PartitionProject");
+        Assert.Equal("regular", partitionEntry.Type);
+        Assert.Equal("--filter-trait \"outerloop=true\"", partitionEntry.ExtraTestArgs);
 
         var classEntry = Assert.Single(matrix.Tests, e => e.ProjectName == "ClassProject");
         Assert.Equal("--filter-class \"MyNamespace.TestClass\" --filter-trait \"outerloop=true\"", classEntry.ExtraTestArgs);

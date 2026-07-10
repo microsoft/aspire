@@ -48,7 +48,14 @@ public sealed class CiWorkflowTests
             ".github/workflows/run-tests.yml",
             ".github/actions/enumerate-tests/**",
             ".github/workflows/build-cli-e2e-image.yml",
-            "eng/scripts/generate-specialized-test-projects-list.sh"
+            "eng/scripts/generate-specialized-test-projects-list.sh",
+            "eng/scripts/build-test-matrix.ps1",
+            "eng/scripts/expand-test-matrix-github.ps1",
+            "eng/scripts/split-test-matrix-by-deps.ps1",
+            "eng/TestEnumerationRunsheetBuilder/**",
+            "eng/AfterSolutionBuild.targets",
+            "eng/testing/CITestsProperties.props",
+            "tests/Directory.Build.targets"
         };
 
         foreach (var path in sharedPaths)

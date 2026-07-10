@@ -357,6 +357,13 @@ foreach ($metadataFile in $metadataFiles) {
     $partitionsJson = Get-Content -Raw -Path $partitionsFile | ConvertFrom-Json
     $testPartitions = $partitionsJson.testPartitions
 
+    if ($SpecializedTraitFilter -and @($testPartitions | Where-Object { $_ -match '^(collection:.+|uncollected:\*)$' }).Count -gt 0) {
+      Write-Host "  → Specialized partition-mode split test (collapsing to one trait-filtered entry)"
+      $entry = New-RegularTestEntry -Metadata $metadata
+      $matrixEntries.Add($entry)
+      continue
+    }
+
     $partitionCount = 0
     $classCount = 0
 

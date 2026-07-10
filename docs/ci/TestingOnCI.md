@@ -167,7 +167,7 @@ In `.github/workflows/tests.yml`, the workflow:
 
 Each job invokes `.github/workflows/run-tests.yml` with matrix parameters including `extraTestArgs` for filtering (e.g., `--filter-trait "Partition=X"`).
 
-Specialized workflows (`tests-outerloop.yml` and `tests-quarantine.yml`) generate their specialized trait filter into each matrix entry instead of appending one global filter at execution time. Regular and class-split entries use simple filters such as `--filter-trait "outerloop=true"` and `--filter-class "..." --filter-trait "outerloop=true"`. Partition-split entries use `--filter-query` so the specialized trait and `Partition` trait are intersected in one xUnit query filter; repeated positive `--filter-trait` arguments are ORed by xUnit.net and would broaden the run.
+Specialized workflows (`tests-outerloop.yml` and `tests-quarantine.yml`) generate their specialized trait filter into each matrix entry instead of appending one global filter at execution time. Regular entries use simple filters such as `--filter-trait "outerloop=true"`, and class-split entries use `--filter-class "..." --filter-trait "outerloop=true"`. Partition-mode split projects are collapsed to a single project-level trait-filtered entry in specialized workflows so empty partition shards are not scheduled.
 
 > **Note:** The workflow automatically prepends `--filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"` before any `extraTestArgs`, ensuring quarantined and outerloop tests are always excluded from the main test run.
 
