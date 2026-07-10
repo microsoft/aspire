@@ -30,6 +30,12 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
     // Protobuf sends strings as UTF8. Be conservative and assume the average character byte size is 2.
     public const int LogMaxBatchCharacters = 1024 * 1024 * 2;
 
+    /// <summary>
+    /// The minimum dashboard version required by this AppHost build.
+    /// Bump this when a new AppHost feature requires a newer dashboard.
+    /// </summary>
+    internal const string MinRequiredDashboardVersion = "13.5.0";
+
     // Calls that consume or produce streams must create a linked cancellation token
     // with IHostApplicationLifetime.ApplicationStopping to ensure eager cancellation
     // of pending connections during shutdown.
@@ -47,7 +53,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         return Task.FromResult(new ApplicationInformationResponse
         {
             ApplicationName = ComputeApplicationName(applicationName),
-            MinDashboardApiVersion = DashboardApiVersions.Current
+            MinDashboardVersion = MinRequiredDashboardVersion
         });
 
         static string ComputeApplicationName(string applicationName)

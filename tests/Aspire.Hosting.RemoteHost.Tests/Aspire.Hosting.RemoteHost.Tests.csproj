@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TestInteractionService.cs" LinkBase="shared" />
+    <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared\TemporaryWorkspace.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Managed\Aspire.Managed.csproj" />
