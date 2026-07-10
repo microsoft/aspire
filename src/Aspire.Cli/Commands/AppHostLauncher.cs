@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Profiling;
@@ -35,7 +36,7 @@ internal sealed class AppHostLauncher(
     ProfilingTelemetry profilingTelemetry,
     FileLoggerProvider fileLoggerProvider,
     ProcessTreeGracefulShutdownService processShutdownService,
-    IDetachedProcessLauncher detachedProcessLauncher,
+    IProcessExecutionFactory processExecutionFactory,
     ILogger<AppHostLauncher> logger,
     TimeProvider timeProvider)
 {
@@ -366,7 +367,7 @@ internal sealed class AppHostLauncher(
         return environment;
     }
 
-    private record LaunchResult(DetachedProcess? ChildProcess, IAppHostAuxiliaryBackchannel? Backchannel, DashboardUrlsState? DashboardUrls, bool ChildExitedEarly, int? ChildExitCode, DateTimeOffset? ChildStartedAt = null);
+    private record LaunchResult(IProcessExecution? ChildProcess, IAppHostAuxiliaryBackchannel? Backchannel, DashboardUrlsState? DashboardUrls, bool ChildExitedEarly, int? ChildExitCode, DateTimeOffset? ChildStartedAt = null);
 
     private async Task<LaunchResult> LaunchAndWaitForBackchannelAsync(
         string executablePath,
@@ -377,20 +378,26 @@ internal sealed class AppHostLauncher(
         Action<string> updateStatus,
         CancellationToken cancellationToken)
     {
-        DetachedProcess childProcess;
+        IProcessExecution childProcess;
 
         using (var spawnActivity = profilingTelemetry.StartDetachedSpawnChild(executablePath, childArgs, "run"))
         {
             try
             {
-                childProcess = await detachedProcessLauncher.StartAsync(
+                var options = new ProcessInvocationOptions
+                {
+                    Detached = true,
+                    EnvironmentVariableFilter = IsExtensionEnvironmentVariable
+                };
+                childProcess = processExecutionFactory.CreateExecution(
                     executablePath,
-                    childArgs,
-                    executionContext.WorkingDirectory.FullName,
-                    IsExtensionEnvironmentVariable,
+                    childArgs.ToArray(),
                     CreateDetachedChildEnvironment(Activity.Current),
-                    cancellationToken).ConfigureAwait(false);
-                spawnActivity.SetProcessId(childProcess.Id);
+                    executionContext.WorkingDirectory,
+                    options);
+
+                await childProcess.StartAsync(cancellationToken).ConfigureAwait(false);
+                spawnActivity.SetProcessId(childProcess.ProcessId);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -401,10 +408,10 @@ internal sealed class AppHostLauncher(
         }
 
         var childStartedAt = childProcess.StartTime;
-        logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.Id);
+        logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.ProcessId);
 
         var startTime = timeProvider.GetUtcNow();
-        using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.Id, expectedHash, legacyHashes.Count > 0);
+        using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.ProcessId, expectedHash, legacyHashes.Count > 0);
         var scanCount = 0;
         IAppHostAuxiliaryBackchannel? connection = null;
         DashboardUrlsState? dashboardUrls = null;
@@ -539,16 +546,16 @@ internal sealed class AppHostLauncher(
         return new LaunchResult(childProcess, null, dashboardUrls, false, 0, childStartedAt);
     }
 
-    private Task RequestGracefulShutdownThenForceKillAsync(DetachedProcess childProcess, DateTimeOffset? childStartedAt)
+    private Task RequestGracefulShutdownThenForceKillAsync(IProcessExecution childProcess, DateTimeOffset? childStartedAt)
     {
         return processShutdownService.StopProcessTreeAsync(
-            childProcess.Id,
+            childProcess.ProcessId,
             childStartedAt,
             includeStartTimeForDcp: true,
             CancellationToken.None);
     }
 
-    private LaunchResult CreateChildExitedLaunchResult(DetachedProcess childProcess, ProfilingTelemetry.ActivityScope waitForBackchannelActivity, DateTimeOffset? childStartedAt)
+    private LaunchResult CreateChildExitedLaunchResult(IProcessExecution childProcess, ProfilingTelemetry.ActivityScope waitForBackchannelActivity, DateTimeOffset? childStartedAt)
     {
         var exitCode = childProcess.ExitCode;
         if (exitCode is { } knownExitCode)
@@ -713,7 +720,7 @@ internal sealed class AppHostLauncher(
         }
 
         interactionService.DisplayError(RunCommandStrings.FailedToStartAppHost);
-        DisplayChildLogTail(childLogFile, result.ChildProcess.Id);
+        DisplayChildLogTail(childLogFile, result.ChildProcess.ProcessId);
         if (failureMessage is not null && !string.Equals(failureMessage, RunCommandStrings.FailedToStartAppHost, StringComparison.Ordinal))
         {
             interactionService.DisplayError(failureMessage);
@@ -786,14 +793,14 @@ internal sealed class AppHostLauncher(
     {
         var appHostInfo = result.Backchannel!.AppHostInfo;
         var dashboardUrls = result.DashboardUrls;
-        var pid = appHostInfo?.ProcessId ?? result.ChildProcess!.Id;
+        var pid = appHostInfo?.ProcessId ?? result.ChildProcess!.ProcessId;
 
         if (format == OutputFormat.Json)
         {
             var jsonResult = new DetachOutputInfo(
                 effectiveAppHostFile.FullName,
                 pid,
-                result.ChildProcess!.Id,
+                result.ChildProcess!.ProcessId,
                 dashboardUrls?.BaseUrlWithLoginToken,
                 childLogFile);
             var json = JsonSerializer.Serialize(jsonResult, RunCommandJsonContext.RelaxedEscaping.DetachOutputInfo);

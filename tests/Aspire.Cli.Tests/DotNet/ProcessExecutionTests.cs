@@ -63,7 +63,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
                 StandardErrorCallback = line => stderrBuilder.AppendLine(line)
             });
 
-        Assert.True(execution.Start());
+        Assert.True(await execution.StartAsync(CancellationToken.None));
 
         var exitCode = await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         await releaseTask.WaitAsync(TimeSpan.FromSeconds(1));
@@ -121,7 +121,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
                 StandardErrorCallback = line => stderrBuilder.AppendLine(line)
             });
 
-        Assert.True(execution.Start());
+        Assert.True(await execution.StartAsync(CancellationToken.None));
 
         var exitCode = await execution.WaitForExitAsync(CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
         await releaseTask.WaitAsync(TimeSpan.FromSeconds(1));
@@ -150,7 +150,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
             scriptFile,
             new ProcessInvocationOptions());
 
-        Assert.True(execution.Start());
+        Assert.True(await execution.StartAsync(CancellationToken.None));
 
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
@@ -178,7 +178,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
 
-        Assert.True(execution.Start());
+        Assert.True(await execution.StartAsync(CancellationToken.None));
 
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
@@ -209,7 +209,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
 
-        Assert.True(execution.Start());
+        Assert.True(await execution.StartAsync(CancellationToken.None));
 
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
@@ -239,7 +239,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 
         await using var execution = CreateExecution(scriptFile, isolateConsole, signaler, shutdownService);
 
-        Assert.True(execution.Start());
+        Assert.True(await execution.StartAsync(CancellationToken.None));
 
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();

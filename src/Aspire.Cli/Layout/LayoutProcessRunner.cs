@@ -50,7 +50,7 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
 
         await using var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, options);
 
-        if (!execution.Start())
+        if (!await execution.StartAsync(ct).ConfigureAwait(false))
         {
             throw new InvalidOperationException($"Failed to start process: {toolPath}");
         }
@@ -88,7 +88,7 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
 
         var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, effectiveOptions);
 
-        if (!execution.Start())
+        if (!await execution.StartAsync(CancellationToken.None).ConfigureAwait(false))
         {
             await execution.DisposeAsync().ConfigureAwait(false);
             throw new InvalidOperationException($"Failed to start process: {toolPath}");

@@ -6,6 +6,7 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
@@ -495,7 +496,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 throw new TimeoutException("Test child process did not exit.");
             }
 
-            return Task.FromResult(new DetachedProcess(detachedHandle, forkProcess, startTime: null));
+            return Task.FromResult<IProcessExecution>(new DetachedProcessExecutionAdapter(new DetachedProcess(detachedHandle, forkProcess, startTime: null)));
         };
 
         try
@@ -544,7 +545,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         using var harness = AppHostLauncherHarness.Create(outputHelper);
         Process? startedProcess = null;
-        DetachedProcess? detachedHandle = null;
+        DetachedProcessExecutionAdapter? detachedHandle = null;
         harness.ProcessLauncher.StartHandler = (_, _, _, _, _, _) =>
         {
             var startInfo = new ProcessStartInfo
@@ -556,8 +557,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             startInfo.ArgumentList.Add("sleep 0.2; exit 11");
 
             startedProcess = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start test process.");
-            detachedHandle = new DetachedProcess(Process.GetProcessById(startedProcess.Id));
-            return Task.FromResult(detachedHandle);
+            detachedHandle = new DetachedProcessExecutionAdapter(new DetachedProcess(Process.GetProcessById(startedProcess.Id)));
+            return Task.FromResult<IProcessExecution>(detachedHandle);
         };
 
         try
@@ -587,7 +588,10 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 await startedProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
             }
 
-            detachedHandle?.Dispose();
+            if (detachedHandle is not null)
+            {
+                await detachedHandle.DisposeAsync();
+            }
             startedProcess?.Dispose();
         }
     }
@@ -1057,7 +1061,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         }
     }
 
-    private sealed class TestDetachedProcessLauncher : IDetachedProcessLauncher, IDisposable
+    private sealed class TestDetachedProcessLauncher : IProcessExecutionFactory, IDisposable
     {
         public enum ChildProcessMode
         {
@@ -1073,7 +1077,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public Process? StartedProcess { get; private set; }
 
-        public Func<string, IReadOnlyList<string>, string, Func<string, bool>?, IReadOnlyDictionary<string, string>?, CancellationToken, Task<DetachedProcess>>? StartHandler { get; set; }
+        public Func<string, IReadOnlyList<string>, string, Func<string, bool>?, IReadOnlyDictionary<string, string>?, CancellationToken, Task<IProcessExecution>>? StartHandler { get; set; }
 
         public void StopStartedProcess()
         {
@@ -1084,21 +1088,38 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             }
         }
 
-        public Task<DetachedProcess> StartAsync(
+        public IProcessExecution CreateExecution(string fileName, string[] args, IDictionary<string, string>? env, DirectoryInfo workingDirectory, ProcessInvocationOptions options)
+        {
+            var environment = env is null ? null : new Dictionary<string, string>(env);
+            return new TestDetachedProcessExecution(this, fileName, args, workingDirectory.FullName, environment, options);
+        }
+
+        public IProcessExecution CreateExecution(ProcessStartInfo startInfo, ProcessInvocationOptions options)
+        {
+            var args = startInfo.ArgumentList.ToArray();
+            var env = startInfo.Environment
+                .Where(static kvp => kvp.Value is not null)
+                .ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value!);
+            var workingDirectory = string.IsNullOrEmpty(startInfo.WorkingDirectory) ? Directory.GetCurrentDirectory() : startInfo.WorkingDirectory;
+
+            return new TestDetachedProcessExecution(this, startInfo.FileName, args, workingDirectory, env, options);
+        }
+
+        private Task<IProcessExecution> StartCoreAsync(
             string fileName,
             IReadOnlyList<string> arguments,
             string workingDirectory,
-            Func<string, bool>? shouldRemoveEnvironmentVariable = null,
-            IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null,
-            CancellationToken cancellationToken = default)
+            ProcessInvocationOptions options,
+            IReadOnlyDictionary<string, string>? additionalEnvironmentVariables,
+            CancellationToken cancellationToken)
         {
             if (StartHandler is not null)
             {
-                return StartHandler(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables, cancellationToken);
+                return StartHandler(fileName, arguments, workingDirectory, options.EnvironmentVariableFilter, additionalEnvironmentVariables, cancellationToken);
             }
 
             _ = fileName;
-            _ = shouldRemoveEnvironmentVariable;
+            _ = options;
             _ = additionalEnvironmentVariables;
             _ = cancellationToken;
 
@@ -1110,7 +1131,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
             StartedProcess = Process.Start(CreateProcessStartInfo(workingDirectory)) ?? throw new InvalidOperationException("Failed to start test child process.");
             Started.SetResult();
-            return Task.FromResult(new DetachedProcess(StartedProcess));
+            return Task.FromResult<IProcessExecution>(new DetachedProcessExecutionAdapter(new DetachedProcess(StartedProcess)));
         }
 
         public void Dispose()
@@ -1171,6 +1192,85 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             }
 
             return arguments[logFileIndex + 1];
+        }
+
+        private sealed class TestDetachedProcessExecution(
+            TestDetachedProcessLauncher launcher,
+            string fileName,
+            IReadOnlyList<string> arguments,
+            string workingDirectory,
+            IReadOnlyDictionary<string, string>? environment,
+            ProcessInvocationOptions options) : IProcessExecution
+        {
+            private IProcessExecution? _inner;
+
+            public string FileName => fileName;
+
+            public IReadOnlyList<string> Arguments => arguments;
+
+            public IReadOnlyDictionary<string, string?> EnvironmentVariables { get; } =
+                environment?.ToDictionary(static kvp => kvp.Key, static kvp => (string?)kvp.Value)
+                ?? new Dictionary<string, string?>();
+
+            public int ProcessId => Inner.ProcessId;
+
+            public DateTimeOffset? StartTime => Inner.StartTime;
+
+            public bool HasExited => Inner.HasExited;
+
+            public int? ExitCode => Inner.ExitCode;
+
+            private IProcessExecution Inner =>
+                _inner ?? throw new InvalidOperationException("Test detached process has not been started.");
+
+            public async Task<bool> StartAsync(CancellationToken cancellationToken)
+            {
+                _inner = await launcher.StartCoreAsync(fileName, arguments, workingDirectory, options, environment, cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+
+            public Task<int> WaitForExitAsync(CancellationToken cancellationToken) => Inner.WaitForExitAsync(cancellationToken);
+
+            public void Kill(bool entireProcessTree) => Inner.Kill(entireProcessTree);
+
+            public ValueTask DisposeAsync() => Inner.DisposeAsync();
+        }
+    }
+
+    private sealed class DetachedProcessExecutionAdapter(DetachedProcess process) : IProcessExecution
+    {
+        public string FileName => string.Empty;
+
+        public IReadOnlyList<string> Arguments => [];
+
+        public IReadOnlyDictionary<string, string?> EnvironmentVariables => new Dictionary<string, string?>();
+
+        public int ProcessId => process.Id;
+
+        public DateTimeOffset? StartTime => process.StartTime;
+
+        public bool HasExited => process.HasExited;
+
+        public int? ExitCode => process.ExitCode;
+
+        public Task<bool> StartAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(true);
+        }
+
+        public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)
+        {
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            return process.ExitCode ?? -1;
+        }
+
+        public void Kill(bool entireProcessTree) => process.Kill(entireProcessTree);
+
+        public ValueTask DisposeAsync()
+        {
+            process.Dispose();
+            return ValueTask.CompletedTask;
         }
     }
 

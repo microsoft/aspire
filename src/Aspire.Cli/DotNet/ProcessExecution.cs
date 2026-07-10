@@ -10,7 +10,7 @@ namespace Aspire.Cli.DotNet;
 /// <summary>
 /// The single <see cref="IProcessExecution"/> implementation. Wraps an <see cref="IsolatedProcess"/>
 /// for isolated-console, kill-on-parent-exit, and ordinary redirected subprocesses. The child is
-/// spawned lazily on <see cref="Start"/> so callers that build an execution but never start it (e.g.
+/// spawned lazily on <see cref="IProcessExecution.StartAsync"/> so callers that build an execution but never start it (e.g.
 /// the extension-host launch path, which reads <see cref="Arguments"/> /
 /// <see cref="EnvironmentVariables"/> and returns before starting) don't orphan a process.
 /// </summary>
@@ -64,21 +64,39 @@ internal sealed class ProcessExecution : IProcessExecution
     public bool HasExited => Process.HasExited;
 
     /// <inheritdoc />
-    public int ExitCode => Process.ExitCode;
-
-    private IsolatedProcess Process =>
-        _process ?? throw new InvalidOperationException($"{nameof(ProcessExecution)} has not been started. Call {nameof(Start)} first.");
+    public int? ExitCode => Process.ExitCode;
 
     /// <inheritdoc />
-    public bool Start()
+    public DateTimeOffset? StartTime
     {
+        get
+        {
+            try
+            {
+                return ProcessStartTimeHelper.TryGetProcessStartTime(ProcessId) ?? new DateTimeOffset(Process.Process.StartTime);
+            }
+            catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                return null;
+            }
+        }
+    }
+
+    private IsolatedProcess Process =>
+        _process ?? throw new InvalidOperationException($"{nameof(ProcessExecution)} has not been started. Call {nameof(StartAsync)} first.");
+
+    /// <inheritdoc />
+    public Task<bool> StartAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
         // IsolatedProcess.Start spawns the child and starts the stdout/stderr pumps. It throws on
         // spawn failure (matching the old ProcessExecution, whose Process.Start could also throw),
         // so a successful return always means the child is running — there is no false-on-failure
         // case to model. The old Process.Start() == false path was dead for UseShellExecute=false.
         _process = IsolatedProcess.Start(_startInfo, OnOutputLine, OnErrorLine);
         _logger.LogDebug("{FileName}({ProcessId}) started in {WorkingDirectory}", _fileName, _process.Id, _startInfo.WorkingDirectory);
-        return true;
+        return Task.FromResult(true);
     }
 
     /// <inheritdoc />

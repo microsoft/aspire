@@ -3,23 +3,9 @@
 
 using System.ComponentModel;
 using System.Diagnostics;
-using Aspire.Cli.Bundles;
-using Aspire.Cli.Layout;
-using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Processes;
-
-internal interface IDetachedProcessLauncher
-{
-    Task<DetachedProcess> StartAsync(
-        string fileName,
-        IReadOnlyList<string> arguments,
-        string workingDirectory,
-        Func<string, bool>? shouldRemoveEnvironmentVariable = null,
-        IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null,
-        CancellationToken cancellationToken = default);
-}
 
 internal sealed class DetachedProcess : IDisposable
 {
@@ -100,63 +86,6 @@ internal sealed class DetachedProcess : IDisposable
         {
             return null;
         }
-    }
-}
-
-internal sealed class DefaultDetachedProcessLauncher(
-    ILayoutDiscovery layoutDiscovery,
-    IBundleService bundleService,
-    CliExecutionContext executionContext,
-    ILogger<DefaultDetachedProcessLauncher> logger) : IDetachedProcessLauncher
-{
-    public async Task<DetachedProcess> StartAsync(
-        string fileName,
-        IReadOnlyList<string> arguments,
-        string workingDirectory,
-        Func<string, bool>? shouldRemoveEnvironmentVariable = null,
-        IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null,
-        CancellationToken cancellationToken = default)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            return await DetachedProcessLauncher.StartAsync(
-                fileName,
-                arguments,
-                workingDirectory,
-                shouldRemoveEnvironmentVariable,
-                additionalEnvironmentVariables,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
-        }
-
-        using var layoutLease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dcp-fork-process", cancellationToken).ConfigureAwait(false);
-        var dcpDirectory = layoutLease?.Layout.GetDcpPath() ??
-            layoutDiscovery.GetComponentPath(LayoutComponent.Dcp, executionContext.WorkingDirectory.FullName);
-        if (dcpDirectory is null)
-        {
-            throw new InvalidOperationException("Could not find DCP in the Aspire layout.");
-        }
-
-        var dcpPath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
-        if (!File.Exists(dcpPath))
-        {
-            throw new InvalidOperationException($"Could not find DCP executable at '{dcpPath}'.");
-        }
-
-        Dictionary<string, string> effectiveEnvironment = additionalEnvironmentVariables is null
-            ? []
-            : new Dictionary<string, string>(additionalEnvironmentVariables);
-        layoutLease?.AddEnvironment(effectiveEnvironment);
-
-        logger.LogDebug("Launching detached child process through DCP fork-process: {DcpPath}", dcpPath);
-        return await DetachedProcessLauncher.StartAsync(
-            fileName,
-            arguments,
-            workingDirectory,
-            shouldRemoveEnvironmentVariable,
-            effectiveEnvironment,
-            dcpPath,
-            cancellationToken,
-            logger).ConfigureAwait(false);
     }
 }
 

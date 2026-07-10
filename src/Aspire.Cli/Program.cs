@@ -445,7 +445,6 @@ public class Program
         builder.Services.AddSingleton<IFeatures, Features>();
         builder.Services.AddTelemetryServices();
         builder.Services.AddTransient<IProcessExecutionFactory, ProcessExecutionFactory>();
-        builder.Services.AddSingleton<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
         // Windows-only crash-time safety net for interactive children spawned by
         // IsolatedProcess is provided by WindowsConsoleProcessJob.Shared — a process-wide
         // job created on first isolated spawn. The OS closes the job handle automatically on

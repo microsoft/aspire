@@ -274,7 +274,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         }
         catch (OperationCanceledException)
         {
-            completion.TrySetResult(execution.HasExited ? execution.ExitCode : -1);
+            completion.TrySetResult(execution.HasExited ? execution.ExitCode ?? -1 : -1);
         }
         catch (Exception ex)
         {
@@ -409,7 +409,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         {
             try
             {
-                _activity.SetProcessExitCode(execution.ExitCode);
+                _activity.SetProcessExitCode(execution.ExitCode ?? -1);
             }
             catch
             {

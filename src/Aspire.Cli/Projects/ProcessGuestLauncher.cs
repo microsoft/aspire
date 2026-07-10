@@ -77,7 +77,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         // The execution local is forward-referenced by the per-line callbacks so they can read the
         // child's pid per line. ProcessInvocationOptions.StandardOutputCallback is Action<string>
         // (line only), but the guest wants the pid in each trace line. The callbacks only fire after
-        // Start(), by which point `execution` is assigned and ProcessId is valid.
+        // StartAsync(), by which point `execution` is assigned and ProcessId is valid.
         IProcessExecution execution = null!;
 
         void HandleStdoutLine(string line)
@@ -145,7 +145,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
 
         try
         {
-            execution.Start();
+            await execution.StartAsync(cancellationToken).ConfigureAwait(false);
 
             _logger.LogDebug("{Language} guest process {ProcessId} started: {Command}", _language, execution.ProcessId, resolvedCommandPath);
             activity?.SetTag(TelemetryConstants.Tags.ProcessPid, execution.ProcessId);
@@ -174,7 +174,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
                 // distinguish user cancellation from internal teardown (surfacing captured output when
                 // the guest was killed because the AppHost system failed). Read the final code from the
                 // now-exited process; -1 only if the kill somehow left it observably alive.
-                finalExitCode = execution.HasExited ? execution.ExitCode : -1;
+                finalExitCode = execution.HasExited ? execution.ExitCode ?? -1 : -1;
             }
 
             _logger.LogDebug("{Language} guest process {ProcessId} exited with code {ExitCode}", _language, execution.ProcessId, finalExitCode);

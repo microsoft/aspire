@@ -269,7 +269,7 @@ internal sealed class DcpConnectionChecker(
                     executionContext.WorkingDirectory,
                     options);
 
-                if (!process.Start())
+                if (!await process.StartAsync(cancellationToken).ConfigureAwait(false))
                 {
                     throw new InvalidOperationException(DoctorCommandStrings.DcpStartFailedMessage);
                 }

@@ -101,6 +101,16 @@ internal sealed class ProcessInvocationOptions
     public bool KillOnParentExit { get; set; }
 
     /// <summary>
+    /// When <c>true</c>, the process is launched as a detached child that survives the launching CLI.
+    /// </summary>
+    public bool Detached { get; set; }
+
+    /// <summary>
+    /// Optional predicate for inherited environment variable names that should be removed before applying caller-supplied variables.
+    /// </summary>
+    public Func<string, bool>? EnvironmentVariableFilter { get; set; }
+
+    /// <summary>
     /// Issues the graceful shutdown signal during the shutdown ladder (DCP
     /// <c>stop-process-tree</c> on Windows, SIGTERM on Unix). When <c>null</c>, the cancellation
     /// path uses <see cref="ProcessExecution"/>'s force-kill mode.
@@ -131,6 +141,8 @@ internal sealed class ProcessInvocationOptions
         KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
         IsolateConsole = IsolateConsole,
         KillOnParentExit = KillOnParentExit,
+        Detached = Detached,
+        EnvironmentVariableFilter = EnvironmentVariableFilter,
         GracefulShutdownSignaler = GracefulShutdownSignaler,
         ShutdownService = ShutdownService,
     };
@@ -253,7 +265,7 @@ internal sealed class DotNetCliRunner(
             }
         }
 
-        var started = execution.Start();
+        var started = await execution.StartAsync(cancellationToken).ConfigureAwait(false);
         processActivity.AddDotNetProcessStartResult(started, started ? execution.ProcessId : null);
 
         if (!started)
@@ -360,6 +372,8 @@ internal sealed class DotNetCliRunner(
             // and intentionally keep the force-kill path.
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
+            Detached = options.Detached,
+            EnvironmentVariableFilter = options.EnvironmentVariableFilter,
             GracefulShutdownSignaler = options.GracefulShutdownSignaler,
             ShutdownService = options.ShutdownService,
             StandardOutputCallback = line =>
