@@ -459,7 +459,8 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             };
 
             process.Start();
-            await process.WaitForExitAsync();
+            using var waitCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            await process.WaitForExitAsync(waitCts.Token);
 
             if (process.ExitCode == 0)
             {
