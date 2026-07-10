@@ -19,8 +19,8 @@ public class MauiiOSValidationTests(ITestOutputHelper outputHelper)
     {
         // A GUID looks like a simulator UDID, not a physical device UDID
         var simulatorLikeId = "E25BBE37-69BA-4720-B6FD-D54C97791E79";
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        using var dir = new SharedTestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -44,8 +44,8 @@ public class MauiiOSValidationTests(ITestOutputHelper outputHelper)
     {
         // A non-GUID looks like a physical device UDID, not a simulator UDID
         var deviceLikeId = "00008030-001234567890123A";
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        using var dir = new SharedTestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -69,8 +69,8 @@ public class MauiiOSValidationTests(ITestOutputHelper outputHelper)
     {
         // A typical physical device UDID (non-GUID format)
         var validDeviceId = "00008030-001234567890123A";
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        using var dir = new SharedTestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -89,8 +89,8 @@ public class MauiiOSValidationTests(ITestOutputHelper outputHelper)
     {
         // A standard GUID format which is expected for simulator UDIDs
         var validSimulatorId = "E25BBE37-69BA-4720-B6FD-D54C97791E79";
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        using var dir = new SharedTestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -107,8 +107,8 @@ public class MauiiOSValidationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddiOSDevice_WithNoDeviceId_DoesNotThrowOnBeforeStart()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        using var dir = new SharedTestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -125,8 +125,8 @@ public class MauiiOSValidationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddiOSSimulator_WithNoSimulatorId_DoesNotThrowOnBeforeStart()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        using var dir = new SharedTestTempDirectory();
+        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();

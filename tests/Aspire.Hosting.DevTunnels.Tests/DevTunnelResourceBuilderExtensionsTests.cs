@@ -1296,6 +1296,13 @@ public class DevTunnelResourceBuilderExtensionsTests
             "Expected the previous port to stay pending when the new port URL is not available.",
             retries: 20);
 
+        // The target endpoint watcher can observe the ready port as soon as the status is updated below.
+        // Install the delete hook first so the test catches either the watcher or the explicit ready event.
+        var deletePortStarted = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowDeletePort = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        client.DeletePortStarted = deletePortStarted;
+        client.AllowDeletePort = allowDeletePort;
+
         client.TunnelStatus = new("mytunnel", HostConnections: 1, ClientConnections: 0, Description: "", Labels: [])
         {
             Ports = [
@@ -1310,10 +1317,8 @@ public class DevTunnelResourceBuilderExtensionsTests
         tunnel.Resource.LastKnownAccessStatus = client.AccessStatus;
         tunnelPort.LastKnownAccessStatus = client.AccessStatus;
 
-        client.DeletePortStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        client.AllowDeletePort = new(TaskCreationOptions.RunContinuationsAsynchronously);
         var readyTask = builder.Eventing.PublishAsync(new ResourceReadyEvent(tunnel.Resource, app.Services));
-        Assert.Equal(5001, await client.DeletePortStarted.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal(5001, await deletePortStarted.Task.WaitAsync(TimeSpan.FromSeconds(10)));
 
         var createPort5001CountBeforeTargetChange = client.Calls.Count(call => call.Method == nameof(IDevTunnelClient.CreatePortAsync) && call.PortNumber == 5001);
         tunnelPort.TargetEndpoint.EndpointAnnotation.TargetPort = 5001;
@@ -1334,7 +1339,7 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.Equal(5002, tunnelPort.ActiveTunnelPort);
         Assert.Equal(createPort5001CountBeforeTargetChange, client.Calls.Count(call => call.Method == nameof(IDevTunnelClient.CreatePortAsync) && call.PortNumber == 5001));
 
-        client.AllowDeletePort.SetResult();
+        allowDeletePort.SetResult();
         await Task.WhenAll(readyTask, targetUpdateTask).DefaultTimeout();
 
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
