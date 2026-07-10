@@ -103,9 +103,10 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            // Step 1b: Isolate kubeconfig and the Radius (`rad`) config to throwaway files under the
-            // TemporaryWorkspace so this test never mutates the developer's real ~/.kube/config or
-            // ~/.rad/config.yaml (test-isolation requirement, .github/instructions/test-review-guidelines).
+            // Step 1b: Isolate kubeconfig, the Radius (`rad`) config, and Docker credentials to
+            // throwaway files under the TemporaryWorkspace so this test never mutates the developer's
+            // real ~/.kube/config, ~/.rad/config.yaml, or ~/.docker/config.json (test-isolation
+            // requirement, .github/instructions/test-review-guidelines).
             //
             // - KUBECONFIG: az/kubectl/rad all honor it, so `az aks get-credentials` writes here and
             //   every kube-touching command uses this file. Removed with the workspace on dispose.
@@ -117,15 +118,19 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             //   subcommand). REAL_RAD is resolved BEFORE prepending the shim dir, so the shim never
             //   recurses. This isolates the config file and its lock without backing up/restoring the
             //   user's real config (which would race with any concurrent `rad` for the ~55-min run).
+            // - DOCKER_CONFIG: the documented override directory for Docker's config.json. `az acr login`
+            //   shells out to `docker login`, and `dotnet publish /t:PublishContainer` reads the same
+            //   config, so both authenticate against this throwaway dir instead of ~/.docker.
             var wsRoot = workspace.WorkspaceRoot.FullName;
-            output.WriteLine("Step 1b: Isolating kubeconfig and rad config to the workspace...");
+            output.WriteLine("Step 1b: Isolating kubeconfig, rad config, and docker credentials to the workspace...");
             await auto.TypeAsync(
                 $"REAL_RAD=\"$(command -v rad)\" && " +
-                $"mkdir -p \"{wsRoot}/bin\" \"{wsRoot}/.rad\" \"{wsRoot}/.kube\" && " +
+                $"mkdir -p \"{wsRoot}/bin\" \"{wsRoot}/.rad\" \"{wsRoot}/.kube\" \"{wsRoot}/.docker\" && " +
                 $"printf '#!/usr/bin/env bash\\nexec \"%s\" --config \"%s\" \"$@\"\\n' \"$REAL_RAD\" \"{wsRoot}/.rad/config.yaml\" > \"{wsRoot}/bin/rad\" && " +
                 $"chmod +x \"{wsRoot}/bin/rad\" && " +
                 $"export PATH=\"{wsRoot}/bin:$PATH\" && " +
-                $"export KUBECONFIG=\"{wsRoot}/.kube/config\"");
+                $"export KUBECONFIG=\"{wsRoot}/.kube/config\" && " +
+                $"export DOCKER_CONFIG=\"{wsRoot}/.docker\"");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
@@ -147,7 +152,8 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
 
             // Log into ACR immediately (before AKS creation which takes 10-15 min). The OIDC
             // federated token expires after ~5 minutes, so authenticate while it's fresh. Docker
-            // credentials persist in ~/.docker/config.json.
+            // credentials are written to the isolated $DOCKER_CONFIG dir set up in Step 1b, not the
+            // developer's ~/.docker/config.json.
             output.WriteLine("Step 4b: Logging into Azure Container Registry (early, before token expires)...");
             await auto.TypeAsync($"az acr login --name {acrName}");
             await auto.EnterAsync();
@@ -348,8 +354,9 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // prompt. (Unlike the sibling ACA/AKS tests, deploy here only runs `rad deploy` against
             // the already-provisioned AKS cluster, so the pipeline helper's transient-Azure-capacity
             // Assert.Skip -- which targets AKS *provisioning* -- does not apply.)
-            // 17m preserves the previous effective ceiling (15m pipeline detect + 2m prompt) so the
-            // single combined wait does not shrink the deploy's headroom.
+            // 17m is a generous upper bound for a single `rad deploy` of the starter app against the
+            // already-provisioned AKS cluster -- Radius recipe execution, container image pulls, and
+            // pod readiness -- plus margin for the terminal prompt to settle.
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(17));
 
             // ===== PHASE 6: Verify the deployed application =====
