@@ -60,7 +60,7 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             }
         }
 
-        var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.Create(output);
         var startTime = DateTime.UtcNow;
 
         var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("radius");
@@ -411,7 +411,7 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
     {
         try
         {
-            var process = new System.Diagnostics.Process
+            using var process = new System.Diagnostics.Process
             {
                 StartInfo = new System.Diagnostics.ProcessStartInfo
                 {

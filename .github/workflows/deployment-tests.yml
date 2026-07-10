@@ -316,7 +316,10 @@ jobs:
           # matches the Bicep types the publisher emits.
           RADIUS_VERSION: "0.59.0"
         run: |
-          curl -fsSL "https://raw.githubusercontent.com/radius-project/radius/main/deploy/install.sh" | \
+          # Fetch install.sh pinned to the same release tag (v$RADIUS_VERSION) we install, rather
+          # than the moving `main` branch. This keeps the installer script content locked to the
+          # pinned version so it cannot drift independently (supply-chain hardening).
+          curl -fsSL "https://raw.githubusercontent.com/radius-project/radius/v${RADIUS_VERSION}/deploy/install.sh" | \
             /bin/bash -s -- --version "$RADIUS_VERSION" --install-dir "$HOME/.rad/bin"
           echo "$HOME/.rad/bin" >> "$GITHUB_PATH"
           "$HOME/.rad/bin/rad" version --cli
