@@ -40,11 +40,6 @@
         flex: 1;
     }
 
-    ::deep.layout .layout-sidebar-spacer {
-        flex: 0 0 auto;
-        width: 480px;
-    }
-
     ::deep.layout > .messagebar-container {
         grid-area: messagebar;
         border-top: 1px solid var(--neutral-stroke-rest);

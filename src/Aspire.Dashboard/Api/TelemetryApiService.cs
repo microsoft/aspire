@@ -5,7 +5,6 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -568,7 +567,7 @@ internal sealed class TelemetryApiService(
         var keys = new List<ResourceKey>();
         foreach (var resourceName in resourceNames)
         {
-            if (!AIHelpers.TryResolveResourceForTelemetry(resources, resourceName, out _, out var resourceKey))
+            if (!TryResolveResourceForTelemetry(resources, resourceName, out var resourceKey))
             {
                 return null;
             }
@@ -578,5 +577,33 @@ internal sealed class TelemetryApiService(
             }
         }
         return keys;
+    }
+
+    /// <summary>
+    /// Tries to resolve a resource name for telemetry queries.
+    /// Returns true if no resource was specified or if the resource was found.
+    /// </summary>
+    private static bool TryResolveResourceForTelemetry(
+        IReadOnlyList<OtlpResource> resources,
+        string? resourceName,
+        out ResourceKey? resourceKey)
+    {
+        if (string.IsNullOrWhiteSpace(resourceName) || string.Equals(resourceName, "null", StringComparison.OrdinalIgnoreCase))
+        {
+            resourceKey = null;
+            return true;
+        }
+
+        var resource = resources.SingleOrDefault(r => r.ResourceName == resourceName)
+            ?? resources.SingleOrDefault(r => r.ResourceKey.ToString() == resourceName);
+
+        if (resource is not null)
+        {
+            resourceKey = resource.ResourceKey;
+            return true;
+        }
+
+        resourceKey = null;
+        return false;
     }
 }

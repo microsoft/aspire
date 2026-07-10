@@ -35,16 +35,13 @@ public sealed class ResourceMenuBuilderTests
             dimensionManager);
     }
 
-    private ResourceMenuBuilder CreateResourceMenuBuilder(TelemetryRepository repository, TestAIContextProvider aiContextProvider)
+    private ResourceMenuBuilder CreateResourceMenuBuilder(TelemetryRepository repository)
     {
         return new ResourceMenuBuilder(
             new TestNavigationManager(),
             repository,
-            aiContextProvider,
             new TestStringLocalizer<ControlsStrings>(),
             new TestStringLocalizer<Resources.Resources>(),
-            new TestStringLocalizer<Resources.AIAssistant>(),
-            new TestStringLocalizer<Resources.AIPrompts>(),
             _iconResolver,
             _dialogService);
     }
@@ -55,8 +52,7 @@ public sealed class ResourceMenuBuilderTests
         // Arrange
         var resource = ModelTestHelpers.CreateResource();
         var repository = TelemetryTestHelpers.CreateRepository();
-        var aiContextProvider = new TestAIContextProvider();
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
         var menuItems = new List<MenuButtonItem>();
@@ -85,7 +81,6 @@ public sealed class ResourceMenuBuilderTests
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-abc");
         var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: attributes => (resource.Name, resource));
         var repository = TelemetryTestHelpers.CreateRepository(outgoingPeerResolvers: [outgoingPeerResolver]);
-        var aiContextProvider = new TestAIContextProvider();
         var addContext = new AddContext();
         repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -107,7 +102,7 @@ public sealed class ResourceMenuBuilderTests
             }
         });
 
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
         var menuItems = new List<MenuButtonItem>();
@@ -137,7 +132,6 @@ public sealed class ResourceMenuBuilderTests
         // Arrange
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-abc");
         var repository = TelemetryTestHelpers.CreateRepository();
-        var aiContextProvider = new TestAIContextProvider();
         var addContext = new AddContext();
         repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -158,7 +152,7 @@ public sealed class ResourceMenuBuilderTests
             }
         });
 
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
         var menuItems = new List<MenuButtonItem>();
@@ -194,8 +188,7 @@ public sealed class ResourceMenuBuilderTests
                 new EnvironmentVariableViewModel("RUNTIME_VAR", "runtime-value", fromSpec: false)
             ]);
         var repository = TelemetryTestHelpers.CreateRepository();
-        var aiContextProvider = new TestAIContextProvider();
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
         var menuItems = new List<MenuButtonItem>();
@@ -228,8 +221,7 @@ public sealed class ResourceMenuBuilderTests
                 new EnvironmentVariableViewModel("RUNTIME_VAR2", "value2", fromSpec: false)
             ]);
         var repository = TelemetryTestHelpers.CreateRepository();
-        var aiContextProvider = new TestAIContextProvider();
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         // Act
         var menuItems = new List<MenuButtonItem>();
@@ -276,8 +268,7 @@ public sealed class ResourceMenuBuilderTests
             iconVariant: IconVariant.Regular);
         var resource = ModelTestHelpers.CreateResource(commands: [startCommand, stopCommand]);
         var repository = TelemetryTestHelpers.CreateRepository();
-        var aiContextProvider = new TestAIContextProvider();
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         var menuItems = new List<MenuButtonItem>();
         resourceMenuBuilder.AddMenuItems(
@@ -315,8 +306,7 @@ public sealed class ResourceMenuBuilderTests
             iconVariant: IconVariant.Regular);
         var resource = ModelTestHelpers.CreateResource(commands: [command]);
         var repository = TelemetryTestHelpers.CreateRepository();
-        var aiContextProvider = new TestAIContextProvider();
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         var menuItems = new List<MenuButtonItem>();
         resourceMenuBuilder.AddMenuItems(
@@ -357,8 +347,7 @@ public sealed class ResourceMenuBuilderTests
             iconVariant: IconVariant.Regular);
         var resource = ModelTestHelpers.CreateResource(commands: [command]);
         var repository = TelemetryTestHelpers.CreateRepository();
-        var aiContextProvider = new TestAIContextProvider();
-        var resourceMenuBuilder = CreateResourceMenuBuilder(repository, aiContextProvider);
+        var resourceMenuBuilder = CreateResourceMenuBuilder(repository);
 
         var menuItems = new List<MenuButtonItem>();
         resourceMenuBuilder.AddMenuItems(
