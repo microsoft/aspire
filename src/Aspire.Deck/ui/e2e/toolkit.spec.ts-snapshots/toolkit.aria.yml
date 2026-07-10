@@ -1,0 +1,42 @@
+- main:
+  - heading "Deck Toolkit" [level=1]
+  - paragraph: Fluent React primitives with Aspire density and tokens
+  - button "Use light theme"
+  - region "Actions":
+    - heading "Actions" [level=2]
+    - status: No action selected
+    - button "Secondary"
+    - button "Primary"
+    - button "Danger"
+    - button "Ghost"
+    - button "Confirm command"
+    - button "Open drawer"
+  - region "Status":
+    - heading "Status" [level=2]
+    - text: Neutral Healthy Starting Degraded Failed Selected
+  - region "Resource data":
+    - heading "Resource data" [level=2]
+    - text: 3 resources
+    - textbox "Filter toolkit resources…"
+    - table:
+      - rowgroup:
+        - row "State Name Type":
+          - columnheader "State"
+          - columnheader "Name"
+          - columnheader "Type"
+      - rowgroup:
+        - row "Running Running · Healthy frontend Project":
+          - cell "Running Running · Healthy"
+          - cell "frontend"
+          - cell "Project"
+        - row "Running Running · Degraded catalog-db Container":
+          - cell "Running Running · Degraded"
+          - cell "catalog-db"
+          - cell "Container"
+        - row "Exited Exited migration Executable":
+          - cell "Exited Exited"
+          - cell "migration"
+          - cell "Executable"
+  - region "Empty state":
+    - heading "Empty state" [level=2]
+    - text: No incidents All monitored resources are within their configured thresholds.

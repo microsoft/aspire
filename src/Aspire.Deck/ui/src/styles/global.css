@@ -27,6 +27,12 @@ body {
   color: var(--text);
 }
 
+html[data-theme-switching] *,
+html[data-theme-switching] *::before,
+html[data-theme-switching] *::after {
+  transition: none !important;
+}
+
 a {
   color: var(--accent);
   text-decoration: none;

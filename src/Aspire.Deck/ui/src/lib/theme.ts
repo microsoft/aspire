@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 
 export type Theme = "dark" | "light";
 
@@ -16,13 +16,21 @@ function readInitialTheme(): Theme {
   return "dark";
 }
 
-// Applies the theme to the document root (drives the CSS [data-theme] variables)
-// and persists the choice. Defaults to dark.
+// Apply the document tokens in a layout effect so they change in the same paint as
+// FluentProvider. Suppressing transitions for that paint prevents foreground and
+// background colors from interpolating independently through unreadable values.
 export function useTheme(): { theme: Theme; toggleTheme: () => void } {
   const [theme, setTheme] = useState<Theme>(readInitialTheme);
 
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.setAttribute("data-theme-switching", "");
+    root.setAttribute("data-theme", theme);
+    const frame = requestAnimationFrame(() => root.removeAttribute("data-theme-switching"));
+    return () => cancelAnimationFrame(frame);
+  }, [theme]);
+
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
     try {
       localStorage.setItem(STORAGE_KEY, theme);
     } catch {

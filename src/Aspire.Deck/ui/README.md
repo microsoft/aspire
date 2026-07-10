@@ -34,6 +34,21 @@ Open `http://localhost:1430/?view=toolkit` for the standalone toolkit playground
 the shared controls without depending on the Deck backend or mock data layer, making it the
 starting point for new dashboard UI and visual regression coverage.
 
+## Verify the toolkit
+
+```bash
+npm run test:e2e
+```
+
+The TypeScript Playwright suite starts Vite when needed and verifies the feature inventory in
+`e2e/toolkit-features.ts`. Every inventory ID must be registered by a browser scenario or the
+test module fails to load. The suite checks the reviewed YAML accessibility snapshot, desktop
+and mobile containment, light and dark theme contrast, filtering, dialogs, drawers, and browser
+errors. Passing runs attach desktop/mobile screenshots to the HTML report; failures retain a
+screenshot, video, trace, and page context under `test-results`.
+
+Use `npm run test:e2e:update` only after reviewing an intentional accessibility-tree change.
+
 ## Build & preview
 
 ```bash
