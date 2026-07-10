@@ -56,6 +56,23 @@ public static class HostedAgentResourceBuilderExtensions
     /// </summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// This overload is retained for source compatibility. Prefer overloads that pass the Microsoft Foundry project
+    /// and hosted agent protocol explicitly.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Subset of the full AsHostedAgent(project) overload which is exported.")]
+    public static IResourceBuilder<T> AsHostedAgent<T>(this IResourceBuilder<T> builder)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        return AsHostedAgent(builder, project: null, configure: null);
+    }
+
+    /// <summary>
+    /// Configures the resource to run and publish as a Microsoft Foundry hosted agent using the Responses protocol version 2.0.0.
+    /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
     /// <param name="project">Optional Microsoft Foundry project resource used for both run and publish mode configuration. When <see langword="null"/>, an existing Foundry project in the model is reused or a new project is created in publish mode.</param>
     /// <param name="configure">A callback to configure hosted agent deployment options.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
@@ -71,6 +88,27 @@ public static class HostedAgentResourceBuilderExtensions
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
         return ConfigureAsHostedAgent(builder, project, HostedAgentProtocol.Responses, AzureHostedAgentResource.DefaultResponsesProtocolVersion, configure);
+    }
+
+    /// <summary>
+    /// Configures the resource to run and publish as a Microsoft Foundry hosted agent using the Responses protocol version 2.0.0.
+    /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <param name="configure">A callback to configure hosted agent deployment options.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// This overload is retained for source compatibility. Prefer overloads that pass the Microsoft Foundry project
+    /// and hosted agent protocol explicitly.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Subset of the full AsHostedAgent overload.")]
+    public static IResourceBuilder<T> AsHostedAgent<T>(
+        this IResourceBuilder<T> builder,
+        Action<HostedAgentConfiguration> configure)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        return AsHostedAgent(builder, project: null, configure);
     }
 
     // The internal AsHostedAgentForExport overload below is the polyglot-exported version of AsHostedAgent.

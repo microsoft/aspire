@@ -310,6 +310,48 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public void AsHostedAgent_LegacyParameterlessOverload_UsesDefaultResponsesProtocol()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent();
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
+        var protocol = Assert.Single(configuration.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Responses, protocol.Protocol);
+        Assert.Equal("2.0.0", protocol.Version);
+    }
+
+    [Fact]
+    public void AsHostedAgent_LegacyConfigureOnlyOverload_UsesDefaultResponsesProtocolAndAppliesConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(options =>
+            {
+                options.Description = "configured agent";
+            });
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
+        Assert.Equal("configured agent", configuration.Description);
+        var protocol = Assert.Single(configuration.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Responses, protocol.Protocol);
+        Assert.Equal("2.0.0", protocol.Version);
+    }
+
+    [Fact]
     public async Task AsHostedAgent_InPublishMode_AddsProjectReferenceToDeploymentTarget()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
