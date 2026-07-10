@@ -72,9 +72,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         var fileName = Path.GetFileName(path);
 
         Assert.StartsWith(logsDirectory, path, StringComparison.OrdinalIgnoreCase);
-        Assert.StartsWith("cli_20260212T180000000_detach-child_", fileName, StringComparison.Ordinal);
-        Assert.EndsWith(".log", fileName, StringComparison.Ordinal);
-        Assert.DoesNotContain($"_{Environment.ProcessId}", fileName, StringComparison.Ordinal);
+        Assert.Matches("^cli_20260212T180000000_detach-child_[0-9a-f]{32}\\.log$", fileName);
     }
 
     [Fact]
@@ -515,9 +513,9 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 CancellationToken.None);
 
             Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
-            Assert.Contains(RunCommandStrings.FailedToStartAppHost, harness.InteractionService.DisplayedErrors);
-            Assert.Contains(harness.InteractionService.DisplayedErrors, error => error.Contains("11", StringComparison.Ordinal));
-            Assert.DoesNotContain(RunCommandStrings.AppHostExitedWithoutExitCode, harness.InteractionService.DisplayedErrors);
+            Assert.Collection(harness.InteractionService.DisplayedErrors,
+                error => Assert.Equal(RunCommandStrings.FailedToStartAppHost, error),
+                error => Assert.Equal(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.AppHostExitedWithCode, 11), error));
         }
         finally
         {
@@ -577,9 +575,9 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 CancellationToken.None);
 
             Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
-            Assert.Contains(RunCommandStrings.FailedToStartAppHost, harness.InteractionService.DisplayedErrors);
-            Assert.Contains(RunCommandStrings.AppHostExitedWithoutExitCode, harness.InteractionService.DisplayedErrors);
-            Assert.DoesNotContain(harness.InteractionService.DisplayedErrors, error => error.Contains("11", StringComparison.Ordinal));
+            Assert.Collection(harness.InteractionService.DisplayedErrors,
+                error => Assert.Equal(RunCommandStrings.FailedToStartAppHost, error),
+                error => Assert.Equal(RunCommandStrings.AppHostExitedWithoutExitCode, error));
         }
         finally
         {
