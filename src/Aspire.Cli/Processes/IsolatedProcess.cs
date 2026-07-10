@@ -106,7 +106,7 @@ internal sealed class IsolatedProcessStartInfo
 internal sealed partial class IsolatedProcess : IAsyncDisposable
 {
     private readonly IsolatedProcessStartInfo _startInfo;
-    private Func<TimeSpan, ValueTask> _disposeAsync = _ => ValueTask.CompletedTask;
+    private Func<ValueTask> _disposeAsync = () => ValueTask.CompletedTask;
     private Func<int>? _exitCodeProvider;
     private Func<bool>? _hasExitedProvider;
     private Func<CancellationToken, Task>? _waitForExitProvider;
@@ -210,7 +210,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
             return ValueTask.CompletedTask;
         }
 
-        return _disposeAsync(TimeSpan.FromSeconds(5));
+        return _disposeAsync();
     }
 
     /// <summary>
@@ -338,36 +338,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         StandardOutputClosed = outputTcs.Task;
         StandardErrorClosed = errorTcs.Task;
 
-        ProcessPump? outputPump = null;
-        ProcessPump? errorPump = null;
-
-        async ValueTask DisposeAsync(TimeSpan drainTimeout)
+        async ValueTask DisposeAsync()
         {
-            // Give the pumps a bounded window to finish. They normally complete when the
-            // child exits and the pipes hit EOF. If a caller disposes before the child
-            // exits, the readers stay blocked until the OS tears the pipes down (Process
-            // disposal on Unix, pipe disposal on Windows) — the timeout keeps us from
-            // hanging on bugs.
-            using var timeoutCts = new CancellationTokenSource(drainTimeout);
-            try
-            {
-                if (outputPump is not null && errorPump is not null)
-                {
-                    await Task.WhenAll(outputPump.Completion, errorPump.Completion).WaitAsync(timeoutCts.Token).ConfigureAwait(false);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // Drain timed out — fall through to extraDispose so it unblocks the pumps
-                // by tearing the pipes down (Windows path). The TCSs are completed below
-                // via the bridge once the pumps actually return.
-            }
-            catch
-            {
-                // Pump faults surface via StandardOutputClosed / StandardErrorClosed; swallow
-                // here so dispose still tears the rest down cleanly.
-            }
-
             if (extraDispose is not null)
             {
                 try { await extraDispose().ConfigureAwait(false); } catch { }
@@ -386,8 +358,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         _disposeAsync = DisposeAsync;
 
         // The pumps capture this wrapper as the handler's "sender", matching Process output event shape.
-        outputPump = ProcessPump.Start(standardOutput, line => OutputDataReceived?.Invoke(this, line));
-        errorPump = ProcessPump.Start(standardError, line => ErrorDataReceived?.Invoke(this, line));
+        var outputPump = ProcessPump.Start(standardOutput, line => OutputDataReceived?.Invoke(this, line));
+        var errorPump = ProcessPump.Start(standardError, line => ErrorDataReceived?.Invoke(this, line));
 
         _ = ForwardPumpAsync(outputPump.Completion, outputTcs);
         _ = ForwardPumpAsync(errorPump.Completion, errorTcs);

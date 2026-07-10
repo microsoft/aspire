@@ -109,6 +109,47 @@ public class IsolatedProcessTests
         Assert.Contains(seenLines, line => line.Contains("line-two"));
     }
 
+    [Fact]
+    public async Task DisposeAsync_DoesNotWaitForOutputCallbackToComplete()
+    {
+        var callbackEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCallback = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (fileName, arguments) = GetEchoCommand("blocked-callback");
+
+        var startInfo = new IsolatedProcessStartInfo
+        {
+            FileName = fileName,
+            WorkingDirectory = Environment.CurrentDirectory,
+        };
+        foreach (var arg in arguments)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+
+        var child = new IsolatedProcess(startInfo);
+        child.OutputDataReceived += (_, _) =>
+        {
+            callbackEntered.TrySetResult();
+            releaseCallback.Task.GetAwaiter().GetResult();
+        };
+
+        try
+        {
+            await child.StartAsync(CancellationToken.None);
+            await callbackEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.False(child.StandardOutputClosed.IsCompleted);
+            await child.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(1));
+        }
+        finally
+        {
+            releaseCallback.TrySetResult();
+            await child.StandardOutputClosed.WaitAsync(TimeSpan.FromSeconds(10));
+            await child.DisposeAsync();
+        }
+    }
+
     private static (string FileName, IReadOnlyList<string> Arguments) GetEchoCommand(string text)
     {
         if (OperatingSystem.IsWindows())

@@ -434,8 +434,8 @@ internal sealed class ProcessExecution : IProcessExecution
         // WaitForExitAsync(token) first, so the shutdown ladder has already exited or killed the
         // process by the time we get here and this is a no-op. It matters for the path where an
         // execution was started but never driven (e.g. a fault between Start and the caller wiring up
-        // its wait loop): IsolatedProcess.DisposeAsync only drains pumps and releases handles — it
-        // does NOT terminate the process — so without this kill the child would be orphaned. Owning
+        // its wait loop): IsolatedProcess.DisposeAsync releases its Process-like resources but does
+        // NOT terminate the process — so without this kill the child would be orphaned. Owning
         // "kill if still alive on dispose" here keeps that responsibility off every consumer.
         try
         {
