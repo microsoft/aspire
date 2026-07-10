@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Negative trace filters such as 'Not Contains' and 'Not Equal' now correctly exclude traces when any span violates the filter condition. Previously, a multi-span trace could slip through a negative filter if any sibling span did not match the excluded value.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-07-10T16:44:45Z",
+  "lastMergedAt": "2026-07-10T16:44:45Z",
+  "name": "Fix trace negative filter logic",
+  "owner": "JamesNK",
+  "prs": [
+    18701
+  ]
+}

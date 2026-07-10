@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard bug fix: negative trace filters now correctly exclude traces when any span matches the negated condition",
+  "mergedAt": "2026-07-10T16:44:45Z",
+  "number": 18701,
+  "runDate": "2026-07-10T18:30:45Z",
+  "status": "included",
+  "title": "Fix trace 'not contains' filter not excluding matching traces"
+}

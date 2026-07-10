@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "CI workflow maintenance: batches sdk dump calls in generate-ats-diffs.yml to fix disk space exhaustion - no user-facing impact",
+  "mergedAt": "2026-07-10T18:21:45Z",
+  "number": 18717,
+  "runDate": "2026-07-10T18:30:45Z",
+  "status": "excluded",
+  "title": "fix: batch sdk dump in generate-ats-diffs to fix disk space exhaustion"
+}
