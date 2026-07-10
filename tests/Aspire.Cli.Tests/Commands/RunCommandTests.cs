@@ -3146,6 +3146,58 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_StoresForwardedAppHostArgumentsForBackchannelMetadata()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />", TestContext.Current.CancellationToken);
+        IDictionary<string, string>? environmentVariables = null;
+        var environmentCaptured = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                environmentVariables = context.EnvironmentVariables;
+                context.BuildCompletionSource?.TrySetResult(true);
+                environmentCaptured.SetResult();
+
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return 0;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost \"{appHostFile.FullName}\" -- --environment staging");
+
+        var pendingRun = result.InvokeAsync(cancellationToken: cancellationTokenSource.Token);
+        await environmentCaptured.Task.DefaultTimeout();
+        await cancellationTokenSource.CancelAsync();
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(environmentVariables);
+        var appHostArgumentsJson = environmentVariables[KnownConfigNames.CliAppHostArguments];
+        var appHostArguments = JsonSerializer.Deserialize(appHostArgumentsJson, JsonSourceGenerationContext.Default.StringArray);
+        Assert.NotNull(appHostArguments);
+        Assert.Equal(["--environment", "staging"], appHostArguments!);
+    }
+
+    [Fact]
     public async Task CaptureAppHostLogsAsync_WritesCategoryWithAppHostPrefix()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -1531,6 +1531,11 @@ internal sealed class AppHostInformation
     /// This value is only set when the AppHost is launched via the Aspire CLI.
     /// </summary>
     public string? CliLogFilePath { get; init; }
+
+    /// <summary>
+    /// Gets the arguments forwarded from the Aspire CLI to the AppHost.
+    /// </summary>
+    public string[] AppHostArguments { get; init; } = [];
 }
 
 /// <summary>

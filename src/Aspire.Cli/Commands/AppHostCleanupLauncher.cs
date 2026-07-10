@@ -24,7 +24,7 @@ internal sealed class AppHostCleanupLauncher(
     private static readonly TimeSpan s_appHostCleanupCancellationTimeout = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan s_cleanupShutdownTimeout = TimeSpan.FromSeconds(10);
 
-    public async Task<int> CleanupAsync(IAppHostProject project, FileInfo appHostFile, int timeoutSeconds, CancellationToken cancellationToken)
+    public async Task<int> CleanupAsync(IAppHostProject project, FileInfo appHostFile, int timeoutSeconds, string[] appHostArguments, CancellationToken cancellationToken)
     {
         var buildCompletionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var backchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -46,7 +46,7 @@ internal sealed class AppHostCleanupLauncher(
             Isolated = false,
             StartDebugSession = false,
             EnvironmentVariables = environmentVariables,
-            UnmatchedTokens = [],
+            UnmatchedTokens = appHostArguments,
             WorkingDirectory = executionContext.WorkingDirectory,
             BuildCompletionSource = buildCompletionSource,
             BackchannelCompletionSource = backchannelCompletionSource,
@@ -110,7 +110,6 @@ internal sealed class AppHostCleanupLauncher(
 
             pendingLogCapture = RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, logCaptureCancellationSource.Token);
 
-            await backchannel.GetDashboardUrlsAsync(cancellationToken).ConfigureAwait(false);
             await backchannel.NotifyAppHostReadyAsync(cancellationToken).ConfigureAwait(false);
 
             var resourcesCreated = await WaitForAppHostResourcesCreatedAsync(

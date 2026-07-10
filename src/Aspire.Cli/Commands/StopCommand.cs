@@ -124,10 +124,10 @@ internal sealed class StopCommand : BaseCommand
             : null;
 
         var stopResult = appHostFile is not null
-            ? new StopAppHostResult(await ExecuteInteractiveAsync(appHostFile, cancellationToken).ConfigureAwait(false), appHostFile)
+            ? await ExecuteInteractiveWithResultAsync(appHostFile, cancellationToken).ConfigureAwait(false)
             : _hostEnvironment.SupportsInteractiveInput
                 ? await ExecuteInteractiveWithResultAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false)
-                : await ExecuteNonInteractiveWithResultAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false);
+                : await ExecuteNonInteractiveWithResultAsync(passedAppHostProjectFile, cancellationToken, treatNotRunningAsSuccess: true).ConfigureAwait(false);
 
         if (stopResult.ExitCode != CliExitCodes.Success)
         {
@@ -163,7 +163,7 @@ internal sealed class StopCommand : BaseCommand
             return CliExitCodes.InvalidCommand;
         }
 
-        return await _cleanupLauncher.CleanupAsync(project, appHostFile, timeoutSeconds, cancellationToken).ConfigureAwait(false);
+        return await _cleanupLauncher.CleanupAsync(project, appHostFile, timeoutSeconds, stopResult.AppHostArguments, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<string?> TryGetAspireHostingVersionAsync(IAppHostProject project, FileInfo appHostFile, CancellationToken cancellationToken)
@@ -238,7 +238,7 @@ internal sealed class StopCommand : BaseCommand
         return result.ExitCode;
     }
 
-    private async Task<StopAppHostResult> ExecuteNonInteractiveWithResultAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
+    private async Task<StopAppHostResult> ExecuteNonInteractiveWithResultAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken, bool treatNotRunningAsSuccess = false)
     {
         // If --project is specified, use the standard resolver (no prompting needed)
         if (passedAppHostProjectFile is not null)
@@ -253,8 +253,14 @@ internal sealed class StopCommand : BaseCommand
 
         if (allConnections.Length == 0)
         {
+            if (treatNotRunningAsSuccess)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.AppHostNotRunning);
+                return new StopAppHostResult(CliExitCodes.Success, null, []);
+            }
+
             InteractionService.DisplayError(SharedCommandStrings.AppHostNotRunning);
-            return new StopAppHostResult(CliExitCodes.FailedToFindProject, null);
+            return new StopAppHostResult(CliExitCodes.FailedToFindProject, null, []);
         }
 
         // In non-interactive mode, only consider in-scope AppHosts (under current directory)
@@ -267,12 +273,12 @@ internal sealed class StopCommand : BaseCommand
             var connection = inScopeConnections[0].Connection!;
             _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
             var exitCode = await StopAppHostAsync(connection, GetSingleAppHostDisplayPath(connection), cancellationToken).ConfigureAwait(false);
-            return new StopAppHostResult(exitCode, GetAppHostFile(connection));
+            return new StopAppHostResult(exitCode, GetAppHostFile(connection), GetAppHostArguments(connection));
         }
 
         // Multiple in-scope AppHosts or none in scope: error with guidance
         InteractionService.DisplayError(string.Format(CultureInfo.InvariantCulture, StopCommandStrings.MultipleAppHostsNonInteractive, s_appHostOption.Name, s_allOption.Name));
-        return new StopAppHostResult(CliExitCodes.FailedToFindProject, null);
+        return new StopAppHostResult(CliExitCodes.FailedToFindProject, null, []);
     }
 
     /// <summary>
@@ -295,12 +301,12 @@ internal sealed class StopCommand : BaseCommand
 
         if (!result.Success)
         {
-            return new StopAppHostResult(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, InteractionService), null);
+            return new StopAppHostResult(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, InteractionService), null, []);
         }
 
         _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
         var exitCode = await StopAppHostAsync(result.Connection!, GetSingleAppHostDisplayPath(result.Connection!), cancellationToken).ConfigureAwait(false);
-        return new StopAppHostResult(exitCode, GetAppHostFile(result.Connection!));
+        return new StopAppHostResult(exitCode, GetAppHostFile(result.Connection!), GetAppHostArguments(result.Connection!));
     }
 
     /// <summary>
@@ -434,6 +440,11 @@ internal sealed class StopCommand : BaseCommand
             : new FileInfo(connection.AppHostInfo.AppHostPath);
     }
 
+    private static string[] GetAppHostArguments(IAppHostAuxiliaryBackchannel connection)
+    {
+        return connection.AppHostInfo?.AppHostArguments ?? [];
+    }
+
     private StringComparer GetAppHostPathComparer()
     {
         return _environment.IsWindows()
@@ -448,5 +459,5 @@ internal sealed class StopCommand : BaseCommand
             : displayPath;
     }
 
-    private sealed record StopAppHostResult(int ExitCode, FileInfo? AppHostFile);
+    private sealed record StopAppHostResult(int ExitCode, FileInfo? AppHostFile, string[] AppHostArguments);
 }

@@ -888,6 +888,22 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             cliStableStartedAt = DateTimeOffset.FromUnixTimeMilliseconds(parsedCliStableStartedAt);
         }
 
+        var appHostArguments = Array.Empty<string>();
+        var appHostArgumentsJson = configuration[KnownConfigNames.CliAppHostArguments];
+        if (!string.IsNullOrEmpty(appHostArgumentsJson))
+        {
+            try
+            {
+                // ASPIRE_CLI_APPHOST_ARGS is a JSON array emitted by the launching CLI, for example:
+                //   ["--environment","staging"]
+                appHostArguments = JsonSerializer.Deserialize<string[]>(appHostArgumentsJson) ?? [];
+            }
+            catch (JsonException ex)
+            {
+                logger.LogDebug(ex, "Failed to parse CLI AppHost arguments.");
+            }
+        }
+
         using var currentProcess = Process.GetCurrentProcess();
 
         return Task.FromResult(new AppHostInformation
@@ -904,7 +920,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             CliStartedAt = cliStartedAt,
             CliStableStartedAt = cliStableStartedAt,
 
-            CliLogFilePath = configuration[KnownConfigNames.CliLogFilePath]
+            CliLogFilePath = configuration[KnownConfigNames.CliLogFilePath],
+            AppHostArguments = appHostArguments
         });
     }
 
