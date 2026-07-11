@@ -1077,6 +1077,32 @@ table.data tbody tr.selected {
 .deck-property-grid dd {
   margin: 0;
 }
+.deck-property-explorer {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+.deck-property-explorer__toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+.deck-property-explorer__toolbar .searchbox {
+  flex: 1 1 180px;
+  min-width: 160px;
+  margin-inline-start: auto;
+}
+.deck-property-explorer__sections .deck-property-grid {
+  grid-template-columns: minmax(130px, 36%) minmax(0, 1fr);
+}
+.deck-property-explorer__empty {
+  padding: 12px 4px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
 .secret {
   flex: 1;
   word-break: break-all;

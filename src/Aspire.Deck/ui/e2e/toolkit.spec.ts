@@ -289,10 +289,19 @@ test(`${features("TK-DIALOG-001", "TK-DRAWER-001")} exercises modal surfaces`, a
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
-test(`${features("TK-PROPERTY-GRID-001", "TK-TEXT-VIEWER-001")} presents properties and copies visualized text`, async ({ page }, testInfo) => {
+test(`${features("TK-PROPERTY-GRID-001", "TK-PROPERTY-EXPLORER-001", "TK-TEXT-VIEWER-001")} presents properties and copies visualized text`, async ({ page }, testInfo) => {
   const properties = page.getByRole("group", { name: "Sample properties" });
   await expect(properties.getByRole("term")).toHaveText(["State", "Resource", "Trace ID"]);
   await expect(properties.getByRole("definition")).toContainText(["Running", "frontend", "0123456789abcdef0123456789abcdef"]);
+
+  const explorer = page.getByRole("region", { name: "Sample property explorer" });
+  await expect(explorer.getByRole("group", { name: "Sample span properties" }).getByRole("term"))
+    .toHaveText(["Name", "Kind", "Trace ID"]);
+  await explorer.getByRole("textbox", { name: "Filter sample details…" }).fill("trace");
+  await expect(explorer.getByRole("group", { name: "Sample span properties" }).getByRole("term"))
+    .toHaveText(["Trace ID"]);
+  await expect(explorer.getByText("No matching properties.", { exact: true })).toHaveCount(1);
+  await explorer.getByRole("textbox", { name: "Filter sample details…" }).clear();
 
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.getByRole("button", { name: "View sample JSON" }).click();

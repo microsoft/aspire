@@ -26,6 +26,7 @@ import {
   PageTitle,
   PageToolbar,
   PlayIcon,
+  PropertyExplorer,
   PropertyGrid,
   ResourcesIcon,
   ResourceTypeIcon,
@@ -453,6 +454,32 @@ export function ToolkitPlayground({
               { id: "state", label: "State", value: <StateDot state="Running" stateStyle={null} health="Healthy" /> },
               { id: "resource", label: "Resource", value: "frontend" },
               { id: "trace", label: "Trace ID", value: "0123456789abcdef0123456789abcdef" },
+            ]}
+          />
+          <PropertyExplorer
+            ariaLabel="Sample property explorer"
+            searchPlaceholder="Filter sample details…"
+            defaultOpenItems={["span", "context"]}
+            sections={[
+              {
+                id: "span",
+                heading: "Span",
+                ariaLabel: "Sample span properties",
+                items: [
+                  { id: "span-name", label: "Name", value: "GET /catalog" },
+                  { id: "span-kind", label: "Kind", value: "Server" },
+                  { id: "span-trace", label: "Trace ID", value: "0123456789abcdef0123456789abcdef" },
+                ],
+              },
+              {
+                id: "context",
+                heading: "Context",
+                ariaLabel: "Sample context properties",
+                items: [
+                  { id: "scope-name", label: "Source", value: "OpenTelemetry.AspNetCore" },
+                  { id: "scope-version", label: "Version", value: "1.9.0" },
+                ],
+              },
             ]}
           />
         </section>

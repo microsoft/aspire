@@ -15,6 +15,7 @@ export * from "./Icons";
 export * from "./NotificationStack";
 export * from "./Page";
 export * from "./PropertyGrid";
+export * from "./PropertyExplorer";
 export * from "./SearchBox";
 export * from "./SecretValue";
 export * from "./Select";

@@ -21,6 +21,7 @@ export const toolkitFeatures = {
   "TK-DIVIDER-001": "Horizontal and vertical dividers expose semantic orientation.",
   "TK-HIGHLIGHT-001": "Search highlighting is case-insensitive and preserves the original text.",
   "TK-PROPERTY-GRID-001": "Property grids expose semantic names and values for telemetry and resource details.",
+  "TK-PROPERTY-EXPLORER-001": "Property explorers filter counted accordion sections while preserving semantic names and values.",
   "TK-TEXT-VIEWER-001": "Text and JSON values open in a readable dialog and can be copied.",
   "TK-A11Y-001": "The playground has a reviewed accessibility-tree contract.",
   "TK-RESPONSIVE-001": "Toolkit controls remain contained and usable at desktop and mobile widths.",
