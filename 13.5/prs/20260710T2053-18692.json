@@ -1,0 +1,9 @@
+{
+  "author": "tommasodotNET",
+  "comment": "Updated Foundry hosted agent protocol payload to match latest Foundry API shape - breaking change",
+  "mergedAt": "2026-07-10T20:53:08Z",
+  "number": 18692,
+  "runDate": "2026-07-11T00:21:37Z",
+  "status": "included",
+  "title": "Update Foundry hosted agent protocol payload"
+}

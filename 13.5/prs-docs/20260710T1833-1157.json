@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Documents aspire dashboard run as standalone configuration path - feature from Aspire 13.3, no matching 13.5 changelog entry",
+  "mergedAt": "2026-07-10T18:33:28Z",
+  "number": 1157,
+  "runDate": "2026-07-11T00:21:37Z",
+  "status": "excluded",
+  "title": "Document `aspire dashboard run` as primary standalone configuration path"
+}
