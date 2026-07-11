@@ -1,17 +1,17 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 34
+- React covered: 35
 - React partial: 43
-- React missing: 80
+- React missing: 79
 - Legacy black-box scenarios pending: 80
-- React parity gaps: 123
+- React parity gaps: 122
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
 | SHELL-IDENTITY-001 | shell | `/` | shell | covered | APP-SHELL-001; STRESS-CONFIG-001 | Application identity and dashboard version are visible. |
 | SHELL-NAV-001 | shell | `/` | shell | partial | APP-NAV-001 | Resources, Parameters, Graph, Console, Structured Logs, Traces, and Metrics are reachable from navigation. |
-| SHELL-ROUTES-001 | shell | `/` | PENDING | missing | - | Pages have stable URLs and browser history/deep links restore the selected page. |
+| SHELL-ROUTES-001 | shell | `/` | PENDING | covered | APP-ROUTES-001 | Pages have stable URLs and browser history/deep links restore the selected page. |
 | SHELL-REPO-001 | shell | `/` | shell | missing | - | The Aspire repository link is available from the top bar. |
 | SHELL-HELP-001 | shell | `/` | shell | missing | - | Help opens with documentation and keyboard shortcut reference content. |
 | SHELL-KEYBOARD-001 | shell | `/` | PENDING | missing | - | Page navigation, panel, help, and settings keyboard shortcuts work. |

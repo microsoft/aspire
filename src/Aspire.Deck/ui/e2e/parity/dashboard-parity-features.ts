@@ -46,7 +46,7 @@ const featureDefinitions = {
   shell: [
     ["SHELL-IDENTITY-001", "/", "Application identity and dashboard version are visible.", "shell", "covered", "APP-SHELL-001; STRESS-CONFIG-001"],
     ["SHELL-NAV-001", "/", "Resources, Parameters, Graph, Console, Structured Logs, Traces, and Metrics are reachable from navigation.", "shell", "partial", "APP-NAV-001"],
-    ["SHELL-ROUTES-001", "/", "Pages have stable URLs and browser history/deep links restore the selected page.", null, "missing"],
+    ["SHELL-ROUTES-001", "/", "Pages have stable URLs and browser history/deep links restore the selected page.", null, "covered", "APP-ROUTES-001"],
     ["SHELL-REPO-001", "/", "The Aspire repository link is available from the top bar.", "shell", "missing"],
     ["SHELL-HELP-001", "/", "Help opens with documentation and keyboard shortcut reference content.", "shell", "missing"],
     ["SHELL-KEYBOARD-001", "/", "Page navigation, panel, help, and settings keyboard shortcuts work.", null, "missing"],

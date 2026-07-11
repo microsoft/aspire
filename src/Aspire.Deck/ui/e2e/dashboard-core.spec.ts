@@ -102,6 +102,27 @@ test(`${features("APP-NAV-001", "APP-APPHOST-001", "APP-THEME-001")} navigates, 
   await expect(root).toHaveAttribute("data-theme", "light");
 });
 
+test(`${features("APP-ROUTES-001")} restores page routes and browser history`, async ({ page }) => {
+  await navigationButton(page, "Structured Logs").click();
+  await expect(page).toHaveURL(/\/structuredlogs$/);
+
+  await page.reload();
+  await expect(page.getByRole("main").locator(".page__title")).toHaveText("Structured Logs");
+  await expect(navigationButton(page, "Structured Logs")).toHaveAttribute("aria-current", "page");
+
+  await navigationButton(page, "Traces").click();
+  await expect(page).toHaveURL(/\/traces$/);
+  await page.goBack();
+  await expect(page.getByRole("main").locator(".page__title")).toHaveText("Structured Logs");
+  await expect(page).toHaveURL(/\/structuredlogs$/);
+  await page.goForward();
+  await expect(page.getByRole("main").locator(".page__title")).toHaveText("Traces");
+
+  await page.goto("/metrics");
+  await expect(page.getByRole("main").locator(".page__title")).toHaveText("Metrics");
+  await expect(navigationButton(page, "Metrics")).toHaveAttribute("aria-current", "page");
+});
+
 test(`${features("APP-PAGE-001")} composes every route from the page toolkit`, async ({ page }) => {
   const pages = [
     { navigation: "Resources", title: "Resources", toolbar: "Resource tools" },

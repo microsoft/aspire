@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { PageId } from "../lib/routes";
 import {
   CanvasIcon,
   ConsoleIcon,
@@ -9,7 +10,7 @@ import {
   TracesIcon,
 } from "../toolkit";
 
-export type PageId = "resources" | "parameters" | "console" | "logs" | "traces" | "metrics" | "canvases";
+export type { PageId } from "../lib/routes";
 
 interface NavEntry {
   id: PageId;

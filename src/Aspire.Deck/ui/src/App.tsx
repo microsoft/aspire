@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { DeckConfig } from "./api/types";
 import { PARAMETER_RESOURCE_TYPE } from "./api/types";
 import { getConfig } from "./api/deck";
 import type { Theme } from "./lib/theme";
-import { Sidebar, type PageId } from "./components/Sidebar";
+import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { NotConnected } from "./components/NotConnected";
 import { useConnection, useResources, useTelemetry, useApphosts, useInteractions } from "./lib/useDeckEvent";
@@ -16,6 +16,12 @@ import { MetricsPage } from "./pages/MetricsPage";
 import { CanvasesPage } from "./pages/CanvasesPage";
 import { InteractionPane } from "./components/InteractionPane";
 import { NotificationStack } from "./components/NotificationStack";
+import {
+  dashboardRouteHref,
+  readDashboardRoute,
+  type DashboardRoute,
+  type PageId,
+} from "./lib/routes";
 
 export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
   const connection = useConnection();
@@ -24,7 +30,23 @@ export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
   const apphosts = useApphosts();
   const interactions = useInteractions();
   const [config, setConfig] = useState<DeckConfig | null>(null);
-  const [page, setPage] = useState<PageId>("resources");
+  const [route, setRoute] = useState<DashboardRoute>(readDashboardRoute);
+  const page = route.page;
+
+  useEffect(() => {
+    const onPopState = (): void => setRoute(readDashboardRoute());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const navigate = useCallback((nextRoute: DashboardRoute): void => {
+    const href = dashboardRouteHref(nextRoute);
+    const current = `${window.location.pathname}${window.location.search}`;
+    if (href !== current) {
+      window.history.pushState({}, "", href);
+    }
+    setRoute(nextRoute);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,7 +90,7 @@ export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
       <div className="app__sidebar">
         <Sidebar
           active={page}
-          onNavigate={setPage}
+          onNavigate={(nextPage) => navigate({ page: nextPage })}
           counts={counts}
           version={config?.version ?? ""}
         />
