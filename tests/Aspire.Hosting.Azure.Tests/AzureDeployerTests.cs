@@ -681,6 +681,83 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task Diagnostics_CrossScopeAcrPullRoleModulesPrecedeTargetedWorkloadProvisioning()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "diagnostics");
+        var mockActivityReporter = new TestPipelineActivityReporter(testOutputHelper);
+        ConfigureTestServices(builder, activityReporter: mockActivityReporter);
+
+        var acaRegistry = builder.AddAzureContainerRegistry("aca-registry")
+            .PublishAsExisting("acaregistry", "shared-registry-rg");
+        var aasRegistry = builder.AddAzureContainerRegistry("aas-registry")
+            .PublishAsExisting("aasregistry", "shared-registry-rg");
+        var acaEnv = builder.AddAzureContainerAppEnvironment("aca-env")
+            .WithAzureContainerRegistry(acaRegistry);
+        var aasEnv = builder.AddAzureAppServiceEnvironment("aas-env")
+            .WithAzureContainerRegistry(aasRegistry);
+
+        builder.AddRedis("cache").WithComputeEnvironment(acaEnv);
+        builder.AddProject<Project>("api-service", launchProfileName: null).WithComputeEnvironment(aasEnv);
+        builder.AddDockerfile("python-app", "python-app.Dockerfile").WithComputeEnvironment(acaEnv);
+
+        using var app = builder.Build();
+        await app.StartAsync();
+        await app.WaitForShutdownAsync();
+
+        var diagnostics = string.Join(
+            Environment.NewLine,
+            mockActivityReporter.LoggedMessages
+                .Where(message => message.StepTitle == "diagnostics")
+                .Select(message => message.Message));
+
+        // Target diagnostics are emitted as:
+        //   If targeting 'deploy-api-service':
+        //     Direct dependencies: ...
+        //     Execution order:
+        //       [0] ...
+        // Extract each complete target section so unrelated pipeline diagnostics do not affect these assertions.
+        static string GetTargetSection(string diagnostics, string target)
+        {
+            var marker = $"If targeting '{target}':";
+            var start = diagnostics.IndexOf(marker, StringComparison.Ordinal);
+            Assert.True(start >= 0, $"Diagnostics did not contain the '{target}' target.");
+
+            var end = diagnostics.IndexOf($"{Environment.NewLine}{Environment.NewLine}If targeting '", start + marker.Length, StringComparison.Ordinal);
+            return end >= 0 ? diagnostics[start..end] : diagnostics[start..];
+        }
+
+        static void AssertAppearsInOrder(string section, params string[] steps)
+        {
+            var previousIndex = -1;
+            foreach (var step in steps)
+            {
+                var index = section.IndexOf(step, previousIndex + 1, StringComparison.Ordinal);
+                Assert.True(index > previousIndex, $"'{step}' did not appear in the expected order:{Environment.NewLine}{section}");
+                previousIndex = index;
+            }
+        }
+
+        AssertAppearsInOrder(
+            GetTargetSection(diagnostics, "deploy-api-service"),
+            "provision-aas-env-mi",
+            "provision-aas-env-mi-roles-aas-registry",
+            "provision-aas-env",
+            "provision-api-service-website");
+        AssertAppearsInOrder(
+            GetTargetSection(diagnostics, "deploy-cache"),
+            "provision-aca-env-mi",
+            "provision-aca-env-mi-roles-aca-registry",
+            "provision-aca-env",
+            "provision-cache-containerapp");
+        AssertAppearsInOrder(
+            GetTargetSection(diagnostics, "deploy-python-app"),
+            "provision-aca-env-mi",
+            "provision-aca-env-mi-roles-aca-registry",
+            "provision-aca-env",
+            "provision-python-app-containerapp");
+    }
+
+    [Fact]
     public async Task DeployAsync_WithUnresolvedParameters_PromptsForParameterValues()
     {
         // Arrange

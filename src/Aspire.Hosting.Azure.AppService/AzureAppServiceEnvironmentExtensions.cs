@@ -297,6 +297,9 @@ public static partial class AzureAppServiceEnvironmentExtensions
             ? builder.AddResource(resource)
             : builder.CreateResourceBuilder(resource);
 
+        appServiceEnvBuilder.WithCrossScopeAcrPullIdentity(
+            identity => new AzureAppServiceEnvironmentAcrPullIdentityAnnotation(identity));
+
         return appServiceEnvBuilder;
     }
 

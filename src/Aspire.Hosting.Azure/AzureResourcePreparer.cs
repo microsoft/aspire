@@ -43,6 +43,7 @@ internal sealed class AzureResourcePreparer(
         }
 
         await BuildRoleAssignmentAnnotations(model, azureResources, cancellationToken).ConfigureAwait(false);
+        PropagateReferencedDeploymentPrerequisites(model);
 
         if (executionContext.IsRunMode)
         {
@@ -539,6 +540,23 @@ internal sealed class AzureResourcePreparer(
         if (prerequisiteResources.Count > 0)
         {
             resource.Annotations.Add(new DeploymentPrerequisitesAnnotation(prerequisiteResources));
+        }
+    }
+
+    private static void PropagateReferencedDeploymentPrerequisites(DistributedApplicationModel appModel)
+    {
+        foreach (var resource in appModel.Resources.OfType<AzureBicepResource>().ToArray())
+        {
+            var prerequisiteResources = resource.GetAzureReferences()
+                .SelectMany(reference => reference.Annotations.OfType<DeploymentPrerequisitesAnnotation>())
+                .SelectMany(annotation => annotation.Resources)
+                .Where(prerequisite => prerequisite != resource)
+                .ToHashSet();
+
+            // References drive pipeline provision ordering. Keep the annotation too so compute
+            // environment publishers can transfer these prerequisites to workload resources.
+            resource.References.UnionWith(prerequisiteResources);
+            AddDeploymentPrerequisitesAnnotation(resource, prerequisiteResources);
         }
     }
 

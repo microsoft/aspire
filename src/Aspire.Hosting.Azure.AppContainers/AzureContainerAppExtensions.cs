@@ -436,6 +436,28 @@ public static class AzureContainerAppExtensions
             ? builder.CreateResourceBuilder(containerAppEnvResource)
             : builder.AddResource(containerAppEnvResource);
 
+        appEnvBuilder.WithCrossScopeAcrPullIdentity(
+            identity => new AzureContainerAppEnvironmentAcrPullIdentityAnnotation(identity),
+            identityBuilder =>
+            {
+                if (!containerAppEnvResource.UseAzdNamingConvention)
+                {
+                    return;
+                }
+
+                identityBuilder.ConfigureInfrastructure(infrastructure =>
+                {
+                    var resourceToken = new ProvisioningVariable("resourceToken", typeof(string))
+                    {
+                        Value = BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)
+                    };
+                    infrastructure.Add(resourceToken);
+
+                    var identity = infrastructure.GetProvisionableResources().OfType<UserAssignedIdentity>().Single();
+                    identity.Name = BicepFunction.Interpolate($"mi-{resourceToken}");
+                });
+            });
+
         return appEnvBuilder;
     }
 

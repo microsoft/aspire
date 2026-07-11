@@ -3,10 +3,12 @@
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+#pragma warning disable ASPIREACANAMING001 // Type is for evaluation purposes only and is subject to change or removal in future updates.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -248,6 +250,133 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
 
         await Verify(bicep, extension: "bicep")
             .AppendContentAsFile(manifest.ToString(), "json");
+    }
+
+    [Fact]
+    public async Task CrossResourceGroupRegistry_UsesStandaloneAcrPullIdentityForFinalRegistry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var firstRegistry = builder.AddAzureContainerRegistry("first-registry")
+            .PublishAsExisting("firstacr", "first-resource-group");
+        var provisionedRegistry = builder.AddAzureContainerRegistry("provisioned-registry");
+        var finalRegistry = builder.AddAzureContainerRegistry("final-registry")
+            .PublishAsExisting("myacr", "my-existing-resource-group");
+
+        var env = builder.AddAzureContainerAppEnvironment("env")
+            .WithAzureContainerRegistry(firstRegistry)
+            .WithAzureContainerRegistry(provisionedRegistry)
+            .WithAzureContainerRegistry(finalRegistry);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var identity = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), resource => resource.Name == "env-mi");
+        var roles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), resource => resource.Name == "env-mi-roles-final-registry");
+        Assert.Same(finalRegistry.Resource, roles.TargetAzureResource);
+
+        var (_, envBicep) = await AzureManifestUtils.GetManifestWithBicep(env.Resource, skipPreparer: true);
+        var (_, identityBicep) = await AzureManifestUtils.GetManifestWithBicep(identity, skipPreparer: true);
+        var (rolesManifest, rolesBicep) = await AzureManifestUtils.GetManifestWithBicep(roles, skipPreparer: true);
+
+        await Verify(envBicep, extension: "bicep")
+            .AppendContentAsFile(identityBicep, "bicep", "identity")
+            .AppendContentAsFile(rolesBicep, "bicep", "roles")
+            .AppendContentAsFile(rolesManifest.ToString(), "json", "roles");
+    }
+
+    [Fact]
+    public async Task CrossResourceGroupRegistry_WithAzdNaming_PreservesIdentityName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry")
+            .PublishAsExisting("myacr", "my-existing-resource-group");
+
+        builder.AddAzureContainerAppEnvironment("env")
+            .WithAzureContainerRegistry(registry)
+            .WithAzdResourceNaming();
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var identity = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), resource => resource.Name == "env-mi");
+        var (_, identityBicep) = await AzureManifestUtils.GetManifestWithBicep(identity, skipPreparer: true);
+
+        await Verify(identityBicep, extension: "bicep");
+    }
+
+    [Fact]
+    public async Task CrossResourceGroupRegistry_WithCompactNaming_PreservesDefaultIdentityName()
+    {
+        static async Task<string> GetIdentityBicepAsync(bool useCompactNaming)
+        {
+            using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+            var registry = builder.AddAzureContainerRegistry("registry")
+                .PublishAsExisting("myacr", "my-existing-resource-group");
+            var env = builder.AddAzureContainerAppEnvironment("env")
+                .WithAzureContainerRegistry(registry);
+            if (useCompactNaming)
+            {
+                env.WithCompactResourceNaming();
+            }
+
+            using var app = builder.Build();
+            await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+            var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+            var identity = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), resource => resource.Name == "env-mi");
+            var (_, identityBicep) = await AzureManifestUtils.GetManifestWithBicep(identity, skipPreparer: true);
+
+            return identityBicep;
+        }
+
+        Assert.Equal(
+            await GetIdentityBicepAsync(useCompactNaming: false),
+            await GetIdentityBicepAsync(useCompactNaming: true));
+    }
+
+    [Fact]
+    public async Task SameScopeExistingRegistry_KeepsInlineAcrPullIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry")
+            .PublishAsExisting("myacr", resourceGroup: null);
+
+        builder.AddAzureContainerAppEnvironment("env")
+            .WithAzureContainerRegistry(registry);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        Assert.Null(model.Resources.OfType<AzureUserAssignedIdentityResource>().SingleOrDefault(resource => resource.Name == "env-mi"));
+        Assert.Null(model.Resources.OfType<AzureRoleAssignmentResource>().SingleOrDefault(resource => resource.Name.StartsWith("env-mi-roles-", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task CrossResourceGroupRegistry_PreservesAcrPullIdentityAddedAfterEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry")
+            .PublishAsExisting("myacr", "my-existing-resource-group");
+        var env = builder.AddAzureContainerAppEnvironment("env")
+            .WithAzureContainerRegistry(registry);
+        var identity = builder.AddAzureUserAssignedIdentity("env-mi");
+        env.WithAcrPullIdentity(identity);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        Assert.Same(identity.Resource, Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), resource => resource.Name == "env-mi"));
+        Assert.Null(model.Resources.OfType<AzureRoleAssignmentResource>().SingleOrDefault(resource => resource.Name.StartsWith("env-mi-roles-", StringComparison.Ordinal)));
     }
 
     [Fact]
