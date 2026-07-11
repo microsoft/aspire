@@ -2273,6 +2273,9 @@ table.data tbody tr.selected {
 .toolkit-section__heading h2 {
   font-size: 14px;
 }
+#toolkit-icons-title {
+  scroll-margin-top: 84px;
+}
 .toolkit-section__heading span {
   color: var(--text-muted);
   font-size: 12px;
@@ -2313,26 +2316,49 @@ table.data tbody tr.selected {
   align-items: center;
   gap: 10px;
 }
-.toolkit-icon-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 0 20px;
+.toolkit-icon-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
 }
-.toolkit-icon-swatch {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px 24px;
-  align-items: center;
-  min-height: 44px;
-  gap: 10px;
+.toolkit-icon-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.toolkit-icon-table th,
+.toolkit-icon-table td {
+  height: 44px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
 }
-.toolkit-icon-swatch code {
-  overflow: hidden;
+.toolkit-icon-table th {
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.toolkit-icon-table th:first-child {
+  width: 28%;
+}
+.toolkit-icon-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.toolkit-icon-table code {
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+}
+.toolkit-icon-component {
+  display: inline-grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
 }
 .toolkit-input-grid {
   display: grid;

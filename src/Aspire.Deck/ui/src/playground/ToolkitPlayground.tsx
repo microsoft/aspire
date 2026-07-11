@@ -15,6 +15,7 @@ import {
   MoonIcon,
   MoreIcon,
   NamedIcon,
+  namedIconMappings,
   NotificationStack,
   Page,
   PageActions,
@@ -54,7 +55,10 @@ const resources: SampleResource[] = [
   { name: "migration", type: "Executable", state: "Exited", stateStyle: null, health: null },
 ];
 
-const defaultIconNames = ["Server", "CloudDatabase"];
+const defaultIconNames = namedIconMappings.map((mapping) => mapping.name);
+const iconMappingsByName = new Map(
+  namedIconMappings.map((mapping) => [mapping.name.toLowerCase(), mapping]),
+);
 
 function getIconNames(): string[] {
   const requestedNames = new URLSearchParams(window.location.search).get("icons");
@@ -241,33 +245,67 @@ export function ToolkitPlayground({
 
         <section className="toolkit-section" aria-labelledby="toolkit-icons-title">
           <div className="toolkit-section__heading">
-            <h2 id="toolkit-icons-title">Icons</h2>
+            <h2 id="toolkit-icons-title">Icon mapping</h2>
           </div>
-          <div className="toolkit-icon-grid" data-testid="toolkit-icon-catalog">
-            {iconNames.map((name) => (
-              <div className="toolkit-icon-swatch" key={name}>
-                <code>{name}</code>
-                <NamedIcon name={name} variant="regular" size={24} aria-label={`${name} regular`} />
-                <NamedIcon name={name} variant="filled" size={24} aria-label={`${name} filled`} />
-              </div>
-            ))}
-            <div className="toolkit-icon-swatch">
-              <code>Resource fallback</code>
-              <ResourceTypeIcon
-                type="Container"
-                iconName="UnknownIntegrationIcon"
-                size={24}
-                aria-label="Unknown icon container fallback"
-              />
-            </div>
-            <div className="toolkit-icon-swatch">
-              <code>Command fallback</code>
-              <NamedIcon
-                name="UnknownCommandIcon"
-                size={24}
-                aria-label="Unknown command icon fallback"
-              />
-            </div>
+          <div className="toolkit-icon-table-wrap">
+            <table className="toolkit-icon-table" data-testid="toolkit-icon-catalog">
+              <thead>
+                <tr>
+                  <th scope="col">Aspire name</th>
+                  <th scope="col">Fluent regular</th>
+                  <th scope="col">Fluent filled</th>
+                </tr>
+              </thead>
+              <tbody>
+                {iconNames.map((name) => {
+                  const mapping = iconMappingsByName.get(name.toLowerCase());
+                  return (
+                    <tr key={name} data-icon-mapping={name}>
+                      <td><code>{name}</code></td>
+                      <td>
+                        <span className="toolkit-icon-component" data-icon-component="regular">
+                          <NamedIcon name={name} variant="regular" size={24} aria-label={`${name} regular`} />
+                          <code>{mapping?.regularComponent ?? "AppsRegular fallback"}</code>
+                        </span>
+                      </td>
+                      <td>
+                        <span className="toolkit-icon-component" data-icon-component="filled">
+                          <NamedIcon name={name} variant="filled" size={24} aria-label={`${name} filled`} />
+                          <code>{mapping?.filledComponent ?? "AppsRegular fallback"}</code>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                <tr data-icon-mapping="UnknownIntegrationIcon">
+                  <td><code>UnknownIntegrationIcon</code></td>
+                  <td colSpan={2}>
+                    <span className="toolkit-icon-component">
+                      <ResourceTypeIcon
+                        type="Container"
+                        iconName="UnknownIntegrationIcon"
+                        size={24}
+                        aria-label="Unknown icon container fallback"
+                      />
+                      <code>Box24Regular resource fallback</code>
+                    </span>
+                  </td>
+                </tr>
+                <tr data-icon-mapping="UnknownCommandIcon">
+                  <td><code>UnknownCommandIcon</code></td>
+                  <td colSpan={2}>
+                    <span className="toolkit-icon-component">
+                      <NamedIcon
+                        name="UnknownCommandIcon"
+                        size={24}
+                        aria-label="Unknown command icon fallback"
+                      />
+                      <code>AppsRegular command fallback</code>
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </section>
 

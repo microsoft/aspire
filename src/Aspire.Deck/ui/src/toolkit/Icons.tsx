@@ -162,76 +162,107 @@ import {
 export type IconProps = Omit<FluentIconsProps, "fontSize"> & { size?: number };
 export type FluentIconVariant = "regular" | "filled";
 
-interface IconPair {
+export interface NamedIconMapping {
+  name: string;
+  regularComponent: string;
+  filledComponent: string;
+}
+
+interface IconPair extends NamedIconMapping {
   regular: FluentIcon;
   filled: FluentIcon;
 }
 
-const namedIcons: Readonly<Record<string, IconPair>> = {
-  add: { regular: AddRegular, filled: AddFilled },
-  agents: { regular: AgentsRegular, filled: AgentsFilled },
-  agentsadd: { regular: AgentsAddRegular, filled: AgentsAddFilled },
-  apps: { regular: AppsRegular, filled: AppsFilled },
-  arrowclockwise: { regular: ArrowClockwiseRegular, filled: ArrowClockwiseFilled },
-  arrowcounterclockwise: { regular: ArrowCounterclockwiseRegular, filled: ArrowCounterclockwiseFilled },
-  arrowreset: { regular: ArrowResetRegular, filled: ArrowResetFilled },
-  arrowsync: { regular: ArrowSyncRegular, filled: ArrowSyncFilled },
-  beaker: { regular: BeakerRegular, filled: BeakerFilled },
-  box: { regular: BoxRegular, filled: BoxFilled },
-  boxmultiple: { regular: BoxMultipleRegular, filled: BoxMultipleFilled },
-  braincircuit: { regular: BrainCircuitRegular, filled: BrainCircuitFilled },
-  branchfork: { regular: BranchForkRegular, filled: BranchForkFilled },
-  calculator: { regular: CalculatorRegular, filled: CalculatorFilled },
-  camera: { regular: CameraRegular, filled: CameraFilled },
-  certificate: { regular: CertificateRegular, filled: CertificateFilled },
-  chatsparkle: { regular: ChatSparkleRegular, filled: ChatSparkleFilled },
-  checkmarkcircle: { regular: CheckmarkCircleRegular, filled: CheckmarkCircleFilled },
-  cloudarrowup: { regular: CloudArrowUpRegular, filled: CloudArrowUpFilled },
-  cloudbidirectional: { regular: CloudBidirectionalRegular, filled: CloudBidirectionalFilled },
-  clouddatabase: { regular: CloudDatabaseRegular, filled: CloudDatabaseFilled },
-  code: { regular: CodeRegular, filled: CodeFilled },
-  codecircle: { regular: CodeCircleRegular, filled: CodeCircleFilled },
-  codecsrectangle: { regular: CodeCsRectangle16Regular, filled: CodeCsRectangle16Filled },
-  codefsrectangle: { regular: CodeFsRectangle16Regular, filled: CodeFsRectangle16Filled },
-  codejsrectangle: { regular: CodeJsRectangle16Regular, filled: CodeJsRectangle16Filled },
-  codepyrectangle: { regular: CodePyRectangle16Regular, filled: CodePyRectangle16Filled },
-  codevbrectangle: { regular: CodeVbRectangle16Regular, filled: CodeVbRectangle16Filled },
-  contentviewgallerylightning: { regular: ContentViewGalleryLightningRegular, filled: ContentViewGalleryLightningFilled },
-  contentview: { regular: ContentViewRegular, filled: ContentViewFilled },
-  database: { regular: DatabaseRegular, filled: DatabaseFilled },
-  databasearrowright: { regular: DatabaseArrowRightRegular, filled: DatabaseArrowRightFilled },
-  databaselightning: { regular: DatabaseLightningRegular, filled: DatabaseLightningFilled },
-  databasemultiple: { regular: DatabaseMultipleRegular, filled: DatabaseMultipleFilled },
-  databaseplugconnected: { regular: DatabasePlugConnectedRegular, filled: DatabasePlugConnectedFilled },
-  databasesearch: { regular: DatabaseSearchRegular, filled: DatabaseSearchFilled },
-  delete: { regular: DeleteRegular, filled: DeleteFilled },
-  document: { regular: DocumentRegular, filled: DocumentFilled },
-  edit: { regular: EditRegular, filled: EditFilled },
-  folder: { regular: FolderRegular, filled: FolderFilled },
-  globearrowforward: { regular: GlobeArrowForwardRegular, filled: GlobeArrowForwardFilled },
-  globedesktop: { regular: GlobeDesktopRegular, filled: GlobeDesktopFilled },
-  heartbroken: { regular: HeartBrokenRegular, filled: HeartBrokenFilled },
-  info: { regular: InfoRegular, filled: InfoFilled },
-  key: { regular: KeyRegular, filled: KeyFilled },
-  linkmultiple: { regular: LinkMultipleRegular, filled: LinkMultipleFilled },
-  mail: { regular: MailRegular, filled: MailFilled },
-  open: { regular: OpenRegular, filled: OpenFilled },
-  play: { regular: PlayRegular, filled: PlayFilled },
-  plugconnectedsettings: { regular: PlugConnectedSettingsRegular, filled: PlugConnectedSettingsFilled },
-  send: { regular: SendRegular, filled: SendFilled },
-  server: { regular: ServerRegular, filled: ServerFilled },
-  settings: { regular: SettingsRegular, filled: SettingsFilled },
-  settingscogmultiple: { regular: SettingsCogMultipleRegular, filled: SettingsCogMultipleFilled },
-  stop: { regular: StopRegular, filled: StopFilled },
-  subtract: { regular: SubtractRegular, filled: SubtractFilled },
-  tablelightning: { regular: TableLightningRegular, filled: TableLightningFilled },
-  toolbox: { regular: ToolboxRegular, filled: ToolboxFilled },
-  virtualnetwork: { regular: VirtualNetworkRegular, filled: VirtualNetworkFilled },
-  warning: { regular: WarningRegular, filled: WarningFilled },
-  window: { regular: WindowRegular, filled: WindowFilled },
-  windowconsole: { regular: WindowConsoleRegular, filled: WindowConsoleFilled },
-  windowdatabase: { regular: WindowDatabaseRegular, filled: WindowDatabaseFilled },
-};
+function createNamedIcon(
+  name: string,
+  regular: FluentIcon,
+  filled: FluentIcon,
+  componentStem = name,
+): IconPair {
+  return {
+    name,
+    regular,
+    filled,
+    regularComponent: `${componentStem}Regular`,
+    filledComponent: `${componentStem}Filled`,
+  };
+}
+
+const namedIconPairs: readonly IconPair[] = [
+  createNamedIcon("Add", AddRegular, AddFilled),
+  createNamedIcon("Agents", AgentsRegular, AgentsFilled),
+  createNamedIcon("AgentsAdd", AgentsAddRegular, AgentsAddFilled),
+  createNamedIcon("Apps", AppsRegular, AppsFilled),
+  createNamedIcon("ArrowClockwise", ArrowClockwiseRegular, ArrowClockwiseFilled),
+  createNamedIcon("ArrowCounterclockwise", ArrowCounterclockwiseRegular, ArrowCounterclockwiseFilled),
+  createNamedIcon("ArrowReset", ArrowResetRegular, ArrowResetFilled),
+  createNamedIcon("ArrowSync", ArrowSyncRegular, ArrowSyncFilled),
+  createNamedIcon("Beaker", BeakerRegular, BeakerFilled),
+  createNamedIcon("Box", BoxRegular, BoxFilled),
+  createNamedIcon("BoxMultiple", BoxMultipleRegular, BoxMultipleFilled),
+  createNamedIcon("BrainCircuit", BrainCircuitRegular, BrainCircuitFilled),
+  createNamedIcon("BranchFork", BranchForkRegular, BranchForkFilled),
+  createNamedIcon("Calculator", CalculatorRegular, CalculatorFilled),
+  createNamedIcon("Camera", CameraRegular, CameraFilled),
+  createNamedIcon("Certificate", CertificateRegular, CertificateFilled),
+  createNamedIcon("ChatSparkle", ChatSparkleRegular, ChatSparkleFilled),
+  createNamedIcon("CheckmarkCircle", CheckmarkCircleRegular, CheckmarkCircleFilled),
+  createNamedIcon("CloudArrowUp", CloudArrowUpRegular, CloudArrowUpFilled),
+  createNamedIcon("CloudBidirectional", CloudBidirectionalRegular, CloudBidirectionalFilled),
+  createNamedIcon("CloudDatabase", CloudDatabaseRegular, CloudDatabaseFilled),
+  createNamedIcon("Code", CodeRegular, CodeFilled),
+  createNamedIcon("CodeCircle", CodeCircleRegular, CodeCircleFilled),
+  createNamedIcon("CodeCsRectangle", CodeCsRectangle16Regular, CodeCsRectangle16Filled, "CodeCsRectangle16"),
+  createNamedIcon("CodeFsRectangle", CodeFsRectangle16Regular, CodeFsRectangle16Filled, "CodeFsRectangle16"),
+  createNamedIcon("CodeJsRectangle", CodeJsRectangle16Regular, CodeJsRectangle16Filled, "CodeJsRectangle16"),
+  createNamedIcon("CodePyRectangle", CodePyRectangle16Regular, CodePyRectangle16Filled, "CodePyRectangle16"),
+  createNamedIcon("CodeVbRectangle", CodeVbRectangle16Regular, CodeVbRectangle16Filled, "CodeVbRectangle16"),
+  createNamedIcon("ContentView", ContentViewRegular, ContentViewFilled),
+  createNamedIcon("ContentViewGalleryLightning", ContentViewGalleryLightningRegular, ContentViewGalleryLightningFilled),
+  createNamedIcon("Database", DatabaseRegular, DatabaseFilled),
+  createNamedIcon("DatabaseArrowRight", DatabaseArrowRightRegular, DatabaseArrowRightFilled),
+  createNamedIcon("DatabaseLightning", DatabaseLightningRegular, DatabaseLightningFilled),
+  createNamedIcon("DatabaseMultiple", DatabaseMultipleRegular, DatabaseMultipleFilled),
+  createNamedIcon("DatabasePlugConnected", DatabasePlugConnectedRegular, DatabasePlugConnectedFilled),
+  createNamedIcon("DatabaseSearch", DatabaseSearchRegular, DatabaseSearchFilled),
+  createNamedIcon("Delete", DeleteRegular, DeleteFilled),
+  createNamedIcon("Document", DocumentRegular, DocumentFilled),
+  createNamedIcon("Edit", EditRegular, EditFilled),
+  createNamedIcon("Folder", FolderRegular, FolderFilled),
+  createNamedIcon("GlobeArrowForward", GlobeArrowForwardRegular, GlobeArrowForwardFilled),
+  createNamedIcon("GlobeDesktop", GlobeDesktopRegular, GlobeDesktopFilled),
+  createNamedIcon("HeartBroken", HeartBrokenRegular, HeartBrokenFilled),
+  createNamedIcon("Info", InfoRegular, InfoFilled),
+  createNamedIcon("Key", KeyRegular, KeyFilled),
+  createNamedIcon("LinkMultiple", LinkMultipleRegular, LinkMultipleFilled),
+  createNamedIcon("Mail", MailRegular, MailFilled),
+  createNamedIcon("Open", OpenRegular, OpenFilled),
+  createNamedIcon("Play", PlayRegular, PlayFilled),
+  createNamedIcon("PlugConnectedSettings", PlugConnectedSettingsRegular, PlugConnectedSettingsFilled),
+  createNamedIcon("Send", SendRegular, SendFilled),
+  createNamedIcon("Server", ServerRegular, ServerFilled),
+  createNamedIcon("Settings", SettingsRegular, SettingsFilled),
+  createNamedIcon("SettingsCogMultiple", SettingsCogMultipleRegular, SettingsCogMultipleFilled),
+  createNamedIcon("Stop", StopRegular, StopFilled),
+  createNamedIcon("Subtract", SubtractRegular, SubtractFilled),
+  createNamedIcon("TableLightning", TableLightningRegular, TableLightningFilled),
+  createNamedIcon("Toolbox", ToolboxRegular, ToolboxFilled),
+  createNamedIcon("VirtualNetwork", VirtualNetworkRegular, VirtualNetworkFilled),
+  createNamedIcon("Warning", WarningRegular, WarningFilled),
+  createNamedIcon("Window", WindowRegular, WindowFilled),
+  createNamedIcon("WindowConsole", WindowConsoleRegular, WindowConsoleFilled),
+  createNamedIcon("WindowDatabase", WindowDatabaseRegular, WindowDatabaseFilled),
+];
+
+const namedIcons: Readonly<Record<string, IconPair>> = Object.fromEntries(
+  namedIconPairs.map((pair) => [pair.name.toLowerCase(), pair]),
+);
+
+export const namedIconMappings: readonly NamedIconMapping[] = namedIconPairs.map((pair) => ({
+  name: pair.name,
+  regularComponent: pair.regularComponent,
+  filledComponent: pair.filledComponent,
+}));
 
 function createIcon(Component: FluentIcon) {
   return function DeckToolkitIcon({ size = 18, ...props }: IconProps) {

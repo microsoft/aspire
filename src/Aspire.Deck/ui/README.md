@@ -85,9 +85,13 @@ export function ResourceList({
 }
 ```
 
-The standalone playground exercises the toolkit without dashboard data or transport code:
+The standalone playground exercises the toolkit without dashboard data or transport code. Its
+icon catalog is generated from the same registry used by `NamedIcon`, and shows the exact Aspire
+name to Fluent regular/filled component mapping plus both fallback contracts.
 
-![Deck toolkit playground](docs/images/toolkit-playground.jpg)
+| Toolkit playground | Icon contract |
+| --- | --- |
+| ![Deck toolkit playground](docs/images/toolkit-playground.jpg) | ![Aspire to Fluent icon mapping](docs/images/toolkit-icons.jpg) |
 
 ## Visual examples
 

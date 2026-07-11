@@ -73,6 +73,19 @@ const knownDashboardIconNames = [
   "WindowDatabase",
 ] as const;
 
+const sizeQualifiedIconNames = new Set([
+  "CodeCsRectangle",
+  "CodeFsRectangle",
+  "CodeJsRectangle",
+  "CodePyRectangle",
+  "CodeVbRectangle",
+]);
+
+function expectedFluentIconComponent(name: string, variant: "Regular" | "Filled"): string {
+  const componentStem = sizeQualifiedIconNames.has(name) ? `${name}16` : name;
+  return `${componentStem}${variant}`;
+}
+
 function features(...ids: ToolkitFeatureId[]): string {
   for (const id of ids) {
     coveredFeatures.add(id);
@@ -163,7 +176,7 @@ test(`${features("TK-ACTIONS-001")} exercises every button variant`, async ({ pa
   await expect(page.getByRole("button", { name: "Use light theme" })).toHaveAttribute("title", "Use light theme");
 });
 
-test(`${features("TK-ICON-001")} resolves named icons, variants, and fallbacks`, async ({ page }) => {
+test(`${features("TK-ICON-001")} resolves named icons, variants, and fallbacks`, async ({ page }, testInfo) => {
   await page.goto(`/?view=toolkit&icons=${encodeURIComponent(knownDashboardIconNames.join(","))}`);
   const catalog = page.getByTestId("toolkit-icon-catalog");
   const regular = catalog.locator('svg[data-icon-name="CloudDatabase"][data-icon-variant="regular"]');
@@ -174,8 +187,26 @@ test(`${features("TK-ICON-001")} resolves named icons, variants, and fallbacks`,
   await expect(filled).toHaveCount(1);
   await expect(catalog.locator("svg[data-icon-name]")).toHaveCount(knownDashboardIconNames.length * 2);
   expect(await regular.locator("path").getAttribute("d")).not.toBe(await filled.locator("path").getAttribute("d"));
+  const displayedMappings = await catalog
+    .locator('tbody tr:has([data-icon-component="regular"])')
+    .evaluateAll((rows) => rows.map((row) => ({
+      name: row.getAttribute("data-icon-mapping"),
+      regular: row.querySelector('[data-icon-component="regular"] code')?.textContent,
+      filled: row.querySelector('[data-icon-component="filled"] code')?.textContent,
+    })));
+  expect(displayedMappings).toEqual(knownDashboardIconNames.map((name) => ({
+    name,
+    regular: expectedFluentIconComponent(name, "Regular"),
+    filled: expectedFluentIconComponent(name, "Filled"),
+  })));
   await expect(catalog.locator('svg[data-icon-fallback="UnknownIntegrationIcon"]')).toHaveCount(1);
   await expect(catalog.locator('svg[data-icon-fallback="UnknownCommandIcon"]')).toHaveCount(1);
+  await expect(catalog.getByText("Box24Regular resource fallback", { exact: true })).toBeVisible();
+  await expect(catalog.getByText("AppsRegular command fallback", { exact: true })).toBeVisible();
+  const body = await page.locator('section[aria-labelledby="toolkit-icons-title"]').screenshot({
+    animations: "disabled",
+  });
+  await testInfo.attach("toolkit-icon-mapping.png", { body, contentType: "image/png" });
 });
 
 test(`${features("TK-PAGE-001")} composes an accessible dashboard page`, async ({ page }) => {
@@ -351,7 +382,7 @@ test(`${features("TK-TABS-001", "TK-ACCORDION-001", "TK-DIVIDER-001", "TK-HIGHLI
 });
 
 test(`${features("TK-DATA-001")} filters semantic table rows and exposes empty results`, async ({ page }) => {
-  const table = page.getByRole("table");
+  const table = page.getByTestId("toolkit-table").getByRole("table");
   const search = page.getByRole("textbox", { name: "Filter toolkit resources…" });
 
   await expect(table.getByRole("columnheader")).toHaveText(["State", "Name", "Type"]);
@@ -368,7 +399,7 @@ test(`${features("TK-DATA-001")} filters semantic table rows and exposes empty r
 });
 
 test(`${features("TK-DATA-SORT-001")} sorts and activates data rows accessibly`, async ({ page }) => {
-  const table = page.getByRole("table");
+  const table = page.getByTestId("toolkit-table").getByRole("table");
   const nameHeader = table.getByRole("columnheader", { name: "Name" });
   const sortByName = nameHeader.getByRole("button", { name: "Name" });
   const names = table.locator("tbody td:nth-child(2)");
