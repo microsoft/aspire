@@ -1001,26 +1001,15 @@ table.data tbody tr.selected {
   border-top: 1px solid var(--border);
   background: var(--bg-surface);
 }
-.structured-log-details {
-  display: flex;
-  min-height: 0;
-  flex-direction: column;
-  gap: 8px;
+.structured-log-details .deck-property-explorer__toolbar .command-menu-root {
+  flex: none;
 }
-.structured-log-details__toolbar {
+.structured-log-details__metadata {
   display: flex;
+  flex: 1 0 100%;
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  padding-bottom: 8px;
-}
-.structured-log-details__toolbar .searchbox {
-  flex: 1 1 180px;
-  min-width: 160px;
-  margin-inline-start: auto;
-}
-.structured-log-details__toolbar .command-menu-root {
-  flex: none;
 }
 .structured-log-details__meta {
   color: var(--text-secondary);
@@ -1030,9 +1019,6 @@ table.data tbody tr.selected {
 .structured-log-details__meta strong {
   color: var(--text);
   font-weight: 600;
-}
-.structured-log-details__sections .deck-property-grid {
-  grid-template-columns: minmax(130px, 36%) minmax(0, 1fr);
 }
 .structured-log-details .deck-mark {
   padding: 0 1px;
