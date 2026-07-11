@@ -9,15 +9,32 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning.ContainerRegistry;
 
+// ACA and App Service normally emit their ACR pull identity and AcrPull assignment inline in the
+// environment module. That remains the preferred path, but Bicep rejects an inline role assignment
+// when PublishAsExisting selects a registry in an explicit resource group or subscription (BCP139).
+//
+// This linked helper runs after the application model and final registry selection are complete. For
+// only that cross-scope case, it creates a standalone identity and lets AzureResourcePreparer emit the
+// role assignment as a separately scoped module. Package-specific annotations remain in their owning
+// assemblies, so this source is linked into only the ACA and App Service projects.
 namespace Aspire.Hosting.Azure;
 
+/// <summary>
+/// Identifies the package-specific annotation that supplies an environment's ACR pull identity.
+/// </summary>
 internal interface IAcrPullIdentityAnnotation : IResourceAnnotation
 {
     AzureUserAssignedIdentityResource Identity { get; }
 }
 
+/// <summary>
+/// Promotes an inline ACR pull identity to a standalone resource when its final registry is explicitly cross-scoped.
+/// </summary>
 internal static class CrossScopeAcrPullIdentityPreparer
 {
+    /// <summary>
+    /// Registers late publish preparation while preserving existing inline and user-supplied identity paths.
+    /// </summary>
     [AspireExportIgnore(Reason = "Internal publish pipeline wiring.")]
     public static IResourceBuilder<TEnvironment> WithCrossScopeAcrPullIdentity<TEnvironment>(
         this IResourceBuilder<TEnvironment> builder,
