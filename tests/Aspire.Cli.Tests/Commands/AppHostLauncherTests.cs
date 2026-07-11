@@ -494,7 +494,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             detachedHandle = Process.GetProcessById(startedProcess.Id);
             await startedProcess.WaitForExitAsync(cancellationToken).DefaultTimeout();
 
-            return new MonitoredProcessExecutionAdapter(detachedHandle, forkProcess, startTime: null);
+            return new MonitoredProcessExecutionAdapter(detachedHandle, forkProcess, startTime: null, useSuppliedStartTime: true);
         };
 
         try
@@ -1260,7 +1260,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         }
     }
 
-    private sealed class MonitoredProcessExecutionAdapter(Process process, Process? exitMonitorProcess = null, DateTimeOffset? startTime = null) : IProcessExecution
+    private sealed class MonitoredProcessExecutionAdapter(Process process, Process? exitMonitorProcess = null, DateTimeOffset? startTime = null, bool useSuppliedStartTime = false) : IProcessExecution
     {
         public string FileName => string.Empty;
 
@@ -1270,7 +1270,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public int ProcessId { get; } = process.Id;
 
-        public DateTimeOffset? StartTime { get; } = startTime ?? GetStartTime(process);
+        public DateTimeOffset? StartTime { get; } = useSuppliedStartTime ? startTime : startTime ?? GetStartTime(process);
 
         public bool HasExited => exitMonitorProcess?.HasExited ?? process.HasExited;
 
