@@ -208,6 +208,44 @@ public static class DashboardEndpointsBuilder
             await StreamDeckConsoleLogsAsync(httpContext, dashboardClient, resourceName, httpContext.RequestAborted).ConfigureAwait(false);
             return Results.Empty;
         });
+
+        group.MapGet("/telemetry/logs", async (
+            TelemetryApiService service,
+            HttpContext httpContext,
+            [FromQuery] string[]? resource,
+            [FromQuery] string? traceId,
+            [FromQuery] string? severity,
+            [FromQuery] int? limit,
+            [FromQuery] bool? follow,
+            [FromQuery] string? search,
+            CancellationToken cancellationToken) =>
+        {
+            if (follow == true)
+            {
+                await StreamNdjsonAsync(
+                    httpContext,
+                    service.FollowLogsAsync(resource, traceId, severity, search, cancellationToken),
+                    cancellationToken,
+                    cacheControl: "no-store").ConfigureAwait(false);
+                return Results.Empty;
+            }
+
+            // Structured logs can contain arbitrary application data and attributes.
+            // The Deck route uses frontend auth, so its response must not be retained.
+            httpContext.Response.Headers.CacheControl = "no-store";
+            var response = service.GetLogs(resource, traceId, severity, limit, search);
+            if (response is null)
+            {
+                return Results.NotFound(new ProblemDetails
+                {
+                    Title = "Resource not found",
+                    Detail = "No resource with specified name(s) was found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+        });
     }
 
     public static void MapTelemetryApi(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)
@@ -363,15 +401,21 @@ public static class DashboardEndpointsBuilder
         });
     }
 
-    private static async Task StreamNdjsonAsync(HttpContext httpContext, IAsyncEnumerable<string> items, CancellationToken cancellationToken)
+    private static async Task StreamNdjsonAsync(
+        HttpContext httpContext,
+        IAsyncEnumerable<string> items,
+        CancellationToken cancellationToken,
+        string cacheControl = "no-cache")
     {
         // Set headers for NDJSON streaming:
         // - application/x-ndjson: Standard content type for newline-delimited JSON
         // - no-cache: Prevent caching of streaming response
         // - X-Accel-Buffering: no: Disable nginx buffering for real-time streaming
         httpContext.Response.ContentType = "application/x-ndjson";
-        httpContext.Response.Headers.CacheControl = "no-cache";
+        httpContext.Response.Headers.CacheControl = cacheControl;
         httpContext.Response.Headers["X-Accel-Buffering"] = "no";
+        await httpContext.Response.StartAsync(cancellationToken).ConfigureAwait(false);
+        await httpContext.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {

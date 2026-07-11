@@ -3,19 +3,27 @@
 
 using System.Collections.Immutable;
 using System.Net;
+using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
+using Aspire.Otlp.Serialization;
+using Aspire.Tests.Shared.Telemetry;
+using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.FluentUI.AspNetCore.Components;
+using OpenTelemetry.Proto.Logs.V1;
 using Xunit;
 using DashboardProto = global::Aspire.DashboardService.Proto.V1;
 
@@ -320,6 +328,90 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task GetStructuredLogs_ReturnsFilteredSnapshot()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        var repository = app.Services.GetRequiredService<TelemetryRepository>();
+        AddStructuredLog(
+            repository,
+            time: new DateTime(2026, 7, 10, 8, 0, 0, DateTimeKind.Utc),
+            message: "Frontend started",
+            severity: SeverityNumber.Info);
+        AddStructuredLog(
+            repository,
+            time: new DateTime(2026, 7, 10, 8, 0, 1, DateTimeKind.Utc),
+            message: "Database connection failed",
+            severity: SeverityNumber.Error);
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var response = await httpClient.GetAsync(
+            "/api/deck/telemetry/logs?resource=frontend&severity=Warning&search=database&limit=10").DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        var snapshot = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+        Assert.NotNull(snapshot);
+        Assert.Equal(1, snapshot.TotalCount);
+        Assert.Equal(1, snapshot.ReturnedCount);
+
+        var resourceLogs = Assert.Single(snapshot.Data?.ResourceLogs ?? []);
+        Assert.Equal("frontend", resourceLogs.Resource?.GetServiceName());
+        Assert.Equal("instance-1", resourceLogs.Resource?.GetServiceInstanceId());
+        var scopeLogs = Assert.Single(resourceLogs.ScopeLogs ?? []);
+        Assert.Equal("Stress.Telemetry", scopeLogs.Scope?.Name);
+        var log = Assert.Single(scopeLogs.LogRecords ?? []);
+        Assert.Equal("Database connection failed", log.Body?.StringValue);
+        Assert.Equal((int)SeverityNumber.Error, log.SeverityNumber);
+        Assert.Equal("Error", log.SeverityText);
+        Assert.Equal("30313233343536373839616263646566", log.TraceId);
+        Assert.Equal("7370616e2d303031", log.SpanId);
+    }
+
+    [Fact]
+    public async Task GetStructuredLogs_FollowStreamsBacklogAndLiveRecords()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        var repository = app.Services.GetRequiredService<TelemetryRepository>();
+        AddStructuredLog(
+            repository,
+            time: new DateTime(2026, 7, 10, 8, 0, 0, DateTimeKind.Utc),
+            message: "Backlog record",
+            severity: SeverityNumber.Info);
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var response = await httpClient.GetAsync(
+            "/api/deck/telemetry/logs?resource=frontend&follow=true",
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationTokenSource.Token).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal("no", Assert.Single(response.Headers.GetValues("X-Accel-Buffering")));
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationTokenSource.Token);
+        using var reader = new StreamReader(stream);
+        Assert.Equal(
+            "Backlog record",
+            GetStructuredLogMessage(await reader.ReadLineAsync(cancellationTokenSource.Token)));
+
+        AddStructuredLog(
+            repository,
+            time: new DateTime(2026, 7, 10, 8, 0, 1, DateTimeKind.Utc),
+            message: "Live record",
+            severity: SeverityNumber.Warn);
+
+        Assert.Equal(
+            "Live record",
+            GetStructuredLogMessage(await reader.ReadLineAsync(cancellationTokenSource.Token)));
+    }
+
+    [Fact]
     public async Task Interactions_RoundTripInputsDialog()
     {
         var interactions = Channel.CreateUnbounded<DashboardProto.WatchInteractionsResponseUpdate>();
@@ -480,6 +572,45 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
 
             await Task.Delay(TimeSpan.FromMilliseconds(20), cts.Token);
         }
+    }
+
+    private static void AddStructuredLog(
+        TelemetryRepository repository,
+        DateTime time,
+        string message,
+        SeverityNumber severity)
+    {
+        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = TelemetryTestHelpers.CreateResource(name: "frontend", instanceId: "instance-1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = TelemetryTestHelpers.CreateScope("Stress.Telemetry"),
+                        LogRecords =
+                        {
+                            TelemetryTestHelpers.CreateLogRecord(
+                                time: time,
+                                message: message,
+                                severity: severity,
+                                attributes: [],
+                                traceId: "0123456789abcdef",
+                                spanId: "span-001")
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    private static string? GetStructuredLogMessage(string? json)
+    {
+        Assert.NotNull(json);
+        var data = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.OtlpTelemetryDataJson);
+        return Assert.Single(Assert.Single(data?.ResourceLogs ?? []).ScopeLogs ?? []).LogRecords?.Single().Body?.StringValue;
     }
 
     private static ResourceViewModel CreateResource()
