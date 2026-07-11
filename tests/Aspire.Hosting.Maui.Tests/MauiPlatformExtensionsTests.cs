@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECOMMAND001 // Required command validation APIs are experimental.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Maui;
@@ -997,6 +999,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
 
         var appBuilder = DistributedApplication.CreateBuilder();
         ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
+        appBuilder.Services.AddSingleton<IRequiredCommandValidator, CancelingRequiredCommandValidator>();
 
         var dashboard = appBuilder.AddResource(new ExecutableResource(KnownResourceNames.AspireDashboard, "dashboard", ""));
         dashboard.Resource.Annotations.Add(new EndpointAnnotation(
@@ -1073,6 +1076,7 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
 
         var appBuilder = DistributedApplication.CreateBuilder();
         ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
+        appBuilder.Services.AddSingleton<IRequiredCommandValidator, CancelingRequiredCommandValidator>();
 
         var dashboard = appBuilder.AddResource(new ExecutableResource(KnownResourceNames.AspireDashboard, "dashboard", ""));
         dashboard.Resource.Annotations.Add(new EndpointAnnotation(
@@ -1704,6 +1708,16 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedPort, endpoint.Port);
         Assert.Equal(expectedPort, endpoint.TargetPort);
         Assert.Equal(expectedUri, endpoint.AllocatedEndpoint?.UriString);
+    }
+
+    private sealed class CancelingRequiredCommandValidator : IRequiredCommandValidator
+    {
+        public async Task<RequiredCommandValidationResult> ValidateAsync(IResource resource, RequiredCommandAnnotation annotation, CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+
+            return RequiredCommandValidationResult.Success();
+        }
     }
 
     // Configuration class for platform-specific test data
