@@ -73,11 +73,29 @@ internal static class CrossScopeAcrPullIdentityPreparer
         TEnvironment environment)
         where TEnvironment : IResource, IAzureComputeEnvironmentResource
     {
-        return executionContext.IsPublishMode &&
-            !environment.HasAnnotationOfType<IAcrPullIdentityAnnotation>() &&
-            environment.ContainerRegistry is AzureContainerRegistryResource registry &&
-            registry.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingRegistry) &&
-            (existingRegistry.ResourceGroup is not null || existingRegistry.Subscription is not null);
+        // Run mode does not emit the environment Bicep that contains the problematic role assignment.
+        // Adding a standalone Azure identity there would unnecessarily change the local application model.
+        if (!executionContext.IsPublishMode)
+        {
+            return false;
+        }
+
+        // WithAcrPullIdentity has already selected a user-supplied identity, so preserve that path.
+        if (environment.HasAnnotationOfType<IAcrPullIdentityAnnotation>())
+        {
+            return false;
+        }
+
+        // ContainerRegistry is evaluated late so registry replacement APIs have already selected the final registry.
+        if (environment.ContainerRegistry is not AzureContainerRegistryResource registry ||
+            !registry.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existingRegistry))
+        {
+            return false;
+        }
+
+        // An existing registry without an explicit scope resolves in the deployment's resource group and
+        // subscription, where the current inline identity and role assignment remain valid.
+        return existingRegistry.ResourceGroup is not null || existingRegistry.Subscription is not null;
     }
 
     private static void PrepareIdentity<TEnvironment>(
