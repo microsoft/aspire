@@ -101,7 +101,7 @@ test(`${features("resources")} inventories resources, details, and graph behavio
 
   const resourceRow = table.getByRole("row").filter({ hasText: "property-stress-resource" });
   await expect(resourceRow).toHaveCount(1);
-  await resourceRow.click({ force: true });
+  await resourceRow.getByText("property-stress-resource", { exact: true }).click();
   const details = page.getByRole("dialog").filter({ hasText: "property-stress-resource" });
   await expect(details.getByText("Overview", { exact: true })).toBeVisible();
   await expect(details.getByText("Properties", { exact: true })).toBeVisible();

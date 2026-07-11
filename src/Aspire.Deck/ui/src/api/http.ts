@@ -67,6 +67,24 @@ async function postJson<TRequest, TResponse>(path: string, body: TRequest): Prom
   return await response.json() as TResponse;
 }
 
+async function postNoContent<TRequest>(path: string, body: TRequest): Promise<void> {
+  const response = await fetch(`/api/deck/${path}`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Deck API request failed with ${response.status} ${response.statusText}.`);
+  }
+
+  await response.arrayBuffer();
+}
+
 function getConfig(): Promise<DeckConfig> {
   if (configPromise === null) {
     const request = requestJson<DeckConfig>("config");
@@ -166,6 +184,35 @@ function onApphosts(callback: (apphosts: AppHostInfo[]) => void): Unsubscribe {
   return () => apphostListeners.delete(callback);
 }
 
+function onInteractions(callback: (interactions: InteractionInfo[]) => void): Unsubscribe {
+  let cancelled = false;
+  let timer: number | undefined;
+
+  const poll = async (): Promise<void> => {
+    try {
+      const interactions = await requestJson<InteractionInfo[]>("interactions");
+      if (!cancelled) {
+        callback(interactions);
+      }
+    } catch {
+      // Keep the last snapshot during a transient failure. Resource polling owns the
+      // connection indicator and will surface a dashboard backend outage.
+    } finally {
+      if (!cancelled) {
+        timer = window.setTimeout(() => void poll(), 250);
+      }
+    }
+  };
+
+  void poll();
+  return () => {
+    cancelled = true;
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+    }
+  };
+}
+
 export const httpBackend = {
   getConfig,
   listResources,
@@ -179,11 +226,9 @@ export const httpBackend = {
       : Promise.reject(new Error(`Unknown dashboard AppHost '${id}'.`));
   },
   onApphosts,
-  onInteractions(callback: (interactions: InteractionInfo[]) => void): Unsubscribe {
-    callback([]);
-    return () => undefined;
-  },
-  respondInteraction(_interactionId: number, _action: string, _values: Record<string, string>): void {
+  onInteractions,
+  respondInteraction(interactionId: number, action: string, values: Record<string, string>): void {
+    void postNoContent("interactions/respond", { interactionId, action, values }).catch(() => undefined);
   },
   getTelemetrySummary(): Promise<TelemetrySummary> {
     return Promise.resolve(emptyTelemetry);

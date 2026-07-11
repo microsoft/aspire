@@ -136,6 +136,39 @@ test(`${features("STRESS-RESOURCE-ICON-001", "STRESS-COMMAND-ICON-001", "STRESS-
   await attachScreenshot(page, testInfo, "stress-live-icon-catalog");
 });
 
+test(`${features("STRESS-COMMAND-ARGUMENTS-001")} submits every input type to a live Stress command`, async ({ page }, testInfo) => {
+  const row = page.getByRole("table").getByRole("row").filter({ hasText: "argument-commands" });
+  await expect(row).toHaveCount(1);
+  await row.click();
+  const details = page.getByRole("dialog", { name: "argument-commands" });
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  await page.getByRole("menuitem", { name: /Echo arguments/ }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Echo arguments" });
+  const message = dialog.getByRole("textbox", { name: "Message" });
+  const repeat = dialog.getByRole("spinbutton", { name: "Repeat" });
+  const shout = dialog.getByRole("checkbox", { name: "Shout" });
+  const flavor = dialog.getByRole("combobox", { name: "Flavor" });
+  const secret = dialog.getByLabel("Secret");
+  await expect(message).toHaveAttribute("placeholder", "Hello from the Stress playground");
+  await expect(message).toHaveAttribute("maxlength", "80");
+  await expect(repeat).toHaveValue("1");
+  await expect(shout).not.toBeChecked();
+  await expect(flavor).toHaveValue("vanilla");
+  await expect(secret).toHaveAttribute("type", "password");
+
+  await message.fill("Stress React interaction");
+  await repeat.fill("2");
+  await shout.check();
+  await flavor.selectOption("chocolate");
+  await secret.fill("dashboard-secret");
+  await attachScreenshot(page, testInfo, "stress-live-command-inputs");
+  await dialog.getByRole("button", { name: "Echo arguments", exact: true }).click();
+
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("status")).toHaveText("Echo arguments succeeded");
+});
+
 test(`${features("STRESS-PARAMETERS-001")} renders live parameters with secure defaults`, async ({ page }, testInfo) => {
   await navigationButton(page, "Parameters").click();
   const table = page.getByRole("table");

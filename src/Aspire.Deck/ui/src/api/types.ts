@@ -231,6 +231,7 @@ export interface InteractionInputInfo {
   value: string;
   validationErrors: string[];
   description: string;
+  enableDescriptionMarkdown: boolean;
   maxLength: number;
   allowCustomChoice: boolean;
   disabled: boolean;

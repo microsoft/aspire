@@ -1,5 +1,5 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
-import type { DeckConfig, Resource } from "../src/api/types";
+import type { DeckConfig, InteractionInfo, Resource } from "../src/api/types";
 import {
   getMissingHttpBackendFeatures,
   type HttpBackendFeatureId,
@@ -51,6 +51,16 @@ const resource: Resource = {
       isHighlighted: true,
       state: "enabled",
     },
+    {
+      name: "echo-arguments",
+      displayName: "Echo arguments",
+      displayDescription: "Collect every supported command input type.",
+      confirmationMessage: null,
+      iconName: "Code",
+      iconVariant: "regular",
+      isHighlighted: false,
+      state: "enabled",
+    },
   ],
   relationships: [],
   isHidden: false,
@@ -70,6 +80,9 @@ test.beforeEach(async ({ page }) => {
   page.on("pageerror", (error) => errors.push(`page: ${error.message}`));
   page.on("requestfailed", (request) => {
     errors.push(`request: ${request.method()} ${request.url()} (${request.failure()?.errorText ?? "unknown failure"})`);
+  });
+  await page.route("**/api/deck/interactions", async (route) => {
+    await route.fulfill({ json: [] });
   });
 });
 
@@ -166,6 +179,128 @@ test(`${features("HTTP-COMMAND-001")} executes a resource command through the HT
 
   await expect(page.getByRole("status")).toHaveText("Check health succeeded");
   expect(commandRequest).toEqual({ resourceName: "stress-api-abc123", commandName: "check-health" });
+});
+
+test(`${features("HTTP-INTERACTION-001")} submits every command input type through the HTTP backend`, async ({ page }, testInfo) => {
+  let interactions: InteractionInfo[] = [];
+  let interactionResponse: unknown;
+  let completeCommand: () => void = () => undefined;
+  const commandCompleted = new Promise<void>((resolve) => {
+    completeCommand = resolve;
+  });
+  const interaction: InteractionInfo = {
+    interactionId: 42,
+    kind: "inputsDialog",
+    title: "Echo arguments",
+    message: "Provide command values.",
+    primaryButtonText: "Run",
+    secondaryButtonText: "Cancel",
+    showSecondaryButton: true,
+    showDismiss: true,
+    enableMessageMarkdown: false,
+    intent: "none",
+    inputs: [
+      {
+        name: "message", label: "Message", placeholder: "Hello", inputType: "text", required: true,
+        options: [], value: "", validationErrors: [], description: "Text value to echo.",
+        enableDescriptionMarkdown: false, maxLength: 80, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+      },
+      {
+        name: "repeat", label: "Repeat", placeholder: "", inputType: "number", required: true,
+        options: [], value: "1", validationErrors: [], description: "Number of repetitions.",
+        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+      },
+      {
+        name: "shout", label: "Shout", placeholder: "", inputType: "boolean", required: false,
+        options: [], value: "false", validationErrors: [], description: "Uppercase the message.",
+        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+      },
+      {
+        name: "flavor", label: "Flavor", placeholder: "", inputType: "choice", required: false,
+        options: [["vanilla", "Vanilla"], ["chocolate", "Chocolate"]], value: "vanilla",
+        validationErrors: [], description: "Select a flavor.", enableDescriptionMarkdown: false,
+        maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+      },
+      {
+        name: "secret", label: "Secret", placeholder: "Optional secret", inputType: "secretText", required: false,
+        options: [], value: "", validationErrors: [], description: "The result only reports its length.",
+        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+      },
+    ],
+    linkText: "",
+    linkUrl: "",
+  };
+
+  await page.unroute("**/api/deck/interactions");
+  await page.route("**/api/deck/config", async (route) => {
+    await route.fulfill({ json: config });
+  });
+  await page.route("**/api/deck/resources", async (route) => {
+    await route.fulfill({ json: [resource] });
+  });
+  await page.route("**/api/deck/interactions", async (route) => {
+    await route.fulfill({ json: interactions });
+  });
+  await page.route("**/api/deck/interactions/respond", async (route) => {
+    interactionResponse = route.request().postDataJSON();
+    interactions = [];
+    await route.fulfill({ status: 204 });
+    completeCommand();
+  });
+  await page.route("**/api/deck/commands/execute", async (route) => {
+    interactions = [interaction];
+    await commandCompleted;
+    await route.fulfill({ json: { kind: "succeeded", message: "Echoed." } });
+  });
+
+  await page.goto("/?backend=http");
+  await page.getByRole("table").getByRole("row", { name: /stress-api Project/ }).click();
+  const details = page.getByRole("dialog", { name: "stress-api" });
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  await page.getByRole("menuitem", { name: /Echo arguments/ }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Echo arguments" });
+  const message = dialog.getByRole("textbox", { name: "Message" });
+  const repeat = dialog.getByRole("spinbutton", { name: "Repeat" });
+  const shout = dialog.getByRole("checkbox", { name: "Shout" });
+  const flavor = dialog.getByRole("combobox", { name: "Flavor" });
+  const secret = dialog.getByLabel("Secret");
+  await expect(message).toHaveAttribute("placeholder", "Hello");
+  await expect(message).toHaveAttribute("maxlength", "80");
+  await expect(dialog.getByText("Text value to echo.", { exact: true })).toBeVisible();
+  await expect(repeat).toHaveValue("1");
+  await expect(shout).not.toBeChecked();
+  await expect(flavor).toHaveValue("vanilla");
+  await expect(flavor.locator("option")).toHaveText(["Vanilla", "Chocolate"]);
+  await expect(secret).toHaveAttribute("type", "password");
+
+  await message.fill("Hello from React");
+  await repeat.fill("3");
+  await shout.check();
+  await flavor.selectOption("chocolate");
+  await secret.fill("s3cr3t");
+  await testInfo.attach("http-command-inputs.png", {
+    body: await page.screenshot({ animations: "disabled", fullPage: true }),
+    contentType: "image/png",
+  });
+  const interactionResponseCompleted = page.waitForEvent("requestfinished", (request) =>
+    request.url().endsWith("/api/deck/interactions/respond"));
+  await dialog.getByRole("button", { name: "Run", exact: true }).click();
+  await interactionResponseCompleted;
+
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("status")).toHaveText("Echo arguments succeeded");
+  expect(interactionResponse).toEqual({
+    interactionId: 42,
+    action: "submit",
+    values: {
+      message: "Hello from React",
+      repeat: "3",
+      shout: "true",
+      flavor: "chocolate",
+      secret: "s3cr3t",
+    },
+  });
 });
 
 test(`${features("HTTP-EMPTY-TELEMETRY-001")} renders a settled empty metrics state`, async ({ page }) => {

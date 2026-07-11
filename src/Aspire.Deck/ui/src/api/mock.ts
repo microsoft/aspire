@@ -570,18 +570,18 @@ class MockBackend {
       {
         name: "replicas", label: "Replicas", placeholder: "1-10", inputType: "number", required: true,
         options: [], value: "1", validationErrors: errs("replicas"), description: "Number of instances to run.",
-        maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: true,
+        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: true,
       },
       {
         name: "tier", label: "Tier", placeholder: "", inputType: "choice", required: true,
         options: [["standard", "Standard"], ["premium", "Premium"]], value: "standard",
         validationErrors: errs("tier"), description: "Compute tier for the replicas.",
-        maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
       },
       {
         name: "drain", label: "Drain connections before scaling down", placeholder: "", inputType: "boolean",
         required: false, options: [], value: "true", validationErrors: [], description: "",
-        maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
       },
     ];
     return {
