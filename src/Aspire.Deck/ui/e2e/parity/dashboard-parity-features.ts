@@ -142,7 +142,7 @@ const featureDefinitions = {
   ],
   console: [
     ["CONSOLE-RESOURCE-001", "/consolelogs", "A grouped resource picker selects one resource or all resources.", "console", "partial", "CONSOLE-RESOURCE-001"],
-    ["CONSOLE-BACKLOG-001", "/consolelogs", "Selecting a resource loads the existing console backlog.", "console", "partial", "CONSOLE-STREAM-001"],
+    ["CONSOLE-BACKLOG-001", "/consolelogs", "Selecting a resource loads the existing console backlog.", "console", "covered", "CONSOLE-STREAM-001; HTTP-CONSOLE-001; STRESS-CONSOLE-001"],
     ["CONSOLE-LIVE-001", "/consolelogs", "New stdout and stderr lines stream without reloading the page.", "console", "partial", "CONSOLE-STREAM-001"],
     ["CONSOLE-SWITCH-001", "/consolelogs", "Switching resources replaces the visible stream and subscription.", null, "partial", "CONSOLE-SWITCH-001"],
     ["CONSOLE-FOLLOW-001", "/consolelogs", "Manual scrolling pauses tail-follow and the user can return to the live tail.", null, "covered", "CONSOLE-FOLLOW-001"],

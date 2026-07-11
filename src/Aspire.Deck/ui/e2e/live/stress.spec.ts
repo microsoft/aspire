@@ -3,6 +3,7 @@ import { getMissingStressFeatures, type StressFeatureId } from "./stress-feature
 
 const coveredFeatures = new Set<StressFeatureId>();
 const browserErrors = new WeakMap<Page, string[]>();
+const allowConsoleStreamAbort = new WeakSet<Page>();
 
 function features(...ids: StressFeatureId[]): string {
   for (const id of ids) {
@@ -42,7 +43,11 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ page }) => {
-  expect(browserErrors.get(page) ?? [], "Unexpected browser errors").toEqual([]);
+  const errors = browserErrors.get(page) ?? [];
+  const unexpected = allowConsoleStreamAbort.has(page)
+    ? errors.filter((error) => !/^request: GET .*\/api\/deck\/resources\/[^/]+\/console-logs \(net::ERR_ABORTED\)$/.test(error))
+    : errors;
+  expect(unexpected, "Unexpected browser errors").toEqual([]);
 });
 
 test(`${features("STRESS-CONFIG-001", "STRESS-RESOURCES-001", "STRESS-VISIBILITY-001", "STRESS-VISUAL-001")} renders the live Stress inventory`, async ({ page }, testInfo) => {
@@ -180,6 +185,36 @@ test(`${features("STRESS-PARAMETERS-001")} renders live parameters with secure d
   await expect(table.getByRole("button", { name: "Reveal value" })).toHaveCount(1);
 
   await attachScreenshot(page, testInfo, "stress-live-parameters");
+});
+
+test(`${features("STRESS-CONSOLE-001")} renders a live resource console backlog`, async ({ page }, testInfo) => {
+  allowConsoleStreamAbort.add(page);
+  await navigationButton(page, "Console").click();
+  const consoleRegion = page.getByRole("main").getByRole("region", { name: "Console" });
+  await consoleRegion.getByRole("combobox", { name: "Resource" }).selectOption({ label: "empty-0000" });
+
+  await expect(consoleRegion.getByText(/Application started\. Press Ctrl\+C to shut down\./)).toBeVisible();
+  await expect(consoleRegion.getByText(/Hosting environment: Production/)).toBeVisible();
+  await expect(consoleRegion.locator(".log-line")).toHaveCount(7);
+  await expect(consoleRegion.locator(".console__footer")).toContainText("7 lines");
+
+  const geometry = await page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>(".console__scroll");
+    if (scroller === null) {
+      throw new Error("Missing console scroller.");
+    }
+
+    return {
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      scrollerWidth: scroller.clientWidth,
+      scrollerContentWidth: scroller.scrollWidth,
+    };
+  });
+  expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+  expect(geometry.scrollerContentWidth).toBeGreaterThan(geometry.scrollerWidth);
+
+  await attachScreenshot(page, testInfo, "stress-live-console");
 });
 
 test(`${features("STRESS-NAVIGATION-001", "STRESS-EMPTY-TELEMETRY-001")} reaches every page against the live dashboard`, async ({ page }) => {

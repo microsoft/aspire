@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 27
-- React partial: 45
+- React covered: 28
+- React partial: 44
 - React missing: 85
 - Legacy black-box scenarios pending: 81
-- React parity gaps: 130
+- React parity gaps: 129
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -99,7 +99,7 @@
 | CMD-RESULT-IMMEDIATE-001 | commands | `/` | PENDING | missing | - | DisplayImmediately command results open without requiring a second action. |
 | CMD-PROCESS-001 | commands | `/` | PENDING | missing | - | Process command stdout, stderr, exit status, line limits, stdin, environment, and working directory are represented. |
 | CONSOLE-RESOURCE-001 | console | `/consolelogs` | console | partial | CONSOLE-RESOURCE-001 | A grouped resource picker selects one resource or all resources. |
-| CONSOLE-BACKLOG-001 | console | `/consolelogs` | console | partial | CONSOLE-STREAM-001 | Selecting a resource loads the existing console backlog. |
+| CONSOLE-BACKLOG-001 | console | `/consolelogs` | console | covered | CONSOLE-STREAM-001; HTTP-CONSOLE-001; STRESS-CONSOLE-001 | Selecting a resource loads the existing console backlog. |
 | CONSOLE-LIVE-001 | console | `/consolelogs` | console | partial | CONSOLE-STREAM-001 | New stdout and stderr lines stream without reloading the page. |
 | CONSOLE-SWITCH-001 | console | `/consolelogs` | PENDING | partial | CONSOLE-SWITCH-001 | Switching resources replaces the visible stream and subscription. |
 | CONSOLE-FOLLOW-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-FOLLOW-001 | Manual scrolling pauses tail-follow and the user can return to the live tail. |

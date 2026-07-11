@@ -12,6 +12,7 @@ import {
   PageSubtitle,
   PageTitle,
   PageToolbar,
+  Select,
 } from "../toolkit";
 
 const MAX_LINES = 5000;
@@ -35,16 +36,22 @@ export function ConsolePage() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const autoScrollRef = useRef(autoScroll);
   autoScrollRef.current = autoScroll;
+  const resourceOptions = useMemo(
+    () => resources
+      .filter((resource) => !resource.isHidden)
+      .map((resource) => ({ value: resource.name, label: resource.displayName })),
+    [resources],
+  );
 
   // Pick a default resource once the list loads.
   useEffect(() => {
-    if (selected === "" && resources.length > 0) {
-      const first = resources.find((r) => !r.isHidden) ?? resources[0];
-      if (first) {
-        setSelected(first.name);
-      }
+    const firstOption = resourceOptions[0];
+    if (selected === "" && firstOption !== undefined) {
+      setSelected(firstOption.value);
+    } else if (selected !== "" && !resourceOptions.some((option) => option.value === selected)) {
+      setSelected(firstOption?.value ?? "");
     }
-  }, [resources, selected]);
+  }, [resourceOptions, selected]);
 
   // Subscribe to console logs for the selected resource; reset on change.
   useEffect(() => {
@@ -124,16 +131,14 @@ export function ConsolePage() {
       </PageHeader>
 
       <PageToolbar ariaLabel="Console tools">
-        <select className="select" value={selected} onChange={(e) => setSelected(e.target.value)}>
-          {resources.length === 0 ? <option value="">No resources</option> : null}
-          {resources
-            .filter((r) => !r.isHidden)
-            .map((r) => (
-              <option key={r.name} value={r.name}>
-                {r.displayName}
-              </option>
-            ))}
-        </select>
+        <Select
+          ariaLabel="Resource"
+          options={resourceOptions}
+          value={selected}
+          placeholder={resourceOptions.length === 0 ? "No resources" : undefined}
+          disabled={resourceOptions.length === 0}
+          onValueChange={(value) => setSelected(value)}
+        />
         {!autoScroll ? (
           <button className="btn btn--sm" onClick={scrollToBottom}>
             Scroll to bottom

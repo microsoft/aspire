@@ -1043,8 +1043,7 @@ table.data tbody tr.selected {
   display: flex;
   gap: 14px;
   padding: 0 16px;
-  white-space: pre-wrap;
-  word-break: break-word;
+  white-space: pre;
 }
 .log-line:hover {
   background: var(--bg-hover);
@@ -1059,6 +1058,7 @@ table.data tbody tr.selected {
 }
 .log-line__text {
   flex: 1;
+  min-width: max-content;
   color: var(--text-secondary);
 }
 .log-line.stderr .log-line__text {

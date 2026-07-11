@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 const dashboardUrl = process.env.ASPIRE_DASHBOARD_URL;
+const reuseExistingServer = process.env.ASPIRE_REUSE_EXISTING_SERVER === "true";
 
 if (!dashboardUrl) {
   throw new Error("ASPIRE_DASHBOARD_URL must point to a running Stress dashboard.");
@@ -29,7 +30,7 @@ export default defineConfig({
     command: "npm run dev -- --host 127.0.0.1",
     env: { ASPIRE_DASHBOARD_URL: dashboardUrl },
     url: "http://127.0.0.1:1430/?backend=http",
-    reuseExistingServer: false,
+    reuseExistingServer,
     timeout: 120_000,
   },
 });

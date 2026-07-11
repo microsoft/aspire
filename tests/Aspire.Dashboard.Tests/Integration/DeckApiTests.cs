@@ -271,7 +271,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
 
         await consoleLogs.Writer.WriteAsync(
             [
-                new ResourceLogLine(12, "Listening on https://localhost:7443", IsErrorMessage: false),
+                new ResourceLogLine(12, "\u001b[32mListening on https://localhost:7443\u001b[39m", IsErrorMessage: false),
                 new ResourceLogLine(13, "Connection failed", IsErrorMessage: true)
             ],
             cancellationTokenSource.Token);

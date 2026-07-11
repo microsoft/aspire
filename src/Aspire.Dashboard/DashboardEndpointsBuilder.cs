@@ -7,6 +7,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Localization;
@@ -407,7 +408,10 @@ public static class DashboardEndpointsBuilder
             {
                 var response = new DeckConsoleLogEvent(
                     resourceName,
-                    batch.Select(line => new DeckConsoleLogLine(line.LineNumber, line.Content, line.IsErrorMessage)).ToArray());
+                    batch.Select(line => new DeckConsoleLogLine(
+                        line.LineNumber,
+                        AnsiParser.StripControlSequences(line.Content),
+                        line.IsErrorMessage)).ToArray());
                 await JsonSerializer.SerializeAsync(
                     httpContext.Response.Body,
                     response,
