@@ -670,6 +670,31 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LaunchDetachedAsync_UsesSingleUncancelledChildExitObservationWhileWaitingForBackchannel()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var execution = new NonExitingProcessExecution();
+        harness.ProcessFactory.StartHandler = (_, _, _, _, _, _) => Task.FromResult<IProcessExecution>(execution);
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: false,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 1,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            cts.Token);
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
+        Assert.Equal(1, execution.WaitForExitCallCount);
+        Assert.Equal(0, execution.WaitForExitWithCancelableTokenCount);
+    }
+
+    [Fact]
     public void DetachedChildEnvironmentFilter_PreservesDebugSessionVariables()
     {
         Assert.True(AppHostLauncher.IsExtensionEnvironmentVariable(KnownConfigNames.ExtensionEndpoint));
@@ -1309,6 +1334,54 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 return null;
             }
         }
+    }
+
+    private sealed class NonExitingProcessExecution : IProcessExecution
+    {
+        private readonly TaskCompletionSource<int> _exit = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _waitForExitCallCount;
+        private int _waitForExitWithCancelableTokenCount;
+
+        public string FileName => string.Empty;
+
+        public IReadOnlyList<string> Arguments => [];
+
+        public IReadOnlyDictionary<string, string?> EnvironmentVariables => new Dictionary<string, string?>();
+
+        public int ProcessId => int.MaxValue - 12345;
+
+        public DateTimeOffset? StartTime => null;
+
+        public bool HasExited => false;
+
+        public int? ExitCode => null;
+
+        public int WaitForExitCallCount => Volatile.Read(ref _waitForExitCallCount);
+
+        public int WaitForExitWithCancelableTokenCount => Volatile.Read(ref _waitForExitWithCancelableTokenCount);
+
+        public Task<bool> StartAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(true);
+        }
+
+        public Task<int> WaitForExitAsync(CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _waitForExitCallCount);
+            if (cancellationToken.CanBeCanceled)
+            {
+                Interlocked.Increment(ref _waitForExitWithCancelableTokenCount);
+            }
+
+            return _exit.Task;
+        }
+
+        public void Kill(bool entireProcessTree)
+        {
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
     private sealed class FixedLayoutDiscovery : ILayoutDiscovery

@@ -417,6 +417,8 @@ internal sealed class AppHostLauncher(
         IAppHostAuxiliaryBackchannel? connection = null;
         DashboardUrlsState? dashboardUrls = null;
         string? launchFailureMessage = null;
+        var childExitTask = childProcess.WaitForExitAsync(CancellationToken.None);
+        ObserveFaults(childExitTask);
 
         try
         {
@@ -461,10 +463,8 @@ internal sealed class AppHostLauncher(
                     {
                         break;
                     }
-
                     using var readinessCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     var readinessTask = WaitForAppHostReadyAsync(connection, readinessCts.Token);
-                    var childExitTask = childProcess.WaitForExitAsync(cancellationToken);
                     var timeoutTask = Task.Delay(remainingTimeout, timeProvider, cancellationToken);
 
                     var completedTask = await Task.WhenAny(readinessTask, childExitTask, timeoutTask).ConfigureAwait(false);
@@ -486,7 +486,7 @@ internal sealed class AppHostLauncher(
                             }
 
                             updateStatus(RunCommandStrings.AppHostConnectionLostWaitingForExit);
-                            await childProcess.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                            await childExitTask.WaitAsync(cancellationToken).ConfigureAwait(false);
                             return CreateChildExitedLaunchResult(childProcess, waitForBackchannelActivity, childStartedAt);
                         }
 
@@ -525,13 +525,13 @@ internal sealed class AppHostLauncher(
                     }
                 }
 
-                try
+                var waitTask = Task.Delay(TimeSpan.FromMilliseconds(500), timeProvider, cancellationToken);
+                var completedWaitTask = await Task.WhenAny(childExitTask, waitTask).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                if (completedWaitTask == childExitTask)
                 {
-                    await childProcess.WaitForExitAsync(cancellationToken).WaitAsync(TimeSpan.FromMilliseconds(500), cancellationToken).ConfigureAwait(false);
-                }
-                catch (TimeoutException)
-                {
-                    // Expected - the 500ms delay elapsed without the process exiting
+                    await childExitTask.ConfigureAwait(false);
+                    return CreateChildExitedLaunchResult(childProcess, waitForBackchannelActivity, childStartedAt);
                 }
             }
         }
