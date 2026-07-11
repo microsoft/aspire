@@ -75,6 +75,7 @@
       <_DiscoveryCommand>$(_DiscoveryCommand) -TestClassNamePrefixForCI &quot;$(TestClassNamePrefixForCI)&quot;</_DiscoveryCommand>
       <_DiscoveryCommand>$(_DiscoveryCommand) -TestPartitionsJsonFile &quot;$(_TestPartitionsJsonAbsolutePath)&quot;</_DiscoveryCommand>
       <_DiscoveryCommand>$(_DiscoveryCommand) -RepoRoot &quot;$(RepoRoot.TrimEnd('\'))&quot;</_DiscoveryCommand>
+      <_DiscoveryCommand Condition="'$(DiscoveryTraitFilter)' != ''">$(_DiscoveryCommand) -IncludeTraitFilter &quot;$(DiscoveryTraitFilter)&quot;</_DiscoveryCommand>
     </PropertyGroup>
 
     <Exec Command="$(_DiscoveryCommand)"

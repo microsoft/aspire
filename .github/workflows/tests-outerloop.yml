@@ -1,9 +1,8 @@
 # Executes outerloop tests
 #
 # COPILOT INSTRUCTIONS:
-# - Keep the shared 'paths:' entries (specialized-test-runner.yml,
-#   run-tests.yml, build-cli-e2e-image.yml) in sync across
-#   tests-outerloop.yml and tests-quarantine.yml. Each workflow also lists itself.
+# - Keep the shared 'paths:' entries in sync across tests-outerloop.yml
+#   and tests-quarantine.yml. Each workflow also lists itself.
 # - Validate that each path exists in the repository before adding or
 #   updating the list
 # - No external YAML file is used—only the workflow YAMLs themselves
@@ -27,8 +26,18 @@ on:
     paths:
       - '.github/workflows/tests-outerloop.yml'
       - '.github/workflows/specialized-test-runner.yml'
+      - '.github/workflows/run-tests-core.yml'
       - '.github/workflows/run-tests.yml'
+      - '.github/actions/enumerate-tests/**'
       - '.github/workflows/build-cli-e2e-image.yml'
+      - 'eng/scripts/generate-specialized-test-projects-list.sh'
+      - 'eng/scripts/build-test-matrix.ps1'
+      - 'eng/scripts/expand-test-matrix-github.ps1'
+      - 'eng/scripts/split-test-matrix-by-deps.ps1'
+      - 'eng/TestEnumerationRunsheetBuilder/**'
+      - 'eng/AfterSolutionBuild.targets'
+      - 'eng/testing/CITestsProperties.props'
+      - 'tests/Directory.Build.targets'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -38,10 +47,7 @@ jobs:
   outerloop_tests:
     uses: ./.github/workflows/specialized-test-runner.yml
     with:
-      testRunnerName: "OuterloopTestRunsheetBuilder"
       attributeName: "OuterloopTest"
-      extraRunSheetBuilderArgs: "-p:RunOuterloopTests=true"
-      extraTestArgs: "--filter-trait outerloop=true"
       enablePlaywrightInstall: true
 
   # On a scheduled failure, file/append a single deduplicated issue: a
@@ -114,4 +120,3 @@ jobs:
           script: |
             const reporter = require('./.github/workflows/report-specialized-test-failures.js');
             await require('./.github/workflows/specialized-test-failure-runner.js')({ github, context, core, reporter });
-
