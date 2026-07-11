@@ -120,6 +120,7 @@ internal sealed partial class IsolatedProcess
 
                 // pi.hThread is no longer needed; the SafeProcessHandle owns pi.hProcess.
                 WindowsProcessInterop.CloseHandle(pi.hThread);
+                pi.hThread = nint.Zero;
 
                 // UTF-8 with non-throwing fallback — a stray OEM-encoded byte from a tsx
                 // warning shouldn't kill the pump. Mojibake is the documented tradeoff.
