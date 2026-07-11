@@ -19,6 +19,7 @@ const knownDashboardIconNames = [
   "Beaker",
   "Box",
   "BoxMultiple",
+  "Braces",
   "BrainCircuit",
   "BranchFork",
   "Calculator",
@@ -38,6 +39,7 @@ const knownDashboardIconNames = [
   "CodeVbRectangle",
   "ContentView",
   "ContentViewGalleryLightning",
+  "Copy",
   "Database",
   "DatabaseArrowRight",
   "DatabaseLightning",
@@ -285,6 +287,24 @@ test(`${features("TK-DIALOG-001", "TK-DRAWER-001")} exercises modal surfaces`, a
   await page.getByRole("button", { name: "Open drawer" }).click();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test(`${features("TK-PROPERTY-GRID-001", "TK-TEXT-VIEWER-001")} presents properties and copies visualized text`, async ({ page }, testInfo) => {
+  const properties = page.getByRole("group", { name: "Sample properties" });
+  await expect(properties.getByRole("term")).toHaveText(["State", "Resource", "Trace ID"]);
+  await expect(properties.getByRole("definition")).toContainText(["Running", "frontend", "0123456789abcdef0123456789abcdef"]);
+
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.getByRole("button", { name: "View sample JSON" }).click();
+  const viewer = page.getByRole("dialog", { name: "Sample structured log" });
+  await expect(viewer.locator("pre[data-format='json']")).toContainText('"resource": "frontend"');
+  await viewer.getByRole("button", { name: "Copy" }).click();
+  await expect(viewer.getByRole("status")).toHaveText("Copied");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('"message": "Request completed"');
+  await attachScreenshot(page, testInfo, "toolkit-text-viewer");
+
+  await page.keyboard.press("Escape");
+  await expect(viewer).toHaveCount(0);
 });
 
 test(`${features("TK-NOTIFICATION-001")} exercises reusable notification actions`, async ({ page }) => {

@@ -998,6 +998,13 @@ table.data tbody tr.selected {
 .kv__val.highlight {
   color: var(--accent);
 }
+.deck-property-grid {
+  margin: 0;
+}
+.deck-property-grid dt,
+.deck-property-grid dd {
+  margin: 0;
+}
 .secret {
   flex: 1;
   word-break: break-all;
@@ -1335,6 +1342,39 @@ table.data tbody tr.selected {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+.text-viewer {
+  width: min(760px, 92%);
+  max-height: min(760px, 86vh);
+  display: flex;
+  flex-direction: column;
+}
+.text-viewer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.text-viewer__content {
+  flex: 1;
+  min-height: 180px;
+  margin: 4px 0 18px;
+  padding: 14px 16px;
+  overflow: auto;
+  color: var(--text);
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: 12px/1.55 var(--font-mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.text-viewer__status {
+  min-width: 72px;
+  margin-inline-end: auto;
+  align-self: center;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 /* ---------- Cards / stat row ---------- */

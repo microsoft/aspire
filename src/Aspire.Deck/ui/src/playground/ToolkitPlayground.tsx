@@ -26,6 +26,7 @@ import {
   PageTitle,
   PageToolbar,
   PlayIcon,
+  PropertyGrid,
   ResourcesIcon,
   ResourceTypeIcon,
   RestartIcon,
@@ -37,9 +38,11 @@ import {
   SunIcon,
   Switch,
   Tabs,
+  TextViewerDialog,
   type Column,
   type ConfirmRequest,
   type DeckTheme,
+  type TextViewerRequest,
 } from "../toolkit";
 
 interface SampleResource {
@@ -105,6 +108,7 @@ export function ToolkitPlayground({
   const [openAccordionItems, setOpenAccordionItems] = useState(["environment"]);
   const [pageRefreshCount, setPageRefreshCount] = useState(0);
   const [selectedResource, setSelectedResource] = useState<string | null>(null);
+  const [textViewer, setTextViewer] = useState<TextViewerRequest | null>(null);
   const iconNames = useMemo(getIconNames, []);
 
   const filteredResources = useMemo(() => {
@@ -196,6 +200,15 @@ export function ToolkitPlayground({
             <Button variant="ghost" onClick={() => setLastAction("Ghost selected")}>Ghost</Button>
             <Button data-testid="toolkit-confirm" onClick={requestConfirmation}>Confirm command</Button>
             <Button data-testid="toolkit-open-drawer" onClick={() => setDrawerOpen(true)}>Open drawer</Button>
+            <Button
+              onClick={() => setTextViewer({
+                title: "Sample structured log",
+                value: JSON.stringify({ resource: "frontend", level: "Information", message: "Request completed" }, null, 2),
+                format: "json",
+              })}
+            >
+              View sample JSON
+            </Button>
             <Button onClick={() => setNotificationVisible(true)}>Show notification</Button>
             <CommandMenu
               ariaLabel="Resource commands"
@@ -430,6 +443,20 @@ export function ToolkitPlayground({
           </div>
         </section>
 
+        <section className="toolkit-section" aria-labelledby="toolkit-properties-title">
+          <div className="toolkit-section__heading">
+            <h2 id="toolkit-properties-title">Properties</h2>
+          </div>
+          <PropertyGrid
+            ariaLabel="Sample properties"
+            items={[
+              { id: "state", label: "State", value: <StateDot state="Running" stateStyle={null} health="Healthy" /> },
+              { id: "resource", label: "Resource", value: "frontend" },
+              { id: "trace", label: "Trace ID", value: "0123456789abcdef0123456789abcdef" },
+            ]}
+          />
+        </section>
+
         <section className="toolkit-section" aria-labelledby="toolkit-empty-title">
           <h2 id="toolkit-empty-title" className="toolkit-visually-hidden">Empty state</h2>
           <EmptyState icon={<ResourcesIcon size={28} />} title="No incidents">
@@ -459,6 +486,7 @@ export function ToolkitPlayground({
       ) : null}
 
       <ConfirmDialog request={confirmation} onClose={() => setConfirmation(null)} />
+      <TextViewerDialog request={textViewer} onClose={() => setTextViewer(null)} />
       <NotificationStack
         notifications={notificationVisible
           ? [
