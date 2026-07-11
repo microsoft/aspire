@@ -8,6 +8,7 @@ import type {
   DeckConfig,
   ExecuteCommandArgs,
   InteractionInfo,
+  LogRecordSummary,
   MetricSeriesQuery,
   MetricSeriesResponse,
   Resource,
@@ -15,11 +16,18 @@ import type {
   TelemetrySummary,
 } from "./types";
 import { readNdjson } from "./ndjson";
+import {
+  getLogRecordSummaries,
+  type OtlpLogRecordSummary,
+  type OtlpTelemetryData,
+  type TelemetryApiResponse,
+} from "./otlp";
 
 type Unsubscribe = () => void;
 
 const connectionListeners = new Set<(status: ConnectionStatus) => void>();
 const apphostListeners = new Set<(apphosts: AppHostInfo[]) => void>();
+const telemetryListeners = new Set<(summary: TelemetrySummary) => void>();
 const connectionStatuses: Record<ConnectionTarget, ConnectionStatus> = {
   resourceService: { target: "resourceService", state: "connecting" },
   otlpGrpc: { target: "otlpGrpc", state: "disconnected" },
@@ -34,6 +42,12 @@ const emptyTelemetry: TelemetrySummary = {
   recentSpans: [],
   metrics: [],
 };
+
+let telemetrySummary: TelemetrySummary = { ...emptyTelemetry, recentLogs: [] };
+let telemetryController: AbortController | null = null;
+let telemetryStarted = false;
+let telemetryStopTimer: number | undefined;
+const telemetryLogKeys = new Set<string>();
 
 let configPromise: Promise<DeckConfig> | null = null;
 
@@ -238,6 +252,110 @@ async function streamConsoleLogs(
   await readNdjson<ConsoleLogEvent>(response.body, callback);
 }
 
+async function streamStructuredLogs(
+  callback: (logs: OtlpLogRecordSummary[]) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch("/api/deck/telemetry/logs?follow=true", {
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { Accept: "application/x-ndjson" },
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error(`Structured log stream failed with ${response.status} ${response.statusText}.`);
+  }
+  if (response.body === null) {
+    throw new Error("Structured log stream returned no response body.");
+  }
+
+  await readNdjson<OtlpTelemetryData>(response.body, (data) => callback(getLogRecordSummaries(data)));
+}
+
+function compareNewestFirst(left: LogRecordSummary, right: LogRecordSummary): number {
+  if (left.timeUnixNano.length !== right.timeUnixNano.length) {
+    return right.timeUnixNano.length - left.timeUnixNano.length;
+  }
+  return right.timeUnixNano.localeCompare(left.timeUnixNano);
+}
+
+function toLogRecordSummary(log: OtlpLogRecordSummary): LogRecordSummary {
+  const { recordKey: _, ...summary } = log;
+  return summary;
+}
+
+function notifyTelemetry(): void {
+  for (const listener of telemetryListeners) {
+    listener(telemetrySummary);
+  }
+}
+
+function appendStructuredLogs(logs: OtlpLogRecordSummary[]): void {
+  const additions = logs.filter((log) => {
+    if (telemetryLogKeys.has(log.recordKey)) {
+      return false;
+    }
+    telemetryLogKeys.add(log.recordKey);
+    return true;
+  });
+  if (additions.length === 0) {
+    return;
+  }
+
+  telemetrySummary = {
+    ...telemetrySummary,
+    logCount: telemetrySummary.logCount + additions.length,
+    recentLogs: [...additions.map(toLogRecordSummary), ...telemetrySummary.recentLogs]
+      .sort(compareNewestFirst)
+      .slice(0, 200),
+  };
+  notifyTelemetry();
+}
+
+function ensureTelemetryStream(): void {
+  if (telemetryStarted) {
+    return;
+  }
+
+  telemetryStarted = true;
+  const controller = new AbortController();
+  telemetryController = controller;
+  void streamStructuredLogs(appendStructuredLogs, controller.signal).catch(() => {
+    // Resource polling owns the shared backend connection state. Preserve the
+    // last telemetry snapshot when a live stream ends or the backend is unavailable.
+  });
+}
+
+function subscribeTelemetry(callback: (summary: TelemetrySummary) => void): Unsubscribe {
+  if (telemetryStopTimer !== undefined) {
+    window.clearTimeout(telemetryStopTimer);
+    telemetryStopTimer = undefined;
+  }
+
+  telemetryListeners.add(callback);
+  callback(telemetrySummary);
+  ensureTelemetryStream();
+
+  return () => {
+    telemetryListeners.delete(callback);
+    if (telemetryListeners.size === 0) {
+      // React development mode immediately remounts effects. Deferring teardown
+      // keeps that lifecycle probe from opening and aborting duplicate HTTP streams.
+      telemetryStopTimer = window.setTimeout(() => {
+        telemetryStopTimer = undefined;
+        if (telemetryListeners.size !== 0) {
+          return;
+        }
+        telemetryController?.abort();
+        telemetryController = null;
+        telemetryStarted = false;
+        telemetrySummary = { ...emptyTelemetry, recentLogs: [] };
+        telemetryLogKeys.clear();
+      });
+    }
+  };
+}
+
 function subscribeConsoleLogs(
   resourceName: string,
   callback: (event: ConsoleLogEvent) => void,
@@ -270,7 +388,13 @@ export const httpBackend = {
     void postNoContent("interactions/respond", { interactionId, action, values }).catch(() => undefined);
   },
   getTelemetrySummary(): Promise<TelemetrySummary> {
-    return Promise.resolve(emptyTelemetry);
+    return requestJson<TelemetryApiResponse>("telemetry/logs?limit=200").then((response) => ({
+      ...emptyTelemetry,
+      logCount: response.totalCount,
+      recentLogs: getLogRecordSummaries(response.data)
+        .map(toLogRecordSummary)
+        .sort(compareNewestFirst),
+    }));
   },
   getMetricSeries(_query: MetricSeriesQuery): Promise<MetricSeriesResponse | null> {
     return Promise.resolve(null);
@@ -285,7 +409,6 @@ export const httpBackend = {
   onResources,
   onConnection,
   onTelemetry(callback: (summary: TelemetrySummary) => void): Unsubscribe {
-    callback(emptyTelemetry);
-    return () => undefined;
+    return subscribeTelemetry(callback);
   },
 };

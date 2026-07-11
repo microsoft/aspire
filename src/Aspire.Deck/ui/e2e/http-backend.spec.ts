@@ -84,6 +84,9 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/api/deck/interactions", async (route) => {
     await route.fulfill({ json: [] });
   });
+  await page.route("**/api/deck/telemetry/logs?*", async (route) => {
+    await route.fulfill({ contentType: "application/x-ndjson", body: "" });
+  });
 });
 
 test.afterEach(async ({ page }) => {
@@ -341,6 +344,87 @@ test(`${features("HTTP-CONSOLE-001")} streams resource console logs through the 
   expect(consoleLogRequests).toBe(1);
 
   await testInfo.attach("http-backend-console.png", {
+    body: await page.screenshot({ animations: "disabled", fullPage: true }),
+    contentType: "image/png",
+  });
+});
+
+test(`${features("HTTP-STRUCTURED-LOGS-001")} streams OTLP structured logs through the HTTP backend`, async ({ page }, testInfo) => {
+  let structuredLogRequests = 0;
+  await page.route("**/api/deck/config", async (route) => {
+    await route.fulfill({ json: config });
+  });
+  await page.route("**/api/deck/resources", async (route) => {
+    await route.fulfill({ json: [resource] });
+  });
+  await page.unroute("**/api/deck/telemetry/logs?*");
+  await page.route("**/api/deck/telemetry/logs?*", async (route) => {
+    structuredLogRequests++;
+    await route.fulfill({
+      contentType: "application/x-ndjson",
+      body: [
+        JSON.stringify({
+          resourceLogs: [{
+            resource: {
+              attributes: [
+                { key: "service.name", value: { stringValue: "stress-api" } },
+                { key: "service.instance.id", value: { stringValue: "instance-1" } },
+              ],
+            },
+            scopeLogs: [{
+              scope: { name: "Stress.Telemetry" },
+              logRecords: [{
+                timeUnixNano: "1783670400000000000",
+                severityNumber: 9,
+                severityText: "Information",
+                body: { stringValue: "HTTP request started" },
+                attributes: [{ key: "aspire.log_id", value: { stringValue: "41" } }],
+                traceId: "0123456789abcdef0123456789abcdef",
+                spanId: "0123456789abcdef",
+              }],
+            }],
+          }],
+        }),
+        JSON.stringify({
+          resourceLogs: [{
+            resource: {
+              attributes: [{ key: "service.name", value: { stringValue: "stress-worker" } }],
+            },
+            scopeLogs: [{
+              scope: { name: "Stress.Telemetry" },
+              logRecords: [{
+                timeUnixNano: "1783670401000000000",
+                severityNumber: 17,
+                severityText: "Error",
+                body: { stringValue: "Queue processing failed" },
+                attributes: [{ key: "aspire.log_id", value: { stringValue: "42" } }],
+                traceId: "fedcba9876543210fedcba9876543210",
+                spanId: "fedcba9876543210",
+              }],
+            }],
+          }],
+        }),
+        "",
+      ].join("\n"),
+    });
+  });
+
+  await page.goto("/?backend=http");
+  await page.getByRole("navigation").getByRole("button", { name: /^Structured Logs(?: \d+)?$/ }).click();
+
+  const logs = page.getByRole("main").getByRole("region", { name: "Structured Logs" });
+  const table = logs.getByRole("table");
+  await expect(table.getByRole("columnheader")).toHaveText(["Time", "Severity", "Resource", "Message"]);
+  await expect(table.locator("tbody tr")).toHaveCount(2);
+  await expect(table).toContainText("HTTP request started");
+  await expect(table).toContainText("Queue processing failed");
+  await expect(table).toContainText("stress-api");
+  await expect(table).toContainText("stress-worker");
+  await expect(table.locator(".badge")).toHaveText(["Error", "Information"]);
+  await expect(logs.locator(".page__subtitle")).toHaveText("2 total · showing 2");
+  expect(structuredLogRequests).toBe(1);
+
+  await testInfo.attach("http-backend-structured-logs.png", {
     body: await page.screenshot({ animations: "disabled", fullPage: true }),
     contentType: "image/png",
   });
