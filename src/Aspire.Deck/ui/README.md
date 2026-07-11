@@ -23,6 +23,88 @@ tables, state indicators, empty states, and confirmation dialogs. Deck pages imp
 controls only through `src/toolkit/index.ts`; AppHost, resource, and telemetry behavior remains
 in `src/api`, `src/components`, and `src/pages`.
 
+## Toolkit architecture
+
+The toolkit is the stable design-language boundary for the dashboard rewrite:
+
+- `DeckProvider` adapts Fluent React behavior and accessibility to Deck's dark/light design
+  tokens, density, typography, borders, and status colors.
+- `Page`, `DataTable`, `Drawer`, `CommandMenu`, `NotificationStack`, and the input/navigation
+  primitives provide reusable composition and interaction patterns without AppHost knowledge.
+- `src/components` and `src/pages` add dashboard concepts such as resources, telemetry, and
+  commands by composing toolkit exports.
+- `src/api` owns the mock, Tauri, and ASP.NET transports. Toolkit controls never fetch data or
+  depend on a backend.
+
+Feature code imports the public barrel rather than individual implementation files. A page can
+therefore keep its domain logic local while sharing layout, focus behavior, Fluent components,
+and visual tokens:
+
+```tsx
+import type { Resource } from "../api/types";
+import {
+  DataTable,
+  Page,
+  PageBody,
+  PageHeader,
+  PageHeading,
+  PageSubtitle,
+  PageTitle,
+  PageToolbar,
+  SearchBox,
+  type Column,
+} from "../toolkit";
+
+export function ResourceList({
+  resources,
+  columns,
+  query,
+  onQueryChange,
+}: {
+  resources: Resource[];
+  columns: Column<Resource>[];
+  query: string;
+  onQueryChange: (value: string) => void;
+}) {
+  return (
+    <Page aria-labelledby="resources-title">
+      <PageHeader>
+        <PageHeading>
+          <PageTitle id="resources-title">Resources</PageTitle>
+          <PageSubtitle>{resources.length} resources</PageSubtitle>
+        </PageHeading>
+      </PageHeader>
+      <PageToolbar ariaLabel="Resource tools">
+        <SearchBox value={query} onChange={onQueryChange} placeholder="Filter resources..." />
+      </PageToolbar>
+      <PageBody>
+        <DataTable columns={columns} rows={resources} rowKey={(resource) => resource.name} />
+      </PageBody>
+    </Page>
+  );
+}
+```
+
+The standalone playground exercises the toolkit without dashboard data or transport code:
+
+![Deck toolkit playground](docs/images/toolkit-playground.jpg)
+
+## Visual examples
+
+The existing Blazor dashboard stays intact while the React UI runs against the same Stress
+AppHost for side-by-side review.
+
+| Existing dashboard | React dashboard |
+| --- | --- |
+| ![Existing Stress dashboard](docs/images/legacy-dashboard.jpg) | ![React Stress dashboard](docs/images/react-dashboard.jpg) |
+
+The shared drawer, secure-value, table, and responsive patterns are exercised against live
+Stress resources:
+
+| Resource details | Mobile resources |
+| --- | --- |
+| ![React resource details](docs/images/react-resource-details.jpg) | ![React mobile resources](docs/images/react-mobile.jpg) |
+
 ## Develop
 
 ```bash
