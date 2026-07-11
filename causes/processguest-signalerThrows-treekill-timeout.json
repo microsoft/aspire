@@ -1,0 +1,16 @@
+{
+  "id": "processguest-signalerThrows-treekill-timeout",
+  "type": "flaky-test",
+  "title": "Flaky: ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_SignalerThrows_StillEscalatesToTreeKill times out intermittently",
+  "test_name": "Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_SignalerThrows_StillEscalatesToTreeKill",
+  "error_pattern": "Expected escalation to tree-kill within 15s of Expire() but it took 00:00:23.1730203.\n   at Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_SignalerThrows_StillEscalatesToTreeKill() in ...\\ProcessGuestLauncherTests.cs:line 287",
+  "occurrences": [
+    {
+      "run_id": 29122927133,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/29122927133",
+      "job": "Tests / Acquisition / Acquisition (ubuntu-latest)",
+      "pr_number": 18692,
+      "observed_at": "2026-07-11T01:07:00Z"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "acquisition-mockghapi-textfilebusy",
+  "type": "flaky-test",
+  "title": "Flaky: PRScriptShellTests.MockGhApiWorkflowWithoutJqFailsLoudly fails with 'Text file busy' race condition",
+  "test_name": "Aspire.Acquisition.Tests.Scripts.PRScriptShellTests.MockGhApiWorkflowWithoutJqFailsLoudly",
+  "error_pattern": "System.ComponentModel.Win32Exception : An error occurred trying to start process '/tmp/aspire-test-.../mock-bin/gh' ... Text file busy\n   at System.Diagnostics.Process.ForkAndExecProcess\n   at Aspire.Acquisition.Tests.Scripts.PRScriptShellTests.MockGhApiWorkflowWithoutJqFailsLoudly()",
+  "occurrences": [
+    {
+      "run_id": 29122927133,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/29122927133",
+      "job": "Tests / Acquisition / Acquisition (ubuntu-latest)",
+      "pr_number": 18692,
+      "observed_at": "2026-07-11T01:07:00Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18732"
+}

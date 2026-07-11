@@ -1,0 +1,58 @@
+{
+  "run_id": 29122927133,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29122927133",
+  "analyzed_at": "2026-07-11T01:07:00Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18692,
+    "title": "Update Foundry hosted agent protocol payload",
+    "author": "tommasodotNET",
+    "state": "closed",
+    "head_branch": "tommasodotnet-update-foundry-protocol",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18692"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Acquisition / Acquisition (ubuntu-latest)",
+      "id": 86491707737,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29122927133/job/86491707737",
+      "classification": "flaky-test",
+      "reason": "Test failed with 'Text file busy' OS error when trying to execute a mock binary - a race condition in CI unrelated to PR changes (PR only modified Foundry hosting files)",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    },
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 86491708691,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29122927133/job/86491708691",
+      "classification": "flaky-test",
+      "reason": "Test expected tree-kill escalation within 15s but it took 23.17s - a timing-sensitive test that intermittently fails under CI load. PR only modified Foundry-related files, unrelated to ProcessGuestLauncher.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Acquisition.Tests.Scripts.PRScriptShellTests.MockGhApiWorkflowWithoutJqFailsLoudly",
+      "job": "Tests / Acquisition / Acquisition (ubuntu-latest)",
+      "error": "System.ComponentModel.Win32Exception : An error occurred trying to start process '/tmp/aspire-test-dvhDuS/mock-bin/gh' with working directory '/home/runner/work/aspire/aspire/artifacts/bin/Aspire.Acquisition.Tests/Debug/net8.0'. Text file busy",
+      "stack_trace": "at System.Diagnostics.Process.ForkAndExecProcess(...)\n   at System.Diagnostics.Process.StartCore(ProcessStartInfo startInfo)\n   at Aspire.Templates.Tests.ToolCommand.ExecuteAsyncInternal(...) in /_/tests/Shared/TemplatesTesting/ToolCommand.cs:line 156\n   at Aspire.Acquisition.Tests.Scripts.PRScriptShellTests.MockGhApiWorkflowWithoutJqFailsLoudly() in /_/tests/Aspire.Acquisition.Tests/Scripts/PRScriptShellTests.cs:line 95",
+      "classification": "flaky",
+      "reason": "The 'Text file busy' error is a Linux OS-level race condition where a file is being written/compiled while the test tries to execute it. This is a transient CI timing issue unrelated to PR changes which only touch Foundry hosting files."
+    },
+    {
+      "name": "Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_SignalerThrows_StillEscalatesToTreeKill",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "Expected escalation to tree-kill within 15s of Expire() but it took 00:00:23.1730203.",
+      "stack_trace": "at Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_SignalerThrows_StillEscalatesToTreeKill() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\ProcessGuestLauncherTests.cs:line 287",
+      "classification": "flaky",
+      "reason": "Timing-sensitive test that expects a process tree-kill escalation within 15s but took 23s under CI load. This is an intermittent timing failure. PR only modified Foundry hosting files, not ProcessGuestLauncher."
+    }
+  ],
+  "causes": [
+    "acquisition-mockghapi-textfilebusy",
+    "processguest-signalerThrows-treekill-timeout"
+  ]
+}
