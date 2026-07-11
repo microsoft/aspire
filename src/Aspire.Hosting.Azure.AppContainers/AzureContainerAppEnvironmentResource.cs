@@ -228,6 +228,8 @@ public class AzureContainerAppEnvironmentResource :
 
     internal bool UseCompactResourceNaming { get; set; }
 
+    internal bool UseSingletonResourceNaming { get; set; }
+
     /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.
     /// Default is true.

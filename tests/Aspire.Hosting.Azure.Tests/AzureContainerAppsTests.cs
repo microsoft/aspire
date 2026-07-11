@@ -1883,6 +1883,93 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task MultipleAzureContainerAppEnvironmentsGenerateDistinctManagedEnvironmentNames()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // Two environments in the same AppHost (and therefore the same resource group).
+        var env1 = builder.AddAzureContainerAppEnvironment("cae1");
+        var env2 = builder.AddAzureContainerAppEnvironment("cae2");
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var envResources = model.Resources.OfType<AzureContainerAppEnvironmentResource>().ToList();
+        Assert.Equal(2, envResources.Count);
+
+        var (_, bicep1) = await GetManifestWithBicep(envResources[0]);
+        var (_, bicep2) = await GetManifestWithBicep(envResources[1]);
+
+        var name1 = GetManagedEnvironmentNameExpression(bicep1);
+        var name2 = GetManagedEnvironmentNameExpression(bicep2);
+
+        // Both environments deploy to the same resource group, so their generated
+        // 'name:' expressions must differ. When they don't, the two symbolic
+        // environments collapse onto a single physical Azure Container Apps
+        // environment and concurrent container-app writes race with
+        // ManagedEnvironmentOperationInProgress. See
+        // https://github.com/microsoft/aspire/issues/18722.
+        Assert.NotEqual(name1, name2);
+
+        // The generated name incorporates the resource name (keeping its trailing digit)
+        // so the two environments are distinguishable.
+        Assert.Equal("take('cae1${uniqueString(resourceGroup().id)}', 24)", name1);
+        Assert.Equal("take('cae2${uniqueString(resourceGroup().id)}', 24)", name2);
+    }
+
+    [Fact]
+    public async Task WithSingletonResourceNamingPreservesPreFixManagedEnvironmentName()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // Opting into singleton naming keeps Azure.Provisioning's default (lowercase-letters-only)
+        // name so an already-deployed environment is not recreated. The trailing digit is dropped,
+        // reproducing the pre-fix name.
+        var env = builder.AddAzureContainerAppEnvironment("cae1")
+            .WithSingletonResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var envResource = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+
+        var (_, bicep) = await GetManifestWithBicep(envResource);
+
+        var name = GetManagedEnvironmentNameExpression(bicep);
+
+        Assert.Equal("take('cae${uniqueString(resourceGroup().id)}', 24)", name);
+    }
+
+    private static string GetManagedEnvironmentNameExpression(string bicep)
+    {
+        // Extract the 'name:' line for the managed environment resource, e.g.:
+        //   resource cae1 'Microsoft.App/managedEnvironments@2025-07-01' = {
+        //     name: take('cae1${uniqueString(resourceGroup().id)}', 24)
+        var match = System.Text.RegularExpressions.Regex.Match(
+            bicep,
+            @"'Microsoft\.App/managedEnvironments@[^']+'\s*=\s*\{\s*\r?\n\s*name:\s*(?<name>.+)");
+
+        Assert.True(match.Success, $"Could not find managed environment name in bicep:\n{bicep}");
+
+        return match.Groups["name"].Value.Trim();
+    }
+
+    [Fact]
     public async Task PublishAsContainerAppJobInfluencesContainerAppDefinition()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

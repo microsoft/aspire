@@ -410,6 +410,25 @@ public static class AzureContainerAppExtensions
                 }
             }
 
+            // When not using azd naming, the managed environment name would otherwise be left to
+            // Azure.Provisioning's default. That default only permits lowercase letters
+            // (ContainerAppManagedEnvironment inherits ResourceNameRequirements(1, 24,
+            // ResourceNameCharacters.LowercaseLetters)), so digits are stripped from the bicep
+            // identifier: environments named e.g. "cae1"/"cae2" in the same resource group both
+            // resolve to take('cae${uniqueString(resourceGroup().id)}', 24) and collapse onto a
+            // single physical environment, where concurrent container-app writes race with
+            // ManagedEnvironmentOperationInProgress. Set the name explicitly, preserving digits,
+            // so multiple environments in one resource group get distinct names. Opt out with
+            // WithSingletonResourceNaming() to keep the pre-fix name for already-deployed environments.
+            // See https://github.com/microsoft/aspire/issues/18722.
+            if (!appEnvResource.UseAzdNamingConvention && !appEnvResource.UseSingletonResourceNaming)
+            {
+                containerAppEnvironment.Name = BicepFunction.Take(
+                    BicepFunction.Interpolate(
+                        $"{GetManagedEnvironmentNamePrefix(appEnvResource)}{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
+                    24);
+            }
+
             // Exposed so that callers reference the LA workspace in other bicep modules
             infra.Add(new ProvisioningOutput("AZURE_LOG_ANALYTICS_WORKSPACE_NAME", typeof(string))
             {
@@ -437,6 +456,23 @@ public static class AzureContainerAppExtensions
             : builder.AddResource(containerAppEnvResource);
 
         return appEnvBuilder;
+    }
+
+    /// <summary>
+    /// Builds the prefix used for the managed environment's <c>name</c> in the default (non-azd) naming path.
+    /// </summary>
+    /// <remarks>
+    /// Azure.Provisioning's default name for a managed environment is
+    /// <c>take('{sanitizedBicepIdentifier}{uniqueString(resourceGroup().id)}', 24)</c>, but its sanitizer only
+    /// keeps lowercase letters (<c>ResourceNameCharacters.LowercaseLetters</c>),
+    /// which drops digits and causes environments named e.g. <c>cae1</c>/<c>cae2</c> to collapse to the same
+    /// <c>cae…</c> name in a shared resource group. We reproduce that prefix but keep digits (managed environment
+    /// names permit lowercase alphanumerics), so distinct resource names produce distinct environment names.
+    /// </remarks>
+    private static string GetManagedEnvironmentNamePrefix(AzureContainerAppEnvironmentResource appEnvResource)
+    {
+        var identifier = appEnvResource.GetBicepIdentifier();
+        return new string(identifier.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
     }
 
     /// <summary>
@@ -647,6 +683,39 @@ public static class AzureContainerAppExtensions
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithCompactResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
     {
         builder.Resource.UseCompactResourceNaming = true;
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the container app environment to use the managed environment name that Aspire generated
+    /// before resource names were incorporated into the name calculation. This naming is appropriate when a
+    /// single container app environment is deployed to a resource group.
+    /// </summary>
+    /// <param name="builder">The <see cref="AzureContainerAppEnvironmentResource"/> to configure.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// By default, the managed environment's <c>name</c> now incorporates the resource name so that multiple
+    /// <see cref="AddAzureContainerAppEnvironment"/> resources in the same resource group produce distinct
+    /// environment names (see <see href="https://github.com/microsoft/aspire/issues/18722"/>).
+    /// </para>
+    /// <para>
+    /// The previous behavior relied on Azure.Provisioning's default name, whose sanitizer keeps only lowercase
+    /// letters — dropping any trailing digit and yielding <c>take('cae{uniqueString(resourceGroup().id)}', 24)</c>
+    /// regardless of the resource name. Applications that deployed a single environment before this change should
+    /// call this method to keep their already-deployed environment name and avoid Azure recreating the environment
+    /// on the next deployment.
+    /// </para>
+    /// <para>
+    /// This option has no effect when <see cref="WithAzdResourceNaming"/> is also used, since azd naming sets the
+    /// environment name explicitly.
+    /// </para>
+    /// </remarks>
+    [AspireExport]
+    [Experimental("ASPIREACANAMING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithSingletonResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
+    {
+        builder.Resource.UseSingletonResourceNaming = true;
         return builder;
     }
 
