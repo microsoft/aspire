@@ -205,12 +205,12 @@ builder.AddAzureAppServiceEnvironment("infra")
                   "slots=$(az webapp deployment slot list -g \"$RG_NAME\" -n \"$webapp\" --query \"[].name\" -o tsv 2>/dev/null); " +
                   "if [ -n \"$slots\" ]; then " +
                   "for slot in $slots; do " +
-                  "url=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --slot \"$slot\" --query defaultHostName -o tsv 2>/dev/null); " +
+                  "if ! url=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --slot \"$slot\" --query defaultHostName -o tsv); then echo \"❌ Failed to query hostname for staging slot $webapp/$slot\"; exit 1; fi; " +
                   "if [ -z \"$url\" ]; then echo \"❌ Missing hostname for staging slot $webapp/$slot\"; exit 1; fi; " +
                   "urls=\"$urls $url\"; staging_endpoint_count=$((staging_endpoint_count + 1)); " +
                   "done; " +
                   "else " +
-                  "url=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --query defaultHostName -o tsv 2>/dev/null); " +
+                  "if ! url=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --query defaultHostName -o tsv); then echo \"❌ Failed to query hostname for dashboard $webapp\"; exit 1; fi; " +
                   "if [ -z \"$url\" ]; then echo \"❌ Missing hostname for dashboard $webapp\"; exit 1; fi; " +
                   "urls=\"$urls $url\"; dashboard_endpoint_count=$((dashboard_endpoint_count + 1)); " +
                   "fi; " +
