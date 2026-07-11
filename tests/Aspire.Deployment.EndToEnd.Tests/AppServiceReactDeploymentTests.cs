@@ -200,20 +200,22 @@ builder.AddAzureAppServiceEnvironment("infra")
                   "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
                   "webapps=$(az webapp list -g \"$RG_NAME\" --query \"[].name\" -o tsv 2>/dev/null) && " +
                   "if [ -z \"$webapps\" ]; then echo \"❌ No App Service sites found\"; exit 1; fi && " +
-                  "urls='' && " +
+                  "urls='' && staging_endpoint_count=0 && dashboard_endpoint_count=0 && " +
                   "for webapp in $webapps; do " +
                   "slots=$(az webapp deployment slot list -g \"$RG_NAME\" -n \"$webapp\" --query \"[].name\" -o tsv 2>/dev/null); " +
                   "if [ -n \"$slots\" ]; then " +
                   "for slot in $slots; do " +
                   "url=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --slot \"$slot\" --query defaultHostName -o tsv 2>/dev/null); " +
-                  "if [ -n \"$url\" ]; then urls=\"$urls $url\"; fi; " +
+                  "if [ -z \"$url\" ]; then echo \"❌ Missing hostname for staging slot $webapp/$slot\"; exit 1; fi; " +
+                  "urls=\"$urls $url\"; staging_endpoint_count=$((staging_endpoint_count + 1)); " +
                   "done; " +
                   "else " +
                   "url=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --query defaultHostName -o tsv 2>/dev/null); " +
-                  "if [ -n \"$url\" ]; then urls=\"$urls $url\"; fi; " +
+                  "if [ -z \"$url\" ]; then echo \"❌ Missing hostname for dashboard $webapp\"; exit 1; fi; " +
+                  "urls=\"$urls $url\"; dashboard_endpoint_count=$((dashboard_endpoint_count + 1)); " +
                   "fi; " +
                   "done && " +
-                  "if [ -z \"$urls\" ]; then echo \"❌ No App Service endpoints found\"; exit 1; fi && " +
+                  "if [ \"$staging_endpoint_count\" -ne 1 ] || [ \"$dashboard_endpoint_count\" -ne 1 ]; then echo \"❌ Expected one staging slot endpoint and one dashboard endpoint\"; exit 1; fi && " +
                   "failed=0 && " +
                   "for url in $urls; do " +
                   "echo \"Checking https://$url...\"; " +

@@ -180,6 +180,27 @@ public class AzureVirtualNetworkExtensionsTests
     }
 
     [Fact]
+    public void WithDelegatedSubnet_ReplacesExistingSubnet()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var firstSubnet = vnet.AddSubnet("first-subnet", "10.0.0.0/24");
+        var secondSubnet = vnet.AddSubnet("second-subnet", "10.0.1.0/24");
+
+        var environment = builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(firstSubnet)
+            .WithDelegatedSubnet(secondSubnet);
+
+        var subnetAnnotation = Assert.Single(environment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>());
+        Assert.Equal("{myvnet.outputs.second_subnet_Id}", subnetAnnotation.SubnetId.ValueExpression);
+        Assert.Empty(firstSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+
+        var delegationAnnotation = Assert.Single(secondSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
     public void AddSubnet_WithParameterResource_CreatesSubnetResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
