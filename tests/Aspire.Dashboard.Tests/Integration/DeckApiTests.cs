@@ -412,6 +412,49 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task DeleteStructuredLogs_ClearsSelectedOrAllResources()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        var repository = app.Services.GetRequiredService<TelemetryRepository>();
+        AddStructuredLog(
+            repository,
+            time: new DateTime(2026, 7, 10, 8, 0, 0, DateTimeKind.Utc),
+            message: "Frontend record",
+            severity: SeverityNumber.Info);
+        AddStructuredLog(
+            repository,
+            time: new DateTime(2026, 7, 10, 8, 0, 1, DateTimeKind.Utc),
+            message: "Backend record",
+            severity: SeverityNumber.Warn,
+            resourceName: "backend");
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+
+        using var missingResponse = await httpClient.DeleteAsync("/api/deck/telemetry/logs?resource=missing").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.NotFound, missingResponse.StatusCode);
+
+        using var selectedResponse = await httpClient.DeleteAsync("/api/deck/telemetry/logs?resource=frontend").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.NoContent, selectedResponse.StatusCode);
+
+        using var selectedSnapshotResponse = await httpClient.GetAsync("/api/deck/telemetry/logs").DefaultTimeout();
+        var selectedSnapshot = await selectedSnapshotResponse.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+        Assert.NotNull(selectedSnapshot);
+        Assert.Equal(1, selectedSnapshot.TotalCount);
+        Assert.Equal("backend", Assert.Single(selectedSnapshot.Data?.ResourceLogs ?? []).Resource?.GetServiceName());
+
+        using var allResponse = await httpClient.DeleteAsync("/api/deck/telemetry/logs").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.NoContent, allResponse.StatusCode);
+
+        using var emptySnapshotResponse = await httpClient.GetAsync("/api/deck/telemetry/logs").DefaultTimeout();
+        var emptySnapshot = await emptySnapshotResponse.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+        Assert.NotNull(emptySnapshot);
+        Assert.Equal(0, emptySnapshot.TotalCount);
+        Assert.Empty(emptySnapshot.Data?.ResourceLogs ?? []);
+    }
+
+    [Fact]
     public async Task Interactions_RoundTripInputsDialog()
     {
         var interactions = Channel.CreateUnbounded<DashboardProto.WatchInteractionsResponseUpdate>();
@@ -578,13 +621,14 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         TelemetryRepository repository,
         DateTime time,
         string message,
-        SeverityNumber severity)
+        SeverityNumber severity,
+        string resourceName = "frontend")
     {
         repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
-                Resource = TelemetryTestHelpers.CreateResource(name: "frontend", instanceId: "instance-1"),
+                Resource = TelemetryTestHelpers.CreateResource(name: resourceName, instanceId: "instance-1"),
                 ScopeLogs =
                 {
                     new ScopeLogs

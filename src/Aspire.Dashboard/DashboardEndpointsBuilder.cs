@@ -246,6 +246,23 @@ public static class DashboardEndpointsBuilder
 
             return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
         });
+
+        group.MapDelete("/telemetry/logs", (
+            TelemetryApiService service,
+            [FromQuery] string? resource) =>
+        {
+            if (!service.ClearLogs(resource))
+            {
+                return Results.NotFound(new ProblemDetails
+                {
+                    Title = "Resource not found",
+                    Detail = "No resource with the specified name was found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            return Results.NoContent();
+        });
     }
 
     public static void MapTelemetryApi(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)

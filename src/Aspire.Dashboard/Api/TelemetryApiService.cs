@@ -244,6 +244,36 @@ internal sealed class TelemetryApiService(
     }
 
     /// <summary>
+    /// Clears structured logs for all resources or for the selected resource group.
+    /// Returns false when a requested resource is unknown.
+    /// </summary>
+    public bool ClearLogs(string? resourceName)
+    {
+        if (string.IsNullOrWhiteSpace(resourceName))
+        {
+            telemetryRepository.ClearStructuredLogs();
+            return true;
+        }
+
+        var resources = telemetryRepository.GetResources();
+        if (resources.Any(resource => string.Equals(resource.ResourceName, resourceName, StringComparison.Ordinal)))
+        {
+            // A resource name can represent multiple service instances. Clearing with a null
+            // instance ID preserves the grouped-resource behavior of the existing dashboard.
+            telemetryRepository.ClearStructuredLogs(new ResourceKey(resourceName, InstanceId: null));
+            return true;
+        }
+
+        if (!AIHelpers.TryResolveResourceForTelemetry(resources, resourceName, out _, out var resourceKey) || resourceKey is null)
+        {
+            return false;
+        }
+
+        telemetryRepository.ClearStructuredLogs(resourceKey);
+        return true;
+    }
+
+    /// <summary>
     /// Streams span updates as they arrive in OTLP JSON format.
     /// Supports multiple resource names.
     /// </summary>
