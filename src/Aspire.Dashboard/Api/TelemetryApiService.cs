@@ -598,8 +598,9 @@ internal sealed class TelemetryApiService(
         // Try exact match by ResourceName first, then by composite ResourceKey string.
         // Use a manual single-match search instead of SingleOrDefault to avoid throwing
         // when multiple replicas share the same ResourceName.
-        if (TryGetSingleResource(resources, r => r.ResourceName == resourceName, out var resource)
-            || TryGetSingleResource(resources, r => r.ResourceKey.ToString() == resourceName, out resource))
+        // Resource names are case-insensitive throughout the dashboard (StringComparisons.ResourceName).
+        if (TryGetSingleResource(resources, r => string.Equals(r.ResourceName, resourceName, StringComparisons.ResourceName), out var resource)
+            || TryGetSingleResource(resources, r => r.ResourceKey.EqualsCompositeName(resourceName), out resource))
         {
             resourceKey = resource.ResourceKey;
             return true;

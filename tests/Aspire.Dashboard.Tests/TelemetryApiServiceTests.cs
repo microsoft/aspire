@@ -947,4 +947,27 @@ public class TelemetryApiServiceTests
         Assert.NotNull(result);
         Assert.Equal(1, result.ReturnedCount);
     }
+
+    [Fact]
+    public void GetSpans_WithDifferentCaseResourceName_ResolvesCaseInsensitively()
+    {
+        // Resource names are case-insensitive throughout the dashboard.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "myapp", instanceId: "inst1"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t1", spanId: "s1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) } } }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetSpans(resourceNames: ["MYAPP"], traceId: null, hasError: null, limit: null);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.ReturnedCount);
+    }
 }
