@@ -1,6 +1,8 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
+const dashboardUrl = process.env.ASPIRE_DASHBOARD_URL;
+
 // Vite stamps `crossorigin` on the entry <script>/<link> tags. Under Tauri's custom
 // asset protocol (notably macOS WKWebView), a `crossorigin` request is treated as a
 // CORS fetch and the protocol response has no `Access-Control-Allow-Origin`, so the
@@ -25,6 +27,15 @@ export default defineConfig({
   server: {
     port: 1430,
     strictPort: true,
+    proxy: dashboardUrl
+      ? {
+          "/api/deck": {
+            target: dashboardUrl,
+            changeOrigin: true,
+            secure: false,
+          },
+        }
+      : undefined,
   },
   build: {
     outDir: "dist",

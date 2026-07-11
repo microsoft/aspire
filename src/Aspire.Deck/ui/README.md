@@ -34,6 +34,17 @@ Open the dev URL in a normal browser. You get a fully interactive dashboard back
 mock backend: live resource state changes, streaming console logs, growing telemetry, and
 an animated sample canvas.
 
+To run the React UI against an existing dashboard backend, set the dashboard URL
+and select the explicit HTTP transport:
+
+```bash
+ASPIRE_DASHBOARD_URL=https://Stress.dev.localhost:49985 npm run dev -- --host 127.0.0.1
+```
+
+Then open `http://127.0.0.1:1430/?backend=http`. The Vite proxy is enabled only
+when `ASPIRE_DASHBOARD_URL` is present, so standalone development continues to use
+the deterministic mock backend.
+
 Open `http://localhost:1430/?view=toolkit` for the standalone toolkit playground. It exercises
 the shared controls without depending on the Deck backend or mock data layer, making it the
 starting point for new dashboard UI and visual regression coverage.
@@ -54,6 +65,13 @@ runs attach desktop/mobile screenshots to the HTML report; failures retain a scr
 trace, and page context under `test-results`.
 
 Use `npm run test:e2e:update` only after reviewing an intentional accessibility-tree change.
+
+The live Stress black-box suite requires a running Stress AppHost:
+
+```bash
+ASPIRE_DASHBOARD_URL=https://Stress.dev.localhost:49985 \
+  npm exec -- playwright test --config=playwright.stress.config.ts
+```
 
 ## Build & preview
 

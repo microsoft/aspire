@@ -4,6 +4,7 @@ const isCi = Boolean(process.env.CI);
 
 export default defineConfig({
   testDir: "./e2e",
+  testIgnore: ["live/**"],
   outputDir: "./test-results",
   fullyParallel: true,
   forbidOnly: isCi,

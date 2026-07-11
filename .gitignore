@@ -218,7 +218,9 @@ extension/package.nls.*.json
 # Playwright CLI artifacts
 .playwright-cli/
 src/Aspire.Deck/ui/playwright-report/
+src/Aspire.Deck/ui/playwright-report-stress/
 src/Aspire.Deck/ui/test-results/
+src/Aspire.Deck/ui/test-results-stress/
 
 # Azure Functions local settings (may contain encrypted secrets)
 local.settings.json
