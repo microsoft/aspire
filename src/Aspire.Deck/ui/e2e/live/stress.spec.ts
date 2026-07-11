@@ -81,6 +81,59 @@ test(`${features("STRESS-DETAILS-001", "STRESS-SECRETS-001")} inspects live Stre
   await attachScreenshot(page, testInfo, "stress-live-resource-details");
 });
 
+test(`${features("STRESS-RESOURCE-ICON-001", "STRESS-COMMAND-ICON-001")} renders live Stress icon contracts`, async ({ page }, testInfo) => {
+  const response = await page.request.get("/api/deck/resources");
+  expect(response.ok()).toBe(true);
+  const resources = await response.json() as Array<{
+    iconName: string | null;
+    commands: Array<{ iconName: string | null }>;
+  }>;
+  const iconNames = [...new Set(resources.flatMap((resource) => [
+    resource.iconName,
+    ...resource.commands.map((command) => command.iconName),
+  ]).filter((name): name is string => name !== null))].sort();
+
+  const table = page.getByRole("table");
+  const api = table.getByRole("row").filter({ hasText: "stress-apiservice" });
+  const document = table.getByRole("row").filter({ hasText: "empty-0000" });
+  await expect(api).toHaveCount(1);
+  await expect(document).toHaveCount(1);
+  await expect(api.locator('svg[data-icon-name="Server"][data-icon-variant="filled"]')).toHaveCount(1);
+  await expect(document.locator('svg[data-icon-name="Document"][data-icon-variant="filled"]')).toHaveCount(1);
+
+  const iconCommands = table.getByRole("row").filter({ hasText: "icon-commands" });
+  await expect(iconCommands).toHaveCount(1);
+  await iconCommands.click();
+  let details = page.getByRole("dialog", { name: "icon-commands" });
+  await expect(
+    details.getByRole("button", { name: "Icon test highlighted", exact: true })
+      .locator('svg[data-icon-name="CloudDatabase"][data-icon-variant="regular"]'),
+  ).toHaveCount(1);
+  await details.getByRole("button", { name: "Close details" }).click();
+
+  const lifecycleCommands = table.getByRole("row").filter({ hasText: "lifecycle-commands" });
+  await expect(lifecycleCommands).toHaveCount(1);
+  await lifecycleCommands.click();
+  details = page.getByRole("dialog", { name: "lifecycle-commands" });
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  const menu = page.getByRole("menu", { name: "Resource commands" });
+  await expect(
+    menu.getByRole("menuitem", { name: /Stop all resources/ })
+      .locator('svg[data-icon-name="Stop"][data-icon-variant="filled"]'),
+  ).toHaveCount(1);
+  await expect(
+    menu.getByRole("menuitem", { name: /Start all resources/ })
+      .locator('svg[data-icon-name="Play"][data-icon-variant="filled"]'),
+  ).toHaveCount(1);
+
+  await attachScreenshot(page, testInfo, "stress-live-icons");
+
+  await page.goto(`/?view=toolkit&icons=${encodeURIComponent(iconNames.join(","))}`);
+  const catalog = page.getByTestId("toolkit-icon-catalog");
+  await expect(catalog.locator("svg[data-icon-name]")).toHaveCount(iconNames.length * 2);
+  await attachScreenshot(page, testInfo, "stress-live-icon-catalog");
+});
+
 test(`${features("STRESS-PARAMETERS-001")} renders live parameters with secure defaults`, async ({ page }, testInfo) => {
   await navigationButton(page, "Parameters").click();
   const table = page.getByRole("table");

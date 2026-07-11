@@ -14,26 +14,22 @@ import {
   ExternalIcon,
   LinkIcon,
   MoreIcon,
-  PlayIcon,
-  RestartIcon,
+  NamedIcon,
   ResourceTypeIcon,
   SecretValue,
   StateDot,
-  StopIcon,
   type ConfirmRequest,
 } from "../toolkit";
 
-function commandIcon(name: string) {
-  if (name.includes("start")) {
-    return <PlayIcon size={15} />;
-  }
-  if (name.includes("stop")) {
-    return <StopIcon size={15} />;
-  }
-  if (name.includes("restart")) {
-    return <RestartIcon size={15} />;
-  }
-  return null;
+function commandIcon(command: ResourceCommand) {
+  const fallbackName = command.name.includes("start")
+    ? "Play"
+    : command.name.includes("stop")
+      ? "Stop"
+      : command.name.includes("restart")
+        ? "ArrowCounterclockwise"
+        : null;
+  return <NamedIcon name={command.iconName ?? fallbackName} variant={command.iconVariant} size={15} />;
 }
 
 function PropertyRow({ prop }: { prop: ResourceProperty }) {
@@ -107,7 +103,7 @@ export function DetailsDrawer({
               title={command.displayDescription ?? command.displayName}
               onClick={() => handleCommand(command)}
             >
-              {commandIcon(command.name)}
+              {commandIcon(command)}
               {command.displayName}
             </Button>
           ))}
@@ -122,7 +118,7 @@ export function DetailsDrawer({
                 id: command.name,
                 label: command.displayName,
                 description: command.displayDescription ?? undefined,
-                icon: commandIcon(command.name) ?? undefined,
+                icon: commandIcon(command),
                 disabled: command.state === "disabled",
                 tone: command.name.includes("stop") ? "danger" : "default",
                 onSelect: () => handleCommand(command),
@@ -136,7 +132,14 @@ export function DetailsDrawer({
   return (
     <Drawer
       title={resource.displayName}
-      leading={<ResourceTypeIcon type={resource.resourceType} size={18} />}
+      leading={(
+        <ResourceTypeIcon
+          type={resource.resourceType}
+          iconName={resource.iconName}
+          iconVariant={resource.iconVariant}
+          size={18}
+        />
+      )}
       subtitle={<StateDot state={resource.state} stateStyle={resource.stateStyle} health={resource.health} />}
       onClose={onClose}
       footer={footer}

@@ -4,6 +4,7 @@
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Microsoft.Extensions.Localization;
+using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Api;
 
@@ -34,7 +35,8 @@ internal static class DeckResourceMapper
             Relationships: resource.Relationships.Select(MapRelationship).ToArray(),
             IsHidden: resource.IsResourceHidden(showHiddenResources: false),
             SupportsDetailedTelemetry: resource.SupportsDetailedTelemetry,
-            IconName: resource.IconName);
+            IconName: resource.IconName,
+            IconVariant: MapIconVariant(resource.IconVariant));
     }
 
     private static DeckResourceUrl MapUrl(UrlViewModel url)
@@ -89,6 +91,7 @@ internal static class DeckResourceMapper
             DisplayDescription: command.GetDisplayDescription(),
             ConfirmationMessage: string.IsNullOrEmpty(command.ConfirmationMessage) ? null : command.ConfirmationMessage,
             IconName: string.IsNullOrEmpty(command.IconName) ? null : command.IconName,
+            IconVariant: MapIconVariant(command.IconVariant),
             IsHighlighted: command.IsHighlighted,
             State: command.State switch
             {
@@ -104,5 +107,21 @@ internal static class DeckResourceMapper
         return new DeckResourceRelationship(
             ResourceName: relationship.ResourceName,
             Type: relationship.Type);
+    }
+
+    private static string? MapIconVariant(IconVariant? iconVariant)
+    {
+        return iconVariant switch
+        {
+            IconVariant.Regular => "regular",
+            IconVariant.Filled => "filled",
+            null => null,
+            _ => throw new InvalidOperationException($"Unexpected {nameof(IconVariant)} value: {iconVariant}.")
+        };
+    }
+
+    private static string MapIconVariant(IconVariant iconVariant)
+    {
+        return MapIconVariant((IconVariant?)iconVariant)!;
     }
 }

@@ -12,6 +12,7 @@ export const dashboardCoreFeatures = {
   "RES-SORT-001": "Resources sort by supported columns in ascending and descending order.",
   "RES-FILTER-001": "Resources filter by name, type, and state and expose an empty result.",
   "RES-ENDPOINT-001": "External resource endpoints retain actionable URLs without selecting the row.",
+  "RES-ICON-001": "Resource and command icons honor Fluent names and regular/filled variants.",
   "RES-DETAILS-001": "Resource details include overview, endpoints, properties, environment, health, and relationships.",
   "RES-SECRETS-001": "Every environment value is masked until the user explicitly reveals it.",
   "RES-COMMANDS-001": "Resource commands expose enabled state and update the live resource state.",

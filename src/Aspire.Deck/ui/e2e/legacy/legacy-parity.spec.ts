@@ -125,7 +125,9 @@ test(`${features("parameters")} inventories parameter states and secure reveal`,
 
   const showValue = table.getByRole("button", { name: "Show value", exact: true });
   await expect(showValue).toHaveCount(1);
-  await showValue.click({ force: true });
+  // The notification stack can overlap the value button at this viewport. Keyboard activation
+  // exercises the same accessible control without dismissing server-scoped notifications.
+  await showValue.press("Enter");
   await expect(table.getByText("value", { exact: true })).toBeVisible();
 
   const filter = page.getByRole("textbox", { name: "Filter...", exact: true });
@@ -143,13 +145,15 @@ test(`${features("commands")} inventories command icons and argument input types
   let details = page.getByRole("dialog").filter({ hasText: "icon-commands" });
   await expect(details.getByRole("button", { name: "Icon test", exact: true })).toBeVisible();
   await expect(details.getByRole("button", { name: "Icon test highlighted", exact: true })).toBeVisible();
+  await attachScreenshot(page, testInfo, "legacy-icon-commands");
   await details.getByRole("button", { name: "Close", exact: true }).click({ force: true });
 
   const argumentCommands = table.getByRole("row").filter({ hasText: "argument-commands" });
   await expect(argumentCommands).toHaveCount(1);
   await argumentCommands.click({ force: true });
   details = page.getByRole("dialog").filter({ hasText: "argument-commands" });
-  await details.getByRole("button", { name: "Echo arguments", exact: true }).click();
+  const echoArguments = details.getByRole("button", { name: "Echo arguments", exact: true });
+  await echoArguments.click();
 
   const inputs = page.getByRole("dialog", { name: "Echo arguments", exact: true });
   await expect(inputs.getByRole("textbox", { name: "Hello from the Stress playground", exact: true })).toBeVisible();

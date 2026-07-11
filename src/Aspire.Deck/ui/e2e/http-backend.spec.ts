@@ -45,6 +45,7 @@ const resource: Resource = {
   isHidden: false,
   supportsDetailedTelemetry: true,
   iconName: "Code",
+  iconVariant: "filled",
 };
 
 test.beforeEach(async ({ page }) => {
@@ -85,7 +86,9 @@ test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-0
 
   await expect(page.getByRole("banner").locator(".topbar__app")).toHaveText("Stress AppHost");
   await expect(page.getByRole("navigation")).toContainText("Aspire Deck 13.5.0-live");
-  await expect(page.getByRole("table").getByRole("row", { name: /stress-api Project/ })).toBeVisible();
+  const resourceRow = page.getByRole("table").getByRole("row", { name: /stress-api Project/ });
+  await expect(resourceRow).toBeVisible();
+  await expect(resourceRow.locator('svg[data-icon-name="Code"][data-icon-variant="filled"]')).toHaveCount(1);
   await expect(page.getByRole("table")).not.toContainText("frontend");
   await expect(page.getByTitle("Resources: Connected")).toBeVisible();
   expect(configRequests).toBeGreaterThan(0);

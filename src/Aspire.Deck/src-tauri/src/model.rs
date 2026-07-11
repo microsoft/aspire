@@ -54,6 +54,7 @@ pub struct ResourceCommand {
     pub display_description: Option<String>,
     pub confirmation_message: Option<String>,
     pub icon_name: Option<String>,
+    pub icon_variant: String,
     pub is_highlighted: bool,
     pub state: String,
 }
@@ -88,6 +89,7 @@ pub struct Resource {
     pub is_hidden: bool,
     pub supports_detailed_telemetry: bool,
     pub icon_name: Option<String>,
+    pub icon_variant: Option<String>,
 }
 
 fn timestamp_to_rfc3339(ts: &prost_types::Timestamp) -> Option<String> {
@@ -133,6 +135,15 @@ fn render_property_value(value: Option<&prost_types::Value>) -> String {
             other => other.to_string(),
         },
     }
+}
+
+fn icon_variant_label(value: Option<i32>) -> Option<String> {
+    value
+        .and_then(|value| pb::IconVariant::try_from(value).ok())
+        .map(|value| match value {
+            pb::IconVariant::Regular => "regular".to_string(),
+            pb::IconVariant::Filled => "filled".to_string(),
+        })
 }
 
 fn health_status_label(status: i32) -> &'static str {
@@ -249,6 +260,7 @@ impl From<&pb::Resource> for Resource {
                 display_description: c.display_description.clone(),
                 confirmation_message: c.confirmation_message.clone(),
                 icon_name: c.icon_name.clone(),
+                icon_variant: icon_variant_label(c.icon_variant).unwrap_or_else(|| "regular".to_string()),
                 is_highlighted: c.is_highlighted,
                 state: command_state_label(c.state).to_string(),
             })
@@ -287,6 +299,7 @@ impl From<&pb::Resource> for Resource {
             is_hidden: r.is_hidden,
             supports_detailed_telemetry: r.supports_detailed_telemetry,
             icon_name: r.icon_name.clone(),
+            icon_variant: icon_variant_label(r.icon_variant),
         }
     }
 }

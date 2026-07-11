@@ -117,6 +117,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                     "displayDescription": "Restart this resource.",
                     "confirmationMessage": "Restart frontend?",
                     "iconName": "ArrowClockwise",
+                    "iconVariant": "regular",
                     "isHighlighted": true,
                     "state": "enabled"
                   }
@@ -129,7 +130,8 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                 ],
                 "isHidden": true,
                 "supportsDetailedTelemetry": true,
-                "iconName": "Code"
+                "iconName": "Code",
+                "iconVariant": "filled"
               }
             ]
             """);
@@ -212,7 +214,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
             IsHidden = true,
             SupportsDetailedTelemetry = true,
             IconName = "Code",
-            IconVariant = IconVariant.Regular
+            IconVariant = IconVariant.Filled
         };
     }
 }

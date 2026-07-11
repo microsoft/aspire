@@ -93,6 +93,7 @@ export interface ResourceCommand {
   displayDescription: string | null;
   confirmationMessage: string | null;
   iconName: string | null;
+  iconVariant: "regular" | "filled";
   isHighlighted: boolean;
   state: "enabled" | "disabled" | "hidden";
 }
@@ -118,6 +119,7 @@ export interface Resource {
   isHidden: boolean;
   supportsDetailedTelemetry: boolean;
   iconName: string | null;
+  iconVariant: "regular" | "filled" | null;
 }
 
 export interface ResourcesEvent {

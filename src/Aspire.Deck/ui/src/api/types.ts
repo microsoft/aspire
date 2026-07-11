@@ -49,6 +49,7 @@ export interface HealthReport {
 }
 
 export type ResourceCommandState = "enabled" | "disabled" | "hidden";
+export type IconVariant = "regular" | "filled";
 
 export interface ResourceCommand {
   name: string;
@@ -56,6 +57,7 @@ export interface ResourceCommand {
   displayDescription: string | null;
   confirmationMessage: string | null;
   iconName: string | null;
+  iconVariant: IconVariant;
   isHighlighted: boolean;
   state: ResourceCommandState;
 }
@@ -93,6 +95,7 @@ export interface Resource {
   isHidden: boolean;
   supportsDetailedTelemetry: boolean;
   iconName: string | null;
+  iconVariant: IconVariant | null;
 }
 
 export interface ResourcesEvent {

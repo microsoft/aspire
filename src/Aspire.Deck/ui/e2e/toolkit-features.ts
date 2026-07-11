@@ -9,6 +9,7 @@ export const toolkitFeatures = {
   "TK-DATA-001": "Data tables retain semantic headers, filtering, row content, and empty results.",
   "TK-DATA-SORT-001": "Data tables provide stable pointer sorting, aria-sort state, keyboard row activation, and selected-row semantics.",
   "TK-STATUS-001": "Badges and resource state indicators expose every semantic status tone.",
+  "TK-ICON-001": "Named Fluent icons preserve regular/filled variants and resource-type fallback behavior.",
   "TK-EMPTY-001": "Empty states expose an icon, title, and supporting content.",
   "TK-NOTIFICATION-001": "Notifications expose semantic intent, actions, links, and explicit dismissal.",
   "TK-SELECT-001": "Select controls expose labels, placeholders, disabled options, and controlled values.",

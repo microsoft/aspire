@@ -192,6 +192,33 @@ test(`${features("RES-LIST-001", "RES-SORT-001", "RES-FILTER-001", "RES-ENDPOINT
   await expect(table).toContainText("No resources match your filter.");
 });
 
+test(`${features("RES-ICON-001")} renders resource and command icon contracts`, async ({ page }) => {
+  const table = page.getByRole("table");
+  const frontend = table.getByRole("row", { name: /frontend Project/ });
+  const cache = table.getByRole("row", { name: /cache Container/ });
+  await expect(frontend.locator('svg[data-icon-name="Window"][data-icon-variant="regular"]')).toHaveCount(1);
+  await expect(cache.locator('svg[data-icon-name="Database"][data-icon-variant="filled"]')).toHaveCount(1);
+
+  await frontend.click();
+  const details = page.getByRole("dialog", { name: "frontend" });
+  await expect(details.locator('svg[data-icon-name="Window"][data-icon-variant="regular"]')).toHaveCount(1);
+  await expect(
+    details.getByRole("button", { name: "Restart", exact: true })
+      .locator('svg[data-icon-name="ArrowClockwise"][data-icon-variant="regular"]'),
+  ).toHaveCount(1);
+
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  const menu = page.getByRole("menu", { name: "Resource commands" });
+  await expect(
+    menu.getByRole("menuitem", { name: /Start/ })
+      .locator('svg[data-icon-name="Play"][data-icon-variant="filled"]'),
+  ).toHaveCount(1);
+  await expect(
+    menu.getByRole("menuitem", { name: /Stop/ })
+      .locator('svg[data-icon-name="Stop"][data-icon-variant="filled"]'),
+  ).toHaveCount(1);
+});
+
 test(`${features("RES-DETAILS-001", "RES-SECRETS-001")} inspects resource details with secure defaults`, async ({ page }) => {
   await page.getByRole("row", { name: /frontend Project/ }).click();
   const dialog = page.getByRole("dialog", { name: "frontend" });

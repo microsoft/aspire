@@ -29,7 +29,8 @@ internal sealed record DeckResource(
     DeckResourceRelationship[] Relationships,
     bool IsHidden,
     bool SupportsDetailedTelemetry,
-    string? IconName);
+    string? IconName,
+    string? IconVariant);
 
 internal sealed record DeckResourceUrl(
     string? Name,
@@ -63,6 +64,7 @@ internal sealed record DeckResourceCommand(
     string? DisplayDescription,
     string? ConfirmationMessage,
     string? IconName,
+    string IconVariant,
     bool IsHighlighted,
     string State);
 

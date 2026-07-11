@@ -90,7 +90,13 @@ export function ResourcesPage() {
       header: "Name",
       render: (r) => (
         <span className="cell-name">
-          <ResourceTypeIcon type={r.resourceType} size={16} className="cell-type-icon" />
+          <ResourceTypeIcon
+            type={r.resourceType}
+            iconName={r.iconName}
+            iconVariant={r.iconVariant}
+            size={16}
+            className="cell-type-icon"
+          />
           {r.displayName}
         </span>
       ),

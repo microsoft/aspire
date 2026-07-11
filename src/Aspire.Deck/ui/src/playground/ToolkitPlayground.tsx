@@ -14,6 +14,7 @@ import {
   Highlighter,
   MoonIcon,
   MoreIcon,
+  NamedIcon,
   NotificationStack,
   Page,
   PageActions,
@@ -25,6 +26,7 @@ import {
   PageToolbar,
   PlayIcon,
   ResourcesIcon,
+  ResourceTypeIcon,
   RestartIcon,
   SearchBox,
   SecretValue,
@@ -51,6 +53,17 @@ const resources: SampleResource[] = [
   { name: "catalog-db", type: "Container", state: "Running", stateStyle: null, health: "Degraded" },
   { name: "migration", type: "Executable", state: "Exited", stateStyle: null, health: null },
 ];
+
+const defaultIconNames = ["Server", "CloudDatabase"];
+
+function getIconNames(): string[] {
+  const requestedNames = new URLSearchParams(window.location.search).get("icons");
+  if (!requestedNames) {
+    return defaultIconNames;
+  }
+
+  return [...new Set(requestedNames.split(",").map((name) => name.trim()).filter(Boolean))];
+}
 
 const columns: Column<SampleResource>[] = [
   {
@@ -86,6 +99,7 @@ export function ToolkitPlayground({
   const [openAccordionItems, setOpenAccordionItems] = useState(["environment"]);
   const [pageRefreshCount, setPageRefreshCount] = useState(0);
   const [selectedResource, setSelectedResource] = useState<string | null>(null);
+  const iconNames = useMemo(getIconNames, []);
 
   const filteredResources = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -222,6 +236,38 @@ export function ToolkitPlayground({
             <Badge tone="warning">Degraded</Badge>
             <Badge tone="error">Failed</Badge>
             <Badge tone="accent">Selected</Badge>
+          </div>
+        </section>
+
+        <section className="toolkit-section" aria-labelledby="toolkit-icons-title">
+          <div className="toolkit-section__heading">
+            <h2 id="toolkit-icons-title">Icons</h2>
+          </div>
+          <div className="toolkit-icon-grid" data-testid="toolkit-icon-catalog">
+            {iconNames.map((name) => (
+              <div className="toolkit-icon-swatch" key={name}>
+                <code>{name}</code>
+                <NamedIcon name={name} variant="regular" size={24} aria-label={`${name} regular`} />
+                <NamedIcon name={name} variant="filled" size={24} aria-label={`${name} filled`} />
+              </div>
+            ))}
+            <div className="toolkit-icon-swatch">
+              <code>Resource fallback</code>
+              <ResourceTypeIcon
+                type="Container"
+                iconName="UnknownIntegrationIcon"
+                size={24}
+                aria-label="Unknown icon container fallback"
+              />
+            </div>
+            <div className="toolkit-icon-swatch">
+              <code>Command fallback</code>
+              <NamedIcon
+                name="UnknownCommandIcon"
+                size={24}
+                aria-label="Unknown command icon fallback"
+              />
+            </div>
           </div>
         </section>
 

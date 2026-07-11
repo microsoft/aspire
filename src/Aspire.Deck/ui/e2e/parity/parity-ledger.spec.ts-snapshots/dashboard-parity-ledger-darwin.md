@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 22
+- React covered: 26
 - React partial: 44
-- React missing: 91
-- Legacy black-box scenarios pending: 80
-- React parity gaps: 135
+- React missing: 87
+- Legacy black-box scenarios pending: 81
+- React parity gaps: 131
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -60,8 +60,8 @@
 | RES-RELATIONSHIPS-001 | resources | `/` | resources | covered | RES-DETAILS-001 | Parent, child, wait, reference, and other relationships are visible. |
 | RES-STATE-001 | resources | `/` | resources | partial | STRESS-RESOURCES-001 | Running, starting, finished, exited, not-started, and unknown states remain distinguishable. |
 | RES-NO-STATUS-001 | resources | `/` | resources | partial | STRESS-RESOURCES-001 | Resources without status data render a stable unknown state. |
-| RES-RESOURCE-ICON-001 | resources | `/` | PENDING | missing | - | Custom Fluent resource icon names override resource-type fallbacks. |
-| RES-RESOURCE-ICON-VARIANT-001 | resources | `/` | PENDING | missing | - | Regular and filled resource icon variants are preserved. |
+| RES-RESOURCE-ICON-001 | resources | `/` | PENDING | covered | RES-ICON-001; HTTP-RESOURCES-001; STRESS-RESOURCE-ICON-001 | Custom Fluent resource icon names override resource-type fallbacks. |
+| RES-RESOURCE-ICON-VARIANT-001 | resources | `/` | PENDING | covered | RES-ICON-001; DeckApiTests.GetResources_ReturnsDeckResourceContract | Regular and filled resource icon variants are preserved. |
 | RES-CONTEXT-MENU-001 | resources | `/` | PENDING | missing | - | Resource rows expose details, navigation, and commands through a context menu. |
 | RES-SESSION-001 | resources | `/` | PENDING | missing | - | Search, filters, sort, view, expansion, and selection survive navigation and reload. |
 | PARAM-LIST-001 | parameters | `/parameters` | parameters | covered | PARAM-LIST-001; STRESS-PARAMETERS-001 | Plain, secret, and unresolved parameters render on a dedicated page. |
@@ -75,8 +75,8 @@
 | PARAM-SESSION-001 | parameters | `/parameters` | PENDING | missing | - | Parameter filter, sort, and selected resource state are restorable. |
 | CMD-VISIBILITY-001 | commands | `/` | PENDING | partial | RES-COMMANDS-001 | Enabled, disabled, hidden, UI-only, and API-only command visibility is honored. |
 | CMD-HIGHLIGHT-001 | commands | `/` | commands | partial | RES-ACTION-MENU-001 | Highlighted commands remain directly available and other commands use overflow presentation. |
-| CMD-ICON-001 | commands | `/` | commands | missing | - | Custom command icon names render in direct and overflow command surfaces. |
-| CMD-ICON-VARIANT-001 | commands | `/` | PENDING | missing | - | Regular and filled command icon variants are preserved. |
+| CMD-ICON-001 | commands | `/` | PENDING | covered | RES-ICON-001; STRESS-COMMAND-ICON-001 | Custom command icon names render in direct and overflow command surfaces. |
+| CMD-ICON-VARIANT-001 | commands | `/` | PENDING | covered | TK-ICON-001; RES-ICON-001; STRESS-COMMAND-ICON-001 | Regular and filled command icon variants are preserved. |
 | CMD-DESCRIPTION-001 | commands | `/` | commands | partial | RES-ACTION-MENU-001 | Command display names and descriptions remain visible and accessible. |
 | CMD-CONFIRM-001 | commands | `/` | PENDING | partial | RES-CONFIRM-001 | Commands with confirmation messages require explicit confirmation. |
 | CMD-EXECUTE-001 | commands | `/` | PENDING | partial | RES-COMMANDS-001 | Commands execute against the selected live resource and report success, cancellation, or failure. |

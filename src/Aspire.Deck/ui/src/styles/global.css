@@ -2313,6 +2313,27 @@ table.data tbody tr.selected {
   align-items: center;
   gap: 10px;
 }
+.toolkit-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0 20px;
+}
+.toolkit-icon-swatch {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 24px 24px;
+  align-items: center;
+  min-height: 44px;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.toolkit-icon-swatch code {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .toolkit-input-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(220px, 1fr));

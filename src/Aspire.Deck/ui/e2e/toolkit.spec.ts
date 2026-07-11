@@ -7,6 +7,72 @@ import {
 const coveredFeatures = new Set<ToolkitFeatureId>();
 const browserErrors = new WeakMap<Page, string[]>();
 
+const knownDashboardIconNames = [
+  "Add",
+  "Agents",
+  "AgentsAdd",
+  "Apps",
+  "ArrowClockwise",
+  "ArrowCounterclockwise",
+  "ArrowReset",
+  "ArrowSync",
+  "Beaker",
+  "Box",
+  "BoxMultiple",
+  "BrainCircuit",
+  "BranchFork",
+  "Calculator",
+  "Camera",
+  "Certificate",
+  "ChatSparkle",
+  "CheckmarkCircle",
+  "CloudArrowUp",
+  "CloudBidirectional",
+  "CloudDatabase",
+  "Code",
+  "CodeCircle",
+  "CodeCsRectangle",
+  "CodeFsRectangle",
+  "CodeJsRectangle",
+  "CodePyRectangle",
+  "CodeVbRectangle",
+  "ContentView",
+  "ContentViewGalleryLightning",
+  "Database",
+  "DatabaseArrowRight",
+  "DatabaseLightning",
+  "DatabaseMultiple",
+  "DatabasePlugConnected",
+  "DatabaseSearch",
+  "Delete",
+  "Document",
+  "Edit",
+  "Folder",
+  "GlobeArrowForward",
+  "GlobeDesktop",
+  "HeartBroken",
+  "Info",
+  "Key",
+  "LinkMultiple",
+  "Mail",
+  "Open",
+  "Play",
+  "PlugConnectedSettings",
+  "Send",
+  "Server",
+  "Settings",
+  "SettingsCogMultiple",
+  "Stop",
+  "Subtract",
+  "TableLightning",
+  "Toolbox",
+  "VirtualNetwork",
+  "Warning",
+  "Window",
+  "WindowConsole",
+  "WindowDatabase",
+] as const;
+
 function features(...ids: ToolkitFeatureId[]): string {
   for (const id of ids) {
     coveredFeatures.add(id);
@@ -95,6 +161,21 @@ test(`${features("TK-ACTIONS-001")} exercises every button variant`, async ({ pa
   }
 
   await expect(page.getByRole("button", { name: "Use light theme" })).toHaveAttribute("title", "Use light theme");
+});
+
+test(`${features("TK-ICON-001")} resolves named icons, variants, and fallbacks`, async ({ page }) => {
+  await page.goto(`/?view=toolkit&icons=${encodeURIComponent(knownDashboardIconNames.join(","))}`);
+  const catalog = page.getByTestId("toolkit-icon-catalog");
+  const regular = catalog.locator('svg[data-icon-name="CloudDatabase"][data-icon-variant="regular"]');
+  const filled = catalog.locator('svg[data-icon-name="CloudDatabase"][data-icon-variant="filled"]');
+
+  await expect(catalog.locator('svg[data-icon-name="Server"][data-icon-variant="regular"]')).toHaveCount(1);
+  await expect(regular).toHaveCount(1);
+  await expect(filled).toHaveCount(1);
+  await expect(catalog.locator("svg[data-icon-name]")).toHaveCount(knownDashboardIconNames.length * 2);
+  expect(await regular.locator("path").getAttribute("d")).not.toBe(await filled.locator("path").getAttribute("d"));
+  await expect(catalog.locator('svg[data-icon-fallback="UnknownIntegrationIcon"]')).toHaveCount(1);
+  await expect(catalog.locator('svg[data-icon-fallback="UnknownCommandIcon"]')).toHaveCount(1);
 });
 
 test(`${features("TK-PAGE-001")} composes an accessible dashboard page`, async ({ page }) => {

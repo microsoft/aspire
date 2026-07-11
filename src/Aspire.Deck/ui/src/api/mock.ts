@@ -88,6 +88,7 @@ function makeResources(): Resource[] {
       isHidden: false,
       supportsDetailedTelemetry: true,
       iconName: "Window",
+      iconVariant: "regular",
     },
     {
       name: "apiservice",
@@ -117,6 +118,7 @@ function makeResources(): Resource[] {
       isHidden: false,
       supportsDetailedTelemetry: true,
       iconName: "Window",
+      iconVariant: "regular",
     },
     {
       name: "cache",
@@ -146,6 +148,7 @@ function makeResources(): Resource[] {
       isHidden: false,
       supportsDetailedTelemetry: false,
       iconName: "Database",
+      iconVariant: "filled",
     },
     {
       name: "postgres",
@@ -177,6 +180,7 @@ function makeResources(): Resource[] {
       isHidden: false,
       supportsDetailedTelemetry: false,
       iconName: "Database",
+      iconVariant: "regular",
     },
     {
       name: "migration",
@@ -203,6 +207,7 @@ function makeResources(): Resource[] {
       isHidden: false,
       supportsDetailedTelemetry: false,
       iconName: "Code",
+      iconVariant: "regular",
     },
     {
       name: "insertionrows",
@@ -222,12 +227,13 @@ function makeResources(): Resource[] {
       environment: [],
       healthReports: [],
       commands: [
-        { name: "parameter-set", displayName: "Set parameter", displayDescription: "Set the parameter value.", confirmationMessage: null, iconName: "Edit", isHighlighted: true, state: "enabled" },
+        { name: "parameter-set", displayName: "Set parameter", displayDescription: "Set the parameter value.", confirmationMessage: null, iconName: "Edit", iconVariant: "regular", isHighlighted: true, state: "enabled" },
       ],
       relationships: [],
       isHidden: false,
       supportsDetailedTelemetry: false,
       iconName: "Settings",
+      iconVariant: "regular",
     },
     {
       name: "apikey",
@@ -247,12 +253,13 @@ function makeResources(): Resource[] {
       environment: [],
       healthReports: [],
       commands: [
-        { name: "parameter-set", displayName: "Set parameter", displayDescription: "Set the parameter value.", confirmationMessage: null, iconName: "Edit", isHighlighted: true, state: "enabled" },
+        { name: "parameter-set", displayName: "Set parameter", displayDescription: "Set the parameter value.", confirmationMessage: null, iconName: "Edit", iconVariant: "regular", isHighlighted: true, state: "enabled" },
       ],
       relationships: [],
       isHidden: false,
       supportsDetailedTelemetry: false,
       iconName: "Settings",
+      iconVariant: "regular",
     },
     {
       name: "greeting",
@@ -272,12 +279,13 @@ function makeResources(): Resource[] {
       environment: [],
       healthReports: [],
       commands: [
-        { name: "parameter-set", displayName: "Set parameter", displayDescription: "Set the parameter value.", confirmationMessage: null, iconName: "Edit", isHighlighted: true, state: "enabled" },
+        { name: "parameter-set", displayName: "Set parameter", displayDescription: "Set the parameter value.", confirmationMessage: null, iconName: "Edit", iconVariant: "regular", isHighlighted: true, state: "enabled" },
       ],
       relationships: [],
       isHidden: false,
       supportsDetailedTelemetry: false,
       iconName: "Settings",
+      iconVariant: "regular",
     },
   ];
 }
@@ -291,6 +299,7 @@ function defaultCommands(state: string): Resource["commands"] {
       displayDescription: "Start the resource.",
       confirmationMessage: null,
       iconName: "Play",
+      iconVariant: "filled",
       isHighlighted: !running,
       state: running ? "disabled" : "enabled",
     },
@@ -300,6 +309,7 @@ function defaultCommands(state: string): Resource["commands"] {
       displayDescription: "Stop the resource.",
       confirmationMessage: "Are you sure you want to stop this resource?",
       iconName: "Stop",
+      iconVariant: "filled",
       isHighlighted: false,
       state: running ? "enabled" : "disabled",
     },
@@ -309,6 +319,7 @@ function defaultCommands(state: string): Resource["commands"] {
       displayDescription: "Restart the resource.",
       confirmationMessage: "Are you sure you want to restart this resource?",
       iconName: "ArrowClockwise",
+      iconVariant: "regular",
       isHighlighted: running,
       state: running ? "enabled" : "disabled",
     },
@@ -318,6 +329,7 @@ function defaultCommands(state: string): Resource["commands"] {
       displayDescription: "Set the replica count (prompts for input).",
       confirmationMessage: null,
       iconName: "ArrowClockwise",
+      iconVariant: "regular",
       isHighlighted: false,
       state: "enabled",
     },

@@ -44,5 +44,14 @@ export default defineConfig({
     sourcemap: false,
     // Avoid emitting <link rel="modulepreload" crossorigin> preload tags as well.
     modulePreload: { polyfill: false },
+    rollupOptions: {
+      output: {
+        // The registry is intentionally static so AppHost-provided icon names work without
+        // runtime code loading. Keep those glyphs in their own cacheable chunk.
+        manualChunks(id) {
+          return id.includes("/@fluentui/react-icons/") ? "fluent-icons" : undefined;
+        },
+      },
+    },
   },
 });
