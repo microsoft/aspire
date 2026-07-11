@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Tests;
 /// after evaluation. MAUI resources resolve these templates eagerly because Android/iOS 
 /// environment files are generated before DCP's template replacement happens.
 /// </summary>
-public class MauiOtlpTemplateTests
+public class MauiOtlpTemplateTests(ITestOutputHelper outputHelper)
 {
     [Theory]
     [InlineData("Windows", "net10.0-windows10.0.19041.0")]
@@ -21,8 +21,8 @@ public class MauiOtlpTemplateTests
     [InlineData("MacCatalyst", "net10.0-maccatalyst")]
     public async Task PlatformResource_OtelServiceName_DoesNotContainDcpPlaceholders(string platform, string tfm)
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(tfm));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -48,8 +48,8 @@ public class MauiOtlpTemplateTests
     [InlineData("MacCatalyst", "net10.0-maccatalyst")]
     public async Task PlatformResource_OtelResourceAttributes_DoesNotContainDcpPlaceholders(string platform, string tfm)
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(tfm));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -71,8 +71,8 @@ public class MauiOtlpTemplateTests
     [Fact]
     public async Task PlatformResource_HasOtelExporterEndpoint()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();

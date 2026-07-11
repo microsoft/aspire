@@ -9,15 +9,15 @@ namespace Aspire.Hosting.Tests;
 /// <summary>
 /// Tests that verify the command-line arguments generated for each MAUI platform.
 /// </summary>
-public class MauiWithArgsTests
+public class MauiWithArgsTests(ITestOutputHelper outputHelper)
 {
     [Theory]
     [InlineData("net10.0-windows10.0.19041.0")]
     [InlineData("net10.0-windows10.0.22621.0")]
     public async Task WindowsDevice_Args_ContainRunAndTfm(string windowsTfm)
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(windowsTfm));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -34,8 +34,8 @@ public class MauiWithArgsTests
     [Fact]
     public async Task MacCatalystDevice_Args_ContainRunTfmAndOpenArguments()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-maccatalyst"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -53,8 +53,8 @@ public class MauiWithArgsTests
     [Fact]
     public async Task AndroidDevice_DefaultArgs_ContainRunTfmAndAdbTargetDevice()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -73,8 +73,8 @@ public class MauiWithArgsTests
     [Fact]
     public async Task AndroidDevice_WithDeviceId_ContainAdbTargetWithSerial()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -90,8 +90,8 @@ public class MauiWithArgsTests
     [Fact]
     public async Task AndroidEmulator_DefaultArgs_ContainAdbTargetEmulator()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -110,8 +110,8 @@ public class MauiWithArgsTests
     [Fact]
     public async Task AndroidEmulator_WithEmulatorId_ContainAdbTargetWithSerial()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -127,8 +127,8 @@ public class MauiWithArgsTests
     [Fact]
     public async Task iOSDevice_DefaultArgs_ContainRuntimeIdentifier()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -146,8 +146,8 @@ public class MauiWithArgsTests
     [Fact]
     public async Task iOSDevice_WithDeviceId_ContainDeviceName()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -163,8 +163,8 @@ public class MauiWithArgsTests
     [Fact]
     public async Task iOSSimulator_DefaultArgs_DoNotContainDeviceName()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -183,8 +183,8 @@ public class MauiWithArgsTests
     [Fact]
     public async Task iOSSimulator_WithSimulatorId_ContainDeviceNameWithUdidPrefix()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -205,8 +205,8 @@ public class MauiWithArgsTests
         // only test that exercises GetPlatformTargetFramework picking the correct entry out of a
         // ';'-joined list. The per-platform tests above use single-TFM projects, so asserting the
         // exact '-f <tfm>' here catches a regression that returns the whole list or the wrong TFM.
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, """
             <Project Sdk="Microsoft.NET.Sdk">
                 <PropertyGroup>
