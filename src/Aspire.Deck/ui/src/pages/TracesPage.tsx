@@ -171,14 +171,35 @@ function buildTraceGroups(spans: SpanSummary[]): TraceGroup[] {
   return result;
 }
 
-export function TracesPage() {
+export function TracesPage({
+  routeTraceId,
+  routeSpanId,
+  onSelectSpan,
+  onCloseDetails,
+}: {
+  routeTraceId: string | null;
+  routeSpanId: string | null;
+  onSelectSpan: (span: SpanSummary) => void;
+  onCloseDetails: () => void;
+}) {
   const telemetry = useTelemetry();
   const [query, setQuery] = useState("");
   const [minMs, setMinMs] = useState(0);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [selected, setSelected] = useState<SpanSummary | null>(null);
 
   const spans = telemetry?.recentSpans ?? [];
+  const selected = useMemo(() => {
+    if (routeTraceId === null) {
+      return null;
+    }
+
+    const traceSpans = spans.filter((span) => span.traceId === routeTraceId);
+    return (routeSpanId === null
+      ? undefined
+      : traceSpans.find((span) => span.spanId === routeSpanId))
+      ?? traceSpans[0]
+      ?? null;
+  }, [routeSpanId, routeTraceId, spans]);
 
   const colorMap = useMemo(() => buildResourceColorMap(spans.map((s) => s.resourceName)), [spans]);
 
@@ -188,7 +209,7 @@ export function TracesPage() {
 
     const groups = buildTraceGroups(significant);
 
-    const trimmed = query.trim().toLowerCase();
+    const trimmed = (routeTraceId ?? query).trim().toLowerCase();
     if (!trimmed) {
       return groups;
     }
@@ -202,7 +223,7 @@ export function TracesPage() {
             (r.span.resourceName ?? "").toLowerCase().includes(trimmed),
         ),
     );
-  }, [spans, query, minMs]);
+  }, [spans, query, minMs, routeTraceId]);
 
   const toggle = (traceId: string) => {
     setCollapsed((prev) => {
@@ -230,7 +251,16 @@ export function TracesPage() {
       </PageHeader>
 
       <PageToolbar ariaLabel="Trace tools">
-        <SearchBox value={query} onChange={setQuery} placeholder="Filter traces…" />
+        <SearchBox
+          value={routeTraceId ?? query}
+          onChange={(value) => {
+            if (routeTraceId !== null) {
+              onCloseDetails();
+            }
+            setQuery(value);
+          }}
+          placeholder="Filter traces…"
+        />
         <label className="min-duration">
           <span className="min-duration__label">Min duration</span>
           <select className="select" value={minMs} onChange={(e) => setMinMs(Number(e.target.value))}>
@@ -256,7 +286,7 @@ export function TracesPage() {
               colorMap={colorMap}
               collapsed={collapsed.has(trace.traceId)}
               onToggle={() => toggle(trace.traceId)}
-              onSelect={setSelected}
+              onSelect={onSelectSpan}
             />
           ))
         )}
@@ -266,7 +296,7 @@ export function TracesPage() {
         <SpanDetailDrawer
           span={selected}
           color={colorFor(colorMap, selected.resourceName)}
-          onClose={() => setSelected(null)}
+          onClose={onCloseDetails}
         />
       ) : null}
     </Page>

@@ -106,8 +106,27 @@ export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
             {page === "resources" ? <ResourcesPage /> : null}
             {page === "parameters" ? <ParametersPage /> : null}
             {page === "console" ? <ConsolePage /> : null}
-            {page === "logs" ? <StructuredLogsPage /> : null}
-            {page === "traces" ? <TracesPage /> : null}
+            {page === "logs" ? (
+              <StructuredLogsPage
+                onNavigateToTrace={(traceId, spanId) => navigate({
+                  page: "traces",
+                  traceId,
+                  spanId: spanId ?? undefined,
+                })}
+              />
+            ) : null}
+            {page === "traces" ? (
+              <TracesPage
+                routeTraceId={route.traceId ?? null}
+                routeSpanId={route.spanId ?? null}
+                onSelectSpan={(span) => navigate({
+                  page: "traces",
+                  traceId: span.traceId,
+                  spanId: span.spanId,
+                })}
+                onCloseDetails={() => navigate({ page: "traces" })}
+              />
+            ) : null}
             {page === "metrics" ? <MetricsPage /> : null}
             {page === "canvases" ? <CanvasesPage /> : null}
           </>

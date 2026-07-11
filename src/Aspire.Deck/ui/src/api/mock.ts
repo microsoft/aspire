@@ -34,13 +34,9 @@ function isoMinutesAgo(minutes: number): string {
   return new Date(Date.now() - minutes * 60_000).toISOString();
 }
 
-function randomHex(length: number): string {
-  let out = "";
-  const chars = "0123456789abcdef";
-  for (let i = 0; i < length; i++) {
-    out += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return out;
+function indexedHex(value: number, length: number): string {
+  const segment = value.toString(16).padStart(8, "0");
+  return segment.repeat(Math.ceil(length / segment.length)).slice(0, length);
 }
 
 const config: DeckConfig = {
@@ -793,10 +789,12 @@ class MockBackend {
     // Append a new log record.
     // Keep browser-mode telemetry representative and deterministic so visual and
     // interaction tests always exercise both successful and failed traces.
-    const isErr = this.telemetryTick++ % 4 === 0;
+    const telemetryIndex = this.telemetryTick++;
+    const isErr = telemetryIndex % 4 === 0;
     const resourceName = this.resources[Math.floor(Math.random() * 3)]?.name ?? "frontend";
-    const traceId = randomHex(32);
-    const spanId = randomHex(16);
+    const traceId = indexedHex(telemetryIndex + 1, 32);
+    const spanIdBase = telemetryIndex * 8 + 1;
+    const spanId = indexedHex(spanIdBase, 16);
     const log: LogRecordSummary = {
       timeUnixNano: toUnixNano(timestampMs),
       observedTimeUnixNano: toUnixNano(timestampMs),
@@ -849,8 +847,8 @@ class MockBackend {
     const durNanos = (ms: number) => String(Math.floor(ms * 1_000_000));
     const pick = <T,>(items: T[]) => items[Math.floor(Math.random() * items.length)]!;
 
-    const parentId = randomHex(16);
-    const dbChildId = randomHex(16);
+    const parentId = spanId;
+    const dbChildId = indexedHex(spanIdBase + 2, 16);
     const segments: {
       spanId: string;
       parentSpanId: string | null;
@@ -862,10 +860,10 @@ class MockBackend {
       error?: boolean;
     }[] = [
       { spanId: parentId, parentSpanId: null, name: pick(spanNames), kind: "Server", resource: resourceName, start: 0, dur: 200 },
-      { spanId: randomHex(16), parentSpanId: parentId, name: "redis GET", kind: "Client", resource: "cache", start: 12, dur: 18 },
+      { spanId: indexedHex(spanIdBase + 1, 16), parentSpanId: parentId, name: "redis GET", kind: "Client", resource: "cache", start: 12, dur: 18 },
       { spanId: dbChildId, parentSpanId: parentId, name: "products.query", kind: "Client", resource: "apiservice", start: 40, dur: 130, error: isErr },
-      { spanId: randomHex(16), parentSpanId: dbChildId, name: "npgsql SELECT", kind: "Client", resource: "catalogdb", start: 55, dur: 95 },
-      { spanId: randomHex(16), parentSpanId: parentId, name: "serialize", kind: "Internal", resource: resourceName, start: 178, dur: 18 },
+      { spanId: indexedHex(spanIdBase + 3, 16), parentSpanId: dbChildId, name: "npgsql SELECT", kind: "Client", resource: "catalogdb", start: 55, dur: 95 },
+      { spanId: indexedHex(spanIdBase + 4, 16), parentSpanId: parentId, name: "serialize", kind: "Internal", resource: resourceName, start: 178, dur: 18 },
     ];
     const newSpans: SpanSummary[] = segments.map((s) => ({
       traceId,

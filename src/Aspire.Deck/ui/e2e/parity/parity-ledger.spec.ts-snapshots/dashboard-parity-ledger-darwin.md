@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 35
-- React partial: 43
-- React missing: 79
+- React covered: 38
+- React partial: 42
+- React missing: 77
 - Legacy black-box scenarios pending: 80
-- React parity gaps: 122
+- React parity gaps: 119
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -125,8 +125,8 @@
 | LOG-CLEAR-001 | structured-logs | `/structuredlogs` | structured-logs | covered | HTTP-STRUCTURED-LOG-CLEAR-001; STRESS-STRUCTURED-LOG-CLEAR-001 | Structured logs can be cleared for the selected resource or all resources. |
 | LOG-VIRTUALIZATION-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Large log volumes remain responsive through row virtualization. |
 | LOG-DETAILS-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-DETAILS-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001 | Selecting a log opens complete event, scope, resource, and attribute details. |
-| LOG-ACTIONS-001 | structured-logs | `/structuredlogs` | structured-logs | partial | LOG-ACTIONS-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001 | Per-log actions expose details, text/JSON visualizers, copy, and related navigation. |
-| LOG-TRACE-LINK-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Trace IDs deep-link to the matching trace and span. |
+| LOG-ACTIONS-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-ACTIONS-001; LOG-TRACE-LINK-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001 | Per-log actions expose details, text/JSON visualizers, copy, and related navigation. |
+| LOG-TRACE-LINK-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-TRACE-LINK-001; TRACE-DETAIL-ROUTE-001 | Trace IDs deep-link to the matching trace and span. |
 | LOG-GENAI-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | GenAI log records open the dedicated GenAI visualizer. |
 | LOG-EXPLAIN-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Explain errors summarizes current error logs through the assistant. |
 | LOG-ROUTE-001 | structured-logs | `/structuredlogs/resource/{name}` | PENDING | missing | - | Resource selection, filters, and selected log are deep-linkable and restorable. |
@@ -141,7 +141,7 @@
 | TRACE-CLEAR-001 | traces | `/traces` | traces | missing | - | Trace data can be cleared for the selected resource or all resources. |
 | TRACE-VIRTUALIZATION-001 | traces | `/traces` | PENDING | missing | - | Large trace inventories remain responsive through virtualization. |
 | TRACE-ACTIONS-001 | traces | `/traces` | traces | missing | - | Per-trace actions expose detail, copy, and related telemetry navigation. |
-| TRACE-DETAIL-ROUTE-001 | traces | `/traces/detail/{traceId}` | PENDING | missing | - | A trace opens on a stable deep-linked detail route. |
+| TRACE-DETAIL-ROUTE-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-DETAIL-ROUTE-001 | A trace opens on a stable deep-linked detail route. |
 | TRACE-TREE-001 | traces | `/traces/detail/{traceId}` | PENDING | partial | TRACE-LIST-001; TRACE-COLLAPSE-001 | The trace detail preserves parent/child span hierarchy and chronological placement. |
 | TRACE-EXPAND-001 | traces | `/traces/detail/{traceId}` | PENDING | partial | TRACE-COLLAPSE-001 | Trace detail supports individual and expand-all/collapse-all span control. |
 | TRACE-SPAN-DETAILS-001 | traces | `/traces/detail/{traceId}` | PENDING | partial | TRACE-DETAILS-001 | Span details include identifiers, timing, status, attributes, resource, and instrumentation scope. |

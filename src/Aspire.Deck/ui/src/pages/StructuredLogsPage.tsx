@@ -3,6 +3,7 @@ import { clearStructuredLogs } from "../api/deck";
 import type { LogRecordSummary, TelemetrySummary } from "../api/types";
 import { StructuredLogActions, formatStructuredLogJson } from "../components/StructuredLogActions";
 import { StructuredLogDetailsDrawer } from "../components/StructuredLogDetailsDrawer";
+import { TraceLink } from "../components/TraceLink";
 import { useTelemetry } from "../lib/useDeckEvent";
 import { dateFromUnixNano, formatTimeWithMillis, shortId } from "../lib/format";
 import {
@@ -54,7 +55,11 @@ function logKey(log: LogRecordSummary): string {
   return `${log.resourceName ?? ""}-${log.timeUnixNano}-${log.spanId ?? ""}-${log.severityNumber}-${log.body}`;
 }
 
-export function StructuredLogsPage() {
+export function StructuredLogsPage({
+  onNavigateToTrace,
+}: {
+  onNavigateToTrace: (traceId: string, spanId: string | null) => void;
+}) {
   const telemetry = useTelemetry();
   const [query, setQuery] = useState("");
   const [severity, setSeverity] = useState("All");
@@ -67,6 +72,10 @@ export function StructuredLogsPage() {
 
   const displayedTelemetry = pausedSnapshot ?? telemetry;
   const logs = displayedTelemetry?.recentLogs ?? [];
+  const availableTraceIds = useMemo(
+    () => new Set((displayedTelemetry?.recentSpans ?? []).map((span) => span.traceId)),
+    [displayedTelemetry?.recentSpans],
+  );
   const resourceOptions = useMemo(() => [
     { value: "all", label: "All resources" },
     ...[...new Set(logs.flatMap((log) => log.resourceName === null ? [] : [log.resourceName]))]
@@ -131,11 +140,20 @@ export function StructuredLogsPage() {
       key: "trace",
       header: "Trace",
       width: "90px",
-      render: (log) => (
-        <span className="cell-mono cell-muted cell-trace" title={log.traceId ?? undefined}>
-          {shortId(log.traceId)}
-        </span>
-      ),
+      render: (log) => log.traceId && availableTraceIds.has(log.traceId)
+        ? (
+            <TraceLink
+              traceId={log.traceId}
+              spanId={log.spanId}
+              shortened
+              onNavigate={onNavigateToTrace}
+            />
+          )
+        : (
+            <span className="cell-mono cell-muted cell-trace" title={log.traceId ?? undefined}>
+              {shortId(log.traceId)}
+            </span>
+          ),
     },
     {
       key: "actions",
@@ -287,6 +305,8 @@ export function StructuredLogsPage() {
             value: formatStructuredLogJson(selectedLog),
             format: "json",
           })}
+          onNavigateToTrace={onNavigateToTrace}
+          canNavigateToTrace={selectedLog.traceId !== null && availableTraceIds.has(selectedLog.traceId)}
         />
       ) : null}
 

@@ -12,6 +12,7 @@ import {
   type PropertyGridItem,
 } from "../toolkit";
 import { StructuredLogActions } from "./StructuredLogActions";
+import { TraceLink } from "./TraceLink";
 
 interface DetailProperty {
   id: string;
@@ -22,6 +23,10 @@ interface DetailProperty {
 
 function textProperty(id: string, label: string, value: string): DetailProperty {
   return { id, label, value, searchableValue: value };
+}
+
+function nodeProperty(id: string, label: string, value: ReactNode, searchableValue: string): DetailProperty {
+  return { id, label, value, searchableValue };
 }
 
 function attributeProperties(
@@ -61,11 +66,15 @@ export function StructuredLogDetailsDrawer({
   onClose,
   onViewMessage,
   onViewJson,
+  onNavigateToTrace,
+  canNavigateToTrace,
 }: {
   log: LogRecordSummary;
   onClose: () => void;
   onViewMessage: () => void;
   onViewJson: () => void;
+  onNavigateToTrace: (traceId: string, spanId: string | null) => void;
+  canNavigateToTrace: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [openItems, setOpenItems] = useState(["log-entry", "context", "exception", "resource"]);
@@ -85,7 +94,18 @@ export function StructuredLogDetailsDrawer({
       textProperty("category", "Category", log.scopeName),
       ...(log.scopeVersion ? [textProperty("scope-version", "Scope version", log.scopeVersion)] : []),
       ...(log.eventName ? [textProperty("event-name", "EventName", log.eventName)] : []),
-      ...(hasTelemetryId(log.traceId) ? [textProperty("trace-id", "TraceId", log.traceId)] : []),
+      ...(hasTelemetryId(log.traceId) && canNavigateToTrace
+        ? [nodeProperty(
+            "trace-id",
+            "TraceId",
+            <TraceLink
+              traceId={log.traceId}
+              spanId={log.spanId}
+              onNavigate={onNavigateToTrace}
+            />,
+            log.traceId,
+          )]
+        : hasTelemetryId(log.traceId) ? [textProperty("trace-id", "TraceId", log.traceId)] : []),
       ...(hasTelemetryId(log.spanId) ? [textProperty("span-id", "SpanId", log.spanId)] : []),
       ...(hasTelemetryId(log.parentId) ? [textProperty("parent-id", "ParentId", log.parentId)] : []),
       ...attributeProperties("scope", log.scopeAttributes),
@@ -110,7 +130,7 @@ export function StructuredLogDetailsDrawer({
     ];
 
     return { logEntry, context, exception, resource };
-  }, [log]);
+  }, [canNavigateToTrace, log, onNavigateToTrace]);
 
   const accordionItems = useMemo(() => {
     const createItem = (

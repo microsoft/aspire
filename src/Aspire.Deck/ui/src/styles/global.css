@@ -500,6 +500,19 @@ a:focus-visible {
 .cell-trace {
   white-space: nowrap;
 }
+.telemetry-link {
+  display: inline;
+  min-width: 0;
+  padding: 0;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.telemetry-link:hover {
+  text-decoration: underline;
+}
 
 /* ---------- Search box ---------- */
 .searchbox {

@@ -157,6 +157,7 @@ test(`${features("LOG-DETAILS-001", "LOG-ACTIONS-001")} opens complete structure
   const table = page.getByRole("table");
   const errorRow = table.locator("tbody tr:has(.badge.error)").first();
   await expect(errorRow).toBeVisible();
+  const selectedLogMessage = (await errorRow.locator("td").nth(3).innerText()).trim();
 
   const rowActions = errorRow.getByRole("button", { name: "Log actions" });
   await rowActions.click();
@@ -216,9 +217,40 @@ test(`${features("LOG-DETAILS-001", "LOG-ACTIONS-001")} opens complete structure
   await jsonViewer.getByRole("button", { name: "Close visualizer" }).click();
 
   await attachScreenshot(page, testInfo, "structured-log-details");
-  await expect(errorRow).toHaveAttribute("aria-selected", "true");
+  const selectedRow = table.locator("tbody tr[aria-selected='true']");
+  await expect(selectedRow).toHaveCount(1);
+  await expect(selectedRow).toContainText(selectedLogMessage);
   await details.getByRole("button", { name: "Close details" }).click();
   await expect(details).toHaveCount(0);
+});
+
+test(`${features("LOG-TRACE-LINK-001", "TRACE-DETAIL-ROUTE-001")} opens and restores the related trace span`, async ({ page }) => {
+  await navigationButton(page, "Structured Logs").click();
+
+  const errorRow = page.getByRole("table").locator("tbody tr:has(.badge.error)").first();
+  const traceLink = errorRow.getByRole("link", { name: /^Open trace / });
+  const traceId = await traceLink.getAttribute("title");
+  expect(traceId).toMatch(/^[0-9a-f]{32}$/);
+
+  await traceLink.click();
+  const detailUrl = new URL(page.url());
+  expect(detailUrl.pathname).toBe(`/traces/detail/${traceId}`);
+  const spanId = detailUrl.searchParams.get("span");
+  expect(spanId).toMatch(/^[0-9a-f]{16}$/);
+
+  const details = page.getByRole("dialog");
+  await expect(page.getByRole("main").locator(".page__title")).toHaveText("Traces");
+  await expect(page.locator(".wf__trace")).toHaveCount(1);
+  await expect(details.locator(".kv__val.cell-mono")).toHaveText([traceId!, spanId!]);
+
+  await page.reload();
+  const restoredDetails = page.getByRole("dialog");
+  await expect(restoredDetails.locator(".kv__val.cell-mono")).toHaveText([traceId!, spanId!]);
+  await expect(page).toHaveURL(detailUrl.toString());
+
+  await page.goBack();
+  await expect(page.getByRole("main").locator(".page__title")).toHaveText("Structured Logs");
+  await expect(page).toHaveURL(/\/structuredlogs$/);
 });
 
 test(`${features("LOG-RESOURCE-001", "LOG-PAUSE-001")} filters resources and pauses incoming structured logs`, async ({ page }) => {

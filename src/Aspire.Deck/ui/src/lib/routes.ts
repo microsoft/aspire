@@ -2,6 +2,8 @@ export type PageId = "resources" | "parameters" | "console" | "logs" | "traces" 
 
 export interface DashboardRoute {
   page: PageId;
+  traceId?: string;
+  spanId?: string;
 }
 
 const pagePaths: Record<PageId, string> = {
@@ -18,7 +20,17 @@ export function pagePath(page: PageId): string {
   return pagePaths[page];
 }
 
-export function readDashboardRoute(location: Pick<Location, "pathname"> = window.location): DashboardRoute {
+function decodeRoutePart(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+export function readDashboardRoute(
+  location: Pick<Location, "pathname" | "search"> = window.location,
+): DashboardRoute {
   const path = location.pathname.toLowerCase();
   if (path === "/parameters" || path.startsWith("/parameters/")) {
     return { page: "parameters" };
@@ -30,6 +42,15 @@ export function readDashboardRoute(location: Pick<Location, "pathname"> = window
     return { page: "logs" };
   }
   if (path === "/traces" || path.startsWith("/traces/")) {
+    const detailMatch = /^\/traces\/detail\/([^/]+)\/?$/i.exec(location.pathname);
+    if (detailMatch) {
+      const spanId = new URLSearchParams(location.search).get("span") || undefined;
+      return {
+        page: "traces",
+        traceId: decodeRoutePart(detailMatch[1]!),
+        spanId,
+      };
+    }
     return { page: "traces" };
   }
   if (path === "/metrics" || path.startsWith("/metrics/")) {
@@ -43,7 +64,13 @@ export function readDashboardRoute(location: Pick<Location, "pathname"> = window
 
 export function dashboardRouteHref(route: DashboardRoute, location: Location = window.location): string {
   const url = new URL(location.href);
-  url.pathname = pagePath(route.page);
+  url.pathname = route.page === "traces" && route.traceId
+    ? `/traces/detail/${encodeURIComponent(route.traceId)}`
+    : pagePath(route.page);
+  url.searchParams.delete("span");
+  if (route.spanId) {
+    url.searchParams.set("span", route.spanId);
+  }
   url.hash = "";
   return `${url.pathname}${url.search}`;
 }
