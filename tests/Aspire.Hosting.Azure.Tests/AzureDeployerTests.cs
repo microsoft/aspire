@@ -715,7 +715,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         //     Direct dependencies: ...
         //     Execution order:
         //       [0] ...
-        // Extract each complete target section so unrelated pipeline diagnostics do not affect these assertions.
+        // Snapshot only the relevant target sections so unrelated pipeline changes do not create churn.
         static string GetTargetSection(string diagnostics, string target)
         {
             var marker = $"If targeting '{target}':";
@@ -726,35 +726,12 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
             return end >= 0 ? diagnostics[start..end] : diagnostics[start..];
         }
 
-        static void AssertAppearsInOrder(string section, params string[] steps)
+        await Verify(new
         {
-            var previousIndex = -1;
-            foreach (var step in steps)
-            {
-                var index = section.IndexOf(step, previousIndex + 1, StringComparison.Ordinal);
-                Assert.True(index > previousIndex, $"'{step}' did not appear in the expected order:{Environment.NewLine}{section}");
-                previousIndex = index;
-            }
-        }
-
-        AssertAppearsInOrder(
-            GetTargetSection(diagnostics, "deploy-api-service"),
-            "provision-aas-env-mi",
-            "provision-aas-env-mi-roles-aas-registry",
-            "provision-aas-env",
-            "provision-api-service-website");
-        AssertAppearsInOrder(
-            GetTargetSection(diagnostics, "deploy-cache"),
-            "provision-aca-env-mi",
-            "provision-aca-env-mi-roles-aca-registry",
-            "provision-aca-env",
-            "provision-cache-containerapp");
-        AssertAppearsInOrder(
-            GetTargetSection(diagnostics, "deploy-python-app"),
-            "provision-aca-env-mi",
-            "provision-aca-env-mi-roles-aca-registry",
-            "provision-aca-env",
-            "provision-python-app-containerapp");
+            ApiService = GetTargetSection(diagnostics, "deploy-api-service"),
+            Cache = GetTargetSection(diagnostics, "deploy-cache"),
+            PythonApp = GetTargetSection(diagnostics, "deploy-python-app")
+        });
     }
 
     [Fact]
