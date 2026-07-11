@@ -132,6 +132,22 @@ test(`${features("HTTP-RECOVERY-001")} recovers when the HTTP backend returns`, 
   await expect(page.getByTitle("Resources: Connected")).toBeVisible();
 });
 
+test(`${features("HTTP-EMPTY-TELEMETRY-001")} renders a settled empty metrics state`, async ({ page }) => {
+  await page.route("**/api/deck/config", async (route) => {
+    await route.fulfill({ json: config });
+  });
+  await page.route("**/api/deck/resources", async (route) => {
+    await route.fulfill({ json: [resource] });
+  });
+
+  await page.goto("/?backend=http");
+  await page.getByRole("navigation").getByRole("button", { name: "Metrics 0" }).click();
+
+  const metrics = page.getByRole("main").getByRole("region", { name: "Metrics" });
+  await expect(metrics.locator(".page__subtitle")).toHaveText("0 instruments");
+  await expect(metrics).not.toContainText("Loading…");
+});
+
 const missingFeatures = getMissingHttpBackendFeatures(coveredFeatures);
 if (missingFeatures.length > 0) {
   throw new Error(`HTTP backend features without Playwright coverage: ${missingFeatures.join(", ")}`);

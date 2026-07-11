@@ -4,6 +4,7 @@ export const httpBackendFeatures = {
   "HTTP-MOCK-ISOLATION-001": "Explicit HTTP mode never falls back to the standalone mock backend.",
   "HTTP-FAILURE-001": "HTTP mode reports an unavailable dashboard backend without unhandled browser errors.",
   "HTTP-RECOVERY-001": "HTTP mode recovers application identity and resources when the dashboard backend returns.",
+  "HTTP-EMPTY-TELEMETRY-001": "HTTP mode distinguishes a settled empty telemetry snapshot from loading.",
 } as const;
 
 export type HttpBackendFeatureId = keyof typeof httpBackendFeatures;

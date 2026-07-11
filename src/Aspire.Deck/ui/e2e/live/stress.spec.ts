@@ -94,7 +94,7 @@ test(`${features("STRESS-PARAMETERS-001")} renders live parameters with secure d
   await attachScreenshot(page, testInfo, "stress-live-parameters");
 });
 
-test(`${features("STRESS-NAVIGATION-001")} reaches every page against the live dashboard`, async ({ page }) => {
+test(`${features("STRESS-NAVIGATION-001", "STRESS-EMPTY-TELEMETRY-001")} reaches every page against the live dashboard`, async ({ page }) => {
   const pages = [
     "Parameters",
     "Console",
@@ -109,6 +109,12 @@ test(`${features("STRESS-NAVIGATION-001")} reaches every page against the live d
     await navigationButton(page, name).click();
     await expect(page.getByRole("main").locator(".page__title")).toHaveText(name);
     await expect(navigationButton(page, name)).toHaveAttribute("aria-current", "page");
+
+    if (name === "Metrics") {
+      const metrics = page.getByRole("main").getByRole("region", { name: "Metrics" });
+      await expect(metrics.locator(".page__subtitle")).toHaveText("0 instruments");
+      await expect(metrics).not.toContainText("Loading…");
+    }
   }
 });
 

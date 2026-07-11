@@ -6,6 +6,7 @@ export const stressFeatures = {
   "STRESS-SECRETS-001": "Sensitive Stress resource properties remain masked by default.",
   "STRESS-PARAMETERS-001": "Live Stress parameters render missing values and keep secret values masked.",
   "STRESS-NAVIGATION-001": "Every dashboard page remains reachable while connected to the live backend.",
+  "STRESS-EMPTY-TELEMETRY-001": "The live dashboard distinguishes settled empty telemetry from loading.",
   "STRESS-RESPONSIVE-001": "The live resource workflow remains contained and usable at a mobile viewport.",
   "STRESS-VISUAL-001": "Desktop and mobile evidence is captured for visual review.",
 } as const;

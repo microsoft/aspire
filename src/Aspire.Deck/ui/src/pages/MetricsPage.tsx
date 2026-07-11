@@ -124,12 +124,14 @@ export function MetricsPage() {
   const lines = useMemo(() => (series ? buildLines(series) : []), [series]);
 
   if (!telemetry || metrics.length === 0) {
+    const subtitle = telemetry ? "0 instruments" : "Loading…";
+
     return (
       <Page aria-labelledby="deck-page-metrics-title">
         <PageHeader>
           <PageHeading>
             <PageTitle id="deck-page-metrics-title">Metrics</PageTitle>
-            <PageSubtitle>Loading…</PageSubtitle>
+            <PageSubtitle>{subtitle}</PageSubtitle>
           </PageHeading>
         </PageHeader>
         <PageBody>
