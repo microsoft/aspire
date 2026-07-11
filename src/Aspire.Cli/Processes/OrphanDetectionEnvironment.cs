@@ -94,21 +94,37 @@ internal static class OrphanDetectionEnvironment
             }
         }
 
-        // The start time can be unavailable (target already exited, privileged, etc.); only stamp it
-        // when it is known so a stale/empty value never masquerades as a verified identity.
-        if (startedValue is { } started && (overwrite || !environment.ContainsKey(startedKey)))
+        // The start time can be unavailable (target already exited, privileged, etc.). When replacing
+        // the PID, remove any inherited start time that cannot be replaced so the child does not verify
+        // a mismatched PID/start-time identity.
+        if (startedValue is { } started)
         {
-            environment[startedKey] = started.ToString(CultureInfo.InvariantCulture);
+            if (overwrite || !environment.ContainsKey(startedKey))
+            {
+                environment[startedKey] = started.ToString(CultureInfo.InvariantCulture);
+            }
+        }
+        else if (overwrite)
+        {
+            environment.Remove(startedKey);
         }
 
-        if (isCliParentIdentity &&
-            stableStartTimeUnixMilliseconds is { } stableStarted &&
-            (overwrite || !environment.ContainsKey(KnownConfigNames.CliProcessStartedStable)))
+        if (isCliParentIdentity)
         {
-            // ASPIRE_CLI_STARTED_STABLE is the millisecond-precision companion current AppHosts prefer: 
-            // it survives wall-clock steps and gives exact PID-reuse detection. 
-            // AppHosts <= Aspire ver 13.4 ignore it and fall back to the seconds-based ASPIRE_CLI_STARTED above.
-            environment[KnownConfigNames.CliProcessStartedStable] = stableStarted.ToString(CultureInfo.InvariantCulture);
+            if (stableStartTimeUnixMilliseconds is { } stableStarted)
+            {
+                if (overwrite || !environment.ContainsKey(KnownConfigNames.CliProcessStartedStable))
+                {
+                    // ASPIRE_CLI_STARTED_STABLE is the millisecond-precision companion current AppHosts prefer:
+                    // it survives wall-clock steps and gives exact PID-reuse detection.
+                    // AppHosts <= Aspire ver 13.4 ignore it and fall back to the seconds-based ASPIRE_CLI_STARTED above.
+                    environment[KnownConfigNames.CliProcessStartedStable] = stableStarted.ToString(CultureInfo.InvariantCulture);
+                }
+            }
+            else if (overwrite)
+            {
+                environment.Remove(KnownConfigNames.CliProcessStartedStable);
+            }
         }
     }
 }
