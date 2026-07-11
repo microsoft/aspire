@@ -149,14 +149,31 @@ export interface CommandResponse {
 }
 
 // --- Telemetry (OTLP) ---
+export interface TelemetryAttribute {
+  key: string;
+  value: string;
+}
 export interface LogRecordSummary {
-  timeUnixNano: string;        // string to avoid JS bigint loss
+  timeUnixNano: string;        // event time, or observed time when event time is 0
+  observedTimeUnixNano: string; // string to avoid JS bigint loss
   severity: string | null;     // e.g. "Information", "Error"
   severityNumber: number;
   body: string;
   resourceName: string | null; // from service.name attribute
   traceId: string | null;
   spanId: string | null;
+  parentId: string | null;
+  eventName: string | null;
+  originalFormat: string | null;
+  scopeName: string;           // "unknown" when the scope name is empty
+  scopeVersion: string | null;
+  attributes: TelemetryAttribute[];
+  scopeAttributes: TelemetryAttribute[];
+  resourceAttributes: TelemetryAttribute[];
+  flags: number;
+  droppedAttributesCount: number;
+  scopeDroppedAttributesCount: number;
+  resourceDroppedAttributesCount: number;
 }
 export interface SpanSummary {
   traceId: string;

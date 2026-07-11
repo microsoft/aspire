@@ -128,14 +128,32 @@ export interface CommandResponse {
   message: string | null;
 }
 
+export interface TelemetryAttribute {
+  key: string;
+  value: string;
+}
+
 export interface LogRecordSummary {
   timeUnixNano: string;
+  observedTimeUnixNano: string;
   severity: string | null;
   severityNumber: number;
   body: string;
   resourceName: string | null;
   traceId: string | null;
   spanId: string | null;
+  parentId: string | null;
+  eventName: string | null;
+  originalFormat: string | null;
+  scopeName: string;
+  scopeVersion: string | null;
+  attributes: TelemetryAttribute[];
+  scopeAttributes: TelemetryAttribute[];
+  resourceAttributes: TelemetryAttribute[];
+  flags: number;
+  droppedAttributesCount: number;
+  scopeDroppedAttributesCount: number;
+  resourceDroppedAttributesCount: number;
 }
 
 export interface SpanSummary {

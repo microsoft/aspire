@@ -799,6 +799,7 @@ class MockBackend {
     const spanId = randomHex(16);
     const log: LogRecordSummary = {
       timeUnixNano: toUnixNano(timestampMs),
+      observedTimeUnixNano: toUnixNano(timestampMs),
       severity: isErr ? "Error" : "Information",
       severityNumber: isErr ? 17 : 9,
       body: isErr
@@ -807,6 +808,32 @@ class MockBackend {
       resourceName,
       traceId,
       spanId,
+      parentId: null,
+      eventName: isErr ? "Catalog.RequestFailed" : "Catalog.RequestCompleted",
+      originalFormat: null,
+      scopeName: "Aspire.Deck.MockTelemetry",
+      scopeVersion: "1.0.0",
+      attributes: [
+        { key: "http.request.method", value: isErr ? "POST" : "GET" },
+        { key: "http.response.status_code", value: isErr ? "500" : "200" },
+        ...(isErr
+          ? [
+              { key: "exception.type", value: "System.InvalidOperationException" },
+              { key: "exception.message", value: "The simulated request failed." },
+              { key: "exception.stacktrace", value: "at Catalog.RequestHandler.HandleAsync()" },
+            ]
+          : []),
+      ],
+      scopeAttributes: [{ key: "telemetry.auto.version", value: "1.0.0" }],
+      resourceAttributes: [
+        { key: "service.name", value: resourceName },
+        { key: "service.instance.id", value: `${resourceName}-1` },
+        { key: "deployment.environment.name", value: "Development" },
+      ],
+      flags: 1,
+      droppedAttributesCount: 0,
+      scopeDroppedAttributesCount: 0,
+      resourceDroppedAttributesCount: 0,
     };
     this.telemetry.recentLogs = [log, ...this.telemetry.recentLogs].slice(0, 200);
     this.telemetry.logCount += 1;
