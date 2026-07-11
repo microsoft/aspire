@@ -286,12 +286,12 @@ builder.AddAzureAppServiceEnvironment("infra")
             "webapp_count=0 && slot_count=0 && " +
             "for webapp in $webapps; do " +
             "webapp_count=$((webapp_count + 1)); " +
-            "subnet_id=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --query \"virtualNetworkSubnetId\" -o tsv 2>/dev/null); " +
+            "if ! subnet_id=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --query \"virtualNetworkSubnetId\" -o tsv); then echo \"ERROR: Failed to query VNet integration for $webapp\"; exit 1; fi; " +
             "if [ -n \"$subnet_id\" ]; then echo \"ERROR: $webapp unexpectedly has VNet integration\"; exit 1; fi; " +
             "slots=$(az webapp deployment slot list -g \"$RG_NAME\" -n \"$webapp\" --query \"[].name\" -o tsv 2>/dev/null); " +
             "for slot in $slots; do " +
             "slot_count=$((slot_count + 1)); " +
-            "subnet_id=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --slot \"$slot\" --query \"virtualNetworkSubnetId\" -o tsv 2>/dev/null); " +
+            "if ! subnet_id=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --slot \"$slot\" --query \"virtualNetworkSubnetId\" -o tsv); then echo \"ERROR: Failed to query VNet integration for $webapp/$slot\"; exit 1; fi; " +
             "if [ -n \"$subnet_id\" ]; then echo \"ERROR: $webapp/$slot unexpectedly has VNet integration\"; exit 1; fi; " +
             "done; " +
             "done && " +
