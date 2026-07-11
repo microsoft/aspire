@@ -24,6 +24,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
+using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using DashboardProto = global::Aspire.DashboardService.Proto.V1;
 
@@ -275,7 +276,6 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
         Assert.Equal("no", Assert.Single(response.Headers.GetValues("X-Accel-Buffering")));
-        Assert.Equal("frontend-abc123", requestedResourceName);
 
         await consoleLogs.Writer.WriteAsync(
             [
@@ -288,6 +288,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         using var reader = new StreamReader(stream);
         var responseLine = await reader.ReadLineAsync(cancellationTokenSource.Token)
             ?? throw new InvalidOperationException("The console stream ended before emitting a batch.");
+        Assert.Equal("frontend-abc123", requestedResourceName);
         var actual = JsonNode.Parse(responseLine);
         var expected = JsonNode.Parse(
             """
@@ -409,6 +410,93 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(
             "Live record",
             GetStructuredLogMessage(await reader.ReadLineAsync(cancellationTokenSource.Token)));
+    }
+
+    [Fact]
+    public async Task GetSpans_ReturnsSnapshot()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        var repository = app.Services.GetRequiredService<TelemetryRepository>();
+        AddSpan(
+            repository,
+            startTime: new DateTime(2026, 7, 10, 8, 0, 0, DateTimeKind.Utc),
+            spanId: "span-001");
+        AddSpan(
+            repository,
+            startTime: new DateTime(2026, 7, 10, 8, 0, 1, DateTimeKind.Utc),
+            spanId: "span-002",
+            parentSpanId: "span-001");
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var response = await httpClient.GetAsync(
+            "/api/deck/telemetry/spans?resource=frontend&limit=10").DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        var snapshot = await response.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+        Assert.NotNull(snapshot);
+        Assert.Equal(2, snapshot.TotalCount);
+        Assert.Equal(2, snapshot.ReturnedCount);
+
+        var resourceSpans = Assert.Single(snapshot.Data?.ResourceSpans ?? []);
+        Assert.Equal("frontend", resourceSpans.Resource?.GetServiceName());
+        Assert.Equal("instance-1", resourceSpans.Resource?.GetServiceInstanceId());
+        var scopeSpans = Assert.Single(resourceSpans.ScopeSpans ?? []);
+        Assert.Equal("Stress.Telemetry", scopeSpans.Scope?.Name);
+        Assert.Collection(
+            scopeSpans.Spans ?? [],
+            span =>
+            {
+                Assert.Equal("7370616e2d303031", span.SpanId);
+                Assert.Null(span.ParentSpanId);
+            },
+            span =>
+            {
+                Assert.Equal("7370616e2d303032", span.SpanId);
+                Assert.Equal("7370616e2d303031", span.ParentSpanId);
+            });
+    }
+
+    [Fact]
+    public async Task GetSpans_FollowStreamsBacklogAndLiveRecords()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        var repository = app.Services.GetRequiredService<TelemetryRepository>();
+        AddSpan(
+            repository,
+            startTime: new DateTime(2026, 7, 10, 8, 0, 0, DateTimeKind.Utc),
+            spanId: "span-001");
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var response = await httpClient.GetAsync(
+            "/api/deck/telemetry/spans?resource=frontend&follow=true",
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationTokenSource.Token).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal("no", Assert.Single(response.Headers.GetValues("X-Accel-Buffering")));
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationTokenSource.Token);
+        using var reader = new StreamReader(stream);
+        Assert.Equal(
+            "Test span. Id: span-001",
+            GetSpanName(await reader.ReadLineAsync(cancellationTokenSource.Token)));
+
+        AddSpan(
+            repository,
+            startTime: new DateTime(2026, 7, 10, 8, 0, 1, DateTimeKind.Utc),
+            spanId: "span-002");
+
+        Assert.Equal(
+            "Test span. Id: span-002",
+            GetSpanName(await reader.ReadLineAsync(cancellationTokenSource.Token)));
     }
 
     [Fact]
@@ -655,6 +743,48 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         Assert.NotNull(json);
         var data = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.OtlpTelemetryDataJson);
         return Assert.Single(Assert.Single(data?.ResourceLogs ?? []).ScopeLogs ?? []).LogRecords?.Single().Body?.StringValue;
+    }
+
+    private static void AddSpan(
+        TelemetryRepository repository,
+        DateTime startTime,
+        string spanId,
+        string? parentSpanId = null,
+        string resourceName = "frontend")
+    {
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = TelemetryTestHelpers.CreateResource(name: resourceName, instanceId: "instance-1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = TelemetryTestHelpers.CreateScope("Stress.Telemetry"),
+                        Spans =
+                        {
+                            TelemetryTestHelpers.CreateSpan(
+                                traceId: "0123456789abcdef",
+                                spanId: spanId,
+                                startTime: startTime,
+                                endTime: startTime.AddMilliseconds(50),
+                                parentSpanId: parentSpanId,
+                                kind: Span.Types.SpanKind.Server)
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    private static string? GetSpanName(string? json)
+    {
+        Assert.NotNull(json);
+        // Each span stream item uses the OTLP shape:
+        // {"resourceSpans":[{"scopeSpans":[{"spans":[{"name":"..."}]}]}]}
+        var data = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.OtlpTelemetryDataJson);
+        return Assert.Single(Assert.Single(data?.ResourceSpans ?? []).ScopeSpans ?? []).Spans?.Single().Name;
     }
 
     private static ResourceViewModel CreateResource()

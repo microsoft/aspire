@@ -247,6 +247,44 @@ public static class DashboardEndpointsBuilder
             return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
         });
 
+        group.MapGet("/telemetry/spans", async (
+            TelemetryApiService service,
+            HttpContext httpContext,
+            [FromQuery] string[]? resource,
+            [FromQuery] string? traceId,
+            [FromQuery] bool? hasError,
+            [FromQuery] int? limit,
+            [FromQuery] bool? follow,
+            [FromQuery] string? search,
+            CancellationToken cancellationToken) =>
+        {
+            if (follow == true)
+            {
+                await StreamNdjsonAsync(
+                    httpContext,
+                    service.FollowSpansAsync(resource, traceId, hasError, search, cancellationToken),
+                    cancellationToken,
+                    cacheControl: "no-store").ConfigureAwait(false);
+                return Results.Empty;
+            }
+
+            // Spans can contain arbitrary application data and attributes. The Deck route
+            // uses frontend auth, so its response must not be retained.
+            httpContext.Response.Headers.CacheControl = "no-store";
+            var response = service.GetSpans(resource, traceId, hasError, limit, search);
+            if (response is null)
+            {
+                return Results.NotFound(new ProblemDetails
+                {
+                    Title = "Resource not found",
+                    Detail = "No resource with specified name(s) was found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            return Results.Json(response, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+        });
+
         group.MapDelete("/telemetry/logs", (
             TelemetryApiService service,
             [FromQuery] string? resource) =>
