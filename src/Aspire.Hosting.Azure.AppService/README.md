@@ -106,6 +106,16 @@ var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("env")
 #pragma warning restore ASPIREAZURE003
 ```
 
+**TypeScript**
+
+```typescript
+const vnet = await builder.addAzureVirtualNetwork("vnet");
+const subnet = await vnet.addSubnet("app-service-subnet", "10.0.0.0/24");
+
+const appServiceEnvironment = await builder.addAzureAppServiceEnvironment("env")
+    .withDelegatedSubnet(subnet);
+```
+
 `WithDelegatedSubnet` delegates the subnet to `Microsoft.Web/serverFarms` and configures every generated
 website, deployment slot, and the default Aspire Dashboard to use it for regional virtual network integration.
 The subnet must meet the [Azure App Service regional virtual network integration requirements](https://learn.microsoft.com/azure/app-service/overview-vnet-integration).
