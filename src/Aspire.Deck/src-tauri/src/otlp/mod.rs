@@ -41,6 +41,7 @@ use crate::proto::opentelemetry::proto::common::v1::{
 };
 use crate::proto::opentelemetry::proto::logs::v1::LogRecord;
 use crate::proto::opentelemetry::proto::resource::v1::Resource;
+use crate::proto::opentelemetry::proto::trace::v1::Span;
 
 pub mod metrics;
 pub use metrics::{MetricKind, MetricSeriesResponse};
@@ -57,6 +58,26 @@ const EMIT_DEBOUNCE: Duration = Duration::from_millis(400);
 pub struct TelemetryAttribute {
     pub key: String,
     pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpanEventSummary {
+    pub time_unix_nano: String,
+    pub name: String,
+    pub attributes: Vec<TelemetryAttribute>,
+    pub dropped_attributes_count: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpanLinkSummary {
+    pub trace_id: String,
+    pub span_id: String,
+    pub trace_state: Option<String>,
+    pub attributes: Vec<TelemetryAttribute>,
+    pub dropped_attributes_count: u32,
+    pub flags: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -84,18 +105,33 @@ pub struct LogRecordSummary {
     pub resource_dropped_attributes_count: u32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SpanSummary {
     pub trace_id: String,
     pub span_id: String,
+    pub trace_state: Option<String>,
     pub parent_span_id: Option<String>,
+    pub flags: u32,
     pub name: String,
     pub kind: String,
     pub resource_name: Option<String>,
     pub start_unix_nano: String,
     pub duration_nanos: String,
     pub status_code: Option<String>,
+    pub status_message: Option<String>,
+    pub scope_name: String,
+    pub scope_version: Option<String>,
+    pub attributes: Vec<TelemetryAttribute>,
+    pub scope_attributes: Vec<TelemetryAttribute>,
+    pub resource_attributes: Vec<TelemetryAttribute>,
+    pub dropped_attributes_count: u32,
+    pub scope_dropped_attributes_count: u32,
+    pub resource_dropped_attributes_count: u32,
+    pub events: Vec<SpanEventSummary>,
+    pub dropped_events_count: u32,
+    pub links: Vec<SpanLinkSummary>,
+    pub dropped_links_count: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -274,12 +310,20 @@ impl Default for TelemetryStore {
 
 #[cfg(test)]
 mod tests {
-    use super::{summarize_log_record, LogRecordSummary, TelemetryAttribute, TelemetryStore};
+    use super::{
+        summarize_log_record, summarize_span, LogRecordSummary, SpanEventSummary,
+        SpanLinkSummary, TelemetryAttribute, TelemetryStore,
+    };
     use crate::proto::opentelemetry::proto::common::v1::{
         any_value, AnyValue, InstrumentationScope, KeyValue,
     };
     use crate::proto::opentelemetry::proto::logs::v1::LogRecord;
     use crate::proto::opentelemetry::proto::resource::v1::Resource;
+    use crate::proto::opentelemetry::proto::trace::v1::{
+        span::{Event, Link, SpanKind},
+        status::StatusCode,
+        Span, Status,
+    };
 
     fn string_attribute(key: &str, value: &str) -> KeyValue {
         KeyValue {
@@ -408,6 +452,110 @@ mod tests {
         assert_eq!(summary.scope_dropped_attributes_count, 2);
         assert_eq!(summary.resource_dropped_attributes_count, 3);
         assert_eq!(summary.flags, 1);
+    }
+
+    #[test]
+    fn summarize_span_preserves_detail_metadata() {
+        let resource = Resource {
+            attributes: vec![
+                string_attribute("service.name", "frontend"),
+                string_attribute("deployment.environment.name", "Development"),
+            ],
+            dropped_attributes_count: 3,
+            ..Default::default()
+        };
+        let scope = InstrumentationScope {
+            name: "Aspire.Test".to_string(),
+            version: "1.2.3".to_string(),
+            attributes: vec![string_attribute("scope.attribute", "scope value")],
+            dropped_attributes_count: 2,
+        };
+        let span = Span {
+            trace_id: vec![0xaa; 16],
+            span_id: vec![0xbb; 8],
+            trace_state: "vendor=value".to_string(),
+            parent_span_id: vec![0xcc; 8],
+            flags: 0x101,
+            name: "GET /catalog".to_string(),
+            kind: SpanKind::Client as i32,
+            start_time_unix_nano: 100,
+            end_time_unix_nano: 250,
+            attributes: vec![string_attribute("http.request.method", "GET")],
+            dropped_attributes_count: 1,
+            events: vec![Event {
+                time_unix_nano: 175,
+                name: "exception".to_string(),
+                attributes: vec![string_attribute("exception.type", "System.InvalidOperationException")],
+                dropped_attributes_count: 4,
+            }],
+            dropped_events_count: 5,
+            links: vec![Link {
+                trace_id: vec![0xdd; 16],
+                span_id: vec![0xee; 8],
+                trace_state: "linked=value".to_string(),
+                attributes: vec![string_attribute("link.reason", "batch")],
+                dropped_attributes_count: 6,
+                flags: 1,
+            }],
+            dropped_links_count: 7,
+            status: Some(Status {
+                message: "Catalog unavailable".to_string(),
+                code: StatusCode::Error as i32,
+            }),
+        };
+
+        let summary = summarize_span(
+            &span,
+            Some("frontend".to_string()),
+            Some(&resource),
+            Some(&scope),
+        );
+
+        assert_eq!(summary.trace_id, "aa".repeat(16));
+        assert_eq!(summary.span_id, "bb".repeat(8));
+        assert_eq!(summary.trace_state.as_deref(), Some("vendor=value"));
+        assert_eq!(summary.parent_span_id, Some("cc".repeat(8)));
+        assert_eq!(summary.flags, 0x101);
+        assert_eq!(summary.name, "GET /catalog");
+        assert_eq!(summary.kind, "Client");
+        assert_eq!(summary.resource_name.as_deref(), Some("frontend"));
+        assert_eq!(summary.start_unix_nano, "100");
+        assert_eq!(summary.duration_nanos, "150");
+        assert_eq!(summary.status_code.as_deref(), Some("Error"));
+        assert_eq!(summary.status_message.as_deref(), Some("Catalog unavailable"));
+        assert_eq!(summary.scope_name, "Aspire.Test");
+        assert_eq!(summary.scope_version.as_deref(), Some("1.2.3"));
+        assert_eq!(summary.attributes, vec![TelemetryAttribute {
+            key: "http.request.method".to_string(),
+            value: "GET".to_string(),
+        }]);
+        assert_eq!(summary.scope_attributes.len(), 1);
+        assert_eq!(summary.resource_attributes.len(), 2);
+        assert_eq!(summary.dropped_attributes_count, 1);
+        assert_eq!(summary.scope_dropped_attributes_count, 2);
+        assert_eq!(summary.resource_dropped_attributes_count, 3);
+        assert_eq!(summary.events, vec![SpanEventSummary {
+            time_unix_nano: "175".to_string(),
+            name: "exception".to_string(),
+            attributes: vec![TelemetryAttribute {
+                key: "exception.type".to_string(),
+                value: "System.InvalidOperationException".to_string(),
+            }],
+            dropped_attributes_count: 4,
+        }]);
+        assert_eq!(summary.dropped_events_count, 5);
+        assert_eq!(summary.links, vec![SpanLinkSummary {
+            trace_id: "dd".repeat(16),
+            span_id: "ee".repeat(8),
+            trace_state: Some("linked=value".to_string()),
+            attributes: vec![TelemetryAttribute {
+                key: "link.reason".to_string(),
+                value: "batch".to_string(),
+            }],
+            dropped_attributes_count: 6,
+            flags: 1,
+        }]);
+        assert_eq!(summary.dropped_links_count, 7);
     }
 }
 
@@ -716,7 +864,70 @@ fn status_label(status: Option<&crate::proto::opentelemetry::proto::trace::v1::S
     match StatusCode::try_from(status.code) {
         Ok(StatusCode::Ok) => Some("Ok".into()),
         Ok(StatusCode::Error) => Some("Error".into()),
-        _ => Some("Unset".into()),
+        _ => None,
+    }
+}
+
+fn summarize_span(
+    span: &Span,
+    resource_name: Option<String>,
+    resource: Option<&Resource>,
+    scope: Option<&InstrumentationScope>,
+) -> SpanSummary {
+    let duration = span.end_time_unix_nano.saturating_sub(span.start_time_unix_nano);
+
+    SpanSummary {
+        trace_id: hex::encode(&span.trace_id),
+        span_id: hex::encode(&span.span_id),
+        trace_state: non_empty(&span.trace_state),
+        parent_span_id: (!span.parent_span_id.is_empty()).then(|| hex::encode(&span.parent_span_id)),
+        flags: span.flags,
+        name: if span.name.is_empty() { "unknown span".to_string() } else { span.name.clone() },
+        kind: span_kind_label(span.kind),
+        resource_name,
+        start_unix_nano: span.start_time_unix_nano.to_string(),
+        duration_nanos: duration.to_string(),
+        status_code: status_label(span.status.as_ref()),
+        status_message: span.status.as_ref().and_then(|status| non_empty(&status.message)),
+        scope_name: scope
+            .map(|scope| scope.name.as_str())
+            .filter(|name| !name.is_empty())
+            .unwrap_or("unknown")
+            .to_string(),
+        scope_version: scope.and_then(|scope| non_empty(&scope.version)),
+        attributes: telemetry_attributes(&span.attributes, &[]),
+        scope_attributes: scope
+            .map(|scope| telemetry_attributes(&scope.attributes, &[]))
+            .unwrap_or_default(),
+        resource_attributes: resource
+            .map(|resource| telemetry_attributes(&resource.attributes, &[]))
+            .unwrap_or_default(),
+        dropped_attributes_count: span.dropped_attributes_count,
+        scope_dropped_attributes_count: scope
+            .map(|scope| scope.dropped_attributes_count)
+            .unwrap_or_default(),
+        resource_dropped_attributes_count: resource
+            .map(|resource| resource.dropped_attributes_count)
+            .unwrap_or_default(),
+        events: span.events.iter().map(|event| SpanEventSummary {
+            time_unix_nano: event.time_unix_nano.to_string(),
+            name: if event.name.is_empty() { "unknown event".to_string() } else { event.name.clone() },
+            attributes: telemetry_attributes(&event.attributes, &[]),
+            dropped_attributes_count: event.dropped_attributes_count,
+        }).collect(),
+        dropped_events_count: span.dropped_events_count,
+        links: span.links.iter()
+            .filter(|link| !link.trace_id.is_empty() && !link.span_id.is_empty())
+            .map(|link| SpanLinkSummary {
+                trace_id: hex::encode(&link.trace_id),
+                span_id: hex::encode(&link.span_id),
+                trace_state: non_empty(&link.trace_state),
+                attributes: telemetry_attributes(&link.attributes, &[]),
+                dropped_attributes_count: link.dropped_attributes_count,
+                flags: link.flags,
+            })
+            .collect(),
+        dropped_links_count: span.dropped_links_count,
     }
 }
 
@@ -732,22 +943,12 @@ fn ingest_traces(shared: &OtlpShared, request: ExportTraceServiceRequest) {
             let mut store = session.telemetry.lock().unwrap();
             for scope_spans in &resource_spans.scope_spans {
                 for span in &scope_spans.spans {
-                    let duration = span.end_time_unix_nano.saturating_sub(span.start_time_unix_nano);
-                    store.push_span(SpanSummary {
-                        trace_id: hex::encode(&span.trace_id),
-                        span_id: hex::encode(&span.span_id),
-                        parent_span_id: if span.parent_span_id.is_empty() {
-                            None
-                        } else {
-                            Some(hex::encode(&span.parent_span_id))
-                        },
-                        name: span.name.clone(),
-                        kind: span_kind_label(span.kind),
-                        resource_name: res_name.clone(),
-                        start_unix_nano: span.start_time_unix_nano.to_string(),
-                        duration_nanos: duration.to_string(),
-                        status_code: status_label(span.status.as_ref()),
-                    });
+                    store.push_span(summarize_span(
+                        span,
+                        res_name.clone(),
+                        resource_spans.resource.as_ref(),
+                        scope_spans.scope.as_ref(),
+                    ));
                 }
             }
         }

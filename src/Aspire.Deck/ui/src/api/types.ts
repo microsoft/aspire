@@ -156,16 +156,47 @@ export interface LogRecordSummary {
   resourceDroppedAttributesCount: number;
 }
 
+export interface SpanEventSummary {
+  timeUnixNano: string;
+  name: string;
+  attributes: TelemetryAttribute[];
+  droppedAttributesCount: number;
+}
+
+export interface SpanLinkSummary {
+  traceId: string;
+  spanId: string;
+  traceState: string | null;
+  attributes: TelemetryAttribute[];
+  droppedAttributesCount: number;
+  flags: number;
+}
+
 export interface SpanSummary {
   traceId: string;
   spanId: string;
+  traceState: string | null;
   parentSpanId: string | null;
+  flags: number;
   name: string;
   kind: string;
   resourceName: string | null;
   startUnixNano: string;
   durationNanos: string;
   statusCode: string | null;
+  statusMessage: string | null;
+  scopeName: string;
+  scopeVersion: string | null;
+  attributes: TelemetryAttribute[];
+  scopeAttributes: TelemetryAttribute[];
+  resourceAttributes: TelemetryAttribute[];
+  droppedAttributesCount: number;
+  scopeDroppedAttributesCount: number;
+  resourceDroppedAttributesCount: number;
+  events: SpanEventSummary[];
+  droppedEventsCount: number;
+  links: SpanLinkSummary[];
+  droppedLinksCount: number;
 }
 
 export type MetricKind = "gauge" | "counter" | "upDownCounter" | "histogram";

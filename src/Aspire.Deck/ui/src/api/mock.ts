@@ -868,13 +868,54 @@ class MockBackend {
     const newSpans: SpanSummary[] = segments.map((s) => ({
       traceId,
       spanId: s.spanId,
+      traceState: "vendor=mock",
       parentSpanId: s.parentSpanId,
+      flags: 1,
       name: s.name,
       kind: s.kind,
       resourceName: s.resource,
       startUnixNano: at(s.start),
       durationNanos: durNanos(s.dur),
       statusCode: s.error ? "Error" : "Ok",
+      statusMessage: s.error ? "The simulated dependency failed." : null,
+      scopeName: "Aspire.Deck.MockTelemetry",
+      scopeVersion: "1.0.0",
+      attributes: [
+        { key: "code.function.name", value: s.name },
+        { key: "server.address", value: s.resource },
+      ],
+      scopeAttributes: [{ key: "telemetry.auto.version", value: "1.0.0" }],
+      resourceAttributes: [
+        { key: "service.name", value: s.resource },
+        { key: "service.instance.id", value: `${s.resource}-1` },
+        { key: "deployment.environment.name", value: "Development" },
+      ],
+      droppedAttributesCount: s.error ? 1 : 0,
+      scopeDroppedAttributesCount: 0,
+      resourceDroppedAttributesCount: 0,
+      events: s.error
+        ? [{
+            timeUnixNano: at(s.start + s.dur),
+            name: "exception",
+            attributes: [
+              { key: "exception.type", value: "System.InvalidOperationException" },
+              { key: "exception.message", value: "The simulated dependency failed." },
+            ],
+            droppedAttributesCount: 0,
+          }]
+        : [],
+      droppedEventsCount: 0,
+      links: s.parentSpanId === null && telemetryIndex > 0
+        ? [{
+            traceId: indexedHex(telemetryIndex, 32),
+            spanId: indexedHex((telemetryIndex - 1) * 8 + 1, 16),
+            traceState: "vendor=mock",
+            attributes: [{ key: "link.reason", value: "previous request" }],
+            droppedAttributesCount: 0,
+            flags: 1,
+          }]
+        : [],
+      droppedLinksCount: 0,
     }));
     this.telemetry.recentSpans = [...newSpans, ...this.telemetry.recentSpans].slice(0, 200);
     this.telemetry.spanCount += newSpans.length;

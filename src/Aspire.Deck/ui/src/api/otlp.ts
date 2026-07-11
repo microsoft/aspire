@@ -56,14 +56,38 @@ interface OtlpSpanStatus {
   message?: string;
 }
 
+interface OtlpSpanEvent {
+  timeUnixNano?: string;
+  name?: string;
+  attributes?: OtlpKeyValue[];
+  droppedAttributesCount?: number;
+}
+
+interface OtlpSpanLink {
+  traceId?: string;
+  spanId?: string;
+  traceState?: string;
+  attributes?: OtlpKeyValue[];
+  droppedAttributesCount?: number;
+  flags?: number;
+}
+
 interface OtlpSpan {
   traceId?: string;
   spanId?: string;
+  traceState?: string;
   parentSpanId?: string;
+  flags?: number;
   name?: string;
   kind?: number;
   startTimeUnixNano?: string;
   endTimeUnixNano?: string;
+  attributes?: OtlpKeyValue[];
+  droppedAttributesCount?: number;
+  events?: OtlpSpanEvent[];
+  droppedEventsCount?: number;
+  links?: OtlpSpanLink[];
+  droppedLinksCount?: number;
   status?: OtlpSpanStatus;
 }
 
@@ -276,13 +300,45 @@ export function getSpanSummaries(data: OtlpTelemetryData | undefined): OtlpSpanS
           recordKey: `${span.traceId}\u0000${span.spanId}`,
           traceId: span.traceId,
           spanId: span.spanId,
+          traceState: span.traceState?.trim() || null,
           parentSpanId: span.parentSpanId?.trim() || null,
+          flags: span.flags ?? 0,
           name: span.name?.trim() || "unknown span",
           kind: spanKind(span.kind),
           resourceName,
           startUnixNano,
           durationNanos: spanDuration(startUnixNano, endUnixNano),
           statusCode: spanStatus(span.status?.code),
+          statusMessage: span.status?.message?.trim() || null,
+          scopeName: scopeSpans.scope?.name?.trim() || "unknown",
+          scopeVersion: scopeSpans.scope?.version?.trim() || null,
+          attributes: toTelemetryAttributes(span.attributes),
+          scopeAttributes: toTelemetryAttributes(scopeSpans.scope?.attributes),
+          resourceAttributes: toTelemetryAttributes(resourceSpans.resource?.attributes),
+          droppedAttributesCount: span.droppedAttributesCount ?? 0,
+          scopeDroppedAttributesCount: scopeSpans.scope?.droppedAttributesCount ?? 0,
+          resourceDroppedAttributesCount: resourceSpans.resource?.droppedAttributesCount ?? 0,
+          events: (span.events ?? []).map((event) => ({
+            timeUnixNano: event.timeUnixNano ?? "0",
+            name: event.name?.trim() || "unknown event",
+            attributes: toTelemetryAttributes(event.attributes),
+            droppedAttributesCount: event.droppedAttributesCount ?? 0,
+          })),
+          droppedEventsCount: span.droppedEventsCount ?? 0,
+          links: (span.links ?? []).flatMap((link) => {
+            if (!link.traceId || !link.spanId) {
+              return [];
+            }
+            return [{
+              traceId: link.traceId,
+              spanId: link.spanId,
+              traceState: link.traceState?.trim() || null,
+              attributes: toTelemetryAttributes(link.attributes),
+              droppedAttributesCount: link.droppedAttributesCount ?? 0,
+              flags: link.flags ?? 0,
+            }];
+          }),
+          droppedLinksCount: span.droppedLinksCount ?? 0,
         });
       }
     }
