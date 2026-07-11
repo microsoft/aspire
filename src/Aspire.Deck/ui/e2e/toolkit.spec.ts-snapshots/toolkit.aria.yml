@@ -38,7 +38,9 @@
     - checkbox "Select all resources" [checked=mixed]
     - text: Select all resources
     - checkbox "Unavailable option" [disabled]
-    - text: Unavailable option API key •••••••••••••••
+    - text: Unavailable option
+    - switch "Pause incoming data"
+    - text: Pause incoming data API key •••••••••••••••
     - button "Reveal API key"
   - region "Navigation and disclosure":
     - heading "Navigation and disclosure" [level=2]

@@ -35,6 +35,7 @@ import {
   StateDot,
   StopIcon,
   SunIcon,
+  Switch,
   Tabs,
   type Column,
   type ConfirmRequest,
@@ -99,6 +100,7 @@ export function ToolkitPlayground({
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [environment, setEnvironment] = useState("development");
   const [includeHidden, setIncludeHidden] = useState(false);
+  const [pauseIncoming, setPauseIncoming] = useState(false);
   const [selectedTab, setSelectedTab] = useState("overview");
   const [openAccordionItems, setOpenAccordionItems] = useState(["environment"]);
   const [pageRefreshCount, setPageRefreshCount] = useState(0);
@@ -333,6 +335,11 @@ export function ToolkitPlayground({
             />
             <Checkbox label="Select all resources" checked={false} indeterminate />
             <Checkbox label="Unavailable option" checked={false} disabled />
+            <Switch
+              label="Pause incoming data"
+              checked={pauseIncoming}
+              onCheckedChange={setPauseIncoming}
+            />
             <div className="toolkit-secret-sample">
               <span>API key</span>
               <SecretValue

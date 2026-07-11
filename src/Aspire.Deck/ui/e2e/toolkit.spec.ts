@@ -314,7 +314,7 @@ test(`${features("TK-NOTIFICATION-001")} exercises reusable notification actions
   await expect(status).toHaveText("Notification dismissed");
 });
 
-test(`${features("TK-SELECT-001", "TK-CHECKBOX-001", "TK-SECRET-001")} exercises input and sensitive-value controls`, async ({ page }) => {
+test(`${features("TK-SELECT-001", "TK-CHECKBOX-001", "TK-SWITCH-001", "TK-SECRET-001")} exercises input and sensitive-value controls`, async ({ page }) => {
   const inputs = page.getByRole("region", { name: "Inputs" });
   const environment = inputs.getByRole("combobox", { name: "Environment" });
   await expect(environment).toHaveValue("development");
@@ -335,6 +335,11 @@ test(`${features("TK-SELECT-001", "TK-CHECKBOX-001", "TK-SECRET-001")} exercises
   await expect(includeHidden).toBeChecked();
   await expect(inputs.getByRole("checkbox", { name: "Select all resources" })).toBeChecked({ indeterminate: true });
   await expect(inputs.getByRole("checkbox", { name: "Unavailable option" })).toBeDisabled();
+
+  const pause = inputs.getByRole("switch", { name: "Pause incoming data" });
+  await expect(pause).not.toBeChecked();
+  await pause.check();
+  await expect(pause).toBeChecked();
 
   await expect(inputs.getByText("deck-secret-123", { exact: true })).toHaveCount(0);
   await inputs.getByRole("button", { name: "Reveal API key" }).click();

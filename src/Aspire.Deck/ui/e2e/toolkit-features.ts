@@ -14,6 +14,7 @@ export const toolkitFeatures = {
   "TK-NOTIFICATION-001": "Notifications expose semantic intent, actions, links, and explicit dismissal.",
   "TK-SELECT-001": "Select controls expose labels, placeholders, disabled options, and controlled values.",
   "TK-CHECKBOX-001": "Checkboxes support checked, unchecked, mixed, and disabled states.",
+  "TK-SWITCH-001": "Switches expose an accessible binary state and controlled updates.",
   "TK-SECRET-001": "Sensitive values are masked by default and can be explicitly revealed and hidden.",
   "TK-TABS-001": "Tabs support pointer and keyboard selection while preserving inactive panel state.",
   "TK-ACCORDION-001": "Accordion sections expose controlled expanded state, counts, and disclosure semantics.",
