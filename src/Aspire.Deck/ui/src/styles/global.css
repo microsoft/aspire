@@ -293,7 +293,9 @@ a:focus-visible {
 /* ---------- Icon button / theme toggle ---------- */
 .deck-provider button.icon-btn {
   width: 34px;
+  min-width: 34px;
   height: 34px;
+  padding: 0;
   border-radius: var(--radius-sm);
   display: grid;
   place-items: center;
@@ -482,6 +484,21 @@ a:focus-visible {
 .structured-logs__pause,
 .structured-logs__toolbar .command-menu-root {
   flex: 0 0 auto;
+}
+.structured-log-actions {
+  display: flex;
+  justify-content: center;
+}
+.structured-log-actions .command-menu-root {
+  flex: none;
+}
+.structured-logs table.data th:last-child,
+.structured-logs table.data td:last-child {
+  padding-inline: 6px;
+  text-align: center;
+}
+.cell-trace {
+  white-space: nowrap;
 }
 
 /* ---------- Search box ---------- */
@@ -699,6 +716,12 @@ a:focus-visible {
 .deck-provider button.btn.btn--sm {
   padding: 5px 10px;
   font-size: 12px;
+}
+.deck-provider button.btn.btn--sm.icon-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
 }
 
 /* ---------- Data table ---------- */
@@ -964,6 +987,42 @@ table.data tbody tr.selected {
   padding: 14px 20px;
   border-top: 1px solid var(--border);
   background: var(--bg-surface);
+}
+.structured-log-details {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+.structured-log-details__toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+.structured-log-details__toolbar .searchbox {
+  flex: 1 1 180px;
+  min-width: 160px;
+  margin-inline-start: auto;
+}
+.structured-log-details__toolbar .command-menu-root {
+  flex: none;
+}
+.structured-log-details__meta {
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.structured-log-details__meta strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.structured-log-details__sections .deck-property-grid {
+  grid-template-columns: minmax(130px, 36%) minmax(0, 1fr);
+}
+.structured-log-details .deck-mark {
+  padding: 0 1px;
 }
 
 /* ---------- Key/value list ---------- */

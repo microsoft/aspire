@@ -281,7 +281,7 @@ test(`${features("STRESS-CONSOLE-001")} renders a live resource console backlog`
   await attachScreenshot(page, testInfo, "stress-live-console");
 });
 
-test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-001", "STRESS-STRUCTURED-LOG-PAUSE-001", "STRESS-STRUCTURED-LOG-CLEAR-001")} replays, filters, pauses, and clears live structured logs`, async ({ page }, testInfo) => {
+test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-001", "STRESS-STRUCTURED-LOG-PAUSE-001", "STRESS-STRUCTURED-LOG-CLEAR-001", "STRESS-STRUCTURED-LOG-DETAILS-001")} replays, inspects, filters, pauses, and clears live structured logs`, async ({ page }, testInfo) => {
   test.setTimeout(75_000);
   await navigationButton(page, "Structured Logs").click();
   const logs = page.getByRole("main").getByRole("region", { name: "Structured Logs" });
@@ -290,7 +290,14 @@ test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-0
   const subtitle = logs.locator(".page__subtitle");
 
   await runTelemetryServiceLifecycleCommand(page);
-  await expect(table.getByRole("columnheader")).toHaveText(["Time", "Severity", "Resource", "Message"]);
+  await expect(table.getByRole("columnheader")).toHaveText([
+    "Resource",
+    "Level",
+    "Timestamp",
+    "Message",
+    "Trace",
+    "Actions",
+  ]);
   await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(10);
   await expect(table).toContainText("stress-telemetryservice");
   await expect(table).toContainText("Application started. Press Ctrl+C to shut down.");
@@ -311,7 +318,7 @@ test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-0
   await resource.selectOption("stress-telemetryservice");
   await expect.poll(() => rows.count()).toBeGreaterThan(0);
   await expect.poll(async () =>
-    (await rows.locator("td:nth-child(3)").allTextContents()).every((value) => value.trim() === "stress-telemetryservice"),
+    (await rows.locator("td:nth-child(1)").allTextContents()).every((value) => value.trim() === "stress-telemetryservice"),
   ).toBe(true);
   await resource.selectOption("all");
 
@@ -336,7 +343,7 @@ test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-0
   await page.setViewportSize({ width: 1280, height: 900 });
   const geometry = await page.evaluate(() => {
     const tableWrap = document.querySelector<HTMLElement>(".table-wrap");
-    const time = document.querySelector<HTMLElement>("tbody tr td:first-child .cell-time");
+    const time = document.querySelector<HTMLElement>("tbody tr td:nth-child(3) .cell-time");
     if (tableWrap === null || time === null) {
       throw new Error("The structured-log table is missing its expected layout elements.");
     }
@@ -353,6 +360,28 @@ test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-0
   expect(geometry.timeWhiteSpace).toBe("nowrap");
 
   await attachScreenshot(page, testInfo, "stress-live-structured-logs");
+
+  const lifecycleRow = rows.filter({ hasText: "Application started. Press Ctrl+C to shut down." }).first();
+  await expect(lifecycleRow).toBeVisible();
+  await lifecycleRow.click();
+  const details = page.getByRole("dialog", { name: "Structured log entry details" });
+  await expect(details.getByRole("group", { name: "Log entry properties" })).toContainText(
+    "Application started. Press Ctrl+C to shut down.",
+  );
+  await expect(details.getByRole("group", { name: "Context properties" })).toContainText("Category");
+  await expect(details.getByRole("group", { name: "Resource properties" })).toContainText(
+    "service.namestress-telemetryservice",
+  );
+  await attachScreenshot(page, testInfo, "stress-live-structured-log-details");
+
+  await details.getByRole("button", { name: "Log actions" }).click();
+  await page.getByRole("menu", { name: "Log actions" }).getByRole("menuitem", { name: "View JSON" }).click();
+  const jsonViewer = page.getByRole("dialog", { name: /\.json$/ });
+  await expect(jsonViewer.locator("pre[data-format='json']")).toContainText(
+    '"name": "stress-telemetryservice"',
+  );
+  await jsonViewer.getByRole("button", { name: "Close visualizer" }).click();
+  await details.getByRole("button", { name: "Close details" }).click();
 
   await logs.getByRole("button", { name: "Clear structured logs" }).click();
   await page.getByRole("menuitem", { name: "Clear stress-telemetryservice" }).click();
@@ -375,6 +404,7 @@ test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-0
 });
 
 test(`${features("STRESS-NAVIGATION-001", "STRESS-EMPTY-METRICS-001")} reaches every page against the live dashboard`, async ({ page }) => {
+  allowNavigationAbort.add(page);
   const pages = [
     "Parameters",
     "Console",

@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { clearStructuredLogs } from "../api/deck";
 import type { LogRecordSummary, TelemetrySummary } from "../api/types";
+import { StructuredLogActions, formatStructuredLogJson } from "../components/StructuredLogActions";
+import { StructuredLogDetailsDrawer } from "../components/StructuredLogDetailsDrawer";
 import { useTelemetry } from "../lib/useDeckEvent";
-import { dateFromUnixNano, formatTimeWithMillis } from "../lib/format";
+import { dateFromUnixNano, formatTimeWithMillis, shortId } from "../lib/format";
 import {
   Badge,
   CommandMenu,
@@ -18,7 +20,9 @@ import {
   SearchBox,
   Select,
   Switch,
+  TextViewerDialog,
   type Column,
+  type TextViewerRequest,
 } from "../toolkit";
 
 const SEVERITIES = ["All", "Trace", "Debug", "Information", "Warning", "Error", "Critical"];
@@ -46,6 +50,10 @@ function severityTone(severity: string | null): "neutral" | "info" | "warning" |
   }
 }
 
+function logKey(log: LogRecordSummary): string {
+  return `${log.resourceName ?? ""}-${log.timeUnixNano}-${log.spanId ?? ""}-${log.severityNumber}-${log.body}`;
+}
+
 export function StructuredLogsPage() {
   const telemetry = useTelemetry();
   const [query, setQuery] = useState("");
@@ -54,6 +62,8 @@ export function StructuredLogsPage() {
   const [pausedSnapshot, setPausedSnapshot] = useState<TelemetrySummary | null>(null);
   const [clearing, setClearing] = useState(false);
   const [clearStatus, setClearStatus] = useState<{ message: string; error: boolean } | null>(null);
+  const [selectedLog, setSelectedLog] = useState<LogRecordSummary | null>(null);
+  const [textViewer, setTextViewer] = useState<TextViewerRequest | null>(null);
 
   const displayedTelemetry = pausedSnapshot ?? telemetry;
   const logs = displayedTelemetry?.recentLogs ?? [];
@@ -80,7 +90,11 @@ export function StructuredLogsPage() {
       if (trimmed) {
         return (
           log.body.toLowerCase().includes(trimmed) ||
-          (log.resourceName ?? "").toLowerCase().includes(trimmed)
+          (log.resourceName ?? "").toLowerCase().includes(trimmed) ||
+          (log.eventName ?? "").toLowerCase().includes(trimmed) ||
+          log.scopeName.toLowerCase().includes(trimmed) ||
+          [...log.attributes, ...log.scopeAttributes, ...log.resourceAttributes].some((attribute) =>
+            attribute.key.toLowerCase().includes(trimmed) || attribute.value.toLowerCase().includes(trimmed))
         );
       }
       return true;
@@ -89,29 +103,66 @@ export function StructuredLogsPage() {
 
   const columns: Column<LogRecordSummary>[] = [
     {
-      key: "time",
-      header: "Time",
-      width: "150px",
-      render: (l) => (
-        <span className="cell-mono cell-muted cell-time">{formatTimeWithMillis(dateFromUnixNano(l.timeUnixNano))}</span>
-      ),
+      key: "resource",
+      header: "Resource",
+      width: "200px",
+      render: (log) => <span className="cell-muted">{log.resourceName ?? "—"}</span>,
     },
     {
       key: "severity",
-      header: "Severity",
+      header: "Level",
       width: "120px",
-      render: (l) => <Badge tone={severityTone(l.severity)}>{l.severity ?? "Unknown"}</Badge>,
+      render: (log) => <Badge tone={severityTone(log.severity)}>{log.severity ?? "Unknown"}</Badge>,
     },
     {
-      key: "resource",
-      header: "Resource",
-      width: "150px",
-      render: (l) => <span className="cell-muted">{l.resourceName ?? "—"}</span>,
+      key: "time",
+      header: "Timestamp",
+      width: "140px",
+      render: (log) => (
+        <span className="cell-mono cell-muted cell-time">{formatTimeWithMillis(dateFromUnixNano(log.timeUnixNano))}</span>
+      ),
     },
     {
       key: "body",
       header: "Message",
-      render: (l) => <span className="cell-mono cell-log-message">{l.body}</span>,
+      render: (log) => <span className="cell-mono cell-log-message">{log.body}</span>,
+    },
+    {
+      key: "trace",
+      header: "Trace",
+      width: "90px",
+      render: (log) => (
+        <span className="cell-mono cell-muted cell-trace" title={log.traceId ?? undefined}>
+          {shortId(log.traceId)}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      width: "56px",
+      minWidth: "56px",
+      render: (log) => (
+        <div
+          className="structured-log-actions"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <StructuredLogActions
+            onViewDetails={() => setSelectedLog(log)}
+            onViewMessage={() => setTextViewer({
+              title: "Structured log message",
+              value: log.body,
+              format: "text",
+            })}
+            onViewJson={() => setTextViewer({
+              title: `${log.eventName ?? "structured-log"}.json`,
+              value: formatStructuredLogJson(log),
+              format: "json",
+            })}
+          />
+        </div>
+      ),
     },
   ];
 
@@ -136,7 +187,7 @@ export function StructuredLogsPage() {
   };
 
   return (
-    <Page aria-labelledby="deck-page-structured-logs-title">
+    <Page className="structured-logs" aria-labelledby="deck-page-structured-logs-title">
       <PageHeader>
         <PageHeading>
           <PageTitle id="deck-page-structured-logs-title">Structured Logs</PageTitle>
@@ -204,7 +255,9 @@ export function StructuredLogsPage() {
         <DataTable
           columns={columns}
           rows={filtered}
-          rowKey={(l) => `${l.resourceName ?? ""}-${l.timeUnixNano}-${l.spanId ?? ""}-${l.severityNumber}-${l.body}`}
+          rowKey={logKey}
+          onRowClick={setSelectedLog}
+          isSelected={(log) => selectedLog !== null && logKey(log) === logKey(selectedLog)}
           emptyMessage={telemetry === null
             ? "Waiting for telemetry…"
             : logs.length === 0
@@ -219,6 +272,25 @@ export function StructuredLogsPage() {
           {clearStatus.message}
         </div>
       ) : null}
+
+      {selectedLog ? (
+        <StructuredLogDetailsDrawer
+          log={selectedLog}
+          onClose={() => setSelectedLog(null)}
+          onViewMessage={() => setTextViewer({
+            title: "Structured log message",
+            value: selectedLog.body,
+            format: "text",
+          })}
+          onViewJson={() => setTextViewer({
+            title: `${selectedLog.eventName ?? "structured-log"}.json`,
+            value: formatStructuredLogJson(selectedLog),
+            format: "json",
+          })}
+        />
+      ) : null}
+
+      <TextViewerDialog request={textViewer} onClose={() => setTextViewer(null)} />
     </Page>
   );
 }

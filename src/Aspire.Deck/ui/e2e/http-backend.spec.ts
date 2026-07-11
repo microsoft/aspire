@@ -349,7 +349,7 @@ test(`${features("HTTP-CONSOLE-001")} streams resource console logs through the 
   });
 });
 
-test(`${features("HTTP-STRUCTURED-LOGS-001")} streams OTLP structured logs through the HTTP backend`, async ({ page }, testInfo) => {
+test(`${features("HTTP-STRUCTURED-LOGS-001", "HTTP-STRUCTURED-LOG-DETAILS-001")} streams detailed OTLP structured logs through the HTTP backend`, async ({ page }, testInfo) => {
   let structuredLogRequests = 0;
   await page.route("**/api/deck/config", async (route) => {
     await route.fulfill({ json: config });
@@ -388,16 +388,37 @@ test(`${features("HTTP-STRUCTURED-LOGS-001")} streams OTLP structured logs throu
         JSON.stringify({
           resourceLogs: [{
             resource: {
-              attributes: [{ key: "service.name", value: { stringValue: "stress-worker" } }],
+              attributes: [
+                { key: "service.name", value: { stringValue: "stress-worker" } },
+                { key: "service.instance.id", value: { stringValue: "worker-1" } },
+                { key: "deployment.environment.name", value: { stringValue: "Development" } },
+              ],
+              droppedAttributesCount: 4,
             },
             scopeLogs: [{
-              scope: { name: "Stress.Telemetry" },
+              scope: {
+                name: "Stress.Telemetry",
+                version: "2.1.0",
+                attributes: [{ key: "scope.attribute", value: { stringValue: "scope value" } }],
+                droppedAttributesCount: 3,
+              },
               logRecords: [{
-                timeUnixNano: "1783670401000000000",
+                timeUnixNano: "0",
+                observedTimeUnixNano: "1783670401000000000",
                 severityNumber: 17,
-                severityText: "Error",
+                severityText: "ERROR",
                 body: { stringValue: "Queue processing failed" },
-                attributes: [{ key: "aspire.log_id", value: { stringValue: "42" } }],
+                attributes: [
+                  { key: "aspire.log_id", value: { stringValue: "42" } },
+                  { key: "event.name", value: { stringValue: "Worker.QueueFailed" } },
+                  { key: "exception.type", value: { stringValue: "System.TimeoutException" } },
+                  { key: "exception.message", value: { stringValue: "Queue receive timed out." } },
+                  { key: "messaging.destination.name", value: { stringValue: "orders" } },
+                  { key: "ParentId", value: { stringValue: "parent-span" } },
+                  { key: "{OriginalFormat}", value: { stringValue: "Queue {QueueName} failed" } },
+                ],
+                droppedAttributesCount: 2,
+                flags: 1,
                 traceId: "fedcba9876543210fedcba9876543210",
                 spanId: "fedcba9876543210",
               }],
@@ -414,7 +435,14 @@ test(`${features("HTTP-STRUCTURED-LOGS-001")} streams OTLP structured logs throu
 
   const logs = page.getByRole("main").getByRole("region", { name: "Structured Logs" });
   const table = logs.getByRole("table");
-  await expect(table.getByRole("columnheader")).toHaveText(["Time", "Severity", "Resource", "Message"]);
+  await expect(table.getByRole("columnheader")).toHaveText([
+    "Resource",
+    "Level",
+    "Timestamp",
+    "Message",
+    "Trace",
+    "Actions",
+  ]);
   await expect(table.locator("tbody tr")).toHaveCount(2);
   await expect(table).toContainText("HTTP request started");
   await expect(table).toContainText("Queue processing failed");
@@ -424,10 +452,32 @@ test(`${features("HTTP-STRUCTURED-LOGS-001")} streams OTLP structured logs throu
   await expect(logs.locator(".page__subtitle")).toHaveText("2 total · showing 2");
   expect(structuredLogRequests).toBe(1);
 
+  await table.locator("tbody tr", { hasText: "Queue processing failed" }).click();
+  const details = page.getByRole("dialog", { name: "Structured log entry details" });
+  await expect(details).toContainText("Worker.QueueFailed");
+  await expect(details).toContainText("Stress.Telemetry");
+  await expect(details.getByRole("group", { name: "Log entry properties" })).toContainText(
+    "messaging.destination.nameorders",
+  );
+  await expect(details.getByRole("group", { name: "Context properties" })).toContainText(
+    "Scope version2.1.0",
+  );
+  await expect(details.getByRole("group", { name: "Context properties" })).toContainText(
+    "ParentIdparent-span",
+  );
+  await expect(details.getByRole("group", { name: "Exception properties" })).toContainText(
+    "exception.typeSystem.TimeoutException",
+  );
+  await expect(details.getByRole("group", { name: "Resource properties" })).toContainText(
+    "deployment.environment.nameDevelopment",
+  );
+  await expect(details.getByText("42", { exact: true })).toHaveCount(0);
+
   await testInfo.attach("http-backend-structured-logs.png", {
     body: await page.screenshot({ animations: "disabled", fullPage: true }),
     contentType: "image/png",
   });
+  await details.getByRole("button", { name: "Close details" }).click();
 });
 
 test(`${features("HTTP-STRUCTURED-LOG-CLEAR-001")} clears selected and all structured logs through the HTTP backend`, async ({ page }, testInfo) => {

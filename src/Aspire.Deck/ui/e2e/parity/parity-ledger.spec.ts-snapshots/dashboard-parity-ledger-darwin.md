@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 32
+- React covered: 34
 - React partial: 43
-- React missing: 82
+- React missing: 80
 - Legacy black-box scenarios pending: 80
-- React parity gaps: 125
+- React parity gaps: 123
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -114,7 +114,7 @@
 | CONSOLE-TERMINAL-SIZE-001 | console | `/consolelogs` | PENDING | missing | - | Interactive terminal column and row presets update the remote terminal size. |
 | CONSOLE-VIRTUALIZATION-001 | console | `/consolelogs` | PENDING | partial | CONSOLE-STREAM-001 | Large console streams remain responsive and preserve stable line numbers. |
 | CONSOLE-ROUTE-001 | console | `/consolelogs/resource/{name}` | PENDING | missing | - | Selected resource and console options are deep-linkable and restorable. |
-| LOG-LIST-001 | structured-logs | `/structuredlogs` | structured-logs | partial | LOG-LIST-001 | Structured logs render resource, level, timestamp, message, trace, and actions columns. |
+| LOG-LIST-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIST-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | Structured logs render resource, level, timestamp, message, trace, and actions columns. |
 | LOG-LIVE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIVE-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | New structured logs stream into the list and update totals. |
 | LOG-RESOURCE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-RESOURCE-001; STRESS-STRUCTURED-LOG-RESOURCE-001 | Logs filter through a grouped resource selector. |
 | LOG-LEVEL-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-SEVERITY-001 | All supported severity levels can be selected. |
@@ -124,8 +124,8 @@
 | LOG-PAUSE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-PAUSE-001; STRESS-STRUCTURED-LOG-PAUSE-001 | Incoming structured logs can be paused and resumed. |
 | LOG-CLEAR-001 | structured-logs | `/structuredlogs` | structured-logs | covered | HTTP-STRUCTURED-LOG-CLEAR-001; STRESS-STRUCTURED-LOG-CLEAR-001 | Structured logs can be cleared for the selected resource or all resources. |
 | LOG-VIRTUALIZATION-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Large log volumes remain responsive through row virtualization. |
-| LOG-DETAILS-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Selecting a log opens complete event, scope, resource, and attribute details. |
-| LOG-ACTIONS-001 | structured-logs | `/structuredlogs` | structured-logs | missing | - | Per-log actions expose details, text/JSON visualizers, copy, and related navigation. |
+| LOG-DETAILS-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-DETAILS-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001 | Selecting a log opens complete event, scope, resource, and attribute details. |
+| LOG-ACTIONS-001 | structured-logs | `/structuredlogs` | structured-logs | partial | LOG-ACTIONS-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001 | Per-log actions expose details, text/JSON visualizers, copy, and related navigation. |
 | LOG-TRACE-LINK-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Trace IDs deep-link to the matching trace and span. |
 | LOG-GENAI-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | GenAI log records open the dedicated GenAI visualizer. |
 | LOG-EXPLAIN-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Explain errors summarizes current error logs through the assistant. |

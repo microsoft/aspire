@@ -95,16 +95,18 @@ test(`${features("LOG-LIST-001", "LOG-FILTER-001", "LOG-SEVERITY-001", "LOG-LIVE
 
   const table = page.getByRole("table");
   await expect(table.getByRole("columnheader")).toHaveText([
-    "Time",
-    "Severity",
     "Resource",
+    "Level",
+    "Timestamp",
     "Message",
+    "Trace",
+    "Actions",
   ]);
   const dataRows = table.locator("tbody tr");
   await expect.poll(() => dataRows.count()).toBeGreaterThanOrEqual(4);
 
   const firstRow = dataRows.first();
-  await expect(firstRow.locator("td").first()).toHaveText(/^\d{2}:\d{2}:\d{2}\.\d{3} (?:AM|PM)$/);
+  await expect(firstRow.locator("td").nth(2)).toHaveText(/^\d{2}:\d{2}:\d{2}\.\d{3} (?:AM|PM)$/);
   const firstMessage = (await firstRow.locator("td").nth(3).innerText()).trim();
   const firstSeverity = (await firstRow.locator("td").nth(1).innerText()).trim();
   expect(firstMessage).not.toBe("");
@@ -149,6 +151,76 @@ test(`${features("LOG-LIST-001", "LOG-FILTER-001", "LOG-SEVERITY-001", "LOG-LIVE
   await expect(table).toContainText("No logs match your filter.");
 });
 
+test(`${features("LOG-DETAILS-001", "LOG-ACTIONS-001")} opens complete structured log details and visualizers`, async ({ page }, testInfo) => {
+  await navigationButton(page, "Structured Logs").click();
+
+  const table = page.getByRole("table");
+  const errorRow = table.locator("tbody tr:has(.badge.error)").first();
+  await expect(errorRow).toBeVisible();
+
+  const rowActions = errorRow.getByRole("button", { name: "Log actions" });
+  await rowActions.click();
+  const rowMenu = page.getByRole("menu", { name: "Log actions" });
+  await expect(rowMenu.getByRole("menuitem")).toHaveText([
+    "View details",
+    "Open message in text visualizer",
+    "View JSON",
+  ]);
+  await rowMenu.getByRole("menuitem", { name: "View details" }).click();
+
+  const details = page.getByRole("dialog", { name: "Structured log entry details" });
+  await expect(details).toContainText("Catalog.RequestFailed");
+  await expect(details).toContainText("Aspire.Deck.MockTelemetry");
+  await expect(details.getByRole("toolbar", { name: "Structured log detail tools" })).toContainText(/Resource .*Timestamp/);
+  await expect(details.getByRole("group", { name: "Log entry properties" }).getByRole("term")).toContainText([
+    "Level",
+    "Message",
+    "http.request.method",
+  ]);
+  await expect(details.getByRole("group", { name: "Context properties" })).toContainText("EventNameCatalog.RequestFailed");
+  await expect(details.getByRole("group", { name: "Context properties" })).toContainText("TraceId");
+  await expect(details.getByRole("group", { name: "Exception properties" })).toContainText(
+    "exception.typeSystem.InvalidOperationException",
+  );
+  await expect(details.getByRole("group", { name: "Resource properties" })).toContainText(
+    "deployment.environment.nameDevelopment",
+  );
+
+  const propertyFilter = details.getByRole("textbox", { name: "Filter properties…" });
+  await propertyFilter.fill("exception.message");
+  await expect(details.getByRole("group", { name: "Exception properties" }).getByRole("term")).toHaveText([
+    "exception.message",
+  ]);
+  await expect(details.getByRole("button", { name: "Log entry 0" })).toBeVisible();
+  await propertyFilter.clear();
+
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await details.getByRole("button", { name: "Log actions" }).click();
+  await page.getByRole("menu", { name: "Log actions" }).getByRole("menuitem", {
+    name: "Open message in text visualizer",
+  }).click();
+  const messageViewer = page.getByRole("dialog", { name: "Structured log message" });
+  await expect(messageViewer.locator("pre[data-format='text']")).not.toBeEmpty();
+  await messageViewer.getByRole("button", { name: "Copy" }).click();
+  await expect(messageViewer.getByRole("status")).toHaveText("Copied");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).not.toBe("");
+  await messageViewer.getByRole("button", { name: "Close visualizer" }).click();
+
+  await details.getByRole("button", { name: "Log actions" }).click();
+  await page.getByRole("menu", { name: "Log actions" }).getByRole("menuitem", { name: "View JSON" }).click();
+  const jsonViewer = page.getByRole("dialog", { name: "Catalog.RequestFailed.json" });
+  await expect(jsonViewer.locator("pre[data-format='json']")).toContainText('"eventName": "Catalog.RequestFailed"');
+  await expect(jsonViewer.locator("pre[data-format='json']")).toContainText('"exception.type": "System.InvalidOperationException"');
+  await expect(jsonViewer.locator("pre[data-format='json']")).toContainText('"deployment.environment.name": "Development"');
+  await attachScreenshot(page, testInfo, "structured-log-json-viewer");
+  await jsonViewer.getByRole("button", { name: "Close visualizer" }).click();
+
+  await attachScreenshot(page, testInfo, "structured-log-details");
+  await expect(errorRow).toHaveAttribute("aria-selected", "true");
+  await details.getByRole("button", { name: "Close details" }).click();
+  await expect(details).toHaveCount(0);
+});
+
 test(`${features("LOG-RESOURCE-001", "LOG-PAUSE-001")} filters resources and pauses incoming structured logs`, async ({ page }) => {
   await navigationButton(page, "Structured Logs").click();
 
@@ -163,7 +235,7 @@ test(`${features("LOG-RESOURCE-001", "LOG-PAUSE-001")} filters resources and pau
   await resource.selectOption(resourceName!);
   await expect.poll(() => rows.count()).toBeGreaterThan(0);
   await expect.poll(async () =>
-    (await rows.locator("td:nth-child(3)").allTextContents()).every((value) => value.trim() === resourceName),
+    (await rows.locator("td:nth-child(1)").allTextContents()).every((value) => value.trim() === resourceName),
   ).toBe(true);
   await resource.selectOption("all");
 
