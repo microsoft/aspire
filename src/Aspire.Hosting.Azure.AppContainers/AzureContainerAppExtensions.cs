@@ -421,6 +421,13 @@ public static class AzureContainerAppExtensions
             // so multiple environments in one resource group get distinct names. Opt out with
             // WithSingletonResourceNaming() to keep the pre-fix name for already-deployed environments.
             // See https://github.com/microsoft/aspire/issues/18722.
+            //
+            // Note: uniqueString(resourceGroup().id) is identical for every environment in the same
+            // resource group, so the ONLY differentiator between environments is the name prefix. Because
+            // the whole value is truncated to 24 chars (the managed environment name limit), two
+            // environments whose sanitized names match in their first 24 characters would still collide.
+            // That is a narrow edge case (long, similar names), but it's the same truncation-collision
+            // class already seen for storage account names in #14427.
             if (!appEnvResource.UseAzdNamingConvention && !appEnvResource.UseSingletonResourceNaming)
             {
                 containerAppEnvironment.Name = BicepFunction.Take(

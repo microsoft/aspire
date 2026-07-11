@@ -1906,8 +1906,14 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var envResources = model.Resources.OfType<AzureContainerAppEnvironmentResource>().ToList();
         Assert.Equal(2, envResources.Count);
 
-        var (_, bicep1) = await GetManifestWithBicep(envResources[0]);
-        var (_, bicep2) = await GetManifestWithBicep(envResources[1]);
+        // Look up each environment by resource name rather than relying on the enumeration
+        // order of model.Resources, which isn't guaranteed and would make the assertions below
+        // flip (and fail) even when the naming behavior is correct.
+        var env1Resource = Assert.Single(envResources, r => r.Name == "cae1");
+        var env2Resource = Assert.Single(envResources, r => r.Name == "cae2");
+
+        var (_, bicep1) = await GetManifestWithBicep(env1Resource);
+        var (_, bicep2) = await GetManifestWithBicep(env2Resource);
 
         var name1 = GetManagedEnvironmentNameExpression(bicep1);
         var name2 = GetManagedEnvironmentNameExpression(bicep2);
@@ -1953,6 +1959,48 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var name = GetManagedEnvironmentNameExpression(bicep);
 
         Assert.Equal("take('cae${uniqueString(resourceGroup().id)}', 24)", name);
+    }
+
+    [Fact]
+    public async Task WithCompactResourceNamingGeneratesDistinctManagedEnvironmentNames()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // Compact naming doesn't set the managed environment name itself, so it flows through the
+        // same default-naming path as the plain case. Two compact environments in one resource
+        // group must still get distinct, digit-preserving names to avoid the collision in #18722.
+        var env1 = builder.AddAzureContainerAppEnvironment("cae1")
+            .WithCompactResourceNaming();
+        var env2 = builder.AddAzureContainerAppEnvironment("cae2")
+            .WithCompactResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var envResources = model.Resources.OfType<AzureContainerAppEnvironmentResource>().ToList();
+        Assert.Equal(2, envResources.Count);
+
+        var env1Resource = Assert.Single(envResources, r => r.Name == "cae1");
+        var env2Resource = Assert.Single(envResources, r => r.Name == "cae2");
+
+        var (_, bicep1) = await GetManifestWithBicep(env1Resource);
+        var (_, bicep2) = await GetManifestWithBicep(env2Resource);
+
+        var name1 = GetManagedEnvironmentNameExpression(bicep1);
+        var name2 = GetManagedEnvironmentNameExpression(bicep2);
+
+        Assert.NotEqual(name1, name2);
+        Assert.Equal("take('cae1${uniqueString(resourceGroup().id)}', 24)", name1);
+        Assert.Equal("take('cae2${uniqueString(resourceGroup().id)}', 24)", name2);
     }
 
     private static string GetManagedEnvironmentNameExpression(string bicep)
