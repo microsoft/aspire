@@ -177,7 +177,8 @@ const featureDefinitions = {
     ["LOG-ROUTE-001", "/structuredlogs/resource/{name}", "Resource selection, filters, and selected log are deep-linkable and restorable.", null, "missing"],
   ],
   traces: [
-    ["TRACE-LIST-001", "/traces", "Traces render timestamp, name, span count, duration, error status, and actions.", "traces", "partial", "TRACE-LIST-001"],
+    ["TRACE-LIST-001", "/traces", "Traces render timestamp, name, span count, duration, error status, and actions.", "traces", "partial", "TRACE-LIST-001; HTTP-TRACES-001; STRESS-TRACES-001"],
+    ["TRACE-LIVE-001", "/traces", "Incoming spans update trace groups and totals without reloading the page.", "traces", "covered", "TRACE-LIVE-001; HTTP-TRACES-001; STRESS-TRACES-001"],
     ["TRACE-RESOURCE-001", "/traces", "Traces filter through a grouped resource selector.", "traces", "missing"],
     ["TRACE-TYPE-001", "/traces", "HTTP, database, messaging, RPC, GenAI, cloud, and other span types can be selected.", "traces", "missing"],
     ["TRACE-TEXT-FILTER-001", "/traces", "Traces filter by operation, resource, and trace identifiers.", "traces", "covered", "TRACE-FILTER-001"],

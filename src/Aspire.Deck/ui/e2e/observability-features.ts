@@ -13,6 +13,7 @@ export const observabilityFeatures = {
   "LOG-ACTIONS-001": "Structured log actions open details plus copyable message and JSON visualizers.",
   "LOG-TRACE-LINK-001": "A structured log trace ID opens the matching trace and span.",
   "TRACE-LIST-001": "Traces group nested spans into chronological waterfall rows.",
+  "TRACE-LIVE-001": "Trace totals and waterfalls update as live spans arrive.",
   "TRACE-COLLAPSE-001": "A trace waterfall can be collapsed and expanded without losing its spans.",
   "TRACE-DETAILS-001": "Pointer and keyboard activation open span details and identifiers.",
   "TRACE-DETAIL-ROUTE-001": "Trace and span details restore from a stable URL after reload.",

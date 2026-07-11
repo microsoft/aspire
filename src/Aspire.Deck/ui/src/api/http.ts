@@ -13,12 +13,15 @@ import type {
   MetricSeriesResponse,
   Resource,
   ResourcesEvent,
+  SpanSummary,
   TelemetrySummary,
 } from "./types";
 import { readNdjson } from "./ndjson";
 import {
   getLogRecordSummaries,
+  getSpanSummaries,
   type OtlpLogRecordSummary,
+  type OtlpSpanSummary,
   type OtlpTelemetryData,
   type TelemetryApiResponse,
 } from "./otlp";
@@ -48,6 +51,7 @@ let telemetryController: AbortController | null = null;
 let telemetryStarted = false;
 let telemetryStopTimer: number | undefined;
 const telemetryLogKeys = new Set<string>();
+const telemetrySpanKeys = new Set<string>();
 
 let configPromise: Promise<DeckConfig> | null = null;
 
@@ -286,11 +290,38 @@ async function streamStructuredLogs(
   await readNdjson<OtlpTelemetryData>(response.body, (data) => callback(getLogRecordSummaries(data)));
 }
 
+async function streamSpans(
+  callback: (spans: OtlpSpanSummary[]) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch("/api/deck/telemetry/spans?follow=true", {
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { Accept: "application/x-ndjson" },
+    signal,
+  });
+  if (!response.ok) {
+    throw new Error(`Span stream failed with ${response.status} ${response.statusText}.`);
+  }
+  if (response.body === null) {
+    throw new Error("Span stream returned no response body.");
+  }
+
+  await readNdjson<OtlpTelemetryData>(response.body, (data) => callback(getSpanSummaries(data)));
+}
+
 function compareNewestFirst(left: LogRecordSummary, right: LogRecordSummary): number {
   if (left.timeUnixNano.length !== right.timeUnixNano.length) {
     return right.timeUnixNano.length - left.timeUnixNano.length;
   }
   return right.timeUnixNano.localeCompare(left.timeUnixNano);
+}
+
+function compareSpansNewestFirst(left: SpanSummary, right: SpanSummary): number {
+  if (left.startUnixNano.length !== right.startUnixNano.length) {
+    return right.startUnixNano.length - left.startUnixNano.length;
+  }
+  return right.startUnixNano.localeCompare(left.startUnixNano);
 }
 
 function toLogRecordSummary(log: OtlpLogRecordSummary): LogRecordSummary {
@@ -326,6 +357,31 @@ function appendStructuredLogs(logs: OtlpLogRecordSummary[]): void {
   notifyTelemetry();
 }
 
+function appendSpans(spans: OtlpSpanSummary[]): void {
+  const additions = spans.filter((span) => {
+    if (telemetrySpanKeys.has(span.recordKey)) {
+      return false;
+    }
+    telemetrySpanKeys.add(span.recordKey);
+    return true;
+  });
+  if (additions.length === 0) {
+    return;
+  }
+
+  telemetrySummary = {
+    ...telemetrySummary,
+    spanCount: telemetrySummary.spanCount + additions.length,
+    recentSpans: [
+      ...additions.map(({ recordKey: _, ...span }) => span),
+      ...telemetrySummary.recentSpans,
+    ]
+      .sort(compareSpansNewestFirst)
+      .slice(0, 200),
+  };
+  notifyTelemetry();
+}
+
 function summaryFromStructuredLogs(response: TelemetryApiResponse): TelemetrySummary {
   return {
     ...emptyTelemetry,
@@ -333,6 +389,19 @@ function summaryFromStructuredLogs(response: TelemetryApiResponse): TelemetrySum
     recentLogs: getLogRecordSummaries(response.data)
       .map(toLogRecordSummary)
       .sort(compareNewestFirst),
+  };
+}
+
+function summaryFromResponses(
+  logsResponse: TelemetryApiResponse,
+  spansResponse: TelemetryApiResponse,
+): TelemetrySummary {
+  return {
+    ...summaryFromStructuredLogs(logsResponse),
+    spanCount: spansResponse.totalCount,
+    recentSpans: getSpanSummaries(spansResponse.data)
+      .map(({ recordKey: _, ...span }) => span)
+      .sort(compareSpansNewestFirst),
   };
 }
 
@@ -368,6 +437,10 @@ function ensureTelemetryStream(): void {
     // Resource polling owns the shared backend connection state. Preserve the
     // last telemetry snapshot when a live stream ends or the backend is unavailable.
   });
+  void streamSpans(appendSpans, controller.signal).catch(() => {
+    // A span stream failure must not tear down structured-log updates. Resource
+    // polling owns the shared backend connection state and reports outages.
+  });
 }
 
 function subscribeTelemetry(callback: (summary: TelemetrySummary) => void): Unsubscribe {
@@ -395,6 +468,7 @@ function subscribeTelemetry(callback: (summary: TelemetrySummary) => void): Unsu
         telemetryStarted = false;
         telemetrySummary = { ...emptyTelemetry, recentLogs: [] };
         telemetryLogKeys.clear();
+        telemetrySpanKeys.clear();
       });
     }
   };
@@ -431,8 +505,12 @@ export const httpBackend = {
   respondInteraction(interactionId: number, action: string, values: Record<string, string>): void {
     void postNoContent("interactions/respond", { interactionId, action, values }).catch(() => undefined);
   },
-  getTelemetrySummary(): Promise<TelemetrySummary> {
-    return requestJson<TelemetryApiResponse>("telemetry/logs?limit=200").then(summaryFromStructuredLogs);
+  async getTelemetrySummary(): Promise<TelemetrySummary> {
+    const [logsResponse, spansResponse] = await Promise.all([
+      requestJson<TelemetryApiResponse>("telemetry/logs?limit=200"),
+      requestJson<TelemetryApiResponse>("telemetry/spans?limit=200"),
+    ]);
+    return summaryFromResponses(logsResponse, spansResponse);
   },
   clearStructuredLogs,
   getMetricSeries(_query: MetricSeriesQuery): Promise<MetricSeriesResponse | null> {

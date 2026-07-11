@@ -113,7 +113,7 @@ test.afterEach(async ({ page }) => {
     : errors;
   if (allowNavigationAbort.has(page)) {
     unexpected = unexpected.filter((error) =>
-      !/^request: GET .*\/api\/deck\/(?:telemetry\/logs\?follow=true|interactions|resources(?:\/[^/]+\/console-logs)?) \(net::ERR_ABORTED\)$/.test(error));
+      !/^request: GET .*\/api\/deck\/(?:telemetry\/(?:logs|spans)\?follow=true|interactions|resources(?:\/[^/]+\/console-logs)?) \(net::ERR_ABORTED\)$/.test(error));
   }
   expect(unexpected, "Unexpected browser errors").toEqual([]);
 });
@@ -426,6 +426,26 @@ test(`${features("STRESS-NAVIGATION-001", "STRESS-EMPTY-METRICS-001")} reaches e
       await expect(metrics).not.toContainText("Loading…");
     }
   }
+});
+
+test(`${features("STRESS-TRACES-001")} replays live Stress traces and opens span details`, async ({ page }, testInfo) => {
+  await navigationButton(page, "Traces").click();
+
+  const traces = page.getByRole("main").getByRole("region", { name: "Traces" });
+  await expect.poll(() => traces.locator(".wf__trace").count(), { timeout: 45_000 }).toBeGreaterThan(0);
+  await expect.poll(() => traces.locator(".wf__span").count()).toBeGreaterThan(0);
+  await expect(traces.locator(".page__subtitle")).toContainText(/\d+ traces · \d+ spans/);
+
+  await traces.locator(".wf__span").first().click();
+  const details = page.getByRole("dialog");
+  await expect(details).toBeVisible();
+  const identifiers = details.locator(".kv__val.cell-mono");
+  await expect(identifiers.nth(0)).toHaveText(/^[0-9a-f]{32}$/);
+  await expect(identifiers.nth(1)).toHaveText(/^[0-9a-f]{16}$/);
+  await expect(page).toHaveURL(/\/traces\/detail\/[0-9a-f]{32}.*span=[0-9a-f]{16}/);
+
+  await attachScreenshot(page, testInfo, "stress-live-traces");
+  await details.getByRole("button", { name: "Close" }).click();
 });
 
 test(`${features("STRESS-RESPONSIVE-001")} keeps the live resource workflow usable on mobile`, async ({ page }, testInfo) => {

@@ -1,7 +1,7 @@
 # Dashboard migration parity ledger
 
-- Total legacy features: 157
-- React covered: 38
+- Total legacy features: 158
+- React covered: 39
 - React partial: 42
 - React missing: 77
 - Legacy black-box scenarios pending: 80
@@ -130,7 +130,8 @@
 | LOG-GENAI-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | GenAI log records open the dedicated GenAI visualizer. |
 | LOG-EXPLAIN-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Explain errors summarizes current error logs through the assistant. |
 | LOG-ROUTE-001 | structured-logs | `/structuredlogs/resource/{name}` | PENDING | missing | - | Resource selection, filters, and selected log are deep-linkable and restorable. |
-| TRACE-LIST-001 | traces | `/traces` | traces | partial | TRACE-LIST-001 | Traces render timestamp, name, span count, duration, error status, and actions. |
+| TRACE-LIST-001 | traces | `/traces` | traces | partial | TRACE-LIST-001; HTTP-TRACES-001; STRESS-TRACES-001 | Traces render timestamp, name, span count, duration, error status, and actions. |
+| TRACE-LIVE-001 | traces | `/traces` | traces | covered | TRACE-LIVE-001; HTTP-TRACES-001; STRESS-TRACES-001 | Incoming spans update trace groups and totals without reloading the page. |
 | TRACE-RESOURCE-001 | traces | `/traces` | traces | missing | - | Traces filter through a grouped resource selector. |
 | TRACE-TYPE-001 | traces | `/traces` | traces | missing | - | HTTP, database, messaging, RPC, GenAI, cloud, and other span types can be selected. |
 | TRACE-TEXT-FILTER-001 | traces | `/traces` | traces | covered | TRACE-FILTER-001 | Traces filter by operation, resource, and trace identifiers. |

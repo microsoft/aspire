@@ -288,11 +288,13 @@ test(`${features("LOG-RESOURCE-001", "LOG-PAUSE-001")} filters resources and pau
   await expect.poll(readPageTotal).toBeGreaterThan(pausedTotal);
 });
 
-test(`${features("TRACE-LIST-001", "TRACE-COLLAPSE-001", "TRACE-DETAILS-001", "TRACE-ERROR-001")} explores trace waterfalls and span details`, async ({ page }) => {
+test(`${features("TRACE-LIST-001", "TRACE-LIVE-001", "TRACE-COLLAPSE-001", "TRACE-DETAILS-001", "TRACE-ERROR-001")} explores trace waterfalls and span details`, async ({ page }) => {
   await navigationButton(page, "Traces").click();
 
   const traces = page.locator(".wf__trace");
   await expect.poll(() => traces.count()).toBeGreaterThanOrEqual(4);
+  const initialTraceCount = await traces.count();
+  await expect.poll(() => traces.count()).toBeGreaterThan(initialTraceCount);
   const initialTrace = traces.first();
   const initialRedisSpan = initialTrace.locator(".wf__span").nth(1);
   await initialRedisSpan.press("Enter");

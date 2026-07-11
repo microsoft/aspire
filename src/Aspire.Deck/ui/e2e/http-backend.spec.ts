@@ -87,6 +87,9 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/api/deck/telemetry/logs?*", async (route) => {
     await route.fulfill({ contentType: "application/x-ndjson", body: "" });
   });
+  await page.route("**/api/deck/telemetry/spans?*", async (route) => {
+    await route.fulfill({ contentType: "application/x-ndjson", body: "" });
+  });
 });
 
 test.afterEach(async ({ page }) => {
@@ -592,6 +595,78 @@ test(`${features("HTTP-STRUCTURED-LOG-CLEAR-001")} clears selected and all struc
   await expect(logs.locator(".page__subtitle")).toHaveText("0 total · showing 0");
   await expect(logs).toContainText("No structured logs.");
   expect(clearRequests).toEqual(["stress-api", null]);
+});
+
+test(`${features("HTTP-TRACES-001")} streams OTLP spans through the HTTP backend`, async ({ page }, testInfo) => {
+  let spanRequests = 0;
+  const traceId = "0123456789abcdef0123456789abcdef";
+  const rootSpanId = "0123456789abcdef";
+  const childSpanId = "fedcba9876543210";
+  await page.route("**/api/deck/config", async (route) => {
+    await route.fulfill({ json: config });
+  });
+  await page.route("**/api/deck/resources", async (route) => {
+    await route.fulfill({ json: [resource] });
+  });
+  await page.unroute("**/api/deck/telemetry/spans?*");
+  await page.route("**/api/deck/telemetry/spans?*", async (route) => {
+    spanRequests++;
+    await route.fulfill({
+      contentType: "application/x-ndjson",
+      body: `${JSON.stringify({
+        resourceSpans: [{
+          resource: {
+            attributes: [{ key: "service.name", value: { stringValue: "stress-api" } }],
+          },
+          scopeSpans: [{
+            scope: { name: "Stress.Telemetry" },
+            spans: [
+              {
+                traceId,
+                spanId: rootSpanId,
+                name: "GET /orders",
+                kind: 2,
+                startTimeUnixNano: "1783670400000000000",
+                endTimeUnixNano: "1783670400200000000",
+                status: { code: 1 },
+              },
+              {
+                traceId,
+                spanId: childSpanId,
+                parentSpanId: rootSpanId,
+                name: "SELECT orders",
+                kind: 3,
+                startTimeUnixNano: "1783670400050000000",
+                endTimeUnixNano: "1783670400180000000",
+                status: { code: 2, message: "Database unavailable" },
+              },
+            ],
+          }],
+        }],
+      })}\n`,
+    });
+  });
+
+  await page.goto("/traces?backend=http");
+
+  const traces = page.getByRole("main").getByRole("region", { name: "Traces" });
+  await expect(traces.locator(".page__subtitle")).toHaveText("1 traces · 2 spans");
+  await expect(traces.locator(".wf__trace")).toHaveCount(1);
+  await expect(traces.locator(".wf__span")).toHaveCount(2);
+  await expect(traces).toContainText("GET /orders");
+  await expect(traces).toContainText("SELECT orders");
+  await expect(traces.locator(".wf__trace")).toHaveClass(/wf__trace--error/);
+  expect(spanRequests).toBe(1);
+
+  await traces.getByRole("button", { name: /SELECT orders/ }).click();
+  const details = page.getByRole("dialog", { name: "SELECT orders" });
+  await expect(details.locator(".kv__val.cell-mono")).toHaveText([traceId, childSpanId, rootSpanId]);
+  await expect(page).toHaveURL(`/traces/detail/${traceId}?backend=http&span=${childSpanId}`);
+
+  await testInfo.attach("http-backend-traces.png", {
+    body: await page.screenshot({ animations: "disabled", fullPage: true }),
+    contentType: "image/png",
+  });
 });
 
 test(`${features("HTTP-EMPTY-TELEMETRY-001")} renders a settled empty metrics state`, async ({ page }) => {

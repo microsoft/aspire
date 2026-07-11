@@ -1,4 +1,4 @@
-import type { LogRecordSummary, TelemetryAttribute } from "./types";
+import type { LogRecordSummary, SpanSummary, TelemetryAttribute } from "./types";
 
 interface OtlpAnyValue {
   stringValue?: string;
@@ -51,8 +51,35 @@ interface OtlpResourceLogs {
   scopeLogs?: OtlpScopeLogs[];
 }
 
+interface OtlpSpanStatus {
+  code?: number;
+  message?: string;
+}
+
+interface OtlpSpan {
+  traceId?: string;
+  spanId?: string;
+  parentSpanId?: string;
+  name?: string;
+  kind?: number;
+  startTimeUnixNano?: string;
+  endTimeUnixNano?: string;
+  status?: OtlpSpanStatus;
+}
+
+interface OtlpScopeSpans {
+  scope?: OtlpInstrumentationScope;
+  spans?: OtlpSpan[];
+}
+
+interface OtlpResourceSpans {
+  resource?: OtlpResource;
+  scopeSpans?: OtlpScopeSpans[];
+}
+
 export interface OtlpTelemetryData {
   resourceLogs?: OtlpResourceLogs[];
+  resourceSpans?: OtlpResourceSpans[];
 }
 
 export interface TelemetryApiResponse {
@@ -62,6 +89,10 @@ export interface TelemetryApiResponse {
 }
 
 export interface OtlpLogRecordSummary extends LogRecordSummary {
+  recordKey: string;
+}
+
+export interface OtlpSpanSummary extends SpanSummary {
   recordKey: string;
 }
 
@@ -202,6 +233,56 @@ export function getLogRecordSummaries(data: OtlpTelemetryData | undefined): Otlp
           droppedAttributesCount: record.droppedAttributesCount ?? 0,
           scopeDroppedAttributesCount: scopeLogs.scope?.droppedAttributesCount ?? 0,
           resourceDroppedAttributesCount: resourceLogs.resource?.droppedAttributesCount ?? 0,
+        });
+      }
+    }
+  }
+
+  return summaries;
+}
+
+function spanKind(kind: number | undefined): string {
+  return ["Unspecified", "Internal", "Server", "Client", "Producer", "Consumer"][kind ?? 0]
+    ?? "Unspecified";
+}
+
+function spanStatus(code: number | undefined): string | null {
+  return [null, "Ok", "Error"][code ?? 0] ?? null;
+}
+
+function spanDuration(startUnixNano: string, endUnixNano: string): string {
+  try {
+    const duration = BigInt(endUnixNano) - BigInt(startUnixNano);
+    return duration > 0n ? duration.toString() : "0";
+  } catch {
+    return "0";
+  }
+}
+
+export function getSpanSummaries(data: OtlpTelemetryData | undefined): OtlpSpanSummary[] {
+  const summaries: OtlpSpanSummary[] = [];
+
+  for (const resourceSpans of data?.resourceSpans ?? []) {
+    const resourceName = resourceAttribute(resourceSpans.resource, "service.name");
+    for (const scopeSpans of resourceSpans.scopeSpans ?? []) {
+      for (const span of scopeSpans.spans ?? []) {
+        if (!span.traceId || !span.spanId) {
+          continue;
+        }
+
+        const startUnixNano = span.startTimeUnixNano ?? "0";
+        const endUnixNano = span.endTimeUnixNano ?? startUnixNano;
+        summaries.push({
+          recordKey: `${span.traceId}\u0000${span.spanId}`,
+          traceId: span.traceId,
+          spanId: span.spanId,
+          parentSpanId: span.parentSpanId?.trim() || null,
+          name: span.name?.trim() || "unknown span",
+          kind: spanKind(span.kind),
+          resourceName,
+          startUnixNano,
+          durationNanos: spanDuration(startUnixNano, endUnixNano),
+          statusCode: spanStatus(span.status?.code),
         });
       }
     }
