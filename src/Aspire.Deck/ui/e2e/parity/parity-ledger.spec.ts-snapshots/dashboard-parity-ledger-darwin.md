@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 29
+- React covered: 31
 - React partial: 43
-- React missing: 85
+- React missing: 83
 - Legacy black-box scenarios pending: 80
-- React parity gaps: 128
+- React parity gaps: 126
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -116,12 +116,12 @@
 | CONSOLE-ROUTE-001 | console | `/consolelogs/resource/{name}` | PENDING | missing | - | Selected resource and console options are deep-linkable and restorable. |
 | LOG-LIST-001 | structured-logs | `/structuredlogs` | structured-logs | partial | LOG-LIST-001 | Structured logs render resource, level, timestamp, message, trace, and actions columns. |
 | LOG-LIVE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIVE-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | New structured logs stream into the list and update totals. |
-| LOG-RESOURCE-001 | structured-logs | `/structuredlogs` | structured-logs | missing | - | Logs filter through a grouped resource selector. |
+| LOG-RESOURCE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-RESOURCE-001; STRESS-STRUCTURED-LOG-RESOURCE-001 | Logs filter through a grouped resource selector. |
 | LOG-LEVEL-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-SEVERITY-001 | All supported severity levels can be selected. |
 | LOG-TEXT-FILTER-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-FILTER-001 | Logs filter across resource and message content. |
 | LOG-STRUCTURED-FILTER-001 | structured-logs | `/structuredlogs` | structured-logs | missing | - | Structured attribute filters can be added, edited, enabled, disabled, and removed. |
 | LOG-FILTER-COUNT-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Enabled structured filters expose a count and management menu. |
-| LOG-PAUSE-001 | structured-logs | `/structuredlogs` | structured-logs | missing | - | Incoming structured logs can be paused and resumed. |
+| LOG-PAUSE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-PAUSE-001; STRESS-STRUCTURED-LOG-PAUSE-001 | Incoming structured logs can be paused and resumed. |
 | LOG-CLEAR-001 | structured-logs | `/structuredlogs` | structured-logs | missing | - | Structured logs can be cleared for the selected resource or all resources. |
 | LOG-VIRTUALIZATION-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Large log volumes remain responsive through row virtualization. |
 | LOG-DETAILS-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Selecting a log opens complete event, scope, resource, and attribute details. |

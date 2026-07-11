@@ -223,7 +223,7 @@ test(`${features("STRESS-CONSOLE-001")} renders a live resource console backlog`
   await attachScreenshot(page, testInfo, "stress-live-console");
 });
 
-test(`${features("STRESS-STRUCTURED-LOGS-001")} replays and streams live structured logs`, async ({ page }, testInfo) => {
+test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-001", "STRESS-STRUCTURED-LOG-PAUSE-001")} replays, filters, and pauses live structured logs`, async ({ page }, testInfo) => {
   await navigationButton(page, "Structured Logs").click();
   const logs = page.getByRole("main").getByRole("region", { name: "Structured Logs" });
   const table = logs.getByRole("table");
@@ -246,6 +246,19 @@ test(`${features("STRESS-STRUCTURED-LOGS-001")} replays and streams live structu
   };
   const initialTotal = await readTotal();
 
+  const resource = logs.getByRole("combobox", { name: "Resource" });
+  await expect(resource.locator("option")).toContainText(["All resources", "stress-telemetryservice"]);
+  await resource.selectOption("stress-telemetryservice");
+  await expect.poll(() => rows.count()).toBeGreaterThan(0);
+  await expect.poll(async () =>
+    (await rows.locator("td:nth-child(3)").allTextContents()).every((value) => value.trim() === "stress-telemetryservice"),
+  ).toBe(true);
+  await resource.selectOption("all");
+
+  const pause = logs.getByRole("switch", { name: "Pause incoming data" });
+  await pause.check();
+  await expect(subtitle).toContainText("paused");
+
   const resourcesResponse = await page.request.get("/api/deck/resources");
   expect(resourcesResponse.ok()).toBe(true);
   const resources = await resourcesResponse.json() as Array<{
@@ -262,10 +275,16 @@ test(`${features("STRESS-STRUCTURED-LOGS-001")} replays and streams live structu
   });
   expect(startResponse.ok()).toBe(true);
   await expect(startResponse.json()).resolves.toMatchObject({ kind: "succeeded" });
-  await expect.poll(readTotal, { timeout: 45_000 }).toBeGreaterThan(initialTotal);
+  const readNavigationTotal = async (): Promise<number> =>
+    Number((await navigationButton(page, "Structured Logs").innerText()).match(/(\d+)$/)?.[1]);
+  await expect.poll(readNavigationTotal, { timeout: 45_000 }).toBeGreaterThan(initialTotal);
+  expect(await readTotal()).toBe(initialTotal);
 
-  const filter = logs.getByRole("textbox", { name: "Filter messages…" });
-  await filter.fill("stress-telemetryservice");
+  await pause.uncheck();
+  await expect(subtitle).not.toContainText("paused");
+  await expect.poll(readTotal).toBeGreaterThan(initialTotal);
+
+  await resource.selectOption("stress-telemetryservice");
   await expect.poll(() => rows.count()).toBeGreaterThan(0);
   await expect.poll(async () => (await rows.allTextContents()).every((row) => row.includes("stress-telemetryservice"))).toBe(true);
 

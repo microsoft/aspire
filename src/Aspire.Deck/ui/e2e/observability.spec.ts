@@ -128,14 +128,60 @@ test(`${features("LOG-LIST-001", "LOG-FILTER-001", "LOG-SEVERITY-001", "LOG-LIVE
 
   await query.clear();
   const severity = page.getByRole("combobox", { name: "Severity" });
-  await severity.selectOption(firstSeverity);
+  await expect(severity.locator("option")).toHaveText([
+    "All",
+    "Trace",
+    "Debug",
+    "Information",
+    "Warning",
+    "Error",
+    "Critical",
+  ]);
+  await severity.selectOption("Warning");
   await expect.poll(() => dataRows.count()).toBeGreaterThan(0);
   await expect
-    .poll(async () => [...new Set(await table.locator("tbody .badge").allTextContents())])
-    .toEqual([firstSeverity]);
+    .poll(async () => (await table.locator("tbody .badge").allTextContents()).every((level) =>
+      ["Warning", "Error", "Critical"].includes(level)),
+    )
+    .toBe(true);
 
   await query.fill("this-log-value-does-not-exist");
   await expect(table).toContainText("No logs match your filter.");
+});
+
+test(`${features("LOG-RESOURCE-001", "LOG-PAUSE-001")} filters resources and pauses incoming structured logs`, async ({ page }) => {
+  await navigationButton(page, "Structured Logs").click();
+
+  const logs = page.getByRole("main").getByRole("region", { name: "Structured Logs" });
+  const rows = logs.getByRole("table").locator("tbody tr");
+  await expect.poll(() => rows.count()).toBeGreaterThanOrEqual(4);
+
+  const resource = logs.getByRole("combobox", { name: "Resource" });
+  await expect.poll(() => resource.locator("option").count()).toBeGreaterThan(1);
+  const resourceName = await resource.locator("option").nth(1).getAttribute("value");
+  expect(resourceName).not.toBeNull();
+  await resource.selectOption(resourceName!);
+  await expect.poll(() => rows.count()).toBeGreaterThan(0);
+  await expect.poll(async () =>
+    (await rows.locator("td:nth-child(3)").allTextContents()).every((value) => value.trim() === resourceName),
+  ).toBe(true);
+  await resource.selectOption("all");
+
+  const subtitle = logs.locator(".page__subtitle");
+  const readPageTotal = async (): Promise<number> => Number((await subtitle.innerText()).match(/^(\d+) total/)?.[1]);
+  const readNavigationTotal = async (): Promise<number> =>
+    Number((await navigationButton(page, "Structured Logs").innerText()).match(/(\d+)$/)?.[1]);
+
+  const pause = logs.getByRole("switch", { name: "Pause incoming data" });
+  await pause.check();
+  const pausedTotal = await readPageTotal();
+  await expect(subtitle).toContainText("paused");
+  await expect.poll(readNavigationTotal, { timeout: 6_000 }).toBeGreaterThan(pausedTotal);
+  expect(await readPageTotal()).toBe(pausedTotal);
+
+  await pause.uncheck();
+  await expect(subtitle).not.toContainText("paused");
+  await expect.poll(readPageTotal).toBeGreaterThan(pausedTotal);
 });
 
 test(`${features("TRACE-LIST-001", "TRACE-COLLAPSE-001", "TRACE-DETAILS-001", "TRACE-ERROR-001")} explores trace waterfalls and span details`, async ({ page }) => {
