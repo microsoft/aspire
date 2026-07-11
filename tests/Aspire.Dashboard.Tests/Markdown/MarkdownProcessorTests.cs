@@ -4,10 +4,6 @@
 using System.Text.RegularExpressions;
 using Aspire.Dashboard.Model.Markdown;
 using Aspire.Dashboard.Resources;
-using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
-using Aspire.Dashboard.Tests.Model;
-using Aspire.Tests.Shared.DashboardModel;
-using Aspire.Tests.Shared.Telemetry;
 using Markdig;
 using Xunit;
 
