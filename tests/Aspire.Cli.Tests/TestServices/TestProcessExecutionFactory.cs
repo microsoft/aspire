@@ -170,7 +170,18 @@ internal sealed class TestProcessExecution : IProcessExecution
 
     public bool Started => _started;
 
-    public bool HasExited => _hasExited;
+    public bool HasExited
+    {
+        get
+        {
+            if (ThrowOnHasExitedBeforeStart && !_started)
+            {
+                throw new InvalidOperationException("Process has not been started.");
+            }
+
+            return _hasExited;
+        }
+    }
 
     public int? ExitCode => _exitCode;
 
@@ -179,6 +190,8 @@ internal sealed class TestProcessExecution : IProcessExecution
     public DateTimeOffset? StartTime { get; init; } = DateTimeOffset.UtcNow;
 
     public bool StartReturnValue { get; init; } = true;
+
+    public bool ThrowOnHasExitedBeforeStart { get; init; }
 
     public Func<ProcessInvocationOptions, CancellationToken, Task<int>>? WaitForExitAsyncCallback { get; init; }
 

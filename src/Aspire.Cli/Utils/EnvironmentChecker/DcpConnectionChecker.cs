@@ -230,6 +230,7 @@ internal sealed class DcpConnectionChecker(
             var dcpExecutablePath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
             var output = new OutputCollector();
             IProcessExecution? process = null;
+            var processStarted = false;
 
             try
             {
@@ -274,6 +275,7 @@ internal sealed class DcpConnectionChecker(
                     throw new InvalidOperationException(DoctorCommandStrings.DcpStartFailedMessage);
                 }
 
+                processStarted = true;
                 var session = new DcpConnectionTestSession(process, sessionDirectory, kubeconfigPath, output, logger);
                 await session.WaitForKubeconfigFileAsync(cancellationToken).ConfigureAwait(false);
                 return session;
@@ -284,7 +286,7 @@ internal sealed class DcpConnectionChecker(
                 {
                     try
                     {
-                        if (!process.HasExited)
+                        if (processStarted && !process.HasExited)
                         {
                             process.Kill(entireProcessTree: true);
                         }
