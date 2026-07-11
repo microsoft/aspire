@@ -155,6 +155,25 @@ ASPIRE_DASHBOARD_URL=https://Stress.dev.localhost:49985 \
   npm exec -- playwright test --config=playwright.stress.config.ts
 ```
 
+The migration parity ledger in `e2e/parity/dashboard-parity-features.ts` is derived from the
+legacy dashboard and Stress AppHost rather than from the React implementation. It records every
+known behavior, its legacy route and black-box scenario, current React status, and existing test
+coverage. The deterministic suite snapshots the ledger so removing or silently reclassifying a
+feature is reviewed like any other compatibility change.
+
+Run the legacy black-box inventory against the same Stress AppHost before changing a dashboard
+surface:
+
+```bash
+ASPIRE_LEGACY_DASHBOARD_URL=https://Stress.dev.localhost:49985 \
+  npm exec -- playwright test --config=playwright.legacy.config.ts
+```
+
+This run records screenshots, video, and traces for the legacy shell, resource list/details/graph,
+parameters, command argument inputs, console, structured logs, traces, and metrics. Features that
+still require a purpose-built fixture have `legacyScenario: null` in the ledger and are reported as
+gaps; they are not counted as covered merely because a related page loaded.
+
 ## Build & preview
 
 ```bash
