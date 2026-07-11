@@ -108,6 +108,7 @@ internal sealed partial class IsolatedProcess
                 HasExitedProvider: () => dcpProcess.HasExited,
                 WaitForExitProvider: dcpProcess.WaitForExitAsync,
                 StartTime: GetStartTime(childProcess),
+                UseProvidedStartTime: true,
                 ProcessId: childPid);
         }
         catch
