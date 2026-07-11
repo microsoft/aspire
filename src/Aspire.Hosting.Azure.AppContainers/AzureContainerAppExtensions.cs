@@ -436,10 +436,15 @@ public static class AzureContainerAppExtensions
             ? builder.CreateResourceBuilder(containerAppEnvResource)
             : builder.AddResource(containerAppEnvResource);
 
+        // The environment normally creates its ACR pull identity and role assignment inline. When the final
+        // registry is explicitly cross-scoped, late preparation promotes only that identity to a standalone
+        // resource so the role assignment can be emitted in a module scoped to the registry.
         appEnvBuilder.WithCrossScopeAcrPullIdentity(
             identity => new AzureContainerAppEnvironmentAcrPullIdentityAnnotation(identity),
             identityBuilder =>
             {
+                // Standalone identities use compact naming by default, but azd-named environments have
+                // historically used mi-${resourceToken}. Preserve that physical name for this promoted path.
                 if (!containerAppEnvResource.UseAzdNamingConvention)
                 {
                     return;
