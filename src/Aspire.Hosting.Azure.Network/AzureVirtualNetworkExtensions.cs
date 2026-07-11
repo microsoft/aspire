@@ -284,12 +284,13 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="subnet">The subnet to associate with the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the resource is already associated with a different delegated subnet.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method automatically configures the subnet with the appropriate service delegation
     /// for the target resource type (for example, "Microsoft.App/environments" for Azure Container Apps
     /// and "Microsoft.Web/serverFarms" for Azure App Service).
-    /// Calling this method again for the same resource replaces its previous subnet association.
+    /// A resource can only be associated with one delegated subnet. Repeating the call with the same subnet is idempotent.
     /// </remarks>
     /// <example>
     /// This example configures an Azure Container App Environment to use a subnet:
@@ -313,42 +314,19 @@ public static class AzureVirtualNetworkExtensions
         var target = builder.Resource;
 
         var subnetId = ReferenceExpression.Create($"{subnet.Resource.Id}");
-        var previousSubnetId = target.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var previousAnnotation)
-            ? previousAnnotation.SubnetId
-            : null;
+        if (target.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var previousAnnotation) &&
+            previousAnnotation.SubnetId.ValueExpression != subnetId.ValueExpression)
+        {
+            throw new InvalidOperationException(
+                $"The resource '{target.Name}' is already associated with a different delegated subnet. A resource can use only one delegated subnet.");
+        }
 
-        // A resource can use only one delegated subnet, so a later call supersedes an earlier one.
         builder.WithAnnotation(
             new DelegatedSubnetAnnotation(subnetId),
             ResourceAnnotationMutationBehavior.Replace);
 
-        if (previousSubnetId is not null && previousSubnetId.ValueExpression != subnetId.ValueExpression)
-        {
-            var isPreviousSubnetStillInUse = builder.ApplicationBuilder.Resources
-                .SelectMany(resource => resource.Annotations.OfType<DelegatedSubnetAnnotation>())
-                .Any(annotation => annotation.SubnetId.ValueExpression == previousSubnetId.ValueExpression);
-
-            if (!isPreviousSubnetStillInUse)
-            {
-                var previousSubnet = builder.ApplicationBuilder.Resources
-                    .OfType<AzureSubnetResource>()
-                    .SingleOrDefault(candidate => ReferenceExpression.Create($"{candidate.Id}").ValueExpression == previousSubnetId.ValueExpression);
-
-                if (previousSubnet is not null)
-                {
-                    // Avoid provisioning an unused delegation after replacing the target's subnet.
-                    foreach (var delegation in previousSubnet.Annotations
-                        .OfType<AzureSubnetServiceDelegationAnnotation>()
-                        .Where(annotation => string.Equals(annotation.ServiceName, target.DelegatedSubnetServiceName, StringComparison.Ordinal))
-                        .ToList())
-                    {
-                        previousSubnet.Annotations.Remove(delegation);
-                    }
-                }
-            }
-        }
-
-        // Add service delegation annotation to the subnet
+        // The subnet provisioner emits a single delegation, so replacing prevents duplicate annotations
+        // when the same subnet is configured repeatedly.
         subnet.WithAnnotation(
             new AzureSubnetServiceDelegationAnnotation(
                 target.DelegatedSubnetServiceName,

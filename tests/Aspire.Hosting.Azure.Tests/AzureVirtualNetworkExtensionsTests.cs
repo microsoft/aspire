@@ -180,7 +180,26 @@ public class AzureVirtualNetworkExtensionsTests
     }
 
     [Fact]
-    public void WithDelegatedSubnet_ReplacesExistingSubnet()
+    public void WithDelegatedSubnet_SameSubnetCanBeConfiguredMoreThanOnce()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
+
+        var environment = builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(subnet)
+            .WithDelegatedSubnet(subnet);
+
+        var subnetAnnotation = Assert.Single(environment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>());
+        Assert.Equal("{myvnet.outputs.app_service_subnet_Id}", subnetAnnotation.SubnetId.ValueExpression);
+
+        var delegationAnnotation = Assert.Single(subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithDelegatedSubnet_DifferentSubnetThrows()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -189,15 +208,16 @@ public class AzureVirtualNetworkExtensionsTests
         var secondSubnet = vnet.AddSubnet("second-subnet", "10.0.1.0/24");
 
         var environment = builder.AddAzureAppServiceEnvironment("env")
-            .WithDelegatedSubnet(firstSubnet)
-            .WithDelegatedSubnet(secondSubnet);
+            .WithDelegatedSubnet(firstSubnet);
 
-        var subnetAnnotation = Assert.Single(environment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>());
-        Assert.Equal("{myvnet.outputs.second_subnet_Id}", subnetAnnotation.SubnetId.ValueExpression);
-        Assert.Empty(firstSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        var exception = Assert.Throws<InvalidOperationException>(() => environment.WithDelegatedSubnet(secondSubnet));
 
-        var delegationAnnotation = Assert.Single(secondSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
-        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.ServiceName);
+        Assert.Equal(
+            "The resource 'env' is already associated with a different delegated subnet. A resource can use only one delegated subnet.",
+            exception.Message);
+        Assert.Single(environment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>());
+        Assert.Single(firstSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Empty(secondSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
     }
 
     [Fact]
