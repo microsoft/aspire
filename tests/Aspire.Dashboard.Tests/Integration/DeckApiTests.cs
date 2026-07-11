@@ -35,7 +35,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
         var response = await httpClient.GetAsync("/api/deck/config").DefaultTimeout();
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var actual = JsonNode.Parse(await response.Content.ReadAsStringAsync().DefaultTimeout());
         var expected = new JsonObject
         {
@@ -238,6 +238,88 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task GetConsoleLogs_StreamsBacklogAndLiveBatches()
+    {
+        var consoleLogs = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        string? requestedResourceName = null;
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            testOutputHelper,
+            preConfigureBuilder: builder => builder.Services.AddSingleton<IDashboardClient>(
+                new TestDashboardClient(
+                    isEnabled: true,
+                    initialResources: [CreateResource()],
+                    consoleLogsChannelProvider: resourceName =>
+                    {
+                        requestedResourceName = resourceName;
+                        return consoleLogs;
+                    })));
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/deck/resources/frontend-abc123/console-logs");
+        using var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var response = await httpClient.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationTokenSource.Token).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal("no", Assert.Single(response.Headers.GetValues("X-Accel-Buffering")));
+        Assert.Equal("frontend-abc123", requestedResourceName);
+
+        await consoleLogs.Writer.WriteAsync(
+            [
+                new ResourceLogLine(12, "Listening on https://localhost:7443", IsErrorMessage: false),
+                new ResourceLogLine(13, "Connection failed", IsErrorMessage: true)
+            ],
+            cancellationTokenSource.Token);
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationTokenSource.Token);
+        using var reader = new StreamReader(stream);
+        var responseLine = await reader.ReadLineAsync(cancellationTokenSource.Token)
+            ?? throw new InvalidOperationException("The console stream ended before emitting a batch.");
+        var actual = JsonNode.Parse(responseLine);
+        var expected = JsonNode.Parse(
+            """
+            {
+              "resourceName": "frontend-abc123",
+              "lines": [
+                {
+                  "lineNumber": 12,
+                  "text": "Listening on https://localhost:7443",
+                  "isStdErr": false
+                },
+                {
+                  "lineNumber": 13,
+                  "text": "Connection failed",
+                  "isStdErr": true
+                }
+              ]
+            }
+            """);
+
+        Assert.True(JsonNode.DeepEquals(expected, actual), $"Expected:{Environment.NewLine}{expected}{Environment.NewLine}Actual:{Environment.NewLine}{actual}");
+        consoleLogs.Writer.Complete();
+    }
+
+    [Fact]
+    public async Task GetConsoleLogs_UnknownResource_ReturnsNotFound()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            testOutputHelper,
+            preConfigureBuilder: builder => builder.Services.AddSingleton<IDashboardClient>(
+                new TestDashboardClient(isEnabled: true, initialResources: [CreateResource()])));
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        var response = await httpClient.GetAsync("/api/deck/resources/missing/console-logs").DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Interactions_RoundTripInputsDialog()
     {
         var interactions = Channel.CreateUnbounded<DashboardProto.WatchInteractionsResponseUpdate>();
@@ -361,7 +443,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
             "application/json");
         var response = await httpClient.PostAsync("/api/deck/interactions/respond", content).DefaultTimeout();
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         var sent = await responses.Reader.ReadAsync().AsTask().DefaultTimeout();
         Assert.Equal(42, sent.InteractionId);
         Assert.Equal(DashboardProto.WatchInteractionsRequestUpdate.KindOneofCase.InputsDialog, sent.KindCase);

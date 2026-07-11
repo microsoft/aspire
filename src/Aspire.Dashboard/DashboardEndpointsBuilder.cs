@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
@@ -191,6 +192,21 @@ public static class DashboardEndpointsBuilder
                 Message: response.Message ?? response.ErrorMessage);
             return Results.Json(result, DeckApiJsonSerializerContext.Default.DeckCommandResponse);
         });
+
+        group.MapGet("/resources/{resourceName}/console-logs", async (
+            string resourceName,
+            HttpContext httpContext,
+            IDashboardClient dashboardClient) =>
+        {
+            if (!dashboardClient.GetResources().Any(resource =>
+                string.Equals(resource.Name, resourceName, StringComparisons.ResourceName)))
+            {
+                return Results.NotFound();
+            }
+
+            await StreamDeckConsoleLogsAsync(httpContext, dashboardClient, resourceName, httpContext.RequestAborted).ConfigureAwait(false);
+            return Results.Empty;
+        });
     }
 
     public static void MapTelemetryApi(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)
@@ -368,6 +384,42 @@ public static class DashboardEndpointsBuilder
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // Client disconnected - this is expected, exit cleanly
+        }
+    }
+
+    private static async Task StreamDeckConsoleLogsAsync(
+        HttpContext httpContext,
+        IDashboardClient dashboardClient,
+        string resourceName,
+        CancellationToken cancellationToken)
+    {
+        httpContext.Response.ContentType = "application/x-ndjson";
+        // Console output can contain secrets. Prevent browsers and intermediaries from
+        // retaining an authenticated stream, and disable reverse-proxy response buffering.
+        httpContext.Response.Headers.CacheControl = "no-store";
+        httpContext.Response.Headers["X-Accel-Buffering"] = "no";
+        await httpContext.Response.StartAsync(cancellationToken).ConfigureAwait(false);
+        await httpContext.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            await foreach (var batch in dashboardClient.SubscribeConsoleLogs(resourceName, cancellationToken).ConfigureAwait(false))
+            {
+                var response = new DeckConsoleLogEvent(
+                    resourceName,
+                    batch.Select(line => new DeckConsoleLogLine(line.LineNumber, line.Content, line.IsErrorMessage)).ToArray());
+                await JsonSerializer.SerializeAsync(
+                    httpContext.Response.Body,
+                    response,
+                    DeckApiJsonSerializerContext.Default.DeckConsoleLogEvent,
+                    cancellationToken).ConfigureAwait(false);
+                await httpContext.Response.WriteAsync("\n", cancellationToken).ConfigureAwait(false);
+                await httpContext.Response.Body.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The stream owns no state after the request ends, so a browser disconnect is expected.
         }
     }
 }

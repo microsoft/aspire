@@ -80,6 +80,15 @@ internal sealed record DeckCommandResponse(
     string Kind,
     string? Message);
 
+internal sealed record DeckConsoleLogEvent(
+    string ResourceName,
+    DeckConsoleLogLine[] Lines);
+
+internal sealed record DeckConsoleLogLine(
+    int LineNumber,
+    string Text,
+    bool IsStdErr);
+
 internal sealed record DeckInteraction(
     int InteractionId,
     string Kind,
