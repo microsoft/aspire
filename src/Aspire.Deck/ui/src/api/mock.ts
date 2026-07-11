@@ -411,6 +411,7 @@ class MockBackend {
       pointCount: 1,
     })),
   };
+  private logCountByResource = new Map<string, number>();
   private telemetryTick = 0;
 
   // Per-metric timestamped history so the Metrics chart has a real time series.
@@ -494,6 +495,28 @@ class MockBackend {
 
   getTelemetrySummary(): TelemetrySummary {
     return structuredClone(this.telemetry);
+  }
+
+  clearStructuredLogs(resourceName: string | null): void {
+    if (resourceName === null) {
+      this.telemetry.logCount = 0;
+      this.telemetry.recentLogs = [];
+      this.logCountByResource.clear();
+    } else {
+      this.telemetry.logCount = Math.max(
+        0,
+        this.telemetry.logCount - (this.logCountByResource.get(resourceName) ?? 0),
+      );
+      this.telemetry.recentLogs = this.telemetry.recentLogs.filter(
+        (log) => log.resourceName !== resourceName,
+      );
+      this.logCountByResource.delete(resourceName);
+    }
+
+    const snapshot = this.getTelemetrySummary();
+    for (const callback of this.telemetrySubs) {
+      callback(snapshot);
+    }
   }
 
   getMetricSeries(query: MetricSeriesQuery): MetricSeriesResponse | null {
@@ -787,6 +810,10 @@ class MockBackend {
     };
     this.telemetry.recentLogs = [log, ...this.telemetry.recentLogs].slice(0, 200);
     this.telemetry.logCount += 1;
+    this.logCountByResource.set(
+      resourceName,
+      (this.logCountByResource.get(resourceName) ?? 0) + 1,
+    );
 
     // Append a nested trace: a server root span with a few staggered child spans
     // (and one grandchild) so the waterfall shows a realistic call timeline.

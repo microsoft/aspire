@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 31
+- React covered: 32
 - React partial: 43
-- React missing: 83
+- React missing: 82
 - Legacy black-box scenarios pending: 80
-- React parity gaps: 126
+- React parity gaps: 125
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -122,7 +122,7 @@
 | LOG-STRUCTURED-FILTER-001 | structured-logs | `/structuredlogs` | structured-logs | missing | - | Structured attribute filters can be added, edited, enabled, disabled, and removed. |
 | LOG-FILTER-COUNT-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Enabled structured filters expose a count and management menu. |
 | LOG-PAUSE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-PAUSE-001; STRESS-STRUCTURED-LOG-PAUSE-001 | Incoming structured logs can be paused and resumed. |
-| LOG-CLEAR-001 | structured-logs | `/structuredlogs` | structured-logs | missing | - | Structured logs can be cleared for the selected resource or all resources. |
+| LOG-CLEAR-001 | structured-logs | `/structuredlogs` | structured-logs | covered | HTTP-STRUCTURED-LOG-CLEAR-001; STRESS-STRUCTURED-LOG-CLEAR-001 | Structured logs can be cleared for the selected resource or all resources. |
 | LOG-VIRTUALIZATION-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Large log volumes remain responsive through row virtualization. |
 | LOG-DETAILS-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Selecting a log opens complete event, scope, resource, and attribute details. |
 | LOG-ACTIONS-001 | structured-logs | `/structuredlogs` | structured-logs | missing | - | Per-log actions expose details, text/JSON visualizers, copy, and related navigation. |

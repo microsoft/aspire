@@ -13,6 +13,7 @@ export const stressFeatures = {
   "STRESS-STRUCTURED-LOGS-001": "The React structured-log page replays Stress telemetry and updates after the telemetry service starts again.",
   "STRESS-STRUCTURED-LOG-RESOURCE-001": "The React structured-log resource selector constrains every visible Stress row.",
   "STRESS-STRUCTURED-LOG-PAUSE-001": "The React structured-log page freezes live Stress records and catches up on resume.",
+  "STRESS-STRUCTURED-LOG-CLEAR-001": "The React structured-log clear menu removes a selected Stress resource and then all logs.",
   "STRESS-NAVIGATION-001": "Every dashboard page remains reachable while connected to the live backend.",
   "STRESS-EMPTY-METRICS-001": "The live dashboard distinguishes settled empty metrics from loading.",
   "STRESS-RESPONSIVE-001": "The live resource workflow remains contained and usable at a mobile viewport.",

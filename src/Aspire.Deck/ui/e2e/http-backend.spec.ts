@@ -430,6 +430,120 @@ test(`${features("HTTP-STRUCTURED-LOGS-001")} streams OTLP structured logs throu
   });
 });
 
+test(`${features("HTTP-STRUCTURED-LOG-CLEAR-001")} clears selected and all structured logs through the HTTP backend`, async ({ page }, testInfo) => {
+  interface TestLog {
+    resourceName: string;
+    timeUnixNano: string;
+    severityNumber: number;
+    severityText: string;
+    body: string;
+    id: string;
+  }
+
+  let records: TestLog[] = [
+    {
+      resourceName: "stress-api",
+      timeUnixNano: "1783670400000000000",
+      severityNumber: 9,
+      severityText: "Information",
+      body: "HTTP request started",
+      id: "51",
+    },
+    {
+      resourceName: "stress-worker",
+      timeUnixNano: "1783670401000000000",
+      severityNumber: 17,
+      severityText: "Error",
+      body: "Queue processing failed",
+      id: "52",
+    },
+  ];
+  const clearRequests: Array<string | null> = [];
+  const toOtlpData = () => ({
+    resourceLogs: records.map((record) => ({
+      resource: {
+        attributes: [{ key: "service.name", value: { stringValue: record.resourceName } }],
+      },
+      scopeLogs: [{
+        scope: { name: "Stress.Telemetry" },
+        logRecords: [{
+          timeUnixNano: record.timeUnixNano,
+          severityNumber: record.severityNumber,
+          severityText: record.severityText,
+          body: { stringValue: record.body },
+          attributes: [{ key: "aspire.log_id", value: { stringValue: record.id } }],
+        }],
+      }],
+    })),
+  });
+
+  await page.route("**/api/deck/config", async (route) => {
+    await route.fulfill({ json: config });
+  });
+  await page.route("**/api/deck/resources", async (route) => {
+    await route.fulfill({ json: [resource] });
+  });
+  await page.unroute("**/api/deck/telemetry/logs?*");
+  await page.route("**/api/deck/telemetry/logs*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === "DELETE") {
+      const resourceName = url.searchParams.get("resource");
+      clearRequests.push(resourceName);
+      records = resourceName === null
+        ? []
+        : records.filter((record) => record.resourceName !== resourceName);
+      await route.fulfill({ status: 204 });
+      return;
+    }
+
+    if (url.searchParams.get("follow") === "true") {
+      await route.fulfill({
+        contentType: "application/x-ndjson",
+        body: `${JSON.stringify(toOtlpData())}\n`,
+      });
+      return;
+    }
+
+    await route.fulfill({
+      json: {
+        data: toOtlpData(),
+        totalCount: records.length,
+        returnedCount: records.length,
+      },
+    });
+  });
+
+  await page.goto("/?backend=http");
+  await page.getByRole("navigation").getByRole("button", { name: /^Structured Logs(?: \d+)?$/ }).click();
+
+  const logs = page.getByRole("main").getByRole("region", { name: "Structured Logs" });
+  const rows = logs.getByRole("table").locator("tbody tr");
+  await expect(rows).toHaveCount(2);
+
+  await logs.getByRole("combobox", { name: "Resource" }).selectOption("stress-api");
+  await logs.getByRole("button", { name: "Clear structured logs" }).click();
+  await page.getByRole("menuitem", { name: "Clear stress-api" }).click();
+
+  await expect(page.getByRole("status")).toHaveText("Cleared structured logs for stress-api.");
+  await expect(rows).toHaveCount(1);
+  await expect(logs.getByRole("table")).toContainText("stress-worker");
+  await expect(logs.getByRole("table")).not.toContainText("stress-api");
+  await expect(logs.locator(".page__subtitle")).toHaveText("1 total · showing 1");
+
+  await logs.getByRole("button", { name: "Clear structured logs" }).click();
+  await testInfo.attach("http-backend-structured-log-clear-menu.png", {
+    body: await page.screenshot({ animations: "disabled", fullPage: true }),
+    contentType: "image/png",
+  });
+  await page.getByRole("menuitem", { name: "Clear all resources" }).click();
+
+  await expect(page.getByRole("status")).toHaveText("Cleared all structured logs.");
+  await expect(logs.locator(".page__subtitle")).toHaveText("0 total · showing 0");
+  await expect(logs).toContainText("No structured logs.");
+  expect(clearRequests).toEqual(["stress-api", null]);
+});
+
 test(`${features("HTTP-EMPTY-TELEMETRY-001")} renders a settled empty metrics state`, async ({ page }) => {
   await page.route("**/api/deck/config", async (route) => {
     await route.fulfill({ json: config });

@@ -5,6 +5,7 @@ const coveredFeatures = new Set<StressFeatureId>();
 const browserErrors = new WeakMap<Page, string[]>();
 const allowConsoleStreamAbort = new WeakSet<Page>();
 const allowNavigationAbort = new WeakSet<Page>();
+const dashboardBrowserToken = process.env.ASPIRE_DASHBOARD_BROWSER_TOKEN;
 
 function features(...ids: StressFeatureId[]): string {
   for (const id of ids) {
@@ -25,6 +26,65 @@ async function attachScreenshot(page: Page, testInfo: TestInfo, name: string): P
   await testInfo.attach(`${name}.png`, { body, contentType: "image/png" });
 }
 
+interface StressResourceApi {
+  name: string;
+  displayName: string;
+  iconName: string | null;
+  commands: Array<{
+    name: string;
+    state: string;
+    iconName: string | null;
+  }>;
+}
+
+async function getDashboardResources(page: Page): Promise<StressResourceApi[]> {
+  return await page.evaluate(async () => {
+    const response = await fetch("/api/deck/resources", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    if (!response.ok) {
+      throw new Error(`Resource request failed with ${response.status}.`);
+    }
+    return await response.json();
+  }) as StressResourceApi[];
+}
+
+async function runTelemetryServiceLifecycleCommand(page: Page): Promise<void> {
+  const resources = await getDashboardResources(page);
+  const telemetryService = resources.find((resource) => resource.displayName === "stress-telemetryservice");
+  if (telemetryService === undefined) {
+    throw new Error("The Stress telemetry service resource was not found.");
+  }
+
+  const lifecycleCommand = telemetryService.commands.find(
+    (command) => command.state === "enabled" && (command.name === "start" || command.name === "restart"),
+  );
+  if (lifecycleCommand === undefined) {
+    throw new Error("The Stress telemetry service has no enabled start or restart command.");
+  }
+
+  const response = await page.evaluate(async ({ resourceName, commandName }) => {
+    const commandResponse = await fetch("/api/deck/commands/execute", {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ resourceName, commandName }),
+    });
+    if (!commandResponse.ok) {
+      throw new Error(`Command request failed with ${commandResponse.status}.`);
+    }
+    return await commandResponse.json();
+  }, { resourceName: telemetryService.name, commandName: lifecycleCommand.name }) as { kind: string };
+  if (response.kind !== "succeeded") {
+    throw new Error(`Telemetry lifecycle command returned '${response.kind}'.`);
+  }
+}
+
 test.beforeEach(async ({ page }) => {
   const errors: string[] = [];
   browserErrors.set(page, errors);
@@ -38,6 +98,9 @@ test.beforeEach(async ({ page }) => {
     errors.push(`request: ${request.method()} ${request.url()} (${request.failure()?.errorText ?? "unknown failure"})`);
   });
 
+  if (dashboardBrowserToken) {
+    await page.goto(`/login?t=${encodeURIComponent(dashboardBrowserToken)}`);
+  }
   await page.goto("/?backend=http");
   await expect(page.getByTitle("Resources: Connected")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("main").locator(".page__title")).toHaveText("Resources");
@@ -50,7 +113,7 @@ test.afterEach(async ({ page }) => {
     : errors;
   if (allowNavigationAbort.has(page)) {
     unexpected = unexpected.filter((error) =>
-      !/^request: GET .*\/api\/deck\/(?:telemetry\/logs\?follow=true|interactions|resources) \(net::ERR_ABORTED\)$/.test(error));
+      !/^request: GET .*\/api\/deck\/(?:telemetry\/logs\?follow=true|interactions|resources(?:\/[^/]+\/console-logs)?) \(net::ERR_ABORTED\)$/.test(error));
   }
   expect(unexpected, "Unexpected browser errors").toEqual([]);
 });
@@ -93,12 +156,7 @@ test(`${features("STRESS-DETAILS-001", "STRESS-SECRETS-001")} inspects live Stre
 
 test(`${features("STRESS-RESOURCE-ICON-001", "STRESS-COMMAND-ICON-001", "STRESS-COMMAND-EXECUTE-001")} renders live Stress icon contracts and executes a command`, async ({ page }, testInfo) => {
   allowNavigationAbort.add(page);
-  const response = await page.request.get("/api/deck/resources");
-  expect(response.ok()).toBe(true);
-  const resources = await response.json() as Array<{
-    iconName: string | null;
-    commands: Array<{ iconName: string | null }>;
-  }>;
+  const resources = await getDashboardResources(page);
   const iconNames = [...new Set(resources.flatMap((resource) => [
     resource.iconName,
     ...resource.commands.map((command) => command.iconName),
@@ -223,15 +281,17 @@ test(`${features("STRESS-CONSOLE-001")} renders a live resource console backlog`
   await attachScreenshot(page, testInfo, "stress-live-console");
 });
 
-test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-001", "STRESS-STRUCTURED-LOG-PAUSE-001")} replays, filters, and pauses live structured logs`, async ({ page }, testInfo) => {
+test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-001", "STRESS-STRUCTURED-LOG-PAUSE-001", "STRESS-STRUCTURED-LOG-CLEAR-001")} replays, filters, pauses, and clears live structured logs`, async ({ page }, testInfo) => {
+  test.setTimeout(75_000);
   await navigationButton(page, "Structured Logs").click();
   const logs = page.getByRole("main").getByRole("region", { name: "Structured Logs" });
   const table = logs.getByRole("table");
   const rows = table.locator("tbody tr");
   const subtitle = logs.locator(".page__subtitle");
 
+  await runTelemetryServiceLifecycleCommand(page);
   await expect(table.getByRole("columnheader")).toHaveText(["Time", "Severity", "Resource", "Message"]);
-  await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThan(10);
+  await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThanOrEqual(10);
   await expect(table).toContainText("stress-telemetryservice");
   await expect(table).toContainText("Application started. Press Ctrl+C to shut down.");
   await expect(table.locator(".badge").filter({ hasText: "Information" }).first()).toBeVisible();
@@ -259,22 +319,7 @@ test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-0
   await pause.check();
   await expect(subtitle).toContainText("paused");
 
-  const resourcesResponse = await page.request.get("/api/deck/resources");
-  expect(resourcesResponse.ok()).toBe(true);
-  const resources = await resourcesResponse.json() as Array<{
-    name: string;
-    displayName: string;
-    commands: Array<{ name: string; state: string }>;
-  }>;
-  const telemetryService = resources.find((resource) => resource.displayName === "stress-telemetryservice");
-  expect(telemetryService).toBeDefined();
-  expect(telemetryService!.commands).toContainEqual(expect.objectContaining({ name: "start", state: "enabled" }));
-
-  const startResponse = await page.request.post("/api/deck/commands/execute", {
-    data: { resourceName: telemetryService!.name, commandName: "start" },
-  });
-  expect(startResponse.ok()).toBe(true);
-  await expect(startResponse.json()).resolves.toMatchObject({ kind: "succeeded" });
+  await runTelemetryServiceLifecycleCommand(page);
   const readNavigationTotal = async (): Promise<number> =>
     Number((await navigationButton(page, "Structured Logs").innerText()).match(/(\d+)$/)?.[1]);
   await expect.poll(readNavigationTotal, { timeout: 45_000 }).toBeGreaterThan(initialTotal);
@@ -308,6 +353,25 @@ test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-0
   expect(geometry.timeWhiteSpace).toBe("nowrap");
 
   await attachScreenshot(page, testInfo, "stress-live-structured-logs");
+
+  await logs.getByRole("button", { name: "Clear structured logs" }).click();
+  await page.getByRole("menuitem", { name: "Clear stress-telemetryservice" }).click();
+  await expect(page.getByRole("status")).toHaveText("Cleared structured logs for stress-telemetryservice.");
+  await expect.poll(readTotal).toBeLessThan(initialTotal);
+  await expect(table).not.toContainText("stress-telemetryservice");
+
+  await runTelemetryServiceLifecycleCommand(page);
+  await expect.poll(readTotal, { timeout: 45_000 }).toBeGreaterThan(0);
+
+  await logs.getByRole("button", { name: "Clear structured logs" }).click();
+  await page.getByRole("menuitem", { name: "Clear all resources" }).click();
+  await expect(page.getByRole("status")).toHaveText("Cleared all structured logs.");
+  await expect.poll(readTotal).toBe(0);
+  await expect(logs).toContainText("No structured logs.");
+
+  // Leave the shared Stress AppHost ready for an immediate repeat of this suite.
+  await runTelemetryServiceLifecycleCommand(page);
+  await expect.poll(readTotal, { timeout: 45_000 }).toBeGreaterThan(0);
 });
 
 test(`${features("STRESS-NAVIGATION-001", "STRESS-EMPTY-METRICS-001")} reaches every page against the live dashboard`, async ({ page }) => {

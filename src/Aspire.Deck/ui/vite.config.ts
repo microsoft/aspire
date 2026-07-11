@@ -34,6 +34,14 @@ export default defineConfig({
             changeOrigin: true,
             secure: false,
           },
+          // Live dashboard runs commonly use browser-token auth. Proxying the
+          // login handshake lets the test browser receive a cookie for the Vite
+          // origin without reading or copying authentication cookie material.
+          "/login": {
+            target: dashboardUrl,
+            changeOrigin: true,
+            secure: false,
+          },
         }
       : undefined,
   },

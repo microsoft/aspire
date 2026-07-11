@@ -6,7 +6,7 @@
 //! Ingested signals are summarized into an in-memory store (recent records are
 //! capped) and pushed to the UI via the `deck://telemetry` event.
 
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -116,6 +116,7 @@ impl TelemetrySummary {
 
 pub struct TelemetryStore {
     log_count: u64,
+    log_count_by_resource: HashMap<Option<String>, u64>,
     span_count: u64,
     metric_count: u64,
     recent_logs: VecDeque<LogRecordSummary>,
@@ -127,6 +128,7 @@ impl TelemetryStore {
     pub fn new() -> Self {
         TelemetryStore {
             log_count: 0,
+            log_count_by_resource: HashMap::new(),
             span_count: 0,
             metric_count: 0,
             recent_logs: VecDeque::with_capacity(RECENT_CAP),
@@ -137,10 +139,28 @@ impl TelemetryStore {
 
     fn push_log(&mut self, log: LogRecordSummary) {
         self.log_count += 1;
+        *self
+            .log_count_by_resource
+            .entry(log.resource_name.clone())
+            .or_default() += 1;
         if self.recent_logs.len() >= RECENT_CAP {
             self.recent_logs.pop_back();
         }
         self.recent_logs.push_front(log);
+    }
+
+    pub fn clear_logs(&mut self, resource_name: Option<&str>) {
+        if let Some(resource_name) = resource_name {
+            let key = Some(resource_name.to_string());
+            let removed_count = self.log_count_by_resource.remove(&key).unwrap_or_default();
+            self.log_count = self.log_count.saturating_sub(removed_count);
+            self.recent_logs
+                .retain(|log| log.resource_name.as_deref() != Some(resource_name));
+        } else {
+            self.log_count = 0;
+            self.log_count_by_resource.clear();
+            self.recent_logs.clear();
+        }
     }
 
     fn push_span(&mut self, span: SpanSummary) {
@@ -225,6 +245,47 @@ impl TelemetryStore {
 impl Default for TelemetryStore {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LogRecordSummary, TelemetryStore};
+
+    fn log(resource_name: &str) -> LogRecordSummary {
+        LogRecordSummary {
+            time_unix_nano: "1".to_string(),
+            severity: Some("Information".to_string()),
+            severity_number: 9,
+            body: "Test log".to_string(),
+            resource_name: Some(resource_name.to_string()),
+            trace_id: None,
+            span_id: None,
+        }
+    }
+
+    #[test]
+    fn clear_logs_removes_selected_resource_or_all_logs() {
+        let mut store = TelemetryStore::new();
+        store.push_log(log("frontend"));
+        store.push_log(log("frontend"));
+        store.push_log(log("backend"));
+
+        store.clear_logs(Some("frontend"));
+
+        let selected_summary = store.summary();
+        assert_eq!(selected_summary.log_count, 1);
+        assert_eq!(selected_summary.recent_logs.len(), 1);
+        assert_eq!(
+            selected_summary.recent_logs[0].resource_name.as_deref(),
+            Some("backend")
+        );
+
+        store.clear_logs(None);
+
+        let empty_summary = store.summary();
+        assert_eq!(empty_summary.log_count, 0);
+        assert!(empty_summary.recent_logs.is_empty());
     }
 }
 

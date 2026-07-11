@@ -10,7 +10,10 @@ The backend exposes **commands** (request/response via `@tauri-apps/api/core` `i
 The ASP.NET Core dashboard backend exposes the same config, resource, command, and interaction
 shapes through `GET /api/deck/config`, `GET /api/deck/resources`,
 `POST /api/deck/commands/execute`, `GET /api/deck/interactions`, and
-`POST /api/deck/interactions/respond`. Command execution accepts
+`POST /api/deck/interactions/respond`. Structured logs are streamed through
+`GET /api/deck/telemetry/logs?follow=true` and cleared through
+`DELETE /api/deck/telemetry/logs` with an optional `resource` query parameter.
+Command execution accepts
 `{ resourceName, commandName }` and returns `CommandResponse`. The interactions GET returns the
 current `InteractionInfo[]`; the response POST accepts `{ interactionId, action, values }`.
 
@@ -25,6 +28,7 @@ current `InteractionInfo[]`; the response POST accepts `{ interactionId, action,
 | `deck_execute_command` | `{ resourceName, resourceType, commandName }` | `CommandResponse` |
 | `deck_list_canvases` | – | `CanvasManifest[]` |
 | `deck_get_telemetry_summary` | – | `TelemetrySummary` |
+| `deck_clear_structured_logs` | `{ resourceName?: string \| null }` | `void` |
 | `deck_get_metric_series` | `{ name, resourceName?, windowSeconds?, maxPoints? }` | `MetricSeriesResponse \| null` (downsampled time series) |
 | `deck_list_apphosts` | – | `AppHostInfo[]` (attached AppHosts) |
 | `deck_select_apphost` | `{ id: string }` | `void` (switches the active AppHost) |

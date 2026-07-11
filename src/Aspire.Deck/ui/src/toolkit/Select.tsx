@@ -19,6 +19,7 @@ export interface SelectProps<T = unknown> {
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  fieldClassName?: string;
   style?: CSSProperties;
 }
 
@@ -32,14 +33,16 @@ export function Select<T>({
   placeholder,
   disabled,
   className,
+  fieldClassName,
   style,
 }: SelectProps<T>) {
   const generatedId = useId();
   const controlId = id ?? generatedId;
   const classes = ["select", className].filter(Boolean).join(" ");
+  const fieldClasses = ["deck-select-field", fieldClassName].filter(Boolean).join(" ");
 
   return (
-    <div className="deck-select-field">
+    <div className={fieldClasses}>
       {label ? (
         <label className="deck-select-label" htmlFor={controlId}>
           {label}

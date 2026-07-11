@@ -157,6 +157,17 @@ export function getTelemetrySummary(): Promise<TelemetrySummary> {
   return Promise.resolve(mockBackend.getTelemetrySummary());
 }
 
+export function clearStructuredLogs(resourceName: string | null): Promise<void> {
+  if (isTauri()) {
+    return invoke<void>("deck_clear_structured_logs", { resourceName });
+  }
+  if (isHttpBackend()) {
+    return httpBackend.clearStructuredLogs(resourceName);
+  }
+  mockBackend.clearStructuredLogs(resourceName);
+  return Promise.resolve();
+}
+
 // Fetches the downsampled time series for a metric within a window. Returns null
 // when the metric has no data yet.
 export function getMetricSeries(query: MetricSeriesQuery): Promise<MetricSeriesResponse | null> {

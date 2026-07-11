@@ -60,6 +60,18 @@ pub fn deck_get_telemetry_summary(state: State<'_, Arc<AppState>>) -> TelemetryS
     }
 }
 
+#[tauri::command]
+pub fn deck_clear_structured_logs(state: State<'_, Arc<AppState>>, resource_name: Option<String>) {
+    if let Some(session) = state.active_session() {
+        session
+            .telemetry
+            .lock()
+            .unwrap()
+            .clear_logs(resource_name.as_deref());
+        state.emit_active_telemetry();
+    }
+}
+
 /// Returns the downsampled time series for a metric within the requested window.
 /// `resourceName` disambiguates when several resources emit the same metric name;
 /// when omitted, the first matching series is returned. Reads the active AppHost's

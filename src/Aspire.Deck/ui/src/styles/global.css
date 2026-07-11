@@ -452,6 +452,38 @@ a:focus-visible {
   flex-wrap: wrap;
 }
 
+.structured-logs__toolbar {
+  flex-wrap: nowrap;
+}
+.structured-logs__toolbar .searchbox {
+  flex: 1 1 220px;
+  min-width: 180px;
+  max-width: 240px;
+}
+.structured-logs__toolbar .deck-select-field {
+  flex: 0 1 200px;
+  min-width: 0;
+}
+.structured-logs__toolbar .select {
+  width: 100%;
+}
+.structured-logs__toolbar .structured-logs__resource-field {
+  flex-basis: 230px;
+}
+.structured-logs__toolbar .structured-logs__severity-field {
+  flex-basis: 170px;
+}
+.structured-logs__toolbar .structured-logs__severity-select {
+  min-width: 140px;
+}
+.structured-logs__toolbar .page__header-spacer {
+  min-width: 0;
+}
+.structured-logs__pause,
+.structured-logs__toolbar .command-menu-root {
+  flex: 0 0 auto;
+}
+
 /* ---------- Search box ---------- */
 .searchbox {
   display: flex;
@@ -2184,6 +2216,18 @@ table.data tbody tr.selected {
     flex: 1 1 100%;
     width: 100%;
     min-width: 0;
+  }
+
+  .structured-logs__toolbar {
+    flex-wrap: wrap;
+  }
+
+  .structured-logs__toolbar .deck-select-field {
+    flex: 1 1 180px;
+  }
+
+  .structured-logs__toolbar .page__header-spacer {
+    display: none;
   }
 
   .page__body {

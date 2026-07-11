@@ -167,7 +167,7 @@ const featureDefinitions = {
     ["LOG-STRUCTURED-FILTER-001", "/structuredlogs", "Structured attribute filters can be added, edited, enabled, disabled, and removed.", "structured-logs", "missing"],
     ["LOG-FILTER-COUNT-001", "/structuredlogs", "Enabled structured filters expose a count and management menu.", null, "missing"],
     ["LOG-PAUSE-001", "/structuredlogs", "Incoming structured logs can be paused and resumed.", "structured-logs", "covered", "LOG-PAUSE-001; STRESS-STRUCTURED-LOG-PAUSE-001"],
-    ["LOG-CLEAR-001", "/structuredlogs", "Structured logs can be cleared for the selected resource or all resources.", "structured-logs", "missing"],
+    ["LOG-CLEAR-001", "/structuredlogs", "Structured logs can be cleared for the selected resource or all resources.", "structured-logs", "covered", "HTTP-STRUCTURED-LOG-CLEAR-001; STRESS-STRUCTURED-LOG-CLEAR-001"],
     ["LOG-VIRTUALIZATION-001", "/structuredlogs", "Large log volumes remain responsive through row virtualization.", null, "missing"],
     ["LOG-DETAILS-001", "/structuredlogs", "Selecting a log opens complete event, scope, resource, and attribute details.", null, "missing"],
     ["LOG-ACTIONS-001", "/structuredlogs", "Per-log actions expose details, text/JSON visualizers, copy, and related navigation.", "structured-logs", "missing"],

@@ -100,6 +100,20 @@ async function postNoContent<TRequest>(path: string, body: TRequest): Promise<vo
   await response.arrayBuffer();
 }
 
+async function deleteNoContent(path: string): Promise<void> {
+  const response = await fetch(`/api/deck/${path}`, {
+    method: "DELETE",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`Deck API request failed with ${response.status} ${response.statusText}.`);
+  }
+
+  await response.arrayBuffer();
+}
+
 function getConfig(): Promise<DeckConfig> {
   if (configPromise === null) {
     const request = requestJson<DeckConfig>("config");
@@ -312,6 +326,36 @@ function appendStructuredLogs(logs: OtlpLogRecordSummary[]): void {
   notifyTelemetry();
 }
 
+function summaryFromStructuredLogs(response: TelemetryApiResponse): TelemetrySummary {
+  return {
+    ...emptyTelemetry,
+    logCount: response.totalCount,
+    recentLogs: getLogRecordSummaries(response.data)
+      .map(toLogRecordSummary)
+      .sort(compareNewestFirst),
+  };
+}
+
+async function clearStructuredLogs(resourceName: string | null): Promise<void> {
+  const resourceQuery = resourceName === null ? "" : `?resource=${encodeURIComponent(resourceName)}`;
+  await deleteNoContent(`telemetry/logs${resourceQuery}`);
+
+  // The live NDJSON stream only carries additions. Refresh after a destructive
+  // mutation so local totals and dedupe keys exactly match the server snapshot.
+  const response = await requestJson<TelemetryApiResponse>("telemetry/logs?limit=200");
+  const records = getLogRecordSummaries(response.data);
+  telemetryLogKeys.clear();
+  for (const record of records) {
+    telemetryLogKeys.add(record.recordKey);
+  }
+  telemetrySummary = {
+    ...telemetrySummary,
+    logCount: response.totalCount,
+    recentLogs: records.map(toLogRecordSummary).sort(compareNewestFirst),
+  };
+  notifyTelemetry();
+}
+
 function ensureTelemetryStream(): void {
   if (telemetryStarted) {
     return;
@@ -388,14 +432,9 @@ export const httpBackend = {
     void postNoContent("interactions/respond", { interactionId, action, values }).catch(() => undefined);
   },
   getTelemetrySummary(): Promise<TelemetrySummary> {
-    return requestJson<TelemetryApiResponse>("telemetry/logs?limit=200").then((response) => ({
-      ...emptyTelemetry,
-      logCount: response.totalCount,
-      recentLogs: getLogRecordSummaries(response.data)
-        .map(toLogRecordSummary)
-        .sort(compareNewestFirst),
-    }));
+    return requestJson<TelemetryApiResponse>("telemetry/logs?limit=200").then(summaryFromStructuredLogs);
   },
+  clearStructuredLogs,
   getMetricSeries(_query: MetricSeriesQuery): Promise<MetricSeriesResponse | null> {
     return Promise.resolve(null);
   },

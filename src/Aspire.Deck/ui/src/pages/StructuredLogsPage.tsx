@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
+import { clearStructuredLogs } from "../api/deck";
 import type { LogRecordSummary, TelemetrySummary } from "../api/types";
 import { useTelemetry } from "../lib/useDeckEvent";
 import { dateFromUnixNano, formatTimeWithMillis } from "../lib/format";
 import {
   Badge,
+  CommandMenu,
   DataTable,
+  NamedIcon,
   Page,
   PageBody,
   PageHeader,
@@ -49,6 +52,8 @@ export function StructuredLogsPage() {
   const [severity, setSeverity] = useState("All");
   const [resource, setResource] = useState("all");
   const [pausedSnapshot, setPausedSnapshot] = useState<TelemetrySummary | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [clearStatus, setClearStatus] = useState<{ message: string; error: boolean } | null>(null);
 
   const displayedTelemetry = pausedSnapshot ?? telemetry;
   const logs = displayedTelemetry?.recentLogs ?? [];
@@ -110,6 +115,26 @@ export function StructuredLogsPage() {
     },
   ];
 
+  const clearLogs = async (resourceName: string | null): Promise<void> => {
+    setClearing(true);
+    setClearStatus(null);
+    try {
+      await clearStructuredLogs(resourceName);
+      setPausedSnapshot(null);
+      setResource("all");
+      setClearStatus({
+        message: resourceName === null
+          ? "Cleared all structured logs."
+          : `Cleared structured logs for ${resourceName}.`,
+        error: false,
+      });
+    } catch (error) {
+      setClearStatus({ message: `Could not clear structured logs: ${String(error)}`, error: true });
+    } finally {
+      setClearing(false);
+    }
+  };
+
   return (
     <Page aria-labelledby="deck-page-structured-logs-title">
       <PageHeader>
@@ -123,26 +148,55 @@ export function StructuredLogsPage() {
         </PageHeading>
       </PageHeader>
 
-      <PageToolbar ariaLabel="Structured log tools">
+      <PageToolbar ariaLabel="Structured log tools" className="structured-logs__toolbar">
         <SearchBox value={query} onChange={setQuery} placeholder="Filter messages…" />
         <Select
           ariaLabel="Resource"
+          className="structured-logs__resource-select"
+          fieldClassName="structured-logs__resource-field"
           options={resourceOptions}
           value={selectedResource}
           onValueChange={setResource}
         />
         <Select
           ariaLabel="Severity"
+          className="structured-logs__severity-select"
+          fieldClassName="structured-logs__severity-field"
           options={SEVERITY_OPTIONS}
           value={severity}
           onValueChange={setSeverity}
         />
         <div className="page__header-spacer" />
         <Switch
+          className="structured-logs__pause"
           label="Pause incoming data"
           checked={pausedSnapshot !== null}
           disabled={telemetry === null}
           onCheckedChange={(checked) => setPausedSnapshot(checked ? telemetry : null)}
+        />
+        <CommandMenu
+          ariaLabel="Clear structured logs"
+          triggerContent="Clear"
+          triggerIcon={<NamedIcon name="Delete" size={16} />}
+          placement="below-end"
+          entries={[
+            {
+              id: "clear-all",
+              label: "Clear all resources",
+              icon: <NamedIcon name="BoxMultiple" size={16} />,
+              tone: "danger",
+              disabled: clearing || displayedTelemetry === null || displayedTelemetry.logCount === 0,
+              onSelect: () => void clearLogs(null),
+            },
+            {
+              id: "clear-resource",
+              label: selectedResource === "all" ? "Clear selected resource" : `Clear ${selectedResource}`,
+              icon: <NamedIcon name="CheckmarkCircle" size={16} />,
+              tone: "danger",
+              disabled: clearing || selectedResource === "all",
+              onSelect: () => void clearLogs(selectedResource),
+            },
+          ]}
         />
       </PageToolbar>
 
@@ -151,9 +205,20 @@ export function StructuredLogsPage() {
           columns={columns}
           rows={filtered}
           rowKey={(l) => `${l.resourceName ?? ""}-${l.timeUnixNano}-${l.spanId ?? ""}-${l.severityNumber}-${l.body}`}
-          emptyMessage={telemetry ? "No logs match your filter." : "Waiting for telemetry…"}
+          emptyMessage={telemetry === null
+            ? "Waiting for telemetry…"
+            : logs.length === 0
+              ? "No structured logs."
+              : "No logs match your filter."}
         />
       </PageBody>
+
+      {clearStatus ? (
+        <div className="toast" role="status" aria-live="polite">
+          <span className={`state__dot ${clearStatus.error ? "error" : "success"}`} />
+          {clearStatus.message}
+        </div>
+      ) : null}
     </Page>
   );
 }
