@@ -13,10 +13,12 @@ import {
   PageTitle,
   PageToolbar,
   SearchBox,
+  Select,
   type Column,
 } from "../toolkit";
 
 const SEVERITIES = ["All", "Trace", "Debug", "Information", "Warning", "Error", "Critical"];
+const SEVERITY_OPTIONS = SEVERITIES.map((value) => ({ value, label: value }));
 
 function severityTone(severity: string | null): "neutral" | "info" | "warning" | "error" {
   switch (severity) {
@@ -59,9 +61,9 @@ export function StructuredLogsPage() {
     {
       key: "time",
       header: "Time",
-      width: "120px",
+      width: "150px",
       render: (l) => (
-        <span className="cell-mono cell-muted">{formatTimeWithMillis(dateFromUnixNano(l.timeUnixNano))}</span>
+        <span className="cell-mono cell-muted cell-time">{formatTimeWithMillis(dateFromUnixNano(l.timeUnixNano))}</span>
       ),
     },
     {
@@ -79,7 +81,7 @@ export function StructuredLogsPage() {
     {
       key: "body",
       header: "Message",
-      render: (l) => <span className="cell-mono">{l.body}</span>,
+      render: (l) => <span className="cell-mono cell-log-message">{l.body}</span>,
     },
   ];
 
@@ -96,20 +98,19 @@ export function StructuredLogsPage() {
 
       <PageToolbar ariaLabel="Structured log tools">
         <SearchBox value={query} onChange={setQuery} placeholder="Filter messages…" />
-        <select className="select" value={severity} onChange={(e) => setSeverity(e.target.value)}>
-          {SEVERITIES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+        <Select
+          ariaLabel="Severity"
+          options={SEVERITY_OPTIONS}
+          value={severity}
+          onValueChange={setSeverity}
+        />
       </PageToolbar>
 
       <PageBody>
         <DataTable
           columns={columns}
           rows={filtered}
-          rowKey={(l) => `${l.timeUnixNano}-${l.spanId ?? ""}-${l.body}`}
+          rowKey={(l) => `${l.resourceName ?? ""}-${l.timeUnixNano}-${l.spanId ?? ""}-${l.severityNumber}-${l.body}`}
           emptyMessage={telemetry ? "No logs match your filter." : "Waiting for telemetry…"}
         />
       </PageBody>

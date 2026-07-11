@@ -65,13 +65,12 @@ export function formatTimeWithMillis(value: Date | string | null): string {
   if (Number.isNaN(date.getTime())) {
     return "—";
   }
-  const base = date.toLocaleTimeString(undefined, {
+  return date.toLocaleTimeString(undefined, {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+    fractionalSecondDigits: 3,
   });
-  const millis = date.getMilliseconds().toString().padStart(3, "0");
-  return `${base}.${millis}`;
 }
 
 export function formatRelativeTime(value: string | null): string {

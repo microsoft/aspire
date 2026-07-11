@@ -104,6 +104,7 @@ test(`${features("LOG-LIST-001", "LOG-FILTER-001", "LOG-SEVERITY-001", "LOG-LIVE
   await expect.poll(() => dataRows.count()).toBeGreaterThanOrEqual(4);
 
   const firstRow = dataRows.first();
+  await expect(firstRow.locator("td").first()).toHaveText(/^\d{2}:\d{2}:\d{2}\.\d{3} (?:AM|PM)$/);
   const firstMessage = (await firstRow.locator("td").nth(3).innerText()).trim();
   const firstSeverity = (await firstRow.locator("td").nth(1).innerText()).trim();
   expect(firstMessage).not.toBe("");
@@ -126,7 +127,7 @@ test(`${features("LOG-LIST-001", "LOG-FILTER-001", "LOG-SEVERITY-001", "LOG-LIVE
     .toBe(true);
 
   await query.clear();
-  const severity = page.getByRole("combobox");
+  const severity = page.getByRole("combobox", { name: "Severity" });
   await severity.selectOption(firstSeverity);
   await expect.poll(() => dataRows.count()).toBeGreaterThan(0);
   await expect

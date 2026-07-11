@@ -160,7 +160,7 @@ const featureDefinitions = {
   ],
   "structured-logs": [
     ["LOG-LIST-001", "/structuredlogs", "Structured logs render resource, level, timestamp, message, trace, and actions columns.", "structured-logs", "partial", "LOG-LIST-001"],
-    ["LOG-LIVE-001", "/structuredlogs", "New structured logs stream into the list and update totals.", null, "partial", "LOG-LIVE-001"],
+    ["LOG-LIVE-001", "/structuredlogs", "New structured logs stream into the list and update totals.", "structured-logs", "covered", "LOG-LIVE-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001"],
     ["LOG-RESOURCE-001", "/structuredlogs", "Logs filter through a grouped resource selector.", "structured-logs", "missing"],
     ["LOG-LEVEL-001", "/structuredlogs", "All supported severity levels can be selected.", "structured-logs", "covered", "LOG-SEVERITY-001"],
     ["LOG-TEXT-FILTER-001", "/structuredlogs", "Logs filter across resource and message content.", "structured-logs", "covered", "LOG-FILTER-001"],

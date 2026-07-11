@@ -740,6 +740,13 @@ table.data tbody tr.selected {
   font-family: var(--font-mono);
   font-size: 12.5px;
 }
+.cell-time {
+  white-space: nowrap;
+}
+.cell-log-message {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .cell-muted {
   color: var(--text-muted);
 }

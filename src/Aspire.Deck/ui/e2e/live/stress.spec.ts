@@ -4,6 +4,7 @@ import { getMissingStressFeatures, type StressFeatureId } from "./stress-feature
 const coveredFeatures = new Set<StressFeatureId>();
 const browserErrors = new WeakMap<Page, string[]>();
 const allowConsoleStreamAbort = new WeakSet<Page>();
+const allowNavigationAbort = new WeakSet<Page>();
 
 function features(...ids: StressFeatureId[]): string {
   for (const id of ids) {
@@ -44,9 +45,13 @@ test.beforeEach(async ({ page }) => {
 
 test.afterEach(async ({ page }) => {
   const errors = browserErrors.get(page) ?? [];
-  const unexpected = allowConsoleStreamAbort.has(page)
+  let unexpected = allowConsoleStreamAbort.has(page)
     ? errors.filter((error) => !/^request: GET .*\/api\/deck\/resources\/[^/]+\/console-logs \(net::ERR_ABORTED\)$/.test(error))
     : errors;
+  if (allowNavigationAbort.has(page)) {
+    unexpected = unexpected.filter((error) =>
+      !/^request: GET .*\/api\/deck\/(?:telemetry\/logs\?follow=true|interactions|resources) \(net::ERR_ABORTED\)$/.test(error));
+  }
   expect(unexpected, "Unexpected browser errors").toEqual([]);
 });
 
@@ -87,6 +92,7 @@ test(`${features("STRESS-DETAILS-001", "STRESS-SECRETS-001")} inspects live Stre
 });
 
 test(`${features("STRESS-RESOURCE-ICON-001", "STRESS-COMMAND-ICON-001", "STRESS-COMMAND-EXECUTE-001")} renders live Stress icon contracts and executes a command`, async ({ page }, testInfo) => {
+  allowNavigationAbort.add(page);
   const response = await page.request.get("/api/deck/resources");
   expect(response.ok()).toBe(true);
   const resources = await response.json() as Array<{
@@ -217,7 +223,75 @@ test(`${features("STRESS-CONSOLE-001")} renders a live resource console backlog`
   await attachScreenshot(page, testInfo, "stress-live-console");
 });
 
-test(`${features("STRESS-NAVIGATION-001", "STRESS-EMPTY-TELEMETRY-001")} reaches every page against the live dashboard`, async ({ page }) => {
+test(`${features("STRESS-STRUCTURED-LOGS-001")} replays and streams live structured logs`, async ({ page }, testInfo) => {
+  await navigationButton(page, "Structured Logs").click();
+  const logs = page.getByRole("main").getByRole("region", { name: "Structured Logs" });
+  const table = logs.getByRole("table");
+  const rows = table.locator("tbody tr");
+  const subtitle = logs.locator(".page__subtitle");
+
+  await expect(table.getByRole("columnheader")).toHaveText(["Time", "Severity", "Resource", "Message"]);
+  await expect.poll(() => rows.count(), { timeout: 30_000 }).toBeGreaterThan(10);
+  await expect(table).toContainText("stress-telemetryservice");
+  await expect(table).toContainText("Application started. Press Ctrl+C to shut down.");
+  await expect(table.locator(".badge").filter({ hasText: "Information" }).first()).toBeVisible();
+
+  const readTotal = async (): Promise<number> => {
+    const text = await subtitle.innerText();
+    const total = Number(text.match(/^(\d+) total/)?.[1]);
+    if (!Number.isFinite(total)) {
+      throw new Error(`Unable to read structured-log total from '${text}'.`);
+    }
+    return total;
+  };
+  const initialTotal = await readTotal();
+
+  const resourcesResponse = await page.request.get("/api/deck/resources");
+  expect(resourcesResponse.ok()).toBe(true);
+  const resources = await resourcesResponse.json() as Array<{
+    name: string;
+    displayName: string;
+    commands: Array<{ name: string; state: string }>;
+  }>;
+  const telemetryService = resources.find((resource) => resource.displayName === "stress-telemetryservice");
+  expect(telemetryService).toBeDefined();
+  expect(telemetryService!.commands).toContainEqual(expect.objectContaining({ name: "start", state: "enabled" }));
+
+  const startResponse = await page.request.post("/api/deck/commands/execute", {
+    data: { resourceName: telemetryService!.name, commandName: "start" },
+  });
+  expect(startResponse.ok()).toBe(true);
+  await expect(startResponse.json()).resolves.toMatchObject({ kind: "succeeded" });
+  await expect.poll(readTotal, { timeout: 45_000 }).toBeGreaterThan(initialTotal);
+
+  const filter = logs.getByRole("textbox", { name: "Filter messages…" });
+  await filter.fill("stress-telemetryservice");
+  await expect.poll(() => rows.count()).toBeGreaterThan(0);
+  await expect.poll(async () => (await rows.allTextContents()).every((row) => row.includes("stress-telemetryservice"))).toBe(true);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const geometry = await page.evaluate(() => {
+    const tableWrap = document.querySelector<HTMLElement>(".table-wrap");
+    const time = document.querySelector<HTMLElement>("tbody tr td:first-child .cell-time");
+    if (tableWrap === null || time === null) {
+      throw new Error("The structured-log table is missing its expected layout elements.");
+    }
+    return {
+      documentWidth: document.documentElement.scrollWidth,
+      viewportWidth: window.innerWidth,
+      tableWidth: tableWrap.clientWidth,
+      tableContentWidth: tableWrap.scrollWidth,
+      timeWhiteSpace: getComputedStyle(time).whiteSpace,
+    };
+  });
+  expect(geometry.documentWidth).toBeLessThanOrEqual(geometry.viewportWidth);
+  expect(geometry.tableContentWidth).toBeLessThanOrEqual(geometry.tableWidth);
+  expect(geometry.timeWhiteSpace).toBe("nowrap");
+
+  await attachScreenshot(page, testInfo, "stress-live-structured-logs");
+});
+
+test(`${features("STRESS-NAVIGATION-001", "STRESS-EMPTY-METRICS-001")} reaches every page against the live dashboard`, async ({ page }) => {
   const pages = [
     "Parameters",
     "Console",

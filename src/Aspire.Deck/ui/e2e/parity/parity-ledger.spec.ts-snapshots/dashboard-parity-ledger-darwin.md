@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 28
-- React partial: 44
+- React covered: 29
+- React partial: 43
 - React missing: 85
-- Legacy black-box scenarios pending: 81
-- React parity gaps: 129
+- Legacy black-box scenarios pending: 80
+- React parity gaps: 128
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -115,7 +115,7 @@
 | CONSOLE-VIRTUALIZATION-001 | console | `/consolelogs` | PENDING | partial | CONSOLE-STREAM-001 | Large console streams remain responsive and preserve stable line numbers. |
 | CONSOLE-ROUTE-001 | console | `/consolelogs/resource/{name}` | PENDING | missing | - | Selected resource and console options are deep-linkable and restorable. |
 | LOG-LIST-001 | structured-logs | `/structuredlogs` | structured-logs | partial | LOG-LIST-001 | Structured logs render resource, level, timestamp, message, trace, and actions columns. |
-| LOG-LIVE-001 | structured-logs | `/structuredlogs` | PENDING | partial | LOG-LIVE-001 | New structured logs stream into the list and update totals. |
+| LOG-LIVE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIVE-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | New structured logs stream into the list and update totals. |
 | LOG-RESOURCE-001 | structured-logs | `/structuredlogs` | structured-logs | missing | - | Logs filter through a grouped resource selector. |
 | LOG-LEVEL-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-SEVERITY-001 | All supported severity levels can be selected. |
 | LOG-TEXT-FILTER-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-FILTER-001 | Logs filter across resource and message content. |
