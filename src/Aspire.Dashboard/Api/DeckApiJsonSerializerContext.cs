@@ -10,4 +10,6 @@ namespace Aspire.Dashboard.Api;
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(DeckConfig))]
 [JsonSerializable(typeof(DeckResource[]))]
+[JsonSerializable(typeof(DeckExecuteCommandRequest))]
+[JsonSerializable(typeof(DeckCommandResponse))]
 internal sealed partial class DeckApiJsonSerializerContext : JsonSerializerContext;

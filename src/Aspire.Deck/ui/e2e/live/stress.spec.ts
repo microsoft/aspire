@@ -81,7 +81,7 @@ test(`${features("STRESS-DETAILS-001", "STRESS-SECRETS-001")} inspects live Stre
   await attachScreenshot(page, testInfo, "stress-live-resource-details");
 });
 
-test(`${features("STRESS-RESOURCE-ICON-001", "STRESS-COMMAND-ICON-001")} renders live Stress icon contracts`, async ({ page }, testInfo) => {
+test(`${features("STRESS-RESOURCE-ICON-001", "STRESS-COMMAND-ICON-001", "STRESS-COMMAND-EXECUTE-001")} renders live Stress icon contracts and executes a command`, async ({ page }, testInfo) => {
   const response = await page.request.get("/api/deck/resources");
   expect(response.ok()).toBe(true);
   const resources = await response.json() as Array<{
@@ -105,10 +105,12 @@ test(`${features("STRESS-RESOURCE-ICON-001", "STRESS-COMMAND-ICON-001")} renders
   await expect(iconCommands).toHaveCount(1);
   await iconCommands.click();
   let details = page.getByRole("dialog", { name: "icon-commands" });
+  const highlightedIconCommand = details.getByRole("button", { name: "Icon test highlighted", exact: true });
   await expect(
-    details.getByRole("button", { name: "Icon test highlighted", exact: true })
-      .locator('svg[data-icon-name="CloudDatabase"][data-icon-variant="regular"]'),
+    highlightedIconCommand.locator('svg[data-icon-name="CloudDatabase"][data-icon-variant="regular"]'),
   ).toHaveCount(1);
+  await highlightedIconCommand.click();
+  await expect(page.getByRole("status")).toHaveText("Icon test highlighted succeeded");
   await details.getByRole("button", { name: "Close details" }).click();
 
   const lifecycleCommands = table.getByRole("row").filter({ hasText: "lifecycle-commands" });

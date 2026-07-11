@@ -71,3 +71,11 @@ internal sealed record DeckResourceCommand(
 internal sealed record DeckResourceRelationship(
     string ResourceName,
     string Type);
+
+internal sealed record DeckExecuteCommandRequest(
+    string ResourceName,
+    string CommandName);
+
+internal sealed record DeckCommandResponse(
+    string Kind,
+    string? Message);

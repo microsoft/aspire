@@ -1,11 +1,17 @@
-# Aspire Deck — Tauri ⇄ UI contract
+# Aspire Deck backend ⇄ UI contract
 
-This is the single source of truth for the boundary between the Rust (Tauri) backend and the
-web UI. Both sides MUST agree on these names and shapes.
+This is the single source of truth for the boundary between the Rust (Tauri) or dashboard HTTP
+backend and the web UI. Both sides MUST agree on these names and shapes.
 
 The backend exposes **commands** (request/response via `@tauri-apps/api/core` `invoke`) and
 **events** (push via `@tauri-apps/api/event` `listen`). All payloads are JSON; field names are
 `camelCase`.
+
+The ASP.NET Core dashboard backend currently exposes the same config, resource, and command
+shapes through `GET /api/deck/config`, `GET /api/deck/resources`, and
+`POST /api/deck/commands/execute`. Command execution accepts `{ resourceName, commandName }`
+and returns `CommandResponse`. The HTTP command path is noninteractive until the interaction
+stream and response endpoints are added.
 
 ## Commands (invoke)
 

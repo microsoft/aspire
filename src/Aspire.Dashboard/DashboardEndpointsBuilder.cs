@@ -126,6 +126,47 @@ public static class DashboardEndpointsBuilder
 
             return Results.Json(resources, DeckApiJsonSerializerContext.Default.DeckResourceArray);
         });
+
+        group.MapPost("/commands/execute", async (HttpContext httpContext, IDashboardClient dashboardClient) =>
+        {
+            var request = await httpContext.Request.ReadFromJsonAsync(
+                DeckApiJsonSerializerContext.Default.DeckExecuteCommandRequest,
+                httpContext.RequestAborted).ConfigureAwait(false);
+            if (request is null || string.IsNullOrWhiteSpace(request.ResourceName) || string.IsNullOrWhiteSpace(request.CommandName))
+            {
+                return Results.BadRequest();
+            }
+
+            var resource = dashboardClient.GetResources().SingleOrDefault(
+                resource => string.Equals(resource.Name, request.ResourceName, StringComparisons.ResourceName));
+            var command = resource?.Commands.SingleOrDefault(
+                command => string.Equals(command.Name, request.CommandName, StringComparison.Ordinal));
+            if (resource is null || command is null)
+            {
+                return Results.NotFound();
+            }
+
+            // Interactive prompts require a separate interaction transport. Until that endpoint is
+            // available, fail commands that prompt rather than leaving an HTTP request hanging.
+            var response = await dashboardClient.ExecuteResourceCommandAsync(
+                resource.Name,
+                resource.ResourceType,
+                command,
+                new ExecuteResourceCommandOptions { NonInteractive = true },
+                httpContext.RequestAborted).ConfigureAwait(false);
+
+            var result = new DeckCommandResponse(
+                Kind: response.Kind switch
+                {
+                    ResourceCommandResponseKind.Succeeded => "succeeded",
+                    ResourceCommandResponseKind.Failed => "failed",
+                    ResourceCommandResponseKind.Cancelled => "cancelled",
+                    ResourceCommandResponseKind.InvalidArguments => "invalidArguments",
+                    _ => "undefined"
+                },
+                Message: response.Message ?? response.ErrorMessage);
+            return Results.Json(result, DeckApiJsonSerializerContext.Default.DeckCommandResponse);
+        });
     }
 
     public static void MapTelemetryApi(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)

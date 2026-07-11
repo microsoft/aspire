@@ -120,7 +120,7 @@ const featureDefinitions = {
     ["CMD-ICON-VARIANT-001", "/", "Regular and filled command icon variants are preserved.", null, "covered", "TK-ICON-001; RES-ICON-001; STRESS-COMMAND-ICON-001"],
     ["CMD-DESCRIPTION-001", "/", "Command display names and descriptions remain visible and accessible.", "commands", "partial", "RES-ACTION-MENU-001"],
     ["CMD-CONFIRM-001", "/", "Commands with confirmation messages require explicit confirmation.", null, "partial", "RES-CONFIRM-001"],
-    ["CMD-EXECUTE-001", "/", "Commands execute against the selected live resource and report success, cancellation, or failure.", null, "partial", "RES-COMMANDS-001"],
+    ["CMD-EXECUTE-001", "/", "Commands execute against the selected live resource and report success, cancellation, or failure.", null, "partial", "RES-COMMANDS-001; HTTP-COMMAND-001; STRESS-COMMAND-EXECUTE-001"],
     ["CMD-TEXT-001", "/", "Text arguments support label, description, placeholder, required, and maximum length.", "commands", "partial", "RES-INTERACTION-001"],
     ["CMD-NUMBER-001", "/", "Number arguments preserve numeric values and validation.", "commands", "missing"],
     ["CMD-BOOLEAN-001", "/", "Boolean arguments preserve checked state and disabled state.", "commands", "partial", "RES-INTERACTION-001"],

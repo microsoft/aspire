@@ -40,7 +40,18 @@ const resource: Resource = {
   properties: [],
   environment: [],
   healthReports: [],
-  commands: [],
+  commands: [
+    {
+      name: "check-health",
+      displayName: "Check health",
+      displayDescription: "Check the resource health.",
+      confirmationMessage: null,
+      iconName: "CheckmarkCircle",
+      iconVariant: "regular",
+      isHighlighted: true,
+      state: "enabled",
+    },
+  ],
   relationships: [],
   isHidden: false,
   supportsDetailedTelemetry: true,
@@ -133,6 +144,28 @@ test(`${features("HTTP-RECOVERY-001")} recovers when the HTTP backend returns`, 
   await expect(page.getByRole("banner").locator(".topbar__app")).toHaveText("Stress AppHost");
   await expect(page.getByRole("table").getByRole("row", { name: /stress-api Project/ })).toBeVisible();
   await expect(page.getByTitle("Resources: Connected")).toBeVisible();
+});
+
+test(`${features("HTTP-COMMAND-001")} executes a resource command through the HTTP backend`, async ({ page }) => {
+  let commandRequest: unknown;
+  await page.route("**/api/deck/config", async (route) => {
+    await route.fulfill({ json: config });
+  });
+  await page.route("**/api/deck/resources", async (route) => {
+    await route.fulfill({ json: [resource] });
+  });
+  await page.route("**/api/deck/commands/execute", async (route) => {
+    commandRequest = route.request().postDataJSON();
+    await route.fulfill({ json: { kind: "succeeded", message: "Healthy." } });
+  });
+
+  await page.goto("/?backend=http");
+  await page.getByRole("table").getByRole("row", { name: /stress-api Project/ }).click();
+  const details = page.getByRole("dialog", { name: "stress-api" });
+  await details.getByRole("button", { name: "Check health", exact: true }).click();
+
+  await expect(page.getByRole("status")).toHaveText("Check health succeeded");
+  expect(commandRequest).toEqual({ resourceName: "stress-api-abc123", commandName: "check-health" });
 });
 
 test(`${features("HTTP-EMPTY-TELEMETRY-001")} renders a settled empty metrics state`, async ({ page }) => {

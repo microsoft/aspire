@@ -79,7 +79,7 @@
 | CMD-ICON-VARIANT-001 | commands | `/` | PENDING | covered | TK-ICON-001; RES-ICON-001; STRESS-COMMAND-ICON-001 | Regular and filled command icon variants are preserved. |
 | CMD-DESCRIPTION-001 | commands | `/` | commands | partial | RES-ACTION-MENU-001 | Command display names and descriptions remain visible and accessible. |
 | CMD-CONFIRM-001 | commands | `/` | PENDING | partial | RES-CONFIRM-001 | Commands with confirmation messages require explicit confirmation. |
-| CMD-EXECUTE-001 | commands | `/` | PENDING | partial | RES-COMMANDS-001 | Commands execute against the selected live resource and report success, cancellation, or failure. |
+| CMD-EXECUTE-001 | commands | `/` | PENDING | partial | RES-COMMANDS-001; HTTP-COMMAND-001; STRESS-COMMAND-EXECUTE-001 | Commands execute against the selected live resource and report success, cancellation, or failure. |
 | CMD-TEXT-001 | commands | `/` | commands | partial | RES-INTERACTION-001 | Text arguments support label, description, placeholder, required, and maximum length. |
 | CMD-NUMBER-001 | commands | `/` | commands | missing | - | Number arguments preserve numeric values and validation. |
 | CMD-BOOLEAN-001 | commands | `/` | commands | partial | RES-INTERACTION-001 | Boolean arguments preserve checked state and disabled state. |

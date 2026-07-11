@@ -49,6 +49,24 @@ async function requestJson<T>(path: string): Promise<T> {
   return await response.json() as T;
 }
 
+async function postJson<TRequest, TResponse>(path: string, body: TRequest): Promise<TResponse> {
+  const response = await fetch(`/api/deck/${path}`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Deck API request failed with ${response.status} ${response.statusText}.`);
+  }
+
+  return await response.json() as TResponse;
+}
+
 function getConfig(): Promise<DeckConfig> {
   if (configPromise === null) {
     const request = requestJson<DeckConfig>("config");
@@ -173,10 +191,10 @@ export const httpBackend = {
   getMetricSeries(_query: MetricSeriesQuery): Promise<MetricSeriesResponse | null> {
     return Promise.resolve(null);
   },
-  executeCommand(_args: ExecuteCommandArgs): Promise<CommandResponse> {
-    return Promise.resolve({
-      kind: "undefined",
-      message: "Resource commands are not available through the HTTP backend yet.",
+  executeCommand(args: ExecuteCommandArgs): Promise<CommandResponse> {
+    return postJson("commands/execute", {
+      resourceName: args.resourceName,
+      commandName: args.commandName,
     });
   },
   subscribeConsoleLogs(_resourceName: string, _callback: (event: ConsoleLogEvent) => void): Unsubscribe {

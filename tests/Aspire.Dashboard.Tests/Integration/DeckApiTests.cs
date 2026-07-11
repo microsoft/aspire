@@ -3,6 +3,7 @@
 
 using System.Collections.Immutable;
 using System.Net;
+using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
@@ -158,6 +159,80 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal("/login?returnUrl=%2Fapi%2Fdeck%2Fresources", response.Headers.Location?.PathAndQuery);
+    }
+
+    [Fact]
+    public async Task PostExecuteCommand_ExecutesResolvedCommandNonInteractively()
+    {
+        var resource = CreateResource();
+        string? actualResourceName = null;
+        string? actualResourceType = null;
+        CommandViewModel? actualCommand = null;
+        ExecuteResourceCommandOptions? actualOptions = null;
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            testOutputHelper,
+            preConfigureBuilder: builder => builder.Services.AddSingleton<IDashboardClient>(
+                new TestDashboardClient(
+                    isEnabled: true,
+                    initialResources: [resource],
+                    executeResourceCommand: (resourceName, resourceType, command, options, _) =>
+                    {
+                        actualResourceName = resourceName;
+                        actualResourceType = resourceType;
+                        actualCommand = command;
+                        actualOptions = options;
+                        return Task.FromResult(new ResourceCommandResponseViewModel
+                        {
+                            Kind = ResourceCommandResponseKind.Succeeded,
+                            Message = "Restarted."
+                        });
+                    })));
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var content = new StringContent(
+            """
+            {"resourceName":"frontend-abc123","commandName":"restart"}
+            """,
+            Encoding.UTF8,
+            "application/json");
+        var response = await httpClient.PostAsync("/api/deck/commands/execute", content).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(resource.Name, actualResourceName);
+        Assert.Equal(resource.ResourceType, actualResourceType);
+        Assert.Equal("restart", actualCommand?.Name);
+        Assert.True(actualOptions?.NonInteractive);
+        Assert.Null(actualOptions?.Arguments);
+        var actual = JsonNode.Parse(await response.Content.ReadAsStringAsync().DefaultTimeout());
+        var expected = JsonNode.Parse(
+            """
+            {"kind":"succeeded","message":"Restarted."}
+            """);
+        Assert.True(JsonNode.DeepEquals(expected, actual), $"Expected:{Environment.NewLine}{expected}{Environment.NewLine}Actual:{Environment.NewLine}{actual}");
+    }
+
+    [Theory]
+    [InlineData("missing-resource", "restart")]
+    [InlineData("frontend-abc123", "missing-command")]
+    public async Task PostExecuteCommand_UnknownResourceOrCommand_ReturnsNotFound(string resourceName, string commandName)
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            testOutputHelper,
+            preConfigureBuilder: builder => builder.Services.AddSingleton<IDashboardClient>(
+                new TestDashboardClient(isEnabled: true, initialResources: [CreateResource()])));
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var content = new StringContent(
+            $$"""
+            {"resourceName":"{{resourceName}}","commandName":"{{commandName}}"}
+            """,
+            Encoding.UTF8,
+            "application/json");
+        var response = await httpClient.PostAsync("/api/deck/commands/execute", content).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     private static ResourceViewModel CreateResource()
