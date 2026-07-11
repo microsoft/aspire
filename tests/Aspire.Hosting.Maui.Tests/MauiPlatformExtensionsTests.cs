@@ -90,8 +90,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public void AddPlatform_CreatesResourceWithCorrectName(PlatformTestConfig config)
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -113,8 +113,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public void AddPlatform_WithCustomName_UsesProvidedName(PlatformTestConfig config)
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -133,8 +133,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public void AddPlatform_DuplicateName_ThrowsException(PlatformTestConfig config)
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -152,8 +152,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [MemberData(nameof(MauiPlatformsWithIdeLaunchConfiguration))]
     public async Task AddMauiPlatform_EmitsMauiIdeLaunchConfiguration(PlatformTestConfig config)
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -181,8 +181,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public void AddPlatform_HasCorrectAnnotations(PlatformTestConfig config)
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -229,8 +229,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public void AddPlatform_ImplementsIMauiPlatformResource(PlatformTestConfig config)
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -248,8 +248,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public void AddPlatform_MultiplePlatforms_AllCreated(PlatformTestConfig config)
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -272,8 +272,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public async Task AddPlatform_WithoutRequiredTfm_ThrowsOnBeforeStartEvent(PlatformTestConfig config)
     {
         // Arrange - Create project without the required TFM
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, CreateProjectContentWithout(config.PlatformIdentifier));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -300,8 +300,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public async Task AddAndroidEmulator_WithEnvironment_EnvironmentVariablesAreSet()
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -326,8 +326,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public void AddAndroidDeviceAndEmulator_CanCoexist()
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -349,8 +349,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public async Task AddAndroidDevice_WithDeviceId_CreatesResourceWithCorrectName()
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -372,8 +372,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public async Task AddAndroidEmulator_WithEmulatorId_CreatesResourceWithCorrectName()
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -395,8 +395,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public async Task AddiOSDevice_WithDeviceId_CreatesResourceWithCorrectName()
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -423,8 +423,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public async Task AddiOSSimulator_WithSimulatorId_CreatesResourceWithCorrectName()
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -448,8 +448,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddiOSSimulator_OptsOutOfProjectIdeLaunchAndKeepsSdkRunArgs()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -477,8 +477,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public void AddiOSDeviceAndSimulator_CanCoexist()
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -502,8 +502,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public void AddiOS_HasEnvironmentAnnotation(bool isDevice)
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -529,8 +529,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public async Task AddiOSSimulator_WithEnvironment_EnvironmentVariablesAreSet()
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -557,8 +557,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public void AddAndroid_HasEnvironmentAnnotation(bool isDevice)
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -587,8 +587,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public void WithOtlpDevTunnel_AddsOtlpDevTunnelAnnotation(PlatformTestConfig config)
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -611,8 +611,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public void WithOtlpDevTunnel_MultiplePlatforms_SharesSameInfrastructure(PlatformTestConfig config)
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -634,8 +634,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     public async Task WithOtlpDevTunnel_SetsEndpointWithoutIntermediateEnvironmentVariables(PlatformTestConfig config)
     {
         // Arrange
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -672,8 +672,60 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_AllocatesStubFromDynamicDashboardOtlpEndpoint()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
+
+        var dashboard = appBuilder.AddResource(new ContainerResource(KnownResourceNames.AspireDashboard));
+        dashboard.Resource.Annotations.Add(new EndpointAnnotation(
+            ProtocolType.Tcp,
+            name: KnownEndpointNames.OtlpGrpcEndpointName,
+            uriScheme: "http",
+            isProxied: true,
+            transport: "http2"));
+
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var iosSimulator = maui.AddiOSSimulator()
+            .WithOtlpDevTunnel();
+
+        var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
+        var stubEndpoint = tunnelConfig.OtlpStub.OtlpEndpoint;
+
+        Assert.Null(stubEndpoint.Port);
+        Assert.Null(stubEndpoint.TargetPort);
+        Assert.Null(stubEndpoint.AllocatedEndpoint);
+
+        await using var app = appBuilder.Build();
+
+        var dashboardEndpoint = dashboard.Resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        dashboardEndpoint.AllocatedEndpoint = new AllocatedEndpoint(dashboardEndpoint, "localhost", 55075);
+        await appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services), CancellationToken.None);
+
+        Assert.Equal("http", stubEndpoint.UriScheme);
+        Assert.Equal(55075, stubEndpoint.Port);
+        Assert.Equal(55075, stubEndpoint.TargetPort);
+        Assert.Equal("http://localhost:55075", stubEndpoint.AllocatedEndpoint?.UriString);
+
+        var tunnelEndpoint = tunnelConfig.DevTunnel.GetEndpoint(tunnelConfig.OtlpStub, "otlp");
+        tunnelEndpoint.EndpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(tunnelEndpoint.EndpointAnnotation, "mobile-otlp.devtunnels.ms", 443);
+
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            iosSimulator.Resource,
+            DistributedApplicationOperation.Run,
+            app.Services);
+
+        Assert.Equal("https://mobile-otlp.devtunnels.ms:443", envVars[KnownOtelConfigNames.ExporterOtlpEndpoint]);
+        Assert.Equal("grpc", envVars[KnownOtelConfigNames.ExporterOtlpProtocol]);
+    }
+
+    [Fact]
+    public async Task WithOtlpDevTunnel_UpdatesStubFromDynamicDashboardOtlpHttpRuntimeSnapshot()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -757,8 +809,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_AllocatesStubFromDynamicDashboardOtlpTargetPort()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -794,8 +846,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_AllocatesStubFromDynamicDashboardOtlpTargetPortExpression()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -844,8 +896,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_DoesNotOverwriteContainerDashboardHostPortFromRuntimeSnapshot()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -899,8 +951,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_DoesNotAllocateStubFromProxyPortWhenTargetPortExpressionIsUnresolved()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -935,8 +987,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_WaitsForRuntimeSnapshotWhenDashboardOtlpTargetPortExpressionIsUnresolved()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -1011,8 +1063,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_WaitsForHttpWhenGrpcIsResolvedButHttpTargetPortExpressionIsUnresolved()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -1162,8 +1214,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_ThrowsWhenDashboardTerminatesWhileWaitingForRuntimeSnapshot()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -1217,8 +1269,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_AllocatesStubFromContainerDashboardOtlpAllocatedPort()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -1256,8 +1308,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_UsesGrpcProtocolWhenDynamicDashboardOnlyHasGrpcEndpoint()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -1300,8 +1352,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_ResolvesProtocolWhenEnvironmentIsEvaluatedBeforeDynamicDashboardEndpoint()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -1344,8 +1396,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_AllocatesStubFromConfiguredOtlpEndpoint()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         using var appBuilder = TestDistributedApplicationBuilder.Create();
@@ -1411,8 +1463,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_PrefersConfiguredHttpEndpointWhenBothOtlpEndpointsAreConfigured()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
         using var appBuilder = TestDistributedApplicationBuilder.Create();
@@ -1450,8 +1502,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_ThrowsWhenDashboardDisabledAndNoConfiguredOtlpEndpoint()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions { DisableDashboard = true });
@@ -1474,8 +1526,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_ThrowsWhenDashboardHasNoAllocatedOtlpEndpoint()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -1501,8 +1553,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithOtlpDevTunnel_ThrowsWhenOnlySyntheticStubEndpointIsAllocated()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
@@ -1531,8 +1583,8 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public void WithOtlpDevTunnel_ThrowsForInvalidConfiguredOtlpEndpoint()
     {
-        using var dir = new SharedTestTempDirectory();
-        var tempFile = Path.Combine(dir.Path, "TempMauiProject.csproj");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
         File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
         var appBuilder = DistributedApplication.CreateBuilder();
