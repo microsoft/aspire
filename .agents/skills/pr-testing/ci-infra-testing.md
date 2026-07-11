@@ -168,15 +168,13 @@ run only on schedule.
 
 When `tests-quarantine.yml` / `tests-outerloop.yml` (or their shared deps) are
 path-triggered on a PR, the run is **deliberately one project, not the whole
-suite.** `eng/AfterSolutionBuild.targets` filters the combined runsheet to the
-first project (keeping its OS variants) for `pull_request` events on the
-`QuarantinedTestRunsheetBuilder` / `OuterloopTestRunsheetBuilder` runners —
-literally "picking a single test project as a sanity check." So a green PR run
+suite.** `specialized-test-runner.yml` filters the canonical matrix to the first
+project (keeping its OS variants) for `pull_request` events. So a green PR run
 proves the runner plumbing works for *one* project; it does **not** prove your
 change is right for all of them. Decide which validation you actually need:
 
 - **Changed the test *invocation* — the command line each project runs**
-  (`extraTestArgs`, `extraRunSheetBuilderArgs`, the `dotnet test` / MTP args,
+  (`extraTestArgs`, the `dotnet test` / MTP args,
   retry or env setup in `run-tests.yml` / `specialized-test-runner.yml`): the
   one-project PR run is **not enough**. Manually dispatch the workflow so the
   full project set runs — the single-project filter is gated on
@@ -189,14 +187,16 @@ change is right for all of them. Decide which validation you actually need:
     --jq '.[0].databaseId')" --exit-status
   ```
 
-- **Changed test *enumeration / splitting*** — the runsheet builder, the
-  `split-test-*.ps1` scripts, or the matrix: don't judge by a test run at all.
-  **Inspect the emitted runsheet** — `combined_runsheet.json` and
-  `runsheet.binlog` upload as the `logs-runsheet` artifact — and confirm the
-  project list is complete and the shards/splits are partitioned as intended
-  (every expected project present exactly once, no empty shard, OS variants
-  correct). This is the Step I-5 "no fewer than baseline" check applied to the
-  enumeration itself, before any test even runs.
+- **Changed test *enumeration / splitting*** — the specialized project-list
+  script, `TestEnumerationRunsheetBuilder`, the `split-test-*.ps1` scripts, or
+  the matrix: don't judge by a test run alone. **Inspect the emitted canonical
+  matrix** — `canonical-test-matrix.json`, `BeforeBuildProps.props`,
+  `*.tests-metadata.json`, `*.tests-partitions.json`, and binlogs upload as the
+  `logs-runsheet` artifact — and confirm the project list is complete and the
+  shards/splits are partitioned as intended (every expected project present
+  exactly once, no unexpected empty shard, OS variants correct). This is the
+  Step I-5 "no fewer than baseline" check applied to the enumeration itself,
+  before any test even runs.
 
 ## Step I-1b: What CI does NOT cover (this is pr-testing's job)
 
