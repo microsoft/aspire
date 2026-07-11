@@ -200,10 +200,6 @@
     background-color: var(--neutral-fill-secondary-rest);
 }
 
-::deep.layout > header > .header-gutters > .header-button-selected:not(:hover)::part(control) {
-    background-color: var(--chat-background-color) !important;
-}
-
 #blazor-error-ui {
     background: var(--highlight-bg);
     bottom: 0;
