@@ -97,8 +97,18 @@ internal sealed class ProcessExecution : IProcessExecution
         var process = new IsolatedProcess(_startInfo);
         process.OutputDataReceived += OnOutputLine;
         process.ErrorDataReceived += OnErrorLine;
-        await process.StartAsync(cancellationToken).ConfigureAwait(false);
         _process = process;
+        try
+        {
+            await process.StartAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            _process = null;
+            await process.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+
         _logger.LogDebug("{FileName}({ProcessId}) started in {WorkingDirectory}", _fileName, _process.Id, _startInfo.WorkingDirectory);
         return true;
     }

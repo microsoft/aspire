@@ -321,7 +321,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         _exitCodeProvider = startedProcess.ExitCodeProvider;
         _hasExitedProvider = startedProcess.HasExitedProvider;
         _waitForExitProvider = startedProcess.WaitForExitProvider;
-        _startTime = startedProcess.StartTime ?? GetStartTime(startedProcess.Process);
+        _startTime = startedProcess.UseProvidedStartTime ? startedProcess.StartTime : GetStartTime(startedProcess.Process);
 
         WireOutputPumps(startedProcess);
     }
@@ -374,6 +374,7 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         Func<bool>? HasExitedProvider = null,
         Func<CancellationToken, Task>? WaitForExitProvider = null,
         DateTimeOffset? StartTime = null,
+        bool UseProvidedStartTime = false,
         int? ProcessId = null);
 
     private static DateTimeOffset? GetStartTime(Process process)

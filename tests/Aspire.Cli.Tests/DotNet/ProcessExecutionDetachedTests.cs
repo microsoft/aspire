@@ -290,6 +290,7 @@ exit "$exit_code"
 
         var childPid = int.Parse(await File.ReadAllTextAsync(capturePath), CultureInfo.InvariantCulture);
         Assert.Equal(childPid, detachedProcess.ProcessId);
+        Assert.Null(detachedProcess.StartTime);
         Assert.True(detachedProcess.HasExited);
         Assert.Equal(11, detachedProcess.ExitCode);
         await detachedProcess.WaitForExitAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));

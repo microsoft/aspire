@@ -230,9 +230,9 @@ internal sealed partial class IsolatedProcess
         {
             var process = Process.GetProcessById(pi.dwProcessId);
             WindowsProcessInterop.CloseHandle(pi.hThread);
+            pi.hThread = nint.Zero;
 
             var capturedProcessHandle = processHandle ?? throw new InvalidOperationException("Windows process handle was not initialized.");
-            processHandle = null;
 
             ValueTask ExtraDispose()
             {
@@ -252,7 +252,10 @@ internal sealed partial class IsolatedProcess
         catch
         {
             try { WindowsProcessInterop.TerminateProcess(pi.hProcess, 1); } catch { }
-            try { WindowsProcessInterop.CloseHandle(pi.hThread); } catch { }
+            if (pi.hThread != nint.Zero)
+            {
+                try { WindowsProcessInterop.CloseHandle(pi.hThread); } catch { }
+            }
             processHandle?.Dispose();
             throw;
         }
