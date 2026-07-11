@@ -19,6 +19,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
@@ -474,7 +475,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Process? startedProcess = null;
         Process? detachedHandle = null;
         Process? forkProcess = null;
-        harness.ProcessFactory.StartHandler = (_, _, _, _, _, _) =>
+        harness.ProcessFactory.StartHandler = async (_, _, _, _, _, cancellationToken) =>
         {
             startedProcess = Process.Start(new ProcessStartInfo
             {
@@ -491,12 +492,9 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             }) ?? throw new InvalidOperationException("Failed to start test DCP monitor process.");
 
             detachedHandle = Process.GetProcessById(startedProcess.Id);
-            if (!startedProcess.WaitForExit(TimeSpan.FromSeconds(5)))
-            {
-                throw new TimeoutException("Test child process did not exit.");
-            }
+            await startedProcess.WaitForExitAsync(cancellationToken).DefaultTimeout();
 
-            return Task.FromResult<IProcessExecution>(new MonitoredProcessExecutionAdapter(detachedHandle, forkProcess, startTime: null));
+            return new MonitoredProcessExecutionAdapter(detachedHandle, forkProcess, startTime: null);
         };
 
         try
@@ -523,13 +521,13 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             if (startedProcess is { HasExited: false })
             {
                 startedProcess.Kill(entireProcessTree: true);
-                await startedProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                await startedProcess.WaitForExitAsync().DefaultTimeout();
             }
 
             if (forkProcess is { HasExited: false })
             {
                 forkProcess.Kill(entireProcessTree: true);
-                await forkProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                await forkProcess.WaitForExitAsync().DefaultTimeout();
             }
 
             detachedHandle?.Dispose();
@@ -585,7 +583,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             if (startedProcess is { HasExited: false })
             {
                 startedProcess.Kill(entireProcessTree: true);
-                await startedProcess.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                await startedProcess.WaitForExitAsync().DefaultTimeout();
             }
 
             if (detachedHandle is not null)
