@@ -16,9 +16,9 @@
     "react-dom": "^19.2.1"
   },
   "devDependencies": {
-    "@babel/core": "^7.28.5",
-    "@babel/preset-env": "^7.28.5",
-    "@babel/preset-react": "^7.28.0",
+    "@babel/core": "^7.29.6",
+    "@babel/preset-env": "^7.29.6",
+    "@babel/preset-react": "^7.29.6",
     "babel-loader": "^10.0.0",
     "css-loader": "^7.1.2",
     "html-webpack-plugin": "^5.6.4",
@@ -26,9 +26,12 @@
     "style-loader": "^4.0.0",
     "webpack": "^5.103.0",
     "webpack-cli": "^6.0.1",
-    "webpack-dev-server": "^5.2.4"
+    "webpack-dev-server": "^5.2.5"
   },
   "overrides": {
-    "uuid": "14.0.0"
+    "uuid": "14.0.0",
+    "esbuild": "0.28.1",
+    "http-proxy-middleware": "3.0.7",
+    "launch-editor": "2.14.1"
   }
 }
