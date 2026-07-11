@@ -14,6 +14,7 @@ import type {
   ResourcesEvent,
   TelemetrySummary,
 } from "./types";
+import { readNdjson } from "./ndjson";
 
 type Unsubscribe = () => void;
 
@@ -213,6 +214,44 @@ function onInteractions(callback: (interactions: InteractionInfo[]) => void): Un
   };
 }
 
+async function streamConsoleLogs(
+  resourceName: string,
+  callback: (event: ConsoleLogEvent) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch(
+    `/api/deck/resources/${encodeURIComponent(resourceName)}/console-logs`,
+    {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { Accept: "application/x-ndjson" },
+      signal,
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Console log stream failed with ${response.status} ${response.statusText}.`);
+  }
+  if (response.body === null) {
+    throw new Error("Console log stream returned no response body.");
+  }
+
+  await readNdjson<ConsoleLogEvent>(response.body, callback);
+}
+
+function subscribeConsoleLogs(
+  resourceName: string,
+  callback: (event: ConsoleLogEvent) => void,
+): Unsubscribe {
+  const controller = new AbortController();
+  void streamConsoleLogs(resourceName, callback, controller.signal).catch((error: unknown) => {
+    if (!controller.signal.aborted) {
+      console.error(`Console log stream for '${resourceName}' failed.`, error);
+    }
+  });
+
+  return () => controller.abort();
+}
+
 export const httpBackend = {
   getConfig,
   listResources,
@@ -242,9 +281,7 @@ export const httpBackend = {
       commandName: args.commandName,
     });
   },
-  subscribeConsoleLogs(_resourceName: string, _callback: (event: ConsoleLogEvent) => void): Unsubscribe {
-    return () => undefined;
-  },
+  subscribeConsoleLogs,
   onResources,
   onConnection,
   onTelemetry(callback: (summary: TelemetrySummary) => void): Unsubscribe {

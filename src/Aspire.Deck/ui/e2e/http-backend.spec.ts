@@ -303,6 +303,49 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
   });
 });
 
+test(`${features("HTTP-CONSOLE-001")} streams resource console logs through the HTTP backend`, async ({ page }, testInfo) => {
+  let consoleLogRequests = 0;
+  await page.route("**/api/deck/config", async (route) => {
+    await route.fulfill({ json: config });
+  });
+  await page.route("**/api/deck/resources", async (route) => {
+    await route.fulfill({ json: [resource] });
+  });
+  await page.route("**/api/deck/resources/stress-api-abc123/console-logs", async (route) => {
+    consoleLogRequests++;
+    await route.fulfill({
+      contentType: "application/x-ndjson",
+      body: [
+        JSON.stringify({
+          resourceName: resource.name,
+          lines: [{ lineNumber: 41, text: "Listening on https://localhost:7443", isStdErr: false }],
+        }),
+        JSON.stringify({
+          resourceName: resource.name,
+          lines: [{ lineNumber: 42, text: "Transient connection failure", isStdErr: true }],
+        }),
+        "",
+      ].join("\n"),
+    });
+  });
+
+  await page.goto("/?backend=http");
+  await page.getByRole("navigation").getByRole("button", { name: /^Console(?: \d+)?$/ }).click();
+
+  const consoleRegion = page.getByRole("main").getByRole("region", { name: "Console" });
+  await expect(consoleRegion.getByText("Listening on https://localhost:7443", { exact: true })).toBeVisible();
+  await expect(consoleRegion.getByText("Transient connection failure", { exact: true })).toBeVisible();
+  await expect(consoleRegion.locator(".log-line.stderr")).toHaveCount(1);
+  await expect(consoleRegion.locator(".console__footer")).toContainText("2 lines");
+  await expect(consoleRegion.locator(".console__footer")).toContainText("1 stderr");
+  expect(consoleLogRequests).toBe(1);
+
+  await testInfo.attach("http-backend-console.png", {
+    body: await page.screenshot({ animations: "disabled", fullPage: true }),
+    contentType: "image/png",
+  });
+});
+
 test(`${features("HTTP-EMPTY-TELEMETRY-001")} renders a settled empty metrics state`, async ({ page }) => {
   await page.route("**/api/deck/config", async (route) => {
     await route.fulfill({ json: config });
