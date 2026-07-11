@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Threading.Channels;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
@@ -16,6 +17,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
+using DashboardProto = global::Aspire.DashboardService.Proto.V1;
 
 namespace Aspire.Dashboard.Tests.Integration;
 
@@ -33,7 +35,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
         var response = await httpClient.GetAsync("/api/deck/config").DefaultTimeout();
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         var actual = JsonNode.Parse(await response.Content.ReadAsStringAsync().DefaultTimeout());
         var expected = new JsonObject
         {
@@ -162,7 +164,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task PostExecuteCommand_ExecutesResolvedCommandNonInteractively()
+    public async Task PostExecuteCommand_ExecutesResolvedCommandInteractively()
     {
         var resource = CreateResource();
         string? actualResourceName = null;
@@ -202,7 +204,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(resource.Name, actualResourceName);
         Assert.Equal(resource.ResourceType, actualResourceType);
         Assert.Equal("restart", actualCommand?.Name);
-        Assert.True(actualOptions?.NonInteractive);
+        Assert.False(actualOptions?.NonInteractive);
         Assert.Null(actualOptions?.Arguments);
         var actual = JsonNode.Parse(await response.Content.ReadAsStringAsync().DefaultTimeout());
         var expected = JsonNode.Parse(
@@ -233,6 +235,169 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         var response = await httpClient.PostAsync("/api/deck/commands/execute", content).DefaultTimeout();
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Interactions_RoundTripInputsDialog()
+    {
+        var interactions = Channel.CreateUnbounded<DashboardProto.WatchInteractionsResponseUpdate>();
+        var responses = Channel.CreateUnbounded<DashboardProto.WatchInteractionsRequestUpdate>();
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            testOutputHelper,
+            preConfigureBuilder: builder => builder.Services.AddSingleton<IDashboardClient>(
+                new TestDashboardClient(
+                    isEnabled: true,
+                    interactionChannelProvider: () => interactions,
+                    sendInteractionUpdateChannel: responses)));
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        var interaction = new DashboardProto.WatchInteractionsResponseUpdate
+        {
+            InteractionId = 42,
+            Title = "Echo arguments",
+            Message = "Provide command values.",
+            PrimaryButtonText = "Run",
+            SecondaryButtonText = "Cancel",
+            ShowSecondaryButton = true,
+            ShowDismiss = true,
+            InputsDialog = new DashboardProto.InteractionInputsDialog()
+        };
+        var flavorInput = new DashboardProto.InteractionInput
+        {
+            Name = "flavor",
+            Label = "Flavor",
+            InputType = DashboardProto.InputType.Choice,
+            Value = "vanilla",
+            Description = "Select a flavor.",
+            UpdateStateOnChange = true
+        };
+        flavorInput.Options.Add("vanilla", "Vanilla");
+        flavorInput.Options.Add("chocolate", "Chocolate");
+        interaction.InputsDialog.InputItems.Add(
+            new DashboardProto.InteractionInput
+            {
+                Name = "message",
+                Label = "Message",
+                Placeholder = "Hello",
+                InputType = DashboardProto.InputType.Text,
+                Required = true,
+                MaxLength = 80
+            });
+        interaction.InputsDialog.InputItems.Add(flavorInput);
+        await interactions.Writer.WriteAsync(interaction).DefaultTimeout();
+
+        var actual = await GetInteractionsAsync(httpClient, expectedCount: 1);
+        var expected = JsonNode.Parse(
+            """
+            [
+              {
+                "interactionId": 42,
+                "kind": "inputsDialog",
+                "title": "Echo arguments",
+                "message": "Provide command values.",
+                "primaryButtonText": "Run",
+                "secondaryButtonText": "Cancel",
+                "showSecondaryButton": true,
+                "showDismiss": true,
+                "enableMessageMarkdown": false,
+                "intent": "none",
+                "inputs": [
+                  {
+                    "name": "message",
+                    "label": "Message",
+                    "placeholder": "Hello",
+                    "inputType": "text",
+                    "required": true,
+                    "options": [],
+                    "value": "",
+                    "validationErrors": [],
+                    "description": "",
+                    "enableDescriptionMarkdown": false,
+                    "maxLength": 80,
+                    "allowCustomChoice": false,
+                    "disabled": false,
+                    "updateStateOnChange": false
+                  },
+                  {
+                    "name": "flavor",
+                    "label": "Flavor",
+                    "placeholder": "",
+                    "inputType": "choice",
+                    "required": false,
+                    "options": [
+                      ["chocolate", "Chocolate"],
+                      ["vanilla", "Vanilla"]
+                    ],
+                    "value": "vanilla",
+                    "validationErrors": [],
+                    "description": "Select a flavor.",
+                    "enableDescriptionMarkdown": false,
+                    "maxLength": 0,
+                    "allowCustomChoice": false,
+                    "disabled": false,
+                    "updateStateOnChange": true
+                  }
+                ],
+                "linkText": "",
+                "linkUrl": ""
+              }
+            ]
+            """);
+        Assert.True(JsonNode.DeepEquals(expected, actual), $"Expected:{Environment.NewLine}{expected}{Environment.NewLine}Actual:{Environment.NewLine}{actual}");
+
+        using var content = new StringContent(
+            """
+            {
+              "interactionId": 42,
+              "action": "submit",
+              "values": {
+                "message": "Hello from React",
+                "flavor": "chocolate"
+              }
+            }
+            """,
+            Encoding.UTF8,
+            "application/json");
+        var response = await httpClient.PostAsync("/api/deck/interactions/respond", content).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var sent = await responses.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(42, sent.InteractionId);
+        Assert.Equal(DashboardProto.WatchInteractionsRequestUpdate.KindOneofCase.InputsDialog, sent.KindCase);
+        Assert.True(sent.HasResponseUpdate);
+        Assert.False(sent.ResponseUpdate);
+        Assert.Collection(
+            sent.InputsDialog.InputItems,
+            input =>
+            {
+                Assert.Equal("message", input.Name);
+                Assert.Equal("Hello from React", input.Value);
+            },
+            input =>
+            {
+                Assert.Equal("flavor", input.Name);
+                Assert.Equal("chocolate", input.Value);
+            });
+        Assert.Empty(await GetInteractionsAsync(httpClient, expectedCount: 0));
+    }
+
+    private static async Task<JsonArray> GetInteractionsAsync(HttpClient httpClient, int expectedCount)
+    {
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (true)
+        {
+            var response = await httpClient.GetAsync("/api/deck/interactions", cts.Token);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+            var actual = JsonNode.Parse(await response.Content.ReadAsStringAsync(cts.Token))!.AsArray();
+            if (actual.Count == expectedCount)
+            {
+                return actual;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(20), cts.Token);
+        }
     }
 
     private static ResourceViewModel CreateResource()

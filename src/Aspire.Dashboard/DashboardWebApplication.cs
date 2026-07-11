@@ -280,6 +280,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         // Data from the server.
         builder.Services.TryAddSingleton<IDashboardClient, DashboardClient>();
+        builder.Services.TryAddSingleton<DeckInteractionService>();
 
         builder.Services.TryAddSingleton<INotificationService, NotificationService>();
         builder.Services.TryAddSingleton(TimeProvider.System);

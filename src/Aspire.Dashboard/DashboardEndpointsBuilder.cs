@@ -127,6 +127,32 @@ public static class DashboardEndpointsBuilder
             return Results.Json(resources, DeckApiJsonSerializerContext.Default.DeckResourceArray);
         });
 
+        group.MapGet("/interactions", (HttpContext httpContext, DeckInteractionService interactionService) =>
+        {
+            httpContext.Response.Headers.CacheControl = "no-store";
+            return Results.Json(
+                interactionService.GetInteractions(),
+                DeckApiJsonSerializerContext.Default.DeckInteractionArray);
+        });
+
+        group.MapPost("/interactions/respond", async (HttpContext httpContext, DeckInteractionService interactionService) =>
+        {
+            var request = await httpContext.Request.ReadFromJsonAsync(
+                DeckApiJsonSerializerContext.Default.DeckRespondInteractionRequest,
+                httpContext.RequestAborted).ConfigureAwait(false);
+            if (request is null || request.InteractionId <= 0 || string.IsNullOrWhiteSpace(request.Action))
+            {
+                return Results.BadRequest();
+            }
+
+            var responded = await interactionService.RespondAsync(
+                request.InteractionId,
+                request.Action,
+                request.Values ?? [],
+                httpContext.RequestAborted).ConfigureAwait(false);
+            return responded ? Results.NoContent() : Results.NotFound();
+        });
+
         group.MapPost("/commands/execute", async (HttpContext httpContext, IDashboardClient dashboardClient) =>
         {
             var request = await httpContext.Request.ReadFromJsonAsync(
@@ -146,13 +172,11 @@ public static class DashboardEndpointsBuilder
                 return Results.NotFound();
             }
 
-            // Interactive prompts require a separate interaction transport. Until that endpoint is
-            // available, fail commands that prompt rather than leaving an HTTP request hanging.
             var response = await dashboardClient.ExecuteResourceCommandAsync(
                 resource.Name,
                 resource.ResourceType,
                 command,
-                new ExecuteResourceCommandOptions { NonInteractive = true },
+                new ExecuteResourceCommandOptions(),
                 httpContext.RequestAborted).ConfigureAwait(false);
 
             var result = new DeckCommandResponse(

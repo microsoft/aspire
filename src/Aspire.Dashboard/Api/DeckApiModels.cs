@@ -79,3 +79,39 @@ internal sealed record DeckExecuteCommandRequest(
 internal sealed record DeckCommandResponse(
     string Kind,
     string? Message);
+
+internal sealed record DeckInteraction(
+    int InteractionId,
+    string Kind,
+    string Title,
+    string Message,
+    string PrimaryButtonText,
+    string SecondaryButtonText,
+    bool ShowSecondaryButton,
+    bool ShowDismiss,
+    bool EnableMessageMarkdown,
+    string Intent,
+    DeckInteractionInput[] Inputs,
+    string LinkText,
+    string LinkUrl);
+
+internal sealed record DeckInteractionInput(
+    string Name,
+    string Label,
+    string Placeholder,
+    string InputType,
+    bool Required,
+    string[][] Options,
+    string Value,
+    string[] ValidationErrors,
+    string Description,
+    bool EnableDescriptionMarkdown,
+    int MaxLength,
+    bool AllowCustomChoice,
+    bool Disabled,
+    bool UpdateStateOnChange);
+
+internal sealed record DeckRespondInteractionRequest(
+    int InteractionId,
+    string Action,
+    Dictionary<string, string>? Values);

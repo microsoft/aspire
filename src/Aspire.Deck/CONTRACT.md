@@ -7,11 +7,12 @@ The backend exposes **commands** (request/response via `@tauri-apps/api/core` `i
 **events** (push via `@tauri-apps/api/event` `listen`). All payloads are JSON; field names are
 `camelCase`.
 
-The ASP.NET Core dashboard backend currently exposes the same config, resource, and command
-shapes through `GET /api/deck/config`, `GET /api/deck/resources`, and
-`POST /api/deck/commands/execute`. Command execution accepts `{ resourceName, commandName }`
-and returns `CommandResponse`. The HTTP command path is noninteractive until the interaction
-stream and response endpoints are added.
+The ASP.NET Core dashboard backend exposes the same config, resource, command, and interaction
+shapes through `GET /api/deck/config`, `GET /api/deck/resources`,
+`POST /api/deck/commands/execute`, `GET /api/deck/interactions`, and
+`POST /api/deck/interactions/respond`. Command execution accepts
+`{ resourceName, commandName }` and returns `CommandResponse`. The interactions GET returns the
+current `InteractionInfo[]`; the response POST accepts `{ interactionId, action, values }`.
 
 ## Commands (invoke)
 
