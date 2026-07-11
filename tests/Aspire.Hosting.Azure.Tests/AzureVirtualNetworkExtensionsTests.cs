@@ -221,6 +221,29 @@ public class AzureVirtualNetworkExtensionsTests
     }
 
     [Fact]
+    public void WithDelegatedSubnet_DifferentServiceDelegationThrows()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("shared-subnet", "10.0.0.0/24");
+        builder.AddAzureContainerAppEnvironment("container-apps")
+            .WithDelegatedSubnet(subnet);
+
+        var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("app-service");
+
+        var exception = Assert.Throws<InvalidOperationException>(() => appServiceEnvironment.WithDelegatedSubnet(subnet));
+
+        Assert.Equal(
+            "The subnet 'shared-subnet' is already delegated to 'Microsoft.App/environments' and cannot also be delegated to 'Microsoft.Web/serverFarms'.",
+            exception.Message);
+        Assert.Empty(appServiceEnvironment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>());
+
+        var delegation = Assert.Single(subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.App/environments", delegation.ServiceName);
+    }
+
+    [Fact]
     public void AddSubnet_WithParameterResource_CreatesSubnetResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

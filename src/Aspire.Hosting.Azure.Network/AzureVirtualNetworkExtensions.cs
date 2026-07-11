@@ -284,7 +284,7 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="subnet">The subnet to associate with the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <exception cref="InvalidOperationException">Thrown when the resource is already associated with a different delegated subnet.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the resource is already associated with a different delegated subnet or the subnet is delegated to a different service.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method automatically configures the subnet with the appropriate service delegation
@@ -319,6 +319,18 @@ public static class AzureVirtualNetworkExtensions
         {
             throw new InvalidOperationException(
                 $"The resource '{target.Name}' is already associated with a different delegated subnet. A resource can use only one delegated subnet.");
+        }
+
+        var conflictingDelegation = subnet.Resource.Annotations
+            .OfType<AzureSubnetServiceDelegationAnnotation>()
+            .FirstOrDefault(annotation => !string.Equals(
+                annotation.ServiceName,
+                target.DelegatedSubnetServiceName,
+                StringComparison.Ordinal));
+        if (conflictingDelegation is not null)
+        {
+            throw new InvalidOperationException(
+                $"The subnet '{subnet.Resource.Name}' is already delegated to '{conflictingDelegation.ServiceName}' and cannot also be delegated to '{target.DelegatedSubnetServiceName}'.");
         }
 
         builder.WithAnnotation(
