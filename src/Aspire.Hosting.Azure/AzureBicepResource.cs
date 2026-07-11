@@ -84,12 +84,18 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
         // Force evaluation of the Bicep template to ensure parameters are expanded.
         _ = GetBicepTemplateString();
 
-        var azureReferences = new HashSet<IAzureResource>();
+        var azureReferences = GetExplicitAzureReferences();
         foreach (var parameter in Parameters)
         {
             ProcessAzureReferences(azureReferences, parameter.Value);
         }
 
+        return azureReferences;
+    }
+
+    internal HashSet<IAzureResource> GetExplicitAzureReferences()
+    {
+        var azureReferences = new HashSet<IAzureResource>();
         foreach (var reference in References)
         {
             ProcessAzureReferences(azureReferences, reference);

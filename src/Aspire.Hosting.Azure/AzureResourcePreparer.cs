@@ -547,7 +547,7 @@ internal sealed class AzureResourcePreparer(
     {
         foreach (var resource in appModel.Resources.OfType<AzureBicepResource>().ToArray())
         {
-            var prerequisiteResources = resource.GetAzureReferences()
+            var prerequisiteResources = resource.GetExplicitAzureReferences()
                 .SelectMany(reference => reference.Annotations.OfType<DeploymentPrerequisitesAnnotation>())
                 .SelectMany(annotation => annotation.Resources)
                 .Where(prerequisite => prerequisite != resource)
